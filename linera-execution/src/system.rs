@@ -6,7 +6,10 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use custom_debug_derive::Debug;
@@ -24,10 +27,12 @@ use linera_base::{
 };
 use linera_views::{
     context::Context,
+    lazy_register_view::LazyRegisterView,
     map_view::MapView,
     register_view::RegisterView,
     set_view::SetView,
     views::{ClonableView, ReplaceContext, View},
+    ViewError,
 };
 use serde::{Deserialize, Serialize};
 
@@ -75,18 +80,19 @@ mod metrics {
 #[allocative(bound = "C")]
 pub struct SystemExecutionStateView<C> {
     /// How the chain was created. May be unknown for inactive chains.
-    pub description: RegisterView<C, Option<ChainDescription>>,
+    pub description: LazyRegisterView<C, Option<ChainDescription>>,
     /// The number identifying the current configuration.
     pub epoch: RegisterView<C, Epoch>,
     /// The admin of the chain.
     pub admin_chain_id: RegisterView<C, Option<ChainId>>,
-    /// The committees that we trust, indexed by epoch number.
-    // Not using a `MapView` because the set active of committees is supposed to be
+    /// The blob hashes of the committees we trust, indexed by epoch number.
+    // Not using a `MapView` because the set of active committees is supposed to be
     // small. Plus, currently, we would create the `BTreeMap` anyway in various places
-    // (e.g. the `OpenChain` operation).
-    pub committees: RegisterView<C, BTreeMap<Epoch, Committee>>,
+    // (e.g. the `OpenChain` operation). The actual committees live in the blob store
+    // and are cached process-wide via `SharedCommittees`.
+    pub committees: RegisterView<C, BTreeMap<Epoch, CryptoHash>>,
     /// Ownership of the chain.
-    pub ownership: RegisterView<C, ChainOwnership>,
+    pub ownership: LazyRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
     pub balance: RegisterView<C, Amount>,
     /// Balances attributed to a given owner.
@@ -98,7 +104,7 @@ pub struct SystemExecutionStateView<C> {
     /// Whether this chain has been closed.
     pub closed: RegisterView<C, bool>,
     /// Permissions for applications on this chain.
-    pub application_permissions: RegisterView<C, ApplicationPermissions>,
+    pub application_permissions: LazyRegisterView<C, ApplicationPermissions>,
     /// Blobs that have been used or published on this chain.
     pub used_blobs: SetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
@@ -298,34 +304,6 @@ pub struct SystemResponse {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-impl UserData {
-    pub fn from_option_string(opt_str: Option<String>) -> Result<Self, usize> {
-        // Convert the Option<String> to Option<[u8; 32]>
-        let option_array = match opt_str {
-            Some(s) => {
-                // Convert the String to a Vec<u8>
-                let vec = s.into_bytes();
-                if vec.len() <= 32 {
-                    // Create an array from the Vec<u8>
-                    let mut array = [b' '; 32];
-
-                    // Copy bytes from the vector into the array
-                    let len = vec.len().min(32);
-                    array[..len].copy_from_slice(&vec[..len]);
-
-                    Some(array)
-                } else {
-                    return Err(vec.len());
-                }
-            }
-            None => None,
-        };
-
-        // Return the UserData with the converted Option<[u8; 32]>
-        Ok(UserData(option_array))
-    }
-}
-
 #[derive(Debug)]
 pub struct CreateApplicationResult {
     pub app_id: ApplicationId,
@@ -337,21 +315,30 @@ where
     C::Extra: ExecutionRuntimeContext,
 {
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.description.get().is_some()
-            && self.ownership.get().is_active()
-            && self.current_committee().is_some()
-            && self.admin_chain_id.get().is_some()
+    pub async fn is_active(&self) -> Result<bool, ViewError> {
+        Ok(self.description.get().await?.is_some()
+            && self.ownership.get().await?.is_active()
+            && self.committees.get().contains_key(self.epoch.get())
+            && self.admin_chain_id.get().is_some())
     }
 
     /// Returns the current committee, if any.
-    pub fn current_committee(&self) -> Option<(Epoch, &Committee)> {
-        let epoch = self.epoch.get();
-        let committee = self.committees.get().get(epoch)?;
-        Some((*epoch, committee))
+    pub async fn current_committee(
+        &self,
+    ) -> Result<Option<(Epoch, Arc<Committee>)>, ExecutionError> {
+        let epoch = *self.epoch.get();
+        let Some(&hash) = self.committees.get().get(&epoch) else {
+            return Ok(None);
+        };
+        let committee = self
+            .context()
+            .extra()
+            .get_or_load_committee_by_hash(hash)
+            .await?;
+        Ok(Some((epoch, committee)))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Vec<u8>, ExecutionError> {
+    async fn get_event(&self, event_id: EventId) -> Result<Arc<Vec<u8>>, ExecutionError> {
         match self.context().extra().get_event(event_id.clone()).await? {
             None => Err(ExecutionError::EventsNotFound(vec![event_id])),
             Some(vec) => Ok(vec),
@@ -447,10 +434,13 @@ where
                     AdminOperation::CreateCommittee { epoch, blob_hash } => {
                         self.check_next_epoch(epoch)?;
                         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
-                        let committee =
-                            bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
+                        // Validate that the blob exists and deserializes as a Committee.
+                        self.context()
+                            .extra()
+                            .get_or_load_committee_by_hash(blob_hash)
+                            .await?;
                         self.blob_used(txn_tracker, blob_id).await?;
-                        self.committees.get_mut().insert(epoch, committee);
+                        self.committees.get_mut().insert(epoch, blob_hash);
                         self.epoch.set(epoch);
                         let event_data = EpochEventData {
                             blob_hash,
@@ -523,15 +513,24 @@ where
                 let bytes = txn_tracker
                     .oracle(|| async {
                         let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id.clone(), bytes))
+                        Ok(OracleResponse::Event(
+                            event_id.clone(),
+                            Arc::unwrap_or_clone(bytes),
+                        ))
                     })
                     .await?
                     .to_event(&event_id)?;
                 let event_data: EpochEventData = bcs::from_bytes(&bytes)?;
                 let blob_id = BlobId::new(event_data.blob_hash, BlobType::Committee);
-                let committee = bcs::from_bytes(self.read_blob_content(blob_id).await?.bytes())?;
+                // Validate that the blob exists and deserializes as a Committee.
+                self.context()
+                    .extra()
+                    .get_or_load_committee_by_hash(event_data.blob_hash)
+                    .await?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committees.get_mut().insert(epoch, committee);
+                self.committees
+                    .get_mut()
+                    .insert(epoch, event_data.blob_hash);
                 self.epoch.set(epoch);
             }
             ProcessRemovedEpoch(epoch) => {
@@ -551,7 +550,7 @@ where
                 txn_tracker
                     .oracle(|| async {
                         let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id, bytes))
+                        Ok(OracleResponse::Event(event_id, Arc::unwrap_or_clone(bytes)))
                     })
                     .await?;
             }
@@ -663,7 +662,11 @@ where
         if source == AccountOwner::CHAIN {
             ensure!(
                 authenticated_owner.is_some()
-                    && self.ownership.get().is_owner(&authenticated_owner.unwrap()),
+                    && self
+                        .ownership
+                        .get()
+                        .await?
+                        .is_owner(&authenticated_owner.unwrap()),
                 ExecutionError::UnauthenticatedTransferOwner
             );
         } else {
@@ -851,7 +854,7 @@ where
     /// Initializes the system application state on a newly opened chain.
     /// Returns `Ok(true)` if the chain was already initialized, `Ok(false)` if it wasn't.
     pub async fn initialize_chain(&mut self, chain_id: ChainId) -> Result<bool, ExecutionError> {
-        if self.description.get().is_some() {
+        if self.description.get().await?.is_some() {
             // already initialized
             return Ok(true);
         }
@@ -874,7 +877,7 @@ where
         let committees = self
             .context()
             .extra()
-            .get_committees(min_active_epoch..=max_active_epoch)
+            .get_committee_hashes(min_active_epoch..=max_active_epoch)
             .await?;
         let admin_chain_id = self
             .context()
@@ -923,20 +926,11 @@ where
             block_height,
             chain_index,
         };
+        let committees = self.committees.get();
         let init_chain_config = config.init_chain_config(
             *self.epoch.get(),
-            self.committees
-                .get()
-                .keys()
-                .min()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
-            self.committees
-                .get()
-                .keys()
-                .max()
-                .copied()
-                .unwrap_or(Epoch::ZERO),
+            committees.keys().min().copied().unwrap_or(Epoch::ZERO),
+            committees.keys().max().copied().unwrap_or(Epoch::ZERO),
         );
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
@@ -1029,45 +1023,6 @@ where
         Ok(description)
     }
 
-    /// Retrieves the recursive dependencies of applications and applies a topological sort.
-    pub async fn find_dependencies(
-        &mut self,
-        mut stack: Vec<ApplicationId>,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<Vec<ApplicationId>, ExecutionError> {
-        // What we return at the end.
-        let mut result = Vec::new();
-        // The entries already inserted in `result`.
-        let mut sorted = HashSet::new();
-        // The entries for which dependencies have already been pushed once to the stack.
-        let mut seen = HashSet::new();
-
-        while let Some(id) = stack.pop() {
-            if sorted.contains(&id) {
-                continue;
-            }
-            if seen.contains(&id) {
-                // Second time we see this entry. It was last pushed just before its
-                // dependencies -- which are now fully sorted.
-                sorted.insert(id);
-                result.push(id);
-                continue;
-            }
-            // First time we see this entry:
-            // 1. Mark it so that its dependencies are no longer pushed to the stack.
-            seen.insert(id);
-            // 2. Schedule all the (yet unseen) dependencies, then this entry for a second visit.
-            stack.push(id);
-            let app = self.describe_application(id, txn_tracker).await?;
-            for child in app.required_application_ids.iter().rev() {
-                if !seen.contains(child) {
-                    stack.push(*child);
-                }
-            }
-        }
-        Ok(result)
-    }
-
     /// Records a blob that is used in this block. If this is the first use on this chain, creates
     /// an oracle response for it.
     pub(crate) async fn blob_used(
@@ -1097,7 +1052,7 @@ where
 
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
-            Ok(Some(blob)) => Ok(blob.into()),
+            Ok(Some(blob)) => Ok(Arc::unwrap_or_clone(blob).into()),
             Ok(None) => Err(ExecutionError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error.into()),
         }

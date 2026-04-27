@@ -205,6 +205,22 @@ where
             .await
     }
 
+    async fn download_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<crate::node::BlobStream, NodeError> {
+        let this = self.clone();
+        let stream = futures::stream::unfold(blob_ids.into_iter(), move |mut iter| {
+            let this = this.clone();
+            async move {
+                let blob_id = iter.next()?;
+                let result = this.download_blob(blob_id).await;
+                Some((result, iter))
+            }
+        });
+        Ok(Box::pin(stream))
+    }
+
     async fn download_pending_blob(
         &self,
         chain_id: ChainId,
@@ -484,8 +500,7 @@ where
                 .await
                 .map_err(Into::into),
         };
-        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map(|(info, _actions)| info))
+        sender.send(result)
     }
 
     async fn do_subscribe(
@@ -532,7 +547,7 @@ where
             Ok(blob) => blob.ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error),
         };
-        sender.send(blob.map(|blob| blob.into_content()))
+        sender.send(blob.map(|blob| Arc::unwrap_or_clone(blob).into_content()))
     }
 
     async fn do_download_pending_blob(
@@ -581,7 +596,7 @@ where
         let certificate = match certificate {
             Err(error) => Err(error),
             Ok(entry) => match entry {
-                Some(certificate) => Ok(certificate),
+                Some(certificate) => Ok(Arc::unwrap_or_clone(certificate)),
                 None => {
                     panic!("Missing certificate: {hash}");
                 }

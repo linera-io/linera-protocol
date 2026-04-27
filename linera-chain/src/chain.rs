@@ -401,7 +401,7 @@ where
                 .get_mut()
                 .get_mut(&update)
                 .ok_or_else(|| {
-                    ChainError::InternalError("message counter should be present".into())
+                    ChainError::CorruptedChainState("message counter should be present".into())
                 })?;
             *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
             if *counter == 0 {
@@ -439,8 +439,8 @@ where
     }
 
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.execution_state.system.is_active()
+    pub async fn is_active(&self) -> Result<bool, ChainError> {
+        Ok(self.execution_state.system.is_active().await?)
     }
 
     /// Initializes the chain if it is not active yet.
@@ -460,13 +460,20 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let maybe_committee = self
+            .execution_state
+            .system
+            .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
+            self.execution_state.system.ownership.get().await?.clone(),
             BlockHeight(0),
             local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
+            maybe_committee
+                .iter()
+                .flat_map(|(_, committee)| committee.account_keys_and_weights()),
         )?;
         Ok(())
     }
@@ -503,7 +510,7 @@ where
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
-            "Processing new messages to {chain_id:.8} from {origin} at height {}",
+            "Processing new messages from {origin} at height {}",
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
@@ -531,16 +538,7 @@ where
             .await
             .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
-                InboxError::GapDetected {
-                    expected_height,
-                    actual_height,
-                } => ChainError::InboxGapDetected {
-                    chain_id,
-                    origin: *origin,
-                    expected_height,
-                    actual_height,
-                },
-                error => ChainError::InternalError(format!(
+                error => ChainError::CorruptedChainState(format!(
                     "while processing messages in certified block: {error}"
                 )),
             })?;
@@ -575,15 +573,18 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
+        let chain_id = self.chain_id();
         self.execution_state
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
+            .ok_or(ChainError::InactiveChain(chain_id))
     }
 
-    pub fn ownership(&self) -> &ChainOwnership {
-        self.execution_state.system.ownership.get()
+    pub async fn ownership(&self) -> Result<&ChainOwnership, ChainError> {
+        Ok(self.execution_state.system.ownership.get().await?)
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
@@ -618,7 +619,7 @@ where
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
-                "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
+                "Removing [{}] from inbox for {origin}",
                 bundles
                     .iter()
                     .map(|bundle| bundle.height.to_string())
@@ -662,7 +663,7 @@ where
     ) -> Result<Vec<ReadGuardedView<OutboxStateView<C>>>, ChainError> {
         let vec_of_options = self.outboxes.try_load_entries(targets).await?;
         let optional_vec = vec_of_options.into_iter().collect::<Option<Vec<_>>>();
-        optional_vec.ok_or_else(|| ChainError::InternalError("Missing outboxes".into()))
+        optional_vec.ok_or_else(|| ChainError::CorruptedChainState("Missing outboxes".into()))
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
@@ -697,6 +698,8 @@ where
         let committee_policy = chain
             .system
             .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -870,7 +873,7 @@ where
         let mut previous_message_blocks = BTreeMap::new();
         for (hash, (recipient, height)) in hashes.into_iter().zip(recipient_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_message_blocks.insert(recipient, (hash, height));
         }
@@ -890,7 +893,7 @@ where
         let mut previous_event_blocks = BTreeMap::new();
         for (hash, (stream, height)) in hashes.into_iter().zip(stream_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_event_blocks.insert(stream, (hash, height));
         }
@@ -992,7 +995,11 @@ where
         }
 
         Self::check_app_permissions(
-            self.execution_state.system.application_permissions.get(),
+            self.execution_state
+                .system
+                .application_permissions
+                .get()
+                .await?,
             &block,
         )?;
 
@@ -1032,7 +1039,8 @@ where
         self.process_outgoing_messages(block).await?;
 
         // Last, reset the consensus state based on the current ownership.
-        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
+        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
+            .await?;
 
         // Advance to next block height.
         let tip = self.tip_state.get_mut();
@@ -1064,15 +1072,6 @@ where
         let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
         Ok(updated_streams)
-    }
-
-    /// Returns whether this is a child chain.
-    pub fn is_child(&self) -> bool {
-        let Some(description) = self.execution_state.system.description.get() else {
-            // Root chains are always initialized, so this must be a child chain.
-            return true;
-        };
-        description.is_child()
     }
 
     /// Verifies that the block is valid according to the chain's application permission settings.
@@ -1161,15 +1160,21 @@ where
     }
 
     /// Resets the chain manager for the next block height.
-    fn reset_chain_manager(
+    async fn reset_chain_manager(
         &mut self,
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        let ownership = self.execution_state.system.ownership.get().clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
+        let maybe_committee = self
+            .execution_state
+            .system
+            .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
+        let ownership = self.execution_state.system.ownership.get().await?.clone();
+        let fallback_owners = maybe_committee
+            .iter()
+            .flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager
@@ -1213,13 +1218,17 @@ where
                         let index =
                             usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                         Some(self.confirmed_log.get(index).await?.ok_or_else(|| {
-                            ChainError::InternalError("missing entry in confirmed_log".into())
+                            ChainError::CorruptedChainState("missing entry in confirmed_log".into())
                         })?)
                     }
                     // The block with last added message has not been executed yet. If we have it,
                     // it's in preprocessed_blocks.
                     Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
-                        || ChainError::InternalError("missing entry in preprocessed_blocks".into()),
+                        || {
+                            ChainError::CorruptedChainState(
+                                "missing entry in preprocessed_blocks".into(),
+                            )
+                        },
                     )?),
                     None => None, // No message to that sender was added yet.
                 };
@@ -1235,7 +1244,7 @@ where
                     (Some(_), None) => {
                         // Outbox indicates there was a previous message block, but
                         // previous_message_blocks has no idea about it - possible bug
-                        return Err(ChainError::InternalError(
+                        return Err(ChainError::CorruptedChainState(
                             "block indicates no previous message block,\
                             but we have one in the outbox"
                                 .into(),

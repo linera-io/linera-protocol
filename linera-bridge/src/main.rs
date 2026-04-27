@@ -18,7 +18,7 @@ enum Cli {
     GenerateDepositProof(GenerateDepositProofOptions),
     /// Run the relay server (proof generation + chain inbox processing + EVM forwarding)
     #[cfg(feature = "relay")]
-    Serve(ServeOptions),
+    Serve(Box<ServeOptions>),
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -54,26 +54,46 @@ struct ServeOptions {
     #[arg(long)]
     rpc_url: String,
 
-    /// URL of the Linera faucet
+    /// URL of the Linera faucet (required when wallet doesn't exist or chain ID not provided)
     #[arg(long)]
-    faucet_url: String,
+    faucet_url: Option<String>,
+
+    /// Path to the wallet state file.
+    #[arg(long = "wallet", env = "LINERA_WALLET")]
+    wallet: Option<PathBuf>,
+
+    /// Path to the keystore file.
+    #[arg(long = "keystore", env = "LINERA_KEYSTORE")]
+    keystore: Option<PathBuf>,
+
+    /// Storage configuration for blockchain history (e.g. rocksdb:/path/to/db).
+    #[arg(long = "storage", env = "LINERA_STORAGE")]
+    storage: Option<String>,
+
+    /// Linera bridge chain ID. If omitted, claims a new chain from faucet.
+    #[arg(long)]
+    linera_bridge_chain_id: Option<linera_base::identifiers::ChainId>,
+
+    /// Owner to use for the bridge chain. Required when --linera-bridge-chain-id is provided.
+    #[arg(long, requires = "linera_bridge_chain_id")]
+    linera_bridge_chain_owner: Option<linera_base::identifiers::AccountOwner>,
 
     /// Address of the FungibleBridge contract on EVM.
-    /// If omitted, reads from --bridge-address-file (polls until available).
     #[arg(long)]
-    bridge_address: Option<String>,
+    evm_bridge_address: String,
 
-    /// File to read bridge address from (used when bridge is deployed after relay starts)
-    #[arg(long, default_value = "/shared/bridge-address")]
-    bridge_address_file: String,
+    /// evm-bridge Linera ApplicationId (hex).
+    #[arg(long)]
+    linera_bridge_address: String,
 
-    /// File to read the evm-bridge ApplicationId from (written by setup script)
-    #[arg(long, default_value = "/shared/bridge-app-id")]
-    bridge_app_id_file: String,
+    /// wrapped-fungible Linera ApplicationId (hex).
+    #[arg(long)]
+    linera_fungible_address: String,
 
-    /// File to read the wrapped-fungible ApplicationId from (written by setup script)
-    #[arg(long, default_value = "/shared/wrapped-app-id")]
-    fungible_app_id_file: String,
+    /// Address of the LightClient contract on EVM.
+    /// When provided, skips discovering it via FungibleBridge.lightClient().
+    #[arg(long)]
+    evm_light_client_address: Option<String>,
 
     /// EVM private key for signing addBlock transactions
     #[arg(long)]
@@ -91,9 +111,9 @@ struct ServeOptions {
     #[arg(long, default_value = "1000")]
     confirmed_block_cache_size: usize,
 
-    /// The maximal number of entries in the lite certificate cache.
+    /// The maximal number of entries in the certificate cache.
     #[arg(long, default_value = "1000")]
-    lite_certificate_cache_size: usize,
+    certificate_cache_size: usize,
 
     /// The maximal number of entries in the raw certificate cache.
     #[arg(long, default_value = "1000")]
@@ -102,6 +122,23 @@ struct ServeOptions {
     /// The maximal number of entries in the event cache.
     #[arg(long, default_value = "1000")]
     event_cache_size: usize,
+
+    /// Interval between monitor scan loops, in seconds.
+    #[arg(long, default_value = "30")]
+    monitor_scan_interval: u64,
+
+    /// EVM block number to start scanning from for deposit monitoring.
+    #[arg(long, default_value = "0")]
+    monitor_start_block: u64,
+
+    /// Maximum number of retry attempts for pending deposits and burns.
+    #[arg(long, default_value = "10")]
+    max_retries: u32,
+
+    /// Path to the SQLite database for persistent request storage.
+    /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
+    #[arg(long)]
+    sqlite_path: Option<std::path::PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -120,23 +157,45 @@ fn main() -> Result<()> {
 #[cfg(feature = "relay")]
 impl ServeOptions {
     async fn run(&self) -> Result<()> {
-        linera_bridge::relay::run(
+        tracing_subscriber::fmt::init();
+
+        // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .expect("failed to install rustls crypto provider");
+
+        // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
+        rustls::crypto::ring::default_provider()
+            .install_default()
+            .expect("failed to install rustls crypto provider");
+
+        Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
-            &self.faucet_url,
-            self.bridge_address.as_deref(),
-            &self.bridge_address_file,
-            &self.bridge_app_id_file,
-            &self.fungible_app_id_file,
+            self.faucet_url.as_deref(),
+            self.wallet.as_deref(),
+            self.keystore.as_deref(),
+            self.storage.as_deref(),
+            self.linera_bridge_chain_id,
+            self.linera_bridge_chain_owner,
+            &self.evm_bridge_address,
+            &self.linera_bridge_address,
+            &self.linera_fungible_address,
             &self.evm_private_key,
+            self.evm_light_client_address.as_deref(),
             self.port,
-            linera_storage::StorageCacheSizes {
+            linera_storage::StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
-                lite_certificate_cache_size: self.lite_certificate_cache_size,
+                certificate_cache_size: self.certificate_cache_size,
                 certificate_raw_cache_size: self.certificate_raw_cache_size,
                 event_cache_size: self.event_cache_size,
+                cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
-        )
+            self.monitor_scan_interval,
+            self.monitor_start_block,
+            self.max_retries,
+            self.sqlite_path.as_deref(),
+        ))
         .await
     }
 }
@@ -160,7 +219,7 @@ impl GenerateDepositProofOptions {
             "block_header_rlp": alloy_primitives::hex::encode_prefixed(&proof.block_header_rlp),
             "receipt_rlp": alloy_primitives::hex::encode_prefixed(&proof.receipt_rlp),
             "proof_nodes": proof.proof_nodes.iter()
-                .map(|n| alloy_primitives::hex::encode_prefixed(n))
+                .map(alloy_primitives::hex::encode_prefixed)
                 .collect::<Vec<_>>(),
             "tx_index": proof.tx_index,
             "log_indices": proof.log_indices,

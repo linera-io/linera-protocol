@@ -48,6 +48,9 @@ pub const METHOD_NAME_LABEL: &str = "method_name";
 /// Prometheus label for distinguishing organic vs synthetic (benchmark) traffic.
 pub const TRAFFIC_TYPE_LABEL: &str = "traffic_type";
 
+/// Prometheus label for the error variant name, e.g. `"WorkerError::UnexpectedBlockHeight"`.
+pub const ERROR_TYPE_LABEL: &str = "error_type";
+
 /// Extracts the gRPC method name from a request URI path.
 ///
 /// gRPC paths have the form `/{package}.{Service}/{Method}` — the first segment

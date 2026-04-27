@@ -137,14 +137,9 @@ impl ChainOwnership {
     }
 
     /// Adds a regular owner.
+    #[cfg(with_testing)]
     pub fn with_regular_owner(mut self, owner: AccountOwner, weight: u64) -> Self {
         self.owners.insert(owner, weight);
-        self
-    }
-
-    /// Fixes the given owner as the leader of the first single-leader round on all heights.
-    pub fn with_first_leader(mut self, owner: AccountOwner) -> Self {
-        self.first_leader = Some(owner);
         self
     }
 

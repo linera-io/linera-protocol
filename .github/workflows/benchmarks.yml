@@ -12,7 +12,7 @@ env:
 
 jobs:
   benchmark:
-    runs-on: linera-io-self-hosted-ci
+    runs-on: ubuntu-latest
     timeout-minutes: 40
 
     steps:
@@ -27,6 +27,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Run benchmarks
       run: |

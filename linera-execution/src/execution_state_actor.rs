@@ -3,7 +3,10 @@
 
 //! Handle requests from the synchronous execution thread of user applications.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use custom_debug_derive::Debug;
 use futures::{channel::mpsc, StreamExt as _};
@@ -306,12 +309,18 @@ where
             }
 
             ChainOwnership { callback } => {
-                let ownership = self.state.system.ownership.get().clone();
+                let ownership = self.state.system.ownership.get().await?.clone();
                 callback.respond(ownership);
             }
 
             ApplicationPermissions { callback } => {
-                let permissions = self.state.system.application_permissions.get().clone();
+                let permissions = self
+                    .state
+                    .system
+                    .application_permissions
+                    .get()
+                    .await?
+                    .clone();
                 callback.respond(permissions);
             }
 
@@ -432,7 +441,7 @@ where
                 application_id,
                 callback,
             } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 if !app_permissions.can_manage_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
@@ -446,7 +455,7 @@ where
                 ownership,
                 callback,
             } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 if !app_permissions.can_manage_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
@@ -460,7 +469,7 @@ where
                 application_permissions,
                 callback,
             } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 if !app_permissions.can_manage_chain(&application_id) {
                     callback.respond(Err(ExecutionError::UnauthorizedApplication(application_id)));
                 } else {
@@ -524,6 +533,7 @@ where
 
                         let (_epoch, committee) = system
                             .current_committee()
+                            .await?
                             .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
                         let allowed_hosts = &committee.policy().http_request_allow_list;
 
@@ -631,7 +641,10 @@ where
                             .get_event(event_id.clone())
                             .await?
                             .ok_or(ExecutionError::EventsNotFound(vec![event_id.clone()]))?;
-                        Ok(OracleResponse::Event(event_id.clone(), event))
+                        Ok(OracleResponse::Event(
+                            event_id.clone(),
+                            Arc::unwrap_or_clone(event),
+                        ))
                     })
                     .await?
                     .to_event(&event_id)?;
@@ -694,7 +707,7 @@ where
             }
 
             GetApplicationPermissions { callback } => {
-                let app_permissions = self.state.system.application_permissions.get();
+                let app_permissions = self.state.system.application_permissions.get().await?;
                 callback.respond(app_permissions.clone());
             }
 

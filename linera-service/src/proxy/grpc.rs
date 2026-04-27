@@ -66,7 +66,7 @@ mod metrics {
     use linera_base::prometheus_util::{
         linear_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
-    use linera_rpc::grpc::{METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
+    use linera_rpc::grpc::{ERROR_TYPE_LABEL, METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
     use prometheus::{HistogramVec, IntCounterVec};
 
     pub static PROXY_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -74,7 +74,7 @@ mod metrics {
             "proxy_request_latency",
             "Proxy request latency",
             &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-            linear_bucket_interval(1.0, 50.0, 2000.0),
+            linear_bucket_interval(1.0, 50.0, 5000.0),
         )
     });
     pub static PROXY_REQUEST_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -97,9 +97,17 @@ mod metrics {
         register_int_counter_vec(
             "proxy_request_error",
             "Proxy request error",
-            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
         )
     });
+}
+
+#[cfg(with_metrics)]
+fn grpc_status_name(status: Option<&str>) -> String {
+    match status {
+        Some(code) => format!("{:?}", tonic::Code::from_bytes(code.as_bytes())),
+        None => "HTTP_ERROR".to_owned(),
+    }
 }
 
 #[derive(Clone)]
@@ -175,8 +183,9 @@ where
                     !response.status().is_success() || grpc_status.is_some_and(|s| s != "0");
 
                 if is_error {
+                    let error_type = grpc_status_name(grpc_status);
                     metrics::PROXY_REQUEST_ERROR
-                        .with_label_values(&[&method_name, traffic_type])
+                        .with_label_values(&[&method_name, traffic_type, &error_type])
                         .inc();
                 } else {
                     metrics::PROXY_REQUEST_SUCCESS
@@ -440,6 +449,8 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     type SubscribeStream = UnboundedReceiverStream<Result<Notification, Status>>;
+    type DownloadBlobsStream =
+        std::pin::Pin<Box<dyn futures::Stream<Item = Result<BlobContent, Status>> + Send>>;
 
     #[instrument(skip_all, err(Display), fields(method = "handle_block_proposal"))]
     async fn handle_block_proposal(
@@ -601,8 +612,34 @@ where
             .read_blob(blob_id)
             .await
             .map_err(Self::view_error_to_status)?;
-        let blob = blob.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+        let blob = blob
+            .map(Arc::unwrap_or_clone)
+            .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
         Ok(Response::new(blob.into_content().try_into()?))
+    }
+
+    #[instrument(skip_all, err(Display), fields(method = "download_blobs"))]
+    async fn download_blobs(
+        &self,
+        request: Request<BlobIds>,
+    ) -> Result<Response<Self::DownloadBlobsStream>, Status> {
+        let blob_ids = Vec::<linera_base::identifiers::BlobId>::try_from(request.into_inner())?;
+        let blobs = self
+            .0
+            .storage
+            .read_blobs(&blob_ids)
+            .await
+            .map_err(Self::view_error_to_status)?;
+        let stream = futures::stream::iter(blob_ids.into_iter().zip(blobs).map(
+            |(blob_id, maybe_blob)| {
+                let blob = maybe_blob
+                    .map(Arc::unwrap_or_clone)
+                    .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+                BlobContent::try_from(blob.into_content())
+                    .map_err(|err| Status::internal(err.to_string()))
+            },
+        ));
+        Ok(Response::new(Box::pin(stream)))
     }
 
     #[instrument(skip_all, err(Display), fields(method = "download_pending_blob"))]
@@ -629,14 +666,15 @@ where
         request: Request<CryptoHash>,
     ) -> Result<Response<Certificate>, Status> {
         let hash = request.into_inner().try_into()?;
-        let certificate: linera_chain::types::Certificate = self
-            .0
-            .storage
-            .read_certificate(hash)
-            .await
-            .map_err(Self::view_error_to_status)?
-            .ok_or_else(|| Status::not_found(hash.to_string()))?
-            .into();
+        let certificate: linera_chain::types::Certificate = Arc::unwrap_or_clone(
+            self.0
+                .storage
+                .read_certificate(hash)
+                .await
+                .map_err(Self::view_error_to_status)?
+                .ok_or_else(|| Status::not_found(hash.to_string()))?,
+        )
+        .into();
         Ok(Response::new(certificate.try_into()?))
     }
 
@@ -712,7 +750,8 @@ where
 
         let returned_certificates =
             limiter.take_if(certificates_by_height, |lim, certificate| {
-                let cert: linera_chain::types::Certificate = certificate.into();
+                let cert: linera_chain::types::Certificate =
+                    Arc::unwrap_or_clone(certificate).into();
                 Ok(lim.fits::<Certificate>(cert.clone())?.then_some(cert))
             })?;
 
@@ -738,6 +777,7 @@ where
             .map_err(Self::view_error_to_status)?
             .into_iter()
             .flatten()
+            .map(Arc::unwrap_or_clone)
             .collect::<Vec<(Vec<u8>, Vec<u8>)>>();
 
         let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =

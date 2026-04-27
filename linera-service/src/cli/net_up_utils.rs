@@ -3,7 +3,6 @@
 
 use std::{num::NonZeroU16, str::FromStr};
 
-use colored::Colorize as _;
 use linera_base::{data_types::Amount, listen_for_shutdown_signals, time::Duration};
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_rpc::config::CrossChainConfig;
@@ -207,6 +206,7 @@ pub async fn handle_net_up_service(
     with_faucet: bool,
     faucet_port: NonZeroU16,
     faucet_amount: Amount,
+    http_request_allow_list: Option<Vec<String>>,
 ) -> anyhow::Result<()> {
     assert!(
         num_initial_validators >= 1,
@@ -251,7 +251,7 @@ pub async fn handle_net_up_service(
         num_shards,
         num_proxies,
         policy_config,
-        http_request_allow_list: None,
+        http_request_allow_list,
         cross_chain_config,
         storage_config_builder,
         path_provider,
@@ -309,25 +309,14 @@ async fn print_messages_and_create_faucet(
          and LINERA_STORAGE as follows.\n"
     );
     println!(
-        "{}",
-        format!(
-            "export LINERA_WALLET=\"{}\"",
-            client.wallet_path().display(),
-        )
-        .bold(),
+        "export LINERA_WALLET=\"{}\"",
+        client.wallet_path().display(),
     );
     println!(
-        "{}",
-        format!(
-            "export LINERA_KEYSTORE=\"{}\"",
-            client.keystore_path().display(),
-        )
-        .bold()
+        "export LINERA_KEYSTORE=\"{}\"",
+        client.keystore_path().display(),
     );
-    println!(
-        "{}",
-        format!("export LINERA_STORAGE=\"{}\"", client.storage_path()).bold(),
-    );
+    println!("export LINERA_STORAGE=\"{}\"", client.storage_path(),);
 
     // Run the faucet using a separate wallet so it doesn't lock the admin wallet.
     // Keep half the balance on the admin chain for fee payments (e.g. committee changes).
@@ -340,10 +329,7 @@ async fn print_messages_and_create_faucet(
             .await?;
 
         eprintln!("To connect to this network, you can use the following faucet URL:");
-        println!(
-            "{}",
-            format!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"").bold(),
-        );
+        println!("export LINERA_FAUCET_URL=\"http://localhost:{faucet_port}\"");
 
         let service = faucet_client
             .run_faucet(Some(faucet_port.into()), Some(faucet_chain), faucet_amount)

@@ -72,6 +72,9 @@ service ValidatorNode {
   // Download a blob.
   rpc DownloadBlob(BlobId) returns (BlobContent);
 
+  // Download a batch of blobs as a stream.
+  rpc DownloadBlobs(BlobIds) returns (stream BlobContent);
+
   // Download a blob that belongs to a pending block on the given chain.
   rpc DownloadPendingBlob(PendingBlobRequest) returns (PendingBlobResult);
 
@@ -261,11 +264,8 @@ message ChainInfoQuery {
   // Query for certificate hashes at block heights sent from the chain.
   optional bytes request_sent_certificate_hashes_by_heights = 11;
 
-  // Whether to create network actions as part of the query.
-  optional bool create_network_actions = 12;
-
   // Query the previous event blocks for specific streams.
-  optional bytes request_previous_event_blocks = 13;
+  optional bytes request_previous_event_blocks = 12;
 }
 
 // An authenticated proposal for a new block.

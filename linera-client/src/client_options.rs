@@ -15,7 +15,8 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
-        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_MAX_EVENT_STREAM_QUERIES,
+        DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
     DEFAULT_QUORUM_GRACE_PERIOD,
@@ -33,7 +34,7 @@ pub enum Error {
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("config error: {0}")]
-    Config(#[from] crate::config::Error),
+    Config(#[from] crate::config::GenesisConfigError),
 }
 
 util::impl_from_infallible!(Error);
@@ -230,6 +231,11 @@ pub struct Options {
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
 
+    /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
+    /// request. Larger sets are split into multiple requests.
+    #[arg(long, default_value_t = DEFAULT_MAX_EVENT_STREAM_QUERIES)]
+    pub max_event_stream_queries: usize,
+
     /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
         long,
@@ -335,6 +341,7 @@ impl Options {
                 .notification_circuit_breaker_initial_probe_interval,
             notification_circuit_breaker_max_probe_interval: self
                 .notification_circuit_breaker_max_probe_interval,
+            max_event_stream_queries: self.max_event_stream_queries,
         }
     }
 

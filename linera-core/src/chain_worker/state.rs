@@ -27,7 +27,7 @@ use linera_chain::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
         OriginalProposal, ProposalContent, ProposedBlock,
     },
-    manager,
+    manager::{self, ManagerSafetySnapshot},
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
@@ -36,12 +36,14 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
-    Committee, ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
+    ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
     ResourceTracker, ServiceRuntimeEndpoint,
 };
-use linera_storage::{Clock as _, ResultReadCertificates, Storage};
+use linera_storage::{Clock as _, Storage};
 use linera_views::{
+    batch::Batch,
     context::{Context, InactiveContext},
+    store::WritableKeyValueStore as _,
     views::{ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::oneshot;
@@ -220,27 +222,28 @@ where
         self.service_runtime_task.take()
     }
 
+    /// Returns the pending cross-chain network actions for this chain, without
+    /// initializing the chain's execution state. Intended for callers that only
+    /// need to re-emit cross-chain requests from the outbox of a sender chain
+    /// whose `ChainDescription` we may never have needed.
+    #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
+    pub(crate) async fn cross_chain_network_actions(&self) -> Result<NetworkActions, WorkerError> {
+        self.create_network_actions(None).await
+    }
+
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
     #[tracing::instrument(level = "debug", skip(self))]
     pub(crate) async fn handle_chain_info_query(
         &mut self,
         query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        let create_network_actions = query.create_network_actions;
+    ) -> Result<ChainInfoResponse, WorkerError> {
         if let Some((height, round)) = query.request_leader_timeout {
             self.vote_for_leader_timeout(height, round).await?;
         }
         if query.request_fallback {
             self.vote_for_fallback().await?;
         }
-        let response = self.prepare_chain_info_response(query).await?;
-        // Trigger any outgoing cross-chain messages that haven't been confirmed yet.
-        let actions = if create_network_actions {
-            self.create_network_actions(None).await?
-        } else {
-            NetworkActions::default()
-        };
-        Ok((response, actions))
+        self.prepare_chain_info_response(query).await
     }
 
     /// Returns the requested blob, if it belongs to the current locking block or pending proposal.
@@ -253,7 +256,8 @@ where
             return Ok(blob);
         }
         let blob = self.storage.read_blob(blob_id).await?;
-        blob.ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
+        blob.map(Arc::unwrap_or_clone)
+            .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
     /// Reads the blobs from the chain manager or from storage. Returns an error if any are
@@ -339,7 +343,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob;
+            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -411,6 +415,42 @@ where
         })
     }
 
+    /// Returns confirmed blocks by hash, checking the cache first and batch-loading the rest
+    /// from storage. The order of the returned blocks matches the order of the input hashes.
+    async fn read_confirmed_blocks(
+        &self,
+        hashes: &[CryptoHash],
+    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, WorkerError> {
+        let mut blocks = Vec::with_capacity(hashes.len());
+        let mut uncached_indices = Vec::new();
+        let mut uncached_hashes = Vec::new();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            if let Some(hashed_block) = self.block_values.get(hash) {
+                blocks.push(Some(Arc::new(ConfirmedBlock::from_hashed(
+                    Arc::unwrap_or_clone(hashed_block),
+                ))));
+            } else {
+                blocks.push(None);
+                uncached_indices.push(i);
+                uncached_hashes.push(*hash);
+            }
+        }
+
+        if !uncached_hashes.is_empty() {
+            let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
+            for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
+                if let Some(block) = &maybe_block {
+                    self.block_values
+                        .insert_hashed(Cow::Borrowed(block.inner()));
+                }
+                blocks[i] = maybe_block;
+            }
+        }
+
+        Ok(blocks)
+    }
+
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         num_recipients = %heights_by_recipient.len()
@@ -425,70 +465,14 @@ where
             .flatten()
             .copied()
             .collect::<BTreeSet<_>>();
-        let next_block_height = self.chain.tip_state.get().next_block_height;
-        let log_heights = heights
-            .range(..next_block_height)
-            .copied()
-            .map(usize::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut hashes = self
-            .chain
-            .confirmed_log
-            .multi_get(log_heights)
-            .await?
-            .into_iter()
-            .zip(&heights)
-            .map(|(maybe_hash, height)| {
-                maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
-                    height: *height,
-                    chain_id: self.chain_id(),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let requested_heights: Vec<BlockHeight> = heights
-            .range(next_block_height..)
-            .copied()
-            .collect::<Vec<BlockHeight>>();
-        for (height, hash) in self
-            .chain
-            .preprocessed_blocks
-            .multi_get_pairs(requested_heights)
-            .await?
-        {
-            let hash = hash.ok_or_else(|| WorkerError::PreprocessedBlocksEntryNotFound {
-                height,
-                chain_id: self.chain_id(),
-            })?;
-            hashes.push(hash);
-        }
+        let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
 
-        let mut uncached_hashes = Vec::new();
-        let mut height_to_blocks: HashMap<BlockHeight, Hashed<Block>> = HashMap::new();
+        let blocks = self.read_confirmed_blocks(&hashes).await?;
 
-        for hash in hashes {
-            if let Some(hashed_block) = self.block_values.get(&hash) {
-                height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
-            } else {
-                uncached_hashes.push(hash);
-            }
-        }
-
-        if !uncached_hashes.is_empty() {
-            let certificates = self.storage.read_certificates(&uncached_hashes).await?;
-            let certificates = match ResultReadCertificates::new(certificates, uncached_hashes) {
-                ResultReadCertificates::Certificates(certificates) => certificates,
-                ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(WorkerError::ReadCertificatesError(hashes))
-                }
-            };
-
-            for cert in certificates {
-                let hashed_block = cert.into_value().into_inner();
-                let height = hashed_block.inner().header.height;
-                self.block_values
-                    .insert_hashed(Cow::Owned(hashed_block.clone()));
-                height_to_blocks.insert(height, hashed_block);
-            }
+        let mut height_to_blocks = HashMap::new();
+        for (block, hash) in blocks.into_iter().zip(hashes) {
+            let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
+            height_to_blocks.insert(block.height(), block);
         }
 
         let sender = self.chain.chain_id();
@@ -500,13 +484,13 @@ where
             let previous_height = heights.first().and_then(|first_height| {
                 let block = height_to_blocks.get(first_height)?;
                 let (_, prev_height) =
-                    block.inner().body.previous_message_blocks.get(&recipient)?;
+                    block.block().body.previous_message_blocks.get(&recipient)?;
                 Some(*prev_height)
             });
             let mut bundles = Vec::new();
             let mut bundles_size = 0;
             for height in heights {
-                let Some(hashed_block) = height_to_blocks.get(&height) else {
+                let Some(confirmed_block) = height_to_blocks.get(&height) else {
                     tracing::warn!(
                         %height,
                         %recipient,
@@ -514,9 +498,9 @@ where
                     );
                     break;
                 };
-                let new_bundles = hashed_block
-                    .inner()
-                    .message_bundles_for(recipient, hashed_block.hash())
+                let new_bundles = confirmed_block
+                    .block()
+                    .message_bundles_for(recipient, confirmed_block.inner().hash())
                     .collect::<Vec<_>>();
                 let new_size = new_bundles
                     .iter()
@@ -600,15 +584,15 @@ where
         // Check that the chain is active and ready for this timeout.
         // Verify the certificate. Returns a catch-all error to make client code more robust.
         self.initialize_and_save_if_needed().await?;
-        let (chain_epoch, committee) = self.chain.current_committee()?;
-        certificate.check(committee)?;
+        let (chain_epoch, committee) = self.chain.current_committee().await?;
+        certificate.check(&committee)?;
         if self
             .chain
             .tip_state
             .get()
             .already_validated_block(certificate.inner().height())?
         {
-            return Ok((self.chain_info_response(), NetworkActions::default()));
+            return Ok((self.chain_info_response().await?, NetworkActions::default()));
         }
         ensure!(
             certificate.inner().epoch() == chain_epoch,
@@ -624,7 +608,7 @@ where
             .handle_timeout_certificate(certificate, self.storage.clock().current_time());
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions))
+        Ok((self.chain_info_response().await?, actions))
     }
 
     /// Tries to load all blobs published in this proposal.
@@ -657,7 +641,7 @@ where
         let missing_blob_ids = missing_blob_ids(&maybe_blobs);
         if !missing_blob_ids.is_empty() {
             let chain = &mut self.chain;
-            if chain.ownership().open_multi_leader_rounds {
+            if chain.ownership().await?.open_multi_leader_rounds {
                 // TODO(#3203): Allow multiple pending proposals on permissionless chains.
                 chain.pending_proposed_blobs.clear();
             }
@@ -702,9 +686,9 @@ where
                 found_block_height: header.height,
             }
         );
-        let (epoch, committee) = self.chain.current_committee()?;
+        let (epoch, committee) = self.chain.current_committee().await?;
         check_block_epoch(epoch, header.chain_id, header.epoch)?;
-        certificate.check(committee)?;
+        certificate.check(&committee)?;
         let already_committed_block = self.chain.tip_state.get().already_validated_block(height)?;
         let should_skip_validated_block = || {
             self.chain
@@ -715,7 +699,7 @@ where
         if already_committed_block || should_skip_validated_block()? {
             // If we just processed the same pending block, return the chain info unchanged.
             return Ok((
-                self.chain_info_response(),
+                self.chain_info_response().await?,
                 NetworkActions::default(),
                 BlockOutcome::Skipped,
             ));
@@ -748,7 +732,11 @@ where
         )?;
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Processed,
+        ))
     }
 
     /// Processes a confirmed block (aka a commit).
@@ -773,40 +761,45 @@ where
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
-            return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
+            return Ok((
+                self.chain_info_response().await?,
+                actions,
+                BlockOutcome::Skipped,
+            ));
         }
 
-        // We haven't processed the block - verify the certificate first
+        // We haven't processed the block - verify the certificate first.
+        // Resolve the committee hash from the admin chain's epoch event stream; the
+        // chain-local `committees` map is just a cache of the same hashes for trusted
+        // epochs, so we can skip it and always hit the event stream.
         let epoch = block.header.epoch;
-        // Get the committee for the block's epoch from storage.
-        if let Some(committee) = self
+        let hash = self
             .chain
             .execution_state
-            .system
-            .committees
-            .get()
-            .get(&epoch)
-        {
-            certificate.check(committee)?;
-        } else {
-            let committee = self
-                .chain
-                .execution_state
-                .context()
-                .extra()
-                .get_committees(epoch..=epoch)
-                .await
-                .map_err(|error| {
-                    ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-                })?
-                .remove(&epoch)
-                .ok_or_else(|| {
-                    ChainError::InternalError(format!(
-                        "missing committee for epoch {epoch}; this is a bug"
-                    ))
-                })?;
-            certificate.check(&committee)?;
-        }
+            .context()
+            .extra()
+            .get_committee_hashes(epoch..=epoch)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?
+            .remove(&epoch)
+            .ok_or_else(|| {
+                ChainError::InternalError(format!(
+                    "missing committee for epoch {epoch}; this is a bug"
+                ))
+            })?;
+        let committee = self
+            .chain
+            .execution_state
+            .context()
+            .extra()
+            .get_or_load_committee_by_hash(hash)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?;
+        certificate.check(&committee)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
         // we can take note of it, so that if any are missing, we will accept them when the client
@@ -860,11 +853,11 @@ where
                     },
                 });
             }
-            trace!("Preprocessed confirmed block {height} on chain {chain_id:.8}");
+            trace!("Preprocessed confirmed block {height}");
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
             return Ok((
-                self.chain_info_response(),
+                self.chain_info_response().await?,
                 actions,
                 BlockOutcome::Preprocessed,
             ));
@@ -880,7 +873,7 @@ where
         // properly chained. Verify that the chain is active and that the epoch we used for
         // verifying the certificate is actually the active one on the chain.
         self.initialize_and_save_if_needed().await?;
-        let (epoch, _) = self.chain.current_committee()?;
+        let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
 
         let published_blobs = block
@@ -899,35 +892,13 @@ where
             );
         }
         let chain = &mut self.chain;
-        match chain
+        chain
             .remove_bundles_from_inboxes(
                 block.header.timestamp,
                 false,
                 block.body.incoming_bundles(),
             )
-            .await
-        {
-            Ok(()) => {}
-            Err(ChainError::InboxGapDetected { origin, .. })
-                if self.config.allow_revert_confirm =>
-            {
-                let retransmit_from = self.get_inbox_next_height(origin).await?;
-                warn!(
-                    "Inbox gap detected for {chain_id} from {origin}: \
-                    requesting resend from {retransmit_from}",
-                );
-                let mut actions = NetworkActions::default();
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::RevertConfirm {
-                        sender: origin,
-                        recipient: chain_id,
-                        retransmit_from,
-                    });
-                return Ok((self.chain_info_response(), actions, BlockOutcome::Skipped));
-            }
-            Err(e) => return Err(e.into()),
-        }
+            .await?;
         let confirmed_block = if let Some(mut execution_state) = self
             .execution_state_cache
             .as_ref()
@@ -957,32 +928,12 @@ where
                 .await?;
             // We should always agree on the messages and state hash.
             if outcome != verified {
-                if let Some(min_duration) = self.config.reset_on_incorrect_outcome {
-                    let block_zero_time = *self.chain.block_zero_executed_at.get();
-                    let elapsed = local_time.duration_since(block_zero_time);
-                    if elapsed >= min_duration {
-                        warn!(
-                            "IncorrectOutcome for block {height} on chain {chain_id}; \
-                            resetting chain state and re-executing"
-                        );
-                        return self
-                            .reset_and_reexecute_chain(
-                                block_hash,
-                                height,
-                                notify_when_messages_are_delivered,
-                            )
-                            .await;
-                    }
-                    warn!(
-                        "IncorrectOutcome for block {height} on chain {chain_id}; \
-                        not resetting because only {elapsed:?} elapsed since last \
-                        block 0 execution (minimum: {min_duration:?})"
-                    );
-                }
-                return Err(WorkerError::IncorrectOutcome {
-                    submitted: Box::new(outcome),
-                    computed: Box::new(verified),
-                });
+                return Err(ChainError::CorruptedChainState(format!(
+                    "computed block outcome differs from the certificate.\n\
+                    Computed: {verified:#?}\n\
+                    Submitted: {outcome:#?}"
+                ))
+                .into());
             }
             ConfirmedBlock::new(Block::new(proposed_block, verified))
         };
@@ -992,10 +943,13 @@ where
             .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
         let mut actions = self.create_network_actions(None).await?;
-        trace!("Processed confirmed block {height} on chain {chain_id:.8}");
+        trace!("Processed confirmed block {height}");
         actions.notifications.push(Notification {
             chain_id,
-            reason: Reason::NewBlock { height, block_hash },
+            reason: Reason::NewBlock {
+                height,
+                hash: block_hash,
+            },
         });
         if !updated_streams.is_empty() {
             actions.notifications.push(Notification {
@@ -1016,7 +970,11 @@ where
         self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
             .await;
 
-        Ok((self.chain_info_response(), actions, BlockOutcome::Processed))
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Processed,
+        ))
     }
 
     /// Schedules a notification for when cross-chain messages are delivered up to the given
@@ -1046,7 +1004,7 @@ where
     }
 
     /// Updates the chain's inboxes, receiving messages from a cross-chain update.
-    #[instrument(level = "trace", skip(self, bundles))]
+    #[instrument(level = "debug", skip(self, bundles), fields(chain_id = %self.chain_id()))]
     pub(crate) async fn process_cross_chain_update(
         &mut self,
         origin: ChainId,
@@ -1065,10 +1023,11 @@ where
         // we haven't received yet, the inbox has a gap.
         if let Some(prev) = sender_previous_height {
             if prev >= next_height_to_receive {
-                let recipient = self.chain_id();
-                if self.config.allow_revert_confirm {
+                let chain_id = self.chain_id();
+                if self.config.allow_revert_confirm && self.config.recovery_allowed_for(&chain_id) {
                     warn!(
-                        "Inbox gap detected for {recipient} from {origin}: \
+                        %chain_id,
+                        "Inbox gap detected from {origin}: \
                         sender declares previous height {prev} but we only have up to \
                         {next_height_to_receive}; requesting resend",
                     );
@@ -1078,7 +1037,7 @@ where
                     });
                 }
                 return Err(ChainError::InboxGapDetected {
-                    chain_id: recipient,
+                    chain_id,
                     origin,
                     expected_height: prev,
                     actual_height: bundles.first().map(|(_, b)| b.height).unwrap_or_default(),
@@ -1106,8 +1065,7 @@ where
             let add_to_received_log = previous_height != Some(bundle.height);
             previous_height = Some(bundle.height);
             // Update the staged chain state with the received block.
-            match self
-                .chain
+            self.chain
                 .receive_message_bundle_with_inbox(
                     &mut inbox,
                     &origin,
@@ -1115,34 +1073,17 @@ where
                     local_time,
                     add_to_received_log,
                 )
-                .await
-            {
-                Ok(()) => {}
-                Err(ChainError::InboxGapDetected { .. }) if self.config.allow_revert_confirm => {
-                    // Don't save — leave the inbox unchanged so the resend can
-                    // reconcile properly. Request from next_height_to_receive
-                    // rather than the specific gap height, so that all pending
-                    // removed_bundles entries can also be reconciled.
-                    warn!(
-                        "Inbox gap detected for {recipient} from {origin}: \
-                        requesting resend from {next_height_to_receive}",
-                    );
-                    return Ok(CrossChainUpdateResult::GapDetected {
-                        origin,
-                        retransmit_from: next_height_to_receive,
-                    });
-                }
-                Err(e) => return Err(e.into()),
-            }
+                .await?;
         }
         inbox.observe_size_metric();
         drop(inbox);
-        if !self.config.allow_inactive_chains && !self.chain.is_active() {
+        if !self.config.allow_inactive_chains && !self.chain.is_active().await? {
             // Refuse to create a chain state if the chain is still inactive by
             // now. Accordingly, do not send a confirmation, so that the
             // cross-chain update is retried later.
             warn!(
-                "Refusing to deliver messages to {recipient} from {origin} \
+                chain_id = %self.chain_id(),
+                "Refusing to deliver messages from {origin} \
                 at height {last_updated_height} because the recipient is still inactive",
             );
             return Ok(CrossChainUpdateResult::NothingToDo);
@@ -1323,9 +1264,10 @@ where
                 }
             };
             let block = self
-                .storage
-                .read_confirmed_block(hash)
+                .read_confirmed_blocks(&[hash])
                 .await?
+                .pop()
+                .flatten()
                 .ok_or_else(|| WorkerError::LocalBlockNotFound {
                     height: current_height,
                     chain_id: self.chain_id(),
@@ -1375,17 +1317,43 @@ where
         Ok(actions)
     }
 
+    /// If the config enables corruption recovery and the min-duration guard is
+    /// satisfied, resets the chain state and re-executes all confirmed blocks.
+    /// Returns `RevertConfirm` requests to dispatch, or `None` if no reset happened.
+    pub(crate) async fn maybe_reset_corrupted_chain_state(
+        &mut self,
+    ) -> Result<Option<Vec<CrossChainRequest>>, WorkerError> {
+        let Some(min_duration) = self.config.reset_on_corrupted_chain_state else {
+            return Ok(None);
+        };
+        let chain_id = self.chain_id();
+        if !self.config.recovery_allowed_for(&chain_id) {
+            return Ok(None);
+        }
+        let local_time = self.storage.clock().current_time();
+        let block_zero_time = *self.chain.block_zero_executed_at.get();
+        let elapsed = local_time.duration_since(block_zero_time);
+        if elapsed < min_duration {
+            warn!(
+                %chain_id, ?elapsed, ?min_duration,
+                "Not resetting corrupted chain state; not enough time elapsed \
+                since last block 0 execution"
+            );
+            return Ok(None);
+        }
+        warn!(%chain_id, "Corrupted chain state detected; resetting and re-executing");
+        Ok(Some(self.reset_and_reexecute_chain().await?))
+    }
+
     /// Resets the chain state completely and re-executes all confirmed blocks from storage.
-    /// Sends `RevertConfirm` to all known senders so they resend cross-chain messages.
+    /// Returns a `RevertConfirm` request for every known sender so they resend cross-chain
+    /// messages that may have been lost during the reset.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
-    async fn reset_and_reexecute_chain(
+    pub(crate) async fn reset_and_reexecute_chain(
         &mut self,
-        failed_block_hash: CryptoHash,
-        failed_height: BlockHeight,
-        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
-    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
         let chain_id = self.chain_id();
         let tip_height = self.chain.tip_state.get().next_block_height;
 
@@ -1394,22 +1362,34 @@ where
         let hashes = self.chain.confirmed_log.read(..).await?;
         let preprocessed = self.chain.preprocessed_blocks.index_values().await?;
 
-        // 2. Clear the chain state entirely and save.
-        self.chain.clear();
+        // 2. Snapshot safety-critical manager state so that we cannot be tricked
+        //    into double-signing if the reset wipes votes we already cast.
+        let manager_snapshot = ManagerSafetySnapshot::capture(&self.chain.manager).await?;
+
+        // 3. Wipe every key under this chain's storage root and reload a fresh
+        //    `ChainStateView`. `ChainStateView::clear` + `save` would only reset
+        //    the in-memory view; `HistoricallyHashableView` deliberately keeps
+        //    its `stored_hash` across clears, so the historical hash would carry
+        //    over from the pre-reset state and the replayed block outcomes would
+        //    never match the original certificates' `state_hash`. Deleting the
+        //    storage prefix and reloading is equivalent to creating the chain
+        //    from scratch, which is what replay expects.
+        self.wipe_and_reload_chain().await?;
         self.knows_chain_is_active = false;
-        self.save().await?;
         warn!(
-            "Cleared chain state for {chain_id} up to height {tip_height}; \
+            %chain_id,
+            "Cleared chain state up to height {tip_height}; \
             re-executing all blocks"
         );
 
-        // 3. Re-load certificates one at a time by hash and re-process them.
+        // 4. Re-load certificates one at a time by hash and re-process them.
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
             let cert = self
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1418,49 +1398,47 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
+                .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
 
-        // 4. Now process the original certificate that triggered the error.
-        let failed_certificate = self
-            .storage
-            .read_certificate(failed_block_hash)
-            .await?
-            .ok_or_else(|| WorkerError::LocalBlockNotFound {
-                height: failed_height,
-                chain_id,
-            })?;
-        let result = Box::pin(
-            self.process_confirmed_block(failed_certificate, notify_when_messages_are_delivered),
-        )
-        .await?;
-
-        // 5. Send RevertConfirm to all senders so they resend messages we may
-        //    have lost during the reset.
-        let (info, mut actions, outcome) = result;
-        for sender_id in sender_ids {
-            actions
-                .cross_chain_requests
-                .push(CrossChainRequest::RevertConfirm {
-                    sender: sender_id,
-                    recipient: chain_id,
-                    retransmit_from: BlockHeight::ZERO,
-                });
+        // 5. Restore any previously cast votes and locking block so we cannot be
+        //    asked to sign a conflicting statement at the same height/round. Votes
+        //    in the manager always belong to the pending height (one past the tip),
+        //    so restoring is only meaningful if re-execution landed at the same
+        //    tip. Otherwise the restored state would refer to a stale pending
+        //    height and could only break the manager's invariants without any
+        //    safety benefit — so we drop the snapshot in that case.
+        let new_tip_height = self.chain.tip_state.get().next_block_height;
+        if new_tip_height == tip_height {
+            manager_snapshot.restore(&mut self.chain.manager)?;
+            self.save().await?;
+        } else {
+            warn!(
+                %tip_height, %new_tip_height,
+                "Dropping manager snapshot: pre-reset tip differs from post-reset tip"
+            );
         }
 
+        // 6. Build RevertConfirm requests so each sender resends messages we may
+        //    have lost during the reset.
+        let revert_requests = sender_ids
+            .into_iter()
+            .map(|sender| CrossChainRequest::RevertConfirm {
+                sender,
+                recipient: chain_id,
+                retransmit_from: BlockHeight::ZERO,
+            })
+            .collect::<Vec<_>>();
+
         warn!(
-            "Chain {chain_id} reset and re-executed up to height {}; \
-            sent RevertConfirm to {} senders",
-            self.chain.tip_state.get().next_block_height,
-            actions
-                .cross_chain_requests
-                .iter()
-                .filter(|r| matches!(r, CrossChainRequest::RevertConfirm { .. }))
-                .count(),
+            tip_height = %self.chain.tip_state.get().next_block_height,
+            num_revert_confirms = revert_requests.len(),
+            "Chain reset and re-executed; sending RevertConfirm to senders"
         );
 
-        Ok((info, actions, outcome))
+        Ok(revert_requests)
     }
 
     #[instrument(skip_all, fields(
@@ -1696,7 +1674,7 @@ where
             .clock()
             .current_time()
             .delta_since(event_data.timestamp);
-        if elapsed >= chain.ownership().timeout_config.fallback_duration {
+        if elapsed >= chain.ownership().await?.timeout_config.fallback_duration {
             let chain_id = chain.chain_id();
             let height = chain.tip_state.get().next_block_height;
             let key_pair = self.config.key_pair();
@@ -1730,7 +1708,7 @@ where
             .await?
         {
             if !pending_blobs.validated.get() {
-                let (_, committee) = self.chain.current_committee()?;
+                let (_, committee) = self.chain.current_committee().await?;
                 let policy = committee.policy();
                 policy
                     .check_blob_size(blob.content())
@@ -1745,7 +1723,7 @@ where
         }
         ensure!(was_expected, WorkerError::UnexpectedBlob);
         self.save().await?;
-        Ok(self.chain_info_response())
+        self.chain_info_response().await
     }
 
     /// Returns a stored [`Certificate`] for the chain's block at the requested [`BlockHeight`].
@@ -1769,6 +1747,7 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
+            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }
@@ -1872,7 +1851,7 @@ where
     ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
-        let (_, committee) = self.chain.current_committee()?;
+        let (_, committee) = self.chain.current_committee().await?;
         block.check_proposal_size(committee.policy().maximum_block_proposal_size)?;
 
         self.chain
@@ -1882,7 +1861,8 @@ where
             Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
 
         // No need to sign: only used internally.
-        let mut response = ChainInfoResponse::new(&self.chain, None);
+        let info = ChainInfo::from_chain_view(&self.chain).await?;
+        let mut response = ChainInfoResponse::new(info, None);
         if let Some(owner) = executed_block.header.authenticated_owner {
             response.info.requested_owner_balance = self
                 .chain
@@ -1922,7 +1902,7 @@ where
         // Check if the chain is ready for this new block proposal.
         chain.tip_state.get().verify_block_chaining(block)?;
         // Check the epoch.
-        let (epoch, committee) = chain.current_committee()?;
+        let (epoch, committee) = chain.current_committee().await?;
         check_block_epoch(epoch, block.chain_id, block.epoch)?;
         let policy = committee.policy().clone();
         block.check_proposal_size(policy.maximum_block_proposal_size)?;
@@ -1941,7 +1921,7 @@ where
             }
             Some(OriginalProposal::Regular { certificate }) => {
                 // Verify that this block has been validated by a quorum before.
-                certificate.check(committee)?;
+                certificate.check(&committee)?;
             }
             Some(OriginalProposal::Fast(signature)) => {
                 let original_proposal = BlockProposal {
@@ -1972,7 +1952,7 @@ where
         }
         if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
             // We already voted for this block.
-            return Ok((self.chain_info_response(), NetworkActions::default()));
+            return Ok((self.chain_info_response().await?, NetworkActions::default()));
         }
         let local_time = self.storage.clock().current_time();
 
@@ -2056,7 +2036,7 @@ where
         }
         self.save().await?;
         let actions = self.create_network_actions(Some(old_round)).await?;
-        Ok((self.chain_info_response(), actions))
+        Ok((self.chain_info_response().await?, actions))
     }
 
     /// Prepares a [`ChainInfoResponse`] for a [`ChainInfoQuery`].
@@ -2069,7 +2049,7 @@ where
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
         let chain = &self.chain;
-        let mut info = ChainInfo::from(chain);
+        let mut info = ChainInfo::from_chain_view(chain).await?;
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
@@ -2227,8 +2207,9 @@ where
         Ok(())
     }
 
-    pub(crate) fn chain_info_response(&self) -> ChainInfoResponse {
-        ChainInfoResponse::new(&self.chain, self.config.key_pair())
+    pub(crate) async fn chain_info_response(&self) -> Result<ChainInfoResponse, WorkerError> {
+        let info = ChainInfo::from_chain_view(&self.chain).await?;
+        Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
 
     /// Stores the chain state in persistent storage.
@@ -2239,17 +2220,52 @@ where
     ))]
     pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
-            if error.must_reload_view() {
+            tracing::error!(
+                ?error,
+                chain_id = %self.chain_id(),
+                "Chain save failed; marking worker as poisoned"
+            );
+            self.poisoned = true;
+            return Err(WorkerError::PoisonedWorker);
+        }
+        Ok(())
+    }
+
+    /// Deletes every key under this chain's storage root and replaces `self.chain`
+    /// with a freshly loaded (empty) view. If either the write or the reload fails,
+    /// the worker is marked as poisoned: the partial deletion may have left
+    /// storage inconsistent with the in-memory view, so it cannot be reused.
+    #[instrument(skip_all, fields(
+        chain_id = %self.chain_id()
+    ))]
+    async fn wipe_and_reload_chain(&mut self) -> Result<(), WorkerError> {
+        let context = self.chain.context().clone();
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(Vec::new());
+        if let Err(error) = context.store().write_batch(batch).await {
+            tracing::error!(
+                ?error,
+                chain_id = %self.chain_id(),
+                "Wiping chain storage failed; marking worker as poisoned"
+            );
+            self.poisoned = true;
+            return Err(WorkerError::PoisonedWorker);
+        }
+        match ChainStateView::load(context).await {
+            Ok(chain) => {
+                self.chain = chain;
+                Ok(())
+            }
+            Err(error) => {
                 tracing::error!(
                     ?error,
                     chain_id = %self.chain_id(),
-                    "Journal resolution failed; marking worker as poisoned"
+                    "Reloading chain after wipe failed; marking worker as poisoned"
                 );
                 self.poisoned = true;
+                Err(WorkerError::PoisonedWorker)
             }
-            return Err(error.into());
         }
-        Ok(())
     }
 }
 
@@ -2306,7 +2322,7 @@ fn check_block_epoch(
 pub(crate) struct CrossChainUpdateHelper<'a> {
     pub(crate) allow_messages_from_deprecated_epochs: bool,
     pub(crate) current_epoch: Epoch,
-    pub(crate) committees: &'a BTreeMap<Epoch, Committee>,
+    pub(crate) committees: &'a BTreeMap<Epoch, CryptoHash>,
 }
 
 impl<'a> CrossChainUpdateHelper<'a> {

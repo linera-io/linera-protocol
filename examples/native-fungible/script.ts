@@ -1,5 +1,4 @@
 /// <reference types="vite/client" />
-/// <reference types="vite/types/importMeta.d.ts" />
 
 import * as linera from "@linera/client";
 import { ethers } from "ethers";
@@ -79,7 +78,7 @@ const submitButton: HTMLInputElement = transferForm.querySelector('input[type="s
 submitButton.disabled = true;
 
 transferForm.addEventListener("submit", (event) => {
-  const elements = event.target.elements as TransferFormControlsCollection;
+  const elements = (event.target as HTMLFormElement).elements as TransferFormControlsCollection;
   event.preventDefault();
   transfer(
     application,
@@ -103,9 +102,10 @@ const signer = linera.signer.PrivateKey.fromMnemonic(mnemonic);
 const wallet = await faucet.createWallet();
 const owner = signer.address();
 const chainId = await faucet.claimChain(wallet, owner);
+document.querySelector("#chain-id").textContent = chainId;
+document.querySelector("#owner").textContent = owner;
 const client = await new linera.Client(wallet, signer);
-document.querySelector("#chain-id").innerText = chainId;
-document.querySelector("#owner").innerText = owner;
+await client.start();
 
 const chain = await client.chain(chainId);
 const application = await chain.application(

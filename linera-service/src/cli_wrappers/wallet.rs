@@ -32,7 +32,6 @@ use linera_base::{
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::worker::Notification;
-use linera_execution::committee::Committee;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_command_opts::to_args;
@@ -58,7 +57,7 @@ use crate::{
         Network,
     },
     util::{self, ChildExt},
-    wallet::Wallet,
+    Wallet,
 };
 
 /// The name of the environment variable that allows specifying additional arguments to be passed
@@ -1652,7 +1651,10 @@ impl NodeService {
         Ok(module_id.with_abi())
     }
 
-    pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
+    pub async fn query_committees(
+        &self,
+        chain_id: &ChainId,
+    ) -> Result<BTreeMap<Epoch, CryptoHash>> {
         let query = format!(
             "query {{ chain(chainId:\"{chain_id}\") {{
                 executionState {{ system {{ committees }} }}
@@ -2103,12 +2105,9 @@ pub trait NotificationsExt {
     ) -> impl Future<Output = Result<CryptoHash>> {
         let expected_height = expected_height.into();
         self.wait_for(move |notification| {
-            if let Reason::NewBlock {
-                height, block_hash, ..
-            } = notification.reason
-            {
+            if let Reason::NewBlock { height, hash, .. } = notification.reason {
                 if expected_height.is_none_or(|h| h == height) {
-                    return Some(block_hash);
+                    return Some(hash);
                 }
             }
             None

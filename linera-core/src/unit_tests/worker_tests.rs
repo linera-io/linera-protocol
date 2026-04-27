@@ -42,7 +42,7 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight,
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
-        PostedMessage, ProposedBlock, SignatureAggregator, Transaction,
+        PostedMessage, ProposedBlock, SignatureAggregator, Transaction, Vote,
     },
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
@@ -178,6 +178,7 @@ where
                 allow_messages_from_deprecated_epochs: is_client,
                 long_lived_services: has_long_lived_services,
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                sender_chain_ttl: None,
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(keypair.secret_key));
@@ -723,7 +724,7 @@ where
                 if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -767,7 +768,7 @@ where
         ) if matches!(**execution_error, ExecutionError::IncorrectTransferAmount))
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -1059,7 +1060,7 @@ where
         Err(WorkerError::InvalidOwner)
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -1115,7 +1116,7 @@ where
             })
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
 
@@ -1124,7 +1125,7 @@ where
         .handle_block_proposal(block_proposal0.clone())
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
     // Multi-leader round - it's not confirmed yet.
     assert!(block.matches_proposed_block(&block_proposal0.content.block));
@@ -1136,7 +1137,7 @@ where
         .handle_validated_certificate(block_certificate0)
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     let block = chain.manager.confirmed_vote().unwrap().value().block();
     // Should be confirmed after handling the certificate.
     assert!(block.matches_proposed_block(&block_proposal0.content.block));
@@ -1153,7 +1154,7 @@ where
         .await?;
 
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
     assert!(block.matches_proposed_block(&block_proposal1.content.block));
     assert!(chain.manager.confirmed_vote().is_none());
@@ -1243,7 +1244,7 @@ where
 
     {
         let chain = env.worker().chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(1));
     }
 
@@ -1268,7 +1269,7 @@ where
 
     {
         let chain = env.worker().chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(2));
     }
 
@@ -1280,7 +1281,7 @@ where
 
     {
         let chain = env.worker().chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_eq!(chain.tip_state.get().next_block_height, BlockHeight(3));
     }
 
@@ -1380,7 +1381,7 @@ where
                 chain_id: chain_1,
                 reason: NewBlock {
                     height: BlockHeight(0),
-                    block_hash: certificate0.hash(),
+                    hash: certificate0.hash(),
                 }
             },
             Notification {
@@ -1394,7 +1395,7 @@ where
                 chain_id: chain_1,
                 reason: NewBlock {
                     height: BlockHeight(1),
-                    block_hash: certificate1.hash(),
+                    hash: certificate1.hash(),
                 }
             },
             Notification {
@@ -1671,7 +1672,7 @@ where
         ) if matches!(**execution_error, ExecutionError::InsufficientBalance { .. }))
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none());
     assert!(chain.manager.validated_vote().is_none());
     Ok(())
@@ -1710,7 +1711,7 @@ where
         .await?;
     chain_info_response.check(env.executing_worker().public_key())?;
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.confirmed_vote().is_none()); // It was a multi-leader
                                                        // round.
     let validated_certificate =
@@ -1723,7 +1724,7 @@ where
         .await?;
     chain_info_response.check(env.executing_worker().public_key())?;
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert!(chain.manager.validated_vote().is_none()); // Should be confirmed by now.
     let pending_vote = chain.manager.confirmed_vote().unwrap().lite();
     assert_eq!(
@@ -1920,7 +1921,7 @@ where
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert_eq!(Amount::ZERO, *chain.execution_state.system.balance.get());
     assert_eq!(
         BlockHeight::from(1),
@@ -1961,7 +1962,7 @@ where
     assert_eq!(chain.confirmed_log.count(), 1);
     assert_eq!(Some(certificate.hash()), chain.tip_state.get().block_hash);
     let chain = env.worker().chain_state_view(chain_2).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     Ok(())
 }
 
@@ -2001,7 +2002,7 @@ where
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let new_sender_chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(new_sender_chain.is_active());
+    assert!(new_sender_chain.is_active().await?);
     assert_eq!(
         Amount::ZERO,
         *new_sender_chain.execution_state.system.balance.get()
@@ -2016,7 +2017,7 @@ where
         new_sender_chain.tip_state.get().block_hash
     );
     let new_recipient_chain = env.executing_worker().chain_state_view(chain_2).await?;
-    assert!(new_recipient_chain.is_active());
+    assert!(new_recipient_chain.is_active().await?);
     assert_eq!(
         Amount::MAX,
         *new_recipient_chain.execution_state.system.balance.get()
@@ -2055,7 +2056,7 @@ where
         .fully_handle_certificate_with_notifications(certificate.clone(), &())
         .await?;
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
 
     // With the new optimization, transfers to the same chain should not create messages.
@@ -2106,7 +2107,7 @@ where
 
     // Check the sender chain
     let chain_1_state = env.executing_worker().chain_state_view(chain_1).await?;
-    assert!(chain_1_state.is_active());
+    assert!(chain_1_state.is_active().await?);
     assert_eq!(
         Amount::ZERO,
         *chain_1_state.execution_state.system.balance.get()
@@ -2188,7 +2189,7 @@ where
         .handle_cross_chain_request(update_recipient_direct(chain_2, &certificate.clone()))
         .await?;
     let chain = env.worker().chain_state_view(chain_2).await?;
-    assert!(chain.is_active());
+    assert!(chain.is_active().await?);
     assert_eq!(Amount::ONE, *chain.execution_state.system.balance.get());
     assert_eq!(BlockHeight::ZERO, chain.tip_state.get().next_block_height);
     let inbox = chain
@@ -2449,7 +2450,7 @@ where
 
     {
         let recipient_chain = env.executing_worker().chain_state_view(chain_2).await?;
-        assert!(recipient_chain.is_active());
+        assert!(recipient_chain.is_active().await?);
         assert_eq!(
             *recipient_chain.execution_state.system.balance.get(),
             Amount::from_tokens(4)
@@ -2470,7 +2471,7 @@ where
         assert_eq!(recipient_chain.received_log.count(), 1);
     }
     let query = ChainInfoQuery::new(chain_2).with_received_log_excluding_first_n(0);
-    let (response, _actions) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -2667,7 +2668,7 @@ where
 
     {
         let chain = env.executing_worker().chain_state_view(chain_2).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_no_removed_bundles(&chain).await;
     }
 
@@ -2705,7 +2706,7 @@ where
 
     {
         let chain = env.worker.chain_state_view(chain_1).await?;
-        assert!(chain.is_active());
+        assert!(chain.is_active().await?);
         assert_no_removed_bundles(&chain).await;
     }
     Ok(())
@@ -2764,7 +2765,7 @@ where
         .await?;
     {
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
         assert_eq!(
             BlockHeight::from(1),
@@ -2830,7 +2831,7 @@ where
     {
         // The child is active and has not migrated yet.
         let user_chain = env.worker().chain_state_view(user_id).await?;
-        assert!(user_chain.is_active());
+        assert!(user_chain.is_active().await?);
         assert_eq!(
             BlockHeight::ZERO,
             user_chain.tip_state.get().next_block_height
@@ -2907,7 +2908,7 @@ where
         .await?;
     {
         let user_chain = env.worker().chain_state_view(user_id).await?;
-        assert!(user_chain.is_active());
+        assert!(user_chain.is_active().await?);
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -3002,7 +3003,7 @@ where
 
     // The transfer was started..
     let user_chain = env.worker().chain_state_view(user_id).await?;
-    assert!(user_chain.is_active());
+    assert!(user_chain.is_active().await?);
     assert_eq!(
         BlockHeight::from(1),
         user_chain.tip_state.get().next_block_height
@@ -3015,7 +3016,7 @@ where
 
     // .. and the message has gone through.
     let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-    assert!(admin_chain.is_active());
+    assert!(admin_chain.is_active().await?);
     assert_eq!(admin_chain.inboxes.indices().await?.len(), 1);
     matches!(
         &admin_chain
@@ -3127,7 +3128,7 @@ where
     {
         // The transfer was started..
         let user_chain = env.worker().chain_state_view(user_id).await?;
-        assert!(user_chain.is_active());
+        assert!(user_chain.is_active().await?);
         assert_eq!(
             BlockHeight::from(1),
             user_chain.tip_state.get().next_block_height
@@ -3140,7 +3141,7 @@ where
 
         // .. but the message hasn't gone through.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert!(admin_chain.inboxes.indices().await?.is_empty());
     }
 
@@ -3181,7 +3182,7 @@ where
     {
         // The admin chain has an anticipated message.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert!(admin_chain
             .inboxes
             .try_load_entry(&user_id)
@@ -3202,7 +3203,7 @@ where
     {
         // The admin chain has no more anticipated messages.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active());
+        assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
     }
 
@@ -3247,7 +3248,7 @@ where
     let stream_id = StreamId::system(NEW_EPOCH_STREAM_NAME);
     let query =
         ChainInfoQuery::new(admin_chain_id).with_previous_event_blocks(vec![stream_id.clone()]);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -3263,7 +3264,9 @@ where
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
     let env = TestEnvironment::new(&mut storage_builder, true, false).await?;
-    let committees = BTreeMap::from([(Epoch::from(1), env.committee().clone())]);
+    // CrossChainUpdateHelper only checks `contains_key` on this map, so a dummy hash
+    // per known epoch is enough.
+    let committees = BTreeMap::from([(Epoch::from(1), CryptoHash::test_hash("epoch 1"))]);
 
     let chain_0 = env.admin_description.clone();
     let chain_1 = dummy_chain_description(1);
@@ -3525,7 +3528,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -3621,7 +3624,7 @@ where
         .handle_validated_certificate(certificate)
         .await?;
     let query_values = ChainInfoQuery::new(chain_1).with_manager_values();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
@@ -3662,7 +3665,7 @@ where
         .executing_worker()
         .handle_block_proposal(proposal)
         .await?;
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values.clone())
         .await?;
@@ -3713,7 +3716,7 @@ where
     worker
         .handle_validated_certificate(certificate.clone())
         .await?;
-    let (response, _) = worker.handle_chain_info_query(query_values).await?;
+    let response = worker.handle_chain_info_query(query_values).await?;
     assert_eq!(
         response.info.manager.requested_locking,
         Some(Box::new(LockingBlock::Regular(certificate)))
@@ -3808,7 +3811,7 @@ where
     clock.set(response.info.manager.round_timeout.unwrap());
 
     // Now the validator will sign a leader timeout vote.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query)
         .await?;
@@ -3841,7 +3844,7 @@ where
         .await?;
     assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values)
         .await?;
@@ -4014,7 +4017,7 @@ where
         .handle_block_proposal(proposal)
         .await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query_values)
         .await?;
@@ -4060,7 +4063,7 @@ where
     let query = ChainInfoQuery::new(chain_id)
         .with_fallback()
         .with_committees();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4072,7 +4075,7 @@ where
 
     // Even if a long time passes: Without a new epoch there's no fallback mode.
     clock.add(fallback_duration);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4097,7 +4100,7 @@ where
         .await?;
 
     // Epoch was just created at time 0: No fallback mode yet.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4105,7 +4108,7 @@ where
 
     // Advance time past the fallback_duration. Now we should vote for fallback.
     clock.add(fallback_duration);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
@@ -4120,17 +4123,23 @@ where
         .await?;
 
     // Now we are in fallback mode, and the validator is the leader.
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
-    let expected_key = response
+    let committee_hash = *response
         .info
         .requested_committees
         .unwrap()
         .get(&response.info.epoch)
-        .unwrap()
+        .unwrap();
+    let committee = env
+        .executing_worker()
+        .storage
+        .get_or_load_committee_by_hash(committee_hash)
+        .await?;
+    let expected_key = committee
         .validators
         .get(&env.executing_worker().public_key())
         .unwrap()
@@ -4597,7 +4606,7 @@ where
 
     // Query pending bundles and verify priority chain's bundle comes first.
     let query = ChainInfoQuery::new(chain_2).with_pending_message_bundles();
-    let (response, _actions) = env.worker().handle_chain_info_query(query).await?;
+    let response = env.worker().handle_chain_info_query(query).await?;
     let bundles = &response.info.requested_pending_message_bundles;
 
     assert_eq!(bundles.len(), 2);
@@ -4609,6 +4618,392 @@ where
         bundles[1].origin, chain_1,
         "Non-priority chain bundle should be second"
     );
+
+    Ok(())
+}
+
+/// Tests the RevertConfirm recovery mechanism.
+///
+/// Simulates the scenario where the sender's outbox was drained (via a spurious
+/// confirmation) but the recipient still has anticipated messages in `removed_bundles`
+/// that were never delivered. The RevertConfirm mechanism should detect the gap,
+/// request the sender to re-add the missing heights to its outbox, and resend the
+/// bundles so the inbox can reconcile.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_revert_confirm_recovery<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    env.worker = env.worker.with_allow_revert_confirm(true);
+    let chain_1 = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await
+        .id();
+
+    // Step 1: Create two transfer certificates from chain_1 to chain_2.
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            None,
+        )
+        .await;
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Some(&cert_0),
+        )
+        .await;
+
+    // Step 2: Process both certs on chain_1 (adds heights 0, 1 to outbox for chain_2).
+    env.worker()
+        .process_confirmed_block(cert_0.clone(), None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1.clone(), None)
+        .await?;
+
+    // Step 3: Deliver height 0 to chain_2 and confirm it on chain_1.
+    // (Normal flow for height 0 only.)
+    let actions = env
+        .worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_0))
+        .await?;
+    // The actions should contain a ConfirmUpdatedRecipient.
+    for request in actions.cross_chain_requests {
+        env.worker().handle_cross_chain_request(request).await?;
+    }
+
+    // Step 4: Send a spurious ConfirmUpdatedRecipient that claims chain_2 already
+    // received up to height 1. This drains height 1 from chain_1's outbox even
+    // though chain_2 never received it.
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::ConfirmUpdatedRecipient {
+            sender: chain_1,
+            recipient: chain_2,
+            latest_height: BlockHeight::from(1),
+        })
+        .await?;
+
+    // Verify chain_1's outbox for chain_2 is now empty.
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        let outbox = chain.outboxes.try_load_entry(&chain_2).await?;
+        assert!(
+            outbox.is_none() || outbox.unwrap().queue.count() == 0,
+            "Outbox should be drained by the spurious confirm"
+        );
+    }
+
+    // Step 5: Create cert_2 from chain_1 (height 2), process it on chain_1, and
+    // deliver it to chain_2. The UpdateRecipient carries previous_height=Some(1)
+    // (cert_2's predecessor for chain_2 is cert_1 at height 1). Since chain_2's
+    // next_height_to_receive is only 1 (it received height 0 but not 1), the
+    // proactive gap detection fires immediately — no need for chain_2 to have
+    // consumed the missing message first.
+    let cert_2 = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(2),
+            Vec::new(),
+            Some(&cert_1),
+        )
+        .await;
+    // Process cert_2 on chain_1 so the block is in confirmed_log.
+    env.worker()
+        .process_confirmed_block(cert_2.clone(), None)
+        .await?;
+
+    // Now manually deliver height 2's cross-chain update to chain_2.
+    let actions = env
+        .worker()
+        .handle_cross_chain_request(update_recipient_direct(chain_2, &cert_2))
+        .await?;
+    // Should contain a RevertConfirm (not a ConfirmUpdatedRecipient).
+    assert!(
+        actions
+            .cross_chain_requests
+            .iter()
+            .any(|r| matches!(r, CrossChainRequest::RevertConfirm { .. })),
+        "Expected RevertConfirm but got: {:?}",
+        actions.cross_chain_requests,
+    );
+    // Now process the full chain of requests (RevertConfirm → resend → confirm).
+    let mut requests = std::collections::VecDeque::from(actions.cross_chain_requests);
+    let mut iterations = 0;
+    while let Some(request) = requests.pop_front() {
+        iterations += 1;
+        assert!(iterations < 20, "Too many iterations in cross-chain loop");
+        let actions = env.worker().handle_cross_chain_request(request).await?;
+        requests.extend(actions.cross_chain_requests);
+    }
+
+    // Step 7: Verify recovery — chain_2 received all three heights.
+    {
+        let chain = env.worker().chain_state_view(chain_2).await?;
+        let inbox = chain
+            .inboxes
+            .try_load_entry(&chain_1)
+            .await?
+            .expect("chain_2 should have an inbox for chain_1");
+        assert_eq!(
+            inbox.removed_bundles.count(),
+            0,
+            "removed_bundles should be empty"
+        );
+        // Heights 0, 1, 2 should all be in added_bundles (delivered but not yet
+        // consumed by a block on chain_2).
+        assert_eq!(
+            inbox.added_bundles.count(),
+            3,
+            "all three heights should have been delivered"
+        );
+    }
+
+    Ok(())
+}
+
+/// Tests the reset-on-corrupted-chain-state recovery mechanism.
+///
+/// Corrupts a chain's `previous_message_blocks` in storage so that re-executing the
+/// next block produces a different `BlockExecutionOutcome`. First verifies that the
+/// corruption causes `CorruptedChainState` without the recovery flag, then enables the
+/// flag and verifies that the chain is reset and re-executed successfully.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_reset_on_corrupted_chain_state<B>(mut storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    let chain_id = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await
+        .id();
+    let target_id = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await
+        .id();
+    let storage = env.worker.storage.clone();
+
+    // Step 1: Create and fully process block 0 (transfer from chain to target).
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_id,
+            sender_key_pair.public(),
+            target_id,
+            Amount::from_tokens(5),
+            Vec::new(),
+            None,
+        )
+        .await;
+    env.worker()
+        .fully_handle_certificate_with_notifications(cert_0.clone(), &())
+        .await?;
+
+    // Verify block 0 was processed.
+    {
+        let chain = env.worker().chain_state_view(chain_id).await?;
+        assert_eq!(
+            chain.tip_state.get().next_block_height,
+            BlockHeight::from(1)
+        );
+    }
+
+    // Step 2: Plant a confirmed vote in the chain manager. After the reset, it must
+    // still be present — otherwise the validator could be tricked into double-signing.
+    let planted_vote = {
+        let key_pair = env.worker.chain_worker_config.key_pair().unwrap().copy();
+        let mut chain = storage.load_chain(chain_id).await?;
+        let vote = Vote::new(cert_0.value().clone(), Round::Fast, &key_pair);
+        chain.manager.confirmed_vote.set(Some(vote.clone()));
+        chain.save().await?;
+        vote
+    };
+
+    // Step 3: Corrupt `previous_message_blocks` in storage. This directly affects
+    // the BlockExecutionOutcome (it's a field in the outcome struct), so the next
+    // block's computed outcome will differ from the certificate's.
+    {
+        let mut chain = storage.load_chain(chain_id).await?;
+        // Remove the entry for target_id. Block 1's locally computed outcome will
+        // then have no previous_message_blocks entry for target_id, while the
+        // certificate's outcome has one pointing to height 0.
+        chain
+            .execution_state
+            .previous_message_blocks
+            .remove(&target_id)?;
+        chain.save().await?;
+    }
+
+    // Step 3: Create block 1 certificate.
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_id,
+            sender_key_pair.public(),
+            target_id,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Some(&cert_0),
+        )
+        .await;
+
+    // Step 4: Verify that WITHOUT recovery, processing fails with CorruptedChainState.
+    {
+        let worker_no_recovery = WorkerState::new(
+            storage.clone(),
+            ChainWorkerConfig {
+                nickname: "No-recovery worker".to_string(),
+                allow_inactive_chains: true,
+                allow_messages_from_deprecated_epochs: true,
+                block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(
+                env.worker.chain_worker_config.key_pair().unwrap().copy(),
+            )),
+            None,
+        );
+
+        assert_matches!(
+            worker_no_recovery
+                .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+                .await,
+            Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
+        );
+    }
+
+    // Step 4b: Verify that with recovery enabled but a whitelist that EXCLUDES
+    // `chain_id`, no reset happens — retrying still fails with the same error.
+    {
+        let worker_not_whitelisted = WorkerState::new(
+            storage.clone(),
+            ChainWorkerConfig {
+                nickname: "Whitelist-excludes worker".to_string(),
+                allow_inactive_chains: true,
+                allow_messages_from_deprecated_epochs: true,
+                reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
+                recovery_whitelist: Some(HashSet::from([target_id])),
+                block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+                ..ChainWorkerConfig::default()
+            }
+            .with_key_pair(Some(
+                env.worker().chain_worker_config.key_pair().unwrap().copy(),
+            )),
+            None,
+        );
+
+        assert_matches!(
+            worker_not_whitelisted
+                .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+                .await,
+            Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
+        );
+        // Retry: without a reset there is no way to recover, so the same error repeats.
+        // The retry serializes behind the background reset task's write lock, so by the
+        // time it starts the reset task has already decided to skip.
+        assert_matches!(
+            worker_not_whitelisted
+                .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+                .await,
+            Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
+        );
+    }
+
+    // Step 5: Now create a worker WITH recovery enabled and a whitelist that
+    // includes `chain_id`, and process the same block.
+    let worker_with_recovery = WorkerState::new(
+        storage.clone(),
+        ChainWorkerConfig {
+            nickname: "Recovery worker".to_string(),
+            allow_inactive_chains: true,
+            allow_messages_from_deprecated_epochs: true,
+            reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
+            recovery_whitelist: Some(HashSet::from([chain_id])),
+            block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
+            ..ChainWorkerConfig::default()
+        }
+        .with_key_pair(Some(
+            env.worker.chain_worker_config.key_pair().unwrap().copy(),
+        )),
+        None,
+    );
+
+    // The first call returns the original error but triggers a background reset that
+    // re-executes prior blocks and fixes the corruption.
+    assert_matches!(
+        worker_with_recovery
+            .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+            .await,
+        Err(WorkerError::ChainError(ref e)) if matches!(**e, ChainError::CorruptedChainState(_))
+    );
+    // The previously cast confirmed vote must have survived the reset, or the
+    // validator could be tricked into double-signing. We check this before the
+    // retry because `apply_confirmed_block` for cert_1 would otherwise wipe the
+    // manager during the course of the retry.
+    {
+        let chain = worker_with_recovery.chain_state_view(chain_id).await?;
+        let restored_vote = chain.manager.confirmed_vote.get().as_ref();
+        assert_eq!(
+            restored_vote.map(|v| v.signature),
+            Some(planted_vote.signature),
+            "confirmed_vote should be restored after reset-and-reexecute"
+        );
+    }
+    // After the reset, retrying the certificate should succeed.
+    worker_with_recovery
+        .fully_handle_certificate_with_notifications(cert_1.clone(), &())
+        .await?;
+
+    // Step 6: Verify recovery — chain should be at height 2 with correct state.
+    {
+        let chain = worker_with_recovery.chain_state_view(chain_id).await?;
+        assert_eq!(
+            chain.tip_state.get().next_block_height,
+            BlockHeight::from(2),
+            "Chain should have processed both blocks after recovery"
+        );
+        // Balance should be correct: 100 - 5 - 3 = 92.
+        assert_eq!(
+            *chain.execution_state.system.balance.get(),
+            Amount::from_tokens(92),
+            "Balance should be correct after re-execution"
+        );
+        // previous_message_blocks should be fixed (pointing to height 1, not 999).
+        let prev = chain
+            .execution_state
+            .previous_message_blocks
+            .get(&target_id)
+            .await?;
+        assert_eq!(
+            prev,
+            Some(BlockHeight::from(1)),
+            "previous_message_blocks should be corrected after re-execution"
+        );
+    }
 
     Ok(())
 }

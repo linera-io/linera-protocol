@@ -19,9 +19,9 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
     ChainStateView,
 };
-use linera_execution::{committee::Committee, ExecutionRuntimeContext};
+use linera_execution::ExecutionRuntimeContext;
 use linera_storage::ChainRuntimeContext;
-use linera_views::context::Context;
+use linera_views::{context::Context, ViewError};
 use serde::{Deserialize, Serialize};
 
 use crate::client::chain_client;
@@ -56,20 +56,12 @@ pub struct ChainInfoQuery {
     #[debug(skip_if = Not::not)]
     pub request_fallback: bool,
     /// Query for certificate hashes at block heights.
-    #[debug(skip_if = Vec::is_empty)]
+    #[debug(skip_if = Vec::is_empty, with = "debug_compressed_heights")]
     pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
     /// Query the previous event blocks for specific streams.
     #[debug(skip_if = Vec::is_empty)]
     #[cfg_attr(with_testing, strategy(proptest::strategy::Just(Vec::new())))]
     pub request_previous_event_blocks: Vec<StreamId>,
-    #[serde(default = "default_true")]
-    pub create_network_actions: bool,
-}
-
-// Default value for create_network_actions.
-// Default for bool returns false.
-fn default_true() -> bool {
-    true
 }
 
 impl ChainInfoQuery {
@@ -86,22 +78,11 @@ impl ChainInfoQuery {
             request_fallback: false,
             request_sent_certificate_hashes_by_heights: Vec::new(),
             request_previous_event_blocks: Vec::new(),
-            create_network_actions: false,
         }
-    }
-
-    pub fn test_next_block_height(mut self, height: BlockHeight) -> Self {
-        self.test_next_block_height = Some(height);
-        self
     }
 
     pub fn with_committees(mut self) -> Self {
         self.request_committees = true;
-        self
-    }
-
-    pub fn with_owner_balance(mut self, owner: AccountOwner) -> Self {
-        self.request_owner_balance = owner;
         self
     }
 
@@ -135,13 +116,9 @@ impl ChainInfoQuery {
         self
     }
 
+    #[cfg(with_testing)]
     pub fn with_fallback(mut self) -> Self {
         self.request_fallback = true;
-        self
-    }
-
-    pub fn with_network_actions(mut self) -> Self {
-        self.create_network_actions = true;
         self
     }
 }
@@ -173,9 +150,9 @@ pub struct ChainInfo {
     /// The requested owner balance, if any.
     #[debug(skip_if = Option::is_none)]
     pub requested_owner_balance: Option<Amount>,
-    /// The current committees.
+    /// Committee blob hashes indexed by epoch, if requested.
     #[debug(skip_if = Option::is_none)]
-    pub requested_committees: Option<BTreeMap<Epoch, Committee>>,
+    pub requested_committees: Option<BTreeMap<Epoch, CryptoHash>>,
     /// The received messages that are waiting be picked in the next block (if requested).
     #[debug(skip_if = Vec::is_empty)]
     pub requested_pending_message_bundles: Vec<IncomingBundle>,
@@ -278,18 +255,18 @@ impl CrossChainRequest {
     }
 }
 
-impl<C, S> From<&ChainStateView<C>> for ChainInfo
-where
-    C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
-    ChainRuntimeContext<S>: ExecutionRuntimeContext,
-{
-    fn from(view: &ChainStateView<C>) -> Self {
+impl ChainInfo {
+    pub async fn from_chain_view<C, S>(view: &ChainStateView<C>) -> Result<Self, ViewError>
+    where
+        C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
+        ChainRuntimeContext<S>: ExecutionRuntimeContext,
+    {
         let system_state = &view.execution_state.system;
         let tip_state = view.tip_state.get();
-        ChainInfo {
+        Ok(ChainInfo {
             chain_id: view.chain_id(),
             epoch: *system_state.epoch.get(),
-            description: system_state.description.get().clone(),
+            description: system_state.description.get().await?.clone(),
             manager: Box::new(ChainManagerInfo::from(&view.manager)),
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
@@ -303,7 +280,7 @@ where
             count_received_log: view.received_log.count(),
             requested_received_log: Vec::new(),
             requested_previous_event_blocks: BTreeMap::new(),
-        }
+        })
     }
 }
 
@@ -331,10 +308,60 @@ impl ChainInfoResponse {
 impl BcsSignable<'_> for ChainInfo {}
 
 /// Request for downloading certificates by heights.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CertificatesByHeightRequest {
     pub chain_id: ChainId,
     pub heights: Vec<BlockHeight>,
+}
+
+/// Wrapper for displaying a sorted slice of [`BlockHeight`] as compressed ranges.
+///
+/// Contiguous heights are shown as `start..end` (inclusive), with gaps producing
+/// comma-separated entries: `[14810..15309, 15311, 15320..15400]`.
+pub(crate) struct CompressedHeights<'a>(pub(crate) &'a [BlockHeight]);
+
+/// Formats a `Vec<BlockHeight>` as compressed ranges for use with `#[debug(with = "...")]`.
+#[allow(clippy::ptr_arg)]
+pub(crate) fn debug_compressed_heights(
+    heights: &Vec<BlockHeight>,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    fmt::Debug::fmt(&CompressedHeights(heights), f)
+}
+
+impl fmt::Debug for CompressedHeights<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let heights = self.0;
+        write!(f, "[")?;
+        let mut index = 0;
+        while index < heights.len() {
+            if index > 0 {
+                write!(f, ", ")?;
+            }
+            let range_start = u64::from(heights[index]);
+            let mut range_end = range_start;
+            while index + 1 < heights.len() && u64::from(heights[index + 1]) == range_end + 1 {
+                index += 1;
+                range_end = u64::from(heights[index]);
+            }
+            if range_start == range_end {
+                write!(f, "{range_start}")?;
+            } else {
+                write!(f, "{range_start}..{range_end}")?;
+            }
+            index += 1;
+        }
+        write!(f, "]")
+    }
+}
+
+impl fmt::Debug for CertificatesByHeightRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CertificatesByHeightRequest")
+            .field("chain_id", &self.chain_id)
+            .field("heights", &CompressedHeights(&self.heights))
+            .finish()
+    }
 }
 
 /// The outcome of trying to commit a list of operations to the chain.
@@ -405,5 +432,58 @@ impl<T> ClientOutcome<T> {
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
             ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::data_types::BlockHeight;
+
+    use super::CompressedHeights;
+
+    #[test]
+    fn test_compressed_heights_empty() {
+        let heights: Vec<BlockHeight> = vec![];
+        assert_eq!(format!("{:?}", CompressedHeights(&heights)), "[]");
+    }
+
+    #[test]
+    fn test_compressed_heights_single() {
+        let heights = vec![BlockHeight::from(5)];
+        assert_eq!(format!("{:?}", CompressedHeights(&heights)), "[5]");
+    }
+
+    #[test]
+    fn test_compressed_heights_contiguous() {
+        let heights: Vec<BlockHeight> = (100..=105).map(BlockHeight::from).collect();
+        assert_eq!(format!("{:?}", CompressedHeights(&heights)), "[100..105]");
+    }
+
+    #[test]
+    fn test_compressed_heights_with_gaps() {
+        let heights = vec![
+            BlockHeight::from(1),
+            BlockHeight::from(2),
+            BlockHeight::from(3),
+            BlockHeight::from(5),
+            BlockHeight::from(7),
+            BlockHeight::from(8),
+            BlockHeight::from(9),
+            BlockHeight::from(10),
+        ];
+        assert_eq!(
+            format!("{:?}", CompressedHeights(&heights)),
+            "[1..3, 5, 7..10]"
+        );
+    }
+
+    #[test]
+    fn test_compressed_heights_all_isolated() {
+        let heights = vec![
+            BlockHeight::from(1),
+            BlockHeight::from(5),
+            BlockHeight::from(10),
+        ];
+        assert_eq!(format!("{:?}", CompressedHeights(&heights)), "[1, 5, 10]");
     }
 }

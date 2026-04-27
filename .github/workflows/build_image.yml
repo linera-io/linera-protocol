@@ -1,0 +1,184 @@
+name: Build Image
+
+# Manually-triggered image build workflow. Replaces `gcloud builds submit` as
+# the generic "submit a build" interface for lineractl and ad-hoc rebuilds.
+# Runs on the linera-io-self-hosted-builder runner (OVH ci-k8s, c3-64 node).
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_type:
+        description: 'Which image to build'
+        required: true
+        type: choice
+        options:
+          - main
+          - indexer
+          - explorer
+          - exporter
+          - bridge
+          - all
+        default: main
+      image_tag:
+        description: 'Image tag (e.g., testnet_conway, a branch name, or arbitrary label)'
+        required: true
+        type: string
+      build_mode:
+        description: 'Build mode'
+        required: true
+        type: choice
+        options:
+          - release
+          - debug
+        default: release
+      ref:
+        description: 'Git ref to build (branch, tag, or commit SHA). Defaults to the current branch.'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: linera-io-self-hosted-builder
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+
+      - name: Auth service account
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker to push to Artifact Registry
+        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+
+      - name: Set env variables
+        env:
+          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+          BUILD_MODE_INPUT: ${{ inputs.build_mode }}
+        run: |
+          echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${IMAGE_TAG_INPUT}" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> "$GITHUB_ENV"
+
+          if [ "${BUILD_MODE_INPUT}" = "debug" ]; then
+            echo "BUILD_FLAG=" >> "$GITHUB_ENV"
+            echo "BUILD_FOLDER=debug" >> "$GITHUB_ENV"
+          else
+            echo "BUILD_FLAG=--release" >> "$GITHUB_ENV"
+            echo "BUILD_FOLDER=release" >> "$GITHUB_ENV"
+          fi
+
+          echo "REGISTRY_BASE=us-docker.pkg.dev/linera-io-dev/linera-public-registry" >> "$GITHUB_ENV"
+
+      - name: Prune stale Docker layers
+        run: docker system prune -af --filter "until=24h" || true
+
+      - name: Build and push selected image(s)
+        env:
+          IMAGE_TYPE: ${{ inputs.image_type }}
+        run: |
+          set -e
+
+          build_and_push() {
+            local DOCKERFILE=$1
+            local IMAGE_NAME=$2
+            local BUILD_NAME=$3
+            local LOG_FILE="/tmp/build-${BUILD_NAME}.log"
+
+            local IMAGE_TAGGED="${REGISTRY_BASE}/${IMAGE_NAME}:${IMAGE_TAG}"
+            local IMAGE_SHORT="${REGISTRY_BASE}/${IMAGE_NAME}:${GIT_COMMIT_SHORT}"
+            local IMAGE_LONG="${REGISTRY_BASE}/${IMAGE_NAME}:${GIT_COMMIT_LONG}"
+
+            {
+              echo "========================================"
+              echo "Building ${BUILD_NAME} (${DOCKERFILE})"
+              echo "========================================"
+
+              DOCKER_BUILDKIT=1 docker build \
+                -t "${IMAGE_TAGGED}" \
+                -t "${IMAGE_SHORT}" \
+                -t "${IMAGE_LONG}" \
+                -f "${DOCKERFILE}" \
+                --build-arg "git_commit=${GIT_COMMIT_LONG}" \
+                --build-arg "build_date=${BUILD_DATE}" \
+                --build-arg "build_flag=${BUILD_FLAG}" \
+                --build-arg "build_folder=${BUILD_FOLDER}" \
+                .
+
+              echo "Pushing ${BUILD_NAME} images..."
+              docker push "${IMAGE_TAGGED}"
+              docker push "${IMAGE_SHORT}"
+              docker push "${IMAGE_LONG}"
+
+              echo "${BUILD_NAME} completed successfully"
+            } > "${LOG_FILE}" 2>&1
+          }
+
+          build_image_by_type() {
+            local TYPE=$1
+            case "${TYPE}" in
+              main)     build_and_push "docker/Dockerfile"           "linera"          "main"     ;;
+              indexer)  build_and_push "docker/Dockerfile.indexer"   "linera-indexer"  "indexer"  ;;
+              explorer) build_and_push "docker/Dockerfile.explorer"  "linera-explorer" "explorer" ;;
+              exporter) build_and_push "docker/Dockerfile.exporter"  "linera-exporter" "exporter" ;;
+              bridge)   build_and_push "docker/Dockerfile.bridge"    "linera-bridge"   "bridge"   ;;
+              *)        echo "Unknown image type: ${TYPE}" >&2; return 1 ;;
+            esac
+          }
+
+          if [ "${IMAGE_TYPE}" = "all" ]; then
+            TYPES="main indexer explorer exporter bridge"
+          else
+            TYPES="${IMAGE_TYPE}"
+          fi
+
+          PIDS=""
+          for TYPE in ${TYPES}; do
+            build_image_by_type "${TYPE}" &
+            PIDS="${PIDS} ${TYPE}:$!"
+          done
+
+          SUCCESS_NAMES=""
+          FAILED_NAMES=""
+          for NAME_PID in ${PIDS}; do
+            NAME="${NAME_PID%%:*}"
+            PID="${NAME_PID##*:}"
+            if wait "$PID"; then
+              SUCCESS_NAMES="${SUCCESS_NAMES} ${NAME}"
+            else
+              FAILED_NAMES="${FAILED_NAMES} ${NAME}"
+              echo "::error::${NAME} build failed"
+            fi
+          done
+
+          # Print successes first, then failures, so the last thing
+          # on screen when a build fails is the failing log.
+          for NAME in ${SUCCESS_NAMES}; do
+            echo "::group::${NAME} (success)"
+            cat "/tmp/build-${NAME}.log" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+          for NAME in ${FAILED_NAMES}; do
+            echo "::group::${NAME} (FAILED)"
+            cat "/tmp/build-${NAME}.log" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+
+          if [ -n "${FAILED_NAMES}" ]; then
+            echo "One or more image builds failed:${FAILED_NAMES}"
+            exit 1
+          fi
+
+          echo "Build complete."

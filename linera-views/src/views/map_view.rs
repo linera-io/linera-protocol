@@ -954,7 +954,7 @@ where
             }
         };
         let Update::Set(value) = update else {
-            unreachable!()
+            unreachable!("ByteMapView::get_mut_or_default: update entry is Update::Removed but every match arm above must insert Update::Set")
         };
         Ok(value)
     }

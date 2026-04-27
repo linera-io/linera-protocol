@@ -2,53 +2,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Cow, collections::BTreeMap, str::FromStr};
+use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoError, ValidatorPublicKey},
+    crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::ArithmeticError,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::policy::ResourceControlPolicy;
-
-/// The identity of a validator.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Debug)]
-pub struct ValidatorName(pub ValidatorPublicKey);
-
-impl Serialize for ValidatorName {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        if serializer.is_human_readable() {
-            serializer.serialize_str(&self.to_string())
-        } else {
-            serializer.serialize_newtype_struct("ValidatorName", &self.0)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for ValidatorName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let value = Self::from_str(&s).map_err(serde::de::Error::custom)?;
-            Ok(value)
-        } else {
-            #[derive(Deserialize)]
-            #[serde(rename = "ValidatorName")]
-            struct ValidatorNameDerived(ValidatorPublicKey);
-
-            let value = ValidatorNameDerived::deserialize(deserializer)?;
-            Ok(Self(value.0))
-        }
-    }
-}
 
 /// Public state of a validator.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
@@ -201,26 +164,6 @@ impl<'a> From<&'a Committee> for CommitteeMinimal<'a> {
     }
 }
 
-impl std::fmt::Display for ValidatorName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        self.0.fmt(f)
-    }
-}
-
-impl std::str::FromStr for ValidatorName {
-    type Err = CryptoError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ValidatorName(ValidatorPublicKey::from_str(s)?))
-    }
-}
-
-impl From<ValidatorPublicKey> for ValidatorName {
-    fn from(value: ValidatorPublicKey) -> Self {
-        Self(value)
-    }
-}
-
 impl Committee {
     pub fn new(
         validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
@@ -277,22 +220,10 @@ impl Committee {
         }
     }
 
-    pub fn keys_and_weights(&self) -> impl Iterator<Item = (ValidatorPublicKey, u64)> + '_ {
-        self.validators
-            .iter()
-            .map(|(name, validator)| (*name, validator.votes))
-    }
-
     pub fn account_keys_and_weights(&self) -> impl Iterator<Item = (AccountPublicKey, u64)> + '_ {
         self.validators
             .values()
             .map(|validator| (validator.account_public_key, validator.votes))
-    }
-
-    pub fn network_address(&self, author: &ValidatorPublicKey) -> Option<&str> {
-        self.validators
-            .get(author)
-            .map(|state| state.network_address.as_ref())
     }
 
     pub fn quorum_threshold(&self) -> u64 {
@@ -324,5 +255,79 @@ impl Committee {
     /// Returns a mutable reference to this committee's [`ResourceControlPolicy`].
     pub fn policy_mut(&mut self) -> &mut ResourceControlPolicy {
         &mut self.policy
+    }
+}
+
+/// Process-global, append-only cache of committees keyed by their blob hash.
+///
+/// Committees are network-global state (created by the admin chain, agreed
+/// on by every validator), so caching them once per process avoids holding a
+/// separate copy in every chain's execution state. The map is populated
+/// lazily by `get_or_load_committee_by_hash` in the storage layer.
+#[derive(Clone, Debug, Default)]
+pub struct SharedCommittees {
+    map: Arc<papaya::HashMap<CryptoHash, Arc<Committee>>>,
+}
+
+impl SharedCommittees {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the cached committee for `hash`, if any.
+    pub fn get(&self, hash: CryptoHash) -> Option<Arc<Committee>> {
+        self.map.pin().get(&hash).cloned()
+    }
+
+    /// Inserts `committee` under `hash`. If an entry was already present, the
+    /// existing value wins and is returned (avoiding spurious clones when two
+    /// callers race to populate the same hash).
+    pub fn insert(&self, hash: CryptoHash, committee: Arc<Committee>) -> Arc<Committee> {
+        let pinned = self.map.pin();
+        match pinned.try_insert(hash, committee) {
+            Ok(inserted) => inserted.clone(),
+            Err(e) => e.current.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_committees_insert_and_get() {
+        let shared = SharedCommittees::new();
+        let hash = CryptoHash::test_hash("c0");
+        assert!(shared.get(hash).is_none());
+        let committee = Arc::new(Committee::default());
+        let inserted = shared.insert(hash, committee.clone());
+        assert!(Arc::ptr_eq(&inserted, &committee));
+        let fetched = shared.get(hash).unwrap();
+        assert!(Arc::ptr_eq(&fetched, &committee));
+    }
+
+    #[test]
+    fn shared_committees_insert_is_first_writer_wins() {
+        let shared = SharedCommittees::new();
+        let hash = CryptoHash::test_hash("c1");
+        let first = Arc::new(Committee::default());
+        let second = Arc::new(Committee::default());
+        let winner = shared.insert(hash, first.clone());
+        assert!(Arc::ptr_eq(&winner, &first));
+        let loser = shared.insert(hash, second.clone());
+        assert!(Arc::ptr_eq(&loser, &first));
+        assert!(!Arc::ptr_eq(&loser, &second));
+    }
+
+    #[test]
+    fn shared_committees_clones_share_storage() {
+        let a = SharedCommittees::new();
+        let b = a.clone();
+        let hash = CryptoHash::test_hash("c2");
+        let committee = Arc::new(Committee::default());
+        a.insert(hash, committee.clone());
+        let fetched = b.get(hash).unwrap();
+        assert!(Arc::ptr_eq(&fetched, &committee));
     }
 }

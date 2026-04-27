@@ -45,7 +45,7 @@ mod metrics {
 
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    node::{BlobStream, CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
 use linera_version::VersionInfo;
@@ -329,7 +329,7 @@ impl ValidatorNode for GrpcClient {
         GrpcClient::try_into_chain_info(client_delegate!(self, handle_chain_info_query, query)?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError> {
         let retry_delay = self.retry_delay;
         let max_retries = self.max_retries;
@@ -464,29 +464,55 @@ impl ValidatorNode for GrpcClient {
         Ok(Box::pin(notification_stream))
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn get_version_info(&self) -> Result<VersionInfo, NodeError> {
         let req = ();
         Ok(client_delegate!(self, get_version_info, req)?.into())
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn get_network_description(&self) -> Result<NetworkDescription, NodeError> {
         let req = ();
         Ok(client_delegate!(self, get_network_description, req)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError> {
         Ok(client_delegate!(self, upload_blob, content)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         Ok(client_delegate!(self, download_blob, blob_id)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
+    async fn download_blobs(&self, blob_ids: Vec<BlobId>) -> Result<BlobStream, NodeError> {
+        debug!(
+            handler = "download_blobs",
+            num_blobs = blob_ids.len(),
+            "sending gRPC request"
+        );
+        let request = api::BlobIds::try_from(blob_ids)?;
+        let stream = self
+            .client
+            .clone()
+            .download_blobs(request)
+            .await
+            .map_err(|status| NodeError::GrpcError {
+                error: status.to_string(),
+            })?
+            .into_inner();
+        let blob_stream = stream.map(|result| match result {
+            Ok(proto_blob) => BlobContent::try_from(proto_blob).map_err(NodeError::from),
+            Err(status) => Err(NodeError::GrpcError {
+                error: status.to_string(),
+            }),
+        });
+        Ok(Box::pin(blob_stream))
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn download_pending_blob(
         &self,
         chain_id: ChainId,
@@ -496,7 +522,7 @@ impl ValidatorNode for GrpcClient {
         client_delegate!(self, download_pending_blob, req)?.try_into()
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_pending_blob(
         &self,
         chain_id: ChainId,
@@ -506,7 +532,7 @@ impl ValidatorNode for GrpcClient {
         GrpcClient::try_into_chain_info(client_delegate!(self, handle_pending_blob, req)?)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn download_certificate(
         &self,
         hash: CryptoHash,
@@ -519,7 +545,7 @@ impl ValidatorNode for GrpcClient {
         .map_err(|_| NodeError::UnexpectedCertificateValue)
     }
 
-    #[instrument(target = "grpc_client", skip_all, err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn download_certificates(
         &self,
         hashes: Vec<CryptoHash>,
@@ -557,7 +583,7 @@ impl ValidatorNode for GrpcClient {
         Ok(certs_collected)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn download_certificates_by_heights(
         &self,
         chain_id: ChainId,
@@ -605,12 +631,12 @@ impl ValidatorNode for GrpcClient {
         Ok(certs_collected)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn blob_last_used_by(&self, blob_id: BlobId) -> Result<CryptoHash, NodeError> {
         Ok(client_delegate!(self, blob_last_used_by, blob_id)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn blob_last_used_by_certificate(
         &self,
         blob_id: BlobId,
@@ -618,7 +644,7 @@ impl ValidatorNode for GrpcClient {
         Ok(client_delegate!(self, blob_last_used_by_certificate, blob_id)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn event_block_heights(
         &self,
         event_ids: Vec<EventId>,
@@ -627,12 +653,12 @@ impl ValidatorNode for GrpcClient {
         Ok(client_delegate!(self, event_block_heights, request)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn missing_blob_ids(&self, blob_ids: Vec<BlobId>) -> Result<Vec<BlobId>, NodeError> {
         Ok(client_delegate!(self, missing_blob_ids, blob_ids)?.try_into()?)
     }
 
-    #[instrument(target = "grpc_client", skip(self), err(level = Level::WARN), fields(address = self.address))]
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn get_shard_info(
         &self,
         chain_id: ChainId,

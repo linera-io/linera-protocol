@@ -66,11 +66,11 @@
      document.getElementById('owner').innerText = owner;
      document.getElementById('chain-id').innerText = chainId;
      const client = await new linera.Client(wallet, signer);
+     client.start();
      let chain = await client.chain(chainId);
      const counter = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
      const logs = document.getElementById('logs');
      const incrementButton = document.getElementById('increment-btn');
-     const blockTemplate = document.getElementById('block-template');
 
      function addLogEntry(block) {
          const entry = logs.getElementsByTagName('template')[0].content.cloneNode(true);

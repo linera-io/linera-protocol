@@ -46,14 +46,20 @@ pub struct ChainWorkerConfig {
     pub cross_chain_message_chunk_limit: usize,
     /// Whether to attempt recovery via `RevertConfirm` when an inbox gap is detected.
     pub allow_revert_confirm: bool,
-    /// If set, reset the chain state and re-execute all blocks when an
-    /// `IncorrectOutcome` error is encountered — but only if the given duration has
+    /// If set, reset the chain state and re-execute all blocks when the chain
+    /// state is detected to be corrupted — but only if the given duration has
     /// elapsed since block 0 was last executed (to prevent reset loops).
-    pub reset_on_incorrect_outcome: Option<Duration>,
+    pub reset_on_corrupted_chain_state: Option<Duration>,
+    /// Optional whitelist restricting which chains are eligible for the
+    /// `allow_revert_confirm` and `reset_on_corrupted_chain_state` recovery
+    /// mechanisms. If `None`, every chain is eligible (subject to the
+    /// respective feature flag). If `Some`, only chains in the set are.
+    pub recovery_whitelist: Option<HashSet<ChainId>>,
 }
 
 impl ChainWorkerConfig {
     /// Configures the `key_pair` in this [`ChainWorkerConfig`].
+    #[cfg(with_testing)]
     pub fn with_key_pair(mut self, key_pair: Option<ValidatorSecretKey>) -> Self {
         self.key_pair = key_pair.map(Arc::new);
         self
@@ -62,6 +68,14 @@ impl ChainWorkerConfig {
     /// Gets a reference to the [`ValidatorSecretKey`], if available.
     pub fn key_pair(&self) -> Option<&ValidatorSecretKey> {
         self.key_pair.as_ref().map(Arc::as_ref)
+    }
+
+    /// Returns whether `chain_id` is allowed to attempt the `RevertConfirm` and
+    /// corrupted-state-reset recovery mechanisms.
+    pub(crate) fn recovery_allowed_for(&self, chain_id: &ChainId) -> bool {
+        self.recovery_whitelist
+            .as_ref()
+            .is_none_or(|set| set.contains(chain_id))
     }
 }
 
@@ -82,7 +96,8 @@ impl Default for ChainWorkerConfig {
             priority_bundle_origins: HashSet::new(),
             cross_chain_message_chunk_limit: usize::MAX,
             allow_revert_confirm: false,
-            reset_on_incorrect_outcome: None,
+            reset_on_corrupted_chain_state: None,
+            recovery_whitelist: None,
         }
     }
 }

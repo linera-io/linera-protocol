@@ -32,6 +32,11 @@ kubernetes/linera-validator/working/*
 node_modules
 **/dist/
 
+# Web client and signer are supposed to be used
+# as a library, so we don't want to
+# include their lock files.
+linera-web/**/*-lock.json
+
 # Claude
 .claude
 CLAUDE.md
@@ -45,10 +50,10 @@ docs/
 # Git worktrees
 .worktrees/
 
-# Test output
-__screenshots__/
+# Test results
 test-results/
 playwright-report/
+__screenshots__/
 
 # macOS
 .DS_Store

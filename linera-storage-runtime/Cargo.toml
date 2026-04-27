@@ -1,0 +1,38 @@
+[package]
+name = "linera-storage-runtime"
+description = "Storage configuration and runtime infrastructure for the Linera protocol."
+readme = "README.md"
+documentation = "https://docs.rs/linera-storage-runtime/latest/linera_storage_runtime/"
+
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+rocksdb = ["linera-views/rocksdb"]
+dynamodb = ["linera-views/dynamodb"]
+scylladb = ["linera-views/scylladb"]
+storage-service = ["linera-storage-service"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+fs-err.workspace = true
+linera-client.workspace = true
+linera-execution.workspace = true
+linera-storage = { workspace = true }
+linera-storage-service = { workspace = true, optional = true }
+linera-views.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+cfg_aliases.workspace = true

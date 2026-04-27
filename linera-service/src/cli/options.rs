@@ -4,10 +4,8 @@
 use std::path::PathBuf;
 
 use anyhow::Error;
-use linera_base::crypto::InMemorySigner;
 use linera_client::{client_context::ClientContext, config::GenesisConfig};
 use linera_execution::WithWasmDefault as _;
-use linera_persistent as persistent;
 use linera_service::{
     cli::{command::ClientCommand, common_options::CommonCliOptions},
     storage::{Runnable, RunnableWithStore, StorageConfig},
@@ -113,7 +111,7 @@ impl Options {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
-        let cache_sizes = self.common.common_storage_options.storage_cache_sizes();
+        let cache_sizes = self.common.common_storage_options.storage_cache_config();
         let output = Box::pin(store_config.run_with_storage(
             self.common.wasm_runtime.with_wasm_default(),
             self.common.application_logs,
@@ -129,7 +127,7 @@ impl Options {
         debug!("Running command using storage configuration: {storage_config}");
         let store_config =
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
-        let cache_sizes = self.common.common_storage_options.storage_cache_sizes();
+        let cache_sizes = self.common.common_storage_options.storage_cache_config();
         let output = Box::pin(store_config.run_with_store(cache_sizes, job)).await?;
         Ok(output)
     }
@@ -140,9 +138,8 @@ impl Options {
         let store_config =
             storage_config.add_common_storage_options(&self.common.common_storage_options)?;
         let wallet = self.wallet()?;
-        let cache_sizes = self.common.common_storage_options.storage_cache_sizes();
-        store_config
-            .initialize(cache_sizes, wallet.genesis_config())
+        let cache_sizes = self.common.common_storage_options.storage_cache_config();
+        linera_service::storage::initialize(store_config, cache_sizes, wallet.genesis_config())
             .await?;
         Ok(())
     }
@@ -162,8 +159,8 @@ impl Options {
         self.common.wallet()
     }
 
-    pub fn signer(&self) -> Result<persistent::File<InMemorySigner>, Error> {
-        self.common.signer()
+    pub fn keystore(&self) -> Result<linera_wallet_json::Keystore, Error> {
+        self.common.keystore()
     }
 
     pub fn create_wallet(&self, genesis_config: GenesisConfig) -> Result<Wallet, Error> {
@@ -173,7 +170,7 @@ impl Options {
     pub fn create_keystore(
         &self,
         testing_prng_seed: Option<u64>,
-    ) -> Result<persistent::File<InMemorySigner>, Error> {
+    ) -> Result<linera_wallet_json::Keystore, Error> {
         self.common.create_keystore(testing_prng_seed)
     }
 }

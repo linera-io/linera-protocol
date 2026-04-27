@@ -23,9 +23,20 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
 };
 use alloy_rlp::Encodable;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use op_alloy_network::Optimism;
+
+/// Errors from deposit proof generation, classified for retry logic.
+#[derive(Debug, thiserror::Error)]
+pub enum ProofError {
+    /// Retrying may succeed (e.g. receipt not yet indexed, RPC transport error).
+    #[error("transient error: {0:#}")]
+    Transient(anyhow::Error),
+    /// Retrying will not help (e.g. hash mismatch, missing deposit event).
+    #[error("permanent error: {0:#}")]
+    Permanent(anyhow::Error),
+}
 
 /// All data needed to submit a `ProcessDeposit` operation to the evm-bridge app.
 #[derive(Debug, Clone)]
@@ -52,7 +63,7 @@ pub trait DepositProofClient {
     ///
     /// The implementation fetches the receipt, locates the `DepositInitiated`
     /// event log automatically, and constructs the MPT proof.
-    async fn generate_deposit_proof(&self, tx_hash: B256) -> Result<DepositProof>;
+    async fn generate_deposit_proof(&self, tx_hash: B256) -> Result<DepositProof, ProofError>;
 }
 
 /// HTTP-based deposit proof client that queries an EVM JSON-RPC endpoint.
@@ -79,29 +90,35 @@ impl HttpDepositProofClient {
 
 #[async_trait]
 impl DepositProofClient for HttpDepositProofClient {
-    async fn generate_deposit_proof(&self, tx_hash: B256) -> Result<DepositProof> {
+    async fn generate_deposit_proof(&self, tx_hash: B256) -> Result<DepositProof, ProofError> {
         // 1. Get transaction receipt → block hash, tx index
         let receipt = self
             .provider
             .get_transaction_receipt(tx_hash)
-            .await?
-            .with_context(|| format!("transaction receipt not found for {tx_hash}"))?;
+            .await
+            .map_err(|e| ProofError::Transient(e.into()))?
+            .ok_or_else(|| {
+                ProofError::Transient(anyhow::anyhow!(
+                    "transaction receipt not found for {tx_hash}"
+                ))
+            })?;
 
-        let block_hash = receipt
-            .inner
-            .block_hash
-            .context("receipt missing block_hash (pending tx?)")?;
-        let tx_index = receipt
-            .inner
-            .transaction_index
-            .context("receipt missing transaction_index")?;
+        let block_hash = receipt.inner.block_hash.ok_or_else(|| {
+            ProofError::Transient(anyhow::anyhow!("receipt missing block_hash (pending tx?)"))
+        })?;
+        let tx_index = receipt.inner.transaction_index.ok_or_else(|| {
+            ProofError::Transient(anyhow::anyhow!("receipt missing transaction_index"))
+        })?;
 
         // 2. Get full block → header RLP
         let block = self
             .provider
             .get_block_by_hash(block_hash)
-            .await?
-            .with_context(|| format!("block not found for hash {block_hash}"))?;
+            .await
+            .map_err(|e| ProofError::Transient(e.into()))?
+            .ok_or_else(|| {
+                ProofError::Transient(anyhow::anyhow!("block not found for hash {block_hash}"))
+            })?;
 
         let mut block_header_rlp = Vec::new();
         block.header.inner.encode(&mut block_header_rlp);
@@ -109,18 +126,23 @@ impl DepositProofClient for HttpDepositProofClient {
         // Sanity check: header RLP hashes to the expected block hash
         let computed_hash = alloy_primitives::keccak256(&block_header_rlp);
         if computed_hash != block_hash {
-            bail!(
+            return Err(ProofError::Permanent(anyhow::anyhow!(
                 "header RLP hash mismatch: computed {computed_hash}, expected {block_hash}. \
                  This may indicate the RPC returned non-standard header fields."
-            );
+            )));
         }
 
         // 3. Get all block receipts
         let all_receipts = self
             .provider
             .get_block_receipts(block.header.number.into())
-            .await?
-            .with_context(|| format!("block receipts not found for block {block_hash}"))?;
+            .await
+            .map_err(|e| ProofError::Transient(e.into()))?
+            .ok_or_else(|| {
+                ProofError::Transient(anyhow::anyhow!(
+                    "block receipts not found for block {block_hash}"
+                ))
+            })?;
 
         // 4. Encode each receipt to canonical EIP-2718 form (as stored in the trie).
         //    Convert RPC logs → primitives logs so Encodable2718 is available.
@@ -140,28 +162,33 @@ impl DepositProofClient for HttpDepositProofClient {
             .iter()
             .find(|(idx, _)| *idx == tx_index)
             .map(|(_, rlp)| rlp.clone())
-            .with_context(|| format!("tx_index {tx_index} not found in block receipts"))?;
+            .ok_or_else(|| {
+                ProofError::Permanent(anyhow::anyhow!(
+                    "tx_index {tx_index} not found in block receipts"
+                ))
+            })?;
 
         let (receipts_root, proof_nodes) =
             crate::proof::build_receipt_proof(&canonical_receipts, tx_index);
 
         // Sanity check: computed receipts root matches block header
         if receipts_root != block.header.inner.receipts_root {
-            bail!(
+            return Err(ProofError::Permanent(anyhow::anyhow!(
                 "receipts root mismatch: computed {receipts_root}, \
                  header says {}. Receipt encoding may be incorrect.",
                 block.header.inner.receipts_root
-            );
+            )));
         }
 
         // Find all DepositInitiated log indices from the canonical receipt
-        let logs = crate::proof::decode_receipt_logs(&receipt_rlp)
-            .context("failed to decode receipt logs")?;
+        let logs =
+            crate::proof::decode_receipt_logs(&receipt_rlp).map_err(ProofError::Permanent)?;
         let log_indices = crate::proof::find_deposit_log_indices(&logs);
-        anyhow::ensure!(
-            !log_indices.is_empty(),
-            "no DepositInitiated event found in receipt for tx {tx_hash}"
-        );
+        if log_indices.is_empty() {
+            return Err(ProofError::Permanent(anyhow::anyhow!(
+                "no DepositInitiated event found in receipt for tx {tx_hash}"
+            )));
+        }
 
         Ok(DepositProof {
             block_header_rlp,

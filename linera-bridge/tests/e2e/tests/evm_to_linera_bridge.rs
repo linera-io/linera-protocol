@@ -25,38 +25,47 @@ use linera_base::{
 };
 use linera_bridge::proof::gen::{DepositProofClient as _, HttpDepositProofClient};
 use linera_bridge_e2e::{
-    compose_file_path, exec_output, light_client_address, parse_deployed_address, start_compose,
+    compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
+    start_compose, wait_for_light_client,
     ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, Query, QueryResponse, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheSizes};
+use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use serde::{Deserialize, Serialize};
 use wrapped_fungible::{InitialState, WrappedParameters};
 
-// ── Inline evm-bridge types (avoids depending on evm-bridge crate) ──────────
+// ── Inline evm-bridge types ─────────────────────────────────────────────────
+// Inlined to avoid a dependency on evm-bridge, which pulls in linera-bridge
+// with the `chain` feature — that disables `proof::gen` via feature unification.
 
 /// Must match `evm_bridge::BridgeParameters` field-for-field for BCS compatibility.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct BridgeParameters {
     source_chain_id: u64,
     bridge_contract_address: [u8; 20],
-    fungible_app_id: ApplicationId,
     token_address: [u8; 20],
+    rpc_endpoint: String,
 }
 
 /// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
 #[derive(Debug, Deserialize, Serialize)]
 enum BridgeOperation {
+    RegisterFungibleApp {
+        app_id: ApplicationId,
+    },
     ProcessDeposit {
         block_header_rlp: Vec<u8>,
         receipt_rlp: Vec<u8>,
         proof_nodes: Vec<Vec<u8>>,
         tx_index: u64,
         log_index: u64,
+    },
+    VerifyBlockHash {
+        block_hash: [u8; 32],
     },
 }
 
@@ -83,11 +92,13 @@ sol! {
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
 async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
+    linera_bridge_e2e::ensure_rustls_provider();
     let compose_file = compose_file_path();
     let project_name = "linera-e2l-bridge-test";
 
     // ── Phase 1: Start docker compose stack ──
     let compose = start_compose(&compose_file, project_name).await;
+    wait_for_light_client(&compose, project_name, &compose_file).await;
 
     // ── Phase 2: Create programmatic Linera client and claim chain ──
     tracing::info!("Creating programmatic Linera client...");
@@ -102,12 +113,13 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         &config,
         "e2l-bridge-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheSizes {
+        StorageCacheConfig {
             blob_cache_size: 1000,
             confirmed_block_cache_size: 1000,
-            lite_certificate_cache_size: 1000,
+            certificate_cache_size: 1000,
             certificate_raw_cache_size: 1000,
             event_cache_size: 1000,
+            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
         },
     )
     .await?;
@@ -161,9 +173,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
     let chain_id_bytes32 = format!("0x{chain_id}");
-    let zero_bytes32 = format!("{}", FixedBytes::<32>::ZERO);
 
-    tracing::info!("Deploying FungibleBridge (applicationId = 0x0)...");
+    tracing::info!("Deploying FungibleBridge...");
     let light_client = light_client_address();
     let bridge_output = exec_output(
         &compose,
@@ -180,8 +191,6 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
              --constructor-args \
              {light_client} \
              {chain_id_bytes32} \
-             0 \
-             {zero_bytes32} \
              {erc20_addr}"
         ),
         project_name,
@@ -212,29 +221,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     cc.synchronize_from_validators().await?;
     cc.process_inbox().await?;
 
-    tracing::info!("Creating wrapped-fungible application...");
-    let wrapped_params = WrappedParameters {
-        ticker_symbol: "wTEST".to_string(),
-        minter: owner,
-        mint_chain_id: chain_id,
-        evm_token_address: erc20_addr.0 .0,
-        evm_source_chain_id: 31337,
-    };
-    let wrapped_init = InitialState {
-        accounts: BTreeMap::new(),
-    };
-    let (fungible_app_id, _) = cc
-        .create_application_untyped(
-            wf_module_id,
-            serde_json::to_vec(&wrapped_params)?,
-            serde_json::to_vec(&wrapped_init)?,
-            vec![],
-        )
-        .await?
-        .expect("create wrapped-fungible app committed");
-    tracing::info!(%fungible_app_id, "wrapped-fungible app created");
-
-    // 4b. Publish and create evm-bridge app
+    // 4b. Publish and create evm-bridge app first (so wrapped-fungible can reference it)
     tracing::info!("Publishing evm-bridge module...");
     let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
     let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
@@ -251,19 +238,75 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let bridge_params = BridgeParameters {
         source_chain_id: 31337,
         bridge_contract_address: bridge_addr.0 .0,
-        fungible_app_id,
         token_address: erc20_addr.0 .0,
+        rpc_endpoint: String::new(),
     };
     let (bridge_app_id, _) = cc
         .create_application_untyped(
             eb_module_id,
             serde_json::to_vec(&bridge_params)?,
             serde_json::to_vec(&())?,
-            vec![fungible_app_id],
+            vec![],
         )
         .await?
         .expect("create evm-bridge app committed");
     tracing::info!(%bridge_app_id, "evm-bridge app created");
+
+    // 4c. Create wrapped-fungible app with bridge_app_id
+    tracing::info!("Creating wrapped-fungible application...");
+    let wrapped_params = WrappedParameters {
+        ticker_symbol: "wTEST".to_string(),
+        minter: Some(owner),
+        mint_chain_id: Some(chain_id),
+        evm_token_address: erc20_addr.0 .0,
+        evm_source_chain_id: 31337,
+        bridge_app_id: Some(bridge_app_id),
+    };
+    let wrapped_init = InitialState {
+        accounts: BTreeMap::new(),
+    };
+    let (fungible_app_id, _) = cc
+        .create_application_untyped(
+            wf_module_id,
+            serde_json::to_vec(&wrapped_params)?,
+            serde_json::to_vec(&wrapped_init)?,
+            vec![],
+        )
+        .await?
+        .expect("create wrapped-fungible app committed");
+    tracing::info!(%fungible_app_id, "wrapped-fungible app created");
+
+    // 4d. Register fungible app in the bridge
+    tracing::info!("Registering fungible app in bridge...");
+    let register_op = BridgeOperation::RegisterFungibleApp {
+        app_id: fungible_app_id,
+    };
+    let register_bytes = bcs::to_bytes(&register_op)?;
+    let register_operation = Operation::User {
+        application_id: bridge_app_id,
+        bytes: register_bytes,
+    };
+    cc.execute_operations(vec![register_operation], vec![])
+        .await?
+        .expect("register fungible app committed");
+
+    // 4e. Register wrapped-fungible applicationId in the EVM FungibleBridge
+    let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    tracing::info!("Registering applicationId in FungibleBridge...");
+    exec_ok(
+        &compose,
+        "foundry-tools",
+        &format!(
+            "cast send --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             {bridge_addr} \
+             'registerFungibleApplicationId(bytes32)' \
+             {app_id_bytes32}"
+        ),
+        project_name,
+        &compose_file,
+    )
+    .await;
 
     // ── Phase 5: Approve + Deposit on EVM ──
     let deposit_amount = U256::from(100u128 * 10u128.pow(18)); // 100 tokens
@@ -289,7 +332,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         let bytes: [u8; 32] = chain_id.0.into();
         FixedBytes::<32>::from(bytes)
     };
-    let zero_b256 = FixedBytes::<32>::ZERO;
+    let fungible_app_b256: FixedBytes<32> = app_id_bytes32.parse()?;
     let owner_b256 = match owner {
         AccountOwner::Address32(hash) => {
             let bytes: [u8; 32] = hash.into();
@@ -301,7 +344,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!("Calling deposit on FungibleBridge...");
     let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
     let deposit_tx = bridge_contract
-        .deposit(chain_b256, zero_b256, owner_b256, deposit_amount)
+        .deposit(chain_b256, fungible_app_b256, owner_b256, deposit_amount)
         .send()
         .await?;
     let deposit_receipt = deposit_tx.get_receipt().await?;
@@ -319,14 +362,31 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         "Deposit proof generated"
     );
 
-    // ── Phase 7: Submit ProcessDeposit on Linera ──
+    // Build the DepositKey for completion checks.
+    let tx_index = proof.tx_index;
+    let log_index = proof.log_indices[0];
+    let deposit_key = linera_bridge::proof::DepositKey {
+        source_chain_id: 31337, // Anvil chain ID
+        block_hash: deposit_receipt.block_hash.unwrap().0,
+        tx_index,
+        log_index,
+    };
+
+    // ── Phase 7a: Verify deposit is NOT yet processed ──
+    assert!(
+        !linera_bridge_e2e::query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
+        "deposit should NOT be processed before ProcessDeposit"
+    );
+    tracing::info!("Confirmed: deposit not yet processed.");
+
+    // ── Phase 7b: Submit ProcessDeposit on Linera ──
     tracing::info!("Submitting ProcessDeposit operation...");
     let bridge_op = BridgeOperation::ProcessDeposit {
         block_header_rlp: proof.block_header_rlp,
         receipt_rlp: proof.receipt_rlp,
         proof_nodes: proof.proof_nodes,
-        tx_index: proof.tx_index,
-        log_index: proof.log_indices[0],
+        tx_index,
+        log_index,
     };
     let op_bytes = bcs::to_bytes(&bridge_op)?;
     let op = Operation::User {
@@ -374,6 +434,13 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         "wrapped-fungible balance should match the 100-token deposit"
     );
 
-    tracing::info!(%balance, "Test passed! Wrapped-fungible balance matches deposit.");
+    tracing::info!(%balance, "Wrapped-fungible balance matches deposit.");
+
+    // ── Phase 9: Verify deposit IS now processed ──
+    assert!(
+        linera_bridge_e2e::query_deposit_processed(&cc, bridge_app_id, &deposit_key).await?,
+        "deposit should be marked as processed after ProcessDeposit"
+    );
+    tracing::info!("Test passed! Deposit confirmed as processed via GraphQL query.");
     Ok(())
 }

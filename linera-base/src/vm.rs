@@ -101,6 +101,7 @@ impl EvmOperation {
     }
 
     /// Creates an `EvmQuery` from the input.
+    #[cfg(with_testing)]
     pub fn to_evm_query(&self) -> Result<EvmQuery, bcs::Error> {
         Ok(EvmQuery::Operation(self.to_bytes()?))
     }

@@ -6,7 +6,7 @@ use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, BlockHeight, Epoch},
+    data_types::{Amount, BlockHeight, Epoch, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamId},
     time::Duration,
     vm::VmRuntime,
@@ -360,6 +360,12 @@ pub enum ClientCommand {
         /// blocks 0 through 9.
         #[arg(long)]
         next_height: Option<BlockHeight>,
+
+        /// Stop synchronizing at the first block with a timestamp greater than this
+        /// value (inclusive). The format is `YYYY-MM-DDTHH:MM:SS` or
+        /// `YYYY-MM-DD HH:MM:SS` in UTC.
+        #[arg(long)]
+        until_block_time: Option<Timestamp>,
     },
 
     /// Process all pending incoming messages from the inbox of the given chain by creating as many
@@ -992,6 +998,23 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
+    /// Execute a raw user operation on an application.
+    ///
+    /// The operation bytes are provided as a hex string (BCS-encoded).
+    ExecuteOperation {
+        /// The application to send the operation to.
+        #[arg(long)]
+        application_id: ApplicationId,
+
+        /// BCS-encoded operation bytes as a hex string.
+        #[arg(long)]
+        operation: String,
+
+        /// Chain ID to submit the operation on. Defaults to the wallet's default chain.
+        #[arg(long)]
+        chain_id: Option<ChainId>,
+    },
+
     /// Show the contents of the wallet.
     #[command(subcommand)]
     Wallet(WalletCommand),
@@ -1079,6 +1102,7 @@ impl ClientCommand {
             | ClientCommand::Validator { .. }
             | ClientCommand::RetryPendingBlock { .. }
             | ClientCommand::QueryApplication { .. } => "client".into(),
+            ClientCommand::ExecuteOperation { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),
@@ -1246,6 +1270,10 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, default_value = "false")]
         dual_store: bool,
+
+        /// Set the list of hosts that contracts and services can send HTTP requests to.
+        #[arg(long, value_delimiter = ',')]
+        http_request_allow_list: Option<Vec<String>>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is
@@ -1360,6 +1388,11 @@ pub enum ProjectCommand {
         /// Use the given clone of the Linera repository instead of remote crates.
         #[arg(long)]
         linera_root: Option<PathBuf>,
+
+        /// Use the given directory for the project instead of creating a new one.
+        /// The directory will be created if it doesn't exist.
+        #[arg(long)]
+        dir: Option<PathBuf>,
     },
 
     /// Test a Linera project.

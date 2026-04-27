@@ -14,14 +14,14 @@ use serde::ser::Serialize as _;
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys, wasm_bindgen};
 
-use crate::{Client, Environment, JsResult};
+use crate::{Environment, JsResult};
 
 pub mod application;
 pub use application::Application;
 
 #[wasm_bindgen]
 pub struct Chain {
-    pub(crate) client: Client,
+    pub(crate) client: crate::Client,
     pub(crate) chain_client: ChainClient<Environment>,
 }
 
@@ -81,7 +81,7 @@ impl Chain {
     pub async fn transfer(&self, params: TransferParams) -> JsResult<()> {
         let _hash = self
             .client
-            .client_context
+            .context
             .lock()
             .await
             .apply_client_command(&self.chain_client, |_chain_client| {
@@ -125,7 +125,7 @@ impl Chain {
     ) -> JsResult<()> {
         let AddOwnerOptions { weight } = options.unwrap_or_default();
         self.client
-            .client_context
+            .context
             .lock()
             .await
             .apply_client_command(&self.chain_client, |_chain_client| {
@@ -143,7 +143,7 @@ impl Chain {
     pub async fn validator_version_info(&self) -> JsResult<JsValue> {
         self.chain_client.synchronize_from_validators().await?;
         let result = self.chain_client.local_committee().await;
-        let mut client = self.client.client_context.lock().await;
+        let mut client = self.client.context.lock().await;
         client.update_wallet(&self.chain_client).await?;
         let committee = result?;
         let node_provider = client.make_node_provider();

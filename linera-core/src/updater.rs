@@ -434,14 +434,14 @@ where
                 )
                 .await?;
             }
-            NodeError::InactiveChain(chain_id) => {
+            NodeError::InactiveChain(inactive_chain_id) => {
                 tracing::debug!(
                     address,
-                    %chain_id,
+                    chain_id = %inactive_chain_id,
                     "Validator has inactive chain; sending chain info.",
                 );
                 self.send_chain_information(
-                    *chain_id,
+                    *inactive_chain_id,
                     height,
                     CrossChainMessageDelivery::NonBlocking,
                     None,
@@ -674,7 +674,7 @@ where
     /// # Returns
     /// - `Ok(())` if synchronization completed successfully or the validator is already up to date
     /// - `Err` if there was a communication or storage error
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "debug", skip_all, fields(%chain_id))]
     pub async fn send_chain_information(
         &mut self,
         chain_id: ChainId,
@@ -794,7 +794,11 @@ where
             .read_certificates_by_heights(chain_id, &heights)
             .await?;
 
-        Ok(certificates_by_height.into_iter().flatten().collect())
+        Ok(certificates_by_height
+            .into_iter()
+            .flatten()
+            .map(Arc::unwrap_or_clone)
+            .collect())
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.
@@ -955,6 +959,7 @@ where
                         .await?
                         .into_iter()
                         .flatten()
+                        .map(Arc::unwrap_or_clone)
                         .collect::<Vec<_>>();
 
                     // Send each certificate

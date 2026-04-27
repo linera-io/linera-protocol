@@ -45,7 +45,7 @@ mod tests {
             &mut db,
             deployer,
             contract,
-            addCommitteeCall {
+            &addCommitteeCall {
                 data: bcs_bytes.into(),
                 committeeBlob: committee_bytes.into(),
                 validators: vec![new_uncompressed.into()],
@@ -67,7 +67,7 @@ mod tests {
         let mut db = CacheDB::default();
         let light_client =
             deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
-        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id, 1);
+        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
         let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
@@ -75,7 +75,7 @@ mod tests {
             &mut db,
             deployer,
             microchain,
-            addBlockCall {
+            &addBlockCall {
                 data: bcs_bytes.into(),
             },
         );

@@ -121,6 +121,17 @@ impl SystemExecutionState {
                 .insert(id, mock_application.into());
         }
 
+        let mut committee_hashes = BTreeMap::new();
+        for (epoch, committee) in committees {
+            let blob = Blob::new_committee(bcs::to_bytes(&committee).expect("BCS should succeed"));
+            let hash = blob.id().hash;
+            extra
+                .add_blobs([blob])
+                .await
+                .expect("Adding committee blobs should not fail");
+            committee_hashes.insert(epoch, hash);
+        }
+
         let context = MemoryContext::new_for_testing(extra);
         let mut view = ExecutionStateView::load(context)
             .await
@@ -128,7 +139,7 @@ impl SystemExecutionState {
         view.system.description.set(description);
         view.system.epoch.set(epoch);
         view.system.admin_chain_id.set(admin_chain_id);
-        view.system.committees.set(committees);
+        view.system.committees.set(committee_hashes);
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
         for (account_owner, balance) in balances {
@@ -153,7 +164,7 @@ impl SystemExecutionState {
 }
 
 impl RegisterMockApplication for SystemExecutionState {
-    fn creator_chain_id(&self) -> ChainId {
+    async fn creator_chain_id(&self) -> ChainId {
         self.description.as_ref().expect(
             "Can't register applications on a system state with no associated `ChainDescription`",
         ).into()

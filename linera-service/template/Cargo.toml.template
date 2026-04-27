@@ -13,6 +13,7 @@ serde_json = {{ version = "1.0" }}
 
 # TODO(#4742): Remove the pinned versions once the `linera-*` crates work with Rust > 1.86.0.
 darling = {{ version = ">=0.20, <0.23" }}
+ruint = {{ version = ">=1, <1.18" }}
 serde_with = {{ version = ">=3, <3.18" }}
 time = {{ version = ">=0.3, <0.3.47" }}
 time-core = {{ version = ">=0.1, <0.1.8" }}
