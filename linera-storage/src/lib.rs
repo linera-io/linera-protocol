@@ -14,7 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode, Epoch,
-        NetworkDescription, TimeDelta, Timestamp,
+        NetworkDescription, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
@@ -570,8 +570,6 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
 #[cfg_attr(web, async_trait(?Send))]
 pub trait Clock {
     fn current_time(&self) -> Timestamp;
-
-    async fn sleep(&self, delta: TimeDelta);
 
     async fn sleep_until(&self, timestamp: Timestamp);
 }

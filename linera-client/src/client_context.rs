@@ -273,7 +273,7 @@ where
     // not worth refactoring this because
     // https://github.com/linera-io/linera-protocol/issues/5082
     // https://github.com/linera-io/linera-protocol/issues/5083
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn new(
         storage: S,
         wallet: W,

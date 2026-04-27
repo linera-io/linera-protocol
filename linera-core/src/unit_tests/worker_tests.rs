@@ -41,8 +41,8 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, SystemMessage, SystemOperation,
-        EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
+        AdminOperation, OpenChainConfig, SystemMessage, SystemOperation, EPOCH_STREAM_NAME,
+        REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
         dummy_chain_description, ExpectedCall, RegisterMockApplication, SystemExecutionState,
@@ -2793,7 +2793,7 @@ where
     ]);
     let event_id = EventId {
         chain_id: admin_chain_id,
-        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+        stream_id: StreamId::system(EPOCH_STREAM_NAME),
         index: 1,
     };
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
@@ -2905,7 +2905,7 @@ where
                     OracleResponse::Event(
                         EventId {
                             chain_id: admin_chain_id,
-                            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                            stream_id: StreamId::system(EPOCH_STREAM_NAME),
                             index: 1,
                         },
                         bcs::to_bytes(&blob_hash).unwrap(),
@@ -3018,7 +3018,7 @@ where
                 previous_message_blocks: BTreeMap::new(),
                 previous_event_blocks: BTreeMap::new(),
                 events: vec![vec![Event {
-                    stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: 1,
                     value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                 }]],
@@ -3140,7 +3140,7 @@ where
             previous_event_blocks: BTreeMap::new(),
             events: vec![
                 vec![Event {
-                    stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: 1,
                     value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                 }],
@@ -3265,11 +3265,11 @@ where
             messages: vec![Vec::new()],
             previous_message_blocks: BTreeMap::new(),
             previous_event_blocks: BTreeMap::from([(
-                StreamId::system(NEW_EPOCH_STREAM_NAME),
+                StreamId::system(EPOCH_STREAM_NAME),
                 (certificate1.hash(), BlockHeight(0)),
             )]),
             events: vec![vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
                 index: 2,
                 value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
             }]],

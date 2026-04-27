@@ -546,11 +546,10 @@ mod tests {
     // The key splitting means that when a key is overwritten
     // some previous segments may still be present.
     #[tokio::test]
-    #[expect(clippy::assertions_on_constants)]
     async fn test_value_splitting1_testing_leftovers() {
         let store = LimitedTestMemoryStore::new();
         const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
-        assert!(MAX_LEN > 10);
+        const _: () = assert!(MAX_LEN > 10);
         let big_store = ValueSplittingStore::new(store.clone());
         let key = vec![0, 0];
         // Write a key with a long value

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::large_futures)]
+#![expect(clippy::large_futures)]
 
 use std::{
     collections::{BTreeMap, BTreeSet},

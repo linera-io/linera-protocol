@@ -76,7 +76,7 @@ pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::En
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
     faucet_url: Option<&str>,
@@ -277,7 +277,7 @@ pub async fn run(
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     chain_client: ChainClient<E>,
     rpc_url: &str,
