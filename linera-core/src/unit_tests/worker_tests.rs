@@ -5,17 +5,25 @@
 #![allow(clippy::large_futures)]
 
 macro_rules! outcome_matches {
-    ($block:expr, $messages:expr, $previous_message_blocks:expr, $previous_event_blocks:expr, $oracle_responses:expr, $events:expr, $blobs:expr, $operation_results:expr $(,)?) => {
-        $block.outcome_matches(
-            $messages,
-            $previous_message_blocks,
-            $previous_event_blocks,
-            $oracle_responses,
-            $events,
-            $blobs,
-            $operation_results,
-        )
-    };
+    ($block:expr, $messages:expr, $previous_message_blocks:expr, $previous_event_blocks:expr, $oracle_responses:expr, $events:expr, $blobs:expr, $operation_results:expr $(,)?) => {{
+        let ::linera_chain::block::BlockBody {
+            transactions: _,
+            messages,
+            previous_message_blocks,
+            previous_event_blocks,
+            oracle_responses,
+            events,
+            blobs,
+            operation_results,
+        } = &$block.body;
+        messages == $messages
+            && previous_message_blocks == $previous_message_blocks
+            && previous_event_blocks == $previous_event_blocks
+            && oracle_responses == $oracle_responses
+            && events == $events
+            && blobs == $blobs
+            && operation_results == $operation_results
+    }};
 }
 
 #[path = "./wasm_worker_tests.rs"]
