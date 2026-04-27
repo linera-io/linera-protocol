@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -637,10 +637,7 @@ where
     /// should be processed first.
     #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self, origins))]
-    pub fn with_priority_bundle_origins(
-        mut self,
-        origins: std::collections::HashSet<ChainId>,
-    ) -> Self {
+    pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
         self.chain_worker_config.priority_bundle_origins = origins;
         self
     }
@@ -1095,7 +1092,16 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            Block,
+            ChainInfoResponse,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        WorkerError,
+    > {
         let chain_id = block.chain_id;
         self.chain_write(chain_id, move |mut guard| async move {
             guard
