@@ -496,7 +496,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera service` with all available options.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn run_node_service_with_all_options(
         &self,
         port: impl Into<Option<u16>>,

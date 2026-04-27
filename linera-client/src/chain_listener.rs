@@ -163,7 +163,7 @@ struct ListeningClient<C: ClientContext> {
 }
 
 impl<C: ClientContext + 'static> ListeningClient<C> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         client: ContextChainClient<C>,
         abort_handle: AbortOnDrop,

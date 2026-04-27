@@ -359,7 +359,7 @@ pub struct CertificatesByHeightRequest {
 pub(crate) struct CompressedHeights<'a>(pub(crate) &'a [BlockHeight]);
 
 /// Formats a `Vec<BlockHeight>` as compressed ranges for use with `#[debug(with = "...")]`.
-#[allow(clippy::ptr_arg)]
+#[expect(clippy::ptr_arg)]
 pub(crate) fn debug_compressed_heights(
     heights: &Vec<BlockHeight>,
     f: &mut fmt::Formatter<'_>,

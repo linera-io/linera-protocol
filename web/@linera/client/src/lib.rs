@@ -17,7 +17,7 @@ key directly in memory and uses it to sign.
 
 // We sometimes need functions in this module to be async in order to
 // ensure the generated code will return a `Promise`.
-#![allow(clippy::unused_async)]
+#![expect(clippy::unused_async)]
 #![recursion_limit = "256"]
 
 use wasm_bindgen::prelude::*;
