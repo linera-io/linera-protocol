@@ -40,9 +40,21 @@ wasmtime = [
     "linera-execution/wasmtime",
     "linera-storage/wasmtime",
 ]
-rocksdb = ["linera-views/rocksdb", "linera-core/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-core/dynamodb"]
-scylladb = ["linera-views/scylladb", "linera-core/scylladb"]
+rocksdb = [
+    "linera-views/rocksdb",
+    "linera-core/rocksdb",
+    "linera-storage-runtime/rocksdb",
+]
+dynamodb = [
+    "linera-views/dynamodb",
+    "linera-core/dynamodb",
+    "linera-storage-runtime/dynamodb",
+]
+scylladb = [
+    "linera-views/scylladb",
+    "linera-core/scylladb",
+    "linera-storage-runtime/scylladb",
+]
 kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote-net = []
 metrics = [
@@ -52,14 +64,15 @@ metrics = [
     "linera-faucet-server/metrics",
     "linera-metrics",
 ]
-jemalloc = ["tikv-jemallocator"]
-memory-profiling = [
-    "metrics",
-    "jemalloc",
-    "tikv-jemallocator/profiling",
-    "linera-metrics/memory-profiling",
+jemalloc = [
+    "linera-jemallocator",
+    "linera-jemallocator/profiling_libunwind",
+    "linera-metrics/jemalloc",
 ]
-storage-service = ["linera-storage-service"]
+storage-service = [
+    "linera-storage-service",
+    "linera-storage-runtime/storage-service",
+]
 opentelemetry = ["linera-rpc/opentelemetry"]
 
 [dependencies]
@@ -75,7 +88,6 @@ async-trait.workspace = true
 async-tungstenite.workspace = true
 axum = { workspace = true, features = ["ws"] }
 bcs.workspace = true
-bincode.workspace = true
 cargo_toml.workspace = true
 cfg-if.workspace = true
 chrono = { workspace = true, features = ["clock"] }
@@ -86,8 +98,6 @@ clio = { workspace = true, features = ["clap-parse"] }
 colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
-custom_debug_derive.workspace = true
-dirs.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true, optional = true }
 futures.workspace = true
@@ -98,13 +108,17 @@ is-terminal.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
 linera-base.workspace = true
-linera-bridge.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
 linera-core.workspace = true
 linera-execution = { workspace = true, features = ["fs"] }
+linera-exporter = { workspace = true, default-features = false }
 linera-faucet-client.workspace = true
 linera-faucet-server.workspace = true
+linera-jemallocator = { workspace = true, features = [
+    "profiling",
+    "unprefixed_malloc_on_supported_platforms",
+], optional = true }
 linera-metrics = { workspace = true, optional = true }
 linera-persistent = { workspace = true, features = ["fs"] }
 linera-rpc = { workspace = true, features = [
@@ -114,11 +128,12 @@ linera-rpc = { workspace = true, features = [
 ] }
 linera-sdk = { workspace = true }
 linera-storage.workspace = true
+linera-storage-runtime.workspace = true
 linera-storage-service = { workspace = true, optional = true }
 linera-version.workspace = true
 linera-views.workspace = true
+linera-wallet-json.workspace = true
 lru.workspace = true
-mini-moka.workspace = true
 nonzero_lit.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true
@@ -128,7 +143,6 @@ pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 prost = { workspace = true }
-quick_cache.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
@@ -137,10 +151,6 @@ serde_json.workspace = true
 stdext = { workspace = true, optional = true }
 tempfile.workspace = true
 thiserror.workspace = true
-tikv-jemallocator = { workspace = true, features = [
-    "profiling",
-    "unprefixed_malloc_on_supported_platforms",
-], optional = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tokio-util.workspace = true
@@ -225,10 +235,6 @@ path = "src/schema_export.rs"
 [[bin]]
 name = "linera-benchmark"
 path = "src/benchmark.rs"
-
-[[bin]]
-name = "linera-exporter"
-path = "src/exporter/main.rs"
 
 [[bench]]
 name = "transfers"

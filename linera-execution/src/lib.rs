@@ -65,7 +65,7 @@ pub use crate::wasm::{
     ServiceRuntimeApi, WasmContractModule, WasmExecutionError, WasmServiceModule,
 };
 pub use crate::{
-    committee::Committee,
+    committee::{Committee, SharedCommittees},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
     policy::ResourceControlPolicy,
@@ -229,7 +229,7 @@ const _: () = {
 };
 
 /// A type for errors happening during execution.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, strum::IntoStaticStr)]
 pub enum ExecutionError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
@@ -437,6 +437,13 @@ impl ExecutionError {
         }
     }
 
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"ExecutionError::BlobsNotFound"`.
+    pub fn error_type(&self) -> String {
+        let variant: &'static str = self.into();
+        format!("ExecutionError::{variant}")
+    }
+
     /// Returns whether this error is caused by a per-block limit being exceeded.
     ///
     /// These are errors that might succeed in a later block if the limit was only exceeded
@@ -532,17 +539,29 @@ pub trait ExecutionRuntimeContext {
         txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError>;
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError>;
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError>;
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError>;
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
-    /// Returns the committees for the epochs in the given range.
-    async fn get_committees(
+    /// Returns the committee whose serialized form hashes to `hash`. Returns
+    /// `ExecutionError::BlobsNotFound` if the committee blob is missing from
+    /// storage.
+    ///
+    /// Implementations should cache results in a process-wide
+    /// [`SharedCommittees`] map so that repeated lookups are cheap across
+    /// chains.
+    async fn get_or_load_committee_by_hash(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Arc<Committee>, ExecutionError>;
+
+    /// Returns the committee blob hashes for the epochs in the given range.
+    async fn get_committee_hashes(
         &self,
         epoch_range: RangeInclusive<Epoch>,
-    ) -> Result<BTreeMap<Epoch, Committee>, ExecutionError> {
+    ) -> Result<BTreeMap<Epoch, CryptoHash>, ExecutionError> {
         let net_description = self
             .get_network_description()
             .await?
@@ -551,7 +570,7 @@ pub trait ExecutionRuntimeContext {
             (epoch_range.start().0..=epoch_range.end().0).map(|epoch| async move {
                 if epoch == 0 {
                     // Genesis epoch is stored in NetworkDescription.
-                    Ok((epoch, net_description.genesis_committee_blob_hash))
+                    Ok((Epoch(epoch), net_description.genesis_committee_blob_hash))
                 } else {
                     let event_id = EventId {
                         chain_id: net_description.admin_chain_id,
@@ -563,7 +582,7 @@ pub trait ExecutionRuntimeContext {
                         .await?
                         .ok_or_else(|| ExecutionError::EventsNotFound(vec![event_id]))?;
                     let event_data: EpochEventData = bcs::from_bytes(&event)?;
-                    Ok((epoch, event_data.blob_hash))
+                    Ok((Epoch(epoch), event_data.blob_hash))
                 }
             }),
         )
@@ -583,36 +602,7 @@ pub trait ExecutionRuntimeContext {
             missing_events.is_empty(),
             ExecutionError::EventsNotFound(missing_events)
         );
-        let committee_hashes = committee_hashes
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()?;
-        let committees = futures::future::join_all(committee_hashes.into_iter().map(
-            |(epoch, committee_hash)| async move {
-                let blob_id = BlobId::new(committee_hash, BlobType::Committee);
-                let committee_blob = self
-                    .get_blob(blob_id)
-                    .await?
-                    .ok_or_else(|| ExecutionError::BlobsNotFound(vec![blob_id]))?;
-                Ok((Epoch(epoch), bcs::from_bytes(committee_blob.bytes())?))
-            },
-        ))
-        .await;
-        let missing_blobs = committees
-            .iter()
-            .filter_map(|result| {
-                if let Err(ExecutionError::BlobsNotFound(blob_ids)) = result {
-                    return Some(blob_ids);
-                }
-                None
-            })
-            .flatten()
-            .cloned()
-            .collect::<Vec<_>>();
-        ensure!(
-            missing_blobs.is_empty(),
-            ExecutionError::BlobsNotFound(missing_blobs)
-        );
-        committees.into_iter().collect()
+        committee_hashes.into_iter().collect()
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
@@ -1366,12 +1356,12 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             .clone())
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, ViewError> {
-        Ok(self.blobs.pin().get(&blob_id).cloned())
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
+        Ok(self.blobs.pin().get(&blob_id).cloned().map(Arc::new))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Vec<u8>>, ViewError> {
-        Ok(self.events.pin().get(&event_id).cloned())
+    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
+        Ok(self.events.pin().get(&event_id).cloned().map(Arc::new))
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -1390,6 +1380,21 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
             genesis_committee_blob_hash,
             name: "dummy network description".to_string(),
         }))
+    }
+
+    async fn get_or_load_committee_by_hash(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Arc<Committee>, ExecutionError> {
+        let blob_id = BlobId::new(hash, BlobType::Committee);
+        let blob = self
+            .blobs
+            .pin()
+            .get(&blob_id)
+            .cloned()
+            .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
+        let committee: Committee = bcs::from_bytes(blob.bytes())?;
+        Ok(Arc::new(committee))
     }
 
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError> {

@@ -3,7 +3,7 @@
 
 use linera_base::identifiers::AccountOwner;
 use serde_reflection::{Samples, Tracer, TracerConfig};
-use wrapped_fungible::{Message, WrappedFungibleOperation};
+use wrapped_fungible::{BurnEvent, Message, WrappedFungibleOperation};
 
 #[test]
 fn test_format_wrapped_fungible() {
@@ -19,6 +19,7 @@ fn test_format_wrapped_fungible() {
         .trace_type::<WrappedFungibleOperation>(&samples)
         .unwrap();
     tracer.trace_type::<Message>(&samples).unwrap();
+    tracer.trace_type::<BurnEvent>(&samples).unwrap();
     let registry = tracer.registry_unchecked();
     insta::assert_yaml_snapshot!("format_wrapped_fungible.yaml", registry);
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 //! The server component of the Linera faucet.
 
@@ -316,7 +316,7 @@ where
 
     /// Returns the current committee, including weights and resource policy.
     async fn current_committee(&self) -> Result<Committee, Error> {
-        Ok(self.client.local_committee().await?)
+        Ok((*self.client.local_committee().await?).clone())
     }
 
     /// Returns the current epoch of the faucet's chain.
@@ -1075,6 +1075,7 @@ where
     pending_requests: Arc<Mutex<VecDeque<PendingRequest>>>,
     request_notifier: Arc<Notify>,
     max_batch_size: usize,
+    enable_memory_profiling: bool,
 }
 
 impl<C> Clone for FaucetService<C>
@@ -1102,6 +1103,7 @@ where
             pending_requests: Arc::clone(&self.pending_requests),
             request_notifier: Arc::clone(&self.request_notifier),
             max_batch_size: self.max_batch_size,
+            enable_memory_profiling: self.enable_memory_profiling,
         }
     }
 }
@@ -1118,6 +1120,7 @@ pub struct FaucetConfig {
     pub chain_listener_config: ChainListenerConfig,
     pub storage_path: PathBuf,
     pub max_batch_size: usize,
+    pub enable_memory_profiling: bool,
 }
 
 impl<C> FaucetService<C>
@@ -1172,6 +1175,7 @@ where
             pending_requests,
             request_notifier,
             max_batch_size: config.max_batch_size,
+            enable_memory_profiling: config.enable_memory_profiling,
         })
     }
 
@@ -1210,7 +1214,12 @@ where
         let index_handler = axum::routing::get(graphiql).post(Self::index_handler);
 
         #[cfg(feature = "metrics")]
-        monitoring_server::start_metrics(self.metrics_address(), cancellation_token.clone());
+        monitoring_server::start_metrics_with_profiling(
+            self.metrics_address(),
+            cancellation_token.clone(),
+            self.enable_memory_profiling,
+        )
+        .await;
 
         let app = Router::new()
             .route("/", index_handler)

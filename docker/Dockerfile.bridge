@@ -99,3 +99,40 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/bin/linera-bridge /usr/local/bin/linera-bridge
+COPY docker/bridge-entrypoint.sh /usr/local/bin/bridge-entrypoint.sh
+RUN chmod +x /usr/local/bin/bridge-entrypoint.sh
+
+# ── Required (no defaults — must be set at runtime) ──
+# RPC_URL              EVM JSON-RPC endpoint
+# EVM_BRIDGE_ADDRESS   FungibleBridge contract address on EVM
+# LINERA_BRIDGE_APP    evm-bridge Linera ApplicationId (hex)
+# LINERA_FUNGIBLE_APP  wrapped-fungible Linera ApplicationId (hex)
+# EVM_PRIVATE_KEY      EVM private key for signing transactions
+
+# ── Conditionally required ──
+# FAUCET_URL           Linera faucet URL (required when wallet doesn't exist or chain ID not provided)
+
+# ── Optional (have defaults) ──
+ENV PORT=3001
+ENV MONITOR_SCAN_INTERVAL=30
+ENV MONITOR_START_BLOCK=0
+ENV MAX_RETRIES=10
+ENV BLOB_CACHE_SIZE=1000
+ENV CONFIRMED_BLOCK_CACHE_SIZE=1000
+ENV CERTIFICATE_CACHE_SIZE=1000
+ENV CERTIFICATE_RAW_CACHE_SIZE=1000
+ENV EVENT_CACHE_SIZE=1000
+
+# ── Optional Linera client paths (clap reads these directly) ──
+# LINERA_WALLET        Path to wallet state file
+# LINERA_KEYSTORE      Path to keystore file
+# LINERA_STORAGE       Storage config (e.g. rocksdb:/data/client.db)
+
+# ── Optional ──
+# LINERA_BRIDGE_CHAIN_ID   Linera bridge chain ID (claims new if omitted)
+# LINERA_BRIDGE_CHAIN_OWNER  Owner for the bridge chain (required with LINERA_BRIDGE_CHAIN_ID)
+
+EXPOSE 3001
+
+ENTRYPOINT ["bridge-entrypoint.sh"]
+CMD ["serve"]

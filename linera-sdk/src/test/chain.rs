@@ -297,7 +297,7 @@ impl ActiveChain {
         &self,
     ) -> Option<(ConfirmedBlockCertificate, ResourceTracker)> {
         let chain_id = self.id();
-        let (information, _) = self
+        let information = self
             .validator
             .worker()
             .handle_chain_info_query(ChainInfoQuery::new(chain_id).with_pending_message_bundles())
@@ -586,6 +586,49 @@ impl ActiveChain {
         };
 
         ApplicationId::<()>::from(&description).with_abi()
+    }
+
+    /// Fallible version of [`create_application`](Self::create_application).
+    ///
+    /// Returns the [`ApplicationId`] on success, or a [`WorkerError`] if instantiation fails.
+    pub async fn try_create_application<Abi, Parameters, InstantiationArgument>(
+        &mut self,
+        module_id: ModuleId<Abi, Parameters, InstantiationArgument>,
+        parameters: Parameters,
+        instantiation_argument: InstantiationArgument,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ApplicationId<Abi>, WorkerError>
+    where
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
+        let parameters = serde_json::to_vec(&parameters).unwrap();
+        let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
+
+        let (creation_certificate, _) = self
+            .try_add_block(|block| {
+                block.with_system_operation(SystemOperation::CreateApplication {
+                    module_id: module_id.forget_abi(),
+                    parameters: parameters.clone(),
+                    instantiation_argument,
+                    required_application_ids: required_application_ids.clone(),
+                });
+            })
+            .await?;
+
+        let block = creation_certificate.inner().block();
+
+        let description = ApplicationDescription {
+            module_id: module_id.forget_abi(),
+            creator_chain_id: block.header.chain_id,
+            block_height: block.header.height,
+            application_index: 0,
+            parameters,
+            required_application_ids,
+        };
+
+        Ok(ApplicationId::<()>::from(&description).with_abi())
     }
 
     /// Returns whether this chain has been closed.

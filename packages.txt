@@ -11,6 +11,7 @@ linera-views
 linera-execution
 linera-chain
 linera-storage-service
+linera-cache
 linera-storage
 linera-core
 linera-ethereum
@@ -19,8 +20,11 @@ linera-sdk-derive
 linera-sdk
 linera-rpc
 linera-client
+linera-wallet-json
+linera-storage-runtime
 linera-faucet-client
 linera-faucet-server
-linera-bridge
+# linera-bridge — depends on unpublished example crate (wrapped-fungible) under the relay feature
+linera-exporter
 linera-service
 linera-service-graphql-client

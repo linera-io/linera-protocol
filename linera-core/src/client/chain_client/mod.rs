@@ -18,7 +18,7 @@ use futures::{
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
         ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
@@ -35,8 +35,8 @@ use linera_base::{
 use linera_base::{data_types::Bytecode, vm::VmRuntime};
 use linera_chain::{
     data_types::{
-        BlockProposal, BundleExecutionPolicy, ChainAndHeight, IncomingBundle, ProposedBlock,
-        Transaction,
+        BlockProposal, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight, IncomingBundle,
+        ProposedBlock, Transaction,
     },
     manager::LockingBlock,
     types::{
@@ -51,7 +51,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome,
 };
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
@@ -69,7 +69,7 @@ use super::{
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     environment::Environment,
-    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider as _,
@@ -88,6 +88,9 @@ pub struct Options {
     ///
     /// Discarded bundles can be retried in the next block.
     pub max_block_limit_errors: u32,
+    /// Time budget for staging message bundles. When set, limits bundle execution by
+    /// wall-clock time, in addition to the count limit from `max_pending_message_bundles`.
+    pub staging_bundles_time_budget: Option<Duration>,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
     /// Whether to block on cross-chain message delivery.
@@ -102,6 +105,9 @@ pub struct Options {
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
+    /// Maximum number of certificates read from local storage and uploaded to a validator
+    /// at a time when synchronizing a chain.
+    pub certificate_upload_batch_size: u64,
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     pub sender_certificate_download_batch_size: usize,
@@ -110,28 +116,61 @@ pub struct Options {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
+    /// Initial probe interval for the notification circuit breaker. When a validator's
+    /// notification stream exhausts retries, the circuit breaker waits this long before
+    /// probing again. Doubles on each failed probe.
+    pub notification_circuit_breaker_initial_probe_interval: Duration,
+    /// Maximum probe interval for the notification circuit breaker. The probe interval
+    /// doubles on each failure but is capped at this value.
+    pub notification_circuit_breaker_max_probe_interval: Duration,
+    /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
+    /// request. Larger sets are split into multiple requests.
+    pub max_event_stream_queries: usize,
+}
+
+struct CircuitBreakerState {
+    next_probe_at: Instant,
+    probe_interval: Duration,
 }
 
 #[cfg(with_testing)]
 impl Options {
     pub fn test_default() -> Self {
         use super::{
-            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+            DEFAULT_MAX_EVENT_STREAM_QUERIES, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
         Options {
             max_pending_message_bundles: 10,
             max_block_limit_errors: 3,
+            staging_bundles_time_budget: None,
             message_policy: MessagePolicy::new_accept_all(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
             certificate_batch_download_timeout: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
+            notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
+            notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
+            max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
+        }
+    }
+}
+
+impl Options {
+    /// Builds the [`BundleExecutionPolicy`] based on the client options.
+    pub fn bundle_execution_policy(&self) -> BundleExecutionPolicy {
+        BundleExecutionPolicy {
+            on_failure: BundleFailurePolicy::AutoRetry {
+                max_failures: self.max_block_limit_errors,
+            },
+            time_budget: self.staging_bundles_time_budget,
         }
     }
 }
@@ -393,12 +432,6 @@ impl<Env: Environment> ChainClient<Env> {
         self.preferred_owner = Some(preferred_owner);
     }
 
-    /// Unsets the preferred owner for signing the blocks.
-    #[instrument(level = "trace", skip(self))]
-    pub fn unset_preferred_owner(&mut self) {
-        self.preferred_owner = None;
-    }
-
     /// Obtains a `ChainStateView` for this client's chain.
     #[instrument(level = "trace")]
     pub async fn chain_state_view(
@@ -541,6 +574,13 @@ impl<Env: Environment> ChainClient<Env> {
                     .as_ref()
                     .is_none_or(|chain_set| chain_set.contains(chain_id))
             })
+            .filter(|((_, stream_id), _)| {
+                self.options
+                    .message_policy
+                    .process_events_from_application_ids
+                    .as_ref()
+                    .is_none_or(|app_set| app_set.contains(&stream_id.application_id))
+            })
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 async move {
@@ -587,30 +627,54 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     async fn epoch_and_committees(
         &self,
-    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
+    ) -> Result<(Epoch, BTreeMap<Epoch, CryptoHash>), LocalNodeError> {
         let info = self.chain_info_with_committees().await?;
         let epoch = info.epoch;
-        let committees = info.into_committees()?;
+        let committees = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
         Ok((epoch, committees))
     }
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
-    pub async fn local_committee(&self) -> Result<Committee, Error> {
+    pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
         let info = match self.chain_info_with_committees().await {
             Ok(info) => info,
             Err(LocalNodeError::BlobsNotFound(_)) => {
                 self.synchronize_chain_state(self.chain_id).await?;
                 self.chain_info_with_committees().await?
             }
+            Err(LocalNodeError::EventsNotFound(event_ids))
+                if event_ids
+                    .iter()
+                    .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)) =>
+            {
+                // `initialize_and_save_if_needed` couldn't start the chain because
+                // the admin chain's epoch events aren't synced yet.
+                self.synchronize_chain_state(self.client.admin_chain_id)
+                    .await?;
+                self.chain_info_with_committees().await?
+            }
             Err(err) => return Err(err.into()),
         };
-        Ok(info.into_current_committee()?)
+        let hash = info
+            .requested_committees
+            .as_ref()
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .get(&info.epoch)
+            .copied()
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
+        Ok(self
+            .storage_client()
+            .get_or_load_committee_by_hash(hash)
+            .await
+            .map_err(LocalNodeError::from)?)
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
     #[instrument(level = "trace")]
-    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         self.client.admin_committee().await
     }
 
@@ -760,7 +824,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?
         };
         if let Ok(new_committee) = self.local_committee().await {
-            if Some(&new_committee) != old_committee {
+            if old_committee.is_none_or(|old| *new_committee != *old) {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
                 self.communicate_chain_updates(&new_committee, latest_certificate)
@@ -871,9 +935,9 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// However, this should be the case whenever a sender's chain is still in use and
     /// is regularly upgraded to new committees.
-    #[instrument(level = "trace")]
+    #[instrument(level = "debug", skip(self), fields(chain_id = %self.chain_id))]
     pub async fn find_received_certificates(&self) -> Result<(), Error> {
-        debug!(chain_id = %self.chain_id, "starting find_received_certificates");
+        debug!("starting find_received_certificates");
         #[cfg(with_metrics)]
         let _latency = super::metrics::FIND_RECEIVED_CERTIFICATES_LATENCY.measure_latency();
         // Use network information from the local chain.
@@ -976,7 +1040,7 @@ impl<Env: Environment> ChainClient<Env> {
             error!(
                 chain_id = %self.chain_id,
                 %error,
-                "Failed to update the certificate trackers for chain",
+                "Failed to update the certificate trackers",
             );
         }
     }
@@ -1172,8 +1236,8 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn request_leader_timeout(&self) -> Result<TimeoutCertificate, Error> {
         let chain_id = self.chain_id;
-        let info = self.chain_info_with_committees().await?;
-        let committee = info.current_committee()?;
+        let info = self.chain_info().await?;
+        let committee = self.local_committee().await?;
         let height = info.next_block_height;
         let round = info.manager.current_round;
         let action = CommunicateAction::RequestTimeout {
@@ -1184,14 +1248,14 @@ impl<Env: Environment> ChainClient<Env> {
         let value = Timeout::new(chain_id, height, info.epoch);
         let certificate = Box::new(
             self.client
-                .communicate_chain_action(committee, action, value)
+                .communicate_chain_action(&committee, action, value)
                 .await?,
         );
         self.client.handle_certificate(*certificate.clone()).await?;
         // The block height didn't increase, but this will communicate the timeout as well.
         self.client
             .communicate_chain_updates(
-                committee,
+                &committee,
                 chain_id,
                 height,
                 CrossChainMessageDelivery::NonBlocking,
@@ -1215,7 +1279,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state_from_committee(
         &self,
-        committee: Committee,
+        committee: Arc<Committee>,
     ) -> Result<Box<ChainInfo>, Error> {
         self.client
             .synchronize_chain_from_committee(self.chain_id, committee)
@@ -1256,8 +1320,8 @@ impl<Env: Environment> ChainClient<Env> {
                     },
                 ))) if expected_block_height > found_block_height => {
                     tracing::info!(
-                        "Local state is outdated; synchronizing chain {:.8}",
-                        self.chain_id
+                        chain_id = %self.chain_id,
+                        "Local state is outdated; synchronizing chain"
                     );
                     self.synchronize_chain_state(self.chain_id).await?;
                 }
@@ -1295,6 +1359,7 @@ impl<Env: Environment> ChainClient<Env> {
         let lock_start = linera_base::time::Instant::now();
         let mut proposal_guard = mutex.lock_owned().await;
         tracing::debug!(
+            chain_id = %self.chain_id,
             lock_wait_ms = lock_start.elapsed().as_millis(),
             "acquired proposal_mutex in execute_block"
         );
@@ -1425,9 +1490,7 @@ impl<Env: Environment> ChainClient<Env> {
                 proposed_block,
                 round,
                 blobs.clone(),
-                BundleExecutionPolicy::AutoRetry {
-                    max_failures: self.options.max_block_limit_errors,
-                },
+                self.options.bundle_execution_policy(),
             )
             .await?;
         let (proposed_block, _) = block.clone().into_proposal();
@@ -1479,11 +1542,12 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Queries a system application.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(query))]
     pub async fn query_system_application(
         &self,
-        query: SystemQuery,
-    ) -> Result<QueryOutcome<SystemResponse>, Error> {
+        query: linera_execution::SystemQuery,
+    ) -> Result<QueryOutcome<linera_execution::SystemResponse>, Error> {
         let (
             QueryOutcome {
                 response,
@@ -1492,7 +1556,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(Query::System(query), None).await?;
         match response {
-            QueryResponse::System(response) => Ok(QueryOutcome {
+            linera_execution::QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
                 operations,
             }),
@@ -1517,7 +1581,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(query, None).await?;
         match response {
-            QueryResponse::User(response_bytes) => {
+            linera_execution::QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
                 Ok(QueryOutcome {
                     response,
@@ -1603,9 +1667,7 @@ impl<Env: Environment> ChainClient<Env> {
                 block,
                 None,
                 Vec::new(),
-                BundleExecutionPolicy::AutoRetry {
-                    max_failures: self.options.max_block_limit_errors,
-                },
+                self.options.bundle_execution_policy(),
             )
             .await
         {
@@ -1722,7 +1784,46 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// If the chain is in follow-only mode, this only downloads blocks for this chain without
     /// fetching manager values or sender/publisher chains.
+    /// Synchronizes the chain state from validators, optionally stopping at a given
+    /// block height or block timestamp.
+    ///
+    /// - If `next_height` is `Some`, downloads blocks up to (but not including) that height.
+    /// - If `until_block_time` is `Some`, downloads blocks up to (but not including) the
+    ///   first block with timestamp >= the given value.
     #[instrument(level = "trace")]
+    pub async fn synchronize_up_to(
+        &self,
+        next_height: Option<BlockHeight>,
+        until_block_time: Option<Timestamp>,
+    ) -> Result<Box<ChainInfo>, Error> {
+        let (_, committee) = self.client.admin_committee().await?;
+        let validators = self.client.make_nodes(&committee)?;
+        Box::pin(self.client.fetch_chain_info(self.chain_id, &validators)).await?;
+        communicate_with_quorum(
+            &validators,
+            &committee,
+            |_: &()| (),
+            |remote_node| async move {
+                self.client
+                    .download_certificates_from(
+                        &remote_node,
+                        self.chain_id,
+                        next_height.unwrap_or(BlockHeight::MAX),
+                        until_block_time,
+                    )
+                    .await?;
+                Ok(())
+            },
+            self.client.options.quorum_grace_period,
+        )
+        .await?;
+        self.client
+            .local_node
+            .chain_info(self.chain_id)
+            .await
+            .map_err(Into::into)
+    }
+
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
         if self.is_follow_only() {
             return self.client.synchronize_chain_state(self.chain_id).await;
@@ -1749,7 +1850,7 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// The caller must hold the proposal mutex via `proposal_guard`. The pending proposal
     /// is read from and cleared through the guard, ensuring synchronization.
-    #[instrument(level = "trace", skip(proposal_guard))]
+    #[instrument(level = "debug", skip(self, proposal_guard), fields(chain_id = %self.chain_id))]
     async fn process_pending_block_without_prepare(
         &self,
         proposal_guard: &mut Option<PendingProposal>,
@@ -1803,7 +1904,7 @@ impl<Env: Environment> ChainClient<Env> {
                             proposed_block,
                             None,
                             blobs.clone(),
-                            BundleExecutionPolicy::Abort,
+                            BundleExecutionPolicy::committed(),
                         )
                         .await?
                         .0;
@@ -1822,7 +1923,7 @@ impl<Env: Environment> ChainClient<Env> {
                     proposed_block,
                     round,
                     blobs.clone(),
-                    BundleExecutionPolicy::Abort,
+                    BundleExecutionPolicy::committed(),
                 )
                 .await?;
             debug!("Proposing the local pending block.");
@@ -1887,13 +1988,13 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = if round.is_fast() {
             let hashed_value = ConfirmedBlock::new(block);
             self.client
-                .submit_block_proposal(&committee, proposal, hashed_value)
+                .submit_block_proposal(committee.clone(), proposal, hashed_value)
                 .await?
         } else {
             let hashed_value = ValidatedBlock::new(block);
             let certificate = self
                 .client
-                .submit_block_proposal(&committee, proposal, hashed_value.clone())
+                .submit_block_proposal(committee.clone(), proposal, hashed_value.clone())
                 .await?;
             self.client.finalize_block(&committee, certificate).await?
         };
@@ -2020,8 +2121,9 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
-        let current_committee = info
-            .current_committee()?
+        let current_committee = self
+            .local_committee()
+            .await?
             .validators
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
@@ -2047,10 +2149,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// Rotates the key of the chain.
     ///
     /// Replaces current owners of the chain with the new key pair.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn rotate_key_pair(
         &self,
-        public_key: AccountPublicKey,
+        public_key: linera_base::crypto::AccountPublicKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         self.transfer_ownership(public_key.into()).await
     }
@@ -2110,6 +2213,7 @@ impl<Env: Environment> ChainClient<Env> {
             .system
             .ownership
             .get()
+            .await?
             .clone())
     }
 
@@ -2143,6 +2247,7 @@ impl<Env: Environment> ChainClient<Env> {
             .system
             .application_permissions
             .get()
+            .await?
             .clone())
     }
 
@@ -2533,6 +2638,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Sends money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
@@ -2555,7 +2661,9 @@ impl<Env: Environment> ChainClient<Env> {
             .storage_client()
             .read_confirmed_block(hash)
             .await?;
-        block.ok_or(Error::MissingConfirmedBlock(hash))
+        block
+            .map(Arc::unwrap_or_clone)
+            .ok_or(Error::MissingConfirmedBlock(hash))
     }
 
     #[instrument(level = "trace", skip(hash))]
@@ -2564,7 +2672,9 @@ impl<Env: Environment> ChainClient<Env> {
         hash: CryptoHash,
     ) -> Result<ConfirmedBlockCertificate, Error> {
         let certificate = self.client.storage_client().read_certificate(hash).await?;
-        certificate.ok_or(Error::ReadCertificatesError(vec![hash]))
+        certificate
+            .map(Arc::unwrap_or_clone)
+            .ok_or(Error::ReadCertificatesError(vec![hash]))
     }
 
     /// Handles any cross-chain requests for any pending outgoing messages.
@@ -2619,13 +2729,13 @@ impl<Env: Environment> ChainClient<Env> {
         local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), Error> {
-        let listening_mode = self.listening_mode();
+        let listening_mode = self.client.chain_mode(notification.chain_id);
         let relevant = listening_mode
             .as_ref()
             .is_some_and(|mode| mode.is_relevant(&notification.reason));
         if !relevant {
-            debug!(
-                chain_id = %self.chain_id,
+            tracing::trace!(
+                chain_id = %notification.chain_id,
                 reason = ?notification.reason,
                 ?listening_mode,
                 "Ignoring notification due to listening mode"
@@ -2784,7 +2894,8 @@ impl<Env: Environment> ChainClient<Env> {
             }
         }
 
-        let mut senders = HashMap::new(); // Senders to cancel notification streams.
+        let mut senders = HashMap::new();
+        let mut circuit_breakers: HashMap<ValidatorPublicKey, CircuitBreakerState> = HashMap::new();
         let notifications = self.subscribe()?;
         let (abortable_notifications, abort) = stream::abortable(self.subscribe()?);
 
@@ -2796,7 +2907,10 @@ impl<Env: Environment> ChainClient<Env> {
 
         let mut process_notifications = FuturesUnordered::new();
 
-        match self.update_notification_streams(&mut senders).await {
+        match self
+            .update_notification_streams(&mut senders, &mut circuit_breakers)
+            .await
+        {
             Ok(handler) => process_notifications.push(handler),
             Err(error) => error!("Failed to update committee: {error}"),
         };
@@ -2811,7 +2925,8 @@ impl<Env: Environment> ChainClient<Env> {
             {
                 if let Reason::NewBlock { .. } = notification.reason {
                     match Box::pin(await_while_polling(
-                        this.update_notification_streams(&mut senders).fuse(),
+                        this.update_notification_streams(&mut senders, &mut circuit_breakers)
+                            .fuse(),
                         &mut process_notifications,
                     ))
                     .await
@@ -2833,11 +2948,16 @@ impl<Env: Environment> ChainClient<Env> {
         Ok((update_streams, AbortOnDrop(abort), notifications))
     }
 
-    #[instrument(level = "trace", skip(senders))]
+    #[instrument(level = "trace", skip(senders, circuit_breakers))]
     async fn update_notification_streams(
         &self,
         senders: &mut HashMap<ValidatorPublicKey, AbortHandle>,
+        circuit_breakers: &mut HashMap<ValidatorPublicKey, CircuitBreakerState>,
     ) -> Result<impl Future<Output = ()>, Error> {
+        let initial_probe_interval = self
+            .options
+            .notification_circuit_breaker_initial_probe_interval;
+        let max_probe_interval = self.options.notification_circuit_breaker_max_probe_interval;
         let (nodes, local_node) = {
             // For EventsOnly chains we may not have the chain's own committee locally,
             // and attempting to fetch it would trigger a full sync. Use the admin
@@ -2857,19 +2977,72 @@ impl<Env: Environment> ChainClient<Env> {
                 .collect();
             (nodes, self.client.local_node.clone())
         };
-        // Drop removed validators.
+        // Detect circuit breaker state transitions before cleaning up senders.
+        for (validator, abort) in senders.iter() {
+            if abort.is_aborted() && nodes.contains_key(validator) {
+                if let Some(state) = circuit_breakers.get_mut(validator) {
+                    // Was probing -> probe failed -> escalate interval.
+                    state.probe_interval = (state.probe_interval * 2).min(max_probe_interval);
+                    state.next_probe_at = Instant::now() + state.probe_interval;
+                    warn!(
+                        %validator,
+                        chain_id = %self.chain_id,
+                        next_probe_in = ?state.probe_interval,
+                        "Validator still unhealthy after probe; increasing probe interval"
+                    );
+                } else {
+                    // First failure -> enter circuit breaker.
+                    circuit_breakers.insert(
+                        *validator,
+                        CircuitBreakerState {
+                            next_probe_at: Instant::now() + initial_probe_interval,
+                            probe_interval: initial_probe_interval,
+                        },
+                    );
+                    error!(
+                        %validator,
+                        chain_id = %self.chain_id,
+                        next_probe_in = ?initial_probe_interval,
+                        "Validator notification stream ended; entering circuit breaker"
+                    );
+                }
+            } else if !abort.is_aborted() && circuit_breakers.contains_key(validator) {
+                // Stream alive while in circuit breaker -> probe succeeded -> recovered.
+                info!(
+                    %validator,
+                    chain_id = %self.chain_id,
+                    "Validator recovered from circuit breaker"
+                );
+                circuit_breakers.remove(validator);
+            }
+        }
+
         senders.retain(|validator, abort| {
             if !nodes.contains_key(validator) {
                 abort.abort();
             }
             !abort.is_aborted()
         });
-        // Add tasks for new validators.
+        circuit_breakers.retain(|validator, _| nodes.contains_key(validator));
+
         let validator_tasks = FuturesUnordered::new();
         for (public_key, node) in nodes {
             let hash_map::Entry::Vacant(entry) = senders.entry(public_key) else {
                 continue;
             };
+
+            // Circuit breaker: skip if not time to probe yet.
+            if let Some(state) = circuit_breakers.get(&public_key) {
+                if Instant::now() < state.next_probe_at {
+                    continue;
+                }
+                debug!(
+                    validator = %public_key,
+                    chain_id = %self.chain_id,
+                    "Probing unhealthy validator"
+                );
+            }
+
             let address = node.address();
             let this = self.clone();
             let listening_mode_for_sync = self.listening_mode();
@@ -2924,6 +3097,7 @@ impl<Env: Environment> ChainClient<Env> {
             .flatten();
             let (stream, abort) = stream::abortable(stream);
             let mut stream = Box::pin(stream);
+            let abort_on_exit = abort.clone();
             let this = self.clone();
             let local_node = local_node.clone();
             let remote_node = RemoteNode { public_key, node };
@@ -2946,6 +3120,12 @@ impl<Env: Environment> ChainClient<Env> {
                         );
                     }
                 }
+                warn!(
+                    chain_id = %this.chain_id,
+                    address = remote_node.address(),
+                    "Validator notification stream ended"
+                );
+                abort_on_exit.abort();
             });
             entry.insert(abort);
         }
@@ -2981,6 +3161,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
             .into_iter()
             .flatten()
+            .map(Arc::unwrap_or_clone)
             .collect::<Vec<_>>();
 
         for certificate in certificates {
@@ -3001,6 +3182,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .await?
                         .into_iter()
                         .flatten()
+                        .map(Arc::unwrap_or_clone)
                         .collect();
                     remote_node.upload_blobs(missing_blobs).await?;
                     remote_node

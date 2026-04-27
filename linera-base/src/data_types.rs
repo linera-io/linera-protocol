@@ -9,11 +9,9 @@ use std::ops;
 use std::{
     collections::HashSet,
     fmt::{self, Display},
-    fs,
     hash::Hash,
     io, iter,
     num::ParseIntError,
-    path::Path,
     str::FromStr,
     sync::Arc,
 };
@@ -195,12 +193,6 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
-    /// Returns the given duration, rounded to the nearest microsecond and capped to the maximum
-    /// [`TimeDelta`] value.
-    pub fn from_duration(duration: Duration) -> Self {
-        TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
-    }
-
     /// Returns this [`TimeDelta`] as a number of microseconds.
     pub const fn as_micros(&self) -> u64 {
         self.0
@@ -297,6 +289,21 @@ impl Display for Timestamp {
     }
 }
 
+impl FromStr for Timestamp {
+    type Err = chrono::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let naive = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+            .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S"))?;
+        let micros = naive
+            .and_utc()
+            .timestamp_micros()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        Ok(Timestamp(micros))
+    }
+}
+
 /// Resources that an application may spend during the execution of transaction or an
 /// application call.
 #[derive(
@@ -355,24 +362,6 @@ pub struct SendMessageRequest<Message> {
     pub grant: Resources,
     /// The message itself.
     pub message: Message,
-}
-
-impl<Message> SendMessageRequest<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> SendMessageRequest<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        SendMessageRequest {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            grant: self.grant,
-            message,
-        }
-    }
 }
 
 /// An error type for arithmetic errors.
@@ -784,11 +773,6 @@ pub enum ChainOrigin {
 }
 
 impl ChainOrigin {
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        matches!(self, ChainOrigin::Child { .. })
-    }
-
     /// Returns the root chain number, if this is a root chain.
     pub fn root(&self) -> Option<u32> {
         match self {
@@ -937,11 +921,6 @@ impl ChainDescription {
     pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
-
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        self.origin.is_child()
-    }
 }
 
 impl BcsHashable<'_> for ChainDescription {}
@@ -1020,6 +999,7 @@ impl ApplicationPermissions {
 
     /// Creates new `ApplicationPermissions` where the given applications are the only ones
     /// whose operations are allowed and mandatory, and they can also manage the chain.
+    #[cfg(with_testing)]
     pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
         Self {
             execute_operations: Some(app_ids.clone()),
@@ -1246,6 +1226,11 @@ impl CompressedBytecode {
         let _decompression_latency = metrics::BYTECODE_DECOMPRESSION_LATENCY.measure_latency();
         let bytes = zstd::stream::decode_all(&**self.compressed_bytes)?;
 
+        #[cfg(with_metrics)]
+        metrics::BYTECODE_DECOMPRESSED_SIZE_BYTES
+            .with_label_values(&[])
+            .observe(bytes.len() as f64);
+
         Ok(Bytecode { bytes })
     }
 }
@@ -1289,6 +1274,11 @@ impl CompressedBytecode {
                 .read_to_end(&mut bytes)
                 .expect("Reading from a slice in memory should not result in I/O errors");
         }
+
+        #[cfg(with_metrics)]
+        BYTECODE_DECOMPRESSED_SIZE_BYTES
+            .with_label_values(&[])
+            .observe(bytes.len() as f64);
 
         Ok(Bytecode { bytes })
     }
@@ -1496,11 +1486,6 @@ impl Blob {
         self.content.bytes()
     }
 
-    /// Loads data blob from a file.
-    pub fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        Ok(Self::new_data(fs::read(path)?))
-    }
-
     /// Returns whether the blob is of [`BlobType::Committee`] variant.
     pub fn is_committee_blob(&self) -> bool {
         self.content().blob_type().is_committee_blob()
@@ -1611,6 +1596,9 @@ pub struct MessagePolicy {
     /// A collection of applications: If `Some`, only bundles all of whose messages are by these
     /// applications will be accepted.
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications: If `Some`, only event streams from those
+    /// applications will be processed.
+    pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 }
 
 /// A blanket policy to apply to all messages by default.
@@ -1646,12 +1634,14 @@ impl MessagePolicy {
         restrict_chain_ids_to: Option<HashSet<ChainId>>,
         reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
         reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+        process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
     ) -> Self {
         Self {
             blanket,
             restrict_chain_ids_to,
             reject_message_bundles_without_application_ids,
             reject_message_bundles_with_other_application_ids,
+            process_events_from_application_ids,
         }
     }
 
@@ -1663,6 +1653,7 @@ impl MessagePolicy {
             restrict_chain_ids_to: None,
             reject_message_bundles_without_application_ids: None,
             reject_message_bundles_with_other_application_ids: None,
+            process_events_from_application_ids: None,
         }
     }
 
@@ -1713,7 +1704,9 @@ mod metrics {
 
     use prometheus::HistogramVec;
 
-    use crate::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
+    use crate::prometheus_util::{
+        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
+    };
 
     /// The time it takes to compress a bytecode.
     pub static BYTECODE_COMPRESSION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -1732,6 +1725,15 @@ mod metrics {
             "Bytecode decompression latency",
             &[],
             exponential_bucket_latencies(10.0),
+        )
+    });
+
+    pub static BYTECODE_DECOMPRESSED_SIZE_BYTES: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "wasm_bytecode_decompressed_size_bytes",
+            "Decompressed size in bytes of WASM bytecodes stored on-chain",
+            &[],
+            exponential_bucket_interval(10_000.0, 100_000_000.0),
         )
     });
 }

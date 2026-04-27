@@ -13,7 +13,7 @@ use futures::StreamExt;
 use linera_base::{
     crypto::{AccountSecretKey, CryptoHash, InMemorySigner},
     data_types::*,
-    identifiers::{Account, AccountOwner, ApplicationId},
+    identifiers::{Account, AccountOwner, ApplicationId, BlobId, BlobType},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_chain::{
@@ -130,12 +130,12 @@ where
     }
     let executed_block_hash = match notifications.next().await {
         Some(Notification {
-            reason: Reason::BlockExecuted { block_hash, height },
+            reason: Reason::BlockExecuted { hash, height },
             chain_id,
         }) => {
             assert_eq!(chain_id, sender.chain_id());
             assert_eq!(height, BlockHeight::ZERO);
-            block_hash
+            hash
         }
         _ => panic!("Expected BlockExecuted notification"),
     };
@@ -146,14 +146,12 @@ where
     let _notification = notifications.next().await;
     match notifications.next().await {
         Some(Notification {
-            reason: Reason::NewBlock {
-                block_hash, height, ..
-            },
+            reason: Reason::NewBlock { hash, height, .. },
             chain_id,
         }) => {
             assert_eq!(chain_id, sender.chain_id());
             assert_eq!(height, BlockHeight::ZERO);
-            assert_eq!(executed_block_hash, block_hash);
+            assert_eq!(executed_block_hash, hash);
         }
         other => panic!("Expected NewBlock notification, got {:?}", other),
     }
@@ -1389,6 +1387,13 @@ where
     Ok(())
 }
 
+/// The sender chain should be stored sparsely in the receiver's node: only blocks
+/// that sent messages to us should be downloaded, not the intermediate ones. When
+/// the sender is a non-root chain (so its `ChainDescription` blob isn't in the
+/// receiver's genesis storage) and the sender's height-0 block doesn't send to us,
+/// the `ChainDescription` itself should never be downloaded either — not during
+/// the initial message processing, and not during a later re-sync that routes the
+/// sender through `retry_pending_cross_chain_requests_from_sender_chains`.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1397,12 +1402,42 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 2, 0, signer).await?;
-    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let _admin = builder.add_root_chain(0, Amount::ZERO).await?;
+    let owner = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let receiver_id = receiver.chain_id();
 
+    // Open the sender as a non-root chain so that its `ChainDescription` isn't
+    // pre-populated in the receiver's genesis storage. We also make the sender's
+    // first block a burn rather than a transfer to the receiver: that keeps the
+    // message-sending blocks at height >= 1, so preprocessing them never requires
+    // the sender's `ChainDescription` (only height-0 blocks do).
+    let sender_public_key = builder.signer.generate_new();
+    let sender_ownership = ChainOwnership::single(sender_public_key.into())
+        .with_regular_owner(sender_public_key.into(), 100);
+    let (sender_description, _creation_certificate) = Box::pin(owner.open_chain(
+        sender_ownership,
+        ApplicationPermissions::default(),
+        Amount::from_tokens(4),
+    ))
+    .await
+    .unwrap_ok_committed();
+    let sender_id = sender_description.id();
+    let sender_chain_desc_blob_id = BlobId::new(sender_id.0, BlobType::ChainDescription);
+
+    let mut sender = builder
+        .make_client(sender_id, None, BlockHeight::ZERO)
+        .await?;
+    sender.set_preferred_owner(sender_public_key.into());
+    sender.synchronize_from_validators().await?;
+
+    // Heights 0 and 2 are burns; heights 1 and 3 send to the receiver.
     let cert0 = sender
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    let cert1 = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1410,11 +1445,11 @@ where
         )
         .await
         .unwrap_ok_committed();
-    let cert1 = sender
+    let cert2 = sender
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    let cert2 = sender
+    let cert3 = sender
         .transfer_to_account(
             AccountOwner::CHAIN,
             Amount::ONE,
@@ -1423,12 +1458,14 @@ where
         .await
         .unwrap_ok_committed();
 
-    // Process the notification about the incoming message.
+    // Process the notification about the most recent incoming message. This walks
+    // back along `previous_message_blocks` and preprocesses only the sender blocks
+    // that sent to us (heights 1 and 3).
     let notification = Notification {
         chain_id: receiver_id,
         reason: Reason::NewIncomingBundle {
-            origin: cert2.block().header.chain_id,
-            height: cert2.block().header.height,
+            origin: sender_id,
+            height: cert3.block().header.height,
         },
     };
     let validator = builder
@@ -1441,25 +1478,31 @@ where
         .await;
     receiver.process_inbox().await?;
 
-    // The first and last blocks sent something to the receiver. The middle one didn't.
-    // So the sender chain should have a gap.
+    // Only the blocks that sent something to the receiver should be in local
+    // storage. The burn blocks in between — and the sender's `ChainDescription`
+    // blob itself — should never have been downloaded.
+    let storage = receiver.storage_client();
+    assert!(!storage.contains_certificate(cert0.hash()).await?);
+    assert!(storage.contains_certificate(cert1.hash()).await?);
+    assert!(!storage.contains_certificate(cert2.hash()).await?);
+    assert!(storage.contains_certificate(cert3.hash()).await?);
     assert!(
-        receiver
-            .storage_client()
-            .contains_certificate(cert0.hash())
-            .await?
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "preprocessing non-height-0 sender blocks must not download the ChainDescription",
     );
+
+    // `process_notification_from` does not advance the client's
+    // `received_certificate_trackers`, so a subsequent `synchronize_from_validators`
+    // still sees (sender, 1) and (sender, 3) in the received log. But the sender's
+    // outbox has those heights scheduled locally now, so `find_received_certificates`
+    // filters them out and routes the sender through
+    // `retry_pending_cross_chain_requests_from_sender_chains`. Before the fix this
+    // initialized the sender's chain worker inside the receiver's node and, on
+    // failing to find the `ChainDescription` blob in storage, triggered a download.
+    receiver.synchronize_from_validators().await?;
     assert!(
-        !receiver
-            .storage_client()
-            .contains_certificate(cert1.hash())
-            .await?
-    );
-    assert!(
-        receiver
-            .storage_client()
-            .contains_certificate(cert2.hash())
-            .await?
+        !storage.contains_blob(sender_chain_desc_blob_id).await?,
+        "retry_pending_cross_chain_requests must not download the ChainDescription",
     );
 
     Ok(())
@@ -2744,7 +2787,7 @@ where
     );
 
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Ignore, None, None, None, None);
     receiver.synchronize_from_validators().await?;
     assert!(receiver.process_inbox().await?.0.is_empty());
     // The message was ignored.
@@ -2756,7 +2799,7 @@ where
     );
 
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 1);
     sender.synchronize_from_validators().await?;
@@ -2792,6 +2835,7 @@ where
         Some([sender.chain_id()].into_iter().collect()),
         None,
         None,
+        None,
     );
     receiver.synchronize_from_validators().await?;
     let certs = receiver.process_inbox().await?.0;
@@ -2802,7 +2846,7 @@ where
 
     // Even if we change the policy, there's no longer a message to receive.
     receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None);
+        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
     let certs = receiver.process_inbox().await?.0;
     assert_eq!(certs.len(), 0);
 
@@ -3050,6 +3094,73 @@ where
     Ok(())
 }
 
+/// Regression test: a client whose local node has the chain's description blob but
+/// hasn't yet synced the admin chain's `NewCommittee` event for the chain's active
+/// epoch must still be able to fetch its own committee — `local_committee` syncs the
+/// admin chain on its own rather than failing with `EventsNotFound` or `InactiveChain`.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_local_committee_syncs_admin_chain<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let new_public_key = signer.generate_new();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+
+    let admin_client = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
+    let parent = builder.add_root_chain(1, Amount::from_tokens(1000)).await?;
+
+    // Create a new epoch on the admin chain.
+    admin_client
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+
+    // Migrate `parent` to the new epoch and open a child chain at that epoch.
+    parent.synchronize_from_validators().await.unwrap();
+    parent.process_inbox().await.unwrap();
+    let (child_desc, certificate) = Box::pin(parent.open_chain(
+        ChainOwnership::single(new_public_key.into()),
+        ApplicationPermissions::default(),
+        Amount::from_tokens(10),
+    ))
+    .await
+    .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // A fresh client with genesis-only storage: no admin-chain events past epoch 0.
+    let mut child_client = builder
+        .make_client(child_desc.id(), None, BlockHeight::ZERO)
+        .await?;
+    child_client.set_preferred_owner(new_public_key.into());
+    // Pre-seed the child's description blob so that the first `chain_info()` call
+    // makes it past the blob-lookup and triggers initialization, which needs the
+    // admin chain's epoch events to load the committee for epoch 1. This is the
+    // exact state a web client ends up in after receiving the chain description
+    // but before syncing the admin chain.
+    child_client
+        .storage_client()
+        .write_blob(&Blob::new_chain_description(&child_desc))
+        .await?;
+
+    // Before the fix, this returned `EventsNotFound` because
+    // `initialize_and_save_if_needed` couldn't find the admin chain's
+    // `NewCommittee` event for epoch 1. `local_committee` must sync
+    // the admin chain on its own and succeed.
+    let committee = child_client.local_committee().await?;
+    assert_eq!(
+        committee.validators.len(),
+        builder.initial_committee.validators.len()
+    );
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
@@ -3170,7 +3281,13 @@ where
             None,
             BlockHeight::ZERO,
             chain_client::Options {
-                message_policy: MessagePolicy::new(BlanketMessagePolicy::Reject, None, None, None),
+                message_policy: MessagePolicy::new(
+                    BlanketMessagePolicy::Reject,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
                 ..chain_client::Options::test_default()
             },
             false,
@@ -3591,6 +3708,66 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(certificate.round, Round::MultiLeader(0));
+
+    Ok(())
+}
+
+/// Tests that cross-chain message chunking works end-to-end: the sender splits large
+/// `UpdateRecipient` messages and the receiver processes all chunks correctly.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_cross_chain_message_chunking_end_to_end<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    // Use a tiny chunk limit so every transfer goes into its own UpdateRecipient.
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
+        .await?
+        .with_cross_chain_message_chunk_limit(1);
+
+    let sender = builder.add_root_chain(1, Amount::from_tokens(100)).await?;
+    let receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Send three transfers from sender to receiver.
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(5),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(3),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    sender
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::from_tokens(2),
+            Account::chain(receiver.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Receiver synchronizes and processes the inbox. With chunk_limit=1, the
+    // cross-chain messages were split into multiple UpdateRecipient requests.
+    // This verifies the previous_height values are correct so the receiver
+    // accepts all chunks without gap detection errors.
+    receiver.synchronize_from_validators().await?;
+    receiver.process_inbox().await?;
+
+    // Verify the receiver got all three transfers.
+    assert_eq!(
+        receiver.local_balance().await?,
+        Amount::from_tokens(10),
+        "Receiver should have received all three transfers"
+    );
 
     Ok(())
 }

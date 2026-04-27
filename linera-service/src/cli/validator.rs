@@ -9,10 +9,15 @@ use anyhow::Context as _;
 use futures::stream::TryStreamExt as _;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
+    data_types::BlockHeight,
     identifiers::ChainId,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{data_types::ClientOutcome, node::ValidatorNodeProvider, Wallet as _};
+use linera_core::{
+    data_types::ClientOutcome,
+    node::{ValidatorNode, ValidatorNodeProvider},
+    Wallet as _,
+};
 use linera_execution::committee::{Committee, ValidatorState};
 use serde::{Deserialize, Serialize};
 
@@ -77,6 +82,7 @@ pub enum Command {
     Update(Update),
     List(List),
     Query(Query),
+    QueryBlock(QueryBlock),
     Remove(Remove),
     Sync(Sync),
 }
@@ -171,6 +177,25 @@ pub struct Query {
     public_key: Option<ValidatorPublicKey>,
 }
 
+/// Query a single validator for a block at a particular chain and height.
+///
+/// Connects to a validator at the specified network address and queries its
+/// view of the blockchain.
+#[derive(Debug, Clone, clap::Parser)]
+pub struct QueryBlock {
+    /// Network address of the validator (e.g., grpcs://host:port)
+    address: String,
+    /// Chain ID to query about (defaults to default chain)
+    #[arg(long)]
+    chain_id: Option<ChainId>,
+    /// Expected public key of the validator (for verification)
+    #[arg(long)]
+    public_key: Option<ValidatorPublicKey>,
+    /// Block height to query about
+    #[arg(long)]
+    height: BlockHeight,
+}
+
 /// Remove a validator from the committee.
 ///
 /// Removes the validator with the specified public key from the committee.
@@ -221,10 +246,11 @@ impl Command {
 
         match self {
             Add(command) => command.run(context).await,
-            BatchQuery(command) => command.run(context).await,
+            BatchQuery(command) => Box::pin(command.run(context)).await,
             Update(command) => command.run(context).await,
             List(command) => command.run(context).await,
             Query(command) => command.run(context).await,
+            QueryBlock(command) => command.run(context).await,
             Remove(command) => command.run(context).await,
             Sync(command) => Box::pin(command.run(context)).await,
         }
@@ -264,7 +290,7 @@ impl Add {
                 let chain_client = chain_client.clone();
                 async move {
                     // Create the new committee.
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -277,9 +303,9 @@ impl Add {
                         },
                     );
 
-                    committee = Committee::new(validators, policy)?;
+                    let new_committee = Committee::new(validators, policy)?;
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }
@@ -509,7 +535,7 @@ impl Update {
                 let batch = batch_clone.clone();
                 async move {
                     // Get current committee
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -560,9 +586,9 @@ impl Update {
                     }
 
                     // Create new committee
-                    committee = Committee::new(validators, policy)?;
+                    let new_committee = Committee::new(validators, policy)?;
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }
@@ -632,7 +658,6 @@ impl List {
         // Print local node results first (everything)
         println!("Local Node:");
         local_results.print(None, None, None, None);
-        println!();
 
         // Print validator results (only differences from local node)
         for (name, address, votes, results) in &validator_results {
@@ -686,6 +711,37 @@ impl Query {
     }
 }
 
+impl QueryBlock {
+    async fn run(
+        &self,
+        context: &ClientContext<impl linera_core::Environment>,
+    ) -> anyhow::Result<()> {
+        let node = context.make_node_provider().make_node(&self.address)?;
+        let chain_id = self.chain_id.unwrap_or_else(|| context.default_chain());
+        let height = self.height;
+        println!(
+            "Querying validator about the certificate for height {height} on the chain \
+            {chain_id}.\n"
+        );
+
+        let result = node
+            .download_certificates_by_heights(chain_id, vec![height])
+            .await;
+
+        match result {
+            Ok(certificates) => {
+                let confirmed_block = certificates[0].inner();
+                println!("{:#?}", confirmed_block);
+            }
+            Err(error) => {
+                tracing::error!("{}", error);
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl Remove {
     async fn run(
         &self,
@@ -705,7 +761,7 @@ impl Remove {
                 let chain_client = chain_client.clone();
                 async move {
                     // Create the new committee.
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -714,9 +770,9 @@ impl Remove {
                         return Ok(ClientOutcome::Committed(None));
                     }
 
-                    committee = Committee::new(validators, policy)?;
+                    let new_committee = Committee::new(validators, policy)?;
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }

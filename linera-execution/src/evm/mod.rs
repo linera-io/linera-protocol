@@ -13,8 +13,8 @@ pub mod inputs;
 pub mod revm;
 
 use linera_base::data_types::AmountConversionError;
-use revm_context::result::{HaltReason, Output, SuccessReason};
-use revm_primitives::{Address, Log, U256};
+use revm_context::result::HaltReason;
+use revm_primitives::{Address, U256};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -62,13 +62,4 @@ pub enum EvmExecutionError {
     },
     #[error("The operation was halted with {gas_used} gas used due to {reason:?}")]
     Halt { gas_used: u64, reason: HaltReason },
-    #[error("The interpreter did not return, reason={:?}, gas_used={}, gas_refunded={}, logs={:?}, output={:?}",
-            reason, gas_used, gas_refunded, logs, output)]
-    NoReturnInterpreter {
-        reason: SuccessReason,
-        gas_used: u64,
-        gas_refunded: u64,
-        logs: Vec<Log>,
-        output: Output,
-    },
 }

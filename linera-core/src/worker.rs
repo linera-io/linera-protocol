@@ -19,14 +19,14 @@ use linera_base::{
         Timestamp,
     },
     doc_scalar,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
+use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
-    data_types::{
-        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock,
-    },
+    data_types::{BlockProposal, BundleExecutionPolicy, MessageBundle, ProposedBlock},
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
@@ -63,13 +63,16 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, DeliveryNotifier,
+        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
+        DeliveryNotifier,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     notifier::Notifier,
-    value_cache::ValueCache,
 };
+
+pub const DEFAULT_BLOCK_CACHE_SIZE: usize = 5_000;
+pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
 
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
@@ -97,7 +100,7 @@ mod metrics {
         exponential_bucket_interval, register_histogram, register_histogram_vec,
         register_int_counter, register_int_counter_vec,
     };
-    use linera_chain::types::ConfirmedBlockCertificate;
+    use linera_chain::{data_types::MessageAction, types::ConfirmedBlockCertificate};
     use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     pub static NUM_ROUNDS_IN_CERTIFICATE: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -123,6 +126,9 @@ mod metrics {
 
     pub static INCOMING_BUNDLE_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("incoming_bundle_count", "Incoming bundle count"));
+
+    pub static REJECTED_BUNDLE_COUNT: LazyLock<IntCounter> =
+        LazyLock::new(|| register_int_counter("rejected_bundle_count", "Rejected bundle count"));
 
     pub static INCOMING_MESSAGE_COUNT: LazyLock<IntCounter> =
         LazyLock::new(|| register_int_counter("incoming_message_count", "Incoming message count"));
@@ -180,6 +186,7 @@ mod metrics {
         round_number: u32,
         confirmed_transactions: u64,
         confirmed_incoming_bundles: u64,
+        confirmed_rejected_bundles: u64,
         confirmed_incoming_messages: u64,
         confirmed_operations: u64,
         validators_with_signatures: Vec<String>,
@@ -195,6 +202,12 @@ mod metrics {
                 confirmed_transactions: certificate.block().body.transactions.len() as u64,
                 confirmed_incoming_bundles: certificate.block().body.incoming_bundles().count()
                     as u64,
+                confirmed_rejected_bundles: certificate
+                    .block()
+                    .body
+                    .incoming_bundles()
+                    .filter(|b| b.action == MessageAction::Reject)
+                    .count() as u64,
                 confirmed_incoming_messages: certificate
                     .block()
                     .body
@@ -225,6 +238,9 @@ mod metrics {
                     .inc_by(self.confirmed_transactions);
                 if self.confirmed_incoming_bundles > 0 {
                     INCOMING_BUNDLE_COUNT.inc_by(self.confirmed_incoming_bundles);
+                }
+                if self.confirmed_rejected_bundles > 0 {
+                    REJECTED_BUNDLE_COUNT.inc_by(self.confirmed_rejected_bundles);
                 }
                 if self.confirmed_incoming_messages > 0 {
                     INCOMING_MESSAGE_COUNT.inc_by(self.confirmed_incoming_messages);
@@ -276,7 +292,7 @@ doc_scalar!(
 pub enum Reason {
     NewBlock {
         height: BlockHeight,
-        block_hash: CryptoHash,
+        hash: CryptoHash,
     },
     NewEvents {
         height: BlockHeight,
@@ -293,12 +309,12 @@ pub enum Reason {
     },
     BlockExecuted {
         height: BlockHeight,
-        block_hash: CryptoHash,
+        hash: CryptoHash,
     },
 }
 
 /// Error type for worker operations.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, strum::IntoStaticStr)]
 pub enum WorkerError {
     #[error(transparent)]
     CryptoError(#[from] CryptoError),
@@ -350,15 +366,6 @@ pub enum WorkerError {
     #[error("The block does not contain the hash that we expected for the previous block")]
     InvalidBlockChaining,
     #[error(
-        "The given outcome is not what we computed after executing the block.\n\
-        Computed: {computed:#?}\n\
-        Submitted: {submitted:#?}"
-    )]
-    IncorrectOutcome {
-        computed: Box<BlockExecutionOutcome>,
-        submitted: Box<BlockExecutionOutcome>,
-    },
-    #[error(
         "Block timestamp ({block_timestamp}) is further in the future from local time \
         ({local_time}) than block time grace period ({block_time_grace_period:?})"
     )]
@@ -385,6 +392,18 @@ pub enum WorkerError {
         height: BlockHeight,
         chain_id: ChainId,
     },
+    #[error(
+        "confirmed_log/preprocessed_blocks entry at height {height} for chain {chain_id} not found"
+    )]
+    ConfirmedBlockHashNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
+    #[error("Block at height {height} on chain {chain_id} not found in local storage")]
+    LocalBlockNotFound {
+        height: BlockHeight,
+        chain_id: ChainId,
+    },
     #[error("The block proposal is invalid: {0}")]
     InvalidBlockProposal(String),
     #[error("Blob was not required by any pending block")]
@@ -395,6 +414,8 @@ pub enum WorkerError {
     MissingNetworkDescription,
     #[error("thread error: {0}")]
     Thread(#[from] web_thread_pool::Error),
+    #[error("Chain worker was poisoned by a journal resolution failure")]
+    PoisonedWorker,
 }
 
 impl WorkerError {
@@ -411,7 +432,6 @@ impl WorkerError {
             | WorkerError::InvalidEpoch { .. }
             | WorkerError::EventsNotFound(_)
             | WorkerError::InvalidBlockChaining
-            | WorkerError::IncorrectOutcome { .. }
             | WorkerError::InvalidTimestamp { .. }
             | WorkerError::MissingCertificateValue
             | WorkerError::InvalidLiteCertificate
@@ -426,11 +446,53 @@ impl WorkerError {
             | WorkerError::ViewError(_)
             | WorkerError::ConfirmedLogEntryNotFound { .. }
             | WorkerError::PreprocessedBlocksEntryNotFound { .. }
+            | WorkerError::ConfirmedBlockHashNotFound { .. }
+            | WorkerError::LocalBlockNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
-            | WorkerError::ReadCertificatesError(_) => true,
+            | WorkerError::ReadCertificatesError(_)
+            | WorkerError::PoisonedWorker => true,
             WorkerError::ChainError(chain_error) => chain_error.is_local(),
         }
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"WorkerError::UnexpectedBlockHeight"`.
+    ///
+    /// For `ChainError` variants, delegates to `ChainError::error_type()` to
+    /// surface the underlying error name rather than just `"ChainError"`.
+    pub fn error_type(&self) -> String {
+        match self {
+            WorkerError::ChainError(chain_error) => chain_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("WorkerError::{variant}")
+            }
+        }
+    }
+
+    /// Returns `true` if this error indicates that the chain worker's in-memory
+    /// state may be inconsistent and must be evicted from the cache.
+    fn must_reload_view(&self) -> bool {
+        matches!(
+            self,
+            WorkerError::PoisonedWorker
+                | WorkerError::ViewError(ViewError::StoreError {
+                    must_reload_view: true,
+                    ..
+                })
+        )
+    }
+
+    /// Returns `true` if this error indicates that the chain's persisted state is
+    /// internally inconsistent, so the worker should consider resetting and
+    /// re-executing it from storage.
+    fn indicates_corrupted_chain_state(&self) -> bool {
+        matches!(
+            self,
+            WorkerError::ChainError(chain_error)
+                if matches!(chain_error.as_ref(), ChainError::CorruptedChainState(_))
+        )
     }
 }
 
@@ -523,8 +585,9 @@ pub struct WorkerState<StorageClient: Storage> {
     storage: StorageClient,
     /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
-    block_cache: Arc<ValueCache<CryptoHash, Block>>,
-    execution_state_cache: Arc<ValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
+    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    execution_state_cache:
+        Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
     chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
@@ -534,7 +597,17 @@ pub struct WorkerState<StorageClient: Storage> {
     /// manages its own lifetime via a keep-alive task. A background sweep
     /// periodically removes dead entries.
     chain_workers: ChainWorkerMap<StorageClient>,
+    /// Shard-routing dispatcher for outbound cross-chain requests. Used when we need
+    /// to send cross-chain requests outside of the normal `NetworkActions` return
+    /// path — in particular, the `RevertConfirm`s emitted after resetting a
+    /// corrupted chain. The RPC server layer installs this; without it, we fall
+    /// back to dispatching locally through `handle_cross_chain_request`.
+    outbound_cross_chain_sender: Option<OutboundCrossChainSender>,
 }
+
+/// Dispatcher for outbound cross-chain requests that handles the source-shard-to-
+/// target-shard routing that the worker itself is not aware of.
+pub type OutboundCrossChainSender = Arc<dyn Fn(CrossChainRequest) + Send + Sync>;
 
 impl<StorageClient> Clone for WorkerState<StorageClient>
 where
@@ -549,6 +622,7 @@ where
             chain_modes: self.chain_modes.clone(),
             delivery_notifiers: self.delivery_notifiers.clone(),
             chain_workers: self.chain_workers.clone(),
+            outbound_cross_chain_sender: self.outbound_cross_chain_sender.clone(),
         }
     }
 }
@@ -559,6 +633,39 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
 {
+    /// Returns an instance with the specified set of chain IDs whose incoming bundles
+    /// should be processed first.
+    #[cfg(with_testing)]
+    #[instrument(level = "trace", skip(self, origins))]
+    pub fn with_priority_bundle_origins(
+        mut self,
+        origins: std::collections::HashSet<ChainId>,
+    ) -> Self {
+        self.chain_worker_config.priority_bundle_origins = origins;
+        self
+    }
+
+    /// Returns an instance with the specified cross-chain message chunk limit.
+    #[cfg(with_testing)]
+    #[instrument(level = "trace", skip(self))]
+    pub fn with_cross_chain_message_chunk_limit(mut self, limit: usize) -> Self {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
+        self
+    }
+
+    /// Sets the cross-chain message chunk limit.
+    #[cfg(with_testing)]
+    pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
+        self.chain_worker_config.cross_chain_message_chunk_limit = limit;
+    }
+
+    #[cfg(with_testing)]
+    #[instrument(level = "trace", skip(self, value))]
+    pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
+        self.chain_worker_config.allow_revert_confirm = value;
+        self
+    }
+
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.chain_worker_config.nickname
@@ -588,6 +695,7 @@ where
             .block_cache
             .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
+        let block = Arc::unwrap_or_clone(block);
 
         match certificate.value.kind {
             linera_chain::types::CertificateKind::Confirmed => {
@@ -668,12 +776,26 @@ where
         WorkerState {
             storage,
             chain_worker_config,
-            block_cache: Arc::new(ValueCache::new(block_cache_size)),
-            execution_state_cache: Arc::new(ValueCache::new(execution_state_cache_size)),
+            block_cache: Arc::new(ValueCache::new(
+                block_cache_size,
+                DEFAULT_CLEANUP_INTERVAL_SECS,
+            )),
+            execution_state_cache: (execution_state_cache_size > 0)
+                .then(|| Arc::new(UniqueValueCache::new(execution_state_cache_size))),
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
+            outbound_cross_chain_sender: None,
         }
+    }
+
+    /// Installs a shard-routing dispatcher used for outbound cross-chain requests
+    /// generated outside the normal response path (specifically, after resetting a
+    /// corrupted chain). Without it, such requests are dispatched locally in a
+    /// loop via `handle_cross_chain_request`.
+    pub fn with_outbound_cross_chain_sender(mut self, sender: OutboundCrossChainSender) -> Self {
+        self.outbound_cross_chain_sender = Some(sender);
+        self
     }
 
     #[instrument(level = "trace", skip(self, certificate, notifier))]
@@ -713,29 +835,128 @@ where
         Fut: std::future::Future<Output = Result<R, WorkerError>>,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        Box::pin(wrap_future(async move {
-            let guard = handle::read_lock(&state).await;
+        let state_ref = &state;
+        let result = Box::pin(wrap_future(async move {
+            let guard = handle::read_lock(state_ref).await;
+            guard.check_not_poisoned()?;
             f(guard).await
         }))
-        .await
+        .await;
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
+            }
+        }
+        result
     }
 
     /// Acquires a write lock on the chain worker and executes the given closure.
     ///
-    /// The [`RollbackGuard`] automatically rolls back uncommitted chain state changes
-    /// when dropped, ensuring cancellation safety. The future is boxed to keep deeply
-    /// nested types off the stack.
+    /// The write work runs on a detached task (via [`linera_base::task::run_detached`])
+    /// so that caller cancellation does not unwind the task mid-save. The
+    /// [`RollbackGuard`] lives inside the detached task, so the write lock is held
+    /// until the DB round-trip and `post_save` have fully completed — subsequent
+    /// readers, including a freshly-loaded replacement worker, only see the
+    /// committed state.
     async fn chain_write<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
     where
-        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut,
-        Fut: std::future::Future<Output = Result<R, WorkerError>>,
+        F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut
+            + linera_base::task::MaybeSend
+            + 'static,
+        Fut: std::future::Future<Output = Result<R, WorkerError>> + linera_base::task::MaybeSend,
+        R: linera_base::task::MaybeSend + 'static,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        Box::pin(wrap_future(async move {
-            let guard = handle::write_lock(&state).await;
+        let state_for_task = state.clone();
+        let result = Box::pin(wrap_future(linera_base::task::run_detached(async move {
+            let guard = handle::write_lock(&state_for_task).await;
+            guard.check_not_poisoned()?;
             f(guard).await
-        }))
-        .await
+        })))
+        .await;
+        if let Err(error) = &result {
+            if error.must_reload_view() {
+                self.evict_poisoned_worker(chain_id, &state);
+            } else if error.indicates_corrupted_chain_state() {
+                self.spawn_reset_corrupted_chain_state(chain_id, state);
+            }
+        }
+        result
+    }
+
+    /// Spawns a detached task that re-acquires the write lock and recovers the
+    /// chain from a detected state corruption. Running the recovery in a separate
+    /// task ensures it survives cancellation of the originating request: if the
+    /// caller's future is dropped mid-way through re-execution, the chain would
+    /// otherwise be left at a partial tip and our safety snapshot would be lost.
+    /// Generated `RevertConfirm` requests are dispatched via the installed
+    /// shard-routing sender when present (sharded validators), or locally
+    /// through `handle_cross_chain_request` otherwise (client nodes and tests).
+    /// Errors are logged; the caller already has the original error to
+    /// propagate.
+    fn spawn_reset_corrupted_chain_state(
+        &self,
+        chain_id: ChainId,
+        state: ChainWorkerArc<StorageClient>,
+    ) where
+        StorageClient: Clone,
+    {
+        let this = self.clone();
+        linera_base::Task::spawn(async move {
+            let requests = {
+                let mut guard = handle::write_lock(&state).await;
+                match guard.maybe_reset_corrupted_chain_state().await {
+                    Ok(Some(requests)) => requests,
+                    Ok(None) => return,
+                    Err(error) => {
+                        tracing::error!(
+                            %chain_id, %error, "Failed to reset corrupted chain state"
+                        );
+                        return;
+                    }
+                }
+            };
+            if let Some(sender) = &this.outbound_cross_chain_sender {
+                // Sharded validator path: let the RPC layer route each request to
+                // the shard that owns the target chain.
+                for request in requests {
+                    sender(request);
+                }
+            } else {
+                // No routing dispatcher is installed (client node or test), so all
+                // involved chains are co-located on this worker. Dispatch locally
+                // in a loop, following any cascading cross-chain requests.
+                let mut queue = VecDeque::from(requests);
+                while let Some(request) = queue.pop_front() {
+                    match this.handle_cross_chain_request(request).await {
+                        Ok(actions) => queue.extend(actions.cross_chain_requests),
+                        Err(error) => {
+                            warn!(
+                                %chain_id, %error,
+                                "Failed to dispatch cross-chain request after \
+                                resetting corrupted chain state"
+                            );
+                        }
+                    }
+                }
+            }
+        })
+        .forget();
+    }
+
+    /// Evicts a poisoned chain worker from the cache, but only if the entry still
+    /// points to the same instance. This avoids removing a fresh replacement that
+    /// another task may have already loaded.
+    fn evict_poisoned_worker(&self, chain_id: ChainId, poisoned: &ChainWorkerArc<StorageClient>) {
+        tracing::warn!(%chain_id, "Evicting poisoned chain worker from cache");
+        let pin = self.chain_workers.pin();
+        let weak_poisoned = Arc::downgrade(poisoned);
+        let _ = pin.remove_if(&chain_id, |_key, future| {
+            future
+                .peek()
+                .and_then(|r| r.clone().ok())
+                .is_some_and(|weak| weak.ptr_eq(&weak_poisoned))
+        });
     }
 
     /// Gets or creates a chain worker for the given chain.
@@ -876,7 +1097,7 @@ where
         policy: BundleExecutionPolicy,
     ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
         let chain_id = block.chain_id;
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard
                 .stage_block_execution(block, round, &published_blobs, policy)
                 .await
@@ -895,7 +1116,7 @@ where
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), WorkerError> {
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard.query_application(query, block_hash).await
         })
         .await
@@ -932,7 +1153,7 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard
                 .process_confirmed_block(certificate, notify_when_messages_are_delivered)
                 .await
@@ -951,7 +1172,7 @@ where
         certificate: ValidatedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard.process_validated_block(certificate).await
         })
         .await
@@ -968,7 +1189,7 @@ where
         certificate: TimeoutCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         let chain_id = certificate.value().chain_id();
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard.process_timeout(certificate).await
         })
         .await
@@ -985,9 +1206,12 @@ where
         origin: ChainId,
         recipient: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Option<BlockHeight>, WorkerError> {
-        self.chain_write(recipient, |mut guard| async move {
-            guard.process_cross_chain_update(origin, bundles).await
+        previous_height: Option<BlockHeight>,
+    ) -> Result<CrossChainUpdateResult, WorkerError> {
+        self.chain_write(recipient, move |mut guard| async move {
+            guard
+                .process_cross_chain_update(origin, bundles, previous_height)
+                .await
         })
         .await
     }
@@ -1057,7 +1281,7 @@ where
         }
 
         let response = self
-            .chain_write(chain_id, |mut guard| async move {
+            .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_block_proposal(proposal).await
             })
             .await?;
@@ -1070,7 +1294,10 @@ where
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
     // Other fields will be included in the caller's span.
-    #[instrument(skip_all, fields(hash = %certificate.value.value_hash))]
+    #[instrument(skip_all, fields(
+        chain_id = %certificate.value.chain_id,
+        hash = %certificate.value.value_hash,
+    ))]
     pub async fn handle_lite_certificate(
         &self,
         certificate: LiteCertificate<'_>,
@@ -1176,13 +1403,13 @@ where
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> Result<ChainInfoResponse, WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), query);
         #[cfg(with_metrics)]
         metrics::CHAIN_INFO_QUERIES.inc();
         let chain_id = query.chain_id;
         let result = self
-            .chain_write(chain_id, |mut guard| async move {
+            .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_chain_info_query(query).await
             })
             .await;
@@ -1199,10 +1426,7 @@ where
         chain_id: ChainId,
         blob_id: BlobId,
     ) -> Result<Blob, WorkerError> {
-        trace!(
-            "{} <-- download_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname()
-        );
+        trace!("{} <-- download_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_read(chain_id, |guard| async move {
                 guard.download_pending_blob(blob_id).await
@@ -1226,12 +1450,9 @@ where
         blob: Blob,
     ) -> Result<ChainInfoResponse, WorkerError> {
         let blob_id = blob.id();
-        trace!(
-            "{} <-- handle_pending_blob({chain_id:8}, {blob_id:8})",
-            self.nickname()
-        );
+        trace!("{} <-- handle_pending_blob({blob_id:8})", self.nickname());
         let result = self
-            .chain_write(chain_id, |mut guard| async move {
+            .chain_write(chain_id, move |mut guard| async move {
                 guard.handle_pending_blob(blob).await
             })
             .await;
@@ -1257,26 +1478,41 @@ where
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             } => {
                 let mut actions = NetworkActions::default();
                 let origin = sender;
-                let Some(height) = self
-                    .process_cross_chain_update(origin, recipient, bundles)
+                match self
+                    .process_cross_chain_update(origin, recipient, bundles, previous_height)
                     .await?
-                else {
-                    return Ok(actions);
-                };
-                actions.notifications.push(Notification {
-                    chain_id: recipient,
-                    reason: Reason::NewIncomingBundle { origin, height },
-                });
-                actions
-                    .cross_chain_requests
-                    .push(CrossChainRequest::ConfirmUpdatedRecipient {
-                        sender,
-                        recipient,
-                        latest_height: height,
-                    });
+                {
+                    CrossChainUpdateResult::NothingToDo => {}
+                    CrossChainUpdateResult::Updated(height) => {
+                        actions.notifications.push(Notification {
+                            chain_id: recipient,
+                            reason: Reason::NewIncomingBundle { origin, height },
+                        });
+                        actions.cross_chain_requests.push(
+                            CrossChainRequest::ConfirmUpdatedRecipient {
+                                sender,
+                                recipient,
+                                latest_height: height,
+                            },
+                        );
+                    }
+                    CrossChainUpdateResult::GapDetected {
+                        origin,
+                        retransmit_from,
+                    } => {
+                        actions
+                            .cross_chain_requests
+                            .push(CrossChainRequest::RevertConfirm {
+                                sender: origin,
+                                recipient,
+                                retransmit_from,
+                            });
+                    }
+                }
                 Ok(actions)
             }
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -1284,13 +1520,26 @@ where
                 recipient,
                 latest_height,
             } => {
-                self.chain_write(sender, |mut guard| async move {
+                let actions = self
+                    .chain_write(sender, move |mut guard| async move {
+                        guard
+                            .confirm_updated_recipient(recipient, latest_height)
+                            .await
+                    })
+                    .await?;
+                Ok(actions)
+            }
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                retransmit_from,
+            } => {
+                self.chain_write(sender, move |mut guard| async move {
                     guard
-                        .confirm_updated_recipient(recipient, latest_height)
+                        .handle_revert_confirm(recipient, retransmit_from)
                         .await
                 })
-                .await?;
-                Ok(NetworkActions::default())
+                .await
             }
         }
     }
@@ -1306,7 +1555,7 @@ where
         chain_id: ChainId,
         new_trackers: BTreeMap<ValidatorPublicKey, u64>,
     ) -> Result<(), WorkerError> {
-        self.chain_write(chain_id, |mut guard| async move {
+        self.chain_write(chain_id, move |mut guard| async move {
             guard
                 .update_received_certificate_trackers(new_trackers)
                 .await
@@ -1415,6 +1664,18 @@ where
         .await
     }
 
+    /// Gets the `next_expected_events` indices for the given streams.
+    pub async fn next_expected_events(
+        &self,
+        chain_id: ChainId,
+        stream_ids: Vec<StreamId>,
+    ) -> Result<BTreeMap<StreamId, u32>, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_next_expected_events(stream_ids).await
+        })
+        .await
+    }
+
     /// Gets received certificate trackers.
     pub async fn get_received_certificate_trackers(
         &self,
@@ -1422,6 +1683,19 @@ where
     ) -> Result<HashMap<ValidatorPublicKey, u64>, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
             guard.get_received_certificate_trackers().await
+        })
+        .await
+    }
+
+    /// Returns the pending cross-chain network actions for this chain without
+    /// initializing its execution state. Safe to call on chains whose
+    /// `ChainDescription` blob is not available locally.
+    pub async fn cross_chain_network_actions(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<NetworkActions, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.cross_chain_network_actions().await
         })
         .await
     }

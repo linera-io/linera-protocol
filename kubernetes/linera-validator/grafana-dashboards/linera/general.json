@@ -12,6 +12,40 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(\n  max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"})\n  !=\n  max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"} offset 5m),\n  \"validator\",\n  \"$1.testnet-conway.linera.net\",\n  \"cluster\",\n  \"gke-testnet-conway-(validator-\\\\d+)\"\n)",
+        "hide": false,
+        "iconColor": "rgba(255, 152, 48, 1)",
+        "limit": 100,
+        "name": "proxy_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "proxy restart",
+        "type": "tags"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(\n  max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"})\n  !=\n  max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"} offset 5m),\n  \"validator\",\n  \"$1.testnet-conway.linera.net\",\n  \"cluster\",\n  \"gke-testnet-conway-(validator-\\\\d+)\"\n)",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "limit": 100,
+        "name": "shard_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "shard restart",
+        "type": "tags"
       }
     ]
   },
@@ -47,11 +81,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -68,6 +104,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -83,7 +120,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -115,7 +152,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -123,10 +160,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Proxy requests per second (averaged for the past minute)",
@@ -144,11 +193,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -165,6 +216,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -180,7 +232,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -212,7 +264,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -222,7 +274,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "(\n    (\n        rate(linera_proxy_request_error{validator=~\"$validator\"}[1m])\n    ) / (\n        (\n            (\n                rate(linera_proxy_request_success{validator=~\"$validator\"}[1m])\n            ) + (\n                rate(linera_proxy_request_error{validator=~\"$validator\"}[1m])\n            )\n        )\n    )\n) * 100",
+          "expr": "(\n    sum(rate(linera_proxy_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_proxy_request_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_proxy_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n) * 100",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -248,11 +300,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -269,6 +323,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -284,7 +339,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -357,11 +412,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -370,7 +426,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_proxy_request_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "format": "time_series",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
@@ -386,7 +442,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "instant": false,
           "legendFormat": "p90",
           "range": true,
@@ -398,7 +454,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "instant": false,
           "legendFormat": "p50",
           "range": true,
@@ -409,12 +465,232 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Proxy request latency percentiles broken down by request type over 1 minute intervals",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "id": 50,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "legendFormat": "{{method_name}} - p99",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "legendFormat": "{{method_name}} - p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "legendFormat": "{{method_name}} - p50",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Proxy Latency by Request Type (ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Proxy request rate broken down by gRPC method name",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 51,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": true,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (method_name)",
+          "legendFormat": "{{method_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Proxy Request Rate by Request Type",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "id": 15,
       "panels": [],
@@ -433,11 +709,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -454,6 +732,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -469,7 +748,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -485,7 +764,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 26
       },
       "id": 22,
       "options": {
@@ -501,7 +780,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -509,7 +788,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\"}[1m])) by (pod)",
+          "expr": "sum by(instance) (rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -520,7 +799,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
@@ -542,11 +821,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -563,6 +844,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -578,7 +860,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -594,7 +876,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 26
       },
       "id": 12,
       "options": {
@@ -610,7 +892,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -619,11 +901,11 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "(\n    (\n        sum(rate(linera_server_request_error{validator=~\"$validator\"}[1m])) by (method_name, pod)\n    ) / (\n        (\n            (\n                sum(rate(linera_server_request_success{validator=~\"$validator\"}[1m])) by (method_name, pod)\n            ) + (\n                sum(rate(linera_server_request_error{validator=~\"$validator\"}[1m])) by (method_name, pod)\n            )\n        )\n    )\n) * 100",
+          "expr": "(\n    sum(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_server_request_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)\n) * 100",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{pod}} - {{method_name}}",
+          "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A",
           "useBackend": false
@@ -644,11 +926,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -665,6 +949,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -680,7 +965,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -742,7 +1027,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 34
       },
       "id": 13,
       "options": {
@@ -753,11 +1038,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -766,7 +1052,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:server_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -781,7 +1067,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:server_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "instant": false,
           "legendFormat": "p90",
           "range": true,
@@ -793,7 +1079,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:server_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "instant": false,
           "legendFormat": "p50",
           "range": true,
@@ -815,11 +1101,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -836,6 +1124,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -851,7 +1140,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -913,7 +1202,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 26
+        "y": 34
       },
       "id": 23,
       "options": {
@@ -924,11 +1213,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -937,7 +1227,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_per_request_type_bucket{validator=~\"$validator\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -953,7 +1243,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_per_request_type_bucket{validator=~\"$validator\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -969,7 +1259,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_per_request_type_bucket{validator=~\"$validator\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -983,12 +1273,111 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Server request rate broken down by gRPC method name",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "id": 52,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": true,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)",
+          "legendFormat": "{{method_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Server Request Rate by Request Type",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 50
       },
       "id": 8,
       "panels": [],
@@ -1007,11 +1396,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1028,6 +1419,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1043,7 +1435,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1059,7 +1451,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 51
       },
       "id": 9,
       "options": {
@@ -1075,7 +1467,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1096,10 +1488,10 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_network_transmit_bytes_total{validator=~\"$validator\",pod=~\"shards-.*\"}[60s]))",
+          "expr": "sum(rate(container_network_transmit_bytes_total{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}[60s]))",
           "hide": false,
           "instant": false,
-          "legendFormat": "tx - Total shards",
+          "legendFormat": "tx - Total",
           "range": true,
           "refId": "D"
         }
@@ -1119,11 +1511,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1140,6 +1534,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1155,7 +1550,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1171,7 +1566,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 51
       },
       "id": 47,
       "options": {
@@ -1187,7 +1582,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1208,10 +1603,10 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_network_receive_bytes_total{validator=~\"$validator\",pod=~\"shards-.*\"}[60s]))",
+          "expr": "sum(rate(container_network_receive_bytes_total{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}[60s]))",
           "hide": false,
           "instant": false,
-          "legendFormat": "tx - Total shards",
+          "legendFormat": "rx - Total",
           "range": true,
           "refId": "D"
         }
@@ -1231,11 +1626,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1252,6 +1649,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1267,7 +1665,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1283,7 +1681,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 43
+        "y": 59
       },
       "id": 39,
       "options": {
@@ -1294,11 +1692,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "10.1.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1306,7 +1705,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(kube_pod_container_status_last_terminated_reason{validator=~\"$validator\"}[1m])) by (pod, reason)",
+          "expr": "sum(rate(kube_pod_container_status_last_terminated_reason{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}[1m])) by (pod, reason)",
           "hide": false,
           "instant": false,
           "legendFormat": "{{pod}} - {{reason}}",
@@ -1315,7 +1714,6 @@
         }
       ],
       "title": "Container termination",
-      "transformations": [],
       "type": "timeseries"
     },
     {
@@ -1330,11 +1728,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1351,6 +1751,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1366,7 +1767,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1381,7 +1782,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 43
+        "y": 59
       },
       "id": 46,
       "options": {
@@ -1397,7 +1798,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "10.1.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1406,7 +1807,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "kube_pod_container_status_last_terminated_exitcode{validator=~\"$validator\"}",
+          "expr": "kube_pod_container_status_last_terminated_exitcode{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1431,11 +1832,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1452,6 +1855,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1467,7 +1871,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1483,7 +1887,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 67
       },
       "id": 36,
       "options": {
@@ -1499,7 +1903,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1519,25 +1923,12 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(container_cpu_usage_seconds_total{validator=~\"$validator\",container=~\"linera-.*\"}[60s])) by (container)",
-          "hide": false,
-          "instant": false,
-          "legendFormat": "{{container}}",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(container_cpu_usage_seconds_total{validator=~\"$validator\"}[60s]))",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{validator=~\"$validator\",pod=~\"(proxy|shards)-.*\"}[60s]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Total",
           "range": true,
-          "refId": "C"
+          "refId": "B"
         }
       ],
       "title": "Container CPU Usage",
@@ -1555,11 +1946,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1576,6 +1969,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1591,7 +1985,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1607,7 +2001,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 67
       },
       "id": 29,
       "options": {
@@ -1625,7 +2019,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1659,11 +2053,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1680,6 +2076,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1695,7 +2092,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1711,7 +2108,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 75
       },
       "id": 41,
       "options": {
@@ -1727,7 +2124,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1770,11 +2167,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1791,6 +2190,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1806,7 +2206,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1822,7 +2222,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 75
       },
       "id": 5,
       "options": {
@@ -1840,7 +2240,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1904,11 +2304,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1925,6 +2327,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1940,7 +2343,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1956,7 +2359,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 83
       },
       "id": 32,
       "options": {
@@ -1972,7 +2375,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2015,11 +2418,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2036,6 +2441,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2051,7 +2457,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2067,7 +2473,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 83
       },
       "id": 31,
       "options": {
@@ -2083,7 +2489,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2126,11 +2532,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2147,6 +2555,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2162,7 +2571,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2178,7 +2587,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 91
       },
       "id": 44,
       "options": {
@@ -2194,7 +2603,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2231,7 +2640,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 99
       },
       "id": 34,
       "panels": [],
@@ -2250,11 +2659,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2271,6 +2682,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2286,7 +2698,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2302,7 +2714,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 84
+        "y": 100
       },
       "id": 30,
       "options": {
@@ -2318,7 +2730,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2348,11 +2760,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2369,6 +2783,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2384,7 +2799,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2400,7 +2815,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 84
+        "y": 100
       },
       "id": 48,
       "options": {
@@ -2416,7 +2831,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2446,11 +2861,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2467,6 +2884,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2482,7 +2900,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2498,7 +2916,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 108
       },
       "id": 45,
       "options": {
@@ -2514,7 +2932,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2548,11 +2966,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2569,6 +2989,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2584,7 +3005,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2600,7 +3021,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 108
       },
       "id": 27,
       "options": {
@@ -2618,7 +3039,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2652,11 +3073,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2673,6 +3096,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2688,7 +3112,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2704,7 +3128,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 100
+        "y": 116
       },
       "id": 26,
       "options": {
@@ -2720,7 +3144,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2750,11 +3174,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2771,6 +3197,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2786,7 +3213,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2802,7 +3229,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 100
+        "y": 116
       },
       "id": 38,
       "options": {
@@ -2818,7 +3245,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2852,11 +3279,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2873,6 +3302,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2888,7 +3318,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2904,7 +3334,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 108
+        "y": 124
       },
       "id": 28,
       "options": {
@@ -2920,7 +3350,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2950,11 +3380,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2971,6 +3403,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2986,7 +3419,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3002,7 +3435,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 108
+        "y": 124
       },
       "id": 10,
       "options": {
@@ -3020,7 +3453,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "10.1.1",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3054,11 +3487,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3075,6 +3510,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3090,7 +3526,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3106,7 +3542,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 116
+        "y": 132
       },
       "id": 42,
       "options": {
@@ -3122,7 +3558,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3152,11 +3588,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3173,6 +3611,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3188,7 +3627,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3204,7 +3643,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 116
+        "y": 132
       },
       "id": 43,
       "options": {
@@ -3220,7 +3659,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3250,11 +3689,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3271,6 +3712,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3286,7 +3728,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3302,7 +3744,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 124
+        "y": 140
       },
       "id": 33,
       "options": {
@@ -3318,7 +3760,7 @@
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3337,9 +3779,9 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 38,
-  "style": "dark",
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
   "tags": [
     "linera"
   ],
@@ -3348,7 +3790,6 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -3357,7 +3798,6 @@
           "uid": "prometheus"
         },
         "definition": "",
-        "hide": 0,
         "includeAll": true,
         "label": "Validator",
         "multi": true,
@@ -3366,8 +3806,6 @@
         "query": "label_values(linera_proxy_request_count, validator)",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
         "type": "query"
       }
     ]
@@ -3380,6 +3818,5 @@
   "timezone": "",
   "title": "General",
   "uid": "d1c10f4e-acbf-4cb9-9abd-bade0adcbd13",
-  "version": 1,
   "weekStart": ""
 }

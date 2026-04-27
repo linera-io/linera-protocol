@@ -120,9 +120,9 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum(rate(linera_proxy_request_error[1m])) / (sum(rate(linera_proxy_request_success[1m])) + sum(rate(linera_proxy_request_error[1m])))) * 100",
+          "expr": "(\n    sum(rate(linera_proxy_request_error{method_name!=\"non_grpc\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_proxy_request_success{method_name!=\"non_grpc\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_proxy_request_error{method_name!=\"non_grpc\"}[1m])) by (method_name)\n) * 100",
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A"
         }
@@ -518,11 +518,11 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "(sum(rate(linera_server_request_error[1m])) / (sum(rate(linera_server_request_success[1m])) + sum(rate(linera_server_request_error[1m])))) * 100",
+          "expr": "(\n    sum(rate(linera_server_request_error[1m])) by (method_name)\n) / (\n    sum(rate(linera_server_request_success[1m])) by (method_name)\n    +\n    sum(rate(linera_server_request_error[1m])) by (method_name)\n) * 100",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "__auto",
+          "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A",
           "useBackend": false
@@ -1083,7 +1083,7 @@
       "type": "table"
     }
   ],
-  "refresh": "5s",
+  "refresh": "10s",
   "schemaVersion": 39,
   "tags": [
     "linera"

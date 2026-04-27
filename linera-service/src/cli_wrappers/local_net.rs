@@ -22,6 +22,7 @@ use linera_base::{
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::node::ValidatorNodeProvider;
+use linera_exporter::config::{BlockExporterConfig, Destination, DestinationConfig};
 use linera_rpc::config::{CrossChainConfig, ExporterServiceConfig, TlsConfig};
 #[cfg(all(feature = "storage-service", with_testing))]
 use linera_storage_service::common::storage_service_test_endpoint;
@@ -41,7 +42,6 @@ use crate::{
     cli_wrappers::{
         ClientWrapper, LineraNet, LineraNetConfig, Network, NetworkConfig, OnClientDrop,
     },
-    config::{BlockExporterConfig, Destination, DestinationConfig},
     storage::{InnerStorageConfig, StorageConfig},
     util::ChildExt,
 };
@@ -706,21 +706,6 @@ impl LocalNet {
                         [[destination_config.destinations]]
                         file_name = "{file_name}"
                         kind = "Logging"
-                        "#
-                    )
-                }
-                Destination::EvmChain {
-                    endpoint,
-                    light_client_address,
-                    private_key,
-                } => {
-                    format!(
-                        r#"
-                        [[destination_config.destinations]]
-                        endpoint = "{endpoint}"
-                        light_client_address = "{light_client_address}"
-                        private_key = "{private_key}"
-                        kind = "EvmChain"
                         "#
                     )
                 }

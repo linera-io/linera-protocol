@@ -4,6 +4,45 @@ import "BridgeTypes.sol";
 
 library WrappedFungibleTypes {
 
+    struct BurnEvent {
+        bytes20 target;
+        BridgeTypes.Amount amount;
+    }
+
+    function bcs_serialize_BurnEvent(BurnEvent memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_bytes20(input.target);
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
+    }
+
+    function bcs_deserialize_offset_BurnEvent(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, BurnEvent memory)
+    {
+        uint256 new_pos;
+        bytes20 target;
+        (new_pos, target) = bcs_deserialize_offset_bytes20(pos, input);
+        BridgeTypes.Amount memory amount;
+        (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
+        return (new_pos, BurnEvent(target, amount));
+    }
+
+    function bcs_deserialize_BurnEvent(bytes memory input)
+        internal
+        pure
+        returns (BurnEvent memory)
+    {
+        uint256 new_pos;
+        BurnEvent memory value;
+        (new_pos, value) = bcs_deserialize_offset_BurnEvent(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct Message {
         uint8 choice;
         // choice=0 corresponds to Credit
@@ -662,6 +701,26 @@ library WrappedFungibleTypes {
         (new_pos, value) = bcs_deserialize_offset_WrappedFungibleOperation_TransferFrom(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
+    }
+
+    function bcs_serialize_bytes20(bytes20 input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(input);
+    }
+
+    function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, bytes20)
+    {
+        bytes20 dest;
+        assembly {
+            dest := mload(add(add(input, 0x20), pos))
+        }
+        return (pos + 20, dest);
     }
 
     function bcs_serialize_uint8(uint8 input)

@@ -4,7 +4,6 @@ on:
   push:
     branches: ["devnet_*", "testnet_*"]
   pull_request:
-  merge_group:
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests
@@ -42,6 +41,7 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "34.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Update aio-max-nr

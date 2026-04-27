@@ -148,15 +148,16 @@ impl BlockBuilder {
     ///
     /// The operation is serialized using the application ABI and added to the block, marked to be
     /// executed by `application`.
+    #[expect(clippy::needless_pass_by_value)]
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
-        operation: &Abi::Operation,
+        operation: Abi::Operation,
     ) -> &mut Self
     where
         Abi: ContractAbi,
     {
-        let operation = <Abi as ContractAbi>::serialize_operation(operation)
+        let operation = <Abi as ContractAbi>::serialize_operation(&operation)
             .expect("Failed to serialize `Operation` in BlockBuilder");
         self.with_raw_operation(application_id.forget_abi(), operation)
     }
@@ -253,7 +254,7 @@ impl BlockBuilder {
                 self.block,
                 None,
                 published_blobs,
-                BundleExecutionPolicy::Abort,
+                BundleExecutionPolicy::committed(),
             )
             .await?;
 

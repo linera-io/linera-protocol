@@ -3,13 +3,7 @@
 
 #![allow(dead_code)]
 
-use std::{
-    collections::BTreeMap,
-    fs::File,
-    io::Write,
-    path::Path,
-    process::{Command, Stdio},
-};
+use std::collections::BTreeMap;
 
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
@@ -23,7 +17,8 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
-    committee::ValidatorState, system::AdminOperation, Message, MessageKind, Operation,
+    committee::ValidatorState, system::AdminOperation,
+    test_utils::solidity::compile_solidity_contract_with_options, Message, MessageKind, Operation,
     ResourceControlPolicy, SystemOperation,
 };
 use revm::{
@@ -125,17 +120,12 @@ pub fn deploy_microchain(
     deployer: Address,
     light_client: Address,
     chain_id: CryptoHash,
-    next_expected_height: u64,
 ) -> Address {
     let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
         .expect("MicrochainTest.sol not found");
     let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
-    let constructor_args = (
-        light_client,
-        <[u8; 32]>::from(*chain_id.as_bytes()),
-        next_expected_height,
-    )
-        .abi_encode_params();
+    let constructor_args =
+        (light_client, <[u8; 32]>::from(*chain_id.as_bytes())).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -146,8 +136,6 @@ pub fn deploy_fungible_bridge(
     deployer: Address,
     light_client: Address,
     chain_id: CryptoHash,
-    next_expected_height: u64,
-    application_id: CryptoHash,
     token: Address,
 ) -> Address {
     let bytecode = compile_contract(
@@ -155,17 +143,31 @@ pub fn deploy_fungible_bridge(
         "FungibleBridge.sol",
         "FungibleBridge",
     );
-    let constructor_args = (
-        light_client,
-        <[u8; 32]>::from(*chain_id.as_bytes()),
-        next_expected_height,
-        <[u8; 32]>::from(*application_id.as_bytes()),
-        token,
-    )
-        .abi_encode_params();
+    let constructor_args =
+        (light_client, <[u8; 32]>::from(*chain_id.as_bytes()), token).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
+}
+
+pub fn register_fungible_application_id(
+    db: &mut CacheDB<EmptyDB>,
+    caller: Address,
+    bridge: Address,
+    application_id: CryptoHash,
+) {
+    use alloy_sol_types::sol;
+    sol! {
+        function registerFungibleApplicationId(bytes32 _applicationId) external;
+    }
+    call_contract(
+        db,
+        caller,
+        bridge,
+        &registerFungibleApplicationIdCall {
+            _applicationId: <[u8; 32]>::from(*application_id.as_bytes()).into(),
+        },
+    );
 }
 
 const MOCK_ERC20_SOL: &str = r#"
@@ -246,18 +248,64 @@ pub fn fungible_message_transaction(
     })
 }
 
-/// Creates a Transaction::ExecuteOperation containing a WrappedFungibleOperation::Burn
-/// as a user operation.
-pub fn fungible_burn_transaction(
+/// Creates a BurnEvent as a linera_base Event on the "burns" stream for a given application.
+pub fn burn_event(
     application_id: CryptoHash,
-    owner: linera_base::identifiers::AccountOwner,
+    target: [u8; 20],
     amount: Amount,
-) -> Transaction {
-    let op = wrapped_fungible::WrappedFungibleOperation::Burn { owner, amount };
-    Transaction::ExecuteOperation(Operation::User {
-        application_id: ApplicationId::new(application_id),
-        bytes: bcs::to_bytes(&op).unwrap(),
-    })
+    index: u32,
+) -> linera_base::data_types::Event {
+    use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};
+    linera_base::data_types::Event {
+        stream_id: StreamId {
+            application_id: GenericApplicationId::User(ApplicationId::new(application_id)),
+            stream_name: StreamName(b"burns".to_vec()),
+        },
+        index,
+        value: bcs::to_bytes(&wrapped_fungible::BurnEvent { target, amount }).unwrap(),
+    }
+}
+
+/// Creates a certificate containing events (no transactions).
+pub fn create_certificate_with_events(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+    chain_id: CryptoHash,
+    height: BlockHeight,
+    events: Vec<Vec<linera_base::data_types::Event>>,
+) -> ConfirmedBlockCertificate {
+    let block = Block {
+        header: BlockHeader {
+            chain_id: ChainId(chain_id),
+            epoch: Epoch::ZERO,
+            height,
+            timestamp: Timestamp::from(0),
+            state_hash: CryptoHash::new(&TestString::new("state")),
+            previous_block_hash: None,
+            authenticated_owner: None,
+            transactions_hash: CryptoHash::new(&TestString::new("tx")),
+            messages_hash: CryptoHash::new(&TestString::new("msg")),
+            previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg")),
+            previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_evt")),
+            oracle_responses_hash: CryptoHash::new(&TestString::new("oracle")),
+            events_hash: CryptoHash::new(&TestString::new("events")),
+            blobs_hash: CryptoHash::new(&TestString::new("blobs")),
+            operation_results_hash: CryptoHash::new(&TestString::new("op_results")),
+        },
+        body: BlockBody {
+            transactions: vec![],
+            messages: vec![],
+            previous_message_blocks: Default::default(),
+            previous_event_blocks: Default::default(),
+            oracle_responses: vec![],
+            events,
+            blobs: vec![],
+            operation_results: vec![],
+        },
+    };
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
+    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
 }
 
 pub fn deploy_light_client(
@@ -322,7 +370,7 @@ pub fn call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
-    call: C,
+    call: &C,
 ) -> (C::Return, Vec<Log>, u64) {
     match try_call_contract(db, deployer, contract, call) {
         Ok(ret) => ret,
@@ -336,7 +384,7 @@ pub fn try_call_contract<C: SolCall>(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     contract: Address,
-    call: C,
+    call: &C,
 ) -> Result<(C::Return, Vec<Log>, u64), String> {
     let nonce = db
         .cache
@@ -412,91 +460,23 @@ pub fn create_test_block(
 }
 
 pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path();
-
-    // Write shared source files so imports resolve
-    for (name, content) in [
-        ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
-        (
-            "WrappedFungibleTypes.sol",
-            evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
-        ),
-        ("LightClient.sol", evm::light_client::SOURCE),
-        ("Microchain.sol", evm::microchain::SOURCE),
-        ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
-    ] {
-        let mut f = File::create(path.join(name)).unwrap();
-        writeln!(f, "{}", content).unwrap();
-    }
-
-    // Write the contract under test
-    let test_path = path.join(file_name);
-    let mut test_file = File::create(&test_path).unwrap();
-    writeln!(test_file, "{}", source_code).unwrap();
-
-    // Write solc config
-    write_compilation_json(path, file_name);
-
-    // Compile
-    let config_file = File::open(path.join("config.json")).unwrap();
-    let output_file = File::create(path.join("result.json")).unwrap();
-
-    let status = Command::new("solc")
-        .current_dir(path)
-        .arg("--standard-json")
-        .stdin(Stdio::from(config_file))
-        .stdout(Stdio::from(output_file))
-        .status()
-        .expect("solc must be installed");
-    assert!(status.success(), "solc compilation failed");
-
-    let contents = std::fs::read_to_string(path.join("result.json")).unwrap();
-    let json_data: serde_json::Value = serde_json::from_str(&contents).unwrap();
-
-    // Check for compilation errors
-    if let Some(errors) = json_data.get("errors") {
-        for error in errors.as_array().unwrap() {
-            let severity = error["severity"].as_str().unwrap_or("");
-            if severity == "error" {
-                panic!(
-                    "solc compilation error: {}",
-                    error["formattedMessage"].as_str().unwrap_or("unknown")
-                );
-            }
-        }
-    }
-
-    let bytecode_hex = json_data["contracts"][file_name][contract_name]["evm"]["bytecode"]
-        ["object"]
-        .as_str()
-        .expect("failed to extract bytecode from solc output");
-    hex::decode(bytecode_hex).unwrap()
-}
-
-fn write_compilation_json(path: &Path, file_name: &str) {
-    let config_path = path.join("config.json");
-    let mut source = File::create(config_path).unwrap();
-    writeln!(
-        source,
-        r#"
-{{
-  "language": "Solidity",
-  "sources": {{
-    "{file_name}": {{
-      "urls": ["./{file_name}"]
-    }}
-  }},
-  "settings": {{
-    "viaIR": true,
-    "outputSelection": {{
-      "*": {{
-        "*": ["evm.bytecode"]
-      }}
-    }}
-  }}
-}}
-"#
+    // `runs = 1` optimizes for smaller deployed bytecode at the cost of per-call
+    // gas. Bridge contracts are large; tests compile faster with this setting.
+    compile_solidity_contract_with_options(
+        source_code,
+        file_name,
+        contract_name,
+        &[
+            ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
+            (
+                "WrappedFungibleTypes.sol",
+                evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
+            ),
+            ("LightClient.sol", evm::light_client::SOURCE),
+            ("Microchain.sol", evm::microchain::SOURCE),
+            ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
+        ],
+        Some(1),
     )
-    .unwrap();
+    .expect("solc compilation failed")
 }

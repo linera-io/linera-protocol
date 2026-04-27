@@ -40,51 +40,23 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     clang
 
-COPY examples examples
-COPY linera-base linera-base
-COPY linera-bridge linera-bridge
-COPY linera-chain linera-chain
-COPY linera-client linera-client
-COPY linera-core linera-core
-COPY linera-ethereum linera-ethereum
-COPY linera-explorer linera-explorer
-COPY linera-execution linera-execution
-COPY linera-faucet linera-faucet
-COPY linera-indexer linera-indexer
-COPY linera-metrics linera-metrics
-COPY linera-rpc linera-rpc
-COPY linera-sdk linera-sdk
-COPY linera-sdk-derive linera-sdk-derive
-COPY linera-service linera-service
-COPY linera-service-graphql-client linera-service-graphql-client
-COPY linera-storage linera-storage
-COPY linera-storage-service linera-storage-service
-COPY linera-summary linera-summary
-COPY linera-persistent linera-persistent
-COPY linera-version linera-version
-COPY linera-views linera-views
-COPY linera-views-derive linera-views-derive
-COPY web web
-COPY linera-witty linera-witty
-COPY linera-witty-macros linera-witty-macros
-COPY scripts scripts
-COPY rust-toolchain* Cargo.* ./
+COPY . .
 
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
-# Build linera CLI, storage server, server, proxy, and block exporter with scylladb and metrics features
+# Build block exporter binary from linera-exporter crate
 RUN cargo build ${build_flag:+"$build_flag"} \
     --bin linera-exporter \
     --features $build_features
 
-# Move binaries to avoid directory conflicts and clean up to save space
-RUN mv target/"$build_folder"/linera-exporter ./
+# Move binary; renamed to avoid conflict with linera-exporter/ crate directory
+RUN mv target/"$build_folder"/linera-exporter ./linera-exporter-binary
 
 # Optionally copy binaries instead of using the build images above
 FROM scratch AS builder_copy
 ARG binaries
-COPY "$binaries"/linera-exporter ./
+COPY "$binaries"/linera-exporter ./linera-exporter-binary
 
 FROM builder$copy AS binaries
 
@@ -107,5 +79,5 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG target
 
-# Copy linera CLI, storage server, server, proxy, indexer and exporter binaries
-COPY --from=binaries linera-exporter ./
+# Copy block exporter binary
+COPY --from=binaries linera-exporter-binary ./linera-exporter

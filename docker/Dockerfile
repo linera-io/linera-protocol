@@ -16,8 +16,8 @@ ARG binaries=
 ARG copy=${binaries:+_copy}
 ARG build_flag=--release
 ARG build_folder=release
-ARG build_features=scylladb,metrics,memory-profiling
-ARG rustflags="-C force-frame-pointers=yes"
+ARG build_features=scylladb,metrics,jemalloc
+ARG rustflags="-C force-frame-pointers=yes -L /usr/lib/x86_64-linux-gnu"
 
 FROM rust:1.86-slim-bookworm AS builder
 ARG git_commit
@@ -30,37 +30,10 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     protobuf-compiler \
     clang \
-    make
+    make \
+    libunwind-dev
 
-COPY examples examples
-COPY linera-base linera-base
-COPY linera-chain linera-chain
-COPY linera-client linera-client
-COPY linera-core linera-core
-COPY linera-bridge linera-bridge
-COPY linera-ethereum linera-ethereum
-COPY linera-execution linera-execution
-COPY linera-explorer linera-explorer
-COPY linera-faucet linera-faucet
-COPY linera-indexer linera-indexer
-COPY linera-metrics linera-metrics
-COPY linera-rpc linera-rpc
-COPY linera-sdk linera-sdk
-COPY linera-sdk-derive linera-sdk-derive
-COPY linera-service linera-service
-COPY linera-service-graphql-client linera-service-graphql-client
-COPY linera-storage linera-storage
-COPY linera-storage-service linera-storage-service
-COPY linera-summary linera-summary
-COPY linera-persistent linera-persistent
-COPY linera-version linera-version
-COPY linera-views linera-views
-COPY linera-views-derive linera-views-derive
-COPY linera-witty linera-witty
-COPY linera-witty-macros linera-witty-macros
-COPY scripts scripts
-COPY web web
-COPY rust-toolchain* Cargo.* ./
+COPY . .
 
 ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
@@ -99,7 +72,8 @@ LABEL build_date=$build_date
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    openssl
+    openssl \
+    libunwind8
 RUN update-ca-certificates
 
 COPY --from=binaries \

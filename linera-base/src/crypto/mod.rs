@@ -36,17 +36,6 @@ pub type ValidatorSignature = secp256k1::Secp256k1Signature;
 /// The key pair of a validator.
 pub type ValidatorKeypair = secp256k1::Secp256k1KeyPair;
 
-/// Signature scheme used for the public key.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq)]
-pub enum SignatureScheme {
-    /// Ed25519
-    Ed25519,
-    /// secp256k1
-    Secp256k1,
-    /// EVM secp256k1
-    EvmSecp256k1,
-}
-
 /// The public key of a chain owner.
 /// The corresponding private key is allowed to propose blocks
 /// on the chain and transfer account's tokens.
@@ -217,15 +206,6 @@ impl AccountSecretKey {
 }
 
 impl AccountPublicKey {
-    /// Returns the signature scheme of the public key.
-    pub fn scheme(&self) -> SignatureScheme {
-        match self {
-            AccountPublicKey::Ed25519(_) => SignatureScheme::Ed25519,
-            AccountPublicKey::Secp256k1(_) => SignatureScheme::Secp256k1,
-            AccountPublicKey::EvmSecp256k1(_) => SignatureScheme::EvmSecp256k1,
-        }
-    }
-
     /// Returns the byte representation of the public key.
     pub fn as_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(&self).expect("serialization to bytes should not fail")

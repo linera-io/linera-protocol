@@ -5,9 +5,11 @@
 
 use std::sync::Arc;
 
+use alloy_primitives::B256;
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
-use evm_bridge::{BridgeParameters, DepositKey, EvmBridgeAbi};
+use evm_bridge::{BridgeParameters, EvmBridgeAbi};
 use linera_sdk::{
+    ethereum::{EthereumQueries, ServiceEthereumClient},
     linera_base_types::WithServiceAbi,
     views::{linera_views, RootView, SetView, View, ViewStorageContext},
     Service, ServiceRuntime,
@@ -17,7 +19,7 @@ use linera_sdk::{
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
-    pub processed_deposits: SetView<DepositKey>,
+    pub processed_deposits: SetView<[u8; 32]>,
 }
 
 #[derive(Clone)]
@@ -70,5 +72,43 @@ impl EvmBridgeService {
     async fn token_address(&self) -> String {
         let params: BridgeParameters = self.runtime.application_parameters();
         format!("0x{}", hex::encode(params.token_address))
+    }
+
+    /// Whether a deposit with the given hash has been processed.
+    ///
+    /// The hash is the hex-encoded keccak-256 of the deposit key
+    /// (see [`evm_bridge::DepositKey::hash`]).
+    async fn is_deposit_processed(&self, hash: String) -> bool {
+        let bytes: [u8; 32] = hex::decode(hash.strip_prefix("0x").unwrap_or(&hash))
+            .expect("invalid hex")
+            .try_into()
+            .expect("hash must be 32 bytes");
+        self.state
+            .processed_deposits
+            .contains(&bytes)
+            .await
+            .expect("failed to check processed deposits")
+    }
+
+    /// Verifies that the given EVM block hash is finalized on the source chain.
+    ///
+    /// Makes the EVM JSON-RPC calls in the service runtime so that the contract
+    /// sees a single deterministic oracle response (the boolean result) instead
+    /// of multiple raw HTTP responses with non-deterministic headers.
+    async fn is_block_hash_finalized(&self, block_hash: String) -> bool {
+        let bytes: [u8; 32] = hex::decode(block_hash.strip_prefix("0x").unwrap_or(&block_hash))
+            .expect("invalid hex")
+            .try_into()
+            .expect("hash must be 32 bytes");
+        let params: BridgeParameters = self.runtime.application_parameters();
+        assert!(
+            !params.rpc_endpoint.is_empty(),
+            "rpc_endpoint must be configured to verify block hashes"
+        );
+        let client = ServiceEthereumClient::new(params.rpc_endpoint);
+        client
+            .is_block_hash_finalized(B256::from(bytes))
+            .await
+            .expect("failed to check block finality — block may not exist")
     }
 }

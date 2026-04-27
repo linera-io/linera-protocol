@@ -121,6 +121,13 @@ impl ValidatorNode for DummyValidatorNode {
         Err(NodeError::UnexpectedMessage)
     }
 
+    async fn download_blobs(
+        &self,
+        _: Vec<BlobId>,
+    ) -> Result<linera_core::node::BlobStream, NodeError> {
+        Err(NodeError::UnexpectedMessage)
+    }
+
     async fn download_certificate(
         &self,
         _: CryptoHash,
@@ -255,6 +262,8 @@ async fn main() -> std::io::Result<()> {
         None,  // no query cache for schema export
         None,
         tokio_util::sync::CancellationToken::new(),
+        false, // memory profiling disabled for schema export
+        false, // not paused
     );
     let schema = service.schema().sdl();
     print!("{}", schema);

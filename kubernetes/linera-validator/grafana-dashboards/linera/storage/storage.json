@@ -12,6 +12,40 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\d+)\")",
+        "hide": false,
+        "iconColor": "rgba(255, 152, 48, 1)",
+        "limit": 100,
+        "name": "proxy_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "proxy restart",
+        "type": "tags"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\d+)\")",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "limit": 100,
+        "name": "shard_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "shard restart",
+        "type": "tags"
       }
     ]
   },
@@ -20,7 +54,6 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
@@ -47,11 +80,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -68,6 +103,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -83,7 +119,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -164,6 +200,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -171,7 +208,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_chain_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:load_chain_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -182,7 +219,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_load_chain_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:load_chain_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -193,7 +230,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_chain_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:load_chain_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -214,11 +251,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -235,6 +274,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -250,7 +290,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -331,6 +371,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -338,7 +379,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_contract_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:load_contract_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -349,7 +390,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_load_contract_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:load_contract_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -360,7 +401,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_contract_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:load_contract_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -381,11 +422,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -402,6 +445,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -417,7 +461,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -498,6 +542,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -505,7 +550,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_load_service_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:load_service_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -516,7 +561,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_load_service_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:load_service_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -527,7 +572,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_load_service_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:load_service_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -548,11 +593,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -569,6 +616,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -584,7 +632,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -665,6 +713,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -672,7 +721,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_read_certificate_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:read_certificate_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -683,7 +732,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_read_certificate_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:read_certificate_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -694,7 +743,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_read_certificate_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:read_certificate_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -715,11 +764,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -736,6 +787,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -751,7 +803,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -832,6 +884,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -839,7 +892,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_read_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:read_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -850,7 +903,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_read_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:read_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -861,7 +914,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_read_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:read_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -882,11 +935,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -903,6 +958,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -918,7 +974,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -999,6 +1055,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1006,7 +1063,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_write_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:write_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1017,7 +1074,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_write_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:write_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1028,7 +1085,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_write_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:write_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1049,11 +1106,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1070,6 +1129,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1085,7 +1145,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1166,6 +1226,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1173,7 +1234,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_read_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:read_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1184,7 +1245,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_read_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:read_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1195,7 +1256,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_read_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:read_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1216,11 +1277,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1237,6 +1300,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1252,7 +1316,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1333,6 +1397,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1340,7 +1405,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_write_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:write_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1351,7 +1416,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_write_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:write_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1362,7 +1427,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_write_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:write_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1383,11 +1448,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1404,6 +1471,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1419,7 +1487,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1500,6 +1568,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1507,7 +1576,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:write_batch_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1518,7 +1587,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:write_batch_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1529,7 +1598,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:write_batch_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1550,11 +1619,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1571,6 +1642,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1586,7 +1658,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1667,6 +1739,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1674,7 +1747,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_contains_certificate_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:contains_certificate_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1685,7 +1758,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_contains_certificate_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:contains_certificate_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1696,7 +1769,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_contains_certificate_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:contains_certificate_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1717,11 +1790,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1738,6 +1813,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1753,7 +1829,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1834,6 +1910,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1841,7 +1918,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_contains_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:contains_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1852,7 +1929,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_contains_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:contains_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1863,7 +1940,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_contains_blob_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:contains_blob_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1884,11 +1961,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1905,6 +1984,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1920,7 +2000,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2001,6 +2081,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2008,7 +2089,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_contains_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:contains_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2019,7 +2100,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_contains_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:contains_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2030,7 +2111,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_contains_event_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:contains_event_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2045,7 +2126,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 106
+        "y": 49
       },
       "id": 14,
       "panels": [],
@@ -2064,11 +2145,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2085,6 +2168,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2100,7 +2184,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2116,7 +2200,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 107
+        "y": 50
       },
       "id": 15,
       "options": {
@@ -2132,6 +2216,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2139,10 +2224,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_blobs{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_contains_blobs{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_blobs{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Blobs Rate",
@@ -2160,11 +2257,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2181,6 +2280,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2196,7 +2296,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2212,7 +2312,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 107
+        "y": 50
       },
       "id": 16,
       "options": {
@@ -2228,6 +2328,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2235,10 +2336,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_blob_state{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_contains_blob_state{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_blob_state{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Blob State Rate",
@@ -2256,11 +2369,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2277,6 +2392,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2292,7 +2408,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2308,7 +2424,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 115
+        "y": 58
       },
       "id": 17,
       "options": {
@@ -2324,6 +2440,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2331,10 +2448,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_write_event{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_write_event{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_write_event{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Write Event Rate",
@@ -2352,11 +2481,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2373,6 +2504,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2388,7 +2520,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2404,7 +2536,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 115
+        "y": 58
       },
       "id": 18,
       "options": {
@@ -2420,6 +2552,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2427,10 +2560,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_event{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_read_event{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_event{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Event Rate",
@@ -2448,11 +2593,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2469,6 +2616,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2484,7 +2632,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2500,7 +2648,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 123
+        "y": 66
       },
       "id": 19,
       "options": {
@@ -2516,6 +2664,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2523,8 +2672,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_certificates{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_read_certificates{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -2534,7 +2683,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_certificates{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_read_certificates{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
@@ -2556,11 +2705,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2577,6 +2728,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2592,7 +2744,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2608,7 +2760,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 123
+        "y": 66
       },
       "id": 20,
       "options": {
@@ -2624,6 +2776,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2631,10 +2784,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_certificate{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_read_certificate{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_certificate{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Certificate Rate (single)",
@@ -2652,11 +2817,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2673,6 +2840,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2688,7 +2856,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2704,7 +2872,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 131
+        "y": 74
       },
       "id": 21,
       "options": {
@@ -2720,6 +2888,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2727,10 +2896,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_blob_states{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_read_blob_states{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_blob_states{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Blob States Rate (batch)",
@@ -2748,11 +2929,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2769,6 +2952,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2784,7 +2968,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2800,7 +2984,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 131
+        "y": 74
       },
       "id": 22,
       "options": {
@@ -2816,6 +3000,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2823,10 +3008,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_blob_state{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_read_blob_state{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_blob_state{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Blob State Rate (single)",
@@ -2844,11 +3041,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2865,6 +3064,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2880,7 +3080,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2896,7 +3096,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 139
+        "y": 82
       },
       "id": 23,
       "options": {
@@ -2912,6 +3112,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2919,10 +3120,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_write_blob{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_write_blob{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_write_blob{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Write Blob Rate",
@@ -2940,11 +3153,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2961,6 +3176,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2976,7 +3192,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -2992,7 +3208,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 139
+        "y": 82
       },
       "id": 24,
       "options": {
@@ -3008,6 +3224,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3015,10 +3232,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_blob{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_read_blob{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_blob{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Blob Rate",
@@ -3036,11 +3265,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3057,6 +3288,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3072,7 +3304,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3088,7 +3320,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 147
+        "y": 90
       },
       "id": 25,
       "options": {
@@ -3104,6 +3336,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3111,8 +3344,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_write_certificate{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_write_certificate{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -3122,7 +3355,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_write_certificate{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_write_certificate{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
@@ -3144,11 +3377,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3165,6 +3400,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3180,7 +3416,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3196,7 +3432,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 147
+        "y": 90
       },
       "id": 26,
       "options": {
@@ -3212,6 +3448,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3219,10 +3456,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_read_confirmed_block{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_read_confirmed_block{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_read_confirmed_block{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Read Confirmed Block Rate",
@@ -3240,11 +3489,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3261,6 +3512,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3276,7 +3528,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3292,7 +3544,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 155
+        "y": 98
       },
       "id": 27,
       "options": {
@@ -3308,6 +3560,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3315,10 +3568,22 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_blob{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_contains_blob{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_blob{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Blob Rate",
@@ -3336,11 +3601,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3357,6 +3624,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3372,7 +3640,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3388,7 +3656,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 155
+        "y": 98
       },
       "id": 28,
       "options": {
@@ -3404,6 +3672,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3411,19 +3680,31 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_contains_certificate{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_contains_certificate{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\",pod!=\"\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_contains_certificate{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "hide": false,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Contains Certificate Rate",
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 38,
-  "style": "dark",
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
   "tags": [
     "linera"
   ],
@@ -3432,7 +3713,6 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -3441,10 +3721,8 @@
           "uid": "prometheus"
         },
         "definition": "label_values(linera_load_view_latency_bucket, validator)",
-        "hide": 0,
         "includeAll": true,
         "label": "Validator",
-        "multi": false,
         "name": "validator",
         "options": [],
         "query": {
@@ -3453,7 +3731,6 @@
         },
         "refresh": 2,
         "regex": "",
-        "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       }
@@ -3467,6 +3744,5 @@
   "timezone": "browser",
   "title": "Storage",
   "uid": "deeg8st7mbegwc",
-  "version": 1,
   "weekStart": ""
 }

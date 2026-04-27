@@ -31,7 +31,7 @@ permissions:
 jobs:
   save-baseline:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: linera-io-self-hosted-ci
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -40,6 +40,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install Valgrind
       run: sudo apt-get update && sudo apt-get install -y valgrind
@@ -58,7 +59,7 @@ jobs:
 
   compare:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: linera-io-self-hosted-ci
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -69,6 +70,7 @@ jobs:
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install Valgrind
       run: sudo apt-get update && sudo apt-get install -y valgrind
@@ -78,6 +80,7 @@ jobs:
       run: cargo bench -p linera-views --bench gungraun_views --no-run
     - name: Download baseline artifact
       id: download-baseline
+      continue-on-error: true
       run: |
         BASE_REF="${{ github.event.pull_request.base.ref || 'main' }}"
         MERGE_BASE=$(git merge-base HEAD "origin/$BASE_REF")

@@ -36,6 +36,9 @@ use crate::{
 /// A pinned [`Stream`] of Notifications.
 pub type NotificationStream = BoxStream<'static, Notification>;
 
+/// A pinned [`Stream`] of blob contents returned by batch downloads.
+pub type BlobStream = BoxStream<'static, Result<BlobContent, NodeError>>;
+
 /// Whether to wait for the delivery of outgoing cross-chain messages.
 #[derive(Debug, Default, Clone, Copy)]
 pub enum CrossChainMessageDelivery {
@@ -123,6 +126,11 @@ pub trait ValidatorNode {
 
     /// Downloads a blob. Returns an error if the validator does not have the blob.
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError>;
+
+    /// Downloads a batch of blobs as a stream. The stream yields one blob per
+    /// requested id, in order. On mid-stream errors, the caller can retry the
+    /// remaining blob ids against another validator.
+    async fn download_blobs(&self, blob_ids: Vec<BlobId>) -> Result<BlobStream, NodeError>;
 
     /// Downloads a blob that belongs to a pending proposal or the locking block on a chain.
     async fn download_pending_blob(
@@ -345,6 +353,9 @@ pub enum NodeError {
         local_time: Timestamp,
         block_time_grace_period_ms: u64,
     },
+
+    #[error("No validators available to handle the request")]
+    NoValidators,
 }
 
 impl NodeError {
@@ -391,7 +402,8 @@ impl NodeError {
             | NodeError::EmptyBlobsNotFound
             | NodeError::ResponseHandlingError { .. }
             | NodeError::MissingCertificatesByHeights { .. }
-            | NodeError::TooManyCertificatesReturned { .. } => false,
+            | NodeError::TooManyCertificatesReturned { .. }
+            | NodeError::NoValidators => false,
         }
     }
 }

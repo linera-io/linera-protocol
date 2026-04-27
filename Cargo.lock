@@ -1823,27 +1823,6 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.65.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfdf7b466f9a4903edc73f95d6d2bcd5baf8ae620638762244d3f60143643cc5"
-dependencies = [
- "bitflags 1.3.2",
- "cexpr",
- "clang-sys",
- "lazy_static",
- "lazycell",
- "peeking_take_while",
- "prettyplease",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash 1.1.0",
- "shlex",
- "syn 2.0.105",
-]
-
-[[package]]
-name = "bindgen"
 version = "0.69.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
@@ -1867,9 +1846,9 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.71.1"
+version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f58bf3d7db68cfbac37cfc485a8d711e87e064c3d0fe0435b92f7a407f9d6b3"
+checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
 dependencies = [
  "bitflags 2.9.1",
  "cexpr",
@@ -5042,23 +5021,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
-name = "jemalloc_pprof"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74ff642505c7ce8d31c0d43ec0e235c6fd4585d9b8172d8f9dd04d36590200b5"
-dependencies = [
- "anyhow",
- "libc",
- "mappings",
- "once_cell",
- "pprof_util",
- "tempfile",
- "tikv-jemalloc-ctl",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "jobserver"
 version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5299,14 +5261,13 @@ dependencies = [
 
 [[package]]
 name = "librocksdb-sys"
-version = "0.11.0+8.1.1"
+version = "0.17.3+10.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3386f101bcb4bd252d8e9d2fb41ec3b0862a15a62b478c355b2982efa469e3e"
+checksum = "cef2a00ee60fe526157c9023edab23943fae1ce2ab6f4abb2a807c1746835de9"
 dependencies = [
- "bindgen 0.65.1",
+ "bindgen 0.72.1",
  "bzip2-sys",
  "cc",
- "glob",
  "libc",
  "libz-sys",
  "lz4-sys",
@@ -5465,6 +5426,7 @@ dependencies = [
  "axum",
  "bcs",
  "clap",
+ "dirs",
  "fs-err",
  "futures",
  "hex",
@@ -5475,9 +5437,12 @@ dependencies = [
  "linera-core",
  "linera-execution",
  "linera-faucet-client",
+ "linera-persistent",
  "linera-storage",
  "linera-views",
+ "linera-wallet-json",
  "op-alloy-network",
+ "prometheus",
  "proptest",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -5490,13 +5455,31 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sqlx",
  "tempfile",
+ "test-case",
+ "thiserror 1.0.69",
  "tokio",
  "tower-http 0.6.6",
  "tracing",
  "tracing-subscriber 0.3.19",
  "url",
  "wrapped-fungible",
+]
+
+[[package]]
+name = "linera-cache"
+version = "0.16.0"
+dependencies = [
+ "cfg_aliases",
+ "linera-base",
+ "linera-cache",
+ "lru 0.15.0",
+ "papaya",
+ "prometheus",
+ "quick_cache",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -5612,6 +5595,7 @@ dependencies = [
  "futures",
  "hex-game",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-core",
  "linera-execution",
@@ -5619,7 +5603,6 @@ dependencies = [
  "linera-storage-service",
  "linera-version",
  "linera-views",
- "lru 0.15.0",
  "meta-counter",
  "papaya",
  "prometheus",
@@ -5630,6 +5613,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "social",
+ "strum 0.26.3",
  "sync_wrapper 1.0.2",
  "test-case",
  "test-log",
@@ -5752,6 +5736,52 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "ws_stream_wasm",
+]
+
+[[package]]
+name = "linera-exporter"
+version = "0.16.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "bincode",
+ "cfg_aliases",
+ "clap",
+ "custom_debug_derive",
+ "fs-err",
+ "futures",
+ "linera-base",
+ "linera-chain",
+ "linera-core",
+ "linera-execution",
+ "linera-metrics",
+ "linera-rpc",
+ "linera-sdk",
+ "linera-storage",
+ "linera-storage-runtime",
+ "linera-version",
+ "linera-views",
+ "mini-moka",
+ "papaya",
+ "prometheus",
+ "prost 0.14.1",
+ "quick_cache",
+ "reqwest 0.11.27",
+ "serde",
+ "test-case",
+ "test-log",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "toml",
+ "tonic 0.14.2",
+ "tonic-health",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+ "tracing-subscriber 0.3.19",
 ]
 
 [[package]]
@@ -5901,6 +5931,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-jemalloc-ctl"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "098410db64dbf9b74f23f99e43e58674620b21be840367637dcf0b6d3c4d0e42"
+dependencies = [
+ "libc",
+ "linera-jemalloc-sys",
+ "paste",
+]
+
+[[package]]
+name = "linera-jemalloc-sys"
+version = "0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e77f5478fd8bd96552edc59ec5bdb2cff8c470e0f5284cd38a70b9f5782dbfc"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
+name = "linera-jemallocator"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8630abf3d99c33454e1c035a0226717a28c028c7254e151abb866b6ebd59af1b"
+dependencies = [
+ "libc",
+ "linera-jemalloc-sys",
+]
+
+[[package]]
 name = "linera-kywasmtime"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5917,8 +5978,11 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "axum",
- "jemalloc_pprof",
+ "linera-jemalloc-ctl",
+ "mappings",
+ "pprof_util",
  "prometheus",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tokio-util",
@@ -6056,7 +6120,6 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bcs",
- "bincode",
  "call-evm-counter",
  "cargo_toml",
  "cfg-if",
@@ -6073,8 +6136,6 @@ dependencies = [
  "criterion",
  "crowd-funding",
  "current_platform",
- "custom_debug_derive",
- "dirs",
  "ethereum-tracker",
  "fs-err",
  "fs_extra",
@@ -6087,26 +6148,28 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "linera-base",
- "linera-bridge",
  "linera-chain",
  "linera-client",
  "linera-core",
  "linera-ethereum",
  "linera-execution",
+ "linera-exporter",
  "linera-faucet-client",
  "linera-faucet-server",
+ "linera-jemallocator",
  "linera-metrics",
  "linera-persistent",
  "linera-rpc",
  "linera-sdk",
  "linera-service",
  "linera-storage",
+ "linera-storage-runtime",
  "linera-storage-service",
  "linera-version",
  "linera-views",
+ "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
- "mini-moka",
  "native-fungible",
  "non-fungible",
  "nonzero_lit",
@@ -6119,7 +6182,6 @@ dependencies = [
  "prometheus",
  "proptest",
  "prost 0.14.1",
- "quick_cache",
  "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
@@ -6133,7 +6195,6 @@ dependencies = [
  "test-log",
  "test-strategy",
  "thiserror 1.0.69",
- "tikv-jemallocator",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -6191,6 +6252,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-execution",
  "linera-storage",
@@ -6201,6 +6263,25 @@ dependencies = [
  "test-case",
  "test-log",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "linera-storage-runtime"
+version = "0.16.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cfg_aliases",
+ "clap",
+ "fs-err",
+ "linera-client",
+ "linera-execution",
+ "linera-storage",
+ "linera-storage-service",
+ "linera-views",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 
@@ -6285,6 +6366,7 @@ dependencies = [
  "cfg_aliases",
  "convert_case",
  "criterion",
+ "custom_debug_derive",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
@@ -6333,6 +6415,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-wallet-json"
+version = "0.16.0"
+dependencies = [
+ "anyhow",
+ "dirs",
+ "fs-err",
+ "futures",
+ "linera-base",
+ "linera-client",
+ "linera-core",
+ "linera-persistent",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "linera-wasm-instrument"
 version = "0.4.0-linera.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6343,9 +6441,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6652182476826343f0dd1e76a184ad34bcee57650a9c00c77574b993dd30529"
+checksum = "6453ccd433866100d587f3db5ffb6c2116ebbcb97891df4197c1038708a551ba"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -6374,9 +6472,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4781ce9fc4a892c9a9727f51ec92d19e1c5b54259da21573671aa49211ae80f"
+checksum = "37d7e7b04c3cd3b94eccf13a1b57f631a5339dbf719e58618d03f30f52ff75e4"
 dependencies = [
  "backtrace",
  "bytes",
@@ -6405,9 +6503,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8056c8bff8e1b5cafd21aac59b9009e93b30f35b7baab5592a6f4c7db120b490"
+checksum = "5e5bf79646e59839a83c10b4c48456a86909596c37cc380c49c94c2632a9126c"
 dependencies = [
  "cranelift-codegen 0.91.1",
  "cranelift-entity 0.91.1",
@@ -6424,9 +6522,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3635a86dd98e2c2fd6dd603054f40b8e379f84365a2238cc177d47547a83eebc"
+checksum = "9d5ca769ec09d276da3b4580992ec5b96268f3b36b0d05a6fabc7dcb7cd3418a"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -6443,9 +6541,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-vm"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f27d020717572fdb6222324ec46b10eeb49f6f4a120ee63cf7145f4392f12fd8"
+checksum = "22ed6366c2d832e034052b6f037b5afe38efb1e9d8e9ef4b31b778751330e519"
 dependencies = [
  "backtrace",
  "cc",
@@ -7533,12 +7631,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
-name = "peeking_take_while"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
-
-[[package]]
 name = "pem"
 version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8176,13 +8268,12 @@ dependencies = [
 
 [[package]]
 name = "quick_cache"
-version = "0.6.16"
+version = "0.6.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ad6644cb07b7f3488b9f3d2fde3b4c0a7fa367cafefb39dff93a659f76eb786"
+checksum = "d4c901384fb8fb3d4510388129ce6e13ecd686eee610da778b6ea77219decd53"
 dependencies = [
- "ahash 0.8.12",
  "equivalent",
- "hashbrown 0.15.5",
+ "hashbrown 0.16.1",
  "parking_lot",
 ]
 
@@ -8884,9 +8975,9 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.21.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb6f170a4041d50a0ce04b0d2e14916d6ca863ea2e422689a5b694395d299ffe"
+checksum = "ddb7af00d2b17dbd07d82c0063e25411959748ff03e8d4f96134c2ff41fce34f"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -10618,37 +10709,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
 dependencies = [
  "num_cpus",
-]
-
-[[package]]
-name = "tikv-jemalloc-ctl"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f21f216790c8df74ce3ab25b534e0718da5a1916719771d3fec23315c99e468b"
-dependencies = [
- "libc",
- "paste",
- "tikv-jemalloc-sys",
-]
-
-[[package]]
-name = "tikv-jemalloc-sys"
-version = "0.6.0+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd3c60906412afa9c2b5b5a48ca6a5abe5736aec9eb48ad05037a677e52e4e2d"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
-name = "tikv-jemallocator"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cec5ff18518d81584f477e9bfdf957f5bb0979b0bac3af4ca30b5b3ae2d2865"
-dependencies = [
- "libc",
- "tikv-jemalloc-sys",
 ]
 
 [[package]]
@@ -12829,7 +12889,6 @@ dependencies = [
  "fungible",
  "hex",
  "linera-sdk",
- "serde",
 ]
 
 [[package]]
@@ -13038,7 +13097,6 @@ version = "2.0.15+zstd.1.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb81183ddd97d0c74cedf1d50d85c8d08c1b8b68ee863bdee9e706eedba1a237"
 dependencies = [
- "bindgen 0.71.1",
  "cc",
  "pkg-config",
 ]

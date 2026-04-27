@@ -17,7 +17,22 @@ use tempfile::{tempdir, TempDir};
 
 use crate::{LINERA_SOL, LINERA_TYPES_SOL};
 
-fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
+fn write_compilation_json(
+    path: &Path,
+    file_name: &str,
+    optimizer_runs: Option<u32>,
+) -> anyhow::Result<()> {
+    let optimizer_block = optimizer_runs
+        .map(|runs| {
+            format!(
+                r#""optimizer": {{
+                    "enabled": true,
+                    "runs": {runs}
+                }},
+                "#
+            )
+        })
+        .unwrap_or_default();
     let mut source = File::create(path).unwrap();
     writeln!(
         source,
@@ -31,7 +46,7 @@ fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
   }},
   "settings": {{
     "viaIR": true,
-    "outputSelection": {{
+    {optimizer_block}"outputSelection": {{
       "*": {{
         "*": ["evm.bytecode"]
       }}
@@ -43,9 +58,14 @@ fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
+fn get_bytecode_path(
+    path: &Path,
+    file_name: &str,
+    contract_name: &str,
+    optimizer_runs: Option<u32>,
+) -> anyhow::Result<Vec<u8>> {
     let config_path = path.join("config.json");
-    write_compilation_json(&config_path, file_name)?;
+    write_compilation_json(&config_path, file_name, optimizer_runs)?;
     let config_file = File::open(config_path)?;
 
     let output_path = path.join("result.json");
@@ -84,9 +104,35 @@ fn get_bytecode_path(path: &Path, file_name: &str, contract_name: &str) -> anyho
     Ok(hex::decode(&object)?)
 }
 
-pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
+pub fn compile_solidity_contract(
+    source_code: &str,
+    file_name: &str,
+    contract_name: &str,
+    extra_sources: &[(&str, &str)],
+) -> anyhow::Result<Vec<u8>> {
+    compile_solidity_contract_with_options(
+        source_code,
+        file_name,
+        contract_name,
+        extra_sources,
+        None,
+    )
+}
+
+pub fn compile_solidity_contract_with_options(
+    source_code: &str,
+    file_name: &str,
+    contract_name: &str,
+    extra_sources: &[(&str, &str)],
+    optimizer_runs: Option<u32>,
+) -> anyhow::Result<Vec<u8>> {
     let dir = tempdir().unwrap();
     let path = dir.path();
+    for (extra_file_name, extra_source_code) in extra_sources {
+        let extra_code_path = path.join(extra_file_name);
+        let mut extra_code_file = File::create(&extra_code_path)?;
+        writeln!(extra_code_file, "{}", extra_source_code)?;
+    }
     if source_code.contains("Linera.sol") {
         // The source code seems to import Linera.sol, so we import the relevant files.
         for (file_name, literal_path) in [
@@ -108,11 +154,14 @@ pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Ve
             .current_dir(path)
             .output()?;
     }
-    let file_name = "test_code.sol";
     let test_code_path = path.join(file_name);
     let mut test_code_file = File::create(&test_code_path)?;
     writeln!(test_code_file, "{}", source_code)?;
-    get_bytecode_path(path, file_name, contract_name)
+    get_bytecode_path(path, file_name, contract_name, optimizer_runs)
+}
+
+pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
+    compile_solidity_contract(source_code, "test_code.sol", contract_name, &[])
 }
 
 pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {

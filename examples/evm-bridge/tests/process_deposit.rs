@@ -19,6 +19,7 @@ use linera_sdk::{
     linera_base_types::{AccountOwner, Amount, ApplicationId},
     test::{ActiveChain, TestValidator},
 };
+use serde::Deserialize;
 use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
 
 /// Helper to query an account balance on the wrapped-fungible app.
@@ -63,21 +64,33 @@ impl TestBridge {
         let mut chain = validator.new_chain().await;
         let chain_owner = AccountOwner::from(chain.public_key());
 
+        let token_address = [0xA0; 20];
+        let source_chain_id = 8453u64;
+
+        // 1. Deploy bridge first
+        let bridge_params = BridgeParameters {
+            source_chain_id,
+            bridge_contract_address: [0xBB; 20],
+            token_address,
+            rpc_endpoint: String::new(),
+        };
+        let bridge_app_id = chain
+            .create_application(bridge_module_id, bridge_params, (), vec![])
+            .await;
+
+        // 2. Deploy wrapped-fungible with the bridge's app ID
         let fungible_module_id = chain
             .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
                 "../wrapped-fungible",
             )
             .await;
-
-        let token_address = [0xA0; 20];
-        let source_chain_id = 8453u64;
-
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
-            minter: chain_owner,
-            mint_chain_id: chain.id(),
+            minter: Some(chain_owner),
+            mint_chain_id: Some(chain.id()),
             evm_token_address: token_address,
             evm_source_chain_id: source_chain_id,
+            bridge_app_id: Some(bridge_app_id.forget_abi()),
         };
         let fungible_app_id = chain
             .create_application(
@@ -88,14 +101,16 @@ impl TestBridge {
             )
             .await;
 
-        let bridge_params = BridgeParameters {
-            source_chain_id,
-            bridge_contract_address: [0xBB; 20],
-            fungible_app_id: fungible_app_id.forget_abi(),
-            token_address,
-        };
-        let bridge_app_id = chain
-            .create_application(bridge_module_id, bridge_params, (), vec![])
+        // 3. Register the fungible app in the bridge
+        chain
+            .add_block(|block| {
+                block.with_operation(
+                    bridge_app_id,
+                    BridgeOperation::RegisterFungibleApp {
+                        app_id: fungible_app_id.forget_abi(),
+                    },
+                );
+            })
             .await;
 
         let chain_id_bytes: [u8; 32] = chain.id().0.into();
@@ -165,7 +180,7 @@ impl TestBridge {
         let (receipts_root, proof_bytes) =
             build_receipt_trie(&[(tx_index, receipt.clone())], tx_index);
         let proof_nodes: Vec<Vec<u8>> = proof_bytes.into_iter().map(|b| b.to_vec()).collect();
-        let block_header = build_test_header(receipts_root);
+        let block_header = build_test_header(receipts_root, 12345);
         (block_header, receipt, proof_nodes, tx_index, 0)
     }
 }
@@ -182,7 +197,7 @@ async fn test_process_deposit() {
         .add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header.clone(),
                     receipt_rlp: receipt.clone(),
                     proof_nodes: proof_nodes.clone(),
@@ -205,7 +220,7 @@ async fn test_process_deposit() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt.clone(),
                     proof_nodes: proof_nodes.clone(),
@@ -219,14 +234,14 @@ async fn test_process_deposit() {
     assert!(result.is_err(), "replay deposit should be rejected");
 
     // Use a different (wrong) receipts root in the block header
-    let wrong_header = build_test_header(B256::from([0xFF; 32]));
+    let wrong_header = build_test_header(B256::from([0xFF; 32]), 12345);
 
     let result = tb
         .chain
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: wrong_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -271,7 +286,7 @@ async fn test_source_chain_id_mismatch() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -320,7 +335,7 @@ async fn test_token_address_mismatch() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -366,7 +381,7 @@ async fn test_wrong_emitter_address() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -414,7 +429,7 @@ async fn test_wrong_event_signature() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -440,7 +455,7 @@ async fn test_log_index_out_of_range() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -486,7 +501,7 @@ async fn test_deposit_amount_exceeds_u128() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -518,7 +533,7 @@ async fn test_replay_different_log_index_succeeds() {
         .add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header_rlp.clone(),
                     receipt_rlp: receipt_rlp.clone(),
                     proof_nodes: proof_nodes.clone(),
@@ -539,7 +554,7 @@ async fn test_replay_different_log_index_succeeds() {
         .add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -554,5 +569,215 @@ async fn test_replay_different_log_index_succeeds() {
     assert_eq!(
         query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
         Some(Amount::from_attos(2_000_000u128)),
+    );
+}
+
+// -- finality verification tests --
+
+/// When `rpc_endpoint` is set but the RPC endpoint is unreachable,
+/// instantiation should fail because the chain ID check cannot succeed.
+#[tokio::test]
+async fn test_instantiation_fails_with_unreachable_endpoint() {
+    let (validator, bridge_module_id) =
+        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
+    let mut chain = validator.new_chain().await;
+
+    let token_address = [0xA0; 20];
+    let source_chain_id = 8453u64;
+
+    // Non-empty endpoint that is unreachable → instantiation should fail
+    let bridge_params = BridgeParameters {
+        source_chain_id,
+        bridge_contract_address: [0xBB; 20],
+        token_address,
+        rpc_endpoint: "http://localhost:8545".to_string(),
+    };
+    let result = chain
+        .try_create_application(bridge_module_id, bridge_params, (), vec![])
+        .await;
+
+    assert!(
+        result.is_err(),
+        "instantiation should fail with unreachable endpoint"
+    );
+}
+
+// -- Anvil-based finality verification tests --
+// These require `anvil` (from Foundry) to be installed.
+
+/// Minimal block response for extracting hash from an Anvil RPC call.
+#[derive(Deserialize)]
+struct EthBlock {
+    hash: B256,
+}
+
+/// Queries Anvil for the latest block hash (outside the contract, for test setup).
+async fn get_anvil_block_hash(endpoint: &str) -> B256 {
+    use linera_ethereum::client::JsonRpcClient;
+    let rpc = linera_ethereum::provider::EthereumClientSimplified::new(endpoint.to_string());
+    let block: EthBlock = rpc
+        .request("eth_getBlockByNumber", ("latest", false))
+        .await
+        .expect("failed to query Anvil for latest block");
+    block.hash
+}
+
+/// Sets up a bridge instance with Anvil as the EVM endpoint and the TestValidator
+/// configured to allow HTTP requests to Anvil's host.
+async fn setup_bridge_with_anvil(
+    anvil_endpoint: &str,
+) -> (
+    ActiveChain,
+    AccountOwner,
+    ApplicationId<EvmBridgeAbi>,
+    ApplicationId<WrappedFungibleTokenAbi>,
+) {
+    let (mut validator, bridge_module_id) =
+        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
+
+    // Allow the contract to make HTTP requests to the Anvil host.
+    validator
+        .change_resource_control_policy(|policy| {
+            policy
+                .http_request_allow_list
+                .insert("localhost".to_owned());
+        })
+        .await;
+
+    let mut chain = validator.new_chain().await;
+    let chain_owner = AccountOwner::from(chain.public_key());
+
+    let token_address = [0xA0; 20];
+    // Anvil's default chain ID is 31337.
+    let source_chain_id = 31337u64;
+
+    // 1. Deploy bridge first
+    let bridge_params = BridgeParameters {
+        source_chain_id,
+        bridge_contract_address: [0xBB; 20],
+        token_address,
+        rpc_endpoint: anvil_endpoint.to_string(),
+    };
+    let bridge_app_id = chain
+        .create_application(bridge_module_id, bridge_params, (), vec![])
+        .await;
+
+    // 2. Deploy wrapped-fungible with bridge's app ID
+    let fungible_module_id = chain
+        .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
+            "../wrapped-fungible",
+        )
+        .await;
+    let wrapped_params = WrappedParameters {
+        ticker_symbol: "wUSDC".to_string(),
+        minter: Some(chain_owner),
+        mint_chain_id: Some(chain.id()),
+        evm_token_address: token_address,
+        evm_source_chain_id: source_chain_id,
+        bridge_app_id: Some(bridge_app_id.forget_abi()),
+    };
+    let fungible_app_id = chain
+        .create_application(
+            fungible_module_id,
+            wrapped_params,
+            InitialStateBuilder::default().build(),
+            vec![],
+        )
+        .await;
+
+    // 3. Register fungible app in bridge
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::RegisterFungibleApp {
+                    app_id: fungible_app_id.forget_abi(),
+                },
+            );
+        })
+        .await;
+
+    (chain, chain_owner, bridge_app_id, fungible_app_id)
+}
+
+/// VerifyBlockHash with a real finalized Anvil block hash should succeed.
+#[tokio::test]
+#[ignore] // requires `anvil` from Foundry
+async fn test_verify_block_hash_anvil() {
+    let anvil = linera_ethereum::test_utils::get_anvil()
+        .await
+        .expect("failed to start anvil");
+
+    let block_hash = get_anvil_block_hash(&anvil.endpoint).await;
+
+    let (chain, _chain_owner, bridge_app_id, _fungible_app_id) =
+        setup_bridge_with_anvil(&anvil.endpoint).await;
+
+    // VerifyBlockHash should succeed — Anvil treats all blocks as finalized.
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::VerifyBlockHash {
+                    block_hash: block_hash.0,
+                },
+            );
+        })
+        .await;
+}
+
+/// VerifyBlockHash with a non-existent block hash should fail.
+#[tokio::test]
+#[ignore] // requires `anvil` from Foundry
+async fn test_verify_block_hash_not_found() {
+    let anvil = linera_ethereum::test_utils::get_anvil()
+        .await
+        .expect("failed to start anvil");
+
+    let (chain, _chain_owner, bridge_app_id, _fungible_app_id) =
+        setup_bridge_with_anvil(&anvil.endpoint).await;
+
+    // VerifyBlockHash with a fake hash — Anvil will return null.
+    let fake_hash = [0xDE; 32];
+    let result = chain
+        .try_add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::VerifyBlockHash {
+                    block_hash: fake_hash,
+                },
+            );
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "VerifyBlockHash with non-existent hash should fail"
+    );
+}
+
+#[tokio::test]
+async fn test_register_fungible_app_cannot_be_called_twice() {
+    let tb = TestBridge::setup().await;
+
+    // The bridge already has a registered fungible app from setup.
+    // Attempting to register again should fail.
+    let dummy_app_id = ApplicationId::new(linera_sdk::linera_base_types::CryptoHash::new(
+        &linera_sdk::linera_base_types::TestString::new("other_app"),
+    ));
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::RegisterFungibleApp {
+                    app_id: dummy_app_id,
+                },
+            );
+        })
+        .await;
+    assert!(
+        result.is_err(),
+        "registering fungible app a second time should be rejected"
     );
 }

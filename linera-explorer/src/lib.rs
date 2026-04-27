@@ -19,7 +19,7 @@ use gql_service::{
     block::{self, BlockBlock as Block},
     blocks::{self, BlocksBlocks as Blocks},
     chain::{self, ChainChain as Chain},
-    chains, notifications, request, Chains, Reason,
+    chains, notifications, request, transfer, Chains, Reason,
 };
 use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
@@ -63,7 +63,10 @@ enum Page {
         blocks: Vec<Blocks>,
         apps: Vec<Application>,
     },
-    Blocks(Vec<Blocks>),
+    Blocks {
+        blocks: Vec<Blocks>,
+        limit: u32,
+    },
     Block(Box<Block>),
     Applications(Vec<Application>),
     Application {
@@ -78,6 +81,9 @@ enum Page {
         name: String,
         link: String,
         queries: Value,
+    },
+    Transfer {
+        result: Option<String>,
     },
     Error(String),
 }
@@ -181,7 +187,7 @@ async fn get_chain(node: &str, chain_id: ChainId) -> Result<Box<Chain>> {
     let chain = request::<gql_service::Chain, _>(&client, node, variables)
         .await?
         .chain;
-    log_str(&serde_json::to_string_pretty(&chain).unwrap());
+    // log_str(&serde_json::to_string_pretty(&chain).unwrap());
     Ok(Box::new(chain))
 }
 
@@ -251,11 +257,13 @@ async fn blocks(
     node: &str,
     chain_id: ChainId,
     from: Option<CryptoHash>,
-    limit: Option<u32>,
+    limit: u32,
 ) -> Result<(Page, String)> {
-    // TODO: limit is not used in the UI, it should be implemented with some path arguments and select input
-    let blocks = get_blocks(node, chain_id, from, limit).await?;
-    Ok((Page::Blocks(blocks), format!("/blocks?chain={}", chain_id)))
+    let blocks = get_blocks(node, chain_id, from, Some(limit)).await?;
+    Ok((
+        Page::Blocks { blocks, limit },
+        format!("/blocks?chain={}", chain_id),
+    ))
 }
 
 /// Returns the block page.
@@ -491,35 +499,48 @@ async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
 }
 
 fn format_bytes(value: &JsValue) -> JsValue {
-    let modified_value = value.clone();
-    if let Some(object) = js_sys::Object::try_from(value) {
-        js_sys::Object::keys(object)
-            .iter()
-            .for_each(|k: JsValue| match k.as_string() {
-                None => (),
-                Some(key_str) => {
-                    if &key_str == "bytes" {
-                        let array: Vec<u8> =
-                            js_sys::Uint8Array::from(getf(&modified_value, "bytes")).to_vec();
-                        let array_hex = hex::encode(array);
-                        let hex_len = array_hex.len();
-                        let hex_elided = if hex_len > 128 {
-                            // don't show all hex digits if the bytes array is too long
-                            format!("{}..{}", &array_hex[0..4], &array_hex[hex_len - 4..])
-                        } else {
-                            array_hex
-                        };
-                        setf(&modified_value, "bytes", &JsValue::from_str(&hex_elided))
-                    } else {
-                        setf(
-                            &modified_value,
-                            &key_str,
-                            &format_bytes(&getf(&modified_value, &key_str)),
-                        )
-                    }
-                }
-            });
+    // Skip non-object types (primitives, null, undefined, BigInt, etc.)
+    let object = match js_sys::Object::try_from(value) {
+        Some(obj) => obj,
+        None => return value.clone(),
     };
+    let modified_value = value.clone();
+    for k in js_sys::Object::keys(object).iter() {
+        let key_str = match k.as_string() {
+            Some(s) => s,
+            None => continue,
+        };
+        let child = match js_sys::Reflect::get(&modified_value, &k) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if key_str == "bytes" && js_sys::Array::is_array(&child) {
+            let js_arr = js_sys::Array::from(&child);
+            let mut valid = true;
+            let mut array = Vec::with_capacity(js_arr.length() as usize);
+            for v in js_arr.iter() {
+                if let Some(f) = v.as_f64() {
+                    array.push(f as u8);
+                } else {
+                    valid = false;
+                    break;
+                }
+            }
+            if valid {
+                let array_hex = hex::encode(array);
+                let hex_len = array_hex.len();
+                let hex_elided = if hex_len > 128 {
+                    format!("{}..{}", &array_hex[0..4], &array_hex[hex_len - 4..])
+                } else {
+                    array_hex
+                };
+                setf(&modified_value, "bytes", &JsValue::from_str(&hex_elided));
+            }
+        } else {
+            let formatted = format_bytes(&child);
+            let _ = js_sys::Reflect::set(&modified_value, &k, &formatted);
+        }
+    }
     modified_value
 }
 
@@ -527,7 +548,7 @@ fn page_name_and_args(page: &Page) -> (&str, Vec<(String, String)>) {
     match page {
         Page::Unloaded | Page::Home { .. } => ("", Vec::new()),
         Page::Block(b) => ("block", vec![("block".to_string(), b.hash.to_string())]),
-        Page::Blocks { .. } => ("blocks", Vec::new()),
+        Page::Blocks { limit, .. } => ("blocks", vec![("limit".to_string(), limit.to_string())]),
         Page::Applications(_) => ("applications", Vec::new()),
         Page::Application { app, .. } => (
             "application",
@@ -542,6 +563,7 @@ fn page_name_and_args(page: &Page) -> (&str, Vec<(String, String)>) {
             ],
         ),
         Page::Plugin { name, .. } => ("plugin", vec![("plugin".to_string(), name.to_string())]),
+        Page::Transfer { .. } => ("transfer", Vec::new()),
         Page::Error(_) => ("error", Vec::new()),
     }
 }
@@ -596,7 +618,11 @@ async fn page(
             let hash = find_arg_map(args, "block", CryptoHash::from_str)?;
             block(node, chain_id, hash).await
         }
-        "blocks" => blocks(node, chain_id, None, Some(20)).await,
+        "blocks" => {
+            let from = find_arg_map(args, "from", CryptoHash::from_str)?;
+            let limit = find_arg_map(args, "limit", u32::from_str)?.unwrap_or(20);
+            blocks(node, chain_id, from, limit).await
+        }
         "applications" => applications(node, chain_id).await,
         "application" => {
             let app_arg = find_arg(args, "app").context("unknown application")?;
@@ -617,6 +643,43 @@ async fn page(
                     };
                     operation(indexer, Some(key), chain_id).await
                 }
+            }
+        }
+        "transfer" => {
+            let recipient_chain = find_arg(args, "recipient_chain");
+            let recipient_owner = find_arg(args, "recipient_owner");
+            let amount = find_arg(args, "amount");
+            match (recipient_chain, amount) {
+                (Some(recipient_chain), Some(amount)) => {
+                    let owner = find_arg(args, "owner").context("missing owner")?;
+                    let recipient_owner = recipient_owner.unwrap_or_else(|| owner.clone());
+                    let variables = transfer::Variables {
+                        chain_id,
+                        owner: serde_json::from_value(Value::String(owner))
+                            .context("invalid owner")?,
+                        recipient: transfer::Account {
+                            chain_id: ChainId::from_str(&recipient_chain)
+                                .context("invalid recipient chain")?,
+                            owner: serde_json::from_value(Value::String(recipient_owner))
+                                .context("invalid recipient owner")?,
+                        },
+                        amount: serde_json::from_value(Value::String(amount))
+                            .context("invalid amount")?,
+                    };
+                    let client = reqwest_client();
+                    let node_url = url(&Config::load(), &Protocol::Http, &AddressKind::Node);
+                    request::<gql_service::Transfer, _>(&client, &node_url, variables).await?;
+                    Ok((
+                        Page::Transfer {
+                            result: Some("Transfer successful!".to_string()),
+                        },
+                        format!("/transfer?chain={}", chain_id),
+                    ))
+                }
+                _ => Ok((
+                    Page::Transfer { result: None },
+                    format!("/transfer?chain={}", chain_id),
+                )),
             }
         }
         "operations" => operations(indexer, chain_id).await,
@@ -665,12 +728,19 @@ async fn route_aux(
     let (page, new_path) = result.unwrap_or_else(|e| error(&e));
     let page_js = format_bytes(&page.serialize(&SER).unwrap());
     setf(app, "page", &page_js);
-    web_sys::window()
+    let history = web_sys::window()
         .expect("window object not found")
         .history()
-        .expect("history object not found")
-        .push_state_with_url(&page_js, &new_path, Some(&new_path))
-        .expect("push_state failed");
+        .expect("history object not found");
+    if init {
+        history
+            .replace_state_with_url(&page_js, &new_path, Some(&new_path))
+            .expect("replace_state failed");
+    } else {
+        history
+            .push_state_with_url(&page_js, &new_path, Some(&new_path))
+            .expect("push_state failed");
+    }
 }
 
 #[wasm_bindgen]
@@ -691,7 +761,10 @@ pub fn short_crypto_hash(s: &str) -> String {
 
 #[wasm_bindgen]
 pub fn short_app_id(s: &str) -> String {
-    format!("{}..{}..{}..", &s[..4], &s[64..68], &s[152..156])
+    if s.len() <= 12 {
+        return s.to_string();
+    }
+    format!("{}..{}", &s[..4], &s[s.len() - 4..])
 }
 
 fn set_onpopstate(app: JsValue) {
@@ -735,18 +808,28 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
         while let Some(evt) = wsio.next().await {
             match evt {
                 WsMessage::Text(message) => {
-                    let graphql_message = serde_json::from_str::<
+                    let graphql_message = match serde_json::from_str::<
                         GQuery<Response<notifications::ResponseData>>,
                     >(&message)
-                    .expect("unexpected websocket response");
+                    {
+                        Ok(msg) => msg,
+                        Err(e) => {
+                            log_str(&format!("ignoring websocket message: {}", e));
+                            continue;
+                        }
+                    };
                     if let Some(payload) = graphql_message.payload {
                         if let Some(message_data) = payload.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            if let Reason::NewBlock { .. } = message_data.notifications.reason {
-                                if message_data.notifications.chain_id == chain {
-                                    route_aux(&app, &data, &None, &Vec::new(), false).await
-                                }
+                            let should_refresh = matches!(
+                                &message_data.notifications.reason,
+                                Reason::NewBlock { .. }
+                                    | Reason::BlockExecuted { .. }
+                                    | Reason::NewEvents { .. }
+                            );
+                            if should_refresh && message_data.notifications.chain_id == chain {
+                                route_aux(&app, &data, &None, &Vec::new(), false).await
                             }
                         }
                         if let Some(errors) = payload.errors {
@@ -799,6 +882,7 @@ pub async fn start(app: JsValue) {
                 "/applications" => Some("applications".to_string()),
                 "/operations" => Some("operations".to_string()),
                 "/operation" => Some("operation".to_string()),
+                "/transfer" => Some("transfer".to_string()),
                 "/plugin" => Some("plugin".to_string()),
                 pathname => match (
                     pathname.strip_prefix("/block/"),

@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   bridge-e2e:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: linera-io-self-hosted-ci
     timeout-minutes: 60
 
     steps:
@@ -39,7 +39,25 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
+          version: "34.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Self-hosted runners occasionally expose an unhealthy
+      # docker socket at job start despite
+      # RUNNER_WAIT_FOR_DOCKER_IN_SECONDS. Probe + retry so
+      # we do not fail the whole run on a startup race.
+      - name: Wait for docker daemon
+        run: |
+          for i in $(seq 1 60); do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker ready after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "Waiting for docker daemon ($i/60)..."
+            sleep 2
+          done
+          echo "Docker daemon did not become ready in 120s"
+          exit 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -57,7 +75,7 @@ jobs:
         run: gcloud auth configure-docker us-docker.pkg.dev
 
       - name: Pull linera image
-        id: pull-linera
+        id: pull-images
         continue-on-error: true
         run: |
           BRANCH="${{ github.base_ref || github.ref_name }}"
@@ -65,30 +83,19 @@ jobs:
           docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
 
       - name: Build linera image
-        if: steps.pull-linera.outcome == 'failure'
+        if: steps.pull-images.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile
-          load: true
           tags: linera-test
-
-      - name: Pull exporter image
-        id: pull-exporter
-        continue-on-error: true
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker pull "${GCP_REGISTRY}/linera-exporter:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera-exporter:${BRANCH}" linera-exporter
-
-      - name: Build exporter image
-        if: steps.pull-exporter.outcome == 'failure'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile.exporter
           load: true
-          tags: linera-exporter
+          build-args: |
+            build_flag=
+            build_folder=debug
+
+      - name: Build foundry-jq image
+        run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
 
       - uses: dorny/paths-filter@v3
         id: changes
@@ -98,9 +105,6 @@ jobs:
               - 'linera-bridge/**'
               - '!linera-bridge/tests/e2e/**'
               - 'docker/Dockerfile.bridge'
-
-      - name: Build foundry-jq image
-        run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
 
       - name: Pull bridge image (unchanged)
         id: pull-bridge
@@ -124,6 +128,9 @@ jobs:
       - name: Build example Wasm for bridge tests
         run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
         working-directory: examples
+
+      - name: Build linera-bridge binary for local relay tests
+        run: cargo build -p linera-bridge --features linera-bridge/relay
 
       - name: Run bridge E2E test
         working-directory: linera-bridge/tests/e2e

@@ -18,6 +18,7 @@ use linera_base::{
     },
     doc_scalar, ensure, hex, hex_debug,
     identifiers::{Account, AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
+    time::Duration,
 };
 use linera_execution::{
     committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemOperation,
@@ -97,24 +98,6 @@ impl ProposedBlock {
                 })
             )
         })
-    }
-
-    /// Returns an iterator over all incoming [`PostedMessage`]s in this block.
-    pub fn incoming_messages(&self) -> impl Iterator<Item = &PostedMessage> {
-        self.incoming_bundles()
-            .flat_map(|incoming_bundle| &incoming_bundle.bundle.messages)
-    }
-
-    /// Returns the number of incoming messages.
-    pub fn message_count(&self) -> usize {
-        self.incoming_bundles()
-            .map(|im| im.bundle.messages.len())
-            .sum()
-    }
-
-    /// Returns an iterator over all transactions as references.
-    pub fn transaction_refs(&self) -> impl Iterator<Item = &Transaction> {
-        self.transactions.iter()
     }
 
     /// Returns all operations in this block.
@@ -334,7 +317,7 @@ pub enum MessageAction {
 
 /// Policy for handling message bundle execution failures during block execution.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub enum BundleExecutionPolicy {
+pub enum BundleFailurePolicy {
     /// Abort block execution on any bundle failure. The proposal is never modified.
     #[default]
     Abort,
@@ -352,6 +335,25 @@ pub enum BundleExecutionPolicy {
         /// Maximum number of discarded bundles before discarding all remaining message bundles.
         max_failures: u32,
     },
+}
+
+/// Policy for executing message bundles during block execution.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct BundleExecutionPolicy {
+    /// What to do when a bundle fails.
+    pub on_failure: BundleFailurePolicy,
+    /// Optional time budget for bundle execution.
+    pub time_budget: Option<Duration>,
+}
+
+impl BundleExecutionPolicy {
+    /// Returns a policy suitable for committed blocks: abort on failure, no time budget.
+    pub fn committed() -> Self {
+        BundleExecutionPolicy {
+            on_failure: BundleFailurePolicy::Abort,
+            time_budget: None,
+        }
+    }
 }
 
 /// A set of messages from a single block, for a single destination.
@@ -579,6 +581,18 @@ impl LiteVote {
 }
 
 impl MessageBundle {
+    /// Returns a rough estimate of the serialized size in bytes, for chunking.
+    pub fn estimated_size(&self) -> usize {
+        // Fixed overhead: height (8) + timestamp (8) + hash (32) + tx_index (4) + vec len (8)
+        let overhead = 60;
+        let messages_size: usize = self
+            .messages
+            .iter()
+            .map(PostedMessage::estimated_size)
+            .sum();
+        overhead + messages_size
+    }
+
     pub fn is_skippable(&self) -> bool {
         self.messages.iter().all(PostedMessage::is_skippable)
     }
@@ -589,6 +603,17 @@ impl MessageBundle {
 }
 
 impl PostedMessage {
+    /// Returns a rough estimate of the serialized size in bytes.
+    pub fn estimated_size(&self) -> usize {
+        // Fixed: signer option (33) + grant (16) + refund option (34) + kind (1) + index (4) + enum tag (8)
+        let overhead = 96;
+        let message_size = match &self.message {
+            Message::System(_) => 256, // conservative estimate for system messages
+            Message::User { bytes, .. } => 64 + bytes.len(),
+        };
+        overhead + message_size
+    }
+
     pub fn is_skippable(&self) -> bool {
         match self.kind {
             MessageKind::Protected | MessageKind::Tracked => false,
@@ -635,10 +660,6 @@ impl BlockExecutionOutcome {
 
     pub fn iter_created_blobs_ids(&self) -> impl Iterator<Item = BlobId> + '_ {
         self.blobs.iter().flatten().map(|blob| blob.id())
-    }
-
-    pub fn created_blobs_ids(&self) -> HashSet<BlobId> {
-        self.iter_created_blobs_ids().collect()
     }
 }
 

@@ -40,7 +40,8 @@ defineProps<{
             <div class="row">
               <div class="col-md-6">
                 <strong>Origin:</strong>
-                <span class="font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender || transaction.incomingBundle.origin) }}</span>
+                <a v-if="transaction.incomingBundle.origin.sender" @click="$root.route(undefined, [['chain', transaction.incomingBundle.origin.sender]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender) }}</a>
+                <span v-else class="font-monospace">{{ typeof transaction.incomingBundle.origin === 'string' ? transaction.incomingBundle.origin : JSON.stringify(transaction.incomingBundle.origin) }}</span>
               </div>
               <div class="col-md-6">
                 <strong>Action:</strong>
@@ -59,7 +60,7 @@ defineProps<{
               </div>
               <div class="col-md-4">
                 <strong>Certificate Hash:</strong>
-                <span class="font-monospace small">{{ short_hash(transaction.incomingBundle.bundle.certificateHash) }}</span>
+                <a @click="$root.route('block', [['block', transaction.incomingBundle.bundle.certificateHash]])" class="btn btn-link btn-sm p-0 font-monospace small">{{ short_hash(transaction.incomingBundle.bundle.certificateHash) }}</a>
               </div>
             </div>
 
@@ -87,7 +88,7 @@ defineProps<{
                     <div v-if="msg.messageMetadata.systemMessage.withdraw" class="small">
                       <div><strong>Owner:</strong> {{ msg.messageMetadata.systemMessage.withdraw.owner }}</div>
                       <div><strong>Amount:</strong> {{ msg.messageMetadata.systemMessage.withdraw.amount }}</div>
-                      <div><strong>Recipient:</strong> {{ msg.messageMetadata.systemMessage.withdraw.recipient.owner }}@{{ short_hash(msg.messageMetadata.systemMessage.withdraw.recipient.chainId) }}</div>
+                      <div><strong>Recipient:</strong> {{ msg.messageMetadata.systemMessage.withdraw.recipient.owner }}@<a @click="$root.route(undefined, [['chain', msg.messageMetadata.systemMessage.withdraw.recipient.chainId]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(msg.messageMetadata.systemMessage.withdraw.recipient.chainId) }}</a></div>
                     </div>
                   </div>
 

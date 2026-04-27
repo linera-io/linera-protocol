@@ -12,6 +12,40 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\d+)\")",
+        "hide": false,
+        "iconColor": "rgba(255, 152, 48, 1)",
+        "limit": 100,
+        "name": "proxy_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "proxy restart",
+        "type": "tags"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\d+)\")",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "limit": 100,
+        "name": "shard_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "shard restart",
+        "type": "tags"
       }
     ]
   },
@@ -20,14 +54,9 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -36,15 +65,6 @@
       },
       "id": 1,
       "panels": [],
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "refId": "A"
-        }
-      ],
       "title": "Latencies",
       "type": "row"
     },
@@ -60,11 +80,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -81,6 +103,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -96,11 +119,11 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
-          "unit": "µs"
+          "unit": "\u00b5s"
         },
         "overrides": [
           {
@@ -168,11 +191,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -180,7 +204,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_block_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:block_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -191,7 +215,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_block_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:block_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -202,7 +226,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_block_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:block_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -223,11 +247,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -244,6 +270,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -259,11 +286,11 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
-          "unit": "µs"
+          "unit": "\u00b5s"
         },
         "overrides": [
           {
@@ -331,11 +358,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -343,7 +371,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_operation_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:operation_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -354,7 +382,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_operation_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:operation_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -365,7 +393,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_operation_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:operation_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -386,11 +414,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -407,6 +437,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -422,11 +453,11 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
-          "unit": "µs"
+          "unit": "\u00b5s"
         },
         "overrides": [
           {
@@ -494,11 +525,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -506,7 +538,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_message_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:message_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -517,7 +549,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_message_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:message_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -528,7 +560,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_message_execution_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:message_execution_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -549,11 +581,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -570,6 +604,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -585,7 +620,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -657,11 +692,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -669,7 +705,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_bytecode_decompression_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:bytecode_decompression_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -680,7 +716,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_bytecode_decompression_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:bytecode_decompression_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -691,7 +727,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_bytecode_decompression_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:bytecode_decompression_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -712,11 +748,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -733,6 +771,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -748,11 +787,11 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
-          "unit": "ms"
+          "unit": "\u00b5s"
         },
         "overrides": [
           {
@@ -820,11 +859,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -832,7 +872,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_state_hash_computation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:state_hash_computation_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -843,7 +883,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_state_hash_computation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:state_hash_computation_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -854,7 +894,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_state_hash_computation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:state_hash_computation_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -875,11 +915,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -896,6 +938,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -911,7 +954,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -983,11 +1026,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -995,7 +1039,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_cross_chain_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:cross_chain_queue_wait_time:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1006,7 +1050,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_cross_chain_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:cross_chain_queue_wait_time:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1017,7 +1061,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_cross_chain_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:cross_chain_queue_wait_time:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1038,11 +1082,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1059,6 +1105,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1074,7 +1121,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -1146,11 +1193,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1158,7 +1206,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_chain_worker_request_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:chain_worker_request_queue_wait_time:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1169,7 +1217,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_chain_worker_request_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:chain_worker_request_queue_wait_time:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1180,7 +1228,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_chain_worker_request_queue_wait_time_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:chain_worker_request_queue_wait_time:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1201,11 +1249,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1222,6 +1272,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1237,7 +1288,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -1309,11 +1360,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1321,7 +1373,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_create_network_actions_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:create_network_actions_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1332,7 +1384,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_create_network_actions_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:create_network_actions_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1343,7 +1395,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_create_network_actions_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:create_network_actions_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1357,18 +1409,20 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Ratio of cache hits to total cache accesses for value cache",
+      "description": "Ratio of cache hits to total cache accesses for value cache, broken down by value type",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1385,6 +1439,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1400,7 +1455,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1427,10 +1482,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1438,59 +1495,35 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (validator) (rate(linera_value_cache_hit{validator=~\"$validator\"}[1m]))\n/\n(\n  sum by (validator) (rate(linera_value_cache_hit{validator=~\"$validator\"}[1m]))\n+ (\n    sum by (validator) (rate(linera_value_cache_miss{validator=~\"$validator\"}[1m]))\n    or on (validator) vector(0)\n  )\n)",
+          "expr": "sum by (value_type) (rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[5m]))\n/\n(\n  sum by (value_type) (rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[5m]))\n  + sum by (value_type) (rate(linera_value_cache_miss{validator=~\"$validator\", job=\"linera-linera-server\"}[5m]))\n)",
           "instant": false,
-          "legendFormat": "{{validator}} - Cache Hit Ratio",
+          "legendFormat": "{{value_type}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Value Cache Hit Ratio",
+      "title": "Value Cache Hit Ratio by Type",
       "type": "timeseries"
     },
     {
-      "collapsed": false,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 41
-      },
-      "id": 10,
-      "panels": [],
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "refId": "A"
-        }
-      ],
-      "title": "Rates",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Rate at which new chains are being opened in the network",
+      "description": "Rate of value cache operations (hits + misses) per second, broken down by value type. Helps distinguish 0% hit ratio due to zero traffic vs actual misses.",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1507,6 +1540,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1522,7 +1556,121 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "id": 69,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (value_type) (\n  rate(linera_value_cache_hit{validator=~\"$validator\", job=\"linera-linera-server\"}[5m])\n  + rate(linera_value_cache_miss{validator=~\"$validator\", job=\"linera-linera-server\"}[5m])\n)",
+          "instant": false,
+          "legendFormat": "{{value_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Value Cache Operations Rate by Type",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "id": 10,
+      "panels": [],
+      "title": "Rates",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Rate at which new chains are being opened in the network",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
               }
             ]
           },
@@ -1545,11 +1693,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1557,8 +1706,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_open_chain_count{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_open_chain_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -1568,7 +1717,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_open_chain_count{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_open_chain_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -1589,11 +1738,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1610,6 +1761,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1625,7 +1777,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -1648,11 +1800,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1660,8 +1813,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_num_blocks{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -1671,7 +1824,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_num_blocks{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -1692,11 +1845,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1713,6 +1868,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1728,7 +1884,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -1751,11 +1907,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1763,8 +1920,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks_executed{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_num_blocks_executed{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -1774,7 +1931,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_num_blocks_executed{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_num_blocks_executed{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -1795,11 +1952,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1816,6 +1975,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1831,7 +1991,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -1854,11 +2014,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1866,8 +2027,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_transaction_count{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_transaction_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -1877,7 +2038,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_transaction_count{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_transaction_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -1898,11 +2059,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1919,6 +2082,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1934,7 +2098,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -1957,11 +2121,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1969,8 +2134,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_operation_count{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_operation_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -1980,7 +2145,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_operation_count{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_operation_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -2001,11 +2166,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2022,6 +2189,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2037,7 +2205,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -2060,11 +2228,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2072,8 +2241,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_incoming_bundle_count{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_incoming_bundle_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -2083,7 +2252,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_incoming_bundle_count{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_incoming_bundle_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -2104,11 +2273,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2125,6 +2296,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2140,7 +2312,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -2163,11 +2335,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2175,8 +2348,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_incoming_message_count{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_incoming_message_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -2186,7 +2359,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_incoming_message_count{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_incoming_message_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -2207,11 +2380,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2228,6 +2403,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2243,110 +2419,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 66
-      },
-      "id": 18,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(linera_cross_chain_message_channel_full{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(linera_cross_chain_message_channel_full{validator=~\"$validator\"}[1m]))",
-          "legendFormat": "Total",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Cross Chain Message Channel Full per Second (1m avg)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Rate at which the cross-chain message channel reaches capacity",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -2369,11 +2442,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2381,8 +2455,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_notifications_skipped_receiver_lag{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_notifications_skipped_receiver_lag{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -2392,7 +2466,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_notifications_skipped_receiver_lag{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_notifications_skipped_receiver_lag{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -2413,11 +2487,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2434,6 +2510,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2449,7 +2526,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -2463,7 +2540,7 @@
         "x": 0,
         "y": 74
       },
-      "id": 60,
+      "id": 18,
       "options": {
         "legend": {
           "calcs": [],
@@ -2472,11 +2549,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2484,8 +2562,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_notifications_dropped_no_receiver{validator=~\"$validator\"}[1m])) by (pod)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_cross_chain_message_channel_full{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"
         },
@@ -2495,13 +2573,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_notifications_dropped_no_receiver{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_cross_chain_message_channel_full{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
         }
       ],
-      "title": "Notifications dropped - No receiver, per Second (1m avg)",
+      "title": "Cross Chain Message Channel Full per Second (1m avg)",
       "type": "timeseries"
     },
     {
@@ -2516,11 +2594,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2537,6 +2617,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2552,7 +2633,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -2575,11 +2656,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2587,8 +2669,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_certificates_signed_count{validator=~\"$validator\"}[1m])) by (validator)",
-          "legendFormat": "{{pod}}",
+          "expr": "sum(rate(linera_certificates_signed_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (validator)",
+          "legendFormat": "{{validator}}",
           "range": true,
           "refId": "A"
         },
@@ -2598,7 +2680,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_certificates_signed_count{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_certificates_signed_count{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
           "legendFormat": "Total",
           "range": true,
           "refId": "B"
@@ -2608,48 +2690,24 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 82
-      },
-      "id": 21,
-      "panels": [],
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "refId": "A"
-        }
-      ],
-      "title": "Other",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Number of inbox queues maintained by each chain",
+      "description": "Rate at which the cross-chain message channel reaches capacity",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2666,6 +2724,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2681,7 +2740,127 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 82
+      },
+      "id": 60,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_notifications_dropped_no_receiver{validator=~\"$validator\", job=\"linera-linera-server\"}[1m])) by (instance)",
+          "legendFormat": "{{instance}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(linera_notifications_dropped_no_receiver{validator=~\"$validator\", job=\"linera-linera-server\"}[1m]))",
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Notifications dropped - No receiver, per Second (1m avg)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 90
+      },
+      "id": 21,
+      "panels": [],
+      "title": "Other",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Number of inbox queues maintained by each chain",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
               }
             ]
           },
@@ -2739,7 +2918,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 91
       },
       "id": 24,
       "options": {
@@ -2753,11 +2932,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2765,7 +2945,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_inboxes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:num_inboxes:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2776,7 +2956,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_num_inboxes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:num_inboxes:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2787,7 +2967,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_inboxes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:num_inboxes:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2808,11 +2988,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2829,6 +3011,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2844,7 +3027,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -2902,7 +3085,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 91
       },
       "id": 25,
       "options": {
@@ -2916,11 +3099,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2928,7 +3112,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_outboxes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:num_outboxes:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2939,7 +3123,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_num_outboxes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:num_outboxes:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2950,7 +3134,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_outboxes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:num_outboxes:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2971,11 +3155,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2992,6 +3178,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3007,7 +3194,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -3065,7 +3252,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 99
       },
       "id": 26,
       "options": {
@@ -3079,11 +3266,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3091,7 +3279,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_inbox_size_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:inbox_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -3102,7 +3290,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_inbox_size_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:inbox_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -3113,7 +3301,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_inbox_size_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:inbox_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -3134,11 +3322,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3155,6 +3345,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3170,7 +3361,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -3228,7 +3419,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 91
+        "y": 99
       },
       "id": 27,
       "options": {
@@ -3242,11 +3433,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3254,7 +3446,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_outbox_size_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:outbox_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -3265,7 +3457,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_outbox_size_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:outbox_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -3276,7 +3468,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_outbox_size_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:outbox_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -3297,11 +3489,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3318,6 +3512,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3333,7 +3528,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -3391,7 +3586,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 99
+        "y": 107
       },
       "id": 28,
       "options": {
@@ -3405,11 +3600,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3417,7 +3613,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_removed_bundles_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:removed_bundles:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -3428,7 +3624,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_removed_bundles_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:removed_bundles:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -3439,7 +3635,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_removed_bundles_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:removed_bundles:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -3460,11 +3656,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3481,6 +3679,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3496,7 +3695,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -3554,7 +3753,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 99
+        "y": 107
       },
       "id": 29,
       "options": {
@@ -3568,11 +3767,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3580,7 +3780,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_rounds_in_block_proposal_bucket{validator=~\"$validator\"}[1m])) by (le, round_type))",
+          "expr": "histogram_quantile(0.50, sum(linera:num_rounds_in_block_proposal:rate1m{validator=~\"$validator\"}) by (le, round_type))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -3591,7 +3791,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_num_rounds_in_block_proposal_bucket{validator=~\"$validator\"}[1m])) by (le, round_type))",
+          "expr": "histogram_quantile(0.90, sum(linera:num_rounds_in_block_proposal:rate1m{validator=~\"$validator\"}) by (le, round_type))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -3602,7 +3802,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_rounds_in_block_proposal_bucket{validator=~\"$validator\"}[1m])) by (le, round_type))",
+          "expr": "histogram_quantile(0.99, sum(linera:num_rounds_in_block_proposal:rate1m{validator=~\"$validator\"}) by (le, round_type))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -3623,11 +3823,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3644,6 +3846,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3659,7 +3862,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -3717,7 +3920,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 107
+        "y": 115
       },
       "id": 23,
       "options": {
@@ -3731,11 +3934,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3743,7 +3947,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_num_rounds_in_certificate_bucket{validator=~\"$validator\"}[1m])) by (le, certificate_value, round_type))",
+          "expr": "histogram_quantile(0.50, sum(linera:num_rounds_in_certificate:rate1m{validator=~\"$validator\"}) by (le, certificate_value, round_type))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -3754,7 +3958,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_num_rounds_in_certificate_bucket{validator=~\"$validator\"}[1m])) by (le, certificate_value, round_type))",
+          "expr": "histogram_quantile(0.90, sum(linera:num_rounds_in_certificate:rate1m{validator=~\"$validator\"}) by (le, certificate_value, round_type))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -3765,7 +3969,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_num_rounds_in_certificate_bucket{validator=~\"$validator\"}[1m])) by (le, certificate_value, round_type))",
+          "expr": "histogram_quantile(0.99, sum(linera:num_rounds_in_certificate:rate1m{validator=~\"$validator\"}) by (le, certificate_value, round_type))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -3785,11 +3989,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3806,6 +4012,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3821,7 +4028,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -3836,7 +4043,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 107
+        "y": 115
       },
       "id": 55,
       "options": {
@@ -3852,7 +4059,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3861,7 +4068,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(linera_cross_chain_message_tasks{validator=~\"$validator\"}) by (pod)",
+          "expr": "sum(linera_cross_chain_message_tasks{validator=~\"$validator\", job=\"linera-linera-server\"}) by (instance)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -3876,7 +4083,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(linera_cross_chain_message_tasks{validator=~\"$validator\"})",
+          "expr": "sum(linera_cross_chain_message_tasks{validator=~\"$validator\", job=\"linera-linera-server\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -3901,11 +4108,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -3922,6 +4131,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -3937,7 +4147,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -3949,7 +4159,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 115
+        "y": 123
       },
       "id": 30,
       "options": {
@@ -3960,11 +4170,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -3972,7 +4183,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "linera_certificates_signed_count{validator=~\"$validator\"}",
+          "expr": "linera_certificates_signed_count{validator=~\"$validator\", job=\"linera-linera-server\"}",
           "legendFormat": "{{validator}}",
           "range": true,
           "refId": "A"
@@ -3982,48 +4193,23 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 123
-      },
-      "id": 31,
-      "panels": [],
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "refId": "A"
-        }
-      ],
-      "title": "Wasm",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Time taken to instantiate a WebAssembly contract module",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -4040,6 +4226,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -4055,984 +4242,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p90"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p99"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 124
-      },
-      "id": 32,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_contract_instantiation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p50",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_contract_instantiation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p90",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_contract_instantiation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p99",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Wasm Contract Instantiation Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Time taken to instantiate a WebAssembly service module",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p90"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p99"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 124
-      },
-      "id": 33,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_service_instantiation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p50",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_service_instantiation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p90",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_service_instantiation_latency_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p99",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Wasm Service Instantiation Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Amount of WebAssembly execution fuel consumed per block",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p90"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p99"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 132
-      },
-      "id": 34,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_fuel_used_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p50",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_fuel_used_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p90",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_fuel_used_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p99",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Wasm Fuel Used per Block",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Number of storage read operations during WebAssembly execution per block",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p90"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p99"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 132
-      },
-      "id": 35,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_num_reads_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p50",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_num_reads_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p90",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_num_reads_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p99",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Wasm Num Reads per Block",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Total bytes read from storage during WebAssembly execution per block",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p90"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p99"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 140
-      },
-      "id": 36,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytes_read_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p50",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_bytes_read_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p90",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytes_read_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p99",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Wasm Bytes Read per Block",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Total bytes written to storage during WebAssembly execution per block",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p50"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p90"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "p99"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 140
-      },
-      "id": 37,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytes_written_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p50",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_bytes_written_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p90",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytes_written_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
-          "legendFormat": "p99",
-          "range": true,
-          "refId": "C"
-        }
-      ],
-      "title": "Wasm Bytes Written per Block",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -5046,8 +4256,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 148
+        "x": 12,
+        "y": 123
       },
       "id": 61,
       "options": {
@@ -5063,7 +4273,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5072,7 +4282,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(linera_chain_worker_actors_active{validator=~\"$validator\"}) by (pod)",
+          "expr": "sum(linera_chain_worker_actors_active{validator=~\"$validator\", job=\"linera-linera-server\"}) by (instance)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -5087,7 +4297,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(linera_chain_worker_actors_active{validator=~\"$validator\"})",
+          "expr": "sum(linera_chain_worker_actors_active{validator=~\"$validator\", job=\"linera-linera-server\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -5111,11 +4321,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -5132,6 +4344,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -5147,122 +4360,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 148
-      },
-      "id": 62,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.6.0-83314",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "disableTextWrap": false,
-          "editorMode": "code",
-          "expr": "sum(linera_chain_worker_states_loaded{validator=~\"$validator\"}) by (pod)",
-          "fullMetaSearch": false,
-          "includeNullMetadata": true,
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "disableTextWrap": false,
-          "editorMode": "code",
-          "expr": "sum(linera_chain_worker_states_loaded{validator=~\"$validator\"})",
-          "fullMetaSearch": false,
-          "hide": false,
-          "includeNullMetadata": true,
-          "legendFormat": "Total",
-          "range": true,
-          "refId": "B",
-          "useBackend": false
-        }
-      ],
-      "title": "Chain Worker States Loaded",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -5277,7 +4375,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 156
+        "y": 131
       },
       "id": 63,
       "options": {
@@ -5293,7 +4391,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5302,7 +4400,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(linera_chain_worker_endpoints_cached{validator=~\"$validator\"}) by (pod)",
+          "expr": "sum(linera_chain_worker_endpoints_cached{validator=~\"$validator\", job=\"linera-linera-server\"}) by (instance)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -5317,7 +4415,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum(linera_chain_worker_endpoints_cached{validator=~\"$validator\"})",
+          "expr": "sum(linera_chain_worker_endpoints_cached{validator=~\"$validator\", job=\"linera-linera-server\"})",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -5335,18 +4433,19 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Distribution of operations per confirmed block",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -5363,6 +4462,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -5378,7 +4478,126 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 131
+      },
+      "id": 62,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "disableTextWrap": false,
+          "editorMode": "code",
+          "expr": "sum(linera_chain_worker_states_loaded{validator=~\"$validator\", job=\"linera-linera-server\"}) by (instance)",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "disableTextWrap": false,
+          "editorMode": "code",
+          "expr": "sum(linera_chain_worker_states_loaded{validator=~\"$validator\", job=\"linera-linera-server\"})",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Total",
+          "range": true,
+          "refId": "B",
+          "useBackend": false
+        }
+      ],
+      "title": "Chain Worker States Loaded",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Distribution of transactions per confirmed block",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
               }
             ]
           },
@@ -5434,9 +4653,176 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
-        "y": 165
+        "y": 139
+      },
+      "id": 66,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(linera:transactions_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(linera:transactions_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(linera:transactions_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Transactions Per Block",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Distribution of operations per confirmed block",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 139
       },
       "id": 64,
       "options": {
@@ -5450,11 +4836,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5462,7 +4849,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_operations_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:operations_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -5473,7 +4860,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_operations_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:operations_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -5484,7 +4871,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_operations_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:operations_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -5505,11 +4892,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -5526,6 +4915,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -5541,7 +4931,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               }
             ]
           },
@@ -5597,9 +4987,9 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 165
+        "w": 12,
+        "x": 0,
+        "y": 147
       },
       "id": 65,
       "options": {
@@ -5613,11 +5003,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5625,7 +5016,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_incoming_bundles_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:incoming_bundles_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -5636,7 +5027,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_incoming_bundles_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:incoming_bundles_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -5647,7 +5038,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_incoming_bundles_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:incoming_bundles_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -5657,22 +5048,37 @@
       "type": "timeseries"
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 155
+      },
+      "id": 31,
+      "panels": [],
+      "title": "Wasm",
+      "type": "row"
+    },
+    {
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Distribution of transactions per confirmed block",
+      "description": "Time taken to instantiate a WebAssembly contract module",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -5689,6 +5095,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -5704,7 +5111,341 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 156
+      },
+      "id": 32,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(linera:wasm_contract_instantiation_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(linera:wasm_contract_instantiation_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(linera:wasm_contract_instantiation_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Wasm Contract Instantiation Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Time taken to instantiate a WebAssembly service module",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 156
+      },
+      "id": 33,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(linera:wasm_service_instantiation_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(linera:wasm_service_instantiation_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(linera:wasm_service_instantiation_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Wasm Service Instantiation Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Amount of WebAssembly execution fuel consumed per block",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
               }
             ]
           },
@@ -5760,11 +5501,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 165
+        "w": 12,
+        "x": 0,
+        "y": 164
       },
-      "id": 66,
+      "id": 34,
       "options": {
         "legend": {
           "calcs": [
@@ -5776,11 +5517,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "multi",
           "sort": "desc"
         }
       },
-      "pluginVersion": "11.6.0-83314",
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -5788,7 +5530,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_transactions_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:wasm_fuel_used_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -5799,7 +5541,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_transactions_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:wasm_fuel_used_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -5810,29 +5552,860 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_transactions_per_block_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:wasm_fuel_used_per_block:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
         }
       ],
-      "title": "Transactions Per Block",
+      "title": "Wasm Fuel Used per Block",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Number of storage read operations during WebAssembly execution per block",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 164
+      },
+      "id": 35,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(linera:wasm_num_reads_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(linera:wasm_num_reads_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(linera:wasm_num_reads_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Wasm Num Reads per Block",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Total bytes read from storage during WebAssembly execution per block",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 172
+      },
+      "id": 36,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(linera:wasm_bytes_read_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(linera:wasm_bytes_read_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(linera:wasm_bytes_read_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Wasm Bytes Read per Block",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Total bytes written to storage during WebAssembly execution per block",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 172
+      },
+      "id": 37,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(linera:wasm_bytes_written_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(linera:wasm_bytes_written_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(linera:wasm_bytes_written_per_block:rate1m{validator=~\"$validator\"}) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Wasm Bytes Written per Block",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 180
+      },
+      "id": 67,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytecode_size_bytes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_bytecode_size_bytes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytecode_size_bytes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "WASM Bytecode Size",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p50"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p99"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 180
+      },
+      "id": 68,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.3.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_wasm_bytecode_decompressed_size_bytes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "legendFormat": "p50",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_wasm_bytecode_decompressed_size_bytes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "legendFormat": "p90",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_wasm_bytecode_decompressed_size_bytes_bucket{validator=~\"$validator\"}[1m])) by (le))",
+          "legendFormat": "p99",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "WASM Bytecode Decompressed Size",
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 38,
-  "style": "dark",
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
   "tags": [
     "linera"
   ],
   "templating": {
     "list": [
       {
-        "allFormat": "glob",
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -5841,10 +6414,8 @@
           "uid": "prometheus"
         },
         "definition": "label_values(linera_block_execution_latency_bucket, validator)",
-        "hide": 0,
         "includeAll": true,
         "label": "Validator",
-        "multi": false,
         "name": "validator",
         "options": [],
         "query": {
@@ -5853,8 +6424,6 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
         "type": "query"
       }
     ]
@@ -5867,6 +6436,5 @@
   "timezone": "",
   "title": "Execution",
   "uid": "aeeg4vnzeku80d",
-  "version": 1,
   "weekStart": ""
 }

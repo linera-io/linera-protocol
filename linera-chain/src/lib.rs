@@ -32,7 +32,7 @@ use linera_execution::ExecutionError;
 use linera_views::ViewError;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, strum::IntoStaticStr)]
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
@@ -137,8 +137,20 @@ pub enum ChainError {
     CertificateValidatorReuse,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error(
+        "Inbox gap on chain {chain_id} from origin {origin}: \
+        expected height {expected_height}, got {actual_height}"
+    )]
+    InboxGapDetected {
+        chain_id: ChainId,
+        origin: ChainId,
+        expected_height: BlockHeight,
+        actual_height: BlockHeight,
+    },
     #[error("Internal error {0}")]
     InternalError(String),
+    #[error("Corrupted chain state: {0}")]
+    CorruptedChainState(String),
     #[error("Block proposal has size {0} which is too large")]
     BlockProposalTooLarge(usize),
     #[error(transparent)]
@@ -197,9 +209,26 @@ impl ChainError {
             | ChainError::MissingCrossChainUpdate { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }
+            | ChainError::InboxGapDetected { .. }
             | ChainError::InternalError(_)
+            | ChainError::CorruptedChainState(_)
             | ChainError::BcsError(_) => true,
             ChainError::ExecutionError(execution_error, _) => execution_error.is_local(),
+        }
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// e.g. `"ChainError::UnexpectedBlockHeight"`.
+    ///
+    /// For `ExecutionError` variants, delegates to `ExecutionError::error_type()`
+    /// to surface the underlying error name rather than just `"ExecutionError"`.
+    pub fn error_type(&self) -> String {
+        match self {
+            ChainError::ExecutionError(execution_error, _) => execution_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("ChainError::{variant}")
+            }
         }
     }
 }

@@ -59,18 +59,14 @@ mod metrics {
     };
     use prometheus::{HistogramVec, IntCounterVec};
 
-    /// Label for distinguishing organic vs synthetic (benchmark) traffic.
-    pub const TRAFFIC_TYPE_LABEL: &str = "traffic_type";
-
-    /// Label for the gRPC method name.
-    pub const METHOD_NAME_LABEL: &str = "method_name";
+    use super::super::{ERROR_TYPE_LABEL, METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL};
 
     pub static SERVER_REQUEST_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "server_request_latency",
             "Server request latency",
             &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-            linear_bucket_interval(1.0, 25.0, 2000.0),
+            linear_bucket_interval(1.0, 50.0, 5000.0),
         )
     });
 
@@ -94,6 +90,14 @@ mod metrics {
         register_int_counter_vec(
             "server_request_error",
             "Server request error",
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
+        )
+    });
+
+    pub static SERVER_REQUEST_CANCELLED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "server_request_cancelled",
+            "Server requests whose handler future was dropped before completion (e.g. client-side timeout / disconnect)",
             &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
@@ -287,6 +291,24 @@ impl GrpcServerHandle {
     }
 }
 
+#[cfg(with_metrics)]
+struct ServerRequestCancellationGuard {
+    method_name: String,
+    traffic_type: &'static str,
+    completed: bool,
+}
+
+#[cfg(with_metrics)]
+impl Drop for ServerRequestCancellationGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            metrics::SERVER_REQUEST_CANCELLED
+                .with_label_values(&[&self.method_name, self.traffic_type])
+                .inc();
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GrpcPrometheusMetricsMiddlewareLayer;
 
@@ -321,20 +343,8 @@ where
         #[cfg(with_metrics)]
         let start = Instant::now();
 
-        // Extract the gRPC method name from the URI path. gRPC paths have the form
-        // `/{package}.{Service}/{Method}` — the first segment always contains a dot.
-        // Non-gRPC requests (bot probes, health checks, etc.) are bucketed as
-        // "non_grpc" to prevent unbounded label cardinality.
         #[cfg(with_metrics)]
-        let method_name = {
-            let path = request.uri().path();
-            let parts: Vec<&str> = path.splitn(3, '/').collect();
-            if parts.len() == 3 && parts[1].contains('.') {
-                parts[2].to_owned()
-            } else {
-                "non_grpc".to_owned()
-            }
-        };
+        let method_name = super::extract_grpc_method_name(request.uri().path()).to_owned();
 
         // Extract traffic type from request extensions (set by OtelContextLayer).
         // When opentelemetry is enabled but no baggage is set, defaults to "organic".
@@ -346,14 +356,21 @@ where
 
         let future = self.service.call(request);
         async move {
+            #[cfg(with_metrics)]
+            let mut cancellation_guard = ServerRequestCancellationGuard {
+                method_name,
+                traffic_type,
+                completed: false,
+            };
             let response = future.await?;
             #[cfg(with_metrics)]
             {
+                cancellation_guard.completed = true;
                 metrics::SERVER_REQUEST_LATENCY
-                    .with_label_values(&[&method_name, traffic_type])
+                    .with_label_values(&[&cancellation_guard.method_name, traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
                 metrics::SERVER_REQUEST_COUNT
-                    .with_label_values(&[&method_name, traffic_type])
+                    .with_label_values(&[&cancellation_guard.method_name, traffic_type])
                     .inc();
             }
             Ok(response)
@@ -385,6 +402,20 @@ where
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
+
+        // Give the worker a shard-routing sender for cross-chain requests generated
+        // outside the normal `NetworkActions` return path (specifically, the
+        // `RevertConfirm`s emitted after resetting a corrupted chain).
+        let state = {
+            let routing_network = internal_network.clone();
+            let routing_sender = cross_chain_sender.clone();
+            state.with_outbound_cross_chain_sender(std::sync::Arc::new(move |request| {
+                let shard_id = routing_network.get_shard_id(request.target_chain_id());
+                if let Err(error) = routing_sender.clone().try_send((request, shard_id)) {
+                    error!(%error, "dropping cross-chain request");
+                }
+            }))
+        };
 
         let (notification_sender, _) =
             tokio::sync::broadcast::channel(notification_config.notification_queue_size);
@@ -647,20 +678,20 @@ where
         .await;
     }
 
-    fn log_request_outcome(success: bool, method_name: &str, traffic_type: &str) {
+    fn log_request_success(method_name: &str, traffic_type: &str) {
         #![cfg_attr(not(with_metrics), allow(unused_variables))]
         #[cfg(with_metrics)]
-        {
-            if success {
-                metrics::SERVER_REQUEST_SUCCESS
-                    .with_label_values(&[method_name, traffic_type])
-                    .inc();
-            } else {
-                metrics::SERVER_REQUEST_ERROR
-                    .with_label_values(&[method_name, traffic_type])
-                    .inc();
-            }
-        }
+        metrics::SERVER_REQUEST_SUCCESS
+            .with_label_values(&[method_name, traffic_type])
+            .inc();
+    }
+
+    fn log_request_error(method_name: &str, traffic_type: &str, error_type: &str) {
+        #![cfg_attr(not(with_metrics), allow(unused_variables))]
+        #[cfg(with_metrics)]
+        metrics::SERVER_REQUEST_ERROR
+            .with_label_values(&[method_name, traffic_type, error_type])
+            .inc();
     }
 
     /// Extracts traffic type from a tonic request's extensions.
@@ -709,12 +740,16 @@ where
         Ok(Response::new(
             match self.state.clone().handle_block_proposal(proposal).await {
                 Ok((info, actions)) => {
-                    Self::log_request_outcome(true, "handle_block_proposal", traffic_type);
+                    Self::log_request_success("handle_block_proposal", traffic_type);
                     self.handle_network_actions(actions);
                     info.try_into()?
                 }
                 Err(error) => {
-                    Self::log_request_outcome(false, "handle_block_proposal", traffic_type);
+                    Self::log_request_error(
+                        "handle_block_proposal",
+                        traffic_type,
+                        &error.error_type(),
+                    );
                     self.log_error(&error, "Failed to handle block proposal");
                     NodeError::from(error).try_into()?
                 }
@@ -750,7 +785,7 @@ where
         .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_lite_certificate", traffic_type);
+                Self::log_request_success("handle_lite_certificate", traffic_type);
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -760,7 +795,11 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_lite_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_lite_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle lite certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -794,7 +833,7 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_confirmed_certificate", traffic_type);
+                Self::log_request_success("handle_confirmed_certificate", traffic_type);
                 self.handle_network_actions(actions);
                 if let Some(receiver) = receiver {
                     if let Err(e) = receiver.await {
@@ -804,7 +843,11 @@ where
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_confirmed_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_confirmed_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle confirmed certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -834,12 +877,16 @@ where
             .await
         {
             Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_validated_certificate", traffic_type);
+                Self::log_request_success("handle_validated_certificate", traffic_type);
                 self.handle_network_actions(actions);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_validated_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_validated_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle validated certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -869,11 +916,15 @@ where
             .await
         {
             Ok((info, _actions)) => {
-                Self::log_request_outcome(true, "handle_timeout_certificate", traffic_type);
+                Self::log_request_success("handle_timeout_certificate", traffic_type);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_timeout_certificate", traffic_type);
+                Self::log_request_error(
+                    "handle_timeout_certificate",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle timeout certificate");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -897,13 +948,16 @@ where
         let query = request.into_inner().try_into()?;
         trace!(?query, "Handling chain info query");
         match self.state.clone().handle_chain_info_query(query).await {
-            Ok((info, actions)) => {
-                Self::log_request_outcome(true, "handle_chain_info_query", traffic_type);
-                self.handle_network_actions(actions);
+            Ok(info) => {
+                Self::log_request_success("handle_chain_info_query", traffic_type);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_chain_info_query", traffic_type);
+                Self::log_request_error(
+                    "handle_chain_info_query",
+                    traffic_type,
+                    &error.error_type(),
+                );
                 self.log_error(&error, "Failed to handle chain info query");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -925,7 +979,7 @@ where
     ) -> Result<Response<PendingBlobResult>, Status> {
         let traffic_type = Self::get_traffic_type(&request);
         let (chain_id, blob_id) = request.into_inner().try_into()?;
-        trace!(?chain_id, ?blob_id, "Download pending blob");
+        trace!(?blob_id, "Download pending blob");
         match self
             .state
             .clone()
@@ -933,11 +987,11 @@ where
             .await
         {
             Ok(blob) => {
-                Self::log_request_outcome(true, "download_pending_blob", traffic_type);
+                Self::log_request_success("download_pending_blob", traffic_type);
                 Ok(Response::new(blob.into_content().try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "download_pending_blob", traffic_type);
+                Self::log_request_error("download_pending_blob", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to download pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -961,14 +1015,14 @@ where
         let (chain_id, blob_content) = request.into_inner().try_into()?;
         let blob = Blob::new(blob_content);
         let blob_id = blob.id();
-        trace!(?chain_id, ?blob_id, "Handle pending blob");
+        trace!(?blob_id, "Handle pending blob");
         match self.state.clone().handle_pending_blob(chain_id, blob).await {
             Ok(info) => {
-                Self::log_request_outcome(true, "handle_pending_blob", traffic_type);
+                Self::log_request_success("handle_pending_blob", traffic_type);
                 Ok(Response::new(info.try_into()?))
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_pending_blob", traffic_type);
+                Self::log_request_error("handle_pending_blob", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to handle pending blob");
                 Ok(Response::new(NodeError::from(error).try_into()?))
             }
@@ -998,13 +1052,16 @@ where
             .await
         {
             Ok(actions) => {
-                Self::log_request_outcome(true, "handle_cross_chain_request", traffic_type);
+                Self::log_request_success("handle_cross_chain_request", traffic_type);
                 self.handle_network_actions(actions)
             }
             Err(error) => {
-                Self::log_request_outcome(false, "handle_cross_chain_request", traffic_type);
-                let nickname = self.state.nickname();
-                error!(nickname, %error, "Failed to handle cross-chain request");
+                Self::log_request_error(
+                    "handle_cross_chain_request",
+                    traffic_type,
+                    &error.error_type(),
+                );
+                self.log_error(&error, "Failed to handle cross-chain request");
             }
         }
         Ok(Response::new(()))
@@ -1071,7 +1128,8 @@ impl GrpcProxyable for CrossChainRequest {
 
         match self.inner.as_ref()? {
             Inner::UpdateRecipient(api::UpdateRecipient { recipient, .. })
-            | Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient { recipient, .. }) => {
+            | Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient { recipient, .. })
+            | Inner::RevertConfirm(api::RevertConfirm { recipient, .. }) => {
                 recipient.clone()?.try_into().ok()
             }
         }

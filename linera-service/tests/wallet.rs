@@ -1,14 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, Blob, BlockHeight, Epoch},
 };
 use linera_chain::data_types::ProposedBlock;
-use linera_client::{client_context::ClientContext, config::GenesisConfig};
+use linera_client::client_context::ClientContext;
 use linera_core::{
     client::{Client, ListeningMode, PendingProposal},
     join_set_ext::JoinSet,
@@ -64,6 +64,7 @@ pub async fn new_test_client_context(
             name,
             Some(chain_worker_ttl),
             Some(sender_chain_worker_ttl),
+            HashSet::new(),
             chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..chain_client::Options::test_default()
@@ -95,7 +96,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
     builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id = builder.admin_chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = linera_core::GenesisConfig::new_for_testing(&builder);
 
     let tmp_dir = tempfile::tempdir()?;
     let mut config_dir = tmp_dir.keep();

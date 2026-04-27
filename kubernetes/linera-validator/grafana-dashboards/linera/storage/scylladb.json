@@ -12,14 +12,47 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"proxy-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\d+)\")",
+        "hide": false,
+        "iconColor": "rgba(255, 152, 48, 1)",
+        "limit": 100,
+        "name": "proxy_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "proxy restart",
+        "type": "tags"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\d+)\")",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "limit": 100,
+        "name": "shard_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "shard restart",
+        "type": "tags"
       }
     ]
   },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
@@ -46,11 +79,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -67,6 +102,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -82,7 +118,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -163,6 +199,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -170,7 +207,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_write_batch_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -181,7 +218,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_write_batch_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -192,7 +229,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_write_batch_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -213,11 +250,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -234,6 +273,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -249,7 +289,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -330,6 +370,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -337,7 +378,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_read_value_bytes_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -348,7 +389,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_read_value_bytes_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -359,7 +400,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_read_value_bytes_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -380,11 +421,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -401,6 +444,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -416,7 +460,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -497,6 +541,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -504,7 +549,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_contains_key_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -515,7 +560,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_contains_key_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -526,7 +571,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_contains_key_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -547,11 +592,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -568,6 +615,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -583,7 +631,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -664,6 +712,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -671,7 +720,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -682,7 +731,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -693,7 +742,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -714,11 +763,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -735,6 +786,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -750,7 +802,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -831,6 +883,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -838,7 +891,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_write_batch_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -849,7 +902,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_write_batch_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -860,7 +913,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_write_batch_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -881,11 +934,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -902,6 +957,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -917,7 +973,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -998,6 +1054,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1005,7 +1062,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_read_value_key_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1016,7 +1073,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_read_value_key_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1027,7 +1084,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_read_value_key_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1048,11 +1105,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1069,6 +1128,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1084,7 +1144,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1165,6 +1225,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1172,7 +1233,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_read_value_value_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1183,7 +1244,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_read_value_value_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1194,7 +1255,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_read_value_value_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1215,11 +1276,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1236,6 +1299,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1251,7 +1315,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1332,6 +1396,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1339,7 +1404,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_contains_keys_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1350,7 +1415,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_contains_keys_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1361,7 +1426,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_contains_keys_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1382,11 +1447,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1403,6 +1470,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1417,7 +1485,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
@@ -1498,6 +1567,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1505,7 +1575,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_read_multi_value_bytes_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1516,7 +1586,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_read_multi_value_bytes_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1527,7 +1597,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_read_multi_value_bytes_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1548,11 +1618,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1569,6 +1641,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1583,7 +1656,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
@@ -1664,6 +1738,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1671,7 +1746,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_read_multi_values_num_entries:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1682,7 +1757,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_read_multi_values_num_entries:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1693,7 +1768,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_read_multi_values_num_entries:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1714,11 +1789,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1735,6 +1812,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1749,7 +1827,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
@@ -1830,6 +1909,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1837,7 +1917,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_find_key_values_by_prefix_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1848,7 +1928,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_find_key_values_by_prefix_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1859,7 +1939,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_find_key_values_by_prefix_latency:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1880,11 +1960,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1901,6 +1983,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1915,7 +1998,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
@@ -1996,6 +2080,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2003,7 +2088,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_keys_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2014,7 +2099,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_keys_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2025,7 +2110,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_keys_size:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2046,11 +2131,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2067,6 +2154,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2081,7 +2169,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
@@ -2162,6 +2251,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2169,7 +2259,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_num_keys:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2180,7 +2270,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_num_keys:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2191,7 +2281,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_scylladb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, sum(linera:journaling_scylladb_internal_find_keys_by_prefix_num_keys:rate1m{validator=~\"$validator\"}) by (le))",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2212,11 +2302,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -2233,6 +2325,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2247,7 +2340,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": 0
               },
               {
                 "color": "red",
@@ -2282,6 +2376,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -2289,7 +2384,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_scylladb_internal_read_value_none_cases{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_journaling_scylladb_internal_read_value_none_cases{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
           "legendFormat": "rate",
           "range": true,
           "refId": "A"
@@ -2297,11 +2392,468 @@
       ],
       "title": "ScyllaDB Read Key Not Found Rate",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 57
+      },
+      "id": 16,
+      "panels": [],
+      "title": "ScyllaDB I/O",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "ScyllaDB disk read and write operations per second from the I/O scheduler",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 58
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(pod) (rate(scylla_io_queue_total_read_ops{namespace=\"scylla\", cluster=~\"$cluster\"}[5m]))",
+          "legendFormat": "{{pod}} read",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(pod) (rate(scylla_io_queue_total_write_ops{namespace=\"scylla\", cluster=~\"$cluster\"}[5m]))",
+          "legendFormat": "{{pod}} write",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "IOPS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Number of requests queued in the ScyllaDB I/O scheduler",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 58
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by(pod) (scylla_io_queue_queue_length{namespace=\"scylla\", cluster=~\"$cluster\"})",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "I/O Queue Length",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Delay in the ScyllaDB I/O scheduler before requests are dispatched to disk",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "µs"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 58
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "max by(pod) (scylla_io_queue_delay{namespace=\"scylla\", cluster=~\"$cluster\"})",
+          "legendFormat": "{{pod}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "I/O Delay",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Maps each Conway validator (GKE cluster) to its ScyllaDB cluster UUID used in scylla-manager backups. Joins scylla_manager_backup_files_size_bytes (UUID + manager pod) with kube_pod_info (manager pod -> GKE cluster). Only actively-backed-up clusters appear; stale scylla-manager registrations are filtered out.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 66
+      },
+      "id": 20,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "group by (cluster, instance) (scylla_manager_backup_files_size_bytes)",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "group by (cluster, pod) (kube_pod_info{pod=~\"scylla-manager-[^-]+-[^-]+\"})",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "B"
+        }
+      ],
+      "title": "Validator → Scylla Cluster UUID",
+      "transformations": [
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "A"
+          },
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "job": true,
+              "name": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "cluster": "scylla_cluster_uuid",
+              "instance": "manager_pod"
+            }
+          }
+        },
+        {
+          "filter": {
+            "id": "byRefId",
+            "options": "B"
+          },
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "created_by_kind": true,
+              "created_by_name": true,
+              "exported_namespace": true,
+              "host_ip": true,
+              "host_network": true,
+              "job": true,
+              "namespace": true,
+              "node": true,
+              "pod_ip": true,
+              "uid": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "cluster": "validator_gke_cluster",
+              "pod": "manager_pod"
+            }
+          }
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "manager_pod",
+            "mode": "inner"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "manager_pod": 2,
+              "scylla_cluster_uuid": 1,
+              "validator_gke_cluster": 0
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 38,
-  "style": "dark",
   "tags": [
     "linera",
     "storage",
@@ -2312,7 +2864,6 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -2321,10 +2872,8 @@
           "uid": "prometheus"
         },
         "definition": "label_values(linera_load_view_latency_bucket, validator)",
-        "hide": 0,
         "includeAll": true,
         "label": "Validator",
-        "multi": false,
         "name": "validator",
         "options": [],
         "query": {
@@ -2333,7 +2882,30 @@
         },
         "refresh": 2,
         "regex": "",
-        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(scylla_io_queue_total_read_ops{namespace=\"scylla\"}, cluster)",
+        "includeAll": true,
+        "label": "Cluster",
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "query": "label_values(scylla_io_queue_total_read_ops{namespace=\"scylla\"}, cluster)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
         "sort": 1,
         "type": "query"
       }
@@ -2347,6 +2919,5 @@
   "timezone": "browser",
   "title": "ScyllaDB",
   "uid": "linera-scylladb",
-  "version": 1,
   "weekStart": ""
 }

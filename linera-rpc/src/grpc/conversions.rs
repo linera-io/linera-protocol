@@ -285,10 +285,12 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             }) => CrossChainRequest::UpdateRecipient {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
                 bundles: bincode::deserialize(&bundles)?,
+                previous_height: previous_height.map(Into::into),
             },
             Inner::ConfirmUpdatedRecipient(api::ConfirmUpdatedRecipient {
                 sender,
@@ -298,6 +300,17 @@ impl TryFrom<api::CrossChainRequest> for CrossChainRequest {
                 sender: try_proto_convert(sender)?,
                 recipient: try_proto_convert(recipient)?,
                 latest_height: latest_height
+                    .ok_or(GrpcProtoConversionError::MissingField)?
+                    .into(),
+            },
+            Inner::RevertConfirm(api::RevertConfirm {
+                sender,
+                recipient,
+                retransmit_from,
+            }) => CrossChainRequest::RevertConfirm {
+                sender: try_proto_convert(sender)?,
+                recipient: try_proto_convert(recipient)?,
+                retransmit_from: retransmit_from
                     .ok_or(GrpcProtoConversionError::MissingField)?
                     .into(),
             },
@@ -317,10 +330,12 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
                 sender,
                 recipient,
                 bundles,
+                previous_height,
             } => Inner::UpdateRecipient(api::UpdateRecipient {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
                 bundles: bincode::serialize(&bundles)?,
+                previous_height: previous_height.map(Into::into),
             }),
             CrossChainRequest::ConfirmUpdatedRecipient {
                 sender,
@@ -330,6 +345,15 @@ impl TryFrom<CrossChainRequest> for api::CrossChainRequest {
                 sender: Some(sender.into()),
                 recipient: Some(recipient.into()),
                 latest_height: Some(latest_height.into()),
+            }),
+            CrossChainRequest::RevertConfirm {
+                sender,
+                recipient,
+                retransmit_from,
+            } => Inner::RevertConfirm(api::RevertConfirm {
+                sender: Some(sender.into()),
+                recipient: Some(recipient.into()),
+                retransmit_from: Some(retransmit_from.into()),
             }),
         };
         Ok(Self { inner: Some(inner) })
@@ -619,7 +643,6 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_fallback: chain_info_query.request_fallback,
             request_sent_certificate_hashes_by_heights,
             request_previous_event_blocks,
-            create_network_actions: chain_info_query.create_network_actions.unwrap_or(true),
         })
     }
 }
@@ -652,7 +675,6 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_manager_values: chain_info_query.request_manager_values,
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
-            create_network_actions: Some(chain_info_query.create_network_actions),
             request_previous_event_blocks: Some(request_previous_event_blocks),
         })
     }
@@ -1216,7 +1238,6 @@ pub mod tests {
             request_fallback: true,
             request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
             request_previous_event_blocks: Vec::new(),
-            create_network_actions: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_some);
     }
@@ -1294,6 +1315,7 @@ pub mod tests {
             sender: dummy_chain_id(0),
             recipient: dummy_chain_id(0),
             bundles: vec![],
+            previous_height: Some(BlockHeight::from(42)),
         };
         round_trip_check::<_, api::CrossChainRequest>(&cross_chain_request_update_recipient);
 
@@ -1345,7 +1367,7 @@ pub mod tests {
             chain_id: dummy_chain_id(0),
             reason: linera_core::worker::Reason::NewBlock {
                 height: BlockHeight(0),
-                block_hash: CryptoHash::new(&Foo("".into())),
+                hash: CryptoHash::new(&Foo("".into())),
             },
         };
         let message = api::Notification::try_from(notification.clone()).unwrap();

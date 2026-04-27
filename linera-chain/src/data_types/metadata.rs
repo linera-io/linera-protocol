@@ -343,8 +343,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 required_application_ids,
             } => SystemOperationMetadata {
                 create_application: Some(CreateApplicationOperationMetadata {
-                    module_id: serde_json::to_string(module_id)
-                        .unwrap_or_else(|_| format!("{:?}", module_id)),
+                    module_id: module_id.to_string(),
                     parameters_hex: hex::encode(parameters),
                     instantiation_argument_hex: hex::encode(instantiation_argument),
                     required_application_ids: required_application_ids.clone(),
@@ -365,8 +364,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             },
             SystemOperation::PublishModule { module_id } => SystemOperationMetadata {
                 publish_module: Some(PublishModuleMetadata {
-                    module_id: serde_json::to_string(module_id)
-                        .unwrap_or_else(|_| format!("{:?}", module_id)),
+                    module_id: module_id.to_string(),
                 }),
                 ..SystemOperationMetadata::new("PublishModule")
             },

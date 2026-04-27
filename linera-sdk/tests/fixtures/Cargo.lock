@@ -2241,6 +2241,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-cache"
+version = "0.16.0"
+dependencies = [
+ "cfg_aliases",
+ "linera-base",
+ "lru",
+ "papaya",
+ "prometheus",
+ "quick_cache",
+ "tokio",
+]
+
+[[package]]
 name = "linera-chain"
 version = "0.16.0"
 dependencies = [
@@ -2279,19 +2292,20 @@ dependencies = [
  "custom_debug_derive",
  "futures",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-execution",
  "linera-storage",
  "linera-storage-service",
  "linera-version",
  "linera-views",
- "lru",
  "papaya",
  "prometheus",
  "proptest",
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "strum",
  "sync_wrapper 1.0.2",
  "test-log",
  "test-strategy",
@@ -2399,6 +2413,7 @@ dependencies = [
  "futures",
  "itertools",
  "linera-base",
+ "linera-cache",
  "linera-chain",
  "linera-execution",
  "linera-views",
@@ -2463,6 +2478,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "convert_case",
+ "custom_debug_derive",
  "derive_more 1.0.0",
  "futures",
  "generic-array",
@@ -2509,9 +2525,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6652182476826343f0dd1e76a184ad34bcee57650a9c00c77574b993dd30529"
+checksum = "6453ccd433866100d587f3db5ffb6c2116ebbcb97891df4197c1038708a551ba"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -2539,9 +2555,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4781ce9fc4a892c9a9727f51ec92d19e1c5b54259da21573671aa49211ae80f"
+checksum = "37d7e7b04c3cd3b94eccf13a1b57f631a5339dbf719e58618d03f30f52ff75e4"
 dependencies = [
  "backtrace",
  "bytes",
@@ -2570,9 +2586,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8056c8bff8e1b5cafd21aac59b9009e93b30f35b7baab5592a6f4c7db120b490"
+checksum = "5e5bf79646e59839a83c10b4c48456a86909596c37cc380c49c94c2632a9126c"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -2589,9 +2605,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3635a86dd98e2c2fd6dd603054f40b8e379f84365a2238cc177d47547a83eebc"
+checksum = "9d5ca769ec09d276da3b4580992ec5b96268f3b36b0d05a6fabc7dcb7cd3418a"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -2608,9 +2624,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-vm"
-version = "4.4.0-linera.7"
+version = "4.4.0-linera.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f27d020717572fdb6222324ec46b10eeb49f6f4a120ee63cf7145f4392f12fd8"
+checksum = "22ed6366c2d832e034052b6f037b5afe38efb1e9d8e9ef4b31b778751330e519"
 dependencies = [
  "backtrace",
  "cc",
@@ -3261,6 +3277,17 @@ dependencies = [
  "linera-sdk",
  "serde",
  "tokio",
+]
+
+[[package]]
+name = "quick_cache"
+version = "0.6.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4c901384fb8fb3d4510388129ce6e13ecd686eee610da778b6ea77219decd53"
+dependencies = [
+ "equivalent",
+ "hashbrown 0.16.0",
+ "parking_lot",
 ]
 
 [[package]]

@@ -1248,15 +1248,15 @@ async fn test_open_chain() -> anyhow::Result<()> {
         .await
         .expect("should initialize chain correctly");
     assert_eq!(*child_view.system.balance.get(), Amount::ONE);
-    assert_eq!(*child_view.system.ownership.get(), child_ownership);
+    assert_eq!(*child_view.system.ownership.get().await?, child_ownership);
     assert_eq!(
         *child_view.system.committees.get(),
-        [(Epoch::ZERO, committee)]
+        [(Epoch::ZERO, committee_blob.id().hash)]
             .into_iter()
             .collect::<BTreeMap<_, _>>()
     );
     assert_eq!(
-        *child_view.system.application_permissions.get(),
+        *child_view.system.application_permissions.get().await?,
         ApplicationPermissions::new_single(application_id)
     );
 

@@ -15,6 +15,7 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_MAX_EVENT_STREAM_QUERIES,
         DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
@@ -33,7 +34,7 @@ pub enum Error {
     #[error("there are {public_keys} public keys but {weights} weights")]
     MisalignedWeights { public_keys: usize, weights: usize },
     #[error("config error: {0}")]
-    Config(#[from] crate::config::Error),
+    Config(#[from] crate::config::GenesisConfigError),
 }
 
 util::impl_from_infallible!(Error);
@@ -52,7 +53,7 @@ pub struct Options {
     pub recv_timeout: Duration,
 
     /// The maximum number of incoming message bundles to include in a block proposal.
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "300")]
     pub max_pending_message_bundles: usize,
 
     /// Maximum number of message bundles to discard from a block proposal due to block limit
@@ -61,6 +62,16 @@ pub struct Options {
     /// Discarded bundles can be retried in the next block.
     #[arg(long, default_value = "3")]
     pub max_block_limit_errors: u32,
+
+    /// Time budget for staging message bundles in milliseconds. When set, limits bundle
+    /// execution by wall-clock time, in addition to the count limit from
+    /// `max_pending_message_bundles`.
+    #[arg(long = "staging-bundles-time-budget-ms", value_parser = util::parse_millis)]
+    pub staging_bundles_time_budget: Option<Duration>,
+
+    /// Comma-separated list of chain IDs whose incoming bundles should be processed first.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub prioritize_bundles_from: Option<HashSet<ChainId>>,
 
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     /// Use 0 to disable expiry.
@@ -102,6 +113,25 @@ pub struct Options {
     )]
     pub max_backoff: Duration,
 
+    /// Initial probe interval (ms) for the notification circuit breaker. When a validator's
+    /// notification stream exhausts retries, the circuit breaker waits this long before
+    /// probing again. Doubles on each failed probe.
+    #[arg(
+        long = "notification-circuit-breaker-initial-probe-interval-ms",
+        default_value = "300000",
+        value_parser = util::parse_millis
+    )]
+    pub notification_circuit_breaker_initial_probe_interval: Duration,
+
+    /// Maximum probe interval (ms) for the notification circuit breaker. The probe interval
+    /// doubles on each failure but is capped at this value.
+    #[arg(
+        long = "notification-circuit-breaker-max-probe-interval-ms",
+        default_value = "3600000",
+        value_parser = util::parse_millis
+    )]
+    pub notification_circuit_breaker_max_probe_interval: Duration,
+
     /// Whether to wait until a quorum of validators has confirmed that all sent cross-chain
     /// messages have been delivered.
     #[arg(long)]
@@ -135,6 +165,11 @@ pub struct Options {
     /// these applications will be accepted.
     #[arg(long, value_parser = util::parse_app_set)]
     pub reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
+
+    /// A set of application IDs. If specified, only events coming from streams created by
+    /// applications from this set will be processed.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// Enable timing reports during operations
     #[cfg(not(web))]
@@ -176,6 +211,14 @@ pub struct Options {
     )]
     pub certificate_download_batch_size: u64,
 
+    /// Maximum number of certificates read from local storage and uploaded to a validator
+    /// at a time when synchronizing a chain.
+    #[arg(
+        long,
+        default_value_t = DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
+    )]
+    pub certificate_upload_batch_size: u64,
+
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     #[arg(
@@ -187,6 +230,11 @@ pub struct Options {
     /// Maximum number of tasks that can are joined concurrently in the client.
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
+
+    /// Maximum number of event stream IDs to include in a single `PreviousEventBlocks`
+    /// request. Larger sets are split into multiple requests.
+    #[arg(long, default_value_t = DEFAULT_MAX_EVENT_STREAM_QUERIES)]
+    pub max_event_stream_queries: usize,
 
     /// Maximum expected latency in milliseconds for score normalization.
     #[arg(
@@ -271,21 +319,29 @@ impl Options {
             self.reject_message_bundles_without_application_ids.clone(),
             self.reject_message_bundles_with_other_application_ids
                 .clone(),
+            self.process_events_from_application_ids.clone(),
         );
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
+            staging_bundles_time_budget: self.staging_bundles_time_budget,
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
             blob_download_timeout: self.blob_download_timeout,
             certificate_batch_download_timeout: self.certificate_batch_download_timeout,
             certificate_download_batch_size: self.certificate_download_batch_size,
+            certificate_upload_batch_size: self.certificate_upload_batch_size,
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
+            notification_circuit_breaker_initial_probe_interval: self
+                .notification_circuit_breaker_initial_probe_interval,
+            notification_circuit_breaker_max_probe_interval: self
+                .notification_circuit_breaker_max_probe_interval,
+            max_event_stream_queries: self.max_event_stream_queries,
         }
     }
 

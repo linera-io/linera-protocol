@@ -12,7 +12,6 @@ async-graphql.workspace = true
 fungible.workspace = true
 hex.workspace = true
 linera-sdk.workspace = true
-serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 async-graphql.workspace = true

@@ -57,7 +57,10 @@ use crate::{
         ValidatorNodeProvider,
     },
     notifier::ChannelNotifier,
-    worker::{Notification, ProcessableCertificate, WorkerState},
+    worker::{
+        Notification, ProcessableCertificate, WorkerState, DEFAULT_BLOCK_CACHE_SIZE,
+        DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+    },
 };
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -200,6 +203,22 @@ where
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         self.spawn_and_receive(move |validator, sender| validator.do_download_blob(blob_id, sender))
             .await
+    }
+
+    async fn download_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<crate::node::BlobStream, NodeError> {
+        let this = self.clone();
+        let stream = futures::stream::unfold(blob_ids.into_iter(), move |mut iter| {
+            let this = this.clone();
+            async move {
+                let blob_id = iter.next()?;
+                let result = this.download_blob(blob_id).await;
+                Some((result, iter))
+            }
+        });
+        Ok(Box::pin(stream))
     }
 
     async fn download_pending_blob(
@@ -481,8 +500,7 @@ where
                 .await
                 .map_err(Into::into),
         };
-        // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map(|(info, _actions)| info))
+        sender.send(result)
     }
 
     async fn do_subscribe(
@@ -529,7 +547,7 @@ where
             Ok(blob) => blob.ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error),
         };
-        sender.send(blob.map(|blob| blob.into_content()))
+        sender.send(blob.map(|blob| Arc::unwrap_or_clone(blob).into_content()))
     }
 
     async fn do_download_pending_blob(
@@ -578,7 +596,7 @@ where
         let certificate = match certificate {
             Err(error) => Err(error),
             Ok(entry) => match entry {
-                Some(certificate) => Ok(certificate),
+                Some(certificate) => Ok(Arc::unwrap_or_clone(certificate)),
                 None => {
                     panic!("Missing certificate: {hash}");
                 }
@@ -937,6 +955,16 @@ where
         self
     }
 
+    pub fn with_cross_chain_message_chunk_limit(self, limit: usize) -> Self {
+        let validator_clients = self.node_provider.0.lock().unwrap();
+        for validator in validator_clients.iter() {
+            let mut inner = validator.client.try_lock().expect("no contention at setup");
+            inner.state.set_cross_chain_message_chunk_limit(limit);
+        }
+        drop(validator_clients);
+        self
+    }
+
     pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
         let mut validator_clients = self.node_provider.0.lock().unwrap();
@@ -1096,9 +1124,10 @@ where
             format!("Client node for {:.8}", chain_id),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            HashSet::new(),
             options,
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &crate::client::RequestsSchedulerConfig::default(),
         ));
         Ok(client.create_chain_client(

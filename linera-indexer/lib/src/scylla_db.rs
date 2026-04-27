@@ -62,6 +62,26 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "10000000")]
     pub max_cache_find_key_values_size: usize,
 
+    /// The maximal number of entries in the blob cache.
+    #[arg(long, default_value = "1000")]
+    pub blob_cache_size: usize,
+
+    /// The maximal number of entries in the confirmed block cache.
+    #[arg(long, default_value = "1000")]
+    pub confirmed_block_cache_size: usize,
+
+    /// The maximal number of entries in the assembled certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_cache_size: usize,
+
+    /// The maximal number of entries in the raw certificate cache.
+    #[arg(long, default_value = "1000")]
+    pub certificate_raw_cache_size: usize,
+
+    /// The maximal number of entries in the event cache.
+    #[arg(long, default_value = "1000")]
+    pub event_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     pub replication_factor: u32,

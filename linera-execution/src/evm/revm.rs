@@ -50,7 +50,7 @@ use linera_base::{
 };
 use revm::{primitives::Bytes, InspectCommitEvm, InspectEvm, Inspector};
 use revm_context::{
-    result::{ExecutionResult, Output, SuccessReason},
+    result::{ExecutionResult, Output},
     BlockEnv, Cfg, ContextTr, Evm, Journal, JournalTr, LocalContextTr as _, TxEnv,
 };
 use revm_database::WrapDatabaseRef;
@@ -127,7 +127,7 @@ mod metrics {
             "evm_contract_instantiation_latency",
             "EVM contract instantiation latency",
             &[],
-            exponential_bucket_latencies(1.0),
+            exponential_bucket_latencies(100.0),
         )
     });
 
@@ -136,7 +136,7 @@ mod metrics {
             "evm_service_instantiation_latency",
             "EVM service instantiation latency",
             &[],
-            exponential_bucket_latencies(1.0),
+            exponential_bucket_latencies(100.0),
         )
     });
 }
@@ -1335,31 +1335,24 @@ fn process_execution_result(
 ) -> Result<ExecutionResultSuccess, EvmExecutionError> {
     match result {
         ExecutionResult::Success {
-            reason,
             gas_used,
             gas_refunded,
             logs,
             output,
+            ..
         } => {
+            // All SuccessReason variants (Return, Stop, SelfDestruct,
+            // EofReturnContract) are valid successful EVM terminations.
+            // Reverts and halts are handled by separate arms.
             // Apply EIP-3529 refund cap (London fork)
             let max_refund = gas_used / 5;
             let actual_refund = gas_refunded.min(max_refund);
             let gas_final = gas_used - actual_refund;
-            if !matches!(reason, SuccessReason::Return) {
-                Err(EvmExecutionError::NoReturnInterpreter {
-                    reason,
-                    gas_used,
-                    gas_refunded,
-                    logs,
-                    output,
-                })
-            } else {
-                Ok(ExecutionResultSuccess {
-                    gas_final,
-                    logs,
-                    output,
-                })
-            }
+            Ok(ExecutionResultSuccess {
+                gas_final,
+                logs,
+                output,
+            })
         }
         ExecutionResult::Revert { gas_used, output } => {
             Err(EvmExecutionError::Revert { gas_used, output })

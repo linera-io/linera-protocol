@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   changed-files:
-    runs-on: linera-io-self-hosted-ci
+    runs-on: ubuntu-latest
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
@@ -57,7 +57,7 @@ jobs:
   web:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
-    runs-on: linera-io-self-hosted-ci
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -68,6 +68,7 @@ jobs:
         rustflags: ""
     - uses: arduino/setup-protoc@v3
       with:
+        version: "34.1"
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - uses: nanasess/setup-chromedriver@v2
     - uses: jetli/wasm-pack-action@v0.4.0
@@ -104,7 +105,7 @@ jobs:
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 1000
         LINERA_STORAGE=rocksdb:/tmp/local-linera-net/client_2.db cargo run --bin linera -- resource-control-policy --http-request-timeout-ms 500
 
-    - name: Deploy the counter application
+    - name: Deploy the example applications
       env:
           LINERA_WALLET: /tmp/local-linera-net/wallet_2.json
           LINERA_KEYSTORE: /tmp/local-linera-net/keystore_2.json
@@ -113,6 +114,7 @@ jobs:
         cargo run --bin linera -- wallet init
         cargo run --bin linera -- wallet request-chain
         echo LINERA_COUNTER_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
+        echo LINERA_FUNGIBLE_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/native-fungible --json-parameters '{ "ticker_symbol": "NAT" }' --json-argument '{ "accounts": {} }') >> "$GITHUB_ENV"
 
     - name: Switch to nightly Rust toolchain
       run: |
@@ -134,3 +136,9 @@ jobs:
         cd examples/counter
         pnpm install --frozen-lockfile
         LINERA_APPLICATION_ID=$LINERA_COUNTER_APPLICATION_ID pnpm test
+
+    - name: Test the `fungible` example
+      run: |
+        cd examples/native-fungible
+        pnpm install --frozen-lockfile
+        LINERA_APPLICATION_ID=$LINERA_FUNGIBLE_APPLICATION_ID pnpm test

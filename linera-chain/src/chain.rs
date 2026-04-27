@@ -16,6 +16,7 @@ use linera_base::{
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
+    time::{Duration, Instant},
 };
 use linera_execution::{
     committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
@@ -37,8 +38,8 @@ use crate::{
     block::{Block, ConfirmedBlock},
     block_tracker::BlockExecutionTracker,
     data_types::{
-        BlockExecutionOutcome, BundleExecutionPolicy, ChainAndHeight, IncomingBundle,
-        MessageAction, MessageBundle, ProposedBlock, Transaction,
+        BlockExecutionOutcome, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight,
+        IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
     inbox::{InboxError, InboxStateView},
     manager::ChainManager,
@@ -59,8 +60,7 @@ pub(crate) mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, exponential_bucket_latencies, register_histogram_vec,
-        register_int_counter_vec,
+        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
     };
     use linera_execution::ResourceTracker;
     use prometheus::{HistogramVec, IntCounterVec};
@@ -102,7 +102,7 @@ pub(crate) mod metrics {
             "wasm_fuel_used_per_block",
             "Wasm fuel used per block",
             &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
+            exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
 
@@ -111,7 +111,7 @@ pub(crate) mod metrics {
             "evm_fuel_used_per_block",
             "EVM fuel used per block",
             &[],
-            exponential_bucket_interval(10.0, 1_000_000.0),
+            exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
 
@@ -145,9 +145,9 @@ pub(crate) mod metrics {
     pub static STATE_HASH_COMPUTATION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "state_hash_computation_latency",
-            "Time to recompute the state hash",
+            "Time to recompute the state hash, in microseconds",
             &[],
-            exponential_bucket_latencies(2000.0),
+            exponential_bucket_interval(1.0, 2_000_000.0),
         )
     });
 
@@ -237,6 +237,11 @@ where
     pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
     /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
     pub nonempty_inboxes: RegisterView<C, BTreeSet<ChainId>>,
+
+    /// The local wall-clock time when block 0 was last executed. Used to prevent
+    /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
+    /// the last reset, the error is returned instead.
+    pub block_zero_executed_at: RegisterView<C, Timestamp>,
 }
 
 /// Block-chaining state.
@@ -396,7 +401,7 @@ where
                 .get_mut()
                 .get_mut(&update)
                 .ok_or_else(|| {
-                    ChainError::InternalError("message counter should be present".into())
+                    ChainError::CorruptedChainState("message counter should be present".into())
                 })?;
             *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
             if *counter == 0 {
@@ -434,8 +439,8 @@ where
     }
 
     /// Invariant for the states of active chains.
-    pub fn is_active(&self) -> bool {
-        self.execution_state.system.is_active()
+    pub async fn is_active(&self) -> Result<bool, ChainError> {
+        Ok(self.execution_state.system.is_active().await?)
     }
 
     /// Initializes the chain if it is not active yet.
@@ -455,13 +460,20 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let maybe_committee = self
+            .execution_state
+            .system
+            .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
         // Last, reset the consensus state based on the current ownership.
         self.manager.reset(
-            self.execution_state.system.ownership.get().clone(),
+            self.execution_state.system.ownership.get().await?.clone(),
             BlockHeight(0),
             local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
+            maybe_committee
+                .iter()
+                .flat_map(|(_, committee)| committee.account_keys_and_weights()),
         )?;
         Ok(())
     }
@@ -498,7 +510,7 @@ where
         assert!(!bundle.messages.is_empty());
         let chain_id = self.chain_id();
         tracing::trace!(
-            "Processing new messages to {chain_id:.8} from {origin} at height {}",
+            "Processing new messages from {origin} at height {}",
             bundle.height,
         );
         let chain_and_height = ChainAndHeight {
@@ -526,7 +538,7 @@ where
             .await
             .map_err(|error| match error {
                 InboxError::ViewError(error) => ChainError::ViewError(error),
-                error => ChainError::InternalError(format!(
+                error => ChainError::CorruptedChainState(format!(
                     "while processing messages in certified block: {error}"
                 )),
             })?;
@@ -561,15 +573,18 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
+        let chain_id = self.chain_id();
         self.execution_state
             .system
             .current_committee()
-            .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
+            .ok_or(ChainError::InactiveChain(chain_id))
     }
 
-    pub fn ownership(&self) -> &ChainOwnership {
-        self.execution_state.system.ownership.get()
+    pub async fn ownership(&self) -> Result<&ChainOwnership, ChainError> {
+        Ok(self.execution_state.system.ownership.get().await?)
     }
 
     /// Removes the incoming message bundles in the block from the inboxes.
@@ -604,7 +619,7 @@ where
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
-                "Removing [{}] from {chain_id:.8}'s inbox for {origin:}",
+                "Removing [{}] from inbox for {origin}",
                 bundles
                     .iter()
                     .map(|bundle| bundle.height.to_string())
@@ -628,6 +643,7 @@ where
                     );
                 }
             }
+            inbox.observe_size_metric();
             if inbox.added_bundles.count() == 0 {
                 self.nonempty_inboxes.get_mut().remove(&origin);
             }
@@ -647,7 +663,7 @@ where
     ) -> Result<Vec<ReadGuardedView<OutboxStateView<C>>>, ChainError> {
         let vec_of_options = self.outboxes.try_load_entries(targets).await?;
         let optional_vec = vec_of_options.into_iter().collect::<Option<Vec<_>>>();
-        optional_vec.ok_or_else(|| ChainError::InternalError("Missing outboxes".into()))
+        optional_vec.ok_or_else(|| ChainError::CorruptedChainState("Missing outboxes".into()))
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
@@ -668,7 +684,7 @@ where
     ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
-        if !matches!(exec_policy, BundleExecutionPolicy::Abort) {
+        if !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort) {
             assert!(
                 replaying_oracle_responses.is_none(),
                 "Cannot use AutoRetry policy when replaying oracle responses"
@@ -682,6 +698,8 @@ where
         let committee_policy = chain
             .system
             .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -714,18 +732,32 @@ where
         )?;
 
         // Extract max_failures from exec_policy.
-        let max_failures = match exec_policy {
-            BundleExecutionPolicy::Abort => 0,
-            BundleExecutionPolicy::AutoRetry { max_failures } => max_failures,
+        let max_failures = match exec_policy.on_failure {
+            BundleFailurePolicy::Abort => 0,
+            BundleFailurePolicy::AutoRetry { max_failures } => max_failures,
         };
-        let auto_retry = !matches!(exec_policy, BundleExecutionPolicy::Abort);
+        let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
+
+        let time_budget = exec_policy.time_budget;
+        let mut cumulative_bundle_time = Duration::ZERO;
 
         let mut i = 0;
         while i < block.transactions.len() {
             let transaction = &mut block.transactions[i];
             let is_bundle = matches!(transaction, Transaction::ReceiveMessages(_));
             let is_stream_update = transaction.is_update_stream();
+
+            // If we have a time budget and it's been exceeded, discard remaining bundles.
+            if is_bundle && time_budget.is_some_and(|budget| cumulative_bundle_time >= budget) {
+                info!(
+                    ?cumulative_bundle_time,
+                    ?time_budget,
+                    "Time budget for bundle staging exceeded, discarding remaining bundles"
+                );
+                Self::discard_remaining_bundles(block, i, None);
+                continue;
+            }
 
             let checkpoint = if auto_retry && (is_bundle || is_stream_update) {
                 Some((
@@ -736,9 +768,19 @@ where
                 None
             };
 
+            let bundle_start = if is_bundle && time_budget.is_some() {
+                Some(Instant::now())
+            } else {
+                None
+            };
+
             let result = block_execution_tracker
                 .execute_transaction(&*transaction, round, chain)
                 .await;
+
+            if let Some(start) = bundle_start {
+                cumulative_bundle_time += start.elapsed();
+            }
 
             // If the transaction executed successfully, we move on to the next one.
             // On transient errors (e.g. missing blobs) we fail, so it can be retried after
@@ -864,7 +906,7 @@ where
         let mut previous_message_blocks = BTreeMap::new();
         for (hash, (recipient, height)) in hashes.into_iter().zip(recipient_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_message_blocks.insert(recipient, (hash, height));
         }
@@ -884,14 +926,14 @@ where
         let mut previous_event_blocks = BTreeMap::new();
         for (hash, (stream, height)) in hashes.into_iter().zip(stream_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::InternalError("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
             })?;
             previous_event_blocks.insert(stream, (hash, height));
         }
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency();
+            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency_us();
             chain.crypto_hash_mut().await?
         };
 
@@ -995,7 +1037,11 @@ where
         }
 
         Self::check_app_permissions(
-            self.execution_state.system.application_permissions.get(),
+            self.execution_state
+                .system
+                .application_permissions
+                .get()
+                .await?,
             &block,
         )?;
 
@@ -1027,12 +1073,16 @@ where
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
+        if block.header.height == BlockHeight::ZERO {
+            self.block_zero_executed_at.set(local_time);
+        }
         self.execution_state_hash.set(Some(block.header.state_hash));
         let updated_streams = self.process_emitted_events(block).await?;
         self.process_outgoing_messages(block).await?;
 
         // Last, reset the consensus state based on the current ownership.
-        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)?;
+        self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
+            .await?;
 
         // Advance to next block height.
         let tip = self.tip_state.get_mut();
@@ -1064,15 +1114,6 @@ where
         let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
         Ok(updated_streams)
-    }
-
-    /// Returns whether this is a child chain.
-    pub fn is_child(&self) -> bool {
-        let Some(description) = self.execution_state.system.description.get() else {
-            // Root chains are always initialized, so this must be a child chain.
-            return true;
-        };
-        description.is_child()
     }
 
     /// Verifies that the block is valid according to the chain's application permission settings.
@@ -1161,15 +1202,21 @@ where
     }
 
     /// Resets the chain manager for the next block height.
-    fn reset_chain_manager(
+    async fn reset_chain_manager(
         &mut self,
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        let ownership = self.execution_state.system.ownership.get().clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
+        let maybe_committee = self
+            .execution_state
+            .system
+            .current_committee()
+            .await
+            .with_execution_context(ChainExecutionContext::Block)?;
+        let ownership = self.execution_state.system.ownership.get().await?.clone();
+        let fallback_owners = maybe_committee
+            .iter()
+            .flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager
@@ -1213,13 +1260,17 @@ where
                         let index =
                             usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
                         Some(self.confirmed_log.get(index).await?.ok_or_else(|| {
-                            ChainError::InternalError("missing entry in confirmed_log".into())
+                            ChainError::CorruptedChainState("missing entry in confirmed_log".into())
                         })?)
                     }
                     // The block with last added message has not been executed yet. If we have it,
                     // it's in preprocessed_blocks.
                     Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
-                        || ChainError::InternalError("missing entry in preprocessed_blocks".into()),
+                        || {
+                            ChainError::CorruptedChainState(
+                                "missing entry in preprocessed_blocks".into(),
+                            )
+                        },
                     )?),
                     None => None, // No message to that sender was added yet.
                 };
@@ -1235,7 +1286,7 @@ where
                     (Some(_), None) => {
                         // Outbox indicates there was a previous message block, but
                         // previous_message_blocks has no idea about it - possible bug
-                        return Err(ChainError::InternalError(
+                        return Err(ChainError::CorruptedChainState(
                             "block indicates no previous message block,\
                             but we have one in the outbox"
                                 .into(),

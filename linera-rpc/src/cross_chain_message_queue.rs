@@ -19,7 +19,7 @@ use linera_core::data_types::CrossChainRequest;
 use rand::Rng as _;
 use tracing::{trace, warn};
 
-use crate::{config::ShardId, full_jitter_delay};
+use crate::config::ShardId;
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -84,6 +84,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
             queue,
             match action {
                 Action::Proceed { .. } => {
+                    let target_chain_id = state.task.request.target_chain_id();
                     if let Err(error) = run_task(state.task).await {
                         warn!(
                             nickname = state.nickname,
@@ -91,6 +92,7 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                             retry = state.retries,
                             from_shard = this_shard,
                             to_shard,
+                            chain_id = %target_chain_id,
                             "Failed to send cross-chain query",
                         );
 
@@ -105,11 +107,9 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
                 }
 
                 Action::Retry => {
-                    let delay = full_jitter_delay(
-                        cross_chain_retry_delay,
-                        state.retries,
-                        cross_chain_max_backoff,
-                    );
+                    let delay = cross_chain_retry_delay
+                        .saturating_mul(state.retries)
+                        .min(cross_chain_max_backoff);
                     linera_base::time::timer::sleep(delay).await;
                     Action::Proceed { id: state.id }
                 }
@@ -203,6 +203,9 @@ impl QueueId {
                 sender, recipient, ..
             } => (*sender, *recipient, true),
             CrossChainRequest::ConfirmUpdatedRecipient {
+                sender, recipient, ..
+            }
+            | CrossChainRequest::RevertConfirm {
                 sender, recipient, ..
             } => (*sender, *recipient, false),
         };

@@ -98,10 +98,14 @@ pub trait Wallet {
     }
 
     /// Modifies a chain in the wallet. Returns `Ok(None)` if the chain doesn't exist.
+    ///
+    /// The closure may be called more than once (e.g. on CAS contention), so it
+    /// must be idempotent. `Fn` (not `FnMut`) is required to discourage reliance
+    /// on mutable captured state.
     async fn modify(
         &self,
         id: ChainId,
-        f: impl FnMut(&mut Chain) + Send,
+        f: impl Fn(&mut Chain) + Send,
     ) -> Result<Option<()>, Self::Error>;
 }
 
@@ -139,7 +143,7 @@ impl<W: Deref<Target: Wallet> + linera_base::util::traits::AutoTraits> Wallet fo
     async fn modify(
         &self,
         id: ChainId,
-        f: impl FnMut(&mut Chain) + Send,
+        f: impl Fn(&mut Chain) + Send,
     ) -> Result<Option<()>, Self::Error> {
         self.deref().modify(id, f).await
     }

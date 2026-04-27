@@ -369,6 +369,44 @@ impl<Env: Environment> RequestsScheduler<Env> {
         .await
     }
 
+    /// Downloads certificates from any of the given validators, using staggered
+    /// concurrent requests so that slow validators are quickly bypassed.
+    pub async fn download_certificates_from_validators(
+        &self,
+        peers: &[RemoteNode<Env::ValidatorNode>],
+        chain_id: ChainId,
+        start: BlockHeight,
+        limit: u64,
+        timeout: Duration,
+    ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
+        if peers.is_empty() {
+            return Err(NodeError::NoValidators);
+        }
+        let heights = (start.0..start.0 + limit)
+            .map(BlockHeight)
+            .collect::<Vec<_>>();
+        let key = RequestKey::Certificates {
+            chain_id,
+            heights: heights.clone(),
+        };
+        communicate_concurrently(
+            peers,
+            async move |peer| {
+                self.with_peer(key, peer, move |peer| {
+                    let heights = heights.clone();
+                    async move {
+                        Box::pin(peer.download_certificates_by_heights(chain_id, heights)).await
+                    }
+                })
+                .await
+            },
+            |errors| errors.last().cloned().unwrap(),
+            timeout,
+        )
+        .await
+        .map_err(|(_validator, error)| error)
+    }
+
     pub async fn download_certificates_by_heights(
         &self,
         peer: &RemoteNode<Env::ValidatorNode>,
@@ -428,29 +466,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
         key: &RequestKey,
     ) -> Option<Vec<RemoteNode<Env::ValidatorNode>>> {
         self.in_flight_tracker.get_alternative_peers(key).await
-    }
-
-    /// Returns current performance metrics for all managed nodes.
-    ///
-    /// Each entry contains:
-    /// - Performance score (f64, normalized 0.0-1.0)
-    /// - EMA success rate (f64, 0.0-1.0)
-    /// - Total requests processed (u64)
-    ///
-    /// Useful for monitoring and debugging node performance.
-    pub async fn get_node_scores(&self) -> BTreeMap<ValidatorPublicKey, (f64, f64, u64)> {
-        let nodes = self.nodes.read().await;
-        let mut result = BTreeMap::new();
-
-        for (key, info) in nodes.iter() {
-            let score = info.calculate_score().await;
-            result.insert(
-                *key,
-                (score, info.ema_success_rate(), info.total_requests()),
-            );
-        }
-
-        result
     }
 
     /// Wraps a request operation with performance tracking and capacity management.

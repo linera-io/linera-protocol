@@ -14,7 +14,7 @@ use linera_chain::{
 };
 use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    node::{BlobStream, CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
 
 use crate::grpc::GrpcClient;
@@ -23,14 +23,14 @@ use crate::simple::SimpleClient;
 
 #[derive(Clone)]
 pub enum Client {
-    Grpc(GrpcClient),
+    Grpc(Box<GrpcClient>),
     #[cfg(with_simple_network)]
     Simple(SimpleClient),
 }
 
 impl From<GrpcClient> for Client {
     fn from(client: GrpcClient) -> Self {
-        Self::Grpc(client)
+        Self::Grpc(Box::new(client))
     }
 }
 
@@ -192,6 +192,15 @@ impl ValidatorNode for Client {
 
             #[cfg(with_simple_network)]
             Client::Simple(simple_client) => simple_client.download_blob(blob_id).await?,
+        })
+    }
+
+    async fn download_blobs(&self, blob_ids: Vec<BlobId>) -> Result<BlobStream, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.download_blobs(blob_ids).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.download_blobs(blob_ids).await?,
         })
     }
 

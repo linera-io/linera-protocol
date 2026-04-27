@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "grafana-pyroscope-datasource",
-        "uid": "P02E4190217B50628"
+        "uid": "pyroscope"
       },
       "gridPos": {
         "h": 12,
@@ -37,7 +37,7 @@
         {
           "datasource": {
             "type": "grafana-pyroscope-datasource",
-            "uid": "P02E4190217B50628"
+            "uid": "pyroscope"
           },
           "groupBy": [],
           "labelSelector": "{service_name=\"ebpf/default/proxy/\"}",
@@ -52,7 +52,7 @@
     {
       "datasource": {
         "type": "grafana-pyroscope-datasource",
-        "uid": "P02E4190217B50628"
+        "uid": "pyroscope"
       },
       "gridPos": {
         "h": 12,
@@ -65,7 +65,7 @@
         {
           "datasource": {
             "type": "grafana-pyroscope-datasource",
-            "uid": "P02E4190217B50628"
+            "uid": "pyroscope"
           },
           "groupBy": [],
           "labelSelector": "{service_name=\"ebpf/default/shards/\"}",
@@ -427,6 +427,5 @@
   "timezone": "browser",
   "title": "CPU",
   "uid": "ee74af8d-0448-45cd-bdbc-f9108b3378b7",
-  "version": 2,
   "weekStart": ""
 }

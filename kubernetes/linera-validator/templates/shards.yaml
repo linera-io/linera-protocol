@@ -134,6 +134,21 @@ spec:
                 --server /config/server.json \
                 --shard $ORDINAL \
                 --storage-replication-factor {{ .Values.storageReplicationFactor | quote }} \
+                --storage-max-cache-size {{ .Values.storageCacheConfig.maxCacheSize | int }} \
+                --storage-max-cache-entries {{ .Values.storageCacheConfig.maxCacheEntries | int }} \
+                --storage-max-value-entry-size {{ .Values.storageCacheConfig.maxValueEntrySize | int }} \
+                --storage-max-find-keys-entry-size {{ .Values.storageCacheConfig.maxFindKeysEntrySize | int }} \
+                --storage-max-find-key-values-entry-size {{ .Values.storageCacheConfig.maxFindKeyValuesEntrySize | int }} \
+                --storage-max-cache-value-size {{ .Values.storageCacheConfig.maxCacheValueSize | int }} \
+                --storage-max-cache-find-keys-size {{ .Values.storageCacheConfig.maxCacheFindKeysSize | int }} \
+                --storage-max-cache-find-key-values-size {{ .Values.storageCacheConfig.maxCacheFindKeyValuesSize | int }} \
+                --blob-cache-size {{ .Values.storageCacheSizes.blobCacheSize | int }} \
+                --confirmed-block-cache-size {{ .Values.storageCacheSizes.confirmedBlockCacheSize | int }} \
+                --certificate-cache-size {{ .Values.storageCacheSizes.certificateCacheSize | int }} \
+                --certificate-raw-cache-size {{ .Values.storageCacheSizes.certificateRawCacheSize | int }} \
+                --event-cache-size {{ .Values.storageCacheSizes.eventCacheSize | int }} \
+                --block-cache-size {{ .Values.blockCacheSize | int }} \
+                --execution-state-cache-size {{ .Values.executionStateCacheSize | int }} \
                 {{- if .Values.crossChainQueueSize }}
                 --cross-chain-queue-size {{ .Values.crossChainQueueSize }}
                 {{- end }}

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
@@ -15,6 +15,7 @@ use linera_core::{
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
     wallet,
+    worker::{DEFAULT_BLOCK_CACHE_SIZE, DEFAULT_EXECUTION_STATE_CACHE_SIZE},
 };
 use linera_storage::Storage;
 use tokio_util::sync::CancellationToken;
@@ -98,7 +99,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
     let chain_id0 = client0.chain_id();
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     // Start a chain listener for chain 0 with a new key.
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
     let epoch0 = client0.chain_info().await?.epoch;
@@ -118,9 +119,10 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             format!("Client node for {:.8}", chain_id0),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -208,7 +210,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
     let chain_a_id = chain_a.chain_id();
     let chain_b_id = chain_b.chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
     let chain_a_info = chain_a.chain_info().await?;
@@ -231,9 +233,10 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             "Client node with follow-only and owned chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -368,7 +371,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     let storage_builder = MemoryStorageBuilder::default();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
 
@@ -386,9 +389,10 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             "Client node with no chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -414,7 +418,7 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
     for i in 0.. {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let result = storage.read_certificate(certificate.hash()).await?;
-        if result.as_ref() == Some(&certificate) {
+        if result.as_deref() == Some(&certificate) {
             break;
         }
         if i == 5 {
@@ -443,7 +447,7 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
     let client0 = builder.add_root_chain(0, Amount::ONE).await?;
     let chain_id0 = client0.chain_id();
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
 
@@ -461,9 +465,10 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             "Client node with no chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };
@@ -560,7 +565,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         ))
         .await?;
 
-    let genesis_config = GenesisConfig::new_testing(&builder);
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
     let admin_chain_id = genesis_config.admin_chain_id();
     let storage = builder.make_storage().await?;
 
@@ -578,9 +583,10 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             format!("Client node for {:.8}", chain_id0),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            HashSet::new(),
             chain_client::Options::test_default(),
-            5_000,
-            10_000,
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             &linera_core::client::RequestsSchedulerConfig::default(),
         )),
     };

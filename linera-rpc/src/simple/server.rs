@@ -124,7 +124,7 @@ where
     }
 
     pub fn spawn(
-        self,
+        mut self,
         shutdown_signal: CancellationToken,
         join_set: &mut JoinSet<()>,
     ) -> ServerHandle {
@@ -138,6 +138,23 @@ where
             mpsc::channel(self.cross_chain_config.queue_size);
 
         let (notification_sender, _) = sync::broadcast::channel(1000);
+
+        // Give the worker a shard-routing sender for cross-chain requests generated
+        // outside the normal `NetworkActions` return path (specifically, the
+        // `RevertConfirm`s emitted after resetting a corrupted chain).
+        {
+            let routing_network = self.network.clone();
+            let routing_sender = cross_chain_sender.clone();
+            self.state = self
+                .state
+                .clone()
+                .with_outbound_cross_chain_sender(Arc::new(move |request| {
+                    let shard_id = routing_network.get_shard_id(request.target_chain_id());
+                    if let Err(error) = routing_sender.clone().try_send((request, shard_id)) {
+                        tracing::error!(%error, "dropping cross-chain request");
+                    }
+                }));
+        }
 
         join_set.spawn_task(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
@@ -303,12 +320,7 @@ where
             }
             RpcMessage::ChainInfoQuery(message) => {
                 match self.server.state.handle_chain_info_query(*message).await {
-                    Ok((info, actions)) => {
-                        // Cross-shard requests
-                        self.handle_network_actions(actions);
-                        // Response
-                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
-                    }
+                    Ok(info) => Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info)))),
                     Err(error) => {
                         self.log_error(&error, "Failed to handle chain info query");
                         Err(error.into())
@@ -378,6 +390,7 @@ where
             | RpcMessage::ShardInfoQuery(_)
             | RpcMessage::ShardInfoResponse(_)
             | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobs(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)

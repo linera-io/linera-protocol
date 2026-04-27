@@ -12,6 +12,23 @@
         "iconColor": "rgba(0, 211, 255, 1)",
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "expr": "label_replace(max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"}) != max without(uid, instance) (kube_pod_start_time{pod=~\"shards-.*\", namespace=\"default\"} offset 5m), \"validator\", \"$1.testnet-conway.linera.net\", \"cluster\", \"gke-testnet-conway-(validator-\\\\d+)\")",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "limit": 100,
+        "name": "shard_restart",
+        "showIn": 0,
+        "tagKeys": "validator,pod",
+        "tags": [],
+        "titleFormat": "shard restart",
+        "type": "tags"
       }
     ]
   },
@@ -19,7 +36,6 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
@@ -46,11 +62,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -67,6 +85,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -82,7 +101,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -163,6 +182,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -170,7 +190,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_write_batch_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -181,7 +201,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_write_batch_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -192,7 +212,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_write_batch_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_write_batch_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -213,11 +233,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -234,6 +256,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -249,7 +272,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -330,6 +353,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -337,7 +361,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_read_value_bytes_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -348,7 +372,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_read_value_bytes_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -359,7 +383,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_read_value_bytes_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -380,11 +404,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -401,6 +427,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -416,7 +443,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -497,6 +524,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -504,7 +532,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_contains_key_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -515,7 +543,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_contains_key_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -526,7 +554,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_contains_key_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_contains_key_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -547,11 +575,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -568,6 +598,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -583,7 +614,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -664,6 +695,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -671,7 +703,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_find_keys_by_prefix_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -682,7 +714,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_find_keys_by_prefix_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -693,7 +725,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_find_keys_by_prefix_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -714,11 +746,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -735,6 +769,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -750,7 +785,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -831,6 +866,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -838,7 +874,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_write_batch_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -849,7 +885,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_write_batch_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -860,7 +896,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_write_batch_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_write_batch_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -881,11 +917,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -902,6 +940,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -917,7 +956,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -998,6 +1037,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1005,7 +1045,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_read_value_key_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1016,7 +1056,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_read_value_key_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1027,7 +1067,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_key_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_read_value_key_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1048,11 +1088,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1069,6 +1111,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1084,7 +1127,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1165,6 +1208,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1172,7 +1216,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_read_value_value_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1183,7 +1227,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_read_value_value_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1194,7 +1238,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_value_value_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_read_value_value_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1215,11 +1259,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1236,6 +1282,7 @@
               "type": "linear"
             },
             "showPoints": "auto",
+            "showValues": false,
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -1251,7 +1298,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "red",
@@ -1332,6 +1379,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.3.0",
       "targets": [
         {
           "datasource": {
@@ -1339,7 +1387,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_contains_keys_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1350,7 +1398,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_contains_keys_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1361,7 +1409,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_contains_keys_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_contains_keys_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1505,7 +1553,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_read_multi_value_bytes_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1516,7 +1564,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_read_multi_value_bytes_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1527,7 +1575,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_multi_value_bytes_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_read_multi_value_bytes_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1671,7 +1719,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_read_multi_values_num_entries:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1682,7 +1730,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_read_multi_values_num_entries:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1693,7 +1741,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_read_multi_values_num_entries_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_read_multi_values_num_entries:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -1837,7 +1885,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_find_key_values_by_prefix_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -1848,7 +1896,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_find_key_values_by_prefix_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -1859,7 +1907,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_key_values_by_prefix_latency_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_find_key_values_by_prefix_latency:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2003,7 +2051,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_find_keys_by_prefix_keys_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2014,7 +2062,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_find_keys_by_prefix_keys_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2025,7 +2073,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_keys_size_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_find_keys_by_prefix_keys_size:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2169,7 +2217,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.50, linera:rocksdb_internal_find_keys_by_prefix_num_keys:rate1m{job=~\"$job\"})",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -2180,7 +2228,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.90, linera:rocksdb_internal_find_keys_by_prefix_num_keys:rate1m{job=~\"$job\"})",
           "legendFormat": "p90",
           "range": true,
           "refId": "B"
@@ -2191,7 +2239,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(linera_rocksdb_internal_find_keys_by_prefix_num_keys_bucket{validator=~\"$validator\"}[1m])))",
+          "expr": "histogram_quantile(0.99, linera:rocksdb_internal_find_keys_by_prefix_num_keys:rate1m{job=~\"$job\"})",
           "legendFormat": "p99",
           "range": true,
           "refId": "C"
@@ -2289,7 +2337,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_rocksdb_internal_read_value_none_cases{validator=~\"$validator\"}[1m]))",
+          "expr": "sum(rate(linera_rocksdb_internal_read_value_none_cases{job=~\"$job\"}[1m]))",
           "legendFormat": "rate",
           "range": true,
           "refId": "A"
@@ -2299,9 +2347,9 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 38,
-  "style": "dark",
+  "preload": false,
+  "refresh": "30s",
+  "schemaVersion": 42,
   "tags": [
     "linera",
     "storage",
@@ -2312,7 +2360,6 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
           "text": "All",
           "value": "$__all"
         },
@@ -2320,20 +2367,17 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(linera_load_view_latency_bucket, validator)",
-        "hide": 0,
+        "definition": "label_values(linera_rocksdb_internal_connect_latency_count, job)",
         "includeAll": true,
-        "label": "Validator",
-        "multi": false,
-        "name": "validator",
+        "label": "Job",
+        "name": "job",
         "options": [],
         "query": {
-          "query": "label_values(linera_load_view_latency_bucket, validator)",
+          "query": "label_values(linera_rocksdb_internal_connect_latency_count, job)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
         "regex": "",
-        "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       }
@@ -2347,6 +2391,5 @@
   "timezone": "browser",
   "title": "RocksDB",
   "uid": "linera-rocksdb",
-  "version": 1,
   "weekStart": ""
 }
