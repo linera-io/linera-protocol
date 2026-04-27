@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["InternalApplicationId","InternalChainId","InternalGenericApplicationId","InternalStreamId","InternalStreamName","InternalStreamUpdate","process_streamsCall","process_streamsReturn"]};

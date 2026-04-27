@@ -1,0 +1,315 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This defines a `BigInteger`, a smart wrapper around a sequence of `u64` limbs, least-significant limb first."><title>BigInteger in ark_ff::biginteger - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="ark_ff" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../ark_ff/index.html">ark_ff</a><span class="version">0.5.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">BigInteger</a></h2><h3><a href="#required-associated-consts">Required Associated Constants</a></h3><ul class="block"><li><a href="#associatedconstant.NUM_LIMBS" title="NUM_LIMBS">NUM_LIMBS</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.add_with_carry" title="add_with_carry">add_with_carry</a></li><li><a href="#tymethod.div2" title="div2">div2</a></li><li><a href="#tymethod.divn" title="divn">divn</a></li><li><a href="#tymethod.from_bits_be" title="from_bits_be">from_bits_be</a></li><li><a href="#tymethod.from_bits_le" title="from_bits_le">from_bits_le</a></li><li><a href="#tymethod.get_bit" title="get_bit">get_bit</a></li><li><a href="#tymethod.is_even" title="is_even">is_even</a></li><li><a href="#tymethod.is_odd" title="is_odd">is_odd</a></li><li><a href="#tymethod.is_zero" title="is_zero">is_zero</a></li><li><a href="#tymethod.mul" title="mul">mul</a></li><li><a href="#tymethod.mul2" title="mul2">mul2</a></li><li><a href="#tymethod.mul_high" title="mul_high">mul_high</a></li><li><a href="#tymethod.mul_low" title="mul_low">mul_low</a></li><li><a href="#tymethod.muln" title="muln">muln</a></li><li><a href="#tymethod.num_bits" title="num_bits">num_bits</a></li><li><a href="#tymethod.sub_with_borrow" title="sub_with_borrow">sub_with_borrow</a></li><li><a href="#tymethod.to_bytes_be" title="to_bytes_be">to_bytes_be</a></li><li><a href="#tymethod.to_bytes_le" title="to_bytes_le">to_bytes_le</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.find_wnaf" title="find_wnaf">find_wnaf</a></li><li><a href="#method.to_bits_be" title="to_bits_be">to_bits_be</a></li><li><a href="#method.to_bits_le" title="to_bits_le">to_bits_le</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In ark_<wbr>ff::<wbr>biginteger</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">ark_ff</a>::<wbr><a href="index.html">biginteger</a></div><h1>Trait <span class="trait">BigInteger</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/ark_ff/biginteger/mod.rs.html#896-1323">Source</a> </span></div><pre class="rust item-decl"><code>pub trait BigInteger:
+    <a class="trait" href="../../ark_serialize/trait.CanonicalSerialize.html" title="trait ark_serialize::CanonicalSerialize">CanonicalSerialize</a>
+    + <a class="trait" href="../../ark_serialize/trait.CanonicalDeserialize.html" title="trait ark_serialize::CanonicalDeserialize">CanonicalDeserialize</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Copy.html" title="trait core::marker::Copy">Copy</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/fmt/trait.Display.html" title="trait core::fmt::Display">Display</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/cmp/trait.Ord.html" title="trait core::cmp::Ord">Ord</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>
+    + 'static
+    + <a class="trait" href="../trait.UniformRand.html" title="trait ark_ff::UniformRand">UniformRand</a>
+    + <a class="trait" href="../../zeroize/trait.Zeroize.html" title="trait zeroize::Zeroize">Zeroize</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsMut.html" title="trait core::convert::AsMut">AsMut</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>]&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>]&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u64.html">u64</a>&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u16.html">u16</a>&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;<a class="struct" href="../../num_bigint/biguint/struct.BigUint.html" title="struct num_bigint::biguint::BigUint">BigUint</a>, Error = <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.unit.html">()</a>&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/str/traits/trait.FromStr.html" title="trait core::str::traits::FromStr">FromStr</a>
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="../../num_bigint/biguint/struct.BigUint.html" title="struct num_bigint::biguint::BigUint">BigUint</a>&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitXorAssign.html" title="trait core::ops::bit::BitXorAssign">BitXorAssign</a>&lt;Self&gt;
+    + for&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitXorAssign.html" title="trait core::ops::bit::BitXorAssign">BitXorAssign</a>&lt;&amp;'a Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitXor.html" title="trait core::ops::bit::BitXor">BitXor</a>&lt;Self, Output = Self&gt;
+    + for&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitXor.html" title="trait core::ops::bit::BitXor">BitXor</a>&lt;&amp;'a Self, Output = Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitAndAssign.html" title="trait core::ops::bit::BitAndAssign">BitAndAssign</a>&lt;Self&gt;
+    + for&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitAndAssign.html" title="trait core::ops::bit::BitAndAssign">BitAndAssign</a>&lt;&amp;'a Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitAnd.html" title="trait core::ops::bit::BitAnd">BitAnd</a>&lt;Self, Output = Self&gt;
+    + for&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitAnd.html" title="trait core::ops::bit::BitAnd">BitAnd</a>&lt;&amp;'a Self, Output = Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitOrAssign.html" title="trait core::ops::bit::BitOrAssign">BitOrAssign</a>&lt;Self&gt;
+    + for&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitOrAssign.html" title="trait core::ops::bit::BitOrAssign">BitOrAssign</a>&lt;&amp;'a Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitOr.html" title="trait core::ops::bit::BitOr">BitOr</a>&lt;Self, Output = Self&gt;
+    + for&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.BitOr.html" title="trait core::ops::bit::BitOr">BitOr</a>&lt;&amp;'a Self, Output = Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.Shr.html" title="trait core::ops::bit::Shr">Shr</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>, Output = Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.ShrAssign.html" title="trait core::ops::bit::ShrAssign">ShrAssign</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.Shl.html" title="trait core::ops::bit::Shl">Shl</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>, Output = Self&gt;
+    + <a class="trait" href="https://doc.rust-lang.org/1.86.0/core/ops/bit/trait.ShlAssign.html" title="trait core::ops::bit::ShlAssign">ShlAssign</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>&gt; {
+    const <a href="#associatedconstant.NUM_LIMBS" class="constant">NUM_LIMBS</a>: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>;
+<details class="toggle type-contents-toggle"><summary class="hideme"><span>Show 21 methods</span></summary>
+    // Required methods
+    fn <a href="#tymethod.add_with_carry" class="fn">add_with_carry</a>(&amp;mut self, other: &amp;Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.sub_with_borrow" class="fn">sub_with_borrow</a>(&amp;mut self, other: &amp;Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.mul2" class="fn">mul2</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.muln" class="fn">muln</a>(&amp;mut self, amt: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.mul_low" class="fn">mul_low</a>(&amp;self, other: &amp;Self) -&gt; Self;
+<span class="item-spacer"></span>    fn <a href="#tymethod.mul_high" class="fn">mul_high</a>(&amp;self, other: &amp;Self) -&gt; Self;
+<span class="item-spacer"></span>    fn <a href="#tymethod.mul" class="fn">mul</a>(&amp;self, other: &amp;Self) -&gt; (Self, Self);
+<span class="item-spacer"></span>    fn <a href="#tymethod.div2" class="fn">div2</a>(&amp;mut self);
+<span class="item-spacer"></span>    fn <a href="#tymethod.divn" class="fn">divn</a>(&amp;mut self, amt: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>);
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_odd" class="fn">is_odd</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_even" class="fn">is_even</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.is_zero" class="fn">is_zero</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.num_bits" class="fn">num_bits</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.get_bit" class="fn">get_bit</a>(&amp;self, i: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_bits_be" class="fn">from_bits_be</a>(bits: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>]) -&gt; Self;
+<span class="item-spacer"></span>    fn <a href="#tymethod.from_bits_le" class="fn">from_bits_le</a>(bits: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>]) -&gt; Self;
+<span class="item-spacer"></span>    fn <a href="#tymethod.to_bytes_be" class="fn">to_bytes_be</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt; <a href="#" class="tooltip" data-notable-ty="Vec&lt;u8&gt;">ⓘ</a>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.to_bytes_le" class="fn">to_bytes_le</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt; <a href="#" class="tooltip" data-notable-ty="Vec&lt;u8&gt;">ⓘ</a>;
+
+    // Provided methods
+    fn <a href="#method.to_bits_be" class="fn">to_bits_be</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.to_bits_le" class="fn">to_bits_le</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>&gt; { ... }
+<span class="item-spacer"></span>    fn <a href="#method.find_wnaf" class="fn">find_wnaf</a>(&amp;self, w: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i64.html">i64</a>&gt;&gt; { ... }
+</details>}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This defines a <code>BigInteger</code>, a smart wrapper around a
+sequence of <code>u64</code> limbs, least-significant limb first.</p>
+</div></details><h2 id="required-associated-consts" class="section-header">Required Associated Constants<a href="#required-associated-consts" class="anchor">§</a></h2><div class="methods"><details class="toggle" open><summary><section id="associatedconstant.NUM_LIMBS" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#939">Source</a><h4 class="code-header">const <a href="#associatedconstant.NUM_LIMBS" class="constant">NUM_LIMBS</a>: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Number of 64-bit limbs representing <code>Self</code>.</p>
+</div></details></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.add_with_carry" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#961">Source</a><h4 class="code-header">fn <a href="#tymethod.add_with_carry" class="fn">add_with_carry</a>(&amp;mut self, other: &amp;Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Add another <a href="trait.BigInteger.html" title="trait ark_ff::biginteger::BigInteger"><code>BigInteger</code></a> to <code>self</code>. This method stores the result in <code>self</code>,
+and returns a carry bit.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span>(<span class="kw-2">mut </span>one, <span class="kw-2">mut </span>x) = (B::from(<span class="number">1u64</span>), B::from(<span class="number">2u64</span>));
+<span class="kw">let </span>carry = x.add_with_carry(<span class="kw-2">&amp;</span>one);
+<span class="macro">assert_eq!</span>(x, B::from(<span class="number">3u64</span>));
+<span class="macro">assert_eq!</span>(carry, <span class="bool-val">false</span>);
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span><span class="kw-2">mut </span>x = B::from(u64::MAX);
+<span class="kw">let </span>carry = x.add_with_carry(<span class="kw-2">&amp;</span>one);
+<span class="macro">assert_eq!</span>(x, B::from(<span class="number">0u64</span>));
+<span class="macro">assert_eq!</span>(carry, <span class="bool-val">true</span>)</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.sub_with_borrow" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#982">Source</a><h4 class="code-header">fn <a href="#tymethod.sub_with_borrow" class="fn">sub_with_borrow</a>(&amp;mut self, other: &amp;Self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Subtract another <a href="trait.BigInteger.html" title="trait ark_ff::biginteger::BigInteger"><code>BigInteger</code></a> from this one. This method stores the result in
+<code>self</code>, and returns a borrow.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span>(<span class="kw-2">mut </span>one_sub, two, <span class="kw-2">mut </span>three_sub) = (B::from(<span class="number">1u64</span>), B::from(<span class="number">2u64</span>), B::from(<span class="number">3u64</span>));
+<span class="kw">let </span>borrow = three_sub.sub_with_borrow(<span class="kw-2">&amp;</span>two);
+<span class="macro">assert_eq!</span>(three_sub, one_sub);
+<span class="macro">assert_eq!</span>(borrow, <span class="bool-val">false</span>);
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span>borrow = one_sub.sub_with_borrow(<span class="kw-2">&amp;</span>two);
+<span class="macro">assert_eq!</span>(one_sub, B::from(u64::MAX));
+<span class="macro">assert_eq!</span>(borrow, <span class="bool-val">true</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.mul2" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1007">Source</a><h4 class="code-header">fn <a href="#tymethod.mul2" class="fn">mul2</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Performs a leftwise bitshift of this number, effectively multiplying
+it by 2. Overflow is ignored.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span><span class="kw-2">mut </span>two_mul = B::from(<span class="number">2u64</span>);
+two_mul.mul2();
+<span class="macro">assert_eq!</span>(two_mul, B::from(<span class="number">4u64</span>));
+
+<span class="comment">// Edge-Cases
+</span><span class="kw">let </span><span class="kw-2">mut </span>zero = B::from(<span class="number">0u64</span>);
+zero.mul2();
+<span class="macro">assert_eq!</span>(zero, B::from(<span class="number">0u64</span>));
+
+<span class="kw">let </span><span class="kw-2">mut </span>arr: [bool; <span class="number">64</span>] = [<span class="bool-val">false</span>; <span class="number">64</span>];
+arr[<span class="number">0</span>] = <span class="bool-val">true</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>mul = B::from_bits_be(<span class="kw-2">&amp;</span>arr);
+mul.mul2();
+<span class="macro">assert_eq!</span>(mul, B::from(<span class="number">0u64</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.muln" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1033">Source</a><h4 class="code-header">fn <a href="#tymethod.muln" class="fn">muln</a>(&amp;mut self, amt: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>)</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.4.2: please use the operator <code>&lt;&lt;</code> instead</span></div></span></summary><div class="docblock"><p>Performs a leftwise bitshift of this number by n bits, effectively multiplying
+it by 2^n. Overflow is ignored.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span><span class="kw-2">mut </span>one_mul = B::from(<span class="number">1u64</span>);
+one_mul.muln(<span class="number">5</span>);
+<span class="macro">assert_eq!</span>(one_mul, B::from(<span class="number">32u64</span>));
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span><span class="kw-2">mut </span>zero = B::from(<span class="number">0u64</span>);
+zero.muln(<span class="number">5</span>);
+<span class="macro">assert_eq!</span>(zero, B::from(<span class="number">0u64</span>));
+
+<span class="kw">let </span><span class="kw-2">mut </span>arr: [bool; <span class="number">64</span>] = [<span class="bool-val">false</span>; <span class="number">64</span>];
+arr[<span class="number">4</span>] = <span class="bool-val">true</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>mul = B::from_bits_be(<span class="kw-2">&amp;</span>arr);
+mul.muln(<span class="number">5</span>);
+<span class="macro">assert_eq!</span>(mul, B::from(<span class="number">0u64</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.mul_low" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1052">Source</a><h4 class="code-header">fn <a href="#tymethod.mul_low" class="fn">mul_low</a>(&amp;self, other: &amp;Self) -&gt; Self</h4></section></summary><div class="docblock"><p>Multiplies this <a href="trait.BigInteger.html" title="trait ark_ff::biginteger::BigInteger"><code>BigInteger</code></a> by another <code>BigInteger</code>, storing the result in <code>self</code>.
+Overflow is ignored.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span><span class="kw-2">mut </span>a = B::from(<span class="number">42u64</span>);
+<span class="kw">let </span>b = B::from(<span class="number">3u64</span>);
+<span class="macro">assert_eq!</span>(a.mul_low(<span class="kw-2">&amp;</span>b), B::from(<span class="number">126u64</span>));
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span><span class="kw-2">mut </span>zero = B::from(<span class="number">0u64</span>);
+<span class="macro">assert_eq!</span>(zero.mul_low(<span class="kw-2">&amp;</span>B::from(<span class="number">5u64</span>)), B::from(<span class="number">0u64</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.mul_high" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1071">Source</a><h4 class="code-header">fn <a href="#tymethod.mul_high" class="fn">mul_high</a>(&amp;self, other: &amp;Self) -&gt; Self</h4></section></summary><div class="docblock"><p>Multiplies this <a href="trait.BigInteger.html" title="trait ark_ff::biginteger::BigInteger"><code>BigInteger</code></a> by another <code>BigInteger</code>, returning the high bits of the result.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span>(one, x) = (B::from(<span class="number">1u64</span>), B::from(<span class="number">2u64</span>));
+<span class="kw">let </span>r = x.mul_high(<span class="kw-2">&amp;</span>one);
+<span class="macro">assert_eq!</span>(r, B::from(<span class="number">0u64</span>));
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span><span class="kw-2">mut </span>x = B::from(u64::MAX);
+<span class="kw">let </span>r = x.mul_high(<span class="kw-2">&amp;</span>B::from(<span class="number">2u64</span>));
+<span class="macro">assert_eq!</span>(r, B::from(<span class="number">1u64</span>))</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.mul" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1095">Source</a><h4 class="code-header">fn <a href="#tymethod.mul" class="fn">mul</a>(&amp;self, other: &amp;Self) -&gt; (Self, Self)</h4></section></summary><div class="docblock"><p>Multiplies this <a href="trait.BigInteger.html" title="trait ark_ff::biginteger::BigInteger"><code>BigInteger</code></a> by another <code>BigInteger</code>, returning both low and high bits of the result.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span><span class="kw-2">mut </span>a = B::from(<span class="number">42u64</span>);
+<span class="kw">let </span>b = B::from(<span class="number">3u64</span>);
+<span class="kw">let </span>(low_bits, high_bits) = a.mul(<span class="kw-2">&amp;</span>b);
+<span class="macro">assert_eq!</span>(low_bits, B::from(<span class="number">126u64</span>));
+<span class="macro">assert_eq!</span>(high_bits, B::from(<span class="number">0u64</span>));
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span><span class="kw-2">mut </span>x = B::from(u64::MAX);
+<span class="kw">let </span><span class="kw-2">mut </span>max_plus_max = x;
+max_plus_max.add_with_carry(<span class="kw-2">&amp;</span>x);
+<span class="kw">let </span>(low_bits, high_bits) = x.mul(<span class="kw-2">&amp;</span>B::from(<span class="number">2u64</span>));
+<span class="macro">assert_eq!</span>(low_bits, max_plus_max);
+<span class="macro">assert_eq!</span>(high_bits, B::from(<span class="number">1u64</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.div2" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1118">Source</a><h4 class="code-header">fn <a href="#tymethod.div2" class="fn">div2</a>(&amp;mut self)</h4></section></summary><div class="docblock"><p>Performs a rightwise bitshift of this number, effectively dividing
+it by 2.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span>(<span class="kw-2">mut </span>two, <span class="kw-2">mut </span>four_div) = (B::from(<span class="number">2u64</span>), B::from(<span class="number">4u64</span>));
+four_div.div2();
+<span class="macro">assert_eq!</span>(two, four_div);
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span><span class="kw-2">mut </span>zero = B::from(<span class="number">0u64</span>);
+zero.div2();
+<span class="macro">assert_eq!</span>(zero, B::from(<span class="number">0u64</span>));
+
+<span class="kw">let </span><span class="kw-2">mut </span>one = B::from(<span class="number">1u64</span>);
+one.div2();
+<span class="macro">assert_eq!</span>(one, B::from(<span class="number">0u64</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.divn" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1139">Source</a><h4 class="code-header">fn <a href="#tymethod.divn" class="fn">divn</a>(&amp;mut self, amt: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a>)</h4></section><span class="item-info"><div class="stab deprecated"><span class="emoji">👎</span><span>Deprecated since 0.4.2: please use the operator <code>&gt;&gt;</code> instead</span></div></span></summary><div class="docblock"><p>Performs a rightwise bitshift of this number by some amount.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="comment">// Basic
+</span><span class="kw">let </span>(<span class="kw-2">mut </span>one, <span class="kw-2">mut </span>thirty_two_div) = (B::from(<span class="number">1u64</span>), B::from(<span class="number">32u64</span>));
+thirty_two_div.divn(<span class="number">5</span>);
+<span class="macro">assert_eq!</span>(one, thirty_two_div);
+
+<span class="comment">// Edge-Case
+</span><span class="kw">let </span><span class="kw-2">mut </span>arr: [bool; <span class="number">64</span>] = [<span class="bool-val">false</span>; <span class="number">64</span>];
+arr[<span class="number">4</span>] = <span class="bool-val">true</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>div = B::from_bits_le(<span class="kw-2">&amp;</span>arr);
+div.divn(<span class="number">5</span>);
+<span class="macro">assert_eq!</span>(div, B::from(<span class="number">0u64</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_odd" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1150">Source</a><h4 class="code-header">fn <a href="#tymethod.is_odd" class="fn">is_odd</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true iff this number is odd.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span><span class="kw-2">mut </span>one = B::from(<span class="number">1u64</span>);
+<span class="macro">assert!</span>(one.is_odd());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_even" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1161">Source</a><h4 class="code-header">fn <a href="#tymethod.is_even" class="fn">is_even</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true iff this number is even.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span><span class="kw-2">mut </span>two = B::from(<span class="number">2u64</span>);
+<span class="macro">assert!</span>(two.is_even());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_zero" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1172">Source</a><h4 class="code-header">fn <a href="#tymethod.is_zero" class="fn">is_zero</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true iff this number is zero.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span><span class="kw-2">mut </span>zero = B::from(<span class="number">0u64</span>);
+<span class="macro">assert!</span>(zero.is_zero());</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.num_bits" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1188">Source</a><h4 class="code-header">fn <a href="#tymethod.num_bits" class="fn">num_bits</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u32.html">u32</a></h4></section></summary><div class="docblock"><p>Compute the minimum number of bits needed to encode this number.</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span>zero = B::from(<span class="number">0u64</span>);
+<span class="macro">assert_eq!</span>(zero.num_bits(), <span class="number">0</span>);
+<span class="kw">let </span>one = B::from(<span class="number">1u64</span>);
+<span class="macro">assert_eq!</span>(one.num_bits(), <span class="number">1</span>);
+<span class="kw">let </span>max = B::from(u64::MAX);
+<span class="macro">assert_eq!</span>(max.num_bits(), <span class="number">64</span>);
+<span class="kw">let </span>u32_max = B::from(u32::MAX <span class="kw">as </span>u64);
+<span class="macro">assert_eq!</span>(u32_max.num_bits(), <span class="number">32</span>);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.get_bit" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1200">Source</a><h4 class="code-header">fn <a href="#tymethod.get_bit" class="fn">get_bit</a>(&amp;self, i: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Compute the <code>i</code>-th bit of <code>self</code>.</p>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span><span class="kw-2">mut </span>one = B::from(<span class="number">1u64</span>);
+<span class="macro">assert!</span>(one.get_bit(<span class="number">0</span>));
+<span class="macro">assert!</span>(!one.get_bit(<span class="number">1</span>));</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_bits_be" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1214">Source</a><h4 class="code-header">fn <a href="#tymethod.from_bits_be" class="fn">from_bits_be</a>(bits: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>]) -&gt; Self</h4></section></summary><div class="docblock"><p>Returns the big integer representation of a given big endian boolean
+array.</p>
+<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span><span class="kw-2">mut </span>arr: [bool; <span class="number">64</span>] = [<span class="bool-val">false</span>; <span class="number">64</span>];
+arr[<span class="number">63</span>] = <span class="bool-val">true</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>one = B::from(<span class="number">1u64</span>);
+<span class="macro">assert_eq!</span>(B::from_bits_be(<span class="kw-2">&amp;</span>arr), one);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.from_bits_le" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1228">Source</a><h4 class="code-header">fn <a href="#tymethod.from_bits_le" class="fn">from_bits_le</a>(bits: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>]) -&gt; Self</h4></section></summary><div class="docblock"><p>Returns the big integer representation of a given little endian boolean
+array.</p>
+<h5 id="example-15"><a class="doc-anchor" href="#example-15">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span><span class="kw-2">mut </span>arr: [bool; <span class="number">64</span>] = [<span class="bool-val">false</span>; <span class="number">64</span>];
+arr[<span class="number">0</span>] = <span class="bool-val">true</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>one = B::from(<span class="number">1u64</span>);
+<span class="macro">assert_eq!</span>(B::from_bits_le(<span class="kw-2">&amp;</span>arr), one);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.to_bytes_be" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1277">Source</a><h4 class="code-header">fn <a href="#tymethod.to_bytes_be" class="fn">to_bytes_be</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt; <a href="#" class="tooltip" data-notable-ty="Vec&lt;u8&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns the byte representation in a big endian byte array,
+with leading zeros.</p>
+<h5 id="example-16"><a class="doc-anchor" href="#example-16">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span>one = B::from(<span class="number">1u64</span>);
+<span class="kw">let </span>arr = one.to_bytes_be();
+<span class="kw">let </span><span class="kw-2">mut </span>vec = <span class="macro">vec!</span>[<span class="number">0</span>; <span class="number">8</span>];
+vec[<span class="number">7</span>] = <span class="number">1</span>;
+<span class="macro">assert_eq!</span>(arr, vec);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.to_bytes_le" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1292">Source</a><h4 class="code-header">fn <a href="#tymethod.to_bytes_le" class="fn">to_bytes_le</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.u8.html">u8</a>&gt; <a href="#" class="tooltip" data-notable-ty="Vec&lt;u8&gt;">ⓘ</a></h4></section></summary><div class="docblock"><p>Returns the byte representation in a little endian byte array,
+with trailing zeros.</p>
+<h5 id="example-17"><a class="doc-anchor" href="#example-17">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span>one = B::from(<span class="number">1u64</span>);
+<span class="kw">let </span>arr = one.to_bytes_le();
+<span class="kw">let </span><span class="kw-2">mut </span>vec = <span class="macro">vec!</span>[<span class="number">0</span>; <span class="number">8</span>];
+vec[<span class="number">0</span>] = <span class="number">1</span>;
+<span class="macro">assert_eq!</span>(arr, vec);</code></pre></div>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.to_bits_be" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1243-1245">Source</a><h4 class="code-header">fn <a href="#method.to_bits_be" class="fn">to_bits_be</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the bit representation in a big endian boolean array,
+with leading zeroes.</p>
+<h5 id="example-18"><a class="doc-anchor" href="#example-18">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span>one = B::from(<span class="number">1u64</span>);
+<span class="kw">let </span>arr = one.to_bits_be();
+<span class="kw">let </span><span class="kw-2">mut </span>vec = <span class="macro">vec!</span>[<span class="bool-val">false</span>; <span class="number">64</span>];
+vec[<span class="number">63</span>] = <span class="bool-val">true</span>;
+<span class="macro">assert_eq!</span>(arr, vec);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.to_bits_le" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1260-1262">Source</a><h4 class="code-header">fn <a href="#method.to_bits_le" class="fn">to_bits_le</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.bool.html">bool</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the bit representation in a little endian boolean array,
+with trailing zeroes.</p>
+<h5 id="example-19"><a class="doc-anchor" href="#example-19">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>ark_ff::{biginteger::BigInteger64 <span class="kw">as </span>B, BigInteger <span class="kw">as _</span>};
+
+<span class="kw">let </span>one = B::from(<span class="number">1u64</span>);
+<span class="kw">let </span>arr = one.to_bits_le();
+<span class="kw">let </span><span class="kw-2">mut </span>vec = <span class="macro">vec!</span>[<span class="bool-val">false</span>; <span class="number">64</span>];
+vec[<span class="number">0</span>] = <span class="bool-val">true</span>;
+<span class="macro">assert_eq!</span>(arr, vec);</code></pre></div>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.find_wnaf" class="method"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#1295-1322">Source</a><h4 class="code-header">fn <a href="#method.find_wnaf" class="fn">find_wnaf</a>(&amp;self, w: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.86.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.i64.html">i64</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Returns the windowed non-adjacent form of <code>self</code>, for a window of size <code>w</code>.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.86.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety", so this trait is not object safe.</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><details class="toggle implementors-toggle"><summary><section id="impl-BigInteger-for-BigInt%3CN%3E" class="impl"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#294-539">Source</a><a href="#impl-BigInteger-for-BigInt%3CN%3E" class="anchor">§</a><h3 class="code-header">impl&lt;const N: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a>&gt; <a class="trait" href="trait.BigInteger.html" title="trait ark_ff::biginteger::BigInteger">BigInteger</a> for <a class="struct" href="struct.BigInt.html" title="struct ark_ff::biginteger::BigInt">BigInt</a>&lt;N&gt;</h3></section></summary><div class="impl-items"><section id="associatedconstant.NUM_LIMBS-1" class="associatedconstant trait-impl"><a class="src rightside" href="../../src/ark_ff/biginteger/mod.rs.html#295">Source</a><a href="#associatedconstant.NUM_LIMBS-1" class="anchor">§</a><h4 class="code-header">const <a href="#associatedconstant.NUM_LIMBS" class="constant">NUM_LIMBS</a>: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a> = N</h4></section></div></details></div><script src="../../trait.impl/ark_ff/biginteger/trait.BigInteger.js" async></script><script type="text/json" id="notable-traits-data">{"Vec<u8>":"<h3>Notable traits for <code><a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;</code></h3><pre><code><div class=\"where\">impl&lt;A&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/std/io/trait.Write.html\" title=\"trait std::io::Write\">Write</a> for <a class=\"struct\" href=\"https://doc.rust-lang.org/1.86.0/alloc/vec/struct.Vec.html\" title=\"struct alloc::vec::Vec\">Vec</a>&lt;<a class=\"primitive\" href=\"https://doc.rust-lang.org/1.86.0/std/primitive.u8.html\">u8</a>, A&gt;<div class=\"where\">where\n    A: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.86.0/core/alloc/trait.Allocator.html\" title=\"trait core::alloc::Allocator\">Allocator</a>,</div></div>"}</script></section></div></main></body></html>

@@ -1,0 +1,475 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/snap-1.1.1/src/decompress.rs`."><title>decompress.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="snap" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../../static.files/src-script-b8d3f215.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">snap/</div>decompress.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span>std::ptr;
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span><span class="kw">crate</span>::bytes;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span><span class="kw">crate</span>::error::{Error, <span class="prelude-ty">Result</span>};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span><span class="kw">crate</span>::tag;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span><span class="kw">crate</span>::MAX_INPUT_SIZE;
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="doccomment">/// A lookup table for quickly computing the various attributes derived from a
+<a href=#9 id=9 data-nosnippet>9</a>/// tag byte.
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">const </span>TAG_LOOKUP_TABLE: TagLookupTable = TagLookupTable(tag::TAG_LOOKUP_TABLE);
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="doccomment">/// `WORD_MASK` is a map from the size of an integer in bytes to its
+<a href=#13 id=13 data-nosnippet>13</a>/// corresponding on a 32 bit integer. This is used when we need to read an
+<a href=#14 id=14 data-nosnippet>14</a>/// integer and we know there are at least 4 bytes to read from a buffer. In
+<a href=#15 id=15 data-nosnippet>15</a>/// this case, we can read a 32 bit little endian integer and mask out only the
+<a href=#16 id=16 data-nosnippet>16</a>/// bits we need. This in particular saves a branch.
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">const </span>WORD_MASK: [usize; <span class="number">5</span>] = [<span class="number">0</span>, <span class="number">0xFF</span>, <span class="number">0xFFFF</span>, <span class="number">0xFFFFFF</span>, <span class="number">0xFFFFFFFF</span>];
+<a href=#18 id=18 data-nosnippet>18</a>
+<a href=#19 id=19 data-nosnippet>19</a><span class="doccomment">/// Returns the decompressed size (in bytes) of the compressed bytes given.
+<a href=#20 id=20 data-nosnippet>20</a>///
+<a href=#21 id=21 data-nosnippet>21</a>/// `input` must be a sequence of bytes returned by a conforming Snappy
+<a href=#22 id=22 data-nosnippet>22</a>/// compressor.
+<a href=#23 id=23 data-nosnippet>23</a>///
+<a href=#24 id=24 data-nosnippet>24</a>/// # Errors
+<a href=#25 id=25 data-nosnippet>25</a>///
+<a href=#26 id=26 data-nosnippet>26</a>/// This function returns an error in the following circumstances:
+<a href=#27 id=27 data-nosnippet>27</a>///
+<a href=#28 id=28 data-nosnippet>28</a>/// * An invalid Snappy header was seen.
+<a href=#29 id=29 data-nosnippet>29</a>/// * The total space required for decompression exceeds `2^32 - 1`.
+<a href=#30 id=30 data-nosnippet>30</a></span><span class="kw">pub fn </span>decompress_len(input: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;usize&gt; {
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">if </span>input.is_empty() {
+<a href=#32 id=32 data-nosnippet>32</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="number">0</span>);
+<a href=#33 id=33 data-nosnippet>33</a>    }
+<a href=#34 id=34 data-nosnippet>34</a>    <span class="prelude-val">Ok</span>(Header::read(input)<span class="question-mark">?</span>.decompress_len)
+<a href=#35 id=35 data-nosnippet>35</a>}
+<a href=#36 id=36 data-nosnippet>36</a>
+<a href=#37 id=37 data-nosnippet>37</a><span class="doccomment">/// Decoder is a raw decoder for decompressing bytes in the Snappy format.
+<a href=#38 id=38 data-nosnippet>38</a>///
+<a href=#39 id=39 data-nosnippet>39</a>/// This decoder does not use the Snappy frame format and simply decompresses
+<a href=#40 id=40 data-nosnippet>40</a>/// the given bytes as if it were returned from `Encoder`.
+<a href=#41 id=41 data-nosnippet>41</a>///
+<a href=#42 id=42 data-nosnippet>42</a>/// Unless you explicitly need the low-level control, you should use
+<a href=#43 id=43 data-nosnippet>43</a>/// [`read::FrameDecoder`](../read/struct.FrameDecoder.html)
+<a href=#44 id=44 data-nosnippet>44</a>/// instead, which decompresses the Snappy frame format.
+<a href=#45 id=45 data-nosnippet>45</a></span><span class="attr">#[derive(Clone, Debug, Default)]
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">pub struct </span>Decoder {
+<a href=#47 id=47 data-nosnippet>47</a>    <span class="comment">// Place holder for potential future fields.
+<a href=#48 id=48 data-nosnippet>48</a>    </span>_dummy: (),
+<a href=#49 id=49 data-nosnippet>49</a>}
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">impl </span>Decoder {
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="doccomment">/// Return a new decoder that can be used for decompressing bytes.
+<a href=#53 id=53 data-nosnippet>53</a>    </span><span class="kw">pub fn </span>new() -&gt; Decoder {
+<a href=#54 id=54 data-nosnippet>54</a>        Decoder { _dummy: () }
+<a href=#55 id=55 data-nosnippet>55</a>    }
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// Decompresses all bytes in `input` into `output`.
+<a href=#58 id=58 data-nosnippet>58</a>    ///
+<a href=#59 id=59 data-nosnippet>59</a>    /// `input` must be a sequence of bytes returned by a conforming Snappy
+<a href=#60 id=60 data-nosnippet>60</a>    /// compressor.
+<a href=#61 id=61 data-nosnippet>61</a>    ///
+<a href=#62 id=62 data-nosnippet>62</a>    /// The size of `output` must be large enough to hold all decompressed
+<a href=#63 id=63 data-nosnippet>63</a>    /// bytes from the `input`. The size required can be queried with the
+<a href=#64 id=64 data-nosnippet>64</a>    /// `decompress_len` function.
+<a href=#65 id=65 data-nosnippet>65</a>    ///
+<a href=#66 id=66 data-nosnippet>66</a>    /// On success, this returns the number of bytes written to `output`.
+<a href=#67 id=67 data-nosnippet>67</a>    ///
+<a href=#68 id=68 data-nosnippet>68</a>    /// # Errors
+<a href=#69 id=69 data-nosnippet>69</a>    ///
+<a href=#70 id=70 data-nosnippet>70</a>    /// This method returns an error in the following circumstances:
+<a href=#71 id=71 data-nosnippet>71</a>    ///
+<a href=#72 id=72 data-nosnippet>72</a>    /// * Invalid compressed Snappy data was seen.
+<a href=#73 id=73 data-nosnippet>73</a>    /// * The total space required for decompression exceeds `2^32 - 1`.
+<a href=#74 id=74 data-nosnippet>74</a>    /// * `output` has length less than `decompress_len(input)`.
+<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="kw">pub fn </span>decompress(
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#77 id=77 data-nosnippet>77</a>        input: <span class="kw-2">&amp;</span>[u8],
+<a href=#78 id=78 data-nosnippet>78</a>        output: <span class="kw-2">&amp;mut </span>[u8],
+<a href=#79 id=79 data-nosnippet>79</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;usize&gt; {
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="kw">if </span>input.is_empty() {
+<a href=#81 id=81 data-nosnippet>81</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::Empty);
+<a href=#82 id=82 data-nosnippet>82</a>        }
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="kw">let </span>hdr = Header::read(input)<span class="question-mark">?</span>;
+<a href=#84 id=84 data-nosnippet>84</a>        <span class="kw">if </span>hdr.decompress_len &gt; output.len() {
+<a href=#85 id=85 data-nosnippet>85</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::BufferTooSmall {
+<a href=#86 id=86 data-nosnippet>86</a>                given: output.len() <span class="kw">as </span>u64,
+<a href=#87 id=87 data-nosnippet>87</a>                min: hdr.decompress_len <span class="kw">as </span>u64,
+<a href=#88 id=88 data-nosnippet>88</a>            });
+<a href=#89 id=89 data-nosnippet>89</a>        }
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="kw">let </span>dst = <span class="kw-2">&amp;mut </span>output[..hdr.decompress_len];
+<a href=#91 id=91 data-nosnippet>91</a>        <span class="kw">let </span><span class="kw-2">mut </span>dec =
+<a href=#92 id=92 data-nosnippet>92</a>            Decompress { src: <span class="kw-2">&amp;</span>input[hdr.len..], s: <span class="number">0</span>, dst: dst, d: <span class="number">0 </span>};
+<a href=#93 id=93 data-nosnippet>93</a>        dec.decompress()<span class="question-mark">?</span>;
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="prelude-val">Ok</span>(dec.dst.len())
+<a href=#95 id=95 data-nosnippet>95</a>    }
+<a href=#96 id=96 data-nosnippet>96</a>
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="doccomment">/// Decompresses all bytes in `input` into a freshly allocated `Vec`.
+<a href=#98 id=98 data-nosnippet>98</a>    ///
+<a href=#99 id=99 data-nosnippet>99</a>    /// This is just like the `decompress` method, except it allocates a `Vec`
+<a href=#100 id=100 data-nosnippet>100</a>    /// with the right size for you. (This is intended to be a convenience
+<a href=#101 id=101 data-nosnippet>101</a>    /// method.)
+<a href=#102 id=102 data-nosnippet>102</a>    ///
+<a href=#103 id=103 data-nosnippet>103</a>    /// This method returns an error under the same circumstances that
+<a href=#104 id=104 data-nosnippet>104</a>    /// `decompress` does.
+<a href=#105 id=105 data-nosnippet>105</a>    </span><span class="kw">pub fn </span>decompress_vec(<span class="kw-2">&amp;mut </span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;&gt; {
+<a href=#106 id=106 data-nosnippet>106</a>        <span class="kw">let </span><span class="kw-2">mut </span>buf = <span class="macro">vec!</span>[<span class="number">0</span>; decompress_len(input)<span class="question-mark">?</span>];
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">let </span>n = <span class="self">self</span>.decompress(input, <span class="kw-2">&amp;mut </span>buf)<span class="question-mark">?</span>;
+<a href=#108 id=108 data-nosnippet>108</a>        buf.truncate(n);
+<a href=#109 id=109 data-nosnippet>109</a>        <span class="prelude-val">Ok</span>(buf)
+<a href=#110 id=110 data-nosnippet>110</a>    }
+<a href=#111 id=111 data-nosnippet>111</a>}
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a><span class="doccomment">/// Decompress is the state of the Snappy compressor.
+<a href=#114 id=114 data-nosnippet>114</a></span><span class="kw">struct </span>Decompress&lt;<span class="lifetime">'s</span>, <span class="lifetime">'d</span>&gt; {
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="doccomment">/// The original compressed bytes not including the header.
+<a href=#116 id=116 data-nosnippet>116</a>    </span>src: <span class="kw-2">&amp;</span><span class="lifetime">'s </span>[u8],
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="doccomment">/// The current position in the compressed bytes.
+<a href=#118 id=118 data-nosnippet>118</a>    </span>s: usize,
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="doccomment">/// The output buffer to write the decompressed bytes.
+<a href=#120 id=120 data-nosnippet>120</a>    </span>dst: <span class="kw-2">&amp;</span><span class="lifetime">'d </span><span class="kw-2">mut </span>[u8],
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="doccomment">/// The current position in the decompressed buffer.
+<a href=#122 id=122 data-nosnippet>122</a>    </span>d: usize,
+<a href=#123 id=123 data-nosnippet>123</a>}
+<a href=#124 id=124 data-nosnippet>124</a>
+<a href=#125 id=125 data-nosnippet>125</a><span class="kw">impl</span>&lt;<span class="lifetime">'s</span>, <span class="lifetime">'d</span>&gt; Decompress&lt;<span class="lifetime">'s</span>, <span class="lifetime">'d</span>&gt; {
+<a href=#126 id=126 data-nosnippet>126</a>    <span class="doccomment">/// Decompresses snappy compressed bytes in `src` to `dst`.
+<a href=#127 id=127 data-nosnippet>127</a>    ///
+<a href=#128 id=128 data-nosnippet>128</a>    /// This assumes that the header has already been read and that `dst` is
+<a href=#129 id=129 data-nosnippet>129</a>    /// big enough to store all decompressed bytes.
+<a href=#130 id=130 data-nosnippet>130</a>    </span><span class="kw">fn </span>decompress(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#131 id=131 data-nosnippet>131</a>        <span class="kw">while </span><span class="self">self</span>.s &lt; <span class="self">self</span>.src.len() {
+<a href=#132 id=132 data-nosnippet>132</a>            <span class="kw">let </span>byte = <span class="self">self</span>.src[<span class="self">self</span>.s];
+<a href=#133 id=133 data-nosnippet>133</a>            <span class="self">self</span>.s += <span class="number">1</span>;
+<a href=#134 id=134 data-nosnippet>134</a>            <span class="kw">if </span>byte &amp; <span class="number">0b000000_11 </span>== <span class="number">0 </span>{
+<a href=#135 id=135 data-nosnippet>135</a>                <span class="kw">let </span>len = (byte &gt;&gt; <span class="number">2</span>) <span class="kw">as </span>usize + <span class="number">1</span>;
+<a href=#136 id=136 data-nosnippet>136</a>                <span class="self">self</span>.read_literal(len)<span class="question-mark">?</span>;
+<a href=#137 id=137 data-nosnippet>137</a>            } <span class="kw">else </span>{
+<a href=#138 id=138 data-nosnippet>138</a>                <span class="self">self</span>.read_copy(byte)<span class="question-mark">?</span>;
+<a href=#139 id=139 data-nosnippet>139</a>            }
+<a href=#140 id=140 data-nosnippet>140</a>        }
+<a href=#141 id=141 data-nosnippet>141</a>        <span class="kw">if </span><span class="self">self</span>.d != <span class="self">self</span>.dst.len() {
+<a href=#142 id=142 data-nosnippet>142</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::HeaderMismatch {
+<a href=#143 id=143 data-nosnippet>143</a>                expected_len: <span class="self">self</span>.dst.len() <span class="kw">as </span>u64,
+<a href=#144 id=144 data-nosnippet>144</a>                got_len: <span class="self">self</span>.d <span class="kw">as </span>u64,
+<a href=#145 id=145 data-nosnippet>145</a>            });
+<a href=#146 id=146 data-nosnippet>146</a>        }
+<a href=#147 id=147 data-nosnippet>147</a>        <span class="prelude-val">Ok</span>(())
+<a href=#148 id=148 data-nosnippet>148</a>    }
+<a href=#149 id=149 data-nosnippet>149</a>
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="doccomment">/// Decompresses a literal from `src` starting at `s` to `dst` starting at
+<a href=#151 id=151 data-nosnippet>151</a>    /// `d` and returns the updated values of `s` and `d`. `s` should point to
+<a href=#152 id=152 data-nosnippet>152</a>    /// the byte immediately proceding the literal tag byte.
+<a href=#153 id=153 data-nosnippet>153</a>    ///
+<a href=#154 id=154 data-nosnippet>154</a>    /// `len` is the length of the literal if it's &lt;=60. Otherwise, it's the
+<a href=#155 id=155 data-nosnippet>155</a>    /// length tag, indicating the number of bytes needed to read a little
+<a href=#156 id=156 data-nosnippet>156</a>    /// endian integer at `src[s..]`. i.e., `61 =&gt; 1 byte`, `62 =&gt; 2 bytes`,
+<a href=#157 id=157 data-nosnippet>157</a>    /// `63 =&gt; 3 bytes` and `64 =&gt; 4 bytes`.
+<a href=#158 id=158 data-nosnippet>158</a>    ///
+<a href=#159 id=159 data-nosnippet>159</a>    /// `len` must be &lt;=64.
+<a href=#160 id=160 data-nosnippet>160</a>    </span><span class="attr">#[inline(always)]
+<a href=#161 id=161 data-nosnippet>161</a>    </span><span class="kw">fn </span>read_literal(<span class="kw-2">&amp;mut </span><span class="self">self</span>, len: usize) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#162 id=162 data-nosnippet>162</a>        <span class="macro">debug_assert!</span>(len &lt;= <span class="number">64</span>);
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span><span class="kw-2">mut </span>len = len <span class="kw">as </span>u64;
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="comment">// As an optimization for the common case, if the literal length is
+<a href=#165 id=165 data-nosnippet>165</a>        // &lt;=16 and we have enough room in both `src` and `dst`, copy the
+<a href=#166 id=166 data-nosnippet>166</a>        // literal using unaligned loads and stores.
+<a href=#167 id=167 data-nosnippet>167</a>        //
+<a href=#168 id=168 data-nosnippet>168</a>        // We pick 16 bytes with the hope that it optimizes down to a 128 bit
+<a href=#169 id=169 data-nosnippet>169</a>        // load/store.
+<a href=#170 id=170 data-nosnippet>170</a>        </span><span class="kw">if </span>len &lt;= <span class="number">16
+<a href=#171 id=171 data-nosnippet>171</a>            </span>&amp;&amp; <span class="self">self</span>.s + <span class="number">16 </span>&lt;= <span class="self">self</span>.src.len()
+<a href=#172 id=172 data-nosnippet>172</a>            &amp;&amp; <span class="self">self</span>.d + <span class="number">16 </span>&lt;= <span class="self">self</span>.dst.len()
+<a href=#173 id=173 data-nosnippet>173</a>        {
+<a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">unsafe </span>{
+<a href=#175 id=175 data-nosnippet>175</a>                <span class="comment">// SAFETY: We know both src and dst have at least 16 bytes of
+<a href=#176 id=176 data-nosnippet>176</a>                // wiggle room after s/d, even if `len` is &lt;16, so the copy is
+<a href=#177 id=177 data-nosnippet>177</a>                // safe.
+<a href=#178 id=178 data-nosnippet>178</a>                </span><span class="kw">let </span>srcp = <span class="self">self</span>.src.as_ptr().add(<span class="self">self</span>.s);
+<a href=#179 id=179 data-nosnippet>179</a>                <span class="kw">let </span>dstp = <span class="self">self</span>.dst.as_mut_ptr().add(<span class="self">self</span>.d);
+<a href=#180 id=180 data-nosnippet>180</a>                <span class="comment">// Hopefully uses SIMD registers for 128 bit load/store.
+<a href=#181 id=181 data-nosnippet>181</a>                </span>ptr::copy_nonoverlapping(srcp, dstp, <span class="number">16</span>);
+<a href=#182 id=182 data-nosnippet>182</a>            }
+<a href=#183 id=183 data-nosnippet>183</a>            <span class="self">self</span>.d += len <span class="kw">as </span>usize;
+<a href=#184 id=184 data-nosnippet>184</a>            <span class="self">self</span>.s += len <span class="kw">as </span>usize;
+<a href=#185 id=185 data-nosnippet>185</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#186 id=186 data-nosnippet>186</a>        }
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="comment">// When the length is bigger than 60, it indicates that we need to read
+<a href=#188 id=188 data-nosnippet>188</a>        // an additional 1-4 bytes to get the real length of the literal.
+<a href=#189 id=189 data-nosnippet>189</a>        </span><span class="kw">if </span>len &gt;= <span class="number">61 </span>{
+<a href=#190 id=190 data-nosnippet>190</a>            <span class="comment">// If there aren't at least 4 bytes left to read then we know this
+<a href=#191 id=191 data-nosnippet>191</a>            // is corrupt because the literal must have length &gt;=61.
+<a href=#192 id=192 data-nosnippet>192</a>            </span><span class="kw">if </span><span class="self">self</span>.s <span class="kw">as </span>u64 + <span class="number">4 </span>&gt; <span class="self">self</span>.src.len() <span class="kw">as </span>u64 {
+<a href=#193 id=193 data-nosnippet>193</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::Literal {
+<a href=#194 id=194 data-nosnippet>194</a>                    len: <span class="number">4</span>,
+<a href=#195 id=195 data-nosnippet>195</a>                    src_len: (<span class="self">self</span>.src.len() - <span class="self">self</span>.s) <span class="kw">as </span>u64,
+<a href=#196 id=196 data-nosnippet>196</a>                    dst_len: (<span class="self">self</span>.dst.len() - <span class="self">self</span>.d) <span class="kw">as </span>u64,
+<a href=#197 id=197 data-nosnippet>197</a>                });
+<a href=#198 id=198 data-nosnippet>198</a>            }
+<a href=#199 id=199 data-nosnippet>199</a>            <span class="comment">// Since we know there are 4 bytes left to read, read a 32 bit LE
+<a href=#200 id=200 data-nosnippet>200</a>            // integer and mask away the bits we don't need.
+<a href=#201 id=201 data-nosnippet>201</a>            </span><span class="kw">let </span>byte_count = len <span class="kw">as </span>usize - <span class="number">60</span>;
+<a href=#202 id=202 data-nosnippet>202</a>            len = bytes::read_u32_le(<span class="kw-2">&amp;</span><span class="self">self</span>.src[<span class="self">self</span>.s..]) <span class="kw">as </span>u64;
+<a href=#203 id=203 data-nosnippet>203</a>            len = (len &amp; (WORD_MASK[byte_count] <span class="kw">as </span>u64)) + <span class="number">1</span>;
+<a href=#204 id=204 data-nosnippet>204</a>            <span class="self">self</span>.s += byte_count;
+<a href=#205 id=205 data-nosnippet>205</a>        }
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="comment">// If there's not enough buffer left to load or store this literal,
+<a href=#207 id=207 data-nosnippet>207</a>        // then the input is corrupt.
+<a href=#208 id=208 data-nosnippet>208</a>        // if self.s + len &gt; self.src.len() || self.d + len &gt; self.dst.len() {
+<a href=#209 id=209 data-nosnippet>209</a>        </span><span class="kw">if </span>((<span class="self">self</span>.src.len() - <span class="self">self</span>.s) <span class="kw">as </span>u64) &lt; len
+<a href=#210 id=210 data-nosnippet>210</a>            || ((<span class="self">self</span>.dst.len() - <span class="self">self</span>.d) <span class="kw">as </span>u64) &lt; len
+<a href=#211 id=211 data-nosnippet>211</a>        {
+<a href=#212 id=212 data-nosnippet>212</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::Literal {
+<a href=#213 id=213 data-nosnippet>213</a>                len: len,
+<a href=#214 id=214 data-nosnippet>214</a>                src_len: (<span class="self">self</span>.src.len() - <span class="self">self</span>.s) <span class="kw">as </span>u64,
+<a href=#215 id=215 data-nosnippet>215</a>                dst_len: (<span class="self">self</span>.dst.len() - <span class="self">self</span>.d) <span class="kw">as </span>u64,
+<a href=#216 id=216 data-nosnippet>216</a>            });
+<a href=#217 id=217 data-nosnippet>217</a>        }
+<a href=#218 id=218 data-nosnippet>218</a>        <span class="kw">unsafe </span>{
+<a href=#219 id=219 data-nosnippet>219</a>            <span class="comment">// SAFETY: We've already checked the bounds, so we know this copy
+<a href=#220 id=220 data-nosnippet>220</a>            // is correct.
+<a href=#221 id=221 data-nosnippet>221</a>            </span><span class="kw">let </span>srcp = <span class="self">self</span>.src.as_ptr().add(<span class="self">self</span>.s);
+<a href=#222 id=222 data-nosnippet>222</a>            <span class="kw">let </span>dstp = <span class="self">self</span>.dst.as_mut_ptr().add(<span class="self">self</span>.d);
+<a href=#223 id=223 data-nosnippet>223</a>            ptr::copy_nonoverlapping(srcp, dstp, len <span class="kw">as </span>usize);
+<a href=#224 id=224 data-nosnippet>224</a>        }
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="self">self</span>.s += len <span class="kw">as </span>usize;
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="self">self</span>.d += len <span class="kw">as </span>usize;
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="prelude-val">Ok</span>(())
+<a href=#228 id=228 data-nosnippet>228</a>    }
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="doccomment">/// Reads a copy from `src` and writes the decompressed bytes to `dst`. `s`
+<a href=#231 id=231 data-nosnippet>231</a>    /// should point to the byte immediately proceding the copy tag byte.
+<a href=#232 id=232 data-nosnippet>232</a>    </span><span class="attr">#[inline(always)]
+<a href=#233 id=233 data-nosnippet>233</a>    </span><span class="kw">fn </span>read_copy(<span class="kw-2">&amp;mut </span><span class="self">self</span>, tag_byte: u8) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#234 id=234 data-nosnippet>234</a>        <span class="comment">// Find the copy offset and len, then advance the input past the copy.
+<a href=#235 id=235 data-nosnippet>235</a>        // The rest of this function deals with reading/writing to output only.
+<a href=#236 id=236 data-nosnippet>236</a>        </span><span class="kw">let </span>entry = TAG_LOOKUP_TABLE.entry(tag_byte);
+<a href=#237 id=237 data-nosnippet>237</a>        <span class="kw">let </span>offset = entry.offset(<span class="self">self</span>.src, <span class="self">self</span>.s)<span class="question-mark">?</span>;
+<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw">let </span>len = entry.len();
+<a href=#239 id=239 data-nosnippet>239</a>        <span class="self">self</span>.s += entry.num_tag_bytes();
+<a href=#240 id=240 data-nosnippet>240</a>
+<a href=#241 id=241 data-nosnippet>241</a>        <span class="comment">// What we really care about here is whether `d == 0` or `d &lt; offset`.
+<a href=#242 id=242 data-nosnippet>242</a>        // To save an extra branch, use `d &lt; offset - 1` instead. If `d` is
+<a href=#243 id=243 data-nosnippet>243</a>        // `0`, then `offset.wrapping_sub(1)` will be usize::MAX which is also
+<a href=#244 id=244 data-nosnippet>244</a>        // the max value of `d`.
+<a href=#245 id=245 data-nosnippet>245</a>        </span><span class="kw">if </span><span class="self">self</span>.d &lt;= offset.wrapping_sub(<span class="number">1</span>) {
+<a href=#246 id=246 data-nosnippet>246</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::Offset {
+<a href=#247 id=247 data-nosnippet>247</a>                offset: offset <span class="kw">as </span>u64,
+<a href=#248 id=248 data-nosnippet>248</a>                dst_pos: <span class="self">self</span>.d <span class="kw">as </span>u64,
+<a href=#249 id=249 data-nosnippet>249</a>            });
+<a href=#250 id=250 data-nosnippet>250</a>        }
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="comment">// When all is said and done, dst is advanced to end.
+<a href=#252 id=252 data-nosnippet>252</a>        </span><span class="kw">let </span>end = <span class="self">self</span>.d + len;
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="comment">// When the copy is small and the offset is at least 8 bytes away from
+<a href=#254 id=254 data-nosnippet>254</a>        // `d`, then we can decompress the copy with two 64 bit unaligned
+<a href=#255 id=255 data-nosnippet>255</a>        // loads/stores.
+<a href=#256 id=256 data-nosnippet>256</a>        </span><span class="kw">if </span>offset &gt;= <span class="number">8 </span>&amp;&amp; len &lt;= <span class="number">16 </span>&amp;&amp; <span class="self">self</span>.d + <span class="number">16 </span>&lt;= <span class="self">self</span>.dst.len() {
+<a href=#257 id=257 data-nosnippet>257</a>            <span class="kw">unsafe </span>{
+<a href=#258 id=258 data-nosnippet>258</a>                <span class="comment">// SAFETY: We know dstp points to at least 16 bytes of memory
+<a href=#259 id=259 data-nosnippet>259</a>                // from the condition above, and we also know that dstp is
+<a href=#260 id=260 data-nosnippet>260</a>                // preceded by at least `offset` bytes from the `d &lt;= offset`
+<a href=#261 id=261 data-nosnippet>261</a>                // check above.
+<a href=#262 id=262 data-nosnippet>262</a>                //
+<a href=#263 id=263 data-nosnippet>263</a>                // We also know that dstp and dstp-8 do not overlap from the
+<a href=#264 id=264 data-nosnippet>264</a>                // check above, justifying the use of copy_nonoverlapping.
+<a href=#265 id=265 data-nosnippet>265</a>                </span><span class="kw">let </span>dstp = <span class="self">self</span>.dst.as_mut_ptr().add(<span class="self">self</span>.d);
+<a href=#266 id=266 data-nosnippet>266</a>                <span class="kw">let </span>srcp = dstp.sub(offset);
+<a href=#267 id=267 data-nosnippet>267</a>                <span class="comment">// We can't do a single 16 byte load/store because src/dst may
+<a href=#268 id=268 data-nosnippet>268</a>                // overlap with each other. Namely, the second copy here may
+<a href=#269 id=269 data-nosnippet>269</a>                // copy bytes written in the first copy!
+<a href=#270 id=270 data-nosnippet>270</a>                </span>ptr::copy_nonoverlapping(srcp, dstp, <span class="number">8</span>);
+<a href=#271 id=271 data-nosnippet>271</a>                ptr::copy_nonoverlapping(srcp.add(<span class="number">8</span>), dstp.add(<span class="number">8</span>), <span class="number">8</span>);
+<a href=#272 id=272 data-nosnippet>272</a>            }
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="comment">// If we have some wiggle room, try to decompress the copy 16 bytes
+<a href=#274 id=274 data-nosnippet>274</a>        // at a time with 128 bit unaligned loads/stores. Remember, we can't
+<a href=#275 id=275 data-nosnippet>275</a>        // just do a memcpy because decompressing copies may require copying
+<a href=#276 id=276 data-nosnippet>276</a>        // overlapping memory.
+<a href=#277 id=277 data-nosnippet>277</a>        //
+<a href=#278 id=278 data-nosnippet>278</a>        // We need the extra wiggle room to make effective use of 128 bit
+<a href=#279 id=279 data-nosnippet>279</a>        // loads/stores. Even if the store ends up copying more data than we
+<a href=#280 id=280 data-nosnippet>280</a>        // need, we're careful to advance `d` by the correct amount at the end.
+<a href=#281 id=281 data-nosnippet>281</a>        </span>} <span class="kw">else if </span>end + <span class="number">24 </span>&lt;= <span class="self">self</span>.dst.len() {
+<a href=#282 id=282 data-nosnippet>282</a>            <span class="kw">unsafe </span>{
+<a href=#283 id=283 data-nosnippet>283</a>                <span class="comment">// SAFETY: We know that dstp is preceded by at least `offset`
+<a href=#284 id=284 data-nosnippet>284</a>                // bytes from the `d &lt;= offset` check above.
+<a href=#285 id=285 data-nosnippet>285</a>                //
+<a href=#286 id=286 data-nosnippet>286</a>                // We don't know whether dstp overlaps with srcp, so we start
+<a href=#287 id=287 data-nosnippet>287</a>                // by copying from srcp to dstp until they no longer overlap.
+<a href=#288 id=288 data-nosnippet>288</a>                // The worst case is when dstp-src = 3 and copy length = 1. The
+<a href=#289 id=289 data-nosnippet>289</a>                // first loop will issue these copy operations before stopping:
+<a href=#290 id=290 data-nosnippet>290</a>                //
+<a href=#291 id=291 data-nosnippet>291</a>                //   [-1, 14] -&gt; [0, 15]
+<a href=#292 id=292 data-nosnippet>292</a>                //   [-1, 14] -&gt; [3, 18]
+<a href=#293 id=293 data-nosnippet>293</a>                //   [-1, 14] -&gt; [9, 24]
+<a href=#294 id=294 data-nosnippet>294</a>                //
+<a href=#295 id=295 data-nosnippet>295</a>                // But the copy had length 1, so it was only supposed to write
+<a href=#296 id=296 data-nosnippet>296</a>                // to [0, 0]. But the last copy wrote to [9, 24], which is 24
+<a href=#297 id=297 data-nosnippet>297</a>                // extra bytes in dst *beyond* the end of the copy, which is
+<a href=#298 id=298 data-nosnippet>298</a>                // guaranteed by the conditional above.
+<a href=#299 id=299 data-nosnippet>299</a>
+<a href=#300 id=300 data-nosnippet>300</a>                // Save destination length here to avoid a reborrow UB violation
+<a href=#301 id=301 data-nosnippet>301</a>                // under the Tree Borrows model.
+<a href=#302 id=302 data-nosnippet>302</a>                </span><span class="kw">let </span>dest_len = <span class="self">self</span>.dst.len();
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>                <span class="kw">let </span><span class="kw-2">mut </span>dstp = <span class="self">self</span>.dst.as_mut_ptr().add(<span class="self">self</span>.d);
+<a href=#305 id=305 data-nosnippet>305</a>                <span class="kw">let </span><span class="kw-2">mut </span>srcp = dstp.sub(offset);
+<a href=#306 id=306 data-nosnippet>306</a>                <span class="kw">loop </span>{
+<a href=#307 id=307 data-nosnippet>307</a>                    <span class="macro">debug_assert!</span>(dstp &gt;= srcp);
+<a href=#308 id=308 data-nosnippet>308</a>                    <span class="kw">let </span>diff = (dstp <span class="kw">as </span>usize) - (srcp <span class="kw">as </span>usize);
+<a href=#309 id=309 data-nosnippet>309</a>                    <span class="kw">if </span>diff &gt;= <span class="number">16 </span>{
+<a href=#310 id=310 data-nosnippet>310</a>                        <span class="kw">break</span>;
+<a href=#311 id=311 data-nosnippet>311</a>                    }
+<a href=#312 id=312 data-nosnippet>312</a>                    <span class="comment">// srcp and dstp can overlap, so use ptr::copy.
+<a href=#313 id=313 data-nosnippet>313</a>                    </span><span class="macro">debug_assert!</span>(<span class="self">self</span>.d + <span class="number">16 </span>&lt;= dest_len);
+<a href=#314 id=314 data-nosnippet>314</a>                    ptr::copy(srcp, dstp, <span class="number">16</span>);
+<a href=#315 id=315 data-nosnippet>315</a>                    <span class="self">self</span>.d += diff <span class="kw">as </span>usize;
+<a href=#316 id=316 data-nosnippet>316</a>                    dstp = dstp.add(diff);
+<a href=#317 id=317 data-nosnippet>317</a>                }
+<a href=#318 id=318 data-nosnippet>318</a>                <span class="kw">while </span><span class="self">self</span>.d &lt; end {
+<a href=#319 id=319 data-nosnippet>319</a>                    ptr::copy_nonoverlapping(srcp, dstp, <span class="number">16</span>);
+<a href=#320 id=320 data-nosnippet>320</a>                    srcp = srcp.add(<span class="number">16</span>);
+<a href=#321 id=321 data-nosnippet>321</a>                    dstp = dstp.add(<span class="number">16</span>);
+<a href=#322 id=322 data-nosnippet>322</a>                    <span class="self">self</span>.d += <span class="number">16</span>;
+<a href=#323 id=323 data-nosnippet>323</a>                }
+<a href=#324 id=324 data-nosnippet>324</a>                <span class="comment">// At this point, `d` is likely wrong. We correct it before
+<a href=#325 id=325 data-nosnippet>325</a>                // returning. It's correct value is `end`.
+<a href=#326 id=326 data-nosnippet>326</a>            </span>}
+<a href=#327 id=327 data-nosnippet>327</a>        } <span class="kw">else </span>{
+<a href=#328 id=328 data-nosnippet>328</a>            <span class="kw">if </span>end &gt; <span class="self">self</span>.dst.len() {
+<a href=#329 id=329 data-nosnippet>329</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::CopyWrite {
+<a href=#330 id=330 data-nosnippet>330</a>                    len: len <span class="kw">as </span>u64,
+<a href=#331 id=331 data-nosnippet>331</a>                    dst_len: (<span class="self">self</span>.dst.len() - <span class="self">self</span>.d) <span class="kw">as </span>u64,
+<a href=#332 id=332 data-nosnippet>332</a>                });
+<a href=#333 id=333 data-nosnippet>333</a>            }
+<a href=#334 id=334 data-nosnippet>334</a>            <span class="comment">// Finally, the slow byte-by-byte case, which should only be used
+<a href=#335 id=335 data-nosnippet>335</a>            // for the last few bytes of decompression.
+<a href=#336 id=336 data-nosnippet>336</a>            </span><span class="kw">while </span><span class="self">self</span>.d != end {
+<a href=#337 id=337 data-nosnippet>337</a>                <span class="self">self</span>.dst[<span class="self">self</span>.d] = <span class="self">self</span>.dst[<span class="self">self</span>.d - offset];
+<a href=#338 id=338 data-nosnippet>338</a>                <span class="self">self</span>.d += <span class="number">1</span>;
+<a href=#339 id=339 data-nosnippet>339</a>            }
+<a href=#340 id=340 data-nosnippet>340</a>        }
+<a href=#341 id=341 data-nosnippet>341</a>        <span class="self">self</span>.d = end;
+<a href=#342 id=342 data-nosnippet>342</a>        <span class="prelude-val">Ok</span>(())
+<a href=#343 id=343 data-nosnippet>343</a>    }
+<a href=#344 id=344 data-nosnippet>344</a>}
+<a href=#345 id=345 data-nosnippet>345</a>
+<a href=#346 id=346 data-nosnippet>346</a><span class="doccomment">/// Header represents the single varint that starts every Snappy compressed
+<a href=#347 id=347 data-nosnippet>347</a>/// block.
+<a href=#348 id=348 data-nosnippet>348</a></span><span class="attr">#[derive(Debug)]
+<a href=#349 id=349 data-nosnippet>349</a></span><span class="kw">struct </span>Header {
+<a href=#350 id=350 data-nosnippet>350</a>    <span class="doccomment">/// The length of the header in bytes (i.e., the varint).
+<a href=#351 id=351 data-nosnippet>351</a>    </span>len: usize,
+<a href=#352 id=352 data-nosnippet>352</a>    <span class="doccomment">/// The length of the original decompressed input in bytes.
+<a href=#353 id=353 data-nosnippet>353</a>    </span>decompress_len: usize,
+<a href=#354 id=354 data-nosnippet>354</a>}
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a><span class="kw">impl </span>Header {
+<a href=#357 id=357 data-nosnippet>357</a>    <span class="doccomment">/// Reads the varint header from the given input.
+<a href=#358 id=358 data-nosnippet>358</a>    ///
+<a href=#359 id=359 data-nosnippet>359</a>    /// If there was a problem reading the header then an error is returned.
+<a href=#360 id=360 data-nosnippet>360</a>    /// If a header is returned then it is guaranteed to be valid.
+<a href=#361 id=361 data-nosnippet>361</a>    </span><span class="attr">#[inline(always)]
+<a href=#362 id=362 data-nosnippet>362</a>    </span><span class="kw">fn </span>read(input: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;Header&gt; {
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="kw">let </span>(decompress_len, header_len) = bytes::read_varu64(input);
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">if </span>header_len == <span class="number">0 </span>{
+<a href=#365 id=365 data-nosnippet>365</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::Header);
+<a href=#366 id=366 data-nosnippet>366</a>        }
+<a href=#367 id=367 data-nosnippet>367</a>        <span class="kw">if </span>decompress_len &gt; MAX_INPUT_SIZE {
+<a href=#368 id=368 data-nosnippet>368</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::TooBig {
+<a href=#369 id=369 data-nosnippet>369</a>                given: decompress_len <span class="kw">as </span>u64,
+<a href=#370 id=370 data-nosnippet>370</a>                max: MAX_INPUT_SIZE,
+<a href=#371 id=371 data-nosnippet>371</a>            });
+<a href=#372 id=372 data-nosnippet>372</a>        }
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="prelude-val">Ok</span>(Header { len: header_len, decompress_len: decompress_len <span class="kw">as </span>usize })
+<a href=#374 id=374 data-nosnippet>374</a>    }
+<a href=#375 id=375 data-nosnippet>375</a>}
+<a href=#376 id=376 data-nosnippet>376</a>
+<a href=#377 id=377 data-nosnippet>377</a><span class="doccomment">/// A lookup table for quickly computing the various attributes derived from
+<a href=#378 id=378 data-nosnippet>378</a>/// a tag byte. The attributes are most useful for the three "copy" tags
+<a href=#379 id=379 data-nosnippet>379</a>/// and include the length of the copy, part of the offset (for copy 1-byte
+<a href=#380 id=380 data-nosnippet>380</a>/// only) and the total number of bytes proceding the tag byte that encode
+<a href=#381 id=381 data-nosnippet>381</a>/// the other part of the offset (1 for copy 1, 2 for copy 2 and 4 for copy 4).
+<a href=#382 id=382 data-nosnippet>382</a>///
+<a href=#383 id=383 data-nosnippet>383</a>/// More specifically, the keys of the table are u8s and the values are u16s.
+<a href=#384 id=384 data-nosnippet>384</a>/// The bits of the values are laid out as follows:
+<a href=#385 id=385 data-nosnippet>385</a>///
+<a href=#386 id=386 data-nosnippet>386</a>/// xxaa abbb xxcc cccc
+<a href=#387 id=387 data-nosnippet>387</a>///
+<a href=#388 id=388 data-nosnippet>388</a>/// Where `a` is the number of bytes, `b` are the three bits of the offset
+<a href=#389 id=389 data-nosnippet>389</a>/// for copy 1 (the other 8 bits are in the byte proceding the tag byte; for
+<a href=#390 id=390 data-nosnippet>390</a>/// copy 2 and copy 4, `b = 0`), and `c` is the length of the copy (max of 64).
+<a href=#391 id=391 data-nosnippet>391</a>///
+<a href=#392 id=392 data-nosnippet>392</a>/// We could pack this in fewer bits, but the position of the three `b` bits
+<a href=#393 id=393 data-nosnippet>393</a>/// lines up with the most significant three bits in the total offset for copy
+<a href=#394 id=394 data-nosnippet>394</a>/// 1, which avoids an extra shift instruction.
+<a href=#395 id=395 data-nosnippet>395</a>///
+<a href=#396 id=396 data-nosnippet>396</a>/// In sum, this table is useful because it reduces branches and various
+<a href=#397 id=397 data-nosnippet>397</a>/// arithmetic operations.
+<a href=#398 id=398 data-nosnippet>398</a></span><span class="kw">struct </span>TagLookupTable([u16; <span class="number">256</span>]);
+<a href=#399 id=399 data-nosnippet>399</a>
+<a href=#400 id=400 data-nosnippet>400</a><span class="kw">impl </span>TagLookupTable {
+<a href=#401 id=401 data-nosnippet>401</a>    <span class="doccomment">/// Look up the tag entry given the tag `byte`.
+<a href=#402 id=402 data-nosnippet>402</a>    </span><span class="attr">#[inline(always)]
+<a href=#403 id=403 data-nosnippet>403</a>    </span><span class="kw">fn </span>entry(<span class="kw-2">&amp;</span><span class="self">self</span>, byte: u8) -&gt; TagEntry {
+<a href=#404 id=404 data-nosnippet>404</a>        TagEntry(<span class="self">self</span>.<span class="number">0</span>[byte <span class="kw">as </span>usize] <span class="kw">as </span>usize)
+<a href=#405 id=405 data-nosnippet>405</a>    }
+<a href=#406 id=406 data-nosnippet>406</a>}
+<a href=#407 id=407 data-nosnippet>407</a>
+<a href=#408 id=408 data-nosnippet>408</a><span class="doccomment">/// Represents a single entry in the tag lookup table.
+<a href=#409 id=409 data-nosnippet>409</a>///
+<a href=#410 id=410 data-nosnippet>410</a>/// See the documentation in `TagLookupTable` for the bit layout.
+<a href=#411 id=411 data-nosnippet>411</a>///
+<a href=#412 id=412 data-nosnippet>412</a>/// The type is a `usize` for convenience.
+<a href=#413 id=413 data-nosnippet>413</a></span><span class="kw">struct </span>TagEntry(usize);
+<a href=#414 id=414 data-nosnippet>414</a>
+<a href=#415 id=415 data-nosnippet>415</a><span class="kw">impl </span>TagEntry {
+<a href=#416 id=416 data-nosnippet>416</a>    <span class="doccomment">/// Return the total number of bytes proceding this tag byte required to
+<a href=#417 id=417 data-nosnippet>417</a>    /// encode the offset.
+<a href=#418 id=418 data-nosnippet>418</a>    </span><span class="kw">fn </span>num_tag_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#419 id=419 data-nosnippet>419</a>        <span class="self">self</span>.<span class="number">0 </span>&gt;&gt; <span class="number">11
+<a href=#420 id=420 data-nosnippet>420</a>    </span>}
+<a href=#421 id=421 data-nosnippet>421</a>
+<a href=#422 id=422 data-nosnippet>422</a>    <span class="doccomment">/// Return the total copy length, capped at 255.
+<a href=#423 id=423 data-nosnippet>423</a>    </span><span class="kw">fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<a href=#424 id=424 data-nosnippet>424</a>        <span class="self">self</span>.<span class="number">0 </span>&amp; <span class="number">0xFF
+<a href=#425 id=425 data-nosnippet>425</a>    </span>}
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="doccomment">/// Return the copy offset corresponding to this copy operation. `s` should
+<a href=#428 id=428 data-nosnippet>428</a>    /// point to the position just after the tag byte that this entry was read
+<a href=#429 id=429 data-nosnippet>429</a>    /// from.
+<a href=#430 id=430 data-nosnippet>430</a>    ///
+<a href=#431 id=431 data-nosnippet>431</a>    /// This requires reading from the compressed input since the offset is
+<a href=#432 id=432 data-nosnippet>432</a>    /// encoded in bytes proceding the tag byte.
+<a href=#433 id=433 data-nosnippet>433</a>    </span><span class="kw">fn </span>offset(<span class="kw-2">&amp;</span><span class="self">self</span>, src: <span class="kw-2">&amp;</span>[u8], s: usize) -&gt; <span class="prelude-ty">Result</span>&lt;usize&gt; {
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="kw">let </span>num_tag_bytes = <span class="self">self</span>.num_tag_bytes();
+<a href=#435 id=435 data-nosnippet>435</a>        <span class="kw">let </span>trailer =
+<a href=#436 id=436 data-nosnippet>436</a>            <span class="comment">// It is critical for this case to come first, since it is the
+<a href=#437 id=437 data-nosnippet>437</a>            // fast path. We really hope that this case gets branch
+<a href=#438 id=438 data-nosnippet>438</a>            // predicted.
+<a href=#439 id=439 data-nosnippet>439</a>            </span><span class="kw">if </span>s + <span class="number">4 </span>&lt;= src.len() {
+<a href=#440 id=440 data-nosnippet>440</a>                <span class="kw">unsafe </span>{
+<a href=#441 id=441 data-nosnippet>441</a>                    <span class="comment">// SAFETY: The conditional above guarantees that
+<a href=#442 id=442 data-nosnippet>442</a>                    // src[s..s+4] is valid to read from.
+<a href=#443 id=443 data-nosnippet>443</a>                    </span><span class="kw">let </span>p = src.as_ptr().add(s);
+<a href=#444 id=444 data-nosnippet>444</a>                    <span class="comment">// We use WORD_MASK here to mask out the bits we don't
+<a href=#445 id=445 data-nosnippet>445</a>                    // need. While we're guaranteed to read 4 valid bytes,
+<a href=#446 id=446 data-nosnippet>446</a>                    // not all of those bytes are necessarily part of the
+<a href=#447 id=447 data-nosnippet>447</a>                    // offset. This is the key optimization: we don't need to
+<a href=#448 id=448 data-nosnippet>448</a>                    // branch on num_tag_bytes.
+<a href=#449 id=449 data-nosnippet>449</a>                    </span>bytes::loadu_u32_le(p) <span class="kw">as </span>usize &amp; WORD_MASK[num_tag_bytes]
+<a href=#450 id=450 data-nosnippet>450</a>                }
+<a href=#451 id=451 data-nosnippet>451</a>            } <span class="kw">else if </span>num_tag_bytes == <span class="number">1 </span>{
+<a href=#452 id=452 data-nosnippet>452</a>                <span class="kw">if </span>s &gt;= src.len() {
+<a href=#453 id=453 data-nosnippet>453</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(Error::CopyRead {
+<a href=#454 id=454 data-nosnippet>454</a>                        len: <span class="number">1</span>,
+<a href=#455 id=455 data-nosnippet>455</a>                        src_len: (src.len() - s) <span class="kw">as </span>u64,
+<a href=#456 id=456 data-nosnippet>456</a>                    });
+<a href=#457 id=457 data-nosnippet>457</a>                }
+<a href=#458 id=458 data-nosnippet>458</a>                src[s] <span class="kw">as </span>usize
+<a href=#459 id=459 data-nosnippet>459</a>            } <span class="kw">else if </span>num_tag_bytes == <span class="number">2 </span>{
+<a href=#460 id=460 data-nosnippet>460</a>                <span class="kw">if </span>s + <span class="number">1 </span>&gt;= src.len() {
+<a href=#461 id=461 data-nosnippet>461</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(Error::CopyRead {
+<a href=#462 id=462 data-nosnippet>462</a>                        len: <span class="number">2</span>,
+<a href=#463 id=463 data-nosnippet>463</a>                        src_len: (src.len() - s) <span class="kw">as </span>u64,
+<a href=#464 id=464 data-nosnippet>464</a>                    });
+<a href=#465 id=465 data-nosnippet>465</a>                }
+<a href=#466 id=466 data-nosnippet>466</a>                bytes::read_u16_le(<span class="kw-2">&amp;</span>src[s..]) <span class="kw">as </span>usize
+<a href=#467 id=467 data-nosnippet>467</a>            } <span class="kw">else </span>{
+<a href=#468 id=468 data-nosnippet>468</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(Error::CopyRead {
+<a href=#469 id=469 data-nosnippet>469</a>                    len: num_tag_bytes <span class="kw">as </span>u64,
+<a href=#470 id=470 data-nosnippet>470</a>                    src_len: (src.len() - s) <span class="kw">as </span>u64,
+<a href=#471 id=471 data-nosnippet>471</a>                });
+<a href=#472 id=472 data-nosnippet>472</a>            };
+<a href=#473 id=473 data-nosnippet>473</a>        <span class="prelude-val">Ok</span>((<span class="self">self</span>.<span class="number">0 </span>&amp; <span class="number">0b0000_0111_0000_0000</span>) | trailer)
+<a href=#474 id=474 data-nosnippet>474</a>    }
+<a href=#475 id=475 data-nosnippet>475</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["collect","fn_stream"],"struct":["PaginationStream","TryFlatMap"]};

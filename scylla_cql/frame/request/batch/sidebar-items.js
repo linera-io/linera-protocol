@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BatchSerializationError","BatchStatement","BatchStatementSerializationError","BatchType"],"struct":["Batch","BatchTypeParseError"]};

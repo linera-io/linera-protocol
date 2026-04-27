@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Color"],"fn":["AnsiByteStrings","AnsiStrings","sub_string","unstyle","unstyled_len"],"mod":["ansi","gradient"],"struct":["AnsiGenericString","AnsiGenericStrings","Rgb","Style"],"type":["AnsiByteString","AnsiByteStrings","AnsiString","AnsiStrings"]};

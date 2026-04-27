@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["THROTTLING_ERRORS","TRANSIENT_ERRORS"],"struct":["AwsErrorCodeClassifier","AwsErrorCodeClassifierBuilder"]};

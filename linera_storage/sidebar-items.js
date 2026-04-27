@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_CLEANUP_INTERVAL_SECS","DEFAULT_NAMESPACE","DEFAULT_STORAGE_CACHE_CONFIG"],"enum":["ResultReadCertificates"],"mod":["metrics"],"struct":["ChainRuntimeContext","ChainStatesFirstAssignment","DbStorage","StorageCacheConfig","StorageCaches","TestClock","WallClock"],"trait":["Clock","Storage"]};

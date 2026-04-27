@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InitcodeStatus"],"struct":["Initcode","LocalContext"]};

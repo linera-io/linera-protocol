@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A Rust implementation of the xxHash algorithm."><title>twox_hash - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="twox_hash" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../static.files/storage-3a5871a4.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../twox_hash/index.html">twox_<wbr>hash</a><span class="version">2.1.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#hashing-arbitrary-data" title="Hashing arbitrary data">Hashing arbitrary data</a></li><li><a href="#in-a-hashmap" title="In a `HashMap`">In a <code>HashMap</code></a></li></ul></li><li><a href="#feature-flags" title="Feature Flags">Feature Flags</a></li><li><a href="#benchmarks" title="Benchmarks">Benchmarks</a></li><li><a href="#contributing" title="Contributing">Contributing</a></li></ul><h3><a href="#reexports">Crate Items</a></h3><ul class="block"><li><a href="#reexports" title="Re-exports">Re-exports</a></li><li><a href="#modules" title="Modules">Modules</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <span>twox_hash</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/twox_hash/lib.rs.html#1-96">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A Rust implementation of the <a href="https://github.com/Cyan4973/xxHash">xxHash</a> algorithm.</p>
+<p><a href="https://crates.io/crates/twox-hash"><img src="https://img.shields.io/crates/v/twox-hash.svg" alt="Crates.io" /></a>
+<a href="https://docs.rs/twox-hash/"><img src="https://img.shields.io/docsrs/twox-hash" alt="Documentation" /></a>
+<a href="https://github.com/shepmaster/twox-hash/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/shepmaster/twox-hash/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a></p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>These examples use <a href="crate::XxHash64"><code>XxHash64</code></a> but the same ideas can be
+used for <a href="xxhash32/struct.Hasher.html" title="struct twox_hash::xxhash32::Hasher"><code>XxHash32</code></a> or <a href="crate::XxHash3_64"><code>XxHash3_64</code></a>.</p>
+<h3 id="hashing-arbitrary-data"><a class="doc-anchor" href="#hashing-arbitrary-data">§</a>Hashing arbitrary data</h3><h4 id="when-all-the-data-is-available-at-once"><a class="doc-anchor" href="#when-all-the-data-is-available-at-once">§</a>When all the data is available at once</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>twox_hash::XxHash64;
+
+<span class="kw">let </span>seed = <span class="number">1234</span>;
+<span class="kw">let </span>hash = XxHash64::oneshot(seed, <span class="string">b"some bytes"</span>);
+<span class="macro">assert_eq!</span>(<span class="number">0xeab5_5659_a496_d78b</span>, hash);</code></pre></div>
+<h4 id="when-the-data-is-streaming"><a class="doc-anchor" href="#when-the-data-is-streaming">§</a>When the data is streaming</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::hash::Hasher <span class="kw">as _</span>;
+<span class="kw">use </span>twox_hash::XxHash64;
+
+<span class="kw">let </span>seed = <span class="number">1234</span>;
+<span class="kw">let </span><span class="kw-2">mut </span>hasher = XxHash64::with_seed(seed);
+hasher.write(<span class="string">b"some"</span>);
+hasher.write(<span class="string">b" "</span>);
+hasher.write(<span class="string">b"bytes"</span>);
+<span class="kw">let </span>hash = hasher.finish();
+<span class="macro">assert_eq!</span>(<span class="number">0xeab5_5659_a496_d78b</span>, hash);</code></pre></div>
+<h3 id="in-a-hashmap"><a class="doc-anchor" href="#in-a-hashmap">§</a>In a <a href="https://doc.rust-lang.org/1.86.0/std/collections/hash/map/struct.HashMap.html" title="struct std::collections::hash::map::HashMap"><code>HashMap</code></a></h3><h4 id="with-a-default-seed"><a class="doc-anchor" href="#with-a-default-seed">§</a>With a default seed</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::{collections::HashMap, hash::BuildHasherDefault};
+<span class="kw">use </span>twox_hash::XxHash64;
+
+<span class="kw">let </span><span class="kw-2">mut </span>hash = HashMap::&lt;<span class="kw">_</span>, <span class="kw">_</span>, BuildHasherDefault&lt;XxHash64&gt;&gt;::default();
+hash.insert(<span class="number">42</span>, <span class="string">"the answer"</span>);
+<span class="macro">assert_eq!</span>(hash.get(<span class="kw-2">&amp;</span><span class="number">42</span>), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">"the answer"</span>));</code></pre></div>
+<h4 id="with-a-random-seed"><a class="doc-anchor" href="#with-a-random-seed">§</a>With a random seed</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>twox_hash::xxhash64;
+
+<span class="kw">let </span><span class="kw-2">mut </span>hash = HashMap::&lt;<span class="kw">_</span>, <span class="kw">_</span>, xxhash64::RandomState&gt;::default();
+hash.insert(<span class="number">42</span>, <span class="string">"the answer"</span>);
+<span class="macro">assert_eq!</span>(hash.get(<span class="kw-2">&amp;</span><span class="number">42</span>), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">"the answer"</span>));</code></pre></div>
+<h4 id="with-a-fixed-seed"><a class="doc-anchor" href="#with-a-fixed-seed">§</a>With a fixed seed</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>twox_hash::xxhash64;
+
+<span class="kw">let </span><span class="kw-2">mut </span>hash = HashMap::with_hasher(xxhash64::State::with_seed(<span class="number">0xdead_cafe</span>));
+hash.insert(<span class="number">42</span>, <span class="string">"the answer"</span>);
+<span class="macro">assert_eq!</span>(hash.get(<span class="kw-2">&amp;</span><span class="number">42</span>), <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span><span class="string">"the answer"</span>));</code></pre></div>
+<h2 id="feature-flags"><a class="doc-anchor" href="#feature-flags">§</a>Feature Flags</h2><div><table><thead><tr><th>name</th><th>description</th></tr></thead><tbody>
+<tr><td>xxhash32</td><td>Include the <a href="xxhash32/struct.Hasher.html" title="struct twox_hash::xxhash32::Hasher"><code>XxHash32</code></a> algorithm</td></tr>
+<tr><td>xxhash64</td><td>Include the <a href="crate::XxHash64"><code>XxHash64</code></a> algorithm</td></tr>
+<tr><td>xxhash3_64</td><td>Include the <a href="crate::XxHash3_64"><code>XxHash3_64</code></a> algorithm</td></tr>
+<tr><td>random</td><td>Create random instances of the hashers</td></tr>
+<tr><td>serialize</td><td>Serialize and deserialize hasher state with Serde</td></tr>
+<tr><td>std</td><td>Use the Rust standard library. Enable this if you want SIMD support in <a href="crate::XxHash3_64"><code>XxHash3_64</code></a></td></tr>
+<tr><td>alloc</td><td>Use the Rust allocator library. Enable this if you want to create <a href="crate::XxHash3_64"><code>XxHash3_64</code></a> with dynamic secrets</td></tr>
+</tbody></table>
+</div><h2 id="benchmarks"><a class="doc-anchor" href="#benchmarks">§</a>Benchmarks</h2>
+<p>See benchmarks in the <a href="https://github.com/shepmaster/twox-hash/tree/main/comparison">comparison</a> README.</p>
+<h2 id="contributing"><a class="doc-anchor" href="#contributing">§</a>Contributing</h2>
+<ol>
+<li>Fork it (<a href="https://github.com/shepmaster/twox-hash/fork">https://github.com/shepmaster/twox-hash/fork</a>)</li>
+<li>Create your feature branch (<code>git checkout -b my-new-feature</code>)</li>
+<li>Add a failing test.</li>
+<li>Add code to pass the test.</li>
+<li>Commit your changes (<code>git commit -am 'Add some feature'</code>)</li>
+<li>Ensure tests pass.</li>
+<li>Push to the branch (<code>git push origin my-new-feature</code>)</li>
+<li>Create a new Pull Request</li>
+</ol>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><dl class="item-table reexports"><dt id="reexport.XxHash32"><code>pub use xxhash32::<a class="struct" href="xxhash32/struct.Hasher.html" title="struct twox_hash::xxhash32::Hasher">Hasher</a> as XxHash32;</code></dt></dl><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="xxhash32/index.html" title="mod twox_hash::xxhash32">xxhash32</a></dt><dd>The implementation of XXH32.</dd></dl></section></div></main></body></html>

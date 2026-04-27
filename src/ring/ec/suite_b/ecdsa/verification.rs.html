@@ -1,0 +1,332 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ring-0.17.14/src/ec/suite_b/ecdsa/verification.rs`."><title>verification.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="ring" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../../../static.files/storage-3a5871a4.js"></script><script defer src="../../../../../static.files/src-script-b8d3f215.js"></script><script defer src="../../../../../src-files.js"></script><script defer src="../../../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">ring/ec/suite_b/ecdsa/</div>verification.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright 2015-2016 Brian Smith.
+<a href=#2 id=2 data-nosnippet>2</a>//
+<a href=#3 id=3 data-nosnippet>3</a>// Permission to use, copy, modify, and/or distribute this software for any
+<a href=#4 id=4 data-nosnippet>4</a>// purpose with or without fee is hereby granted, provided that the above
+<a href=#5 id=5 data-nosnippet>5</a>// copyright notice and this permission notice appear in all copies.
+<a href=#6 id=6 data-nosnippet>6</a>//
+<a href=#7 id=7 data-nosnippet>7</a>// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+<a href=#8 id=8 data-nosnippet>8</a>// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+<a href=#9 id=9 data-nosnippet>9</a>// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+<a href=#10 id=10 data-nosnippet>10</a>// SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+<a href=#11 id=11 data-nosnippet>11</a>// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+<a href=#12 id=12 data-nosnippet>12</a>// OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+<a href=#13 id=13 data-nosnippet>13</a>// CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a></span><span class="doccomment">//! ECDSA Signatures using the P-256 and P-384 curves.
+<a href=#16 id=16 data-nosnippet>16</a>
+<a href=#17 id=17 data-nosnippet>17</a></span><span class="kw">use </span><span class="kw">super</span>::digest_scalar::digest_scalar;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use crate</span>::{
+<a href=#19 id=19 data-nosnippet>19</a>    arithmetic::montgomery::<span class="kw-2">*</span>,
+<a href=#20 id=20 data-nosnippet>20</a>    cpu, digest,
+<a href=#21 id=21 data-nosnippet>21</a>    ec::suite_b::{ops::<span class="kw-2">*</span>, public_key::<span class="kw-2">*</span>, verify_jacobian_point_is_on_the_curve},
+<a href=#22 id=22 data-nosnippet>22</a>    error,
+<a href=#23 id=23 data-nosnippet>23</a>    io::der,
+<a href=#24 id=24 data-nosnippet>24</a>    limb, sealed, signature,
+<a href=#25 id=25 data-nosnippet>25</a>};
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a><span class="doccomment">/// An ECDSA verification algorithm.
+<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">pub struct </span>EcdsaVerificationAlgorithm {
+<a href=#29 id=29 data-nosnippet>29</a>    ops: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>PublicScalarOps,
+<a href=#30 id=30 data-nosnippet>30</a>    digest_alg: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>digest::Algorithm,
+<a href=#31 id=31 data-nosnippet>31</a>    split_rs:
+<a href=#32 id=32 data-nosnippet>32</a>        <span class="kw">for</span>&lt;<span class="lifetime">'a</span>&gt; <span class="kw">fn</span>(
+<a href=#33 id=33 data-nosnippet>33</a>            ops: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>ScalarOps,
+<a href=#34 id=34 data-nosnippet>34</a>            input: <span class="kw-2">&amp;mut </span>untrusted::Reader&lt;<span class="lifetime">'a</span>&gt;,
+<a href=#35 id=35 data-nosnippet>35</a>        )
+<a href=#36 id=36 data-nosnippet>36</a>            -&gt; <span class="prelude-ty">Result</span>&lt;(untrusted::Input&lt;<span class="lifetime">'a</span>&gt;, untrusted::Input&lt;<span class="lifetime">'a</span>&gt;), error::Unspecified&gt;,
+<a href=#37 id=37 data-nosnippet>37</a>    id: AlgorithmID,
+<a href=#38 id=38 data-nosnippet>38</a>}
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a><span class="attr">#[derive(Debug)]
+<a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">enum </span>AlgorithmID {
+<a href=#42 id=42 data-nosnippet>42</a>    ECDSA_P256_SHA256_ASN1,
+<a href=#43 id=43 data-nosnippet>43</a>    ECDSA_P256_SHA256_FIXED,
+<a href=#44 id=44 data-nosnippet>44</a>    ECDSA_P256_SHA384_ASN1,
+<a href=#45 id=45 data-nosnippet>45</a>    ECDSA_P384_SHA256_ASN1,
+<a href=#46 id=46 data-nosnippet>46</a>    ECDSA_P384_SHA384_ASN1,
+<a href=#47 id=47 data-nosnippet>47</a>    ECDSA_P384_SHA384_FIXED,
+<a href=#48 id=48 data-nosnippet>48</a>}
+<a href=#49 id=49 data-nosnippet>49</a>
+<a href=#50 id=50 data-nosnippet>50</a><span class="macro">derive_debug_via_id!</span>(EcdsaVerificationAlgorithm);
+<a href=#51 id=51 data-nosnippet>51</a>
+<a href=#52 id=52 data-nosnippet>52</a><span class="kw">impl </span>signature::VerificationAlgorithm <span class="kw">for </span>EcdsaVerificationAlgorithm {
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">fn </span>verify(
+<a href=#54 id=54 data-nosnippet>54</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#55 id=55 data-nosnippet>55</a>        public_key: untrusted::Input,
+<a href=#56 id=56 data-nosnippet>56</a>        msg: untrusted::Input,
+<a href=#57 id=57 data-nosnippet>57</a>        signature: untrusted::Input,
+<a href=#58 id=58 data-nosnippet>58</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), error::Unspecified&gt; {
+<a href=#59 id=59 data-nosnippet>59</a>        <span class="kw">let </span>cpu = cpu::features();
+<a href=#60 id=60 data-nosnippet>60</a>        <span class="kw">let </span>e = {
+<a href=#61 id=61 data-nosnippet>61</a>            <span class="comment">// NSA Guide Step 2: "Use the selected hash function to compute H =
+<a href=#62 id=62 data-nosnippet>62</a>            // Hash(M)."
+<a href=#63 id=63 data-nosnippet>63</a>            </span><span class="kw">let </span>h = digest::digest(<span class="self">self</span>.digest_alg, msg.as_slice_less_safe());
+<a href=#64 id=64 data-nosnippet>64</a>
+<a href=#65 id=65 data-nosnippet>65</a>            <span class="comment">// NSA Guide Step 3: "Convert the bit string H to an integer e as
+<a href=#66 id=66 data-nosnippet>66</a>            // described in Appendix B.2."
+<a href=#67 id=67 data-nosnippet>67</a>            </span><span class="kw">let </span>n = <span class="kw-2">&amp;</span><span class="self">self</span>.ops.scalar_ops.scalar_modulus(cpu);
+<a href=#68 id=68 data-nosnippet>68</a>            digest_scalar(n, h)
+<a href=#69 id=69 data-nosnippet>69</a>        };
+<a href=#70 id=70 data-nosnippet>70</a>
+<a href=#71 id=71 data-nosnippet>71</a>        <span class="self">self</span>.verify_digest(public_key, e, signature)
+<a href=#72 id=72 data-nosnippet>72</a>    }
+<a href=#73 id=73 data-nosnippet>73</a>}
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a><span class="kw">impl </span>EcdsaVerificationAlgorithm {
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="doccomment">/// This is intentionally not public.
+<a href=#77 id=77 data-nosnippet>77</a>    </span><span class="kw">fn </span>verify_digest(
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#79 id=79 data-nosnippet>79</a>        public_key: untrusted::Input,
+<a href=#80 id=80 data-nosnippet>80</a>        e: Scalar,
+<a href=#81 id=81 data-nosnippet>81</a>        signature: untrusted::Input,
+<a href=#82 id=82 data-nosnippet>82</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), error::Unspecified&gt; {
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="kw">let </span>cpu = cpu::features();
+<a href=#84 id=84 data-nosnippet>84</a>
+<a href=#85 id=85 data-nosnippet>85</a>        <span class="comment">// NSA Suite B Implementer's Guide to ECDSA Section 3.4.2.
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>        </span><span class="kw">let </span>public_key_ops = <span class="self">self</span>.ops.public_key_ops;
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="kw">let </span>scalar_ops = <span class="self">self</span>.ops.scalar_ops;
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="kw">let </span>q = <span class="kw-2">&amp;</span>public_key_ops.common.elem_modulus(cpu);
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="kw">let </span>n = <span class="kw-2">&amp;</span>scalar_ops.scalar_modulus(cpu);
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="comment">// NSA Guide Prerequisites:
+<a href=#93 id=93 data-nosnippet>93</a>        //
+<a href=#94 id=94 data-nosnippet>94</a>        //    Prior to accepting a verified digital signature as valid the
+<a href=#95 id=95 data-nosnippet>95</a>        //    verifier shall have:
+<a href=#96 id=96 data-nosnippet>96</a>        //
+<a href=#97 id=97 data-nosnippet>97</a>        //    1. assurance of the signatory’s claimed identity,
+<a href=#98 id=98 data-nosnippet>98</a>        //    2. an authentic copy of the domain parameters, (q, FR, a, b, SEED,
+<a href=#99 id=99 data-nosnippet>99</a>        //       G, n, h),
+<a href=#100 id=100 data-nosnippet>100</a>        //    3. assurance of the validity of the public key, and
+<a href=#101 id=101 data-nosnippet>101</a>        //    4. assurance that the claimed signatory actually possessed the
+<a href=#102 id=102 data-nosnippet>102</a>        //       private key that was used to generate the digital signature at
+<a href=#103 id=103 data-nosnippet>103</a>        //       the time that the signature was generated.
+<a href=#104 id=104 data-nosnippet>104</a>        //
+<a href=#105 id=105 data-nosnippet>105</a>        // Prerequisites #1 and #4 are outside the scope of what this function
+<a href=#106 id=106 data-nosnippet>106</a>        // can do. Prerequisite #2 is handled implicitly as the domain
+<a href=#107 id=107 data-nosnippet>107</a>        // parameters are hard-coded into the source. Prerequisite #3 is
+<a href=#108 id=108 data-nosnippet>108</a>        // handled by `parse_uncompressed_point`.
+<a href=#109 id=109 data-nosnippet>109</a>        </span><span class="kw">let </span>peer_pub_key = parse_uncompressed_point(public_key_ops, q, public_key)<span class="question-mark">?</span>;
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">let </span>(r, s) = signature.read_all(error::Unspecified, |input| {
+<a href=#112 id=112 data-nosnippet>112</a>            (<span class="self">self</span>.split_rs)(scalar_ops, input)
+<a href=#113 id=113 data-nosnippet>113</a>        })<span class="question-mark">?</span>;
+<a href=#114 id=114 data-nosnippet>114</a>
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="comment">// NSA Guide Step 1: "If r and s are not both integers in the interval
+<a href=#116 id=116 data-nosnippet>116</a>        // [1, n − 1], output INVALID."
+<a href=#117 id=117 data-nosnippet>117</a>        </span><span class="kw">let </span>r = scalar_parse_big_endian_variable(n, limb::AllowZero::No, r)<span class="question-mark">?</span>;
+<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">let </span>s = scalar_parse_big_endian_variable(n, limb::AllowZero::No, s)<span class="question-mark">?</span>;
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a>        <span class="comment">// NSA Guide Step 4: "Compute w = s**−1 mod n, using the routine in
+<a href=#121 id=121 data-nosnippet>121</a>        // Appendix B.1."
+<a href=#122 id=122 data-nosnippet>122</a>        </span><span class="kw">let </span>w = <span class="self">self</span>.ops.scalar_inv_to_mont_vartime(<span class="kw-2">&amp;</span>s, cpu);
+<a href=#123 id=123 data-nosnippet>123</a>
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="comment">// NSA Guide Step 5: "Compute u1 = (e * w) mod n, and compute
+<a href=#125 id=125 data-nosnippet>125</a>        // u2 = (r * w) mod n."
+<a href=#126 id=126 data-nosnippet>126</a>        </span><span class="kw">let </span>u1 = scalar_ops.scalar_product(<span class="kw-2">&amp;</span>e, <span class="kw-2">&amp;</span>w, cpu);
+<a href=#127 id=127 data-nosnippet>127</a>        <span class="kw">let </span>u2 = scalar_ops.scalar_product(<span class="kw-2">&amp;</span>r, <span class="kw-2">&amp;</span>w, cpu);
+<a href=#128 id=128 data-nosnippet>128</a>
+<a href=#129 id=129 data-nosnippet>129</a>        <span class="comment">// NSA Guide Step 6: "Compute the elliptic curve point
+<a href=#130 id=130 data-nosnippet>130</a>        // R = (xR, yR) = u1*G + u2*Q, using EC scalar multiplication and EC
+<a href=#131 id=131 data-nosnippet>131</a>        // addition. If R is equal to the point at infinity, output INVALID."
+<a href=#132 id=132 data-nosnippet>132</a>        </span><span class="kw">let </span>product = (<span class="self">self</span>.ops.twin_mul)(<span class="kw-2">&amp;</span>u1, <span class="kw-2">&amp;</span>u2, <span class="kw-2">&amp;</span>peer_pub_key, cpu);
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>        <span class="comment">// Verify that the point we computed is on the curve; see
+<a href=#135 id=135 data-nosnippet>135</a>        // `verify_affine_point_is_on_the_curve_scaled` for details on why. It
+<a href=#136 id=136 data-nosnippet>136</a>        // would be more secure to do the check on the affine coordinates if we
+<a href=#137 id=137 data-nosnippet>137</a>        // were going to convert to affine form (again, see
+<a href=#138 id=138 data-nosnippet>138</a>        // `verify_affine_point_is_on_the_curve_scaled` for details on why).
+<a href=#139 id=139 data-nosnippet>139</a>        // But, we're going to avoid converting to affine for performance
+<a href=#140 id=140 data-nosnippet>140</a>        // reasons, so we do the verification using the Jacobian coordinates.
+<a href=#141 id=141 data-nosnippet>141</a>        </span><span class="kw">let </span>z2 = verify_jacobian_point_is_on_the_curve(q, <span class="kw-2">&amp;</span>product)<span class="question-mark">?</span>;
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a>        <span class="comment">// NSA Guide Step 7: "Compute v = xR mod n."
+<a href=#144 id=144 data-nosnippet>144</a>        // NSA Guide Step 8: "Compare v and r0. If v = r0, output VALID;
+<a href=#145 id=145 data-nosnippet>145</a>        // otherwise, output INVALID."
+<a href=#146 id=146 data-nosnippet>146</a>        //
+<a href=#147 id=147 data-nosnippet>147</a>        // Instead, we use Greg Maxwell's trick to avoid the inversion mod `q`
+<a href=#148 id=148 data-nosnippet>148</a>        // that would be necessary to compute the affine X coordinate.
+<a href=#149 id=149 data-nosnippet>149</a>        </span><span class="kw">let </span>x = q.point_x(<span class="kw-2">&amp;</span>product);
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="kw">fn </span>sig_r_equals_x(q: <span class="kw-2">&amp;</span>Modulus&lt;Q&gt;, r: <span class="kw-2">&amp;</span>Elem&lt;Unencoded&gt;, x: <span class="kw-2">&amp;</span>Elem&lt;R&gt;, z2: <span class="kw-2">&amp;</span>Elem&lt;R&gt;) -&gt; bool {
+<a href=#151 id=151 data-nosnippet>151</a>            <span class="kw">let </span>r_jacobian = q.elem_product(z2, r);
+<a href=#152 id=152 data-nosnippet>152</a>            <span class="kw">let </span>x = q.elem_unencoded(x);
+<a href=#153 id=153 data-nosnippet>153</a>            q.elems_are_equal(<span class="kw-2">&amp;</span>r_jacobian, <span class="kw-2">&amp;</span>x).leak()
+<a href=#154 id=154 data-nosnippet>154</a>        }
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span><span class="kw-2">mut </span>r = <span class="self">self</span>.ops.scalar_as_elem(<span class="kw-2">&amp;</span>r);
+<a href=#156 id=156 data-nosnippet>156</a>        <span class="kw">if </span>sig_r_equals_x(q, <span class="kw-2">&amp;</span>r, <span class="kw-2">&amp;</span>x, <span class="kw-2">&amp;</span>z2) {
+<a href=#157 id=157 data-nosnippet>157</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#158 id=158 data-nosnippet>158</a>        }
+<a href=#159 id=159 data-nosnippet>159</a>        <span class="kw">if </span>q.elem_less_than_vartime(<span class="kw-2">&amp;</span>r, <span class="kw-2">&amp;</span><span class="self">self</span>.ops.q_minus_n) {
+<a href=#160 id=160 data-nosnippet>160</a>            <span class="kw">let </span>n = Elem::from(<span class="self">self</span>.ops.n());
+<a href=#161 id=161 data-nosnippet>161</a>            q.add_assign(<span class="kw-2">&amp;mut </span>r, <span class="kw-2">&amp;</span>n);
+<a href=#162 id=162 data-nosnippet>162</a>            <span class="kw">if </span>sig_r_equals_x(q, <span class="kw-2">&amp;</span>r, <span class="kw-2">&amp;</span>x, <span class="kw-2">&amp;</span>z2) {
+<a href=#163 id=163 data-nosnippet>163</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+<a href=#164 id=164 data-nosnippet>164</a>            }
+<a href=#165 id=165 data-nosnippet>165</a>        }
+<a href=#166 id=166 data-nosnippet>166</a>
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="prelude-val">Err</span>(error::Unspecified)
+<a href=#168 id=168 data-nosnippet>168</a>    }
+<a href=#169 id=169 data-nosnippet>169</a>}
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a><span class="kw">impl </span>sealed::Sealed <span class="kw">for </span>EcdsaVerificationAlgorithm {}
+<a href=#172 id=172 data-nosnippet>172</a>
+<a href=#173 id=173 data-nosnippet>173</a><span class="kw">fn </span>split_rs_fixed&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#174 id=174 data-nosnippet>174</a>    ops: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>ScalarOps,
+<a href=#175 id=175 data-nosnippet>175</a>    input: <span class="kw-2">&amp;mut </span>untrusted::Reader&lt;<span class="lifetime">'a</span>&gt;,
+<a href=#176 id=176 data-nosnippet>176</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(untrusted::Input&lt;<span class="lifetime">'a</span>&gt;, untrusted::Input&lt;<span class="lifetime">'a</span>&gt;), error::Unspecified&gt; {
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">let </span>scalar_len = ops.scalar_bytes_len();
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">let </span>r = input.read_bytes(scalar_len)<span class="question-mark">?</span>;
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">let </span>s = input.read_bytes(scalar_len)<span class="question-mark">?</span>;
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="prelude-val">Ok</span>((r, s))
+<a href=#181 id=181 data-nosnippet>181</a>}
+<a href=#182 id=182 data-nosnippet>182</a>
+<a href=#183 id=183 data-nosnippet>183</a><span class="kw">fn </span>split_rs_asn1&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#184 id=184 data-nosnippet>184</a>    _ops: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>ScalarOps,
+<a href=#185 id=185 data-nosnippet>185</a>    input: <span class="kw-2">&amp;mut </span>untrusted::Reader&lt;<span class="lifetime">'a</span>&gt;,
+<a href=#186 id=186 data-nosnippet>186</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(untrusted::Input&lt;<span class="lifetime">'a</span>&gt;, untrusted::Input&lt;<span class="lifetime">'a</span>&gt;), error::Unspecified&gt; {
+<a href=#187 id=187 data-nosnippet>187</a>    der::nested(input, der::Tag::Sequence, error::Unspecified, |input| {
+<a href=#188 id=188 data-nosnippet>188</a>        <span class="kw">let </span>r = der::positive_integer(input)<span class="question-mark">?</span>.big_endian_without_leading_zero_as_input();
+<a href=#189 id=189 data-nosnippet>189</a>        <span class="kw">let </span>s = der::positive_integer(input)<span class="question-mark">?</span>.big_endian_without_leading_zero_as_input();
+<a href=#190 id=190 data-nosnippet>190</a>        <span class="prelude-val">Ok</span>((r, s))
+<a href=#191 id=191 data-nosnippet>191</a>    })
+<a href=#192 id=192 data-nosnippet>192</a>}
+<a href=#193 id=193 data-nosnippet>193</a>
+<a href=#194 id=194 data-nosnippet>194</a><span class="doccomment">/// Verification of fixed-length (PKCS#11 style) ECDSA signatures using the
+<a href=#195 id=195 data-nosnippet>195</a>/// P-256 curve and SHA-256.
+<a href=#196 id=196 data-nosnippet>196</a>///
+<a href=#197 id=197 data-nosnippet>197</a>/// See "`ECDSA_*_FIXED` Details" in `ring::signature`'s module-level
+<a href=#198 id=198 data-nosnippet>198</a>/// documentation for more details.
+<a href=#199 id=199 data-nosnippet>199</a></span><span class="kw">pub static </span>ECDSA_P256_SHA256_FIXED: EcdsaVerificationAlgorithm = EcdsaVerificationAlgorithm {
+<a href=#200 id=200 data-nosnippet>200</a>    ops: <span class="kw-2">&amp;</span>p256::PUBLIC_SCALAR_OPS,
+<a href=#201 id=201 data-nosnippet>201</a>    digest_alg: <span class="kw-2">&amp;</span>digest::SHA256,
+<a href=#202 id=202 data-nosnippet>202</a>    split_rs: split_rs_fixed,
+<a href=#203 id=203 data-nosnippet>203</a>    id: AlgorithmID::ECDSA_P256_SHA256_FIXED,
+<a href=#204 id=204 data-nosnippet>204</a>};
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a><span class="doccomment">/// Verification of fixed-length (PKCS#11 style) ECDSA signatures using the
+<a href=#207 id=207 data-nosnippet>207</a>/// P-384 curve and SHA-384.
+<a href=#208 id=208 data-nosnippet>208</a>///
+<a href=#209 id=209 data-nosnippet>209</a>/// See "`ECDSA_*_FIXED` Details" in `ring::signature`'s module-level
+<a href=#210 id=210 data-nosnippet>210</a>/// documentation for more details.
+<a href=#211 id=211 data-nosnippet>211</a></span><span class="kw">pub static </span>ECDSA_P384_SHA384_FIXED: EcdsaVerificationAlgorithm = EcdsaVerificationAlgorithm {
+<a href=#212 id=212 data-nosnippet>212</a>    ops: <span class="kw-2">&amp;</span>p384::PUBLIC_SCALAR_OPS,
+<a href=#213 id=213 data-nosnippet>213</a>    digest_alg: <span class="kw-2">&amp;</span>digest::SHA384,
+<a href=#214 id=214 data-nosnippet>214</a>    split_rs: split_rs_fixed,
+<a href=#215 id=215 data-nosnippet>215</a>    id: AlgorithmID::ECDSA_P384_SHA384_FIXED,
+<a href=#216 id=216 data-nosnippet>216</a>};
+<a href=#217 id=217 data-nosnippet>217</a>
+<a href=#218 id=218 data-nosnippet>218</a><span class="doccomment">/// Verification of ASN.1 DER-encoded ECDSA signatures using the P-256 curve
+<a href=#219 id=219 data-nosnippet>219</a>/// and SHA-256.
+<a href=#220 id=220 data-nosnippet>220</a>///
+<a href=#221 id=221 data-nosnippet>221</a>/// See "`ECDSA_*_ASN1` Details" in `ring::signature`'s module-level
+<a href=#222 id=222 data-nosnippet>222</a>/// documentation for more details.
+<a href=#223 id=223 data-nosnippet>223</a></span><span class="kw">pub static </span>ECDSA_P256_SHA256_ASN1: EcdsaVerificationAlgorithm = EcdsaVerificationAlgorithm {
+<a href=#224 id=224 data-nosnippet>224</a>    ops: <span class="kw-2">&amp;</span>p256::PUBLIC_SCALAR_OPS,
+<a href=#225 id=225 data-nosnippet>225</a>    digest_alg: <span class="kw-2">&amp;</span>digest::SHA256,
+<a href=#226 id=226 data-nosnippet>226</a>    split_rs: split_rs_asn1,
+<a href=#227 id=227 data-nosnippet>227</a>    id: AlgorithmID::ECDSA_P256_SHA256_ASN1,
+<a href=#228 id=228 data-nosnippet>228</a>};
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a><span class="doccomment">/// *Not recommended*. Verification of ASN.1 DER-encoded ECDSA signatures using
+<a href=#231 id=231 data-nosnippet>231</a>/// the P-256 curve and SHA-384.
+<a href=#232 id=232 data-nosnippet>232</a>///
+<a href=#233 id=233 data-nosnippet>233</a>/// In most situations, P-256 should be used only with SHA-256 and P-384
+<a href=#234 id=234 data-nosnippet>234</a>/// should be used only with SHA-384. However, in some cases, particularly TLS
+<a href=#235 id=235 data-nosnippet>235</a>/// on the web, it is necessary to support P-256 with SHA-384 for compatibility
+<a href=#236 id=236 data-nosnippet>236</a>/// with widely-deployed implementations that do not follow these guidelines.
+<a href=#237 id=237 data-nosnippet>237</a>///
+<a href=#238 id=238 data-nosnippet>238</a>/// See "`ECDSA_*_ASN1` Details" in `ring::signature`'s module-level
+<a href=#239 id=239 data-nosnippet>239</a>/// documentation for more details.
+<a href=#240 id=240 data-nosnippet>240</a></span><span class="kw">pub static </span>ECDSA_P256_SHA384_ASN1: EcdsaVerificationAlgorithm = EcdsaVerificationAlgorithm {
+<a href=#241 id=241 data-nosnippet>241</a>    ops: <span class="kw-2">&amp;</span>p256::PUBLIC_SCALAR_OPS,
+<a href=#242 id=242 data-nosnippet>242</a>    digest_alg: <span class="kw-2">&amp;</span>digest::SHA384,
+<a href=#243 id=243 data-nosnippet>243</a>    split_rs: split_rs_asn1,
+<a href=#244 id=244 data-nosnippet>244</a>    id: AlgorithmID::ECDSA_P256_SHA384_ASN1,
+<a href=#245 id=245 data-nosnippet>245</a>};
+<a href=#246 id=246 data-nosnippet>246</a>
+<a href=#247 id=247 data-nosnippet>247</a><span class="doccomment">/// *Not recommended*. Verification of ASN.1 DER-encoded ECDSA signatures using
+<a href=#248 id=248 data-nosnippet>248</a>/// the P-384 curve and SHA-256.
+<a href=#249 id=249 data-nosnippet>249</a>///
+<a href=#250 id=250 data-nosnippet>250</a>/// In most situations, P-256 should be used only with SHA-256 and P-384
+<a href=#251 id=251 data-nosnippet>251</a>/// should be used only with SHA-384. However, in some cases, particularly TLS
+<a href=#252 id=252 data-nosnippet>252</a>/// on the web, it is necessary to support P-256 with SHA-384 for compatibility
+<a href=#253 id=253 data-nosnippet>253</a>/// with widely-deployed implementations that do not follow these guidelines.
+<a href=#254 id=254 data-nosnippet>254</a>///
+<a href=#255 id=255 data-nosnippet>255</a>/// See "`ECDSA_*_ASN1` Details" in `ring::signature`'s module-level
+<a href=#256 id=256 data-nosnippet>256</a>/// documentation for more details.
+<a href=#257 id=257 data-nosnippet>257</a></span><span class="kw">pub static </span>ECDSA_P384_SHA256_ASN1: EcdsaVerificationAlgorithm = EcdsaVerificationAlgorithm {
+<a href=#258 id=258 data-nosnippet>258</a>    ops: <span class="kw-2">&amp;</span>p384::PUBLIC_SCALAR_OPS,
+<a href=#259 id=259 data-nosnippet>259</a>    digest_alg: <span class="kw-2">&amp;</span>digest::SHA256,
+<a href=#260 id=260 data-nosnippet>260</a>    split_rs: split_rs_asn1,
+<a href=#261 id=261 data-nosnippet>261</a>    id: AlgorithmID::ECDSA_P384_SHA256_ASN1,
+<a href=#262 id=262 data-nosnippet>262</a>};
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a><span class="doccomment">/// Verification of ASN.1 DER-encoded ECDSA signatures using the P-384 curve
+<a href=#265 id=265 data-nosnippet>265</a>/// and SHA-384.
+<a href=#266 id=266 data-nosnippet>266</a>///
+<a href=#267 id=267 data-nosnippet>267</a>/// See "`ECDSA_*_ASN1` Details" in `ring::signature`'s module-level
+<a href=#268 id=268 data-nosnippet>268</a>/// documentation for more details.
+<a href=#269 id=269 data-nosnippet>269</a></span><span class="kw">pub static </span>ECDSA_P384_SHA384_ASN1: EcdsaVerificationAlgorithm = EcdsaVerificationAlgorithm {
+<a href=#270 id=270 data-nosnippet>270</a>    ops: <span class="kw-2">&amp;</span>p384::PUBLIC_SCALAR_OPS,
+<a href=#271 id=271 data-nosnippet>271</a>    digest_alg: <span class="kw-2">&amp;</span>digest::SHA384,
+<a href=#272 id=272 data-nosnippet>272</a>    split_rs: split_rs_asn1,
+<a href=#273 id=273 data-nosnippet>273</a>    id: AlgorithmID::ECDSA_P384_SHA384_ASN1,
+<a href=#274 id=274 data-nosnippet>274</a>};
+<a href=#275 id=275 data-nosnippet>275</a>
+<a href=#276 id=276 data-nosnippet>276</a><span class="attr">#[cfg(test)]
+<a href=#277 id=277 data-nosnippet>277</a></span><span class="kw">mod </span>tests {
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">extern crate </span>alloc;
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">use </span><span class="kw">crate</span>::testutil <span class="kw">as </span>test;
+<a href=#281 id=281 data-nosnippet>281</a>    <span class="kw">use </span>alloc::{vec, vec::Vec};
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a>    <span class="attr">#[test]
+<a href=#284 id=284 data-nosnippet>284</a>    </span><span class="kw">fn </span>test_digest_based_test_vectors() {
+<a href=#285 id=285 data-nosnippet>285</a>        <span class="kw">let </span>cpu = cpu::features();
+<a href=#286 id=286 data-nosnippet>286</a>        test::run(
+<a href=#287 id=287 data-nosnippet>287</a>            <span class="macro">test_vector_file!</span>(<span class="string">"../../../../crypto/fipsmodule/ecdsa/ecdsa_verify_tests.txt"</span>),
+<a href=#288 id=288 data-nosnippet>288</a>            |section, test_case| {
+<a href=#289 id=289 data-nosnippet>289</a>                <span class="macro">assert_eq!</span>(section, <span class="string">""</span>);
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a>                <span class="kw">let </span>curve_name = test_case.consume_string(<span class="string">"Curve"</span>);
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>                <span class="kw">let </span>public_key = {
+<a href=#294 id=294 data-nosnippet>294</a>                    <span class="kw">let </span><span class="kw-2">mut </span>public_key = <span class="macro">vec!</span>[<span class="number">0x04</span>];
+<a href=#295 id=295 data-nosnippet>295</a>                    public_key.extend(<span class="kw-2">&amp;</span>test_case.consume_bytes(<span class="string">"X"</span>));
+<a href=#296 id=296 data-nosnippet>296</a>                    public_key.extend(<span class="kw-2">&amp;</span>test_case.consume_bytes(<span class="string">"Y"</span>));
+<a href=#297 id=297 data-nosnippet>297</a>                    public_key
+<a href=#298 id=298 data-nosnippet>298</a>                };
+<a href=#299 id=299 data-nosnippet>299</a>
+<a href=#300 id=300 data-nosnippet>300</a>                <span class="kw">let </span>digest = test_case.consume_bytes(<span class="string">"Digest"</span>);
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>                <span class="kw">let </span>sig = {
+<a href=#303 id=303 data-nosnippet>303</a>                    <span class="kw">let </span><span class="kw-2">mut </span>sig = Vec::new();
+<a href=#304 id=304 data-nosnippet>304</a>                    sig.extend(<span class="kw-2">&amp;</span>test_case.consume_bytes(<span class="string">"R"</span>));
+<a href=#305 id=305 data-nosnippet>305</a>                    sig.extend(<span class="kw-2">&amp;</span>test_case.consume_bytes(<span class="string">"S"</span>));
+<a href=#306 id=306 data-nosnippet>306</a>                    sig
+<a href=#307 id=307 data-nosnippet>307</a>                };
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>                <span class="kw">let </span>invalid = test_case.consume_optional_string(<span class="string">"Invalid"</span>);
+<a href=#310 id=310 data-nosnippet>310</a>
+<a href=#311 id=311 data-nosnippet>311</a>                <span class="kw">let </span>alg = <span class="kw">match </span>curve_name.as_str() {
+<a href=#312 id=312 data-nosnippet>312</a>                    <span class="string">"P-256" </span>=&gt; <span class="kw-2">&amp;</span>ECDSA_P256_SHA256_FIXED,
+<a href=#313 id=313 data-nosnippet>313</a>                    <span class="string">"P-384" </span>=&gt; <span class="kw-2">&amp;</span>ECDSA_P384_SHA384_FIXED,
+<a href=#314 id=314 data-nosnippet>314</a>                    <span class="kw">_ </span>=&gt; {
+<a href=#315 id=315 data-nosnippet>315</a>                        <span class="macro">panic!</span>(<span class="string">"Unsupported curve: {}"</span>, curve_name);
+<a href=#316 id=316 data-nosnippet>316</a>                    }
+<a href=#317 id=317 data-nosnippet>317</a>                };
+<a href=#318 id=318 data-nosnippet>318</a>                <span class="kw">let </span>n = <span class="kw-2">&amp;</span>alg.ops.scalar_ops.scalar_modulus(cpu);
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a>                <span class="kw">let </span>digest = <span class="kw">super</span>::<span class="kw">super</span>::digest_scalar::digest_bytes_scalar(n, <span class="kw-2">&amp;</span>digest[..]);
+<a href=#321 id=321 data-nosnippet>321</a>                <span class="kw">let </span>actual_result = alg.verify_digest(
+<a href=#322 id=322 data-nosnippet>322</a>                    untrusted::Input::from(<span class="kw-2">&amp;</span>public_key[..]),
+<a href=#323 id=323 data-nosnippet>323</a>                    digest,
+<a href=#324 id=324 data-nosnippet>324</a>                    untrusted::Input::from(<span class="kw-2">&amp;</span>sig[..]),
+<a href=#325 id=325 data-nosnippet>325</a>                );
+<a href=#326 id=326 data-nosnippet>326</a>                <span class="macro">assert_eq!</span>(actual_result.is_ok(), invalid.is_none());
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a>                <span class="prelude-val">Ok</span>(())
+<a href=#329 id=329 data-nosnippet>329</a>            },
+<a href=#330 id=330 data-nosnippet>330</a>        );
+<a href=#331 id=331 data-nosnippet>331</a>    }
+<a href=#332 id=332 data-nosnippet>332</a>}</code></pre></div></section></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WrappedFungibleOperation"],"struct":["Account","BurnEvent","WrappedFungibleOperationMutationRoot","WrappedFungibleTokenAbi","WrappedParameters"]};

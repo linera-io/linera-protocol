@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AssumeRoleWithWebIdentityError"],"mod":["builders"],"struct":["AssumeRoleWithWebIdentity","AssumeRoleWithWebIdentityInput","AssumeRoleWithWebIdentityOutput"]};

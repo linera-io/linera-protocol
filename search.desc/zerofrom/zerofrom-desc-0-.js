@@ -1,0 +1,1 @@
+searchState.loadedDescShard("zerofrom", 0, "This crate provides <code>ZeroFrom</code>, a trait for converting types …\nTrait for types that can be created from a reference to a …\nCustom derive for <code>zerofrom::ZeroFrom</code>,\nClone the other <code>C</code> into a struct that may retain references …")

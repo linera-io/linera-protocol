@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BuildError","DefaultAuthSchemeResolver","Params","ParamsBuilder"],"trait":["ResolveAuthScheme"]};

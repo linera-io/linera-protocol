@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CreateTableError"],"mod":["builders"],"struct":["CreateTable","CreateTableInput","CreateTableOutput"]};

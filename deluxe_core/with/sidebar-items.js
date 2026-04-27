@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["any_path","from_str","from_str_default","identity","maybe_quoted","mod_path","quoted","syn","syn_quoted"]};
