@@ -1121,27 +1121,22 @@ impl QueryResponseCache {
     /// (including when the chain has no cache entry yet).
     fn get(&self, chain_id: ChainId, app_id: &ApplicationId, request: &[u8]) -> Option<Vec<u8>> {
         let pinned = self.chains.pin();
-        let Some(mutex) = pinned.get(&chain_id) else {
-            #[cfg(with_metrics)]
-            query_cache_metrics::QUERY_CACHE_MISS
-                .with_label_values(&[])
-                .inc();
-            return None;
-        };
-        let mut cache = mutex.lock().expect("LRU mutex poisoned");
-        let key = (*app_id, request.to_vec());
-        let result = cache.lru.get(&key).cloned();
+        let result = pinned.get(&chain_id).and_then(|mutex| {
+            mutex
+                .lock()
+                .expect("LRU mutex poisoned")
+                .lru
+                .get(&(*app_id, request.to_vec()))
+                .cloned()
+        });
         #[cfg(with_metrics)]
         {
-            if result.is_some() {
-                query_cache_metrics::QUERY_CACHE_HIT
-                    .with_label_values(&[])
-                    .inc();
+            let metric = if result.is_some() {
+                &query_cache_metrics::QUERY_CACHE_HIT
             } else {
-                query_cache_metrics::QUERY_CACHE_MISS
-                    .with_label_values(&[])
-                    .inc();
-            }
+                &query_cache_metrics::QUERY_CACHE_MISS
+            };
+            metric.with_label_values(&[]).inc();
         }
         result
     }
