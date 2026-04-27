@@ -17,6 +17,7 @@ members = [
     "matching-engine",
     "native-fungible",
     "non-fungible",
+    "panicker",
     "rfq",
     "social",
     "task-processor",

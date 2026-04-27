@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linera | Panicker</title>
+    <link href="/style.css" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container">
+      <div class="content">
+        <div class="description">
+          <h1>Panicker</h1>
+          <p>
+            Sends an operation that makes the contract call <code>panic!</code>.
+            Open the developer console before clicking, then watch how the panic
+            is surfaced on the web target.
+          </p>
+        </div>
+        <div class="ui">
+          <button id="panic-btn" disabled>Trigger panic</button>
+          <pre id="result"></pre>
+        </div>
+
+        <h2>Connected as <code id="owner" class="hex">requesting owner…</code></h2>
+        <h2>Chain <code id="chain-id" class="hex">requesting chain…</code></h2>
+      </div>
+    </div>
+
+    <script type="module">
+     import * as linera from '@linera/client';
+
+     await linera.initialize();
+     console.log('initialized');
+     const faucet = await new linera.Faucet(import.meta.env.LINERA_FAUCET_URL);
+
+     const signer = linera.signer.PrivateKey.createRandom();
+     const wallet = await faucet.createWallet();
+     const owner = await signer.address();
+     const chainId = await faucet.claimChain(wallet, owner);
+     document.getElementById('owner').innerText = owner;
+     document.getElementById('chain-id').innerText = chainId;
+     const client = await new linera.Client(wallet, signer);
+     client.start();
+     const chain = await client.chain(chainId);
+     const panicker = await chain.application(import.meta.env.LINERA_APPLICATION_ID);
+
+     const panicButton = document.getElementById('panic-btn');
+     const result = document.getElementById('result');
+     panicButton.disabled = false;
+
+     panicButton.addEventListener('click', async () => {
+         result.textContent = 'sending operation…';
+         let local_result = await panicker.query(JSON.stringify(null));
+         result.textContent = 'operation sent. Result: ' + JSON.stringify(local_result);
+     });
+    </script>
+  </body>
+</html>
