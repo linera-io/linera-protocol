@@ -27,7 +27,7 @@ async fn single_chain_test() {
     let operation = CounterOperation::Increment { value: increment };
     chain
         .add_block(|block| {
-            block.with_operation(application_id, &operation);
+            block.with_operation(application_id, operation);
         })
         .await;
 

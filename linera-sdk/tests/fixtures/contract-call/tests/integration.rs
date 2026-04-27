@@ -76,7 +76,7 @@ async fn test_contract_call_integration() {
     // Add a block with the operation
     chain
         .add_block(|block| {
-            block.with_operation(application_id, &operation);
+            block.with_operation(application_id, operation);
         })
         .await;
 }
