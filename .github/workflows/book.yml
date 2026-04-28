@@ -40,10 +40,7 @@ jobs:
           mdbook-version: '0.4.48'
 
       - name: 'Install Protoc'
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "34.1"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/install-protoc
 
       - name: 'Install mdbook linkcheck'
         uses: taiki-e/cache-cargo-install-action@v2

@@ -49,10 +49,7 @@ jobs:
       run: |
         cargo install --git https://github.com/ma2bd/cargo-all-features --branch workspace_metadata --locked
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        version: "34.1"
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run cargo check-all-features
       run: |
         cargo check-all-features --all-targets
