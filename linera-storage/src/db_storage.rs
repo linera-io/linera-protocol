@@ -21,7 +21,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ExecutionRuntimeConfig, SharedCommittees, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
@@ -49,10 +50,10 @@ pub mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_latencies, register_histogram_vec, register_int_counter,
-        register_int_counter_vec,
+        exponential_bucket_interval, exponential_bucket_latencies, linear_bucket_interval,
+        register_histogram, register_histogram_vec, register_int_counter, register_int_counter_vec,
     };
-    use prometheus::{HistogramVec, IntCounter, IntCounterVec};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     /// Label name for distinguishing cache hits vs DB reads.
     pub(super) const SOURCE_LABEL: &str = "source";
@@ -176,6 +177,41 @@ pub mod metrics {
         )
     });
 
+    /// Serialized size of the lite-certificate component (round + value hash + validator
+    /// signatures), observed when a confirmed certificate is written to storage. Bytes are
+    /// taken from the already-produced BCS output, so this adds no extra serialization work.
+    /// Sized to track the signature component, which is what grows under post-quantum
+    /// signature migration (10x for Falcon-512, 38x for ML-DSA-44).
+    pub(super) static CERTIFICATE_LITE_BYTES: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "certificate_lite_bytes",
+            "Serialized size of the lite-certificate (signatures + metadata) in bytes",
+            exponential_bucket_interval(128.0, 2_097_152.0),
+        )
+    });
+
+    /// Serialized size of the certificate value (block payload), observed when a confirmed
+    /// certificate is written to storage. Bytes are taken from the already-produced BCS
+    /// output. Range matches the gRPC max message size cap.
+    pub(super) static CERTIFICATE_VALUE_BYTES: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "certificate_value_bytes",
+            "Serialized size of the certificate value (block payload) in bytes",
+            exponential_bucket_interval(256.0, 16_777_216.0),
+        )
+    });
+
+    /// Number of validator signatures attached to each confirmed certificate. Linear buckets
+    /// because committee size is small (typically under 20) and resolution at single-signer
+    /// granularity matters more than range.
+    pub(super) static CERTIFICATE_SIGNER_COUNT: LazyLock<Histogram> = LazyLock::new(|| {
+        register_histogram(
+            "certificate_signer_count",
+            "Number of validator signatures attached to each confirmed certificate",
+            linear_bucket_interval(1.0, 1.0, 20.0),
+        )
+    });
+
     /// The latency to load a chain state.
     #[doc(hidden)]
     pub(crate) static LOAD_CHAIN_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -255,7 +291,7 @@ fn get_block_keys() -> Vec<Vec<u8>> {
 }
 
 #[derive(Default)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 struct MultiPartitionBatch {
     keys_value_bytes: BTreeMap<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>,
 }
@@ -303,7 +339,10 @@ impl MultiPartitionBatch {
         certificate: &ConfirmedBlockCertificate,
     ) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
-        metrics::WRITE_CERTIFICATE_COUNTER.inc();
+        {
+            metrics::WRITE_CERTIFICATE_COUNTER.inc();
+            metrics::CERTIFICATE_SIGNER_COUNT.observe(certificate.signatures().len() as f64);
+        }
         let hash = certificate.hash();
 
         // Write certificate data by hash
@@ -311,9 +350,13 @@ impl MultiPartitionBatch {
         let mut key_values = Vec::new();
         let key = LITE_CERTIFICATE_KEY.to_vec();
         let value = bcs::to_bytes(&certificate.lite_certificate())?;
+        #[cfg(with_metrics)]
+        metrics::CERTIFICATE_LITE_BYTES.observe(value.len() as f64);
         key_values.push((key, value));
         let key = BLOCK_KEY.to_vec();
         let value = bcs::to_bytes(&certificate.value())?;
+        #[cfg(with_metrics)]
+        metrics::CERTIFICATE_VALUE_BYTES.observe(value.len() as f64);
         key_values.push((key, value));
         self.put_key_values(root_key, key_values);
 
@@ -428,6 +471,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    shared_committees: SharedCommittees,
     caches: StorageCaches,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
@@ -508,14 +552,10 @@ impl Clock for WallClock {
         Timestamp::now()
     }
 
-    async fn sleep(&self, delta: TimeDelta) {
-        linera_base::time::timer::sleep(delta.as_duration()).await
-    }
-
     async fn sleep_until(&self, timestamp: Timestamp) {
         let delta = timestamp.delta_since(Timestamp::now());
         if delta > TimeDelta::ZERO {
-            self.sleep(delta).await
+            linera_base::time::timer::sleep(delta.as_duration()).await
         }
     }
 }
@@ -539,11 +579,6 @@ impl TestClockInner {
             // Receiver may have been dropped if the sleep was cancelled.
             sender.send(()).ok();
         }
-    }
-
-    fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
-        let target_time = self.time.saturating_add(delta);
-        self.add_sleep_until(target_time)
     }
 
     fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {
@@ -579,15 +614,6 @@ pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         self.lock().time
-    }
-
-    async fn sleep(&self, delta: TimeDelta) {
-        if delta == TimeDelta::ZERO {
-            return;
-        }
-        let receiver = self.lock().add_sleep(delta);
-        // Sender may have been dropped if the clock was dropped; just stop waiting.
-        receiver.await.ok();
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -660,6 +686,10 @@ where
 
     fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
         &self.thread_pool
+    }
+
+    fn shared_committees(&self) -> &SharedCommittees {
+        &self.shared_committees
     }
 
     #[instrument(level = "trace", skip_all, fields(chain_id = %chain_id))]
@@ -860,11 +890,12 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blobs = Vec::new();
-        for blob_id in blob_ids {
-            blobs.push(self.read_blob(*blob_id).await?);
-        }
-        Ok(blobs)
+        // Each blob lives under its own root_key (partition), so cross-partition
+        // reads can't be coalesced into a single IN query. The ScyllaDB best
+        // practice is parallel queries via the shard-aware driver, which routes
+        // each query to the right shard on the right node. RocksDB benefits too:
+        // concurrent point lookups let the scheduler overlap cache/SST reads.
+        futures::future::try_join_all(blob_ids.iter().map(|blob_id| self.read_blob(*blob_id))).await
     }
 
     #[instrument(skip_all, fields(%blob_id))]
@@ -887,11 +918,12 @@ where
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut blob_states = Vec::new();
-        for blob_id in blob_ids {
-            blob_states.push(self.read_blob_state(*blob_id).await?);
-        }
-        Ok(blob_states)
+        futures::future::try_join_all(
+            blob_ids
+                .iter()
+                .map(|blob_id| self.read_blob_state(*blob_id)),
+        )
+        .await
     }
 
     #[instrument(skip_all, fields(blob_id = %blob.id()))]
@@ -1475,6 +1507,7 @@ impl<Database, C> DbStorage<Database, C> {
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
+            shared_committees: SharedCommittees::new(),
             caches: StorageCaches::new(cache_sizes),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }

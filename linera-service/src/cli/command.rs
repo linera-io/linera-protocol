@@ -998,6 +998,23 @@ pub enum ClientCommand {
         chain_id: Option<ChainId>,
     },
 
+    /// Execute a raw user operation on an application.
+    ///
+    /// The operation bytes are provided as a hex string (BCS-encoded).
+    ExecuteOperation {
+        /// The application to send the operation to.
+        #[arg(long)]
+        application_id: ApplicationId,
+
+        /// BCS-encoded operation bytes as a hex string.
+        #[arg(long)]
+        operation: String,
+
+        /// Chain ID to submit the operation on. Defaults to the wallet's default chain.
+        #[arg(long)]
+        chain_id: Option<ChainId>,
+    },
+
     /// Show the contents of the wallet.
     #[command(subcommand)]
     Wallet(WalletCommand),
@@ -1085,6 +1102,7 @@ impl ClientCommand {
             | ClientCommand::Validator { .. }
             | ClientCommand::RetryPendingBlock { .. }
             | ClientCommand::QueryApplication { .. } => "client".into(),
+            ClientCommand::ExecuteOperation { .. } => "client".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Single { .. }) => "single-benchmark".into(),
             ClientCommand::Benchmark(BenchmarkCommand::Multi { .. }) => "multi-benchmark".into(),
             ClientCommand::Net { .. } => "net".into(),
@@ -1130,7 +1148,7 @@ pub enum DatabaseToolCommand {
     ListEventIds,
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Clone, clap::Parser)]
 pub enum NetCommand {
     /// Start a Local Linera Network
@@ -1252,6 +1270,10 @@ pub enum NetCommand {
         #[cfg(feature = "kubernetes")]
         #[arg(long, default_value = "false")]
         dual_store: bool,
+
+        /// Set the list of hosts that contracts and services can send HTTP requests to.
+        #[arg(long, value_delimiter = ',')]
+        http_request_allow_list: Option<Vec<String>>,
     },
 
     /// Print a bash helper script to make `linera net up` easier to use. The script is

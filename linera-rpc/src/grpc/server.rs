@@ -66,7 +66,7 @@ mod metrics {
             "server_request_latency",
             "Server request latency",
             &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
-            linear_bucket_interval(1.0, 25.0, 2000.0),
+            linear_bucket_interval(1.0, 50.0, 5000.0),
         )
     });
 
@@ -91,6 +91,14 @@ mod metrics {
             "server_request_error",
             "Server request error",
             &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL, ERROR_TYPE_LABEL],
+        )
+    });
+
+    pub static SERVER_REQUEST_CANCELLED: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "server_request_cancelled",
+            "Server requests whose handler future was dropped before completion (e.g. client-side timeout / disconnect)",
+            &[METHOD_NAME_LABEL, TRAFFIC_TYPE_LABEL],
         )
     });
 
@@ -283,6 +291,24 @@ impl GrpcServerHandle {
     }
 }
 
+#[cfg(with_metrics)]
+struct ServerRequestCancellationGuard {
+    method_name: String,
+    traffic_type: &'static str,
+    completed: bool,
+}
+
+#[cfg(with_metrics)]
+impl Drop for ServerRequestCancellationGuard {
+    fn drop(&mut self) {
+        if !self.completed {
+            metrics::SERVER_REQUEST_CANCELLED
+                .with_label_values(&[&self.method_name, self.traffic_type])
+                .inc();
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GrpcPrometheusMetricsMiddlewareLayer;
 
@@ -330,14 +356,21 @@ where
 
         let future = self.service.call(request);
         async move {
+            #[cfg(with_metrics)]
+            let mut cancellation_guard = ServerRequestCancellationGuard {
+                method_name,
+                traffic_type,
+                completed: false,
+            };
             let response = future.await?;
             #[cfg(with_metrics)]
             {
+                cancellation_guard.completed = true;
                 metrics::SERVER_REQUEST_LATENCY
-                    .with_label_values(&[&method_name, traffic_type])
+                    .with_label_values(&[&cancellation_guard.method_name, traffic_type])
                     .observe(start.elapsed().as_secs_f64() * 1000.0);
                 metrics::SERVER_REQUEST_COUNT
-                    .with_label_values(&[&method_name, traffic_type])
+                    .with_label_values(&[&cancellation_guard.method_name, traffic_type])
                     .inc();
             }
             Ok(response)
@@ -369,6 +402,20 @@ where
 
         let (cross_chain_sender, cross_chain_receiver) =
             mpsc::channel(cross_chain_config.queue_size);
+
+        // Give the worker a shard-routing sender for cross-chain requests generated
+        // outside the normal `NetworkActions` return path (specifically, the
+        // `RevertConfirm`s emitted after resetting a corrupted chain).
+        let state = {
+            let routing_network = internal_network.clone();
+            let routing_sender = cross_chain_sender.clone();
+            state.with_outbound_cross_chain_sender(std::sync::Arc::new(move |request| {
+                let shard_id = routing_network.get_shard_id(request.target_chain_id());
+                if let Err(error) = routing_sender.clone().try_send((request, shard_id)) {
+                    error!(%error, "dropping cross-chain request");
+                }
+            }))
+        };
 
         let (notification_sender, _) =
             tokio::sync::broadcast::channel(notification_config.notification_queue_size);

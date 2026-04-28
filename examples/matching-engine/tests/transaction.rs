@@ -148,7 +148,7 @@ async fn single_transaction() {
         let operation = Operation::ExecuteOrder { order };
         let (bid_certificate, _) = user_chain_a
             .add_block(|block| {
-                block.with_operation(matching_id, &operation);
+                block.with_operation(matching_id, operation);
             })
             .await;
 
@@ -194,7 +194,7 @@ async fn single_transaction() {
         let operation = Operation::ExecuteOrder { order };
         let (ask_certificate, _) = user_chain_b
             .add_block(|block| {
-                block.with_operation(matching_id, &operation);
+                block.with_operation(matching_id, operation);
             })
             .await;
 
@@ -241,7 +241,7 @@ async fn single_transaction() {
     let operation = Operation::ExecuteOrder { order };
     let (order_certificate, _) = user_chain_a
         .add_block(|block| {
-            block.with_operation(matching_id, &operation);
+            block.with_operation(matching_id, operation);
         })
         .await;
     assert_eq!(order_certificate.outgoing_message_count(), 1);
@@ -260,7 +260,7 @@ async fn single_transaction() {
         .await;
     matching_chain
         .add_block(|block| {
-            block.with_operation(matching_id, &Operation::CloseChain);
+            block.with_operation(matching_id, Operation::CloseChain);
         })
         .await;
 

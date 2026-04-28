@@ -10,7 +10,7 @@ use crate::{Environment, JsResult};
 
 #[wasm_bindgen]
 pub struct Application {
-    pub(crate) client_context: crate::ClientContext,
+    pub(crate) client: crate::Client,
     pub(crate) chain_client: ChainClient<Environment>,
     pub(crate) id: ApplicationId,
 }
@@ -70,7 +70,8 @@ impl Application {
 
         if !operations.is_empty() {
             let _hash = self
-                .client_context
+                .client
+                .context
                 .lock()
                 .await
                 .apply_client_command(&chain_client, |_chain_client| {

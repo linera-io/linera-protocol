@@ -16,7 +16,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
-use linera_base::identifiers::ChainId;
+use linera_base::identifiers::{BlobId, ChainId};
 use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -92,6 +92,16 @@ pub trait MessageHandler: Clone {
     async fn handle_subscribe(
         &mut self,
         _chains: Vec<ChainId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        None
+    }
+
+    /// Handle a batch blob download request by streaming one
+    /// `RpcMessage::DownloadBlobResponse` per requested blob ID.
+    /// Returns `None` if not supported.
+    async fn handle_download_blobs(
+        &mut self,
+        _blob_ids: Vec<BlobId>,
     ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
         None
     }
@@ -475,6 +485,10 @@ where
                         self.handle_subscription(chains).await;
                         return;
                     }
+                    Some(Ok(RpcMessage::DownloadBlobs(blob_ids))) => {
+                        self.handle_download_blobs(blob_ids).await;
+                        return;
+                    }
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
                         Self::handle_error(&error);
@@ -507,6 +521,27 @@ where
                     Some(notification) => {
                         if let Err(error) = self.connection.send(notification).await {
                             error!("Failed to send notification: {error}");
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+
+    /// Handles a batch blob download request by streaming one response per blob.
+    async fn handle_download_blobs(&mut self, blob_ids: Vec<BlobId>) {
+        let Some(mut stream) = self.handler.handle_download_blobs(blob_ids).await else {
+            return;
+        };
+        loop {
+            tokio::select! { biased;
+                _ = self.shutdown_signal.cancelled() => break,
+                msg = stream.next() => match msg {
+                    Some(message) => {
+                        if let Err(error) = self.connection.send(message).await {
+                            error!("Failed to send blob response: {error}");
                             break;
                         }
                     }

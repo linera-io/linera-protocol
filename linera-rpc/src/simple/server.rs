@@ -124,7 +124,7 @@ where
     }
 
     pub fn spawn(
-        self,
+        mut self,
         shutdown_signal: CancellationToken,
         join_set: &mut JoinSet<()>,
     ) -> ServerHandle {
@@ -138,6 +138,23 @@ where
             mpsc::channel(self.cross_chain_config.queue_size);
 
         let (notification_sender, _) = sync::broadcast::channel(1000);
+
+        // Give the worker a shard-routing sender for cross-chain requests generated
+        // outside the normal `NetworkActions` return path (specifically, the
+        // `RevertConfirm`s emitted after resetting a corrupted chain).
+        {
+            let routing_network = self.network.clone();
+            let routing_sender = cross_chain_sender.clone();
+            self.state = self
+                .state
+                .clone()
+                .with_outbound_cross_chain_sender(Arc::new(move |request| {
+                    let shard_id = routing_network.get_shard_id(request.target_chain_id());
+                    if let Err(error) = routing_sender.clone().try_send((request, shard_id)) {
+                        tracing::error!(%error, "dropping cross-chain request");
+                    }
+                }));
+        }
 
         join_set.spawn_task(Self::forward_cross_chain_queries(
             self.state.nickname().to_string(),
@@ -373,6 +390,7 @@ where
             | RpcMessage::ShardInfoQuery(_)
             | RpcMessage::ShardInfoResponse(_)
             | RpcMessage::DownloadBlob(_)
+            | RpcMessage::DownloadBlobs(_)
             | RpcMessage::DownloadBlobResponse(_)
             | RpcMessage::DownloadPendingBlobResponse(_)
             | RpcMessage::DownloadConfirmedBlock(_)
@@ -398,7 +416,7 @@ where
         self.server.packets_processed += 1;
         // We allow this because `is_multiple_of` is still unstable in our MSRV.
         #[allow(unknown_lints)]
-        #[allow(clippy::manual_is_multiple_of)]
+        #[expect(clippy::manual_is_multiple_of)]
         if self.server.packets_processed % 5000 == 0 {
             debug!(
                 "[{}] {}:{} (shard {}) has processed {} packets",

@@ -6,7 +6,7 @@
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 
 /// Configure jemalloc profiling infrastructure at startup with sampling disabled.
 /// Profiling is activated at runtime only when `--enable-memory-profiling` is passed.
@@ -59,7 +59,7 @@ use linera_core::{
     worker::Reason,
     JoinSetExt as _, LocalNodeError,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, Operation};
 use linera_faucet_server::{FaucetConfig, FaucetService};
 #[cfg(with_metrics)]
 use linera_metrics::monitoring_server;
@@ -556,7 +556,7 @@ impl Runnable for Job {
                         let command = command.clone();
                         async move {
                             // Update resource control policy
-                            let mut committee = chain_client.local_committee().await.unwrap();
+                            let committee = chain_client.local_committee().await.unwrap();
                             let mut policy = committee.policy().clone();
                             let validators = committee.validators().clone();
                             match command {
@@ -685,9 +685,9 @@ impl Runnable for Job {
                                 }
                                 _ => unreachable!(),
                             }
-                            committee = Committee::new(validators, policy)?;
+                            let new_committee = Committee::new(validators, policy)?;
                             chain_client
-                                .stage_new_committee(committee)
+                                .stage_new_committee(new_committee)
                                 .await
                                 .map(|outcome| outcome.map(Some))
                         }
@@ -1614,6 +1614,33 @@ impl Runnable for Job {
                 );
             }
 
+            ExecuteOperation {
+                application_id,
+                operation,
+                chain_id,
+            } => {
+                let bytes = linera_base::hex::decode(&operation)
+                    .context("invalid hex for operation bytes")?;
+                let user_operation = Operation::User {
+                    application_id,
+                    bytes,
+                };
+                let mut context = options
+                    .create_client_context(storage, wallet, keystore)
+                    .await?;
+                let chain_id = chain_id.unwrap_or_else(|| context.default_chain());
+                let chain_client = context.make_chain_client(chain_id).await?;
+                let certificate = context
+                    .apply_client_command(&chain_client, |chain_client| {
+                        let chain_client = chain_client.clone();
+                        let user_operation = user_operation.clone();
+                        async move { chain_client.execute_operation(user_operation).await }
+                    })
+                    .await
+                    .context("Failed to execute operation")?;
+                debug!("{:?}", certificate);
+            }
+
             Project(project_command) => match project_command {
                 ProjectCommand::PublishAndCreate {
                     path,
@@ -1771,7 +1798,7 @@ impl Runnable for Job {
                     .make_chain_client(network_description.admin_chain_id)
                     .await?;
                 chain_client
-                    .synchronize_chain_state_from_committee(committee)
+                    .synchronize_chain_state_from_committee(Arc::new(committee))
                     .await?;
                 context.update_wallet_from_client(&chain_client).await?;
             }
@@ -2038,7 +2065,47 @@ fn init_tracing(options: &Options) {
     linera_base::tracing::init(&options.command.log_file_name());
 }
 
+/// Resolve the desired color override based on the `NO_COLOR`, `CLICOLOR`, and
+/// `CLICOLOR_FORCE` environment variables, as specified by <https://no-color.org>.
+///
+/// Returns `Some(false)` when colors must be disabled, `Some(true)` when they must be
+/// forced on, or `None` to leave auto-detection alone.
+fn color_override_from_env(
+    no_color: Option<&std::ffi::OsStr>,
+    clicolor: Option<&str>,
+    clicolor_force: Option<&str>,
+) -> Option<bool> {
+    let no_color_set = no_color.is_some_and(|value| !value.is_empty());
+    let clicolor_zero = clicolor == Some("0");
+    if no_color_set || clicolor_zero {
+        Some(false)
+    } else if clicolor_force == Some("1") {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+/// Configure color output according to the `NO_COLOR` / `CLICOLOR` / `CLICOLOR_FORCE`
+/// environment variables, as specified by <https://no-color.org>.
+///
+/// This only affects styling applied via the `colored` crate, which is used for
+/// `tracing` messages written to stderr. Stdout is always plain text.
+fn configure_colors() {
+    let no_color = std::env::var_os("NO_COLOR");
+    let clicolor = std::env::var("CLICOLOR").ok();
+    let clicolor_force = std::env::var("CLICOLOR_FORCE").ok();
+    if let Some(enabled) = color_override_from_env(
+        no_color.as_deref(),
+        clicolor.as_deref(),
+        clicolor_force.as_deref(),
+    ) {
+        colored::control::set_override(enabled);
+    }
+}
+
 fn main() -> anyhow::Result<process::ExitCode> {
+    configure_colors();
     let options = Options::init();
     let mut runtime = if options.common.tokio_threads == Some(1) {
         tokio::runtime::Builder::new_current_thread()
@@ -2238,8 +2305,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             });
             let mut genesis_config = persistent::File::new(
                 genesis_config_path,
-                GenesisConfig::new(
-                    committee_config,
+                committee_config.into_genesis(
                     timestamp,
                     policy,
                     network_name,
@@ -2405,6 +2471,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 with_block_exporter,
                 exporter_address: block_exporter_address,
                 exporter_port: block_exporter_port,
+                http_request_allow_list,
                 ..
             } => {
                 net_up_utils::handle_net_up_service(
@@ -2425,6 +2492,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     *with_faucet,
                     *faucet_port,
                     *faucet_amount,
+                    http_request_allow_list.clone(),
                 )
                 .boxed()
                 .await?;
@@ -2590,5 +2658,53 @@ Make sure to use a Linera client compatible with this network.
             options.run_with_storage(Job(options.clone())).await??;
             Ok(0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsStr;
+
+    use super::color_override_from_env;
+
+    #[test]
+    fn no_color_disables_colors() {
+        assert_eq!(
+            color_override_from_env(Some(OsStr::new("1")), None, None),
+            Some(false),
+        );
+        assert_eq!(
+            color_override_from_env(Some(OsStr::new("anything")), None, Some("1")),
+            Some(false),
+            "NO_COLOR must win over CLICOLOR_FORCE",
+        );
+    }
+
+    #[test]
+    fn empty_no_color_is_ignored() {
+        assert_eq!(
+            color_override_from_env(Some(OsStr::new("")), None, None),
+            None,
+        );
+    }
+
+    #[test]
+    fn clicolor_zero_disables_colors() {
+        assert_eq!(color_override_from_env(None, Some("0"), None), Some(false),);
+    }
+
+    #[test]
+    fn clicolor_force_one_forces_colors() {
+        assert_eq!(color_override_from_env(None, None, Some("1")), Some(true),);
+    }
+
+    #[test]
+    fn no_env_leaves_defaults() {
+        assert_eq!(color_override_from_env(None, None, None), None);
+        assert_eq!(
+            color_override_from_env(None, Some("1"), None),
+            None,
+            "CLICOLOR=1 should not force or disable",
+        );
     }
 }

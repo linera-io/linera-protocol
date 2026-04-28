@@ -47,7 +47,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::Environment,
-    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode as _, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
@@ -266,7 +266,7 @@ pub struct Client<Env: Environment> {
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         environment: Env,
         admin_chain_id: ChainId,
@@ -781,9 +781,18 @@ impl<Env: Environment> Client<Env> {
         until_block_time: Option<Timestamp>,
     ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
         let mut info = None;
+        // Blobs created by these certs are already embedded in the downloaded
+        // block bodies, so they don't need to be fetched from a validator. The
+        // chain worker resolves them from `Block::created_blobs()` during
+        // `handle_certificate`.
+        let created_blob_ids: BTreeSet<BlobId> = certificates
+            .iter()
+            .flat_map(|certificate| certificate.value().block().created_blob_ids())
+            .collect();
         let required_blob_ids: Vec<_> = certificates
             .iter()
             .flat_map(|certificate| certificate.value().required_blob_ids())
+            .filter(|blob_id| !created_blob_ids.contains(blob_id))
             .collect();
 
         match self
@@ -843,15 +852,40 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn admin_committees(
         &self,
-    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
+    ) -> Result<(Epoch, BTreeMap<Epoch, Arc<Committee>>), LocalNodeError> {
         let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        Ok((info.epoch, info.into_committees()?))
+        let hashes = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+        let committees =
+            futures::future::try_join_all(hashes.into_iter().map(|(epoch, hash)| async move {
+                let committee = self
+                    .storage_client()
+                    .get_or_load_committee_by_hash(hash)
+                    .await?;
+                Ok::<_, LocalNodeError>((epoch, committee))
+            }))
+            .await?
+            .into_iter()
+            .collect();
+        Ok((info.epoch, committees))
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
-    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        Ok((info.epoch, info.into_current_committee()?))
+        let hash = info
+            .requested_committees
+            .as_ref()
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
+            .get(&info.epoch)
+            .copied()
+            .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
+        let committee = self
+            .storage_client()
+            .get_or_load_committee_by_hash(hash)
+            .await?;
+        Ok((info.epoch, committee))
     }
 
     /// Obtains the validators for the latest epoch.
@@ -935,7 +969,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn submit_block_proposal<T: ProcessableCertificate>(
         self: &Arc<Self>,
-        committee: &Committee,
+        committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
         value: T,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
@@ -992,7 +1026,7 @@ impl<Env: Environment> Client<Env> {
         });
 
         let certificate = self
-            .communicate_chain_action(committee, submit_action, value)
+            .communicate_chain_action(&committee, submit_action, value)
             .await?;
 
         clock_skew_check_handle.await;
@@ -1171,7 +1205,7 @@ impl<Env: Environment> Client<Env> {
         let (max_epoch, committees) = match self.admin_committees().await {
             Ok(result) => result,
             Err(error) => {
-                error!(%error, "could not read admin committees");
+                error!(%error, %sender_chain_id, "could not read admin committees");
                 return;
             }
         };
@@ -1257,6 +1291,7 @@ impl<Env: Environment> Client<Env> {
                     nodes.retain(|node| !faulty_validators.contains(&node.public_key));
                     if nodes.is_empty() {
                         info!(
+                            chain_id = %sender_chain_id,
                             "could not download certificates for chain - no more correct validators left"
                         );
                         return;
@@ -1582,7 +1617,7 @@ impl<Env: Environment> Client<Env> {
     )]
     fn check_certificate(
         highest_known_epoch: Epoch,
-        committees: &BTreeMap<Epoch, Committee>,
+        committees: &BTreeMap<Epoch, Arc<Committee>>,
         incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
         let block = incoming_certificate.block();
@@ -1622,7 +1657,7 @@ impl<Env: Environment> Client<Env> {
     pub(crate) async fn synchronize_chain_from_committee(
         &self,
         chain_id: ChainId,
-        committee: Committee,
+        committee: Arc<Committee>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         #[cfg(with_metrics)]
         let _latency = if !self.is_chain_follow_only(chain_id) {

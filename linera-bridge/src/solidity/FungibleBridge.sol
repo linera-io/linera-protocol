@@ -29,21 +29,32 @@ contract FungibleBridge is Microchain {
         uint256 nonce
     );
 
-    bytes32 public immutable applicationId;
+    // WrappedFungible application ID on Linera,
+    // used to identify Burn events in the block stream.
+    // Set once via registerFungibleApplicationId after deployment.
+    bytes32 public fungibleApplicationId;
+    // The ERC-20 token being bridged.
     IERC20 public immutable token;
+    // The deployer, authorized to register the application ID.
+    address public immutable deployer;
     uint256 public depositNonce;
 
     constructor(
         address _lightClient,
         bytes32 _chainId,
-        uint64 _nextExpectedHeight,
-        bytes32 _applicationId,
         address _token
     )
-        Microchain(_lightClient, _chainId, _nextExpectedHeight)
+        Microchain(_lightClient, _chainId)
     {
-        applicationId = _applicationId;
         token = IERC20(_token);
+        deployer = msg.sender;
+    }
+
+    /// Registers the wrapped-fungible application ID. Can only be called once, by the deployer.
+    function registerFungibleApplicationId(bytes32 _fungibleApplicationId) external {
+        require(msg.sender == deployer, "only deployer can register");
+        require(fungibleApplicationId == bytes32(0), "application ID already registered");
+        fungibleApplicationId = _fungibleApplicationId;
     }
 
     /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
@@ -57,7 +68,7 @@ contract FungibleBridge is Microchain {
         uint256 amount
     ) external {
         require(amount > 0, "amount=0");
-        require(target_application_id == applicationId, "target application mismatch");
+        require(target_application_id == fungibleApplicationId, "target application mismatch");
 
         uint256 before = token.balanceOf(address(this));
         _safeTransferFrom(msg.sender, address(this), amount);
@@ -78,29 +89,28 @@ contract FungibleBridge is Microchain {
         );
     }
 
-    /// Processes a Linera block and releases ERC-20 tokens for any Burn
-    /// operations targeting an Ethereum address (Address20).
+    /// Processes a Linera block and releases ERC-20 tokens for any BurnEvent
+    /// events on the "burns" stream from the wrapped-fungible application.
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
-        for (uint i = 0; i < blockValue.body.transactions.length; i++) {
-            BridgeTypes.Transaction memory txn = blockValue.body.transactions[i];
-            // choice==1 is ExecuteOperation
-            if (txn.choice != 1) continue;
+        bytes32 burnsHash = keccak256("burns");
+        for (uint i = 0; i < blockValue.body.events.length; i++) {
+            BridgeTypes.Event[] memory txEvents = blockValue.body.events[i];
+            for (uint j = 0; j < txEvents.length; j++) {
+                BridgeTypes.Event memory evt = txEvents[j];
 
-            BridgeTypes.Operation memory op = txn.execute_operation;
-            // choice==1 is User
-            if (op.choice != 1) continue;
-            if (op.user.application_id.application_description_hash.value != applicationId) continue;
+                // choice==1 is User application
+                if (evt.stream_id.application_id.choice != 1) continue;
+                if (evt.stream_id.application_id.user.application_description_hash.value != fungibleApplicationId) continue;
 
-            WrappedFungibleTypes.WrappedFungibleOperation memory userOp =
-                WrappedFungibleTypes.bcs_deserialize_WrappedFungibleOperation(op.user.bytes_);
+                // Check stream name is "burns"
+                if (keccak256(evt.stream_id.stream_name.value) != burnsHash) continue;
 
-            // choice==7 is Burn
-            if (userOp.choice != 7) continue;
-            // choice==2 is Address20 (Ethereum address)
-            if (userOp.burn.owner.choice != 2) continue;
+                WrappedFungibleTypes.BurnEvent memory burnEvt =
+                    WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
 
-            address target = address(userOp.burn.owner.address20);
-            require(token.transfer(target, userOp.burn.amount.value), "token transfer failed");
+                address target = address(burnEvt.target);
+                require(token.transfer(target, burnEvt.amount.value), "token transfer failed");
+            }
         }
     }
 

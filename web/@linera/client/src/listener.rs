@@ -5,7 +5,7 @@ use futures::future::{self, FutureExt as _};
 use linera_client::chain_listener::ChainListener;
 use tokio_util::sync::CancellationToken;
 
-use crate::{ClientContext, Result, Storage};
+use crate::Result;
 
 pub struct Listener {
     cancellation_token: CancellationToken,
@@ -13,16 +13,12 @@ pub struct Listener {
 }
 
 impl Listener {
-    pub(crate) async fn start(
-        context: ClientContext,
-        config: linera_client::chain_listener::ChainListenerConfig,
-        storage: Storage,
-    ) -> Result<Self> {
+    pub(crate) async fn start(client: crate::Client) -> Result<Self> {
         let cancellation_token = CancellationToken::new();
         let chain_listener = ChainListener::new(
-            config,
-            context,
-            storage,
+            client.chain_listener_config,
+            client.context,
+            client.storage,
             cancellation_token.clone(),
             tokio::sync::mpsc::unbounded_channel().1,
             true, // Enable background sync

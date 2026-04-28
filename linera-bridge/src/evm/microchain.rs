@@ -9,8 +9,6 @@ pub const SOURCE: &str = include_str!("../solidity/Microchain.sol");
 sol! {
     function addBlock(bytes calldata data) external;
 
-    function nextExpectedHeight() external view returns (uint64);
-
     function lightClient() external view returns (address);
 
     function chainId() external view returns (bytes32);
@@ -28,7 +26,7 @@ mod tests {
         primitives::Address,
     };
 
-    use super::{addBlockCall, chainIdCall, lightClientCall, nextExpectedHeightCall};
+    use super::{addBlockCall, chainIdCall, lightClientCall};
     use crate::test_helpers::*;
 
     sol! {
@@ -67,11 +65,6 @@ mod tests {
         microchain.add_block(BlockHeight(1));
 
         assert_eq!(microchain.query_block_count(), 1, "block count should be 1");
-        assert_eq!(
-            microchain.query_next_expected_height(),
-            2,
-            "next expected height should be 2"
-        );
     }
 
     #[test]
@@ -102,13 +95,18 @@ mod tests {
     }
 
     #[test]
-    fn test_microchain_rejects_non_sequential_height() {
+    fn test_microchain_accepts_non_sequential_height() {
         let mut t = TestMicrochain::new();
 
-        assert!(
-            t.try_add_block(t.chain_id, BlockHeight(5)).is_err(),
-            "should reject non-sequential block height"
-        );
+        // Blocks can be submitted at any height, not just sequentially.
+        t.add_block(BlockHeight(5));
+        assert_eq!(t.query_block_count(), 1, "block count should be 1");
+
+        t.add_block(BlockHeight(2));
+        assert_eq!(t.query_block_count(), 2, "block count should be 2");
+
+        t.add_block(BlockHeight(100));
+        assert_eq!(t.query_block_count(), 3, "block count should be 3");
     }
 
     /// Common test state for Microchain tests.
@@ -131,7 +129,7 @@ mod tests {
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let light_client =
                 deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
-            let contract = deploy_microchain(&mut db, deployer, light_client, chain_id, 1);
+            let contract = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
             Self {
                 db,
@@ -188,16 +186,6 @@ mod tests {
                 &blockCountCall {},
             );
             count
-        }
-
-        fn query_next_expected_height(&mut self) -> u64 {
-            let (height, _, _) = call_contract(
-                &mut self.db,
-                self.deployer,
-                self.contract,
-                &nextExpectedHeightCall {},
-            );
-            height
         }
     }
 }

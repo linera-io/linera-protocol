@@ -188,8 +188,8 @@ where
     /// Schedules an operation to be included in the block being built.
     ///
     /// The operation is specified as an opaque blob of bytes.
-    pub fn schedule_raw_operation(&self, operation: &[u8]) {
-        service_wit::schedule_operation(operation);
+    pub fn schedule_raw_operation(&self, operation: Vec<u8>) {
+        service_wit::schedule_operation(&operation);
     }
 
     /// Schedules an operation to be included in the block being built.

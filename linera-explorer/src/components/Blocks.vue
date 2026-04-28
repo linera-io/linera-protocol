@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ConfirmedBlock } from '../../gql/service'
-import { getOperations, getIncomingBundles } from './utils'
+import { getOperations, getIncomingBundles, formatTimestamp, copyToClipboard } from './utils'
 
 defineProps<{blocks: ConfirmedBlock[]}>()
 </script>
@@ -29,8 +29,9 @@ defineProps<{blocks: ConfirmedBlock[]}>()
           <td>{{ b.block.header.height }}</td>
           <td :title="b.hash">
             <a @click="$root.route('block', [['block', b.hash]])" class="btn btn-link">{{ short_hash(b.hash) }}</a>
+            <a role="button" @click="copyToClipboard(b.hash, $event)" title="Copy hash"><i class="bi bi-clipboard"></i></a>
           </td>
-          <td>{{ (new Date(Number(b.block.header.timestamp)/1000)).toLocaleString() }}</td>
+          <td>{{ formatTimestamp(b.block.header.timestamp) }}</td>
           <td>
             <a v-if="b.block.header.authenticatedOwner" class="btn btn-link btn-sm font-monospace" data-bs-toggle="collapse" :data-bs-target="'#signer-'+b.hash">{{ b.block.header.authenticatedOwner.slice(0, 10) }}…</a>
             <div v-if="b.block.header.authenticatedOwner" class="collapse font-monospace small text-break" :id="'signer-'+b.hash">{{ b.block.header.authenticatedOwner }}</div>

@@ -6,7 +6,7 @@
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 
 /// Configure jemalloc profiling infrastructure at startup with sampling disabled.
 /// Profiling is activated at runtime only when `--enable-memory-profiling` is passed.
@@ -16,6 +16,7 @@ pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\
 
 use std::{
     borrow::Cow,
+    collections::HashSet,
     num::NonZeroU16,
     path::{Path, PathBuf},
     sync::Arc,
@@ -27,6 +28,7 @@ use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, FutureExt as _, StreamExt, TryFutureExt as _};
 use linera_base::{
     crypto::{CryptoRng, Ed25519SecretKey},
+    identifiers::ChainId,
     listen_for_shutdown_signals,
 };
 use linera_client::config::{CommitteeConfig, ValidatorConfig, ValidatorServerConfig};
@@ -68,7 +70,8 @@ struct ServerContext {
     chain_info_max_received_log_entries: usize,
     cross_chain_message_chunk_limit: usize,
     allow_revert_confirm: bool,
-    reset_on_incorrect_outcome_mins: Option<u64>,
+    reset_on_corrupted_chain_state_mins: Option<u64>,
+    recovery_whitelist: Option<HashSet<ChainId>>,
     #[cfg(with_metrics)]
     enable_memory_profiling: bool,
 }
@@ -101,9 +104,10 @@ impl ServerContext {
             block_cache_size: self.block_cache_size,
             execution_state_cache_size: self.execution_state_cache_size,
             allow_revert_confirm: self.allow_revert_confirm,
-            reset_on_incorrect_outcome: self
-                .reset_on_incorrect_outcome_mins
+            reset_on_corrupted_chain_state: self
+                .reset_on_corrupted_chain_state_mins
                 .map(|m| Duration::from_secs(m * 60)),
+            recovery_whitelist: self.recovery_whitelist.clone(),
             ..ChainWorkerConfig::default()
         };
         let state = WorkerState::new(storage, config, None);
@@ -474,12 +478,19 @@ enum ServerCommand {
         #[arg(long, default_value_t = false)]
         allow_revert_confirm: bool,
 
-        /// On IncorrectOutcome errors, reset the chain state and re-execute all
-        /// blocks from scratch. Sends RevertConfirm to all known senders. The
+        /// On detection of corrupted chain state, reset the chain state and re-execute
+        /// all blocks from scratch. Sends RevertConfirm to all known senders. The
         /// value is the minimum number of minutes since the last reset before
         /// another reset is allowed (to prevent loops).
         #[arg(long)]
-        reset_on_incorrect_outcome_mins: Option<u64>,
+        reset_on_corrupted_chain_state_mins: Option<u64>,
+
+        /// Optional whitelist of chain IDs allowed to use the `--allow-revert-confirm`
+        /// and `--reset-on-corrupted-chain-state-mins` recovery mechanisms. If not
+        /// specified, every chain is eligible. Values may be passed as a
+        /// comma-separated list or by repeating the flag.
+        #[arg(long, value_delimiter = ',')]
+        recovery_whitelist: Option<Vec<ChainId>>,
 
         /// OpenTelemetry OTLP exporter endpoint (requires opentelemetry feature).
         #[arg(long, env = "LINERA_OTLP_EXPORTER_ENDPOINT")]
@@ -614,7 +625,8 @@ async fn run(options: ServerOptions) {
             chain_info_max_received_log_entries,
             cross_chain_message_chunk_limit,
             allow_revert_confirm,
-            reset_on_incorrect_outcome_mins,
+            reset_on_corrupted_chain_state_mins,
+            recovery_whitelist,
             otlp_exporter_endpoint: _,
         } => {
             linera_version::VERSION_INFO.log();
@@ -634,7 +646,8 @@ async fn run(options: ServerOptions) {
                 chain_info_max_received_log_entries,
                 cross_chain_message_chunk_limit,
                 allow_revert_confirm,
-                reset_on_incorrect_outcome_mins,
+                reset_on_corrupted_chain_state_mins,
+                recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
                 #[cfg(with_metrics)]
                 enable_memory_profiling,
             };

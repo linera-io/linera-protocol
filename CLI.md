@@ -39,6 +39,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera keygen`↴](#linera-keygen)
 * [`linera assign`↴](#linera-assign)
 * [`linera retry-pending-block`↴](#linera-retry-pending-block)
+* [`linera execute-operation`↴](#linera-execute-operation)
 * [`linera wallet`↴](#linera-wallet)
 * [`linera wallet show`↴](#linera-wallet-show)
 * [`linera wallet set-default`↴](#linera-wallet-set-default)
@@ -64,6 +65,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera validator update`↴](#linera-validator-update)
 * [`linera validator list`↴](#linera-validator-list)
 * [`linera validator query`↴](#linera-validator-query)
+* [`linera validator query-block`↴](#linera-validator-query-block)
 * [`linera validator remove`↴](#linera-validator-remove)
 * [`linera validator sync`↴](#linera-validator-sync)
 * [`linera storage`↴](#linera-storage)
@@ -117,6 +119,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `keygen` — Create an unassigned key pair
 * `assign` — Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
 * `retry-pending-block` — Retry a block we unsuccessfully tried to propose earlier
+* `execute-operation` — Execute a raw user operation on an application
 * `wallet` — Show the contents of the wallet
 * `chain` — Show the information about a chain
 * `project` — Manage Linera projects
@@ -990,6 +993,22 @@ As long as a block is pending most other commands will fail, since it is unsafe 
 
 
 
+## `linera execute-operation`
+
+Execute a raw user operation on an application.
+
+The operation bytes are provided as a hex string (BCS-encoded).
+
+**Usage:** `linera execute-operation [OPTIONS] --application-id <APPLICATION_ID> --operation <OPERATION>`
+
+###### **Options:**
+
+* `--application-id <APPLICATION_ID>` — The application to send the operation to
+* `--operation <OPERATION>` — BCS-encoded operation bytes as a hex string
+* `--chain-id <CHAIN_ID>` — Chain ID to submit the operation on. Defaults to the wallet's default chain
+
+
+
 ## `linera wallet`
 
 Show the contents of the wallet
@@ -1321,6 +1340,7 @@ Start a Local Linera Network
 * `--exporter-port <EXPORTER_PORT>` — The port on which to run the block exporter
 
   Default value: `8081`
+* `--http-request-allow-list <HTTP_REQUEST_ALLOW_LIST>` — Set the list of hosts that contracts and services can send HTTP requests to
 
 
 
@@ -1345,6 +1365,7 @@ Manage validators in the committee
 * `update` — Apply multiple validator changes from JSON input
 * `list` — List all validators in the committee
 * `query` — Query a single validator's state and connectivity
+* `query-block` — Query a single validator for a block at a particular chain and height
 * `remove` — Remove a validator from the committee
 * `sync` — Synchronize chain state to a validator
 
@@ -1439,6 +1460,26 @@ Connects to a validator at the specified network address and queries its view of
 
 * `--chain-id <CHAIN_ID>` — Chain ID to query about (defaults to default chain)
 * `--public-key <PUBLIC_KEY>` — Expected public key of the validator (for verification)
+
+
+
+## `linera validator query-block`
+
+Query a single validator for a block at a particular chain and height.
+
+Connects to a validator at the specified network address and queries its view of the blockchain.
+
+**Usage:** `linera validator query-block [OPTIONS] --height <HEIGHT> <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — Network address of the validator (e.g., grpcs://host:port)
+
+###### **Options:**
+
+* `--chain-id <CHAIN_ID>` — Chain ID to query about (defaults to default chain)
+* `--public-key <PUBLIC_KEY>` — Expected public key of the validator (for verification)
+* `--height <HEIGHT>` — Block height to query about
 
 
 

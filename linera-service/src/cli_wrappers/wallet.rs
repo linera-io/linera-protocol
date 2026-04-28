@@ -32,7 +32,6 @@ use linera_base::{
 };
 use linera_client::client_options::ResourceControlPolicyConfig;
 use linera_core::worker::Notification;
-use linera_execution::committee::Committee;
 use linera_faucet_client::Faucet;
 use serde::{de::DeserializeOwned, ser::Serialize};
 use serde_command_opts::to_args;
@@ -502,7 +501,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera service` with all available options.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn run_node_service_with_all_options(
         &self,
         port: impl Into<Option<u16>>,
@@ -1652,7 +1651,10 @@ impl NodeService {
         Ok(module_id.with_abi())
     }
 
-    pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
+    pub async fn query_committees(
+        &self,
+        chain_id: &ChainId,
+    ) -> Result<BTreeMap<Epoch, CryptoHash>> {
         let query = format!(
             "query {{ chain(chainId:\"{chain_id}\") {{
                 executionState {{ system {{ committees }} }}

@@ -820,7 +820,7 @@ where
     /// application doesn't have permission to do so.
     pub fn change_application_permissions(
         &mut self,
-        application_permissions: &ApplicationPermissions,
+        application_permissions: ApplicationPermissions,
     ) -> Result<(), ManageChainError> {
         let authorized = self.can_manage_chain.expect(
             "Authorization to manage the chain has not been mocked, \
@@ -857,7 +857,6 @@ where
 
     /// Opens a new chain, configuring it with the provided `chain_ownership`,
     /// `application_permissions` and initial `balance` (debited from the current chain).
-    #[allow(clippy::needless_pass_by_value)]
     pub fn open_chain(
         &mut self,
         ownership: ChainOwnership,
@@ -925,7 +924,6 @@ where
     }
 
     /// Creates a new module-id on-chain application, based on the supplied bytecode and parameters.
-    #[allow(clippy::needless_pass_by_value)]
     pub fn publish_module(
         &mut self,
         contract: Bytecode,
@@ -948,7 +946,6 @@ where
     }
 
     /// Creates a new on-chain application, based on the supplied module and parameters.
-    #[allow(clippy::needless_pass_by_value)]
     pub fn create_application<Abi, Parameters, InstantiationArgument>(
         &mut self,
         module_id: ModuleId,
@@ -987,7 +984,7 @@ where
     }
 
     /// Creates a new data blob and returns its hash.
-    pub fn create_data_blob(&mut self, bytes: &[u8]) -> DataBlobHash {
+    pub fn create_data_blob(&mut self, bytes: Vec<u8>) -> DataBlobHash {
         let ExpectedCreateDataBlobCall {
             bytes: expected_bytes,
             blob_id,
@@ -995,7 +992,7 @@ where
             .expected_create_data_blob_calls
             .pop_front()
             .expect("Unexpected create_data_blob call");
-        assert_eq!(bytes, &expected_bytes);
+        assert_eq!(bytes, expected_bytes);
         DataBlobHash(blob_id.hash)
     }
 
@@ -1090,8 +1087,8 @@ where
     pub fn add_expected_service_query<A: ServiceAbi + Send>(
         &mut self,
         application_id: ApplicationId<A>,
-        query: &A::Query,
-        response: &A::QueryResponse,
+        query: A::Query,
+        response: A::QueryResponse,
     ) {
         let query = serde_json::to_string(&query).expect("Failed to serialize query");
         let response = serde_json::to_string(&response).expect("Failed to serialize response");
@@ -1140,13 +1137,13 @@ where
     pub fn query_service<A: ServiceAbi + Send>(
         &mut self,
         application_id: ApplicationId<A>,
-        query: &A::Query,
+        query: A::Query,
     ) -> A::QueryResponse {
         let maybe_query = self.expected_service_queries.pop_front();
         let (expected_id, expected_query, response) =
             maybe_query.expect("Unexpected service query");
         assert_eq!(application_id.forget_abi(), expected_id);
-        let query = serde_json::to_string(query).expect("Failed to serialize query");
+        let query = serde_json::to_string(&query).expect("Failed to serialize query");
         assert_eq!(query, expected_query);
         serde_json::from_str(&response).expect("Failed to deserialize response")
     }
@@ -1158,7 +1155,6 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
-    #[allow(clippy::needless_pass_by_value)]
     pub fn http_request(&mut self, request: http::Request) -> http::Response {
         let maybe_request = self.expected_http_requests.pop_front();
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");

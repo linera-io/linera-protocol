@@ -99,29 +99,33 @@ The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis c
 
 ### Microchain (abstract)
 
-#### `constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight)`
+#### `constructor(address _lightClient, bytes32 _chainId)`
 
-Binds the contract to a specific `LightClient` instance, a Linera chain ID (a 32-byte `CryptoHash`), and an initial block height.
+Binds the contract to a specific `LightClient` instance and a Linera chain ID (a 32-byte `CryptoHash`).
 
 #### `addBlock(bytes calldata data)`
 
 Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
+- **No duplicate blocks**: rejects certificates already processed via the `verifiedBlocks` mapping.
 - **Chain ID match**: the block's `header.chain_id` must equal this contract's `chainId`.
-- **Sequential heights**: the block's height must equal `nextExpectedHeight`.
 
-On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
+Blocks can be submitted in any order; sequential height enforcement is not required because BFT-finalized certificates guarantee canonicality. On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
 ### FungibleBridge (concrete Microchain)
 
-A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When a fungible `Credit` message targeting an Ethereum address (`Address20`) is received, the contract transfers tokens from its own balance to the recipient.
+A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When the wrapped-fungible application emits a `BurnEvent` (tokens auto-burned on the bridge chain), the contract releases the corresponding ERC-20 tokens to the target Ethereum address.
 
-#### `constructor(address _lightClient, bytes32 _chainId, uint64 _latestHeight, bytes32 _applicationId, address _token)`
+#### `constructor(address _lightClient, bytes32 _chainId, address _token)`
 
-Binds to a specific `LightClient`, chain, initial block height, Linera application ID, and ERC-20 token contract. Only messages targeting this `applicationId` are processed; all others are silently skipped.
+Binds to a specific `LightClient`, chain, and ERC-20 token contract.
+
+#### `registerFungibleApplicationId(bytes32 _fungibleApplicationId)`
+
+Registers the wrapped-fungible application ID. Can only be called once. Only events from this application are processed; all others are silently skipped.
 
 #### `_onBlock(BridgeTypes.Block)`
 
-Scans the block's `ReceiveMessages` transactions for `Message::User` entries matching `applicationId`. For each match, the opaque `bytes` payload is deserialized as a `WrappedFungibleTypes.Message`. Only `Credit` messages with an `Address20` target (Ethereum address) trigger an ERC-20 `transfer` from the bridge's balance to the target.
+Scans the block's `events` for entries on the `"burns"` stream matching `fungibleApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
 
 ## Rust API
 
@@ -140,7 +144,7 @@ let calldata: Vec<u8> = call.abi_encode();
 
 // Available call types:
 // light_client: addCommitteeCall, verifyBlockCall, currentEpochCall
-// microchain:   addBlockCall, nextExpectedHeightCall, lightClientCall, chainIdCall
+// microchain:   addBlockCall, lightClientCall, chainIdCall
 
 // Solidity sources (for compilation or deployment tooling):
 // BRIDGE_TYPES_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE
@@ -194,12 +198,54 @@ Tests use [revm](https://github.com/bluealloy/revm) (Rust EVM) to execute the So
 - Microchain block tracking with chain ID enforcement
 - Microchain rejection of wrong chain ID and non-sequential heights
 - Microchain rejection of duplicate block submissions
-- FungibleBridge ERC-20 transfer on Credit message
-- FungibleBridge accumulated transfers across blocks
-- FungibleBridge skips non-EVM targets (Address32)
-- FungibleBridge ignores messages for other application IDs
+- FungibleBridge ERC-20 release on BurnEvent
+- FungibleBridge accumulated releases across blocks
+- FungibleBridge ignores events for other application IDs
 
 ### Prerequisites
 
 - `solc` (Solidity compiler) must be on `$PATH`
 - Run tests: `cargo test -p linera-bridge`
+
+## Security analysis
+
+### Can tokens be minted on Linera without a corresponding EVM deposit?
+
+**No.** The `wrapped-fungible` contract's `Mint` operation requires that the caller is the registered `evm-bridge` application (`authenticated_caller_id` must match `bridge_app_id` in parameters). Direct `Mint` operations — even from the bridge chain owner — are rejected. The `evm-bridge` app only calls `Mint` after verifying an MPT inclusion proof for a `DepositInitiated` event on EVM, and replay protection (`processed_deposits`) prevents double-minting from the same deposit.
+
+### Can tokens be unlocked on EVM without burning on Linera?
+
+**No.** `FungibleBridge._onBlock()` only processes `BurnEvent` events embedded in Linera block certificates. Certificates require a quorum of validator signatures (verified by `LightClient`). A `BurnEvent` can only appear in a block if the wrapped-fungible contract emitted it during execution. The `Microchain` contract rejects duplicate block submissions, preventing replay.
+
+### What if the bridge chain owner's key leaks?
+
+**Limited impact.** The owner cannot:
+- Mint tokens directly (requires `evm-bridge` as caller, not the owner)
+- Register a different fungible app in the `evm-bridge` (set-once, already locked after deployment)
+- Forge BurnEvents (events are part of validated block execution, not proposer-controlled)
+
+The owner can:
+- Submit `ProcessDeposit` operations with valid proofs (but these correspond to real EVM deposits — not harmful)
+- Censor transactions on the bridge chain (delay processing, but not steal funds)
+- Propose blocks, but block content is validated by validators before signing
+
+### What if a quorum of Linera validators is compromised?
+
+**Full compromise.** A colluding quorum (2/3+ by weight) can forge certificates containing arbitrary `BurnEvent` data, which `FungibleBridge` would accept. This is a fundamental trust assumption of the BFT protocol — the bridge's security is bounded by the validator set's integrity. This risk is shared with all Linera applications, not specific to the bridge.
+
+### Registration front-running
+
+Both registration functions are set-once and access-controlled:
+- **Linera side** (`RegisterFungibleApp`): requires an authenticated signer (chain owner)
+- **EVM side** (`registerFungibleApplicationId`): restricted to the contract deployer
+
+An attacker cannot front-run registration on either side without the owner's key (Linera) or the deployer's key (EVM).
+
+### Trust assumptions summary
+
+| Component | Trusted to | Not trusted to |
+|-----------|-----------|----------------|
+| Bridge chain owner | Propose blocks, not censor indefinitely | Mint, burn, or steal tokens |
+| Linera validators (quorum) | Finalize valid blocks only | N/A — if compromised, all bets are off |
+| Relayer | Forward certificates and proofs | Cannot forge — only relays signed data |
+| EVM contract deployer | Register correct application ID once | N/A after registration is locked |

@@ -76,6 +76,11 @@ pub struct CommonStorageOptions {
 }
 
 impl CommonStorageOptions {
+    pub fn with_defaults() -> Self {
+        use clap::Parser as _;
+        Self::parse_from(std::iter::empty::<String>())
+    }
+
     pub fn storage_cache_config(&self) -> StorageCacheConfig {
         StorageCacheConfig {
             blob_cache_size: self.blob_cache_size,

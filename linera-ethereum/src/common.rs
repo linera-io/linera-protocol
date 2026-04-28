@@ -55,6 +55,10 @@ pub enum EthereumServiceError {
     #[error(transparent)]
     FromHexError(#[from] alloy_primitives::hex::FromHexError),
 
+    /// Block not found on chain
+    #[error("Block not found on chain")]
+    BlockNotFound,
+
     /// `serde_json` error
     #[error(transparent)]
     JsonError(#[from] serde_json::Error),

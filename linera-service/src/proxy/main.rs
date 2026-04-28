@@ -3,7 +3,7 @@
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 
 /// Configure jemalloc profiling infrastructure at startup with sampling disabled.
 /// Profiling is activated at runtime only when `--enable-memory-profiling` is passed.
@@ -16,7 +16,10 @@ use std::{net::SocketAddr, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{stream::SelectAll, FutureExt as _, SinkExt, Stream, StreamExt};
-use linera_base::{identifiers::ChainId, listen_for_shutdown_signals};
+use linera_base::{
+    identifiers::{BlobId, ChainId},
+    listen_for_shutdown_signals,
+};
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
 #[cfg(with_metrics)]
@@ -283,6 +286,31 @@ where
         chains: Vec<ChainId>,
     ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
         self.subscribe_to_shards(chains).await
+    }
+
+    async fn handle_download_blobs(
+        &mut self,
+        blob_ids: Vec<BlobId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        let blobs = match self.storage.read_blobs(&blob_ids).await {
+            Ok(blobs) => blobs,
+            Err(error) => {
+                return Some(Box::pin(futures::stream::once(async move {
+                    RpcMessage::Error(Box::new(NodeError::from(error)))
+                })));
+            }
+        };
+        let messages =
+            blob_ids
+                .into_iter()
+                .zip(blobs)
+                .map(|(blob_id, maybe_blob)| match maybe_blob {
+                    Some(blob) => RpcMessage::DownloadBlobResponse(Box::new(
+                        Arc::unwrap_or_clone(blob).into_content(),
+                    )),
+                    None => RpcMessage::Error(Box::new(NodeError::BlobsNotFound(vec![blob_id]))),
+                });
+        Some(Box::pin(futures::stream::iter(messages)))
     }
 }
 
@@ -553,6 +581,7 @@ where
             | NetworkDescriptionResponse(_)
             | ShardInfoResponse(_)
             | DownloadBlobResponse(_)
+            | DownloadBlobs(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
             | HandlePendingBlob(_)

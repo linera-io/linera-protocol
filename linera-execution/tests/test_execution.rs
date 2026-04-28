@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::field_reassign_with_default)]
-
 use std::{collections::BTreeMap, vec};
 
 use assert_matches::assert_matches;
@@ -1251,7 +1249,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     assert_eq!(*child_view.system.ownership.get().await?, child_ownership);
     assert_eq!(
         *child_view.system.committees.get(),
-        [(Epoch::ZERO, committee)]
+        [(Epoch::ZERO, committee_blob.id().hash)]
             .into_iter()
             .collect::<BTreeMap<_, _>>()
     );

@@ -164,6 +164,71 @@ pub fn parse_deployed_address(output: &str) -> anyhow::Result<Address> {
     anyhow::bail!("Could not find 'Deployed to:' in forge output:\n{output}");
 }
 
+/// Queries the evm-bridge app to check whether a deposit has been processed.
+/// Mirrors `linera_bridge::monitor::query_deposit_processed` for use in tests
+/// without enabling the `relay` feature.
+pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    bridge_app_id: linera_base::identifiers::ApplicationId,
+    deposit_key: &linera_bridge::proof::DepositKey,
+) -> anyhow::Result<bool> {
+    use linera_execution::{Query, QueryResponse};
+
+    #[derive(serde::Serialize)]
+    struct GqlRequest {
+        query: String,
+    }
+
+    let hash_hex = format!("0x{}", alloy::primitives::hex::encode(deposit_key.hash()));
+    let gql = format!(r#"{{ isDepositProcessed(hash: "{hash_hex}") }}"#);
+    let query = Query::user_without_abi(bridge_app_id, &GqlRequest { query: gql })?;
+    let (outcome, _) = chain_client.query_application(query, None).await?;
+    let response_bytes = match outcome.response {
+        QueryResponse::User(bytes) => bytes,
+        other => anyhow::bail!("unexpected query response: {other:?}"),
+    };
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
+    Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
+}
+
+/// Waits for the `bridge-init` container to deploy the LightClient contract.
+/// Must be called before deploying any test contracts to avoid a nonce race
+/// (bridge-init and the test both use Anvil account 0).
+pub async fn wait_for_light_client(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+) {
+    tracing::info!("Waiting for LightClient deployment (bridge-init)...");
+    for attempt in 0..60 {
+        let result = exec_output(
+            compose,
+            "foundry-tools",
+            &format!(
+                "cast code {} --rpc-url http://anvil:8545",
+                light_client_address()
+            ),
+            project_name,
+            compose_file,
+        )
+        .await;
+        if result.trim() != "0x" && !result.trim().is_empty() {
+            tracing::info!(attempt, "LightClient deployed");
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    dump_compose_logs(project_name, compose_file);
+    panic!("LightClient not deployed within timeout");
+}
+
+/// Installs the rustls crypto provider if not already set.
+/// Required because enabling the `relay` feature links rustls which
+/// needs an explicit provider before any TLS usage.
+pub fn ensure_rustls_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
 /// Starts docker compose stack with pre-cleanup of stale state.
 pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -> DockerCompose {
     let compose_file_str = compose_file
