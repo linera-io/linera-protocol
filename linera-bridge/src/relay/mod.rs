@@ -26,14 +26,10 @@ use alloy::{
 };
 use anyhow::{Context as _, Result};
 use futures::StreamExt as _;
-use linera_base::{
-    crypto::InMemorySigner,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
-};
+use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
-use linera_persistent::Persist;
 use linera_storage::{DbStorage, Storage as _};
 use linera_views::{
     backends::{
@@ -132,9 +128,9 @@ pub async fn run(
         wallet_path.display(),
     );
 
-    let signer: InMemorySigner = linera_persistent::File::<InMemorySigner>::read(&keystore_path)
+    let signer = linera_wallet_json::Keystore::read(&keystore_path)
         .context("failed to read keystore")?
-        .into_value();
+        .into_signer();
 
     // Parse storage path: expect "rocksdb:/path/to/db"
     let db_path = storage_path
