@@ -45,8 +45,11 @@ relay = [
     "dep:linera-chain",
     "dep:linera-client",
     "dep:linera-core",
+<<<<<<< HEAD
     "dep:linera-faucet-client",
     "dep:linera-persistent",
+=======
+>>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
     "dep:linera-storage",
     "dep:linera-wallet-json",
     "dep:linera-views",
@@ -104,8 +107,11 @@ hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
 linera-core = { workspace = true, optional = true }
+<<<<<<< HEAD
 linera-faucet-client = { workspace = true, optional = true }
 linera-persistent = { workspace = true, optional = true, features = ["fs"] }
+=======
+>>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
 linera-storage = { workspace = true, optional = true }
 linera-views = { workspace = true, optional = true }
 linera-wallet-json = { workspace = true, optional = true }

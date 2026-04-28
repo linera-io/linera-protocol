@@ -33,8 +33,11 @@ use linera_base::{
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
+<<<<<<< HEAD
 use linera_faucet_client::Faucet;
 use linera_persistent::Persist;
+=======
+>>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
 use linera_storage::{DbStorage, Storage as _};
 use linera_views::{
     backends::{
@@ -88,12 +91,11 @@ pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::En
 #[expect(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
-    faucet_url: Option<&str>,
     wallet_path: Option<&Path>,
     keystore_path: Option<&Path>,
     storage_config: Option<&str>,
-    chain_id_arg: Option<ChainId>,
-    chain_owner_arg: Option<AccountOwner>,
+    chain_id: ChainId,
+    chain_owner: AccountOwner,
     evm_bridge_address: &str,
     linera_bridge_address: &str,
     linera_fungible_address: &str,
@@ -128,12 +130,13 @@ pub async fn run(
         "Resolved paths"
     );
 
-    // ── Common init ──
-    let faucet = faucet_url.map(|url| {
-        tracing::info!("Using Linera faucet at {url}");
-        Faucet::new(url.to_string())
-    });
+    anyhow::ensure!(
+        wallet_path.exists(),
+        "wallet not found at {}",
+        wallet_path.display(),
+    );
 
+<<<<<<< HEAD
     let mut signer: InMemorySigner =
         linera_persistent::File::<InMemorySigner>::read(&keystore_path)
             .context("failed to read keystore")?
@@ -144,25 +147,39 @@ pub async fn run(
         .strip_prefix("rocksdb:")
         .context("storage config must start with 'rocksdb:'")?;
     let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
+=======
+    let keystore =
+        linera_wallet_json::Keystore::read(&keystore_path).context("failed to read keystore")?;
+    let signer = keystore.into_signer();
 
-    // ── Wallet: load existing or create fresh ──
-    let wallet = if wallet_path.exists() {
-        tracing::info!("Loading existing wallet from {}", wallet_path.display());
-        let wallet = PersistentWallet::read(&wallet_path).context("failed to read wallet")?;
-        wallet
-            .genesis_config()
-            .initialize_storage(&mut storage)
+    // Parse storage config and create storage.
+    let mut storage_config: StorageConfig = storage_path.parse()?;
+    storage_config.namespace = "bridge_relay".to_string();
+    let store_config = storage_config.add_common_storage_options(common_storage_options)?;
+    let cache_sizes = common_storage_options.storage_cache_sizes();
+    let (mut storage, db_path) = match store_config {
+        StoreConfig::RocksDb { config, namespace } => {
+            let path = config.inner_config.path_with_guard.path_buf.clone();
+            let storage = DbStorage::<RocksDbDatabase, _>::maybe_create_and_connect(
+                &config,
+                &namespace,
+                Some(WasmRuntime::default()),
+                cache_sizes,
+            )
             .await?;
-        wallet
-    } else {
-        let faucet = faucet
-            .as_ref()
-            .context("--faucet-url is required when no wallet exists")?;
-        tracing::info!("Creating new wallet at {}", wallet_path.display());
-        let genesis_config = faucet.genesis_config().await?;
-        genesis_config.initialize_storage(&mut storage).await?;
-        PersistentWallet::create(&wallet_path, genesis_config).context("failed to create wallet")?
+            (storage, path)
+        }
+        _ => anyhow::bail!("only rocksdb storage is supported by the bridge relay"),
     };
+>>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
+
+    // Wallet: must already exist
+    tracing::info!(path = %wallet_path.display(), "Loading existing wallet");
+    let wallet = PersistentWallet::read(&wallet_path).context("failed to read wallet")?;
+    wallet
+        .genesis_config()
+        .initialize_storage(&mut storage)
+        .await?;
 
     let admin_chain_id = wallet.genesis_config().admin_chain_id();
     let genesis_config = wallet.genesis_config().clone();
@@ -185,21 +202,24 @@ pub async fn run(
     let admin_chain_height = admin_client.chain_info().await?.next_block_height;
     tracing::info!(%admin_chain_height, "Admin chain synced");
 
-    // ── Resolve bridge chain ──
-    let (chain_id, _owner) = if let Some(cid) = chain_id_arg {
-        let owner = chain_owner_arg.context(
-            "--linera-bridge-chain-owner is required when --linera-bridge-chain-id is provided",
-        )?;
+    // ── Register bridge chain in the local wallet ──
+    anyhow::ensure!(
+        signer
+            .contains_key(&chain_owner)
+            .await
+            .context("failed to query keystore")?,
+        "keystore does not contain a key for owner {chain_owner}"
+    );
 
-        // Verify the keystore has the signing key for this owner.
-        anyhow::ensure!(
-            signer
-                .contains_key(&owner)
-                .await
-                .context("failed to query keystore")?,
-            "keystore does not contain a key for owner {owner}"
-        );
+    ctx.update_wallet_for_new_chain(
+        chain_id,
+        Some(chain_owner),
+        linera_base::data_types::Timestamp::default(),
+        linera_base::data_types::Epoch::ZERO,
+    )
+    .await?;
 
+<<<<<<< HEAD
         // Register the chain with the specified owner.
         ctx.update_wallet_for_new_chain(
             cid,
@@ -241,8 +261,14 @@ pub async fn run(
         tracing::info!(%cid, "Bridge chain claimed and synced");
         (cid, owner)
     };
+=======
+    ctx.client
+        .extend_chain_mode(chain_id, linera_core::client::ListeningMode::FullChain);
+>>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
 
     let chain_client = ctx.make_chain_client(chain_id).await?;
+    chain_client.synchronize_from_validators().await?;
+    tracing::info!(%chain_id, %chain_owner, "Bridge chain registered and synced");
 
     Box::pin(serve_loop(
         chain_client,
