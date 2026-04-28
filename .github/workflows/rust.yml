@@ -170,13 +170,7 @@ jobs:
         cache-workspaces: |
           examples -> target
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Run Wasm application tests
       run: |
         cd examples
@@ -195,13 +189,7 @@ jobs:
         cache-workspaces: |
           linera-sdk/tests/fixtures -> target
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Run linera-sdk fixtures
       run: |
         cd linera-sdk/tests/fixtures
@@ -222,13 +210,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Compile Wasm test modules for Witty integration tests
       run: |
         cargo build -p linera-witty-test-modules --target wasm32-unknown-unknown --locked
@@ -250,13 +232,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Check for outdated CLI.md
       run: |
         if ! diff CLI.md <(cargo run --bin linera -- help-markdown)
@@ -299,13 +275,7 @@ jobs:
     - name: Check if Solc is in PATH
       run: which solc || echo "Solc not found in PATH"
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Install serde-generate-bin
       run: |
         cargo install serde-generate-bin@0.8.0 --locked
@@ -345,13 +315,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Build example applications
       run: |
         cd examples
@@ -499,13 +463,7 @@ jobs:
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Run Wasm application lints
       run: |
         cd examples
@@ -528,13 +486,7 @@ jobs:
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Run clippy
       run: |
         cargo clippy --locked --all-targets --all-features --workspace
@@ -558,13 +510,7 @@ jobs:
         ln -sf toolchains/nightly/rust-toolchain.toml
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Run cargo doc
       run: |
         cargo doc --locked --all-features
@@ -579,13 +525,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
-      run: |
-        set -euo pipefail
-        PB_VER=34.1
-        curl -fsSL -o /tmp/protoc.zip \
-          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
-        sudo unzip -o /tmp/protoc.zip -d /usr/local
-        protoc --version
+      uses: ./.github/actions/install-protoc
     - name: Check linera-service GraphQL schema
       run: |
         diff <(cargo run --locked --bin linera-schema-export) linera-service-graphql-client/gql/service_schema.graphql
