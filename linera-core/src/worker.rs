@@ -581,26 +581,26 @@ pub(crate) enum BatchRequest {
 ///
 /// Wrapped in `Shared<BatchFuture>` so that all tasks waiting for
 /// cross-chain operations on the same chain can cooperatively poll a
-/// single driver. The driver loops: drain the request channel, acquire the
-/// write lock, process all requests in one batch, repeat.
+/// single driver. The driver loops: wait for an item from the request channel, acquire the
+/// write lock, drain the channel, process all requests in one batch, repeat.
 #[cfg(not(web))]
 type BatchFuture = pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 #[cfg(web)]
 type BatchFuture = pin::Pin<Box<dyn Future<Output = ()>>>;
 
 #[derive(Clone)]
-struct DriverState {
-    /// Send half of the channel whose receiver lives inside the driver future.
+struct ChainBatchRequestProcessor {
+    /// Sender half of the channel whose receiver lives inside the driver future.
     sender: mpsc::UnboundedSender<BatchRequest>,
     /// Weak handle to the shared driver future. Upgraded to `Shared<BatchFuture>`
     /// by callers who need to poll it.
     future: WeakShared<BatchFuture>,
 }
 
-impl DriverState {
-    fn new<StorageClient>(
+impl ChainBatchRequestProcessor {
+    fn create<StorageClient>(
         state: ChainWorkerArc<StorageClient>,
-    ) -> (DriverState, Shared<BatchFuture>)
+    ) -> (ChainBatchRequestProcessor, Shared<BatchFuture>)
     where
         StorageClient: Storage + Clone + 'static,
     {
@@ -608,13 +608,15 @@ impl DriverState {
         let future: BatchFuture = Box::pin(async move {
             while let Some(first) = receiver.recv().await {
                 let mut requests = vec![first];
-                while let Ok(req) = receiver.try_recv() {
-                    requests.push(req);
-                }
-                #[cfg(with_metrics)]
-                metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
                 match handle::write_lock(&state).await {
-                    Ok(mut guard) => guard.process_batch(requests).await,
+                    Ok(mut guard) => {
+                        while let Ok(req) = receiver.try_recv() {
+                            requests.push(req);
+                        }
+                        #[cfg(with_metrics)]
+                        metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
+                        guard.process_batch(requests).await
+                    }
                     Err(error) => {
                         tracing::error!(%error, "failed to obtain write lock");
                         for request in requests {
@@ -633,15 +635,15 @@ impl DriverState {
         });
         let shared = future.shared();
         let weak = shared.downgrade().expect("future has not been polled yet");
-        let driver_state = DriverState {
+        let batch_processor = ChainBatchRequestProcessor {
             sender,
             future: weak,
         };
-        (driver_state, shared)
+        (batch_processor, shared)
     }
 }
 
-type ChainBatchMap = Arc<papaya::HashMap<ChainId, DriverState>>;
+type ChainBatchMap = Arc<papaya::HashMap<ChainId, ChainBatchRequestProcessor>>;
 
 /// Starts a background task that periodically removes dead weak references
 /// from the chain handle map. The actual lifetime management is handled by
@@ -883,10 +885,10 @@ where
             chain_modes,
             delivery_notifiers: Arc::default(),
             chain_workers,
-            // On wasm, `DriverState` is not `Send`/`Sync` (the inner future
+            // On wasm, `ChainBatchRequestProcessor` is not `Send`/`Sync` (the inner future
             // isn't `Send`), but `Arc` is still correct: `WorkerState` clones
             // share this map and wasm is single-threaded.
-            #[allow(clippy::arc_with_non_send_sync)]
+            #[cfg_attr(web, expect(clippy::arc_with_non_send_sync))]
             chain_batches: Arc::new(papaya::HashMap::new()),
             outbound_cross_chain_sender: None,
         }
@@ -1076,32 +1078,32 @@ where
     ) -> Result<(mpsc::UnboundedSender<BatchRequest>, Shared<BatchFuture>), WorkerError> {
         // Fast path: reuse an existing live driver. The pin guard is !Send,
         // so it must be dropped before any .await point.
-        if let Some(driver_state) = self.chain_batches.pin().get(&chain_id) {
-            if let Some(future) = driver_state.future.upgrade() {
-                return Ok((driver_state.sender.clone(), future));
+        if let Some(batch_processor) = self.chain_batches.pin().get(&chain_id) {
+            if let Some(future) = batch_processor.future.upgrade() {
+                return Ok((batch_processor.sender.clone(), future));
             }
         }
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        let (new_driver_state, new_future) = DriverState::new(state);
+        let (new_request_processor, new_future) = ChainBatchRequestProcessor::create(state);
         match self
             .chain_batches
             .pin()
             .compute(chain_id, |existing| match existing {
-                Some((_, driver_state)) => {
-                    if let Some(future) = driver_state.future.upgrade() {
-                        papaya::Operation::Abort((driver_state.sender.clone(), future))
+                Some((_, batch_processor)) => {
+                    if let Some(future) = batch_processor.future.upgrade() {
+                        papaya::Operation::Abort((batch_processor.sender.clone(), future))
                     } else {
-                        papaya::Operation::Insert(new_driver_state.clone())
+                        papaya::Operation::Insert(new_request_processor.clone())
                     }
                 }
-                None => papaya::Operation::Insert(new_driver_state.clone()),
+                None => papaya::Operation::Insert(new_request_processor.clone()),
             }) {
             papaya::Compute::Aborted((sender, future)) => Ok((sender, future)),
-            papaya::Compute::Inserted(_, driver_state)
+            papaya::Compute::Inserted(_, batch_processor)
             | papaya::Compute::Updated {
-                new: (_, driver_state),
+                new: (_, batch_processor),
                 ..
-            } => Ok((driver_state.sender.clone(), new_future)),
+            } => Ok((batch_processor.sender.clone(), new_future)),
             papaya::Compute::Removed { .. } => unreachable!(),
         }
     }
