@@ -1946,12 +1946,17 @@ impl<Env: Environment> Client<Env> {
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
+    ) -> Result<(Block, ChainInfoResponse, HashSet<ChainId>), chain_client::Error> {
         let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone(), policy)
+                .stage_block_execution(
+                    block.clone(),
+                    round,
+                    published_blobs.clone(),
+                    policy.clone(),
+                )
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
@@ -1972,7 +1977,7 @@ impl<Env: Environment> Client<Env> {
                 }
                 // All reported events were already downloaded; don't loop forever.
             }
-            if let Ok((_, executed_block, _, _)) = &result {
+            if let Ok((_, executed_block, _, _, _)) = &result {
                 let hash = CryptoHash::new(executed_block);
                 let notification = Notification {
                     chain_id: executed_block.header.chain_id,
@@ -1983,8 +1988,14 @@ impl<Env: Environment> Client<Env> {
                 };
                 self.notifier.notify(&[notification]);
             }
-            let (_modified_block, executed_block, response, _resource_tracker) = result?;
-            return Ok((executed_block, response));
+            let (
+                _modified_block,
+                executed_block,
+                response,
+                _resource_tracker,
+                never_reject_origins,
+            ) = result?;
+            return Ok((executed_block, response, never_reject_origins));
         }
     }
 }
