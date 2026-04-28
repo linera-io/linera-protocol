@@ -67,10 +67,13 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - uses: taiki-e/install-action@cargo-hack
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        version: "34.1"
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        PB_VER=34.1
+        curl -fsSL -o /tmp/protoc.zip \
+          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
+        sudo unzip -o /tmp/protoc.zip -d /usr/local
+        protoc --version
     - name: Run cargo hack check (partition ${{ matrix.partition }}/6)
       run: |
         cargo hack check --each-feature --workspace --all-targets --partition ${{ matrix.partition }}/6
