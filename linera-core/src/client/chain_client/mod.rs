@@ -1937,7 +1937,7 @@ impl<Env: Environment> ChainClient<Env> {
             // Otherwise we are free to propose our own pending block.
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
-            let auto_retry_outcome = pending.auto_retry_outcome.as_ref();
+            let staging_outcome = pending.auto_retry_outcome.as_ref();
             let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _, _) = self
                 .client
@@ -1951,9 +1951,9 @@ impl<Env: Environment> ChainClient<Env> {
             // Sanity check: the committed execution should produce the same outcome
             // as the initial AutoRetry execution. A mismatch indicates a divergence
             // between the two execution paths.
-            if let Some(auto_retry_outcome) = auto_retry_outcome {
+            if let Some(staging_outcome) = staging_outcome {
                 ensure!(
-                    block.outcome_matches(auto_retry_outcome),
+                    block.outcome_matches(staging_outcome),
                     Error::ExecutionOutcomeMismatch
                 );
             }
