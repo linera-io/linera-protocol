@@ -606,6 +606,15 @@ impl<Env: Environment> Client<Env> {
         // Download remaining certificates from the remote node using a pipelined
         // sliding window. A background task downloads up to `max_concurrent_batch_downloads`
         // batches concurrently and sends them through a channel for sequential processing.
+        #[cfg(not(web))]
+        type CertificateBatchFuture = std::pin::Pin<
+            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>> + Send>,
+        >;
+        #[cfg(web)]
+        type CertificateBatchFuture = std::pin::Pin<
+            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>>>,
+        >;
+
         let max_concurrent = self.options.max_concurrent_batch_downloads;
         let batch_size = self.options.certificate_download_batch_size;
         let (sender, mut receiver) = tokio::sync::mpsc::channel(max_concurrent);
@@ -614,43 +623,36 @@ impl<Env: Environment> Client<Env> {
 
         let _download_task = linera_base::Task::spawn(async move {
             let mut download_height = next_height;
-            let mut in_flight = FuturesOrdered::new();
+            let mut in_flight = FuturesOrdered::<CertificateBatchFuture>::new();
 
-            let enqueue_batch = |in_flight: &mut FuturesOrdered<_>,
-                                 scheduler: &Arc<RequestsScheduler<Env>>,
-                                 remote: &RemoteNode<Env::ValidatorNode>,
-                                 height: BlockHeight,
-                                 limit: u64| {
+            let try_enqueue = |in_flight: &mut FuturesOrdered<CertificateBatchFuture>,
+                               download_height: &mut BlockHeight| {
+                if *download_height >= stop {
+                    return;
+                }
+                let limit = u64::from(stop)
+                    .saturating_sub(u64::from(*download_height))
+                    .min(batch_size);
+                let height = *download_height;
                 let scheduler = scheduler.clone();
                 let remote = remote.clone();
-                in_flight.push_back(async move {
+                in_flight.push_back(Box::pin(async move {
                     scheduler
                         .download_certificates(&remote, chain_id, height, limit)
                         .await
-                });
+                }));
+                *download_height = BlockHeight(u64::from(*download_height) + limit);
             };
 
-            // Fill initial window.
             while in_flight.len() < max_concurrent && download_height < stop {
-                let limit = u64::from(stop)
-                    .saturating_sub(u64::from(download_height))
-                    .min(batch_size);
-                enqueue_batch(&mut in_flight, &scheduler, &remote, download_height, limit);
-                download_height = BlockHeight(u64::from(download_height) + limit);
+                try_enqueue(&mut in_flight, &mut download_height);
             }
 
-            // Drain completed batches and refill the window.
             while let Some(result) = in_flight.next().await {
                 if sender.send(result).await.is_err() {
                     break;
                 }
-                if download_height < stop {
-                    let limit = u64::from(stop)
-                        .saturating_sub(u64::from(download_height))
-                        .min(batch_size);
-                    enqueue_batch(&mut in_flight, &scheduler, &remote, download_height, limit);
-                    download_height = BlockHeight(u64::from(download_height) + limit);
-                }
+                try_enqueue(&mut in_flight, &mut download_height);
             }
         });
 
