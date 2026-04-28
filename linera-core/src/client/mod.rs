@@ -28,7 +28,10 @@ use linera_base::{
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
-    data_types::{BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote, ProposedBlock},
+    data_types::{
+        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
+        ProposedBlock,
+    },
     manager::LockingBlock,
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
@@ -2054,6 +2057,10 @@ impl Drop for AbortOnDrop {
 pub struct PendingProposal {
     pub block: ProposedBlock,
     pub blobs: Vec<Blob>,
+    /// The execution outcome from the AutoRetry execution, used as a sanity check
+    /// against the committed execution outcome.
+    #[serde(default)]
+    pub auto_retry_outcome: Option<BlockExecutionOutcome>,
 }
 
 enum ReceiveCertificateMode {
