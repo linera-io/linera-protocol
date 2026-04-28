@@ -1949,12 +1949,11 @@ impl<Env: Environment> ChainClient<Env> {
                 )
                 .await?;
             // Sanity check: the committed execution should produce the same outcome
-            // as the initial AutoRetry execution. A mismatch indicates a fuel
-            // accounting divergence between the two execution paths.
+            // as the initial AutoRetry execution. A mismatch indicates a divergence
+            // between the two execution paths.
             if let Some(auto_retry_outcome) = auto_retry_outcome {
-                let (_, committed_outcome) = block.clone().into_proposal();
                 ensure!(
-                    *auto_retry_outcome == committed_outcome,
+                    block.outcome_matches(auto_retry_outcome),
                     Error::ExecutionOutcomeMismatch
                 );
             }
