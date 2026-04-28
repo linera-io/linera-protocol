@@ -5436,11 +5436,7 @@ dependencies = [
  "linera-client",
  "linera-core",
  "linera-execution",
-<<<<<<< HEAD
- "linera-faucet-client",
  "linera-persistent",
-=======
->>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
  "linera-storage",
  "linera-views",
  "linera-wallet-json",

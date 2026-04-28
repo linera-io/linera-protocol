@@ -123,11 +123,6 @@ jobs:
           context: .
           file: ./docker/Dockerfile.bridge
           load: true
-<<<<<<< HEAD
-          tags: linera-bridge:latest
-
-      - name: Build example Wasm for bridge tests
-=======
           tags: |
             linera-bridge:latest
             ${{ github.event_name != 'workflow_dispatch' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.base_ref || github.ref_name) || '' }}
@@ -138,8 +133,7 @@ jobs:
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
 
-      - name: Build example Wasm modules for bridge tests
->>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
+      - name: Build example Wasm for bridge tests
         run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
         working-directory: examples
 

@@ -33,11 +33,7 @@ use linera_base::{
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
-<<<<<<< HEAD
-use linera_faucet_client::Faucet;
 use linera_persistent::Persist;
-=======
->>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
 use linera_storage::{DbStorage, Storage as _};
 use linera_views::{
     backends::{
@@ -136,42 +132,15 @@ pub async fn run(
         wallet_path.display(),
     );
 
-<<<<<<< HEAD
-    let mut signer: InMemorySigner =
-        linera_persistent::File::<InMemorySigner>::read(&keystore_path)
-            .context("failed to read keystore")?
-            .into_value();
+    let signer: InMemorySigner = linera_persistent::File::<InMemorySigner>::read(&keystore_path)
+        .context("failed to read keystore")?
+        .into_value();
 
     // Parse storage path: expect "rocksdb:/path/to/db"
     let db_path = storage_path
         .strip_prefix("rocksdb:")
         .context("storage config must start with 'rocksdb:'")?;
     let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
-=======
-    let keystore =
-        linera_wallet_json::Keystore::read(&keystore_path).context("failed to read keystore")?;
-    let signer = keystore.into_signer();
-
-    // Parse storage config and create storage.
-    let mut storage_config: StorageConfig = storage_path.parse()?;
-    storage_config.namespace = "bridge_relay".to_string();
-    let store_config = storage_config.add_common_storage_options(common_storage_options)?;
-    let cache_sizes = common_storage_options.storage_cache_sizes();
-    let (mut storage, db_path) = match store_config {
-        StoreConfig::RocksDb { config, namespace } => {
-            let path = config.inner_config.path_with_guard.path_buf.clone();
-            let storage = DbStorage::<RocksDbDatabase, _>::maybe_create_and_connect(
-                &config,
-                &namespace,
-                Some(WasmRuntime::default()),
-                cache_sizes,
-            )
-            .await?;
-            (storage, path)
-        }
-        _ => anyhow::bail!("only rocksdb storage is supported by the bridge relay"),
-    };
->>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
 
     // Wallet: must already exist
     tracing::info!(path = %wallet_path.display(), "Loading existing wallet");
@@ -219,52 +188,8 @@ pub async fn run(
     )
     .await?;
 
-<<<<<<< HEAD
-        // Register the chain with the specified owner.
-        ctx.update_wallet_for_new_chain(
-            cid,
-            Some(owner),
-            linera_base::data_types::Timestamp::default(),
-            linera_base::data_types::Epoch::ZERO,
-        )
-        .await?;
-
-        // Register for notifications so the listener can connect to validators.
-        ctx.client
-            .extend_chain_mode(cid, linera_core::client::ListeningMode::FullChain);
-
-        // Sync from validators.
-        let chain_client = ctx.make_chain_client(cid).await?;
-        chain_client.synchronize_from_validators().await?;
-
-        tracing::info!(%cid, %owner, "Using pre-existing chain");
-        (cid, owner)
-    } else {
-        // Claim from faucet.
-        let faucet = faucet
-            .as_ref()
-            .context("--faucet-url is required when --linera-bridge-chain-id is not provided")?;
-        tracing::info!("Claiming bridge chain from faucet...");
-        let owner = AccountOwner::from(signer.generate_new());
-        let chain_desc = faucet.claim(&owner).await?;
-        let cid = chain_desc.id();
-        tracing::info!(%cid, %owner, "Chain claimed, extending wallet...");
-        ctx.extend_with_chain(chain_desc, Some(owner)).await?;
-
-        // Save updated keystore (has new key from generate_new).
-        let mut ks_file = linera_persistent::File::new(&keystore_path, signer.clone())?;
-        ks_file.persist().await?;
-
-        // Sync bridge chain.
-        let chain_client = ctx.make_chain_client(cid).await?;
-        chain_client.synchronize_from_validators().await?;
-        tracing::info!(%cid, "Bridge chain claimed and synced");
-        (cid, owner)
-    };
-=======
     ctx.client
         .extend_chain_mode(chain_id, linera_core::client::ListeningMode::FullChain);
->>>>>>> b31c0accb0 (Extract bridge initialization/setup from linera-bridge (#6124))
 
     let chain_client = ctx.make_chain_client(chain_id).await?;
     chain_client.synchronize_from_validators().await?;
