@@ -207,7 +207,9 @@ pub struct Options {
     #[arg(long, default_value_t = DEFAULT_QUORUM_GRACE_PERIOD)]
     pub quorum_grace_period: f64,
 
-    /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
+    /// The maximum time without progress (stream opening or a new blob arriving) when
+    /// downloading blobs from a validator, after which we try the next validator, in
+    /// milliseconds.
     #[arg(
         long = "blob-download-timeout-ms",
         default_value = "1000",
