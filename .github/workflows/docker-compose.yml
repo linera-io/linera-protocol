@@ -43,6 +43,10 @@ jobs:
         with:
           version: "34.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install libunwind-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libunwind-dev
       # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Update aio-max-nr
       # run: echo 1048576 > /proc/sys/fs/aio-max-nr
