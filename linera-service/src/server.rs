@@ -411,6 +411,7 @@ fn make_server_config<R: CryptoRng>(
 }
 
 #[derive(clap::Parser)]
+#[allow(clippy::large_enum_variant)]
 enum ServerCommand {
     /// Runs a service for each shard of the Linera validator")
     #[command(name = "run")]
