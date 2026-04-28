@@ -16,8 +16,8 @@ set -- linera-bridge serve \
     --linera-bridge-address="${LINERA_BRIDGE_APP:?LINERA_BRIDGE_APP is required}" \
     --linera-fungible-address="${LINERA_FUNGIBLE_APP:?LINERA_FUNGIBLE_APP is required}" \
     --evm-private-key="${EVM_PRIVATE_KEY:?EVM_PRIVATE_KEY is required}" \
-    --linera-bridge-chain-id="${LINERA_BRIDGE_CHAIN_ID:?LINERA_BRIDGE_CHAIN_ID is required — run linera-bridge-init first}" \
-    --linera-bridge-chain-owner="${LINERA_BRIDGE_CHAIN_OWNER:?LINERA_BRIDGE_CHAIN_OWNER is required — run linera-bridge-init first}" \
+    --linera-bridge-chain-id="${LINERA_BRIDGE_CHAIN_ID:?LINERA_BRIDGE_CHAIN_ID is required}" \
+    --linera-bridge-chain-owner="${LINERA_BRIDGE_CHAIN_OWNER:?LINERA_BRIDGE_CHAIN_OWNER is required}" \
     --port="${PORT:-5001}" \
     --monitor-scan-interval="${MONITOR_SCAN_INTERVAL:-30}" \
     --monitor-start-block="${MONITOR_START_BLOCK:-0}" \

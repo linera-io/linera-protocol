@@ -119,7 +119,7 @@ pub async fn run(
 
     anyhow::ensure!(
         wallet_path.exists(),
-        "wallet not found at {}; run `linera-bridge-init` first",
+        "wallet not found at {}",
         wallet_path.display(),
     );
 
@@ -147,8 +147,8 @@ pub async fn run(
         _ => anyhow::bail!("only rocksdb storage is supported by the bridge relay"),
     };
 
-    // ── Wallet: must already exist (use `linera-bridge-init` to create one). ──
-    tracing::info!("Loading existing wallet from {}", wallet_path.display());
+    // Wallet: must already exist
+    tracing::info!(path = %wallet_path.display(), "Loading existing wallet");
     let wallet = PersistentWallet::read(&wallet_path).context("failed to read wallet")?;
     wallet
         .genesis_config()
