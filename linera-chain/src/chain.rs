@@ -35,7 +35,7 @@ use linera_views::{
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::{
     block::{Block, ConfirmedBlock},
@@ -710,10 +710,10 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
-        if !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort) {
+        if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
             assert!(
                 replaying_oracle_responses.is_none(),
                 "Cannot use AutoRetry policy when replaying oracle responses"
@@ -759,13 +759,17 @@ where
             block,
         )?;
 
-        // Extract failure policy settings.
-        let max_failures = match exec_policy.on_failure {
-            BundleFailurePolicy::Abort => 0,
-            BundleFailurePolicy::AutoRetry { max_failures } => max_failures,
+        // Extract failure-policy parameters from exec_policy.
+        let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
+            BundleFailurePolicy::Abort => (0, Arc::new(HashSet::new())),
+            BundleFailurePolicy::AutoRetry {
+                max_failures,
+                never_reject_application_ids,
+            } => (*max_failures, never_reject_application_ids.clone()),
         };
         let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
+        let mut never_reject_discarded_origins = HashSet::new();
 
         // Track cumulative bundle execution time if time budget is set.
         let time_budget = exec_policy.time_budget;
@@ -837,6 +841,10 @@ where
             *chain = saved_chain;
             block_execution_tracker.restore_checkpoint(&saved_tracker);
 
+            let all_messages_never_reject = !never_reject_application_ids.is_empty()
+                && incoming_bundle.messages().all(|posted_msg| {
+                    never_reject_application_ids.contains(&posted_msg.message.application_id())
+                });
             if error.is_limit_error() && i > 0 {
                 failure_count += 1;
                 // If we've exceeded max failures, discard all remaining message bundles.
@@ -860,10 +868,23 @@ where
                 };
                 Self::discard_remaining_bundles(block, i, maybe_sender);
                 // Continue without incrementing i (next transaction is now at i).
-            } else if incoming_bundle.bundle.is_protected()
-                || incoming_bundle.action == MessageAction::Reject
+            } else if (all_messages_never_reject || incoming_bundle.bundle.is_protected())
+                && incoming_bundle.action != MessageAction::Reject
             {
-                // Protected bundles cannot be rejected. Failed rejected bundles fail the block.
+                let origin = incoming_bundle.origin;
+                never_reject_discarded_origins.insert(origin);
+                warn!(
+                    %error,
+                    index = i,
+                    %origin,
+                    "Message bundle cannot be rejected (protected or never-reject); \
+                    discarding the bundle (and same-sender subsequent bundles) for retry \
+                    in a later block"
+                );
+                Self::discard_remaining_bundles(block, i, Some(origin));
+                // Continue without incrementing i (next transaction is now at i).
+            } else if incoming_bundle.action == MessageAction::Reject {
+                // Failed rejected bundles fail the block.
                 return Err(ChainError::ExecutionError(error, context));
             } else {
                 // Reject the bundle: either a non-limit error, or the first bundle
@@ -944,6 +965,7 @@ where
                 operation_results,
             },
             resource_tracker,
+            never_reject_discarded_origins,
         ))
     }
 
@@ -988,7 +1010,15 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            BlockExecutionOutcome,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        ChainError,
+    > {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
@@ -1049,7 +1079,9 @@ where
             policy,
         )
         .await
-        .map(|(outcome, tracker)| (block, outcome, tracker))
+        .map(|(outcome, tracker, never_reject_origins)| {
+            (block, outcome, tracker, never_reject_origins)
+        })
     }
 
     /// Tracks emitted events per stream and returns the set of streams where new contiguous

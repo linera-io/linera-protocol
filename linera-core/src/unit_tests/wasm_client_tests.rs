@@ -24,8 +24,8 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Epoch,
-        Event, MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Epoch, Event, MessagePolicy,
+        OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
         AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId, StreamName,
@@ -799,13 +799,10 @@ where
 
     receiver.synchronize_from_validators().await.unwrap();
 
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        Some([sender.chain_id()].into_iter().collect()),
-        None,
-        None,
-        None,
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        restrict_chain_ids_to: Some([sender.chain_id()].into_iter().collect()),
+        ..Default::default()
+    };
 
     // Receiver should only process the event from sender now.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -826,8 +823,7 @@ where
     );
 
     // Let's receive from everyone again.
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
+    receiver.options_mut().message_policy = MessagePolicy::default();
 
     // Receiver should now process the event from sender2 as well.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -862,26 +858,22 @@ where
 
     // Turn on the events publishing whitelist: with no applications on it, processing the
     // events will effectively be disabled.
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        None,
-        Some(Default::default()),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        process_events_from_application_ids: Some(Default::default()),
+        ..Default::default()
+    };
 
     // Receiver should not process the event.
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 
     // Let's whitelist the social app now.
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        None,
-        Some([application_id.forget_abi().into()].into_iter().collect()),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        process_events_from_application_ids: Some(
+            [application_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
 
     // Receiver should process the new event now.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -1374,13 +1366,12 @@ where
     campaign_chain.synchronize_from_validators().await?;
 
     // Test 1: Accept bundles with at least one message from fungible app.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        Some([fungible_id.forget_abi().into()].into_iter().collect()),
-        None,
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_without_application_ids: Some(
+            [fungible_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
 
@@ -1398,13 +1389,12 @@ where
     campaign_chain.synchronize_from_validators().await?;
 
     // Test 2: Accept bundles with at least one message from crowd-funding app.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
-        None,
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_without_application_ids: Some(
+            [crowd_funding_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
@@ -1428,13 +1418,12 @@ where
     // Test 3: Reject bundles without any message from a non-existent app.
     // Use a different application description hash to create a fake app ID.
     let fake_app_id = ApplicationId::new(CryptoHash::test_hash("fake app"));
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        Some([fake_app_id.into()].into_iter().collect()),
-        None,
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_without_application_ids: Some(
+            [fake_app_id.into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
@@ -1444,13 +1433,12 @@ where
 
     // Test 4: Reject bundles that contain messages from apps not in the allowlist.
     // The bundle has messages from both fungible and crowd-funding, but we only allow fungible.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        Some([fungible_id.forget_abi().into()].into_iter().collect()),
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_with_other_application_ids: Some(
+            [fungible_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
@@ -1459,11 +1447,8 @@ where
     );
 
     // Test 5: Accept bundles when all app messages are in the allowlist.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        Some(
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_with_other_application_ids: Some(
             [
                 fungible_id.forget_abi().into(),
                 crowd_funding_id.forget_abi().into(),
@@ -1471,8 +1456,8 @@ where
             .into_iter()
             .collect(),
         ),
-        None,
-    );
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
