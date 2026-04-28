@@ -73,7 +73,7 @@ async fn collect_pledges() {
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
-                    &Operation::Pledge {
+                    Operation::Pledge {
                         owner: *backer_account,
                         amount: pledge_amount,
                     },
@@ -102,7 +102,7 @@ async fn collect_pledges() {
 
     campaign_chain
         .add_block(|block| {
-            block.with_operation(campaign_id, &Operation::Collect);
+            block.with_operation(campaign_id, Operation::Collect);
         })
         .await;
 
@@ -179,7 +179,7 @@ async fn cancel_successful_campaign() {
             .add_block(|block| {
                 block.with_operation(
                     campaign_id,
-                    &Operation::Pledge {
+                    Operation::Pledge {
                         owner: *backer_account,
                         amount: pledge_amount,
                     },
@@ -210,7 +210,7 @@ async fn cancel_successful_campaign() {
         .add_block(|block| {
             block
                 .with_timestamp(Timestamp::from(20))
-                .with_operation(campaign_id, &Operation::Cancel);
+                .with_operation(campaign_id, Operation::Cancel);
         })
         .await;
 

@@ -7,7 +7,7 @@
 //! These tests only run if a Wasm runtime has been configured by enabling either the `wasmer` or
 //! the `wasmtime` feature flags.
 
-#![allow(clippy::large_futures)]
+#![expect(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use std::collections::BTreeMap;
@@ -136,7 +136,7 @@ where
     assert!(publish_certificate
         .value()
         .matches_proposed_block(&publish_block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         publish_certificate.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -145,7 +145,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult::default()]
-    ));
+    );
 
     assert_matches!(
         env.worker()
@@ -196,7 +196,7 @@ where
     assert!(create_certificate
         .value()
         .matches_proposed_block(&create_block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         create_certificate.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -208,7 +208,7 @@ where
         &[vec![]],
         &[vec![application_description_blob.clone()]],
         &[OperationResult::default()],
-    ));
+    );
 
     env.write_blobs(std::slice::from_ref(&application_description_blob))
         .await?;
@@ -238,7 +238,7 @@ where
     let run_certificate = env.execute_proposal(run_block.clone(), vec![]).await?;
 
     assert!(run_certificate.value().matches_proposed_block(&run_block));
-    assert!(outcome_matches!(
+    assert_outcome_matches!(
         run_certificate.block(),
         &[vec![]],
         &BTreeMap::new(),
@@ -247,7 +247,7 @@ where
         &[vec![]],
         &[vec![]],
         &[OperationResult(bcs::to_bytes(&15u64)?)],
-    ));
+    );
 
     let info = env
         .worker()
@@ -446,14 +446,17 @@ where
 
     // Stage execution with AutoRetry policy.
     // This should handle the failing message by rejecting the bundle.
-    let (modified_block, auto_retry_executed, _, _) = env
+    let (modified_block, auto_retry_executed, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             proposed_block.clone(),
             None,
             vec![],
             BundleExecutionPolicy {
-                on_failure: BundleFailurePolicy::AutoRetry { max_failures: 3 },
+                on_failure: BundleFailurePolicy::AutoRetry {
+                    max_failures: 3,
+                    never_reject_application_ids: Default::default(),
+                },
                 time_budget: None,
             },
         )
@@ -475,7 +478,7 @@ where
     // Now stage the modified block with Abort policy.
     // Since the bundle is already marked as Reject, this should succeed
     // and produce the same outcome.
-    let (_, abort_executed, _, _) = env
+    let (_, abort_executed, _, _, _) = env
         .executing_worker()
         .stage_block_execution(
             modified_block.clone(),

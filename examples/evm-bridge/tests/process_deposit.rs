@@ -106,7 +106,7 @@ impl TestBridge {
             .add_block(|block| {
                 block.with_operation(
                     bridge_app_id,
-                    &BridgeOperation::RegisterFungibleApp {
+                    BridgeOperation::RegisterFungibleApp {
                         app_id: fungible_app_id.forget_abi(),
                     },
                 );
@@ -197,7 +197,7 @@ async fn test_process_deposit() {
         .add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header.clone(),
                     receipt_rlp: receipt.clone(),
                     proof_nodes: proof_nodes.clone(),
@@ -220,7 +220,7 @@ async fn test_process_deposit() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt.clone(),
                     proof_nodes: proof_nodes.clone(),
@@ -241,7 +241,7 @@ async fn test_process_deposit() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: wrong_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -286,7 +286,7 @@ async fn test_source_chain_id_mismatch() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -335,7 +335,7 @@ async fn test_token_address_mismatch() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -381,7 +381,7 @@ async fn test_wrong_emitter_address() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header,
                     receipt_rlp: receipt,
                     proof_nodes,
@@ -429,7 +429,7 @@ async fn test_wrong_event_signature() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -455,7 +455,7 @@ async fn test_log_index_out_of_range() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -501,7 +501,7 @@ async fn test_deposit_amount_exceeds_u128() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -533,7 +533,7 @@ async fn test_replay_different_log_index_succeeds() {
         .add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp: block_header_rlp.clone(),
                     receipt_rlp: receipt_rlp.clone(),
                     proof_nodes: proof_nodes.clone(),
@@ -554,7 +554,7 @@ async fn test_replay_different_log_index_succeeds() {
         .add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::ProcessDeposit {
+                BridgeOperation::ProcessDeposit {
                     block_header_rlp,
                     receipt_rlp,
                     proof_nodes,
@@ -690,7 +690,7 @@ async fn setup_bridge_with_anvil(
         .add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                &BridgeOperation::RegisterFungibleApp {
+                BridgeOperation::RegisterFungibleApp {
                     app_id: fungible_app_id.forget_abi(),
                 },
             );
@@ -718,7 +718,7 @@ async fn test_verify_block_hash_anvil() {
         .add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                &BridgeOperation::VerifyBlockHash {
+                BridgeOperation::VerifyBlockHash {
                     block_hash: block_hash.0,
                 },
             );
@@ -743,7 +743,7 @@ async fn test_verify_block_hash_not_found() {
         .try_add_block(|block| {
             block.with_operation(
                 bridge_app_id,
-                &BridgeOperation::VerifyBlockHash {
+                BridgeOperation::VerifyBlockHash {
                     block_hash: fake_hash,
                 },
             );
@@ -770,7 +770,7 @@ async fn test_register_fungible_app_cannot_be_called_twice() {
         .try_add_block(|block| {
             block.with_operation(
                 tb.bridge_app_id,
-                &BridgeOperation::RegisterFungibleApp {
+                BridgeOperation::RegisterFungibleApp {
                     app_id: dummy_app_id,
                 },
             );

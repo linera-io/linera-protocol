@@ -130,7 +130,7 @@ impl EvmBridgeContract {
         let query = async_graphql::Request::new(format!(
             "query {{ isBlockHashFinalized(blockHash: \"0x{hash_hex}\") }}"
         ));
-        let response = self.runtime.query_service(application_id, &query);
+        let response = self.runtime.query_service(application_id, query);
 
         let async_graphql::Value::Object(data) = response.data else {
             panic!("Unexpected response from service: {response:#?}");

@@ -217,7 +217,7 @@ async fn allowance_overwrite_and_clear() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &FungibleOperation::Approve {
+                FungibleOperation::Approve {
                     owner,
                     spender,
                     allowance: Amount::from_tokens(9),
@@ -225,7 +225,7 @@ async fn allowance_overwrite_and_clear() {
             );
             block.with_operation(
                 application_id,
-                &FungibleOperation::Approve {
+                FungibleOperation::Approve {
                     owner,
                     spender,
                     allowance: Amount::from_tokens(4),
@@ -245,7 +245,7 @@ async fn allowance_overwrite_and_clear() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &FungibleOperation::Approve {
+                FungibleOperation::Approve {
                     owner,
                     spender,
                     allowance: Amount::ZERO,
@@ -301,7 +301,7 @@ async fn allowances_are_independent() {
         .add_block(|block| {
             block.with_operation(
                 application_id,
-                &FungibleOperation::Approve {
+                FungibleOperation::Approve {
                     owner,
                     spender: spender1,
                     allowance: Amount::from_tokens(6),
@@ -309,7 +309,7 @@ async fn allowances_are_independent() {
             );
             block.with_operation(
                 application_id,
-                &FungibleOperation::Approve {
+                FungibleOperation::Approve {
                     owner,
                     spender: spender2,
                     allowance: Amount::from_tokens(2),

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::large_futures)]
+#![expect(clippy::large_futures)]
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -65,15 +65,17 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
         local_time: Timestamp,
         published_blobs: &[Blob],
     ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
-        self.execute_block(
-            block,
-            local_time,
-            None,
-            published_blobs,
-            None,
-            BundleExecutionPolicy::committed(),
-        )
-        .await
+        let (block, outcome, tracker, _) = self
+            .execute_block(
+                block,
+                local_time,
+                None,
+                published_blobs,
+                None,
+                BundleExecutionPolicy::committed(),
+            )
+            .await?;
+        Ok((block, outcome, tracker))
     }
 }
 

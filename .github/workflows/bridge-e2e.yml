@@ -37,10 +37,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "34.1"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/install-protoc
 
       # Self-hosted runners occasionally expose an unhealthy
       # docker socket at job start despite
@@ -62,8 +59,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Pull pre-built linera images from GCP registry
+      # GCP auth is only needed to push the bridge image on release branches.
       - name: Auth to GCP
+        if: github.event_name == 'push'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: >-
@@ -72,18 +70,10 @@ jobs:
             actions-runner@linera-io-dev.iam.gserviceaccount.com
 
       - name: Configure Docker for GCP
+        if: github.event_name == 'push'
         run: gcloud auth configure-docker us-docker.pkg.dev
 
-      - name: Pull linera image
-        id: pull-images
-        continue-on-error: true
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
-
       - name: Build linera image
-        if: steps.pull-images.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -97,33 +87,21 @@ jobs:
       - name: Build foundry-jq image
         run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
 
-      - uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            bridge:
-              - 'linera-bridge/**'
-              - '!linera-bridge/tests/e2e/**'
-              - 'docker/Dockerfile.bridge'
-
-      - name: Pull bridge image (unchanged)
-        id: pull-bridge
-        if: steps.changes.outputs.bridge == 'false'
-        continue-on-error: true
-        run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker pull "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera-bridge:${BRANCH}" linera-bridge:latest
-
       - name: Build bridge image
         id: build-bridge
-        if: steps.changes.outputs.bridge == 'true' || steps.pull-bridge.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/Dockerfile.bridge
           load: true
-          tags: linera-bridge:latest
+          tags: |
+            linera-bridge:latest
+            ${{ github.event_name == 'push' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.ref_name) || '' }}
+
+      - name: Push bridge image to registry
+        if: steps.build-bridge.outcome == 'success' && github.event_name == 'push'
+        run: |
+          docker push "${GCP_REGISTRY}/linera-bridge:${{ github.ref_name }}"
 
       - name: Build example Wasm for bridge tests
         run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge

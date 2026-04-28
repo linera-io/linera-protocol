@@ -36,7 +36,7 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct EthereumClient {
     pub provider: FillProvider<
