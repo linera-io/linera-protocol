@@ -69,6 +69,14 @@ jobs:
         run: |
           cd docker
           ./ci-compose.sh
+      - name: Dump compose logs on failure
+        if: failure()
+        run: |
+          cd docker
+          docker compose ps -a || true
+          docker compose logs --no-color --tail=200 || true
+          echo "--- shard-init binary inspection ---"
+          docker compose run --rm --entrypoint sh shard-init -c "ldd ./linera 2>&1 | head -20; echo ---; ./linera --version 2>&1 || echo \"linera exec failed: \$?\"" || true
       # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Setup upterm session
       # uses: lhotari/action-upterm@v1
