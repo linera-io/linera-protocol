@@ -62,8 +62,9 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Pull pre-built linera images from GCP registry
+      # GCP auth is only needed to push the bridge image on release branches.
       - name: Auth to GCP
+        if: github.event_name == 'push'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: >-
@@ -72,32 +73,10 @@ jobs:
             actions-runner@linera-io-dev.iam.gserviceaccount.com
 
       - name: Configure Docker for GCP
+        if: github.event_name == 'push'
         run: gcloud auth configure-docker us-docker.pkg.dev
 
-      # In merge_group events, github.ref_name is "gh-readonly-queue/<base>/<head>"
-      # which contains slashes invalid in Docker tags. Resolve the real base
-      # branch so pulls/pushes use a clean tag.
-      - name: Compute base branch
-        id: base-branch
-        run: |
-          if [ "${{ github.event_name }}" = "merge_group" ]; then
-            REF="${{ github.event.merge_group.base_ref }}"
-            BRANCH="${REF#refs/heads/}"
-          else
-            BRANCH="${{ github.base_ref || github.ref_name }}"
-          fi
-          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
-
-      - name: Pull linera image
-        id: pull-images
-        continue-on-error: true
-        run: |
-          BRANCH="${{ steps.base-branch.outputs.name }}"
-          docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
-
       - name: Build linera image
-        if: steps.pull-images.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -111,27 +90,8 @@ jobs:
       - name: Build foundry-jq image
         run: docker build -t foundry-jq -f ./docker/Dockerfile.foundry ./docker
 
-      - uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            bridge:
-              - 'linera-bridge/**'
-              - '!linera-bridge/tests/e2e/**'
-              - 'docker/Dockerfile.bridge'
-
-      - name: Pull bridge image (unchanged)
-        id: pull-bridge
-        if: steps.changes.outputs.bridge == 'false'
-        continue-on-error: true
-        run: |
-          BRANCH="${{ steps.base-branch.outputs.name }}"
-          docker pull "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
-          docker tag "${GCP_REGISTRY}/linera-bridge:${BRANCH}" linera-bridge:latest
-
       - name: Build bridge image
         id: build-bridge
-        if: steps.changes.outputs.bridge == 'true' || steps.pull-bridge.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
