@@ -44,7 +44,6 @@ relay = [
     "dep:linera-chain",
     "dep:linera-client",
     "dep:linera-core",
-    "dep:linera-faucet-client",
     "dep:linera-storage",
     "dep:linera-storage-runtime",
     "dep:linera-wallet-json",
@@ -102,7 +101,6 @@ hex = { workspace = true, optional = true }
 linera-chain = { workspace = true, optional = true }
 linera-client = { workspace = true, optional = true }
 linera-core = { workspace = true, optional = true }
-linera-faucet-client = { workspace = true, optional = true }
 linera-storage = { workspace = true, optional = true }
 linera-storage-runtime = { workspace = true, optional = true, features = [
     "rocksdb",
