@@ -825,8 +825,7 @@ where
                 };
                 Self::discard_remaining_bundles(block, i, maybe_sender);
                 // Continue without incrementing i (next transaction is now at i).
-            } else if all_messages_never_reject
-                && !incoming_bundle.bundle.is_protected()
+            } else if (all_messages_never_reject || incoming_bundle.bundle.is_protected())
                 && incoming_bundle.action != MessageAction::Reject
             {
                 let origin = incoming_bundle.origin;
@@ -835,15 +834,14 @@ where
                     %error,
                     index = i,
                     %origin,
-                    "Message bundle for a never-reject application failed; discarding the \
-                    bundle (and same-sender subsequent bundles) for retry in a later block"
+                    "Message bundle cannot be rejected (protected or never-reject); \
+                    discarding the bundle (and same-sender subsequent bundles) for retry \
+                    in a later block"
                 );
                 Self::discard_remaining_bundles(block, i, Some(origin));
                 // Continue without incrementing i (next transaction is now at i).
-            } else if incoming_bundle.bundle.is_protected()
-                || incoming_bundle.action == MessageAction::Reject
-            {
-                // Protected bundles cannot be rejected. Failed rejected bundles fail the block.
+            } else if incoming_bundle.action == MessageAction::Reject {
+                // Failed rejected bundles fail the block.
                 return Err(ChainError::ExecutionError(error, context));
             } else {
                 // Reject the bundle: either a non-limit error, or the first bundle
