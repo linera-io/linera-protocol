@@ -74,11 +74,25 @@ jobs:
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker us-docker.pkg.dev
 
+      # In merge_group events, github.ref_name is "gh-readonly-queue/<base>/<head>"
+      # which contains slashes invalid in Docker tags. Resolve the real base
+      # branch so pulls/pushes use a clean tag.
+      - name: Compute base branch
+        id: base-branch
+        run: |
+          if [ "${{ github.event_name }}" = "merge_group" ]; then
+            REF="${{ github.event.merge_group.base_ref }}"
+            BRANCH="${REF#refs/heads/}"
+          else
+            BRANCH="${{ github.base_ref || github.ref_name }}"
+          fi
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
       - name: Pull linera image
         id: pull-images
         continue-on-error: true
         run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
+          BRANCH="${{ steps.base-branch.outputs.name }}"
           docker pull "${GCP_REGISTRY}/linera:${BRANCH}"
           docker tag "${GCP_REGISTRY}/linera:${BRANCH}" linera-test
 
@@ -111,7 +125,7 @@ jobs:
         if: steps.changes.outputs.bridge == 'false'
         continue-on-error: true
         run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
+          BRANCH="${{ steps.base-branch.outputs.name }}"
           docker pull "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
           docker tag "${GCP_REGISTRY}/linera-bridge:${BRANCH}" linera-bridge:latest
 
@@ -125,13 +139,12 @@ jobs:
           load: true
           tags: |
             linera-bridge:latest
-            ${{ github.event_name != 'workflow_dispatch' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.base_ref || github.ref_name) || '' }}
+            ${{ github.event_name == 'push' && format('{0}/linera-bridge:{1}', env.GCP_REGISTRY, github.ref_name) || '' }}
 
       - name: Push bridge image to registry
-        if: steps.build-bridge.outcome == 'success' && github.event_name != 'workflow_dispatch'
+        if: steps.build-bridge.outcome == 'success' && github.event_name == 'push'
         run: |
-          BRANCH="${{ github.base_ref || github.ref_name }}"
-          docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
+          docker push "${GCP_REGISTRY}/linera-bridge:${{ github.ref_name }}"
 
       - name: Build example Wasm for bridge tests
         run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
