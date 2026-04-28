@@ -38,10 +38,7 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        version: "34.1"
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Build
       run: |
         cargo build --release -p linera-service

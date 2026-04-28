@@ -37,10 +37,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "34.1"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/install-protoc
 
       # Self-hosted runners occasionally expose an unhealthy
       # docker socket at job start despite
