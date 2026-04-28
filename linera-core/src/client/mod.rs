@@ -276,6 +276,7 @@ impl<Env: Environment> Client<Env> {
         chain_worker_ttl: Option<Duration>,
         sender_chain_worker_ttl: Option<Duration>,
         priority_bundle_origins: HashSet<ChainId>,
+        cross_chain_batch_size_limit: usize,
         options: chain_client::Options,
         block_cache_size: usize,
         execution_state_cache_size: usize,
@@ -292,6 +293,7 @@ impl<Env: Environment> Client<Env> {
             block_cache_size,
             execution_state_cache_size,
             priority_bundle_origins,
+            cross_chain_batch_size_limit,
             ..ChainWorkerConfig::default()
         };
         let state = WorkerState::new(

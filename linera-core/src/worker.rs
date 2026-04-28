@@ -600,6 +600,7 @@ struct ChainBatchRequestProcessor {
 impl ChainBatchRequestProcessor {
     fn create<StorageClient>(
         state: ChainWorkerArc<StorageClient>,
+        batch_size_limit: usize,
     ) -> (ChainBatchRequestProcessor, Shared<BatchFuture>)
     where
         StorageClient: Storage + Clone + 'static,
@@ -610,8 +611,11 @@ impl ChainBatchRequestProcessor {
                 let mut requests = vec![first];
                 match handle::write_lock(&state).await {
                     Ok(mut guard) => {
-                        while let Ok(req) = receiver.try_recv() {
-                            requests.push(req);
+                        while requests.len() < batch_size_limit {
+                            match receiver.try_recv() {
+                                Ok(req) => requests.push(req),
+                                Err(_) => break,
+                            }
                         }
                         #[cfg(with_metrics)]
                         metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
@@ -1084,7 +1088,10 @@ where
             }
         }
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        let (new_request_processor, new_future) = ChainBatchRequestProcessor::create(state);
+        let (new_request_processor, new_future) = ChainBatchRequestProcessor::create(
+            state,
+            self.chain_worker_config.cross_chain_batch_size_limit,
+        );
         match self
             .chain_batches
             .pin()

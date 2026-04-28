@@ -93,6 +93,11 @@ pub struct Options {
     )]
     pub sender_chain_worker_ttl: Duration,
 
+    /// Maximum number of cross-chain requests coalesced into a single batch by the
+    /// per-chain driver. Bounds the worst-case write-lock hold time.
+    #[arg(long, default_value_t = 1000)]
+    pub cross_chain_batch_size_limit: usize,
+
     /// Delay increment for retrying to connect to a validator.
     #[arg(
         long = "retry-delay-ms",
