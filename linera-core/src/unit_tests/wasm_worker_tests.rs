@@ -396,7 +396,7 @@ where
         .with_timestamp(1)
         .with_operation(publish_counter_op)
         .with_operation(publish_meta_op);
-    let (_, publish_executed, _, _) = env
+    let (_, publish_executed, _, _, _) = env
         .worker()
         .stage_block_execution(
             publish_block,
@@ -431,7 +431,7 @@ where
     let create_counter_block = make_child_block(&publish_cert.into_value())
         .with_timestamp(2)
         .with_operation(create_counter_op);
-    let (_, create_counter_executed, _, _) = env
+    let (_, create_counter_executed, _, _, _) = env
         .worker()
         .stage_block_execution(
             create_counter_block,
@@ -466,7 +466,7 @@ where
     let create_meta_block = make_child_block(&create_counter_cert.into_value())
         .with_timestamp(3)
         .with_operation(create_meta_op);
-    let (_, create_meta_executed, _, _) = env
+    let (_, create_meta_executed, _, _, _) = env
         .worker()
         .stage_block_execution(
             create_meta_block,
@@ -489,7 +489,7 @@ where
             application_id: meta_app_id,
             bytes: fail_op_bytes,
         });
-    let (_, send_fail_executed, _, _) = env
+    let (_, send_fail_executed, _, _, _) = env
         .worker()
         .stage_block_execution(
             send_fail_block,
@@ -534,14 +534,17 @@ where
 
     // Stage execution with AutoRetry policy.
     // This should handle the failing message by rejecting the bundle.
-    let (modified_block, auto_retry_executed, _, _) = env
+    let (modified_block, auto_retry_executed, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block.clone(),
             None,
             vec![],
             BundleExecutionPolicy {
-                on_failure: BundleFailurePolicy::AutoRetry { max_failures: 3 },
+                on_failure: BundleFailurePolicy::AutoRetry {
+                    max_failures: 3,
+                    never_reject_application_ids: Default::default(),
+                },
                 time_budget: None,
             },
         )
@@ -563,7 +566,7 @@ where
     // Now stage the modified block with Abort policy.
     // Since the bundle is already marked as Reject, this should succeed
     // and produce the same outcome.
-    let (_, abort_executed, _, _) = env
+    let (_, abort_executed, _, _, _) = env
         .worker()
         .stage_block_execution(
             modified_block.clone(),
