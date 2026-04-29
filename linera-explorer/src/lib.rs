@@ -673,12 +673,12 @@ async fn page(
                         Page::Transfer {
                             result: Some("Transfer successful!".to_string()),
                         },
-                        format!("/transfer?chain={}", chain_id),
+                        format!("/transfer?chain={chain_id}"),
                     ))
                 }
                 _ => Ok((
                     Page::Transfer { result: None },
-                    format!("/transfer?chain={}", chain_id),
+                    format!("/transfer?chain={chain_id}"),
                 )),
             }
         }
@@ -808,7 +808,7 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
                     {
                         Ok(msg) => msg,
                         Err(e) => {
-                            log_str(&format!("ignoring websocket message: {}", e));
+                            log_str(&format!("ignoring websocket message: {e}"));
                             continue;
                         }
                     };
