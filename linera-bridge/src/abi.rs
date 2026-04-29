@@ -42,4 +42,8 @@ pub enum BridgeOperation {
     },
     /// Verify that an EVM block hash is authentic and finalized.
     VerifyBlockHash { block_hash: [u8; 32] },
+    /// Register the EVM FungibleBridge contract address.
+    /// Can only be called once, by the chain owner.
+    /// Must be set before ProcessDeposit can succeed.
+    RegisterFungibleBridge { address: [u8; 20] },
 }

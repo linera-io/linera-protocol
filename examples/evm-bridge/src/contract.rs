@@ -107,6 +107,16 @@ impl Contract for EvmBridgeContract {
                         .expect("failed to insert verified block hash");
                 }
             }
+            BridgeOperation::RegisterFungibleBridge { address } => {
+                self.runtime
+                    .authenticated_signer()
+                    .expect("RegisterFungibleBridge requires an authenticated signer");
+                assert!(
+                    self.state.bridge_contract_address.get().is_none(),
+                    "bridge contract address is already registered and cannot be changed"
+                );
+                self.state.bridge_contract_address.set(Some(address));
+            }
         }
     }
 

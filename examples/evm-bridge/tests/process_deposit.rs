@@ -781,3 +781,47 @@ async fn test_register_fungible_app_cannot_be_called_twice() {
         "registering fungible app a second time should be rejected"
     );
 }
+
+#[tokio::test]
+async fn test_register_fungible_bridge_is_one_shot() {
+    let (validator, bridge_module_id) =
+        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
+    let mut chain = validator.new_chain().await;
+
+    let bridge_params = BridgeParameters {
+        source_chain_id: 8453u64,
+        bridge_contract_address: [0xBB; 20],
+        token_address: [0xA0; 20],
+        rpc_endpoint: String::new(),
+    };
+    let bridge_app_id = chain
+        .create_application(bridge_module_id, bridge_params, (), vec![])
+        .await;
+
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::RegisterFungibleBridge {
+                    address: [0xCC; 20],
+                },
+            );
+        })
+        .await;
+
+    let result = chain
+        .try_add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::RegisterFungibleBridge {
+                    address: [0xDD; 20],
+                },
+            );
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "registering the bridge contract address a second time should be rejected"
+    );
+}
