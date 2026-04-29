@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta, Timestamp,
+        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -2061,6 +2061,9 @@ pub struct PendingProposal {
     /// against the committed execution outcome.
     #[serde(default)]
     pub auto_retry_outcome: Option<BlockExecutionOutcome>,
+    /// The round in which this proposal was first submitted, if any.
+    #[serde(default)]
+    pub round: Option<Round>,
 }
 
 enum ReceiveCertificateMode {
