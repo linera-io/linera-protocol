@@ -1233,9 +1233,7 @@ struct EthereumTrackerApp(ApplicationWrapper<ethereum_tracker::EthereumTrackerAb
 impl EthereumTrackerApp {
     async fn get_amount(&self, account_owner: &str) -> U256 {
         use ethereum_tracker::U256Cont;
-        let query = format!(
-            "accounts {{ entry(key: \"{account_owner}\") {{ value }} }}"
-        );
+        let query = format!("accounts {{ entry(key: \"{account_owner}\") {{ value }} }}");
         let response_body = self.0.query(&query).await.unwrap();
         let amount_option = serde_json::from_value::<Option<U256Cont>>(
             response_body["accounts"]["entry"]["value"].clone(),

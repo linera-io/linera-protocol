@@ -1004,9 +1004,8 @@ impl PostgresDatabase {
 
     /// Serialize a Message with consistent error handling
     fn serialize_message(message: &Message) -> Result<Vec<u8>, PostgresError> {
-        bincode::serialize(message).map_err(|e| {
-            PostgresError::Serialization(format!("Failed to serialize message: {e}"))
-        })
+        bincode::serialize(message)
+            .map_err(|e| PostgresError::Serialization(format!("Failed to serialize message: {e}")))
     }
 
     fn deserialize_message(data: &[u8]) -> Result<Message, PostgresError> {

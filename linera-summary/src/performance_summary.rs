@@ -66,9 +66,8 @@ impl PerformanceSummary {
             commit_hash
         );
 
-        let mut markdown_content = format!(
-            "{PR_COMMENT_HEADER} [{short_commit_hash}]({commit_url})\n\n"
-        );
+        let mut markdown_content =
+            format!("{PR_COMMENT_HEADER} [{short_commit_hash}]({commit_url})\n\n");
 
         markdown_content.push_str("### CI Runtime Comparison\n\n");
         for (workflow_name, comparisons) in &self.ci_runtime_comparison.0 {

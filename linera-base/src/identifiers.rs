@@ -298,8 +298,7 @@ impl std::str::FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(&format!("\"{s}\""))
-            .with_context(|| format!("Invalid BlobType: {s}"))
+        serde_json::from_str(&format!("\"{s}\"")).with_context(|| format!("Invalid BlobType: {s}"))
     }
 }
 

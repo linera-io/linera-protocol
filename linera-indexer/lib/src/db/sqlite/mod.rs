@@ -64,9 +64,7 @@ impl SqliteDatabase {
                     tracing::info!(?database_url, "creating new SQLite database");
                     // Create the database file if it doesn't exist
                     std::fs::File::create(database_url).unwrap_or_else(|e| {
-                        panic!(
-                            "failed to create SQLite database file: {database_url}, error: {e}"
-                        )
+                        panic!("failed to create SQLite database file: {database_url}, error: {e}")
                     });
                 }
                 Err(e) => {
@@ -157,9 +155,8 @@ impl SqliteDatabase {
         data: &[u8],
     ) -> Result<(), SqliteError> {
         // Deserialize the block to extract denormalized data
-        let block: Block = bincode::deserialize(data).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to deserialize block: {e}"))
-        })?;
+        let block: Block = bincode::deserialize(data)
+            .map_err(|e| SqliteError::Serialization(format!("Failed to deserialize block: {e}")))?;
 
         // Count aggregated data
         let operation_count = block.body.operations().count();
@@ -436,9 +433,7 @@ impl SqliteDatabase {
                 }
                 OracleResponse::EventExists(event_exists) => {
                     let serialized = bincode::serialize(event_exists).map_err(|e| {
-                        SqliteError::Serialization(format!(
-                            "Failed to serialize event exists: {e}"
-                        ))
+                        SqliteError::Serialization(format!("Failed to serialize event exists: {e}"))
                     })?;
                     ("EventExists", None, Some(serialized))
                 }
@@ -1000,9 +995,8 @@ impl SqliteDatabase {
     }
 
     fn deserialize_message(data: &[u8]) -> Result<Message, SqliteError> {
-        bincode::deserialize(data).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to deserialize message: {e}"))
-        })
+        bincode::deserialize(data)
+            .map_err(|e| SqliteError::Serialization(format!("Failed to deserialize message: {e}")))
     }
 }
 

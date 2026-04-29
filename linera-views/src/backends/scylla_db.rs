@@ -932,9 +932,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         Self::check_namespace(namespace)?;
         let session = ScyllaDbClient::build_default_session(&config.uri).await?;
         let statement = session
-            .prepare(format!(
-                "DROP TABLE IF EXISTS {KEYSPACE}.\"{namespace}\";"
-            ))
+            .prepare(format!("DROP TABLE IF EXISTS {KEYSPACE}.\"{namespace}\";"))
             .await?;
         session
             .execute_single_page(&statement, &[], PagingState::start())

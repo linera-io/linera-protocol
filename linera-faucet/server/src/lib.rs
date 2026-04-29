@@ -616,9 +616,7 @@ where
         })?
         .ok_or_else(|| {
             tracing::error!("Chain description blob not found for chain {}", chain_id);
-            Error::new(format!(
-                "Chain description not found for chain {chain_id}"
-            ))
+            Error::new(format!("Chain description not found for chain {chain_id}"))
         })?;
 
     // Deserialize the chain description from the blob bytes

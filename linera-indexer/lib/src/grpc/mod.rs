@@ -226,9 +226,7 @@ impl From<SqliteError> for Status {
             SqliteError::BlockNotFound(hash) => {
                 Status::not_found(format!("Block not found: {hash}"))
             }
-            SqliteError::BlobNotFound(hash) => {
-                Status::not_found(format!("Blob not found: {hash}"))
-            }
+            SqliteError::BlobNotFound(hash) => Status::not_found(format!("Blob not found: {hash}")),
         }
     }
 }
