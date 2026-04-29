@@ -1509,8 +1509,8 @@ where
     }
 
     /// Gets the next height to preprocess.
-    pub(crate) async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
-        Ok(self.chain.next_height_to_preprocess().await?)
+    pub(crate) fn get_next_height_to_preprocess(&self) -> BlockHeight {
+        *self.chain.next_height_to_preprocess.get()
     }
 
     /// Attempts to vote for a leader timeout, if possible.

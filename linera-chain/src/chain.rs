@@ -241,6 +241,16 @@ where
     /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
     /// the last reset, the error is returned instead.
     pub block_zero_executed_at: RegisterView<C, Timestamp>,
+
+    /// The height at which the next block can be preprocessed: one past the highest
+    /// height in `block_hashes` (executed or preprocessed), or `next_block_height` if
+    /// `block_hashes` is empty.
+    ///
+    /// Maintained as an O(1) shortcut for `next_height_to_preprocess`, since
+    /// `CustomMapView` does not yet expose a `last_index` lookup. Once
+    /// `linera-views` gains efficient first/last key support, this field can be
+    /// removed in favor of `block_hashes.last_index()`.
+    pub next_height_to_preprocess: RegisterView<C, BlockHeight>,
 }
 
 /// Block-chaining state.
@@ -477,17 +487,16 @@ where
         Ok(())
     }
 
-    /// Returns the height of the highest block we have, plus one. Includes preprocessed blocks.
-    ///
-    /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
-    pub async fn next_height_to_preprocess(&self) -> Result<BlockHeight, ChainError> {
-        let next_block_height = self.tip_state.get().next_block_height;
-        if let Some(height) = self.block_hashes.indices().await?.last() {
-            if *height >= next_block_height {
-                return Ok(height.saturating_add(BlockHeight(1)));
-            }
+    /// Updates `next_height_to_preprocess` to `height + 1` if it is currently smaller.
+    fn update_next_height_to_preprocess(
+        &mut self,
+        height: BlockHeight,
+    ) -> Result<(), ArithmeticError> {
+        let next = self.next_height_to_preprocess.get_mut();
+        if *next <= height {
+            *next = height.try_add_one()?;
         }
-        Ok(next_block_height)
+        Ok(())
     }
 
     /// Attempts to process a new `bundle` of messages from the given `origin`. Returns an
@@ -1080,6 +1089,7 @@ where
         tip.next_block_height.try_add_assign_one()?;
         tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.block_hashes.insert(&block.header.height, hash)?;
+        self.update_next_height_to_preprocess(block.header.height)?;
         Ok(updated_streams)
     }
 
@@ -1102,6 +1112,7 @@ where
         self.process_outgoing_messages(block).await?;
         let updated_streams = self.process_emitted_events(block).await?;
         self.block_hashes.insert(&height, hash)?;
+        self.update_next_height_to_preprocess(height)?;
         Ok(updated_streams)
     }
 

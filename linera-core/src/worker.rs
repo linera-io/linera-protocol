@@ -1710,7 +1710,7 @@ where
         chain_id: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
-            guard.get_next_height_to_preprocess().await
+            Ok(guard.get_next_height_to_preprocess())
         })
         .await
     }

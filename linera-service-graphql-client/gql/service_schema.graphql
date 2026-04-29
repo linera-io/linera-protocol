@@ -394,6 +394,17 @@ type ChainStateExtendedView {
 	the last reset, the error is returned instead.
 	"""
 	blockZeroExecutedAt: Timestamp!
+	"""
+	The height at which the next block can be preprocessed: one past the highest
+	height in `block_hashes` (executed or preprocessed), or `next_block_height` if
+	`block_hashes` is empty.
+	
+	Maintained as an O(1) shortcut for `next_height_to_preprocess`, since
+	`CustomMapView` does not yet expose a `last_index` lookup. Once
+	`linera-views` gains efficient first/last key support, this field can be
+	removed in favor of `block_hashes.last_index()`.
+	"""
+	nextHeightToPreprocess: BlockHeight!
 }
 
 """
