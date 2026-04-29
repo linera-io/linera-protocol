@@ -430,8 +430,13 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?
             .and_then(|chain| chain.owner);
 
+        let pending_proposal = if info.manager.current_round.is_fast() {
+            client.pending_proposal().await
+        } else {
+            None
+        };
         let new_chain = wallet::Chain {
-            pending_proposal: client.pending_proposal().await,
+            pending_proposal,
             owner: existing_owner,
             ..info.as_ref().into()
         };
@@ -1015,7 +1020,11 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().await;
+                let pending_proposal = if info.manager.current_round.is_fast() {
+                    chain_client.pending_proposal().await
+                } else {
+                    None
+                };
                 self.wallet()
                     .insert(
                         info.chain_id,
