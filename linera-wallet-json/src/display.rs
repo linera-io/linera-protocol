@@ -84,8 +84,8 @@ impl ChainDetails {
             println!("{:<20}  {hash}", "Latest block hash:");
         }
 
-        if self.user_chain.pending_proposal.is_some() {
-            println!("{:<20}  present", "Pending proposal:");
+        if self.user_chain.pending_fast_proposal.is_some() {
+            println!("{:<20}  present", "Pending fast proposal:");
         }
     }
 }
