@@ -153,8 +153,8 @@ query Chain(
       fallbackOwners
       currentRound
     }
-    confirmedLog {
-      entries
+    blockHashes {
+      keys
     }
     receivedLog {
       entries {

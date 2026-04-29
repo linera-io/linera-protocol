@@ -26,7 +26,7 @@ use linera_execution::{
 use linera_views::{
     context::Context,
     log_view::LogView,
-    map_view::MapView,
+    map_view::{CustomMapView, MapView},
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
     views::{ClonableView, RootView, View},
@@ -212,9 +212,10 @@ where
     /// The incomplete sets of blobs for upcoming proposals.
     pub pending_proposed_blobs: ReentrantCollectionView<C, AccountOwner, PendingBlobsView<C>>,
 
-    /// Hashes of all certified blocks for this sender.
-    /// This ends with `block_hash` and has length `usize::from(next_block_height)`.
-    pub confirmed_log: LogView<C, CryptoHash>,
+    /// Hashes of all known blocks in this chain, indexed by their height. A block at
+    /// `height < next_block_height` is executed; a block at `height >= next_block_height`
+    /// is preprocessed (verified but not yet executed) and may not be contiguous.
+    pub block_hashes: CustomMapView<C, BlockHeight, CryptoHash>,
     /// Sender chain and height of all certified blocks known as a receiver (local ordering).
     pub received_log: LogView<C, ChainAndHeight>,
     /// The number of `received_log` entries we have synchronized, for each validator.
@@ -233,8 +234,6 @@ where
     /// Outboxes with at least one pending message. This allows us to avoid loading all outboxes.
     pub nonempty_outboxes: RegisterView<C, BTreeSet<ChainId>>,
 
-    /// Blocks that have been verified but not executed yet, and that may not be contiguous.
-    pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
     /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
     pub nonempty_inboxes: RegisterView<C, BTreeSet<ChainId>>,
 
@@ -482,10 +481,13 @@ where
     ///
     /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
     pub async fn next_height_to_preprocess(&self) -> Result<BlockHeight, ChainError> {
-        if let Some(height) = self.preprocessed_blocks.indices().await?.last() {
-            return Ok(height.saturating_add(BlockHeight(1)));
+        let next_block_height = self.tip_state.get().next_block_height;
+        if let Some(height) = self.block_hashes.indices().await?.last() {
+            if *height >= next_block_height {
+                return Ok(height.saturating_add(BlockHeight(1)));
+            }
         }
-        Ok(self.tip_state.get().next_block_height)
+        Ok(next_block_height)
     }
 
     /// Attempts to process a new `bundle` of messages from the given `origin`. Returns an
@@ -674,7 +676,7 @@ where
     ))]
     async fn execute_block_inner(
         chain: &mut ExecutionStateView<C>,
-        confirmed_log: &LogView<C, CryptoHash>,
+        block_hashes: &CustomMapView<C, BlockHeight, CryptoHash>,
         block: &mut ProposedBlock,
         local_time: Timestamp,
         round: Option<u32>,
@@ -875,7 +877,6 @@ where
 
         let recipients = block_execution_tracker.recipients();
         let mut recipient_heights = Vec::new();
-        let mut indices = Vec::new();
         for (recipient, height) in chain
             .previous_message_blocks
             .multi_get_pairs(recipients)
@@ -885,36 +886,35 @@ where
                 .previous_message_blocks
                 .insert(&recipient, block.height)?;
             if let Some(height) = height {
-                let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
-                indices.push(index);
                 recipient_heights.push((recipient, height));
             }
         }
-        let hashes = confirmed_log.multi_get(indices).await?;
+        let hashes = block_hashes
+            .multi_get(recipient_heights.iter().map(|(_, height)| height))
+            .await?;
         let mut previous_message_blocks = BTreeMap::new();
         for (hash, (recipient, height)) in hashes.into_iter().zip(recipient_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in block_hashes".into())
             })?;
             previous_message_blocks.insert(recipient, (hash, height));
         }
 
         let streams = block_execution_tracker.event_streams();
         let mut stream_heights = Vec::new();
-        let mut indices = Vec::new();
         for (stream, height) in chain.previous_event_blocks.multi_get_pairs(streams).await? {
             chain.previous_event_blocks.insert(&stream, block.height)?;
             if let Some(height) = height {
-                let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
-                indices.push(index);
                 stream_heights.push((stream, height));
             }
         }
-        let hashes = confirmed_log.multi_get(indices).await?;
+        let hashes = block_hashes
+            .multi_get(stream_heights.iter().map(|(_, height)| height))
+            .await?;
         let mut previous_event_blocks = BTreeMap::new();
         for (hash, (stream, height)) in hashes.into_iter().zip(stream_heights) {
             let hash = hash.ok_or_else(|| {
-                ChainError::CorruptedChainState("missing entry in confirmed_log".into())
+                ChainError::CorruptedChainState("missing entry in block_hashes".into())
             })?;
             previous_event_blocks.insert(stream, (hash, height));
         }
@@ -1035,7 +1035,7 @@ where
 
         Self::execute_block_inner(
             &mut self.execution_state,
-            &self.confirmed_log,
+            &self.block_hashes,
             &mut block,
             local_time,
             round,
@@ -1079,12 +1079,11 @@ where
         tip.block_hash = Some(hash);
         tip.next_block_height.try_add_assign_one()?;
         tip.update_counters(&block.body.transactions, &block.body.messages)?;
-        self.confirmed_log.push(hash);
-        self.preprocessed_blocks.remove(&block.header.height)?;
+        self.block_hashes.insert(&block.header.height, hash)?;
         Ok(updated_streams)
     }
 
-    /// Adds a block to `preprocessed_blocks`, and updates the outboxes where possible.
+    /// Adds a block to `block_hashes` as preprocessed, and updates the outboxes where possible.
     /// Returns the set of streams that were updated as a result of preprocessing the block.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
@@ -1102,7 +1101,7 @@ where
         }
         self.process_outgoing_messages(block).await?;
         let updated_streams = self.process_emitted_events(block).await?;
-        self.preprocessed_blocks.insert(&height, hash)?;
+        self.block_hashes.insert(&height, hash)?;
         Ok(updated_streams)
     }
 
@@ -1157,36 +1156,22 @@ where
         Ok(())
     }
 
-    /// Returns the hashes of all blocks we have in the given range.
-    ///
-    /// If the input heights are in ascending order, the hashes will be in the same order.
-    /// Otherwise they may be unordered.
+    /// Returns the hashes of all blocks we have at the given heights, in input order.
+    /// Unknown heights are skipped.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         next_block_height = %self.tip_state.get().next_block_height,
     ))]
-    pub async fn block_hashes(
+    pub async fn block_hashes_for_heights(
         &self,
         heights: impl IntoIterator<Item = BlockHeight>,
     ) -> Result<Vec<CryptoHash>, ChainError> {
-        let next_height = self.tip_state.get().next_block_height;
-        // Everything up to (excluding) next_height is in confirmed_log.
-        let (confirmed_heights, unconfirmed_heights) = heights
+        let heights = heights.into_iter().collect::<Vec<_>>();
+        Ok(self
+            .block_hashes
+            .multi_get(&heights)
+            .await?
             .into_iter()
-            .partition::<Vec<_>, _>(|height| *height < next_height);
-        let confirmed_indices = confirmed_heights
-            .into_iter()
-            .map(|height| usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow))
-            .collect::<Result<_, _>>()?;
-        let confirmed_hashes = self.confirmed_log.multi_get(confirmed_indices).await?;
-        // Everything after (including) next_height in preprocessed_blocks if we have it.
-        let unconfirmed_hashes = self
-            .preprocessed_blocks
-            .multi_get(&unconfirmed_heights)
-            .await?;
-        Ok(confirmed_hashes
-            .into_iter()
-            .chain(unconfirmed_hashes)
             .flatten()
             .collect())
     }
@@ -1244,24 +1229,11 @@ where
                 }
                 let maybe_prev_hash = match outbox.next_height_to_schedule.get().try_sub_one().ok()
                 {
-                    // The block with the last added message has already been executed; look up its
-                    // hash in the confirmed_log.
-                    Some(height) if height < next_height => {
-                        let index =
-                            usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
-                        Some(self.confirmed_log.get(index).await?.ok_or_else(|| {
-                            ChainError::CorruptedChainState("missing entry in confirmed_log".into())
+                    Some(height) => {
+                        Some(self.block_hashes.get(&height).await?.ok_or_else(|| {
+                            ChainError::CorruptedChainState("missing entry in block_hashes".into())
                         })?)
                     }
-                    // The block with last added message has not been executed yet. If we have it,
-                    // it's in preprocessed_blocks.
-                    Some(height) => Some(self.preprocessed_blocks.get(&height).await?.ok_or_else(
-                        || {
-                            ChainError::CorruptedChainState(
-                                "missing entry in preprocessed_blocks".into(),
-                            )
-                        },
-                    )?),
                     None => None, // No message to that sender was added yet.
                 };
                 // Only schedule if this block contains the next message for that recipient.
