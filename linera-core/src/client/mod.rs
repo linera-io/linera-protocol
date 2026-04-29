@@ -612,7 +612,7 @@ impl<Env: Environment> Client<Env> {
         let scheduler = self.requests_scheduler.clone();
         let remote = remote_node.clone();
 
-        let _download_task = linera_base::Task::spawn(async move {
+        let download_task = linera_base::Task::spawn(async move {
             let mut download_height = next_height;
             let mut in_flight = FuturesOrdered::<CertificateBatchFuture>::new();
 
@@ -660,6 +660,9 @@ impl<Env: Environment> Client<Env> {
             next_height = info.next_block_height;
             last_info = info;
         }
+        // Await the downloader so any panic inside the spawned task surfaces here
+        // instead of being silently swallowed when the channel closes.
+        download_task.await;
         Ok(last_info)
     }
 
