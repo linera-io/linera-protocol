@@ -60,18 +60,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # GCP auth is only needed to push the bridge image on release branches.
-      - name: Auth to GCP
-        if: github.event_name == 'push'
-        uses: google-github-actions/auth@v2
+      - if: github.event_name == 'push'
+        uses: ./.github/actions/gcp-auth
         with:
-          workload_identity_provider: >-
-            projects/886017272224/locations/global/workloadIdentityPools/github-apps-pool/providers/github-apps-provider
-          service_account: >-
-            actions-runner@linera-io-dev.iam.gserviceaccount.com
-
-      - name: Configure Docker for GCP
-        if: github.event_name == 'push'
-        run: gcloud auth configure-docker us-docker.pkg.dev
+          service_account: actions-runner@linera-io-dev.iam.gserviceaccount.com
+          configure_docker_for: us-docker.pkg.dev
 
       - name: Build linera image
         uses: docker/build-push-action@v6
