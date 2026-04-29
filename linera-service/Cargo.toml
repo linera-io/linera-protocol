@@ -197,6 +197,8 @@ linera-execution = { workspace = true, features = ["test"] }
 linera-rpc = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["wasmer", "test"] }
 linera-service = { path = ".", default-features = false, features = ["test"] }
+event-emitter.workspace = true
+event-subscriber.workspace = true
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
 matching-engine.workspace = true

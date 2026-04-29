@@ -2595,6 +2595,238 @@ async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig)
     Ok(())
 }
 
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp) ; "storage_test_service_tcp"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_update_stream_splitting(config: impl LineraNetConfig) -> Result<()> {
+    use event_emitter::EventEmitterAbi;
+    use event_subscriber::EventSubscriberAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+
+    let emitter_chain1 = client
+        .open_and_assign(&client, Amount::from_tokens(100))
+        .await?;
+    let emitter_chain2 = client
+        .open_and_assign(&client, Amount::from_tokens(100))
+        .await?;
+    let subscriber_chain = client
+        .open_and_assign(&client, Amount::from_tokens(100))
+        .await?;
+
+    let (emitter_contract, emitter_service) = client.build_example("event-emitter").await?;
+    let emitter_module_id = client
+        .publish_module::<EventEmitterAbi, (), ()>(
+            emitter_contract,
+            emitter_service,
+            linera_base::vm::VmRuntime::Wasm,
+            None,
+        )
+        .await?;
+
+    let emitter_app1 = client
+        .create_application(&emitter_module_id, &(), &(), &[], Some(emitter_chain1))
+        .await?;
+    let emitter_app2 = client
+        .create_application(&emitter_module_id, &(), &(), &[], Some(emitter_chain2))
+        .await?;
+
+    let (subscriber_contract, subscriber_service) =
+        client.build_example("event-subscriber").await?;
+    let subscriber_module_id = client
+        .publish_module::<EventSubscriberAbi, (), ()>(
+            subscriber_contract,
+            subscriber_service,
+            linera_base::vm::VmRuntime::Wasm,
+            None,
+        )
+        .await?;
+
+    let subscriber_app1 = client
+        .create_application(
+            &subscriber_module_id,
+            &(),
+            &(),
+            &[emitter_app1.forget_abi()],
+            Some(subscriber_chain),
+        )
+        .await?;
+    let subscriber_app2 = client
+        .create_application(
+            &subscriber_module_id,
+            &(),
+            &(),
+            &[emitter_app1.forget_abi()],
+            Some(subscriber_chain),
+        )
+        .await?;
+
+    let port = get_node_port().await;
+    let node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    // Two emitting applications on their own chains, and two subscribing applications on
+    // one chain, each subscribing to both emitting applications.
+    // This way, we should get 4 UpdateStream operations: 1 for each (emitter, subscriber)
+    // pair.
+    let sub_app1 = node_service.make_application(&subscriber_chain, &subscriber_app1)?;
+    let sub_app2 = node_service.make_application(&subscriber_chain, &subscriber_app2)?;
+    let emit1 = node_service.make_application(&emitter_chain1, &emitter_app1)?;
+    let emit2 = node_service.make_application(&emitter_chain2, &emitter_app2)?;
+
+    sub_app1
+        .mutate(format!(
+            "subscribe(chainId: \"{emitter_chain1}\", applicationId: \"{}\", streamName: \"s\")",
+            emitter_app1.forget_abi()
+        ))
+        .await?;
+    sub_app1
+        .mutate(format!(
+            "subscribe(chainId: \"{emitter_chain2}\", applicationId: \"{}\", streamName: \"s\")",
+            emitter_app2.forget_abi()
+        ))
+        .await?;
+    sub_app2
+        .mutate(format!(
+            "subscribe(chainId: \"{emitter_chain1}\", applicationId: \"{}\", streamName: \"s\")",
+            emitter_app1.forget_abi()
+        ))
+        .await?;
+    sub_app2
+        .mutate(format!(
+            "subscribe(chainId: \"{emitter_chain2}\", applicationId: \"{}\", streamName: \"s\")",
+            emitter_app2.forget_abi()
+        ))
+        .await?;
+
+    emit1
+        .mutate("emit(streamName: \"s\", value: \"e1a\")")
+        .await?;
+    emit1
+        .mutate("emit(streamName: \"s\", value: \"e1b\")")
+        .await?;
+    emit2
+        .mutate("emit(streamName: \"s\", value: \"e2a\")")
+        .await?;
+    emit2
+        .mutate("emit(streamName: \"s\", value: \"e2b\")")
+        .await?;
+
+    let (_, height_before) = node_service
+        .chain_tip(subscriber_chain)
+        .await?
+        .context("subscriber chain should exist")?;
+
+    node_service.process_inbox(&subscriber_chain).await?;
+
+    let (_, height_after_default) = node_service
+        .chain_tip(subscriber_chain)
+        .await?
+        .context("subscriber chain should exist")?;
+
+    let blocks_used = height_after_default.0 - height_before.0;
+    tracing::info!(
+        "With default block size: processed 4 UpdateStream operations in {blocks_used} block(s) \
+         (height {height_before} -> {height_after_default})"
+    );
+    assert_eq!(
+        blocks_used, 1,
+        "With default block size, all 4 operations should fit in 1 block, but used {blocks_used}"
+    );
+
+    let query = "receivedEvents { entries(start: 0, end: 10) }";
+    let response = sub_app1.query(query).await?;
+    let events = response["receivedEvents"]["entries"]
+        .as_array()
+        .context("expected array")?;
+    assert_eq!(events.len(), 4, "Expected 4 events, got {events:?}");
+    let response = sub_app2.query(query).await?;
+    let events = response["receivedEvents"]["entries"]
+        .as_array()
+        .context("expected array")?;
+    assert_eq!(events.len(), 4, "Expected 4 events, got {events:?}");
+
+    node_service.terminate().await?;
+
+    client
+        .set_maximum_block_size(500)
+        .await
+        .context("Failed to set maximum block size")?;
+
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+
+    let sub_app1 = node_service.make_application(&subscriber_chain, &subscriber_app1)?;
+    let sub_app2 = node_service.make_application(&subscriber_chain, &subscriber_app2)?;
+    let emit1 = node_service.make_application(&emitter_chain1, &emitter_app1)?;
+    let emit2 = node_service.make_application(&emitter_chain2, &emitter_app2)?;
+
+    node_service.process_inbox(&subscriber_chain).await?;
+
+    emit1
+        .mutate("emit(streamName: \"s\", value: \"e1c\")")
+        .await?;
+    emit1
+        .mutate("emit(streamName: \"s\", value: \"e1d\")")
+        .await?;
+    emit2
+        .mutate("emit(streamName: \"s\", value: \"e2c\")")
+        .await?;
+    emit2
+        .mutate("emit(streamName: \"s\", value: \"e2d\")")
+        .await?;
+
+    let (_, height_before_small) = node_service
+        .chain_tip(subscriber_chain)
+        .await?
+        .context("subscriber chain should exist")?;
+
+    node_service.process_inbox(&subscriber_chain).await?;
+
+    let (_, height_after_small) = node_service
+        .chain_tip(subscriber_chain)
+        .await?
+        .context("subscriber chain should exist")?;
+
+    let response = sub_app1.query(query).await?;
+    let events = response["receivedEvents"]["entries"]
+        .as_array()
+        .context("expected array")?;
+    assert!(
+        events.len() >= 8,
+        "Expected at least 8 events total, got {events:?}"
+    );
+    let response = sub_app2.query(query).await?;
+    let events = response["receivedEvents"]["entries"]
+        .as_array()
+        .context("expected array")?;
+    assert!(
+        events.len() >= 8,
+        "Expected at least 8 events total, got {events:?}"
+    );
+
+    let blocks_used_small = height_after_small.0 - height_before_small.0;
+    tracing::info!(
+        "With small block size: processed 4 UpdateStream operations in {blocks_used_small} block(s) \
+         (height {height_before_small} -> {height_after_small})"
+    );
+    assert_eq!(
+        blocks_used_small, 4,
+        "With small block size, 4 operations should require 4 blocks, \
+         but used {blocks_used_small}"
+    );
+
+    node_service.ensure_is_running()?;
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "fungible" ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc), "native-fungible" ; "native_storage_test_service_grpc"))]
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Tcp), "fungible" ; "storage_test_service_tcp"))]

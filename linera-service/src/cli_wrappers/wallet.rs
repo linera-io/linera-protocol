@@ -1274,6 +1274,17 @@ impl ClientWrapper {
         Ok(())
     }
 
+    pub async fn set_maximum_block_size(&self, size: u64) -> Result<()> {
+        self.command()
+            .await?
+            .arg("resource-control-policy")
+            .arg("--maximum-block-size")
+            .arg(size.to_string())
+            .spawn_and_wait_for_stdout()
+            .await?;
+        Ok(())
+    }
+
     /// Runs `linera keygen`.
     pub async fn keygen(&self) -> Result<AccountOwner> {
         let stdout = self
