@@ -425,11 +425,17 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?
             .and_then(|chain| chain.owner);
 
+        // Only persist proposals that were made in the fast round: they need to be
+        // remembered across sessions to make sure there are no conflicting fast proposals.
+        let pending_proposal = chain_client
+            .pending_proposal()
+            .await
+            .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         self.wallet()
             .insert(
                 info.chain_id,
                 wallet::Chain {
-                    pending_proposal: chain_client.pending_proposal().await,
+                    pending_proposal,
                     owner: existing_owner,
                     ..info.as_ref().into()
                 },
@@ -1030,7 +1036,10 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().await;
+                let pending_proposal = chain_client
+                    .pending_proposal()
+                    .await
+                    .filter(|p| p.round.is_some_and(|r| r.is_fast()));
                 self.wallet()
                     .insert(
                         info.chain_id,
