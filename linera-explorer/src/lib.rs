@@ -731,12 +731,10 @@ fn set_onpopstate(app: JsValue) {
 
 /// Subscribes to notifications for one chain
 async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
-    let (ws, mut wsio) = WsMeta::connect(
-        &format!("{address}/ws"),
-        Some(vec!["graphql-transport-ws"]),
-    )
-    .await
-    .expect("cannot connect to websocket");
+    let (ws, mut wsio) =
+        WsMeta::connect(&format!("{address}/ws"), Some(vec!["graphql-transport-ws"]))
+            .await
+            .expect("cannot connect to websocket");
     wsio.send(WsMessage::Text(
         "{\"type\": \"connection_init\", \"payload\": {}}".to_string(),
     ))
@@ -744,9 +742,7 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
     .expect("cannot send to websocket");
     wsio.next().await;
     let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
-    let payload_query = format!(
-        r#"subscription {{ notifications(chainId: \"{chain}\") }}"#
-    );
+    let payload_query = format!(r#"subscription {{ notifications(chainId: \"{chain}\") }}"#);
     let query = format!(
         r#"{{ "id": "{uuid}", "type": "subscribe", "payload": {{"query": "{payload_query}"}} }}"#
     );

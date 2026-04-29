@@ -123,9 +123,10 @@ impl StorageServer {
 
     pub async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Status> {
         match &self.store {
-            LocalStore::Memory(store) => store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
-                Status::unknown(format!("Memory error {e:?} at find_keys_by_prefix"))
-            }),
+            LocalStore::Memory(store) => store
+                .find_keys_by_prefix(key_prefix)
+                .await
+                .map_err(|e| Status::unknown(format!("Memory error {e:?} at find_keys_by_prefix"))),
             #[cfg(with_rocksdb)]
             LocalStore::RocksDb(store) => {
                 store.find_keys_by_prefix(key_prefix).await.map_err(|e| {
@@ -145,9 +146,7 @@ impl StorageServer {
                     .find_key_values_by_prefix(key_prefix)
                     .await
                     .map_err(|e| {
-                        Status::unknown(format!(
-                            "Memory error {e:?} at find_key_values_by_prefix"
-                        ))
+                        Status::unknown(format!("Memory error {e:?} at find_key_values_by_prefix"))
                     })
             }
             #[cfg(with_rocksdb)]
@@ -155,9 +154,7 @@ impl StorageServer {
                 .find_key_values_by_prefix(key_prefix)
                 .await
                 .map_err(|e| {
-                    Status::unknown(format!(
-                        "RocksDB error {e:?} at find_key_values_by_prefix"
-                    ))
+                    Status::unknown(format!("RocksDB error {e:?} at find_key_values_by_prefix"))
                 }),
         }
     }

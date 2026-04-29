@@ -121,10 +121,7 @@ impl ClientWrapper {
         on_drop: OnClientDrop,
         extra_args: Vec<String>,
     ) -> Self {
-        let storage = format!(
-            "rocksdb:{}/client_{id}.db",
-            path_provider.path().display(),
-        );
+        let storage = format!("rocksdb:{}/client_{id}.db", path_provider.path().display(),);
         let wallet = format!("wallet_{id}.json");
         let keystore = format!("keystore_{id}.json");
         Self {
@@ -536,10 +533,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{port}/"))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -577,10 +571,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{port}/"))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 tracing::info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -666,10 +657,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{port}/"))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Faucet has started");
                 return Ok(FaucetService::new(port, child, temp_dir));

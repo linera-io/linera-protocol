@@ -341,9 +341,7 @@ where
         let container = ops.handle("postgres");
         let (_, host_port) = container.host_port(5432).unwrap();
 
-        let database_url = format!(
-            "postgresql://testuser:testpass@localhost:{host_port}/testdb"
-        );
+        let database_url = format!("postgresql://testuser:testpass@localhost:{host_port}/testdb");
 
         test_fn(database_url).await;
     })
