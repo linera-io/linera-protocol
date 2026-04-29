@@ -5023,8 +5023,7 @@ where
     // Confirmations should have triggered 2 additional chunks (heights 1 and 2).
     assert_eq!(
         chunks_delivered, 2,
-        "Expected 2 additional chunks from confirmations, got {}",
-        chunks_delivered
+        "Expected 2 additional chunks from confirmations, got {chunks_delivered}"
     );
 
     // Verify chain_2 received all three heights.

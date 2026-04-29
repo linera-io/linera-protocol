@@ -5108,14 +5108,12 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .await?;
 
     let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {{SetAdmins: {{ admins: [\"{}\"] }} }})",
-        admin_owner, admin_owner
+        "executeControllerCommand(admin: \"{admin_owner}\", command: {{SetAdmins: {{ admins: [\"{admin_owner}\"] }} }})"
     );
     admin_app.mutate(&mutation).await?;
 
     let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
-        admin_owner, service_id, worker1_chain
+        "executeControllerCommand(admin: \"{admin_owner}\", command: {{UpdateService: {{ service_id: \"{service_id}\", workers: [\"{worker1_chain}\"] }} }})"
     );
     admin_app.mutate(&mutation).await?;
 
@@ -5176,8 +5174,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     }
 
     let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [] }} }})",
-        admin_owner, service_id
+        "executeControllerCommand(admin: \"{admin_owner}\", command: {{UpdateService: {{ service_id: \"{service_id}\", workers: [] }} }})"
     );
     admin_app.mutate(&mutation).await?;
 

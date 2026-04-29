@@ -498,7 +498,7 @@ impl StorageConfig {
                 spawn_mode: _,
                 uri: _,
             } => {
-                let shard_str = format!("shard_{}", shard);
+                let shard_str = format!("shard_{shard}");
                 path_with_guard.path_buf.push(shard_str);
                 std::fs::create_dir_all(&path_with_guard.path_buf)
             }
@@ -622,24 +622,24 @@ impl fmt::Display for StorageConfig {
         match &self.inner_storage_config {
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { endpoint } => {
-                write!(f, "service:tcp:{}:{}", endpoint, namespace)
+                write!(f, "service:tcp:{endpoint}:{namespace}")
             }
             InnerStorageConfig::Memory { genesis_path } => {
-                write!(f, "memory:{}:{}", genesis_path.display(), namespace)
+                write!(f, "memory:{}:{namespace}", genesis_path.display())
             }
             #[cfg(feature = "rocksdb")]
             InnerStorageConfig::RocksDb { path, spawn_mode } => {
                 let spawn_mode = spawn_mode.to_string();
-                write!(f, "rocksdb:{}:{}:{}", path.display(), spawn_mode, namespace)
+                write!(f, "rocksdb:{}:{spawn_mode}:{namespace}", path.display())
             }
             #[cfg(feature = "dynamodb")]
             InnerStorageConfig::DynamoDb { use_dynamodb_local } => match use_dynamodb_local {
-                true => write!(f, "dynamodb:{}:dynamodb_local", namespace),
-                false => write!(f, "dynamodb:{}:env", namespace),
+                true => write!(f, "dynamodb:{namespace}:dynamodb_local"),
+                false => write!(f, "dynamodb:{namespace}:env"),
             },
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { uri } => {
-                write!(f, "scylladb:tcp:{}:{}", uri, namespace)
+                write!(f, "scylladb:tcp:{uri}:{namespace}")
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             InnerStorageConfig::DualRocksDbScyllaDb {

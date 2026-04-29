@@ -1382,7 +1382,7 @@ where
                 inspector,
             )
             .map_err(|error| {
-                let error = format!("{:?}", error);
+                let error = format!("{error:?}");
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;
@@ -1535,7 +1535,7 @@ where
                 inspector,
             )
             .map_err(|error| {
-                let error = format!("{:?}", error);
+                let error = format!("{error:?}");
                 EvmExecutionError::TransactCommitError(error)
             })
         }?;

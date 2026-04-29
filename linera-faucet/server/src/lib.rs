@@ -631,8 +631,7 @@ where
         .ok_or_else(|| {
             tracing::error!(?chain_id, "chain description blob not found for chain");
             Error::new(format!(
-                "Chain description not found for chain {}",
-                chain_id
+                "Chain description not found for chain {chain_id}"
             ))
         })?;
 
@@ -640,8 +639,7 @@ where
     let description = bcs::from_bytes::<ChainDescription>(blob.bytes()).map_err(|e| {
         tracing::error!(?e, ?chain_id, "failed to deserialize chain description",);
         Error::new(format!(
-            "Invalid chain description data for chain {}",
-            chain_id
+            "Invalid chain description data for chain {chain_id}"
         ))
     })?;
 
@@ -1023,7 +1021,7 @@ where
         };
 
         if let Err(e) = futures::try_join!(store_initial, store_daily) {
-            let error_msg = format!("Failed to save claims to database: {}", e);
+            let error_msg = format!("Failed to save claims to database: {e}");
             Self::send_err(requests, error_msg.clone());
             anyhow::bail!(error_msg);
         }

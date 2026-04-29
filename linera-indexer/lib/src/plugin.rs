@@ -61,7 +61,7 @@ pub fn sdl<Q: ObjectType + 'static>(query: Q) -> String {
 
 pub fn route<Q: ObjectType + 'static>(name: &str, query: Q, app: axum::Router) -> axum::Router {
     app.route(
-        &format!("/{}", name),
+        &format!("/{name}"),
         axum::routing::get(crate::common::graphiql).post(handler::<Q>),
     )
     .layer(axum::extract::Extension(schema(query)))

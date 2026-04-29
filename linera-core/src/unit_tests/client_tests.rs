@@ -153,7 +153,7 @@ where
             assert_eq!(height, BlockHeight::ZERO);
             assert_eq!(executed_block_hash, hash);
         }
-        other => panic!("Expected NewBlock notification, got {:?}", other),
+        other => panic!("Expected NewBlock notification, got {other:?}"),
     }
     Ok(())
 }
@@ -779,8 +779,7 @@ where
                 LocalNodeError::WorkerError(WorkerError::ChainError(err))
             )) if matches!(**err, ChainError::ClosedChain)
         ),
-        "Unexpected result: {:?}",
-        result,
+        "Unexpected result: {result:?}",
     );
 
     // Incoming messages now get rejected.
@@ -2071,7 +2070,7 @@ where
         Err(chain_client::Error::CommunicationError(CommunicationError::Sample(samples)))
         if samples.iter().any(|(err, _)| matches!(err, NodeError::ChainError { .. }))
     ) {
-        panic!("unexpected leader timeout result: {:?}", result);
+        panic!("unexpected leader timeout result: {result:?}");
     }
 
     clock.set(manager.round_timeout.unwrap());
@@ -2103,7 +2102,7 @@ where
     };
     let round_number = match round {
         Round::SingleLeader(round_number) => round_number,
-        round => panic!("Unexpected round {:?}", round),
+        round => panic!("Unexpected round {round:?}"),
     };
 
     // The other owner is leader now. Trying to submit a block should return `WaitForTimeout`.

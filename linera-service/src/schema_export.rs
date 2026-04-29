@@ -256,6 +256,6 @@ async fn main() -> std::io::Result<()> {
         false, // not paused
     );
     let schema = service.schema().sdl();
-    print!("{}", schema);
+    print!("{schema}");
     Ok(())
 }

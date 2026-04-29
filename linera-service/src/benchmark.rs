@@ -166,7 +166,7 @@ async fn benchmark_with_fungible(
             let initial_state = InitialState {
                 accounts: BTreeMap::from([(owner, Amount::from_tokens(num_transactions as u128))]),
             };
-            let parameters = Parameters::new(format!("FUN{}", i).leak());
+            let parameters = Parameters::new(format!("FUN{i}").leak());
             let application_id = node_service
                 .create_application(&default_chain, &module_id, &parameters, &initial_state, &[])
                 .await?;

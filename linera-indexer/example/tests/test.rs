@@ -52,7 +52,7 @@ async fn run_indexer(path_provider: &PathProvider) -> anyhow::Result<Child> {
     for i in 0..10 {
         linera_base::time::timer::sleep(Duration::from_secs(i)).await;
         let request = client
-            .get(format!("http://localhost:{}/", port))
+            .get(format!("http://localhost:{port}/"))
             .send()
             .await;
         if request.is_ok() {

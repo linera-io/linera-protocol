@@ -477,8 +477,8 @@ impl ActiveChain {
         let base_path = Self::find_output_directory_of(repository)
             .await
             .expect("Failed to look for output binaries");
-        let contract_path = base_path.join(format!("{}.wasm", contract_binary));
-        let service_path = base_path.join(format!("{}.wasm", service_binary));
+        let contract_path = base_path.join(format!("{contract_binary}.wasm"));
+        let service_path = base_path.join(format!("{service_binary}.wasm"));
 
         let contract = Bytecode::load_from_file(contract_path)
             .expect("Failed to load contract bytecode from file");

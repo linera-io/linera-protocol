@@ -54,7 +54,7 @@ impl fmt::Debug for AccountOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Reserved(byte) => f.debug_tuple("Reserved").field(byte).finish(),
-            Self::Address32(hash) => write!(f, "Address32({:?})", hash),
+            Self::Address32(hash) => write!(f, "Address32({hash:?})"),
             Self::Address20(bytes) => write!(f, "Address20({})", hex::encode(bytes)),
         }
     }
@@ -259,7 +259,7 @@ impl BlobType {
 
 impl fmt::Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -268,7 +268,7 @@ impl std::str::FromStr for BlobType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(&format!("\"{s}\""))
-            .with_context(|| format!("Invalid BlobType: {}", s))
+            .with_context(|| format!("Invalid BlobType: {s}"))
     }
 }
 
@@ -1097,7 +1097,7 @@ impl fmt::Display for AccountOwner {
             AccountOwner::Reserved(value) => {
                 write!(f, "0x{}", hex::encode(&value.to_be_bytes()[..]))?
             }
-            AccountOwner::Address32(value) => write!(f, "0x{}", value)?,
+            AccountOwner::Address32(value) => write!(f, "0x{value}")?,
             AccountOwner::Address20(value) => write!(f, "0x{}", hex::encode(&value[..]))?,
         };
 

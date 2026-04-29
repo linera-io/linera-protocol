@@ -67,13 +67,12 @@ impl PerformanceSummary {
         );
 
         let mut markdown_content = format!(
-            "{} [{}]({})\n\n",
-            PR_COMMENT_HEADER, short_commit_hash, commit_url
+            "{PR_COMMENT_HEADER} [{short_commit_hash}]({commit_url})\n\n"
         );
 
         markdown_content.push_str("### CI Runtime Comparison\n\n");
         for (workflow_name, comparisons) in &self.ci_runtime_comparison.0 {
-            markdown_content.push_str(&format!("#### Workflow: {}\n\n", workflow_name));
+            markdown_content.push_str(&format!("#### Workflow: {workflow_name}\n\n"));
             markdown_content
                 .push_str("| Job Name | Base Runtime | PR Runtime | Runtime Difference (%) |\n");
             markdown_content.push_str("| --- | --- | --- | --- |\n");

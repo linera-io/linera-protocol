@@ -796,7 +796,7 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     std::thread::spawn(move || {
         for line in lines {
             let line = line.unwrap();
-            eprintln!("{}", line);
+            eprintln!("{line}");
         }
     });
 
@@ -816,7 +816,7 @@ async fn test_storage_service_linera_net_up_simple() -> Result<()> {
     assert_eq!(exports.next().unwrap()?, "");
 
     // Test faucet.
-    let faucet = Faucet::new(format!("http://localhost:{}/", port));
+    let faucet = Faucet::new(format!("http://localhost:{port}/"));
     faucet.version_info().await.unwrap();
 
     // Send SIGINT to the child process.
@@ -1288,8 +1288,7 @@ impl EthereumTrackerApp {
     async fn get_amount(&self, account_owner: &str) -> U256 {
         use ethereum_tracker::U256Cont;
         let query = format!(
-            "accounts {{ entry(key: \"{}\") {{ value }} }}",
-            account_owner
+            "accounts {{ entry(key: \"{account_owner}\") {{ value }} }}"
         );
         let response_body = self.0.query(&query).await.unwrap();
         let amount_option = serde_json::from_value::<Option<U256Cont>>(
@@ -1313,7 +1312,7 @@ impl EthereumTrackerApp {
     }
 
     async fn update(&self, to_block: u64) {
-        let mutation = format!("update(toBlock: {})", to_block);
+        let mutation = format!("update(toBlock: {to_block})");
         self.0.mutate(mutation).await.unwrap();
     }
 }
