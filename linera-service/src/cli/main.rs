@@ -245,8 +245,8 @@ impl Runnable for Job {
                 );
                 debug!("{:?}", certificate);
                 // Print the new chain ID, and owner on stdout for scripting purposes.
-                println!("{}", id);
-                println!("{}", new_owner);
+                println!("{id}");
+                println!("{new_owner}");
             }
 
             OpenMultiOwnerChain {
@@ -299,7 +299,7 @@ impl Runnable for Job {
                 );
                 debug!("{:?}", certificate);
                 // Print the new chain ID on stdout for scripting purposes.
-                println!("{}", id);
+                println!("{id}");
             }
 
             ShowOwnership { chain_id } => {
@@ -308,7 +308,7 @@ impl Runnable for Job {
                     .await?;
                 let ownership = context.ownership(chain_id).await?;
                 let json = serde_json::to_string_pretty(&ownership)?;
-                println!("{}", json);
+                println!("{json}");
             }
 
             ChangeOwnership {
@@ -394,7 +394,7 @@ impl Runnable for Job {
             ShowNetworkDescription => {
                 let network_description = storage.read_network_description().await?;
                 let json = serde_json::to_string_pretty(&network_description)?;
-                println!("{}", json);
+                println!("{json}");
             }
 
             LocalBalance { account } => {
@@ -408,7 +408,7 @@ impl Runnable for Job {
                 let balance = chain_client.local_owner_balance(account.owner).await?;
                 let time_total = time_start.elapsed();
                 info!("Local balance obtained after {} ms", time_total.as_millis());
-                println!("{}", balance);
+                println!("{balance}");
             }
 
             QueryBalance { account } => {
@@ -425,7 +425,7 @@ impl Runnable for Job {
                 let balance = chain_client.query_owner_balance(account.owner).await?;
                 let time_total = time_start.elapsed();
                 info!("Balance obtained after {} ms", time_total.as_millis());
-                println!("{}", balance);
+                println!("{balance}");
             }
 
             SyncBalance { account } => {
@@ -446,7 +446,7 @@ impl Runnable for Job {
                     "Synchronizing balance confirmed after {} ms",
                     time_total.as_millis()
                 );
-                println!("{}", balance);
+                println!("{balance}");
             }
 
             Sync {
@@ -1373,7 +1373,7 @@ impl Runnable for Job {
                 let module_id = context
                     .publish_module(&chain_client, contract, service, vm_runtime)
                     .await?;
-                println!("{}", module_id);
+                println!("{module_id}");
                 info!(
                     "Module published in {} ms",
                     start_time.elapsed().as_millis()
@@ -1393,7 +1393,7 @@ impl Runnable for Job {
                 let index_events = storage
                     .read_events_from_index(&chain_id, &stream_id, start_index)
                     .await?;
-                println!("{:#?}", index_events);
+                println!("{index_events:#?}");
                 info!("Events listed in {} ms", start_time.elapsed().as_millis());
             }
 
@@ -1410,7 +1410,7 @@ impl Runnable for Job {
                 info!("Publishing data blob on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher).await?;
                 let hash = context.publish_data_blob(&chain_client, blob_path).await?;
-                println!("{}", hash);
+                println!("{hash}");
                 info!(
                     "Data blob published in {} ms",
                     start_time.elapsed().as_millis()
@@ -1478,7 +1478,7 @@ impl Runnable for Job {
                     "Application created in {} ms",
                     start_time.elapsed().as_millis()
                 );
-                println!("{}", application_id);
+                println!("{application_id}");
             }
 
             PublishAndCreate {
@@ -1530,7 +1530,7 @@ impl Runnable for Job {
                     "Application published and created in {} ms",
                     start_time.elapsed().as_millis()
                 );
-                println!("{}", application_id);
+                println!("{application_id}");
             }
 
             Assign { owner, chain_id } => {
@@ -1631,7 +1631,7 @@ impl Runnable for Job {
                         "Project published and created in {} ms",
                         start_time.elapsed().as_millis()
                     );
-                    println!("{}", application_id);
+                    println!("{application_id}");
                 }
                 _ => unreachable!("other project commands do not require storage"),
             },
@@ -1778,7 +1778,7 @@ impl Runnable for Job {
                     .read_confirmed_block(block_hash)
                     .await
                     .context("Failed to find the given block in storage")?;
-                println!("{:#?}", block);
+                println!("{block:#?}");
             }
 
             Chain(ChainCommand::ShowChainDescription { chain_id }) => {
@@ -1795,7 +1795,7 @@ impl Runnable for Job {
                     }
                     err => err.context("Failed to get the chain description")?,
                 };
-                println!("{:#?}", description);
+                println!("{description:#?}");
             }
 
             Validator(validator_command) => {
@@ -1907,7 +1907,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 );
                 info!("The list of namespaces is:");
                 for namespace in namespaces {
-                    println!("{}", namespace);
+                    println!("{namespace}");
                 }
             }
             DatabaseToolCommand::ListBlobIds => {
@@ -1915,7 +1915,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 info!("Blob IDs listed in {} ms", start_time.elapsed().as_millis());
                 info!("The list of blob IDs is:");
                 for id in blob_ids {
-                    println!("{}", id);
+                    println!("{id}");
                 }
             }
             DatabaseToolCommand::ListChainIds => {
@@ -1926,7 +1926,7 @@ impl RunnableWithStore for DatabaseToolJob<'_> {
                 );
                 info!("The list of chain IDs is:");
                 for id in chain_ids {
-                    println!("{}", id);
+                    println!("{id}");
                 }
             }
         }
@@ -2246,7 +2246,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             let mut keystore = options.keystore()?;
             let public_key = keystore.generate_key().await?;
             let owner = AccountOwner::from(public_key);
-            println!("{}", owner);
+            println!("{owner}");
             info!("Key generated in {} ms", start_time.elapsed().as_millis());
             Ok(0)
         }

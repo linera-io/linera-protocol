@@ -95,7 +95,7 @@ where
     let mut relayed = 0u32;
     for cert in certs.into_iter().flatten() {
         if let Some((epoch, blob_hash)) = find_create_committee(&cert) {
-            if epoch.0 <= current_epoch.into() {
+            if epoch.0 <= current_epoch {
                 continue;
             }
             let blob_id = BlobId::new(blob_hash, BlobType::Committee);

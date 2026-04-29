@@ -401,9 +401,9 @@ where
             .enumerate()
             .map(|(index, bytes)| {
                 bcs::from_bytes(&bytes).unwrap_or_else(|error| {
+                    let hex_bytes = hex::encode(bytes);
                     panic!(
-                        "Failed to deserialize scheduled operation #{index} (0x{}): {error}",
-                        hex::encode(bytes)
+                        "Failed to deserialize scheduled operation #{index} (0x{hex_bytes}): {error}"
                     )
                 })
             })

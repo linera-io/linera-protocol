@@ -681,10 +681,8 @@ async fn run(options: ServerOptions) {
                 let options_string = fs_err::tokio::read_to_string(options_path)
                     .await
                     .expect("Unable to read validator options file");
-                let options: ValidatorOptions =
-                    toml::from_str(&options_string).unwrap_or_else(|_| {
-                        panic!("Invalid options file format: \n {}", options_string)
-                    });
+                let options: ValidatorOptions = toml::from_str(&options_string)
+                    .unwrap_or_else(|_| panic!("Invalid options file format: \n {options_string}"));
                 let path = options.server_config_path.clone();
                 let mut server = make_server_config(&path, &mut rng, options)
                     .expect("Unable to open server config file");

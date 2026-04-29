@@ -1470,8 +1470,7 @@ mod tests {
             let delay = times[1].1.as_millis();
             assert!(
                 delay < 50,
-                "Second peer should be called immediately on first failure, got {}ms",
-                delay
+                "Second peer should be called immediately on first failure, got {delay}ms"
             );
         }
 
@@ -1482,8 +1481,7 @@ mod tests {
         let total_time = Instant::now().duration_since(start_time).as_millis();
         assert!(
             total_time < 500,
-            "Total time should be less than 500ms (sequential would be ~650ms), got {}ms",
-            total_time
+            "Total time should be less than 500ms (sequential would be ~650ms), got {total_time}ms"
         );
     }
 }
