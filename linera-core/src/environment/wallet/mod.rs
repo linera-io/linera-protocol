@@ -21,7 +21,6 @@ pub struct Chain {
     pub block_hash: Option<CryptoHash>,
     pub next_block_height: BlockHeight,
     pub timestamp: Timestamp,
-    /// A pending block proposal that was made in the fast round.
     pub pending_fast_proposal: Option<PendingProposal>,
     pub epoch: Option<Epoch>,
 }
