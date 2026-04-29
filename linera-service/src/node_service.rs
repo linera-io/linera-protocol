@@ -27,7 +27,8 @@ use linera_base::{
         TimeDelta,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, ChainId, IndexAndEvent, ModuleId, StreamId,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, IndexAndEvent, ModuleId,
+        StreamId,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -838,6 +839,17 @@ where
             values.push(value);
         }
         Ok(values)
+    }
+
+    /// Reads the bytes of a `BcsApplicationDescription` blob from local storage.
+    async fn bcs_application_description(&self, hash: CryptoHash) -> Result<Vec<u8>, Error> {
+        let blob_id = BlobId::new(hash, BlobType::BcsApplicationDescription);
+        let storage = self.context.lock().await.storage().clone();
+        let blob = storage
+            .read_blob(blob_id)
+            .await?
+            .ok_or_else(|| Error::new(format!("Blob {blob_id} not found")))?;
+        Ok(blob.content().bytes().to_vec())
     }
 
     /// Returns the version information on this node service.

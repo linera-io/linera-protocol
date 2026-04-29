@@ -142,6 +142,14 @@ pub struct Notifications;
 )]
 pub struct Transfer;
 
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "gql/service_schema.graphql",
+    query_path = "gql/service_requests.graphql",
+    response_derives = "Debug, Serialize, Clone"
+)]
+pub struct BcsApplicationDescription;
+
 #[derive(Error, Debug)]
 pub enum ConversionError {
     #[error(transparent)]
@@ -342,6 +350,16 @@ mod from {
                 })?;
                 Ok(SystemOperation::PublishDataBlob {
                     blob_hash: publish_data_blob.blob_hash,
+                })
+            }
+            "PublishBcsApplicationDescription" => {
+                let publish = system_op.publish_bcs_application_description.ok_or_else(|| {
+                    ConversionError::UnexpectedCertificateType(
+                        "Missing publish_bcs_application_description metadata".to_string(),
+                    )
+                })?;
+                Ok(SystemOperation::PublishBcsApplicationDescription {
+                    blob_hash: publish.blob_hash,
                 })
             }
             "VerifyBlob" => {

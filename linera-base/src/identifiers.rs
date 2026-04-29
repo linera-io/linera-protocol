@@ -240,6 +240,8 @@ pub enum BlobType {
     Committee,
     /// A blob containing a chain description.
     ChainDescription,
+    /// A blob containing the BCS `Formats` description of an application.
+    BcsApplicationDescription,
 }
 
 impl BlobType {
@@ -251,7 +253,8 @@ impl BlobType {
             | BlobType::ServiceBytecode
             | BlobType::EvmBytecode
             | BlobType::ApplicationDescription
-            | BlobType::ChainDescription => false,
+            | BlobType::ChainDescription
+            | BlobType::BcsApplicationDescription => false,
             BlobType::Committee => true,
         }
     }

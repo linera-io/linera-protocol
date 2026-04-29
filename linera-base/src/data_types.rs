@@ -1350,6 +1350,11 @@ impl BlobContent {
         BlobContent::new(BlobType::ChainDescription, bytes)
     }
 
+    /// Creates a new BCS application-description [`BlobContent`] from raw bytes.
+    pub fn new_bcs_application_description(bytes: impl Into<Box<[u8]>>) -> Self {
+        BlobContent::new(BlobType::BcsApplicationDescription, bytes)
+    }
+
     /// Gets a reference to the blob's bytes.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
@@ -1456,6 +1461,11 @@ impl Blob {
     /// Creates a new chain description [`Blob`] from a [`ChainDescription`].
     pub fn new_chain_description(chain_description: &ChainDescription) -> Self {
         Blob::new(BlobContent::new_chain_description(chain_description))
+    }
+
+    /// Creates a new BCS application-description [`Blob`] from raw bytes.
+    pub fn new_bcs_application_description(bytes: impl Into<Box<[u8]>>) -> Self {
+        Blob::new(BlobContent::new_bcs_application_description(bytes))
     }
 
     /// A content-addressed blob ID i.e. the hash of the `Blob`.

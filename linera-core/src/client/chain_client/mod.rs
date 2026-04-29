@@ -2423,6 +2423,98 @@ impl<Env: Environment> ChainClient<Env> {
         .try_map(|certificate| Ok((module_id, certificate)))
     }
 
+    /// Publishes a module along with the BCS `Formats` description of the application.
+    /// All required blobs are published in a single block.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[instrument(level = "trace", skip(contract, service, bcs_formats_bytes))]
+    pub async fn publish_bcs_module(
+        &self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+        bcs_formats_bytes: Vec<u8>,
+    ) -> Result<ClientOutcome<(ModuleId, CryptoHash, ConfirmedBlockCertificate)>, Error> {
+        let (mut blobs, module_id) = create_bytecode_blobs(contract, service, vm_runtime).await;
+        let bcs_blob = Blob::new_bcs_application_description(bcs_formats_bytes);
+        let bcs_blob_hash = bcs_blob.id().hash;
+        blobs.push(bcs_blob);
+        let operations = vec![
+            Operation::system(SystemOperation::PublishModule { module_id }),
+            Operation::system(SystemOperation::PublishBcsApplicationDescription {
+                blob_hash: bcs_blob_hash,
+            }),
+        ];
+        self.execute_operations(operations, blobs)
+            .await?
+            .try_map(|certificate| Ok((module_id, bcs_blob_hash, certificate)))
+    }
+
+    /// Publishes a module with its BCS `Formats` description and instantiates an application
+    /// from it. All required blobs and operations are published atomically in a single block.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[expect(clippy::too_many_arguments)]
+    #[instrument(
+        level = "trace",
+        skip(
+            contract,
+            service,
+            bcs_formats_bytes,
+            parameters,
+            instantiation_argument,
+            required_application_ids
+        )
+    )]
+    pub async fn publish_bcs_application(
+        &self,
+        contract: Bytecode,
+        service: Bytecode,
+        vm_runtime: VmRuntime,
+        bcs_formats_bytes: Vec<u8>,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<
+        ClientOutcome<(ApplicationId, ModuleId, CryptoHash, ConfirmedBlockCertificate)>,
+        Error,
+    > {
+        let (mut blobs, module_id) = create_bytecode_blobs(contract, service, vm_runtime).await;
+        let bcs_blob = Blob::new_bcs_application_description(bcs_formats_bytes);
+        let bcs_blob_hash = bcs_blob.id().hash;
+        blobs.push(bcs_blob);
+        let operations = vec![
+            Operation::system(SystemOperation::PublishModule { module_id }),
+            Operation::system(SystemOperation::PublishBcsApplicationDescription {
+                blob_hash: bcs_blob_hash,
+            }),
+            Operation::system(SystemOperation::CreateApplication {
+                module_id,
+                parameters,
+                instantiation_argument,
+                required_application_ids,
+            }),
+        ];
+        self.execute_operations(operations, blobs)
+            .await?
+            .try_map(|certificate| {
+                let mut creation: Vec<_> = certificate
+                    .block()
+                    .created_blob_ids()
+                    .into_iter()
+                    .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
+                    .collect();
+                if creation.len() > 1 {
+                    return Err(Error::InternalError(
+                        "Unexpected number of application descriptions published",
+                    ));
+                }
+                let blob_id = creation.pop().ok_or(Error::InternalError(
+                    "ApplicationDescription blob not found.",
+                ))?;
+                let application_id = ApplicationId::new(blob_id.hash);
+                Ok((application_id, module_id, bcs_blob_hash, certificate))
+            })
+    }
+
     /// Publishes some data blobs.
     #[instrument(level = "trace", skip(bytes))]
     pub async fn publish_data_blobs(
