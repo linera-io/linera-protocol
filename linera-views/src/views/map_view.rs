@@ -662,6 +662,68 @@ where
         Ok(count)
     }
 
+    /// Returns the lexicographically smallest key matching the prefix, if any.
+    /// The prefix is not included in the returned key.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![1, 2], String::from("World"));
+    /// assert_eq!(map.first_key(Vec::new()).await.unwrap(), Some(vec![0, 1]));
+    /// # })
+    /// ```
+    pub async fn first_key(&self, prefix: Vec<u8>) -> Result<Option<Vec<u8>>, ViewError> {
+        if self.updates.is_empty() && !self.deletion_set.has_pending_changes() {
+            let base = self.context.base_key().base_index(&prefix);
+            return Ok(self.context.store().find_first_key_by_prefix(&base).await?);
+        }
+        let mut result = None;
+        self.for_each_key_while(
+            |key| {
+                result = Some(key.to_vec());
+                Ok(false)
+            },
+            prefix,
+        )
+        .await?;
+        Ok(result)
+    }
+
+    /// Returns the lexicographically largest key matching the prefix, if any.
+    /// The prefix is not included in the returned key.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::map_view::ByteMapView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut map = ByteMapView::load(context).await.unwrap();
+    /// map.insert(vec![0, 1], String::from("Hello"));
+    /// map.insert(vec![1, 2], String::from("World"));
+    /// assert_eq!(map.last_key(Vec::new()).await.unwrap(), Some(vec![1, 2]));
+    /// # })
+    /// ```
+    pub async fn last_key(&self, prefix: Vec<u8>) -> Result<Option<Vec<u8>>, ViewError> {
+        if self.updates.is_empty() && !self.deletion_set.has_pending_changes() {
+            let base = self.context.base_key().base_index(&prefix);
+            return Ok(self.context.store().find_last_key_by_prefix(&base).await?);
+        }
+        let mut result = None;
+        self.for_each_key(
+            |key| {
+                result = Some(key.to_vec());
+                Ok(())
+            },
+            prefix,
+        )
+        .await?;
+        Ok(result)
+    }
+
     /// Applies a function f on each key/value pair matching a prefix. The key is the
     /// shortened one by the prefix. The value is an enum that can be either a value
     /// or its serialization. This is needed in order to avoid a scenario where we
@@ -902,6 +964,63 @@ where
     /// ```
     pub async fn key_values(&self) -> Result<Vec<(Vec<u8>, V)>, ViewError> {
         self.key_values_by_prefix(Vec::new()).await
+    }
+
+    /// Returns the `(key, value)` pair with the lexicographically smallest key matching
+    /// the prefix, if any. The prefix is not included in the returned key.
+    pub async fn first_key_value(
+        &self,
+        prefix: Vec<u8>,
+    ) -> Result<Option<(Vec<u8>, V)>, ViewError> {
+        if self.updates.is_empty() && !self.deletion_set.has_pending_changes() {
+            let base = self.context.base_key().base_index(&prefix);
+            let Some((short_key, value_bytes)) = self
+                .context
+                .store()
+                .find_first_key_value_by_prefix(&base)
+                .await?
+            else {
+                return Ok(None);
+            };
+            return Ok(Some((short_key, bcs::from_bytes(&value_bytes)?)));
+        }
+        let mut result = None;
+        self.for_each_key_value_while(
+            |key, value| {
+                result = Some((key.to_vec(), value.into_owned()));
+                Ok(false)
+            },
+            prefix,
+        )
+        .await?;
+        Ok(result)
+    }
+
+    /// Returns the `(key, value)` pair with the lexicographically largest key matching
+    /// the prefix, if any. The prefix is not included in the returned key.
+    pub async fn last_key_value(&self, prefix: Vec<u8>) -> Result<Option<(Vec<u8>, V)>, ViewError> {
+        if self.updates.is_empty() && !self.deletion_set.has_pending_changes() {
+            let base = self.context.base_key().base_index(&prefix);
+            let Some((short_key, value_bytes)) = self
+                .context
+                .store()
+                .find_last_key_value_by_prefix(&base)
+                .await?
+            else {
+                return Ok(None);
+            };
+            return Ok(Some((short_key, bcs::from_bytes(&value_bytes)?)));
+        }
+        let mut result = None;
+        self.for_each_key_value(
+            |key, value| {
+                result = Some((key.to_vec(), value.into_owned()));
+                Ok(())
+            },
+            prefix,
+        )
+        .await?;
+        Ok(result)
     }
 }
 
@@ -1529,6 +1648,40 @@ where
     pub async fn iterative_count(&self) -> Result<usize, ViewError> {
         self.map.iterative_count().await
     }
+
+    /// Returns the lexicographically smallest index in the map, if any. The order is
+    /// determined by serialization.
+    pub async fn first_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.map.first_key(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some(BaseKey::deserialize_value(&short_key)?))
+    }
+
+    /// Returns the lexicographically largest index in the map, if any. The order is
+    /// determined by serialization.
+    pub async fn last_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.map.last_key(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some(BaseKey::deserialize_value(&short_key)?))
+    }
+
+    /// Returns the `(index, value)` pair with the lexicographically smallest index, if any.
+    pub async fn first_index_value(&self) -> Result<Option<(I, V)>, ViewError> {
+        let Some((short_key, value)) = self.map.first_key_value(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some((BaseKey::deserialize_value(&short_key)?, value)))
+    }
+
+    /// Returns the `(index, value)` pair with the lexicographically largest index, if any.
+    pub async fn last_index_value(&self) -> Result<Option<(I, V)>, ViewError> {
+        let Some((short_key, value)) = self.map.last_key_value(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some((BaseKey::deserialize_value(&short_key)?, value)))
+    }
 }
 
 impl<C, I, V> MapView<C, I, V>
@@ -2081,6 +2234,38 @@ where
     /// ```
     pub async fn iterative_count(&self) -> Result<usize, ViewError> {
         self.map.iterative_count().await
+    }
+
+    /// Returns the smallest index in the map (per the custom serialization order), if any.
+    pub async fn first_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.map.first_key(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some(I::from_custom_bytes(&short_key)?))
+    }
+
+    /// Returns the largest index in the map (per the custom serialization order), if any.
+    pub async fn last_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.map.last_key(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some(I::from_custom_bytes(&short_key)?))
+    }
+
+    /// Returns the `(index, value)` pair with the smallest index, if any.
+    pub async fn first_index_value(&self) -> Result<Option<(I, V)>, ViewError> {
+        let Some((short_key, value)) = self.map.first_key_value(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some((I::from_custom_bytes(&short_key)?, value)))
+    }
+
+    /// Returns the `(index, value)` pair with the largest index, if any.
+    pub async fn last_index_value(&self) -> Result<Option<(I, V)>, ViewError> {
+        let Some((short_key, value)) = self.map.last_key_value(Vec::new()).await? else {
+            return Ok(None);
+        };
+        Ok(Some((I::from_custom_bytes(&short_key)?, value)))
     }
 }
 
