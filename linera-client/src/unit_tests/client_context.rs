@@ -73,7 +73,8 @@ async fn make_context(
 #[test_log::test(tokio::test)]
 async fn test_wallet_persists_fast_pending_proposal() -> anyhow::Result<()> {
     let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(MemoryStorageBuilder::default(), 4, 0, signer.clone()).await?;
+    let mut builder =
+        TestBuilder::new(MemoryStorageBuilder::default(), 4, 0, signer.clone()).await?;
     let mut client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     client.options_mut().allow_fast_blocks = true;
     let chain_id = client.chain_id();
@@ -121,7 +122,8 @@ async fn test_wallet_persists_fast_pending_proposal() -> anyhow::Result<()> {
 #[test_log::test(tokio::test)]
 async fn test_wallet_drops_non_fast_pending_proposal() -> anyhow::Result<()> {
     let mut signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(MemoryStorageBuilder::default(), 4, 0, signer.clone()).await?;
+    let mut builder =
+        TestBuilder::new(MemoryStorageBuilder::default(), 4, 0, signer.clone()).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client.chain_id();
     let owner0 = client.identity().await?;
