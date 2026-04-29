@@ -112,7 +112,7 @@ async fn test_wallet_persists_fast_pending_proposal() -> anyhow::Result<()> {
         .wallet()
         .get(chain_id)
         .expect("wallet missing chain entry")
-        .pending_proposal
+        .pending_fast_proposal
         .expect("wallet missing fast pending proposal");
     assert_eq!(stored.round, Some(Round::Fast));
     Ok(())
@@ -154,6 +154,6 @@ async fn test_wallet_drops_non_fast_pending_proposal() -> anyhow::Result<()> {
         .wallet()
         .get(chain_id)
         .expect("wallet missing chain entry");
-    assert!(stored.pending_proposal.is_none());
+    assert!(stored.pending_fast_proposal.is_none());
     Ok(())
 }

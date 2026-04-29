@@ -118,7 +118,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
             &wallet::Chain {
                 owner: Some(new_pubkey.into()),
                 timestamp: clock.current_time(),
-                pending_proposal: Some(PendingProposal {
+                pending_fast_proposal: Some(PendingProposal {
                     block: ProposedBlock {
                         chain_id,
                         epoch: Epoch::ZERO,

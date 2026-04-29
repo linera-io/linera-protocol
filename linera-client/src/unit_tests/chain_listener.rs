@@ -70,14 +70,14 @@ impl chain_listener::ClientContext for ClientContext {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let existing_owner = self.wallet().get(info.chain_id).and_then(|c| c.owner);
-        let pending_proposal = client
+        let pending_fast_proposal = client
             .pending_proposal()
             .await
             .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
-                pending_proposal,
+                pending_fast_proposal,
                 owner: existing_owner,
                 ..info.as_ref().into()
             },
@@ -252,7 +252,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             block_hash: chain_a_info.block_hash,
             next_block_height: chain_a_info.next_block_height,
             timestamp: clock.current_time(),
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(chain_a_info.epoch),
         },
     );
@@ -265,7 +265,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             block_hash: chain_b_info.block_hash,
             next_block_height: chain_b_info.next_block_height,
             timestamp: clock.current_time(),
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(chain_b_info.epoch),
         },
     );
@@ -603,7 +603,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             block_hash: chain0_info.block_hash,
             next_block_height: chain0_info.next_block_height,
             timestamp: clock.current_time(),
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(chain0_info.epoch),
         },
     );
