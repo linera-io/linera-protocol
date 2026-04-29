@@ -30,7 +30,7 @@ permissions:
 jobs:
   compose:
     if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
-    runs-on: linera-io-self-hosted-ci
+    runs-on: linera-io-self-hosted-builder
     timeout-minutes: 40
 
     steps:
