@@ -346,6 +346,35 @@ impl Error {
     pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
     }
+
+    /// Returns `true` if this error is consistent with the local view of the
+    /// chain being out-of-date relative to the network.
+    ///
+    /// Used by [`ChainClient::process_inbox`] to decide whether to retry after
+    /// a quorum-wide `synchronize_chain_state` call. The list is intentionally
+    /// conservative: a false negative (real staleness mistakenly treated as
+    /// fatal) just bubbles the error up — the same behaviour as before the
+    /// optimistic path was introduced — while a false positive only costs one
+    /// wasted validator round-trip on an error path.
+    fn is_likely_stale_local_state(&self) -> bool {
+        match self {
+            // Explicit signal that the local view is behind the trusted state.
+            Error::WalletSynchronizationError => true,
+            // The local node rejected the proposal because its view of the
+            // chain head, epoch, or chaining differs from ours. These map
+            // directly to `WorkerError::is_local() == false` in the worker.
+            Error::LocalNodeError(LocalNodeError::WorkerError(worker_error)) => matches!(
+                worker_error,
+                WorkerError::UnexpectedBlockHeight { .. }
+                    | WorkerError::InvalidEpoch { .. }
+                    | WorkerError::InvalidBlockChaining
+                    | WorkerError::EventsNotFound(_)
+            ),
+            // Block proposal incompatible with our local view of the chain.
+            Error::BlockProposalError(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl<Env: Environment> ChainClient<Env> {
@@ -2531,12 +2560,35 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// If not all certificates could be processed due to a timeout, the timestamp for when to retry
     /// is returned, too.
+    ///
+    /// Optimistically attempts the inbox-processing loop without first calling
+    /// [`Self::prepare_chain`], which fans out a quorum-wide
+    /// `synchronize_chain_state` to every validator and forces them to hydrate
+    /// the chain's `ChainStateView` (heavy on the validator side, especially on
+    /// idle chains backed by Scylla). In the common case where the worker has
+    /// been running and processing notifications, local state is already
+    /// current and the optimistic attempt succeeds. Only if the optimistic
+    /// attempt fails with an error that's consistent with our local view being
+    /// stale do we fall back to the full `prepare_chain` + retry — which
+    /// preserves the previous semantics on the slow path.
     #[instrument(level = "trace")]
     pub async fn process_inbox(
         &self,
     ) -> Result<(Vec<ConfirmedBlockCertificate>, Option<RoundTimeout>), Error> {
-        self.prepare_chain().await?;
-        self.process_inbox_without_prepare().await
+        match self.process_inbox_without_prepare().await {
+            Ok(result) => Ok(result),
+            Err(error) if error.is_likely_stale_local_state() => {
+                debug!(
+                    chain_id = %self.chain_id,
+                    ?error,
+                    "process_inbox_without_prepare failed with a stale-state error; \
+                     falling back to prepare_chain and retrying",
+                );
+                self.prepare_chain().await?;
+                self.process_inbox_without_prepare().await
+            }
+            Err(other) => Err(other),
+        }
     }
 
     /// Creates blocks without any operations to process all incoming messages. This may require
