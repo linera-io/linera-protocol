@@ -507,7 +507,9 @@ where
     ///
     /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
     pub async fn next_height_to_preprocess(&self) -> Result<BlockHeight, ChainError> {
-        if let Some(height) = self.preprocessed_blocks.indices().await?.last() {
+        // `indices()` returns heights in serialization order (BCS little-endian for `u64`),
+        // which does not match numeric order, so we take the numeric max rather than the last.
+        if let Some(height) = self.preprocessed_blocks.indices().await?.into_iter().max() {
             return Ok(height.saturating_add(BlockHeight(1)));
         }
         Ok(self.tip_state.get().next_block_height)
