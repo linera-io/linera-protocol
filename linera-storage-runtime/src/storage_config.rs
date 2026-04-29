@@ -452,7 +452,7 @@ impl fmt::Display for StorageConfig {
         match &self.inner_storage_config {
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { endpoint } => {
-                write!(f, "service:tcp:{}:{}", endpoint, namespace)
+                write!(f, "service:tcp:{endpoint}:{namespace}")
             }
             InnerStorageConfig::Memory { genesis_path } => {
                 write!(f, "memory:{}:{}", genesis_path.display(), namespace)
@@ -464,12 +464,12 @@ impl fmt::Display for StorageConfig {
             }
             #[cfg(feature = "dynamodb")]
             InnerStorageConfig::DynamoDb { use_dynamodb_local } => match use_dynamodb_local {
-                true => write!(f, "dynamodb:{}:dynamodb_local", namespace),
-                false => write!(f, "dynamodb:{}:env", namespace),
+                true => write!(f, "dynamodb:{namespace}:dynamodb_local"),
+                false => write!(f, "dynamodb:{namespace}:env"),
             },
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { uri } => {
-                write!(f, "scylladb:tcp:{}:{}", uri, namespace)
+                write!(f, "scylladb:tcp:{uri}:{namespace}")
             }
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
             InnerStorageConfig::DualRocksDbScyllaDb {

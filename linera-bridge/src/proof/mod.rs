@@ -709,7 +709,7 @@ mod tests {
             topics: vec![B256::from([0xBB; 32])],
             data: vec![1, 2, 3, 4],
         };
-        let receipt = build_test_receipt(&[log.clone()]);
+        let receipt = build_test_receipt(std::slice::from_ref(&log));
 
         let decoded = decode_receipt_logs(&receipt).unwrap();
         assert_eq!(decoded.len(), 1);
@@ -743,7 +743,7 @@ mod tests {
             topics: vec![],
             data: vec![42],
         };
-        let legacy_receipt = build_test_receipt(&[log.clone()]);
+        let legacy_receipt = build_test_receipt(std::slice::from_ref(&log));
 
         // Prepend type byte 0x02 (EIP-1559)
         let mut typed_receipt = vec![0x02];
@@ -1055,7 +1055,7 @@ mod tests {
             topics: vec![],
             data: vec![42],
         };
-        let legacy = build_test_receipt(&[log.clone()]);
+        let legacy = build_test_receipt(std::slice::from_ref(&log));
         let mut typed = vec![0x00];
         typed.extend_from_slice(&legacy);
 
