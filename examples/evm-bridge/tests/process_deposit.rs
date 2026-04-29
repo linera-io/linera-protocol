@@ -70,7 +70,6 @@ impl TestBridge {
         // 1. Deploy bridge first
         let bridge_params = BridgeParameters {
             source_chain_id,
-            bridge_contract_address: [0xBB; 20],
             token_address,
             rpc_endpoint: String::new(),
         };
@@ -194,6 +193,84 @@ impl TestBridge {
         let proof_nodes: Vec<Vec<u8>> = proof_bytes.into_iter().map(|b| b.to_vec()).collect();
         let block_header = build_test_header(receipts_root, 12345);
         (block_header, receipt, proof_nodes, tx_index, 0)
+    }
+
+    /// Like `setup`, but skips the FungibleBridge address registration so callers
+    /// can verify that `ProcessDeposit` panics when the address has not been set.
+    async fn setup_without_bridge_address() -> Self {
+        let (validator, bridge_module_id) =
+            TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
+        let mut chain = validator.new_chain().await;
+        let chain_owner = AccountOwner::from(chain.public_key());
+
+        let token_address = [0xA0; 20];
+        let source_chain_id = 8453u64;
+
+        let bridge_params = BridgeParameters {
+            source_chain_id,
+            token_address,
+            rpc_endpoint: String::new(),
+        };
+        let bridge_app_id = chain
+            .create_application(bridge_module_id, bridge_params, (), vec![])
+            .await;
+
+        let fungible_module_id = chain
+            .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
+                "../wrapped-fungible",
+            )
+            .await;
+        let wrapped_params = WrappedParameters {
+            ticker_symbol: "wUSDC".to_string(),
+            minter: Some(chain_owner),
+            mint_chain_id: Some(chain.id()),
+            evm_token_address: token_address,
+            evm_source_chain_id: source_chain_id,
+            bridge_app_id: Some(bridge_app_id.forget_abi()),
+        };
+        let fungible_app_id = chain
+            .create_application(
+                fungible_module_id,
+                wrapped_params,
+                InitialStateBuilder::default().build(),
+                vec![],
+            )
+            .await;
+
+        chain
+            .add_block(|block| {
+                block.with_operation(
+                    bridge_app_id,
+                    BridgeOperation::RegisterFungibleApp {
+                        app_id: fungible_app_id.forget_abi(),
+                    },
+                );
+            })
+            .await;
+
+        let chain_id_bytes: [u8; 32] = chain.id().0.into();
+        let target_chain_b256 = B256::from(chain_id_bytes);
+
+        let owner_hash = match chain_owner {
+            AccountOwner::Address32(hash) => <[u8; 32]>::from(hash),
+            _ => panic!("expected Address32"),
+        };
+        let target_owner_b256 = B256::from(owner_hash);
+
+        let bridge_contract = Address::from([0xBB; 20]);
+        let token = Address::from(token_address);
+
+        TestBridge {
+            chain,
+            chain_owner,
+            bridge_app_id,
+            fungible_app_id,
+            source_chain_id,
+            bridge_contract,
+            token,
+            target_chain_b256,
+            target_owner_b256,
+        }
     }
 }
 
@@ -600,7 +677,6 @@ async fn test_instantiation_fails_with_unreachable_endpoint() {
     // Non-empty endpoint that is unreachable → instantiation should fail
     let bridge_params = BridgeParameters {
         source_chain_id,
-        bridge_contract_address: [0xBB; 20],
         token_address,
         rpc_endpoint: "http://localhost:8545".to_string(),
     };
@@ -666,7 +742,6 @@ async fn setup_bridge_with_anvil(
     // 1. Deploy bridge first
     let bridge_params = BridgeParameters {
         source_chain_id,
-        bridge_contract_address: [0xBB; 20],
         token_address,
         rpc_endpoint: anvil_endpoint.to_string(),
     };
@@ -807,6 +882,33 @@ async fn test_register_fungible_app_cannot_be_called_twice() {
 }
 
 #[tokio::test]
+async fn test_process_deposit_rejects_when_bridge_address_unregistered() {
+    let tb = TestBridge::setup_without_bridge_address().await;
+    let (block_header, receipt, proof_nodes, tx_index, log_index) = tb.build_valid_deposit();
+
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header,
+                    receipt_rlp: receipt,
+                    proof_nodes,
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+
+    assert!(
+        result.is_err(),
+        "ProcessDeposit without RegisterFungibleBridge must be rejected"
+    );
+}
+
+#[tokio::test]
 async fn test_register_fungible_bridge_is_one_shot() {
     let (validator, bridge_module_id) =
         TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, ()>().await;
@@ -814,7 +916,6 @@ async fn test_register_fungible_bridge_is_one_shot() {
 
     let bridge_params = BridgeParameters {
         source_chain_id: 8453u64,
-        bridge_contract_address: [0xBB; 20],
         token_address: [0xA0; 20],
         rpc_endpoint: String::new(),
     };

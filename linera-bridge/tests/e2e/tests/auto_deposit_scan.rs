@@ -159,51 +159,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let erc20_addr = parse_deployed_address(&erc20_output)?;
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
-    // ── Phase 4: Deploy FungibleBridge on EVM (no applicationId needed at construction) ──
+    // ── Phase 4 (deferred): FungibleBridge is deployed after the wrapped-fungible
+    // app is created, so the wrapped applicationId can be baked into the constructor.
     let chain_a_bytes32 = format!("0x{chain_a}");
     let light_client = light_client_address();
-
-    tracing::info!("Deploying FungibleBridge...");
-    let bridge_output = exec_output(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "forge create /contracts/FungibleBridge.sol:FungibleBridge \
-             --root /contracts --via-ir --optimize \
-             --ignored-error-codes 6321 \
-             --evm-version shanghai \
-             --out /tmp/forge-out --cache-path /tmp/forge-cache \
-             --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             --broadcast \
-             --constructor-args \
-             {light_client} \
-             {chain_a_bytes32} \
-             {erc20_addr}"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
-    let bridge_addr = parse_deployed_address(&bridge_output)?;
-    tracing::info!(%bridge_addr, "FungibleBridge deployed");
-
-    tracing::info!("Funding FungibleBridge with ERC20 tokens...");
-    exec_ok(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "cast send --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             {erc20_addr} \
-             'transfer(address,uint256)(bool)' \
-             {bridge_addr} \
-             500000000000000000000"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
 
     // ── Phase 5: Publish and deploy Linera apps ──
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -229,7 +188,6 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             eb_module_id,
             serde_json::to_vec(&BridgeParameters {
                 source_chain_id: 31337,
-                bridge_contract_address: bridge_addr.0 .0,
                 token_address: erc20_addr.0 .0,
                 rpc_endpoint: String::new(),
             })?,
@@ -284,22 +242,63 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .await?
         .expect("register fungible app committed");
 
+    // Deploy FungibleBridge with the wrapped-fungible applicationId baked in.
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
-    tracing::info!("Registering fungibleApplicationId in FungibleBridge...");
-    exec_ok(
+    tracing::info!("Deploying FungibleBridge...");
+    let bridge_output = exec_output(
         &compose,
         "foundry-tools",
         &format!(
-            "cast send --rpc-url http://anvil:8545 \
+            "forge create /contracts/FungibleBridge.sol:FungibleBridge \
+             --root /contracts --via-ir --optimize \
+             --ignored-error-codes 6321 \
+             --evm-version shanghai \
+             --out /tmp/forge-out --cache-path /tmp/forge-cache \
+             --rpc-url http://anvil:8545 \
              --private-key {ANVIL_PRIVATE_KEY} \
-             {bridge_addr} \
-             'registerFungibleApplicationId(bytes32)' \
+             --broadcast \
+             --constructor-args \
+             {light_client} \
+             {chain_a_bytes32} \
+             {erc20_addr} \
              {app_id_bytes32}"
         ),
         project_name,
         &compose_file,
     )
     .await;
+    let bridge_addr = parse_deployed_address(&bridge_output)?;
+    tracing::info!(%bridge_addr, "FungibleBridge deployed");
+
+    tracing::info!("Funding FungibleBridge with ERC20 tokens...");
+    exec_ok(
+        &compose,
+        "foundry-tools",
+        &format!(
+            "cast send --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             {erc20_addr} \
+             'transfer(address,uint256)(bool)' \
+             {bridge_addr} \
+             500000000000000000000"
+        ),
+        project_name,
+        &compose_file,
+    )
+    .await;
+
+    // Register the FungibleBridge contract address in the evm-bridge app.
+    tracing::info!("Registering FungibleBridge address in evm-bridge...");
+    let register_bridge_bytes = bcs::to_bytes(&BridgeOperation::RegisterFungibleBridge {
+        address: bridge_addr.0 .0,
+    })?;
+    let register_bridge_operation = Operation::User {
+        application_id: bridge_app_id,
+        bytes: register_bridge_bytes,
+    };
+    cc_a.execute_operations(vec![register_bridge_operation], vec![])
+        .await?
+        .expect("register bridge contract address committed");
     tracing::info!("All app IDs registered");
 
     // ── Phase 7: Start relay ──

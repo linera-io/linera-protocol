@@ -26,7 +26,7 @@ use linera_bridge::{
     proof::gen::{DepositProofClient as _, HttpDepositProofClient},
 };
 use linera_bridge_e2e::{
-    compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
+    compose_file_path, exec_output, light_client_address, parse_deployed_address,
     start_compose, wait_for_light_client,
     ANVIL_PRIVATE_KEY,
 };
@@ -120,7 +120,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     cc.synchronize_from_validators().await?;
     tracing::info!(%chain_id, %owner, "Chain claimed");
 
-    // ── Phase 3: Deploy MockERC20 + FungibleBridge on Anvil ──
+    // ── Phase 3: Deploy MockERC20 on Anvil ──
     tracing::info!("Deploying MockERC20...");
     let erc20_output = exec_output(
         &compose,
@@ -143,32 +143,6 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
     let chain_id_bytes32 = format!("0x{chain_id}");
-
-    tracing::info!("Deploying FungibleBridge...");
-    let light_client = light_client_address();
-    let bridge_output = exec_output(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "forge create /contracts/FungibleBridge.sol:FungibleBridge \
-             --root /contracts --via-ir --optimize \
-             --ignored-error-codes 6321 \
-             --evm-version shanghai \
-             --out /tmp/forge-out --cache-path /tmp/forge-cache \
-             --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             --broadcast \
-             --constructor-args \
-             {light_client} \
-             {chain_id_bytes32} \
-             {erc20_addr}"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
-    let bridge_addr = parse_deployed_address(&bridge_output)?;
-    tracing::info!(%bridge_addr, "FungibleBridge deployed");
 
     // ── Phase 4: Deploy wrapped-fungible + evm-bridge apps on Linera ──
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -207,7 +181,6 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!("Creating evm-bridge application...");
     let bridge_params = BridgeParameters {
         source_chain_id: 31337,
-        bridge_contract_address: bridge_addr.0 .0,
         token_address: erc20_addr.0 .0,
         rpc_endpoint: String::new(),
     };
@@ -260,23 +233,48 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         .await?
         .expect("register fungible app committed");
 
-    // 4e. Register wrapped-fungible applicationId in the EVM FungibleBridge
+    // 4e. Deploy FungibleBridge with the wrapped-fungible applicationId baked in
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
-    tracing::info!("Registering applicationId in FungibleBridge...");
-    exec_ok(
+    let light_client = light_client_address();
+    tracing::info!("Deploying FungibleBridge...");
+    let bridge_output = exec_output(
         &compose,
         "foundry-tools",
         &format!(
-            "cast send --rpc-url http://anvil:8545 \
+            "forge create /contracts/FungibleBridge.sol:FungibleBridge \
+             --root /contracts --via-ir --optimize \
+             --ignored-error-codes 6321 \
+             --evm-version shanghai \
+             --out /tmp/forge-out --cache-path /tmp/forge-cache \
+             --rpc-url http://anvil:8545 \
              --private-key {ANVIL_PRIVATE_KEY} \
-             {bridge_addr} \
-             'registerFungibleApplicationId(bytes32)' \
+             --broadcast \
+             --constructor-args \
+             {light_client} \
+             {chain_id_bytes32} \
+             {erc20_addr} \
              {app_id_bytes32}"
         ),
         project_name,
         &compose_file,
     )
     .await;
+    let bridge_addr = parse_deployed_address(&bridge_output)?;
+    tracing::info!(%bridge_addr, "FungibleBridge deployed");
+
+    // 4f. Register the FungibleBridge contract address in the evm-bridge app
+    tracing::info!("Registering FungibleBridge address in evm-bridge...");
+    let register_bridge_op = BridgeOperation::RegisterFungibleBridge {
+        address: bridge_addr.0 .0,
+    };
+    let register_bridge_bytes = bcs::to_bytes(&register_bridge_op)?;
+    let register_bridge_operation = Operation::User {
+        application_id: bridge_app_id,
+        bytes: register_bridge_bytes,
+    };
+    cc.execute_operations(vec![register_bridge_operation], vec![])
+        .await?
+        .expect("register bridge contract address committed");
 
     // ── Phase 5: Approve + Deposit on EVM ──
     let deposit_amount = U256::from(100u128 * 10u128.pow(18)); // 100 tokens
