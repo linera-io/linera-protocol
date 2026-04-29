@@ -431,8 +431,7 @@ impl<Env: Environment> ClientContext<Env> {
             .and_then(|chain| chain.owner);
 
         // Only persist proposals that were made in the fast round: they need to be
-        // remembered across sessions even if the chain has since progressed past the
-        // fast round, so the proposer can retry them.
+        // remembered across sessions to make sure there are no conflicting fast proposals.
         let pending_fast_proposal = client
             .pending_proposal()
             .await
