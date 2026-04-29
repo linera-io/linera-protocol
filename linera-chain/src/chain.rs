@@ -487,11 +487,15 @@ where
         Ok(())
     }
 
-    /// Updates `next_height_to_preprocess` to `height + 1` if it is currently smaller.
-    fn update_next_height_to_preprocess(
+    /// Inserts `(height, hash)` into `block_hashes` and updates the
+    /// `next_height_to_preprocess` register accordingly. Every write to
+    /// `block_hashes` must go through this helper so the register stays in sync.
+    fn insert_block_hash(
         &mut self,
         height: BlockHeight,
-    ) -> Result<(), ArithmeticError> {
+        hash: CryptoHash,
+    ) -> Result<(), ChainError> {
+        self.block_hashes.insert(&height, hash)?;
         let next = self.next_height_to_preprocess.get_mut();
         if *next <= height {
             *next = height.try_add_one()?;
@@ -1088,8 +1092,7 @@ where
         tip.block_hash = Some(hash);
         tip.next_block_height.try_add_assign_one()?;
         tip.update_counters(&block.body.transactions, &block.body.messages)?;
-        self.block_hashes.insert(&block.header.height, hash)?;
-        self.update_next_height_to_preprocess(block.header.height)?;
+        self.insert_block_hash(block.header.height, hash)?;
         Ok(updated_streams)
     }
 
@@ -1111,8 +1114,7 @@ where
         }
         self.process_outgoing_messages(block).await?;
         let updated_streams = self.process_emitted_events(block).await?;
-        self.block_hashes.insert(&height, hash)?;
-        self.update_next_height_to_preprocess(height)?;
+        self.insert_block_hash(height, hash)?;
         Ok(updated_streams)
     }
 
