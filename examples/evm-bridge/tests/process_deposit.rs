@@ -113,6 +113,18 @@ impl TestBridge {
             })
             .await;
 
+        // 4. Register the FungibleBridge contract address.
+        chain
+            .add_block(|block| {
+                block.with_operation(
+                    bridge_app_id,
+                    BridgeOperation::RegisterFungibleBridge {
+                        address: [0xBB; 20],
+                    },
+                );
+            })
+            .await;
+
         let chain_id_bytes: [u8; 32] = chain.id().0.into();
         let target_chain_b256 = B256::from(chain_id_bytes);
 
@@ -692,6 +704,18 @@ async fn setup_bridge_with_anvil(
                 bridge_app_id,
                 BridgeOperation::RegisterFungibleApp {
                     app_id: fungible_app_id.forget_abi(),
+                },
+            );
+        })
+        .await;
+
+    // 4. Register the FungibleBridge contract address.
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                bridge_app_id,
+                BridgeOperation::RegisterFungibleBridge {
+                    address: [0xBB; 20],
                 },
             );
         })
