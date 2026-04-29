@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ConfirmedBlock } from '../../gql/service'
-import { getOperations, getIncomingBundles } from './utils'
+import { getOperations, getIncomingBundles, formatTimestamp, displayValue, copyToClipboard } from './utils'
 import Json from './Json.vue'
 // Op is now imported by Transaction.vue
 import Transaction from './Transaction.vue'
