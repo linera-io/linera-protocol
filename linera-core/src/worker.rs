@@ -568,12 +568,12 @@ pub(crate) enum BatchRequest {
         origin: ChainId,
         bundles: Vec<(Epoch, MessageBundle)>,
         previous_height: Option<BlockHeight>,
-        result_tx: oneshot::Sender<Result<CrossChainUpdateResult, WorkerError>>,
+        result_sender: oneshot::Sender<Result<CrossChainUpdateResult, WorkerError>>,
     },
     Confirm {
         recipient: ChainId,
         latest_height: BlockHeight,
-        result_tx: oneshot::Sender<Result<NetworkActions, WorkerError>>,
+        result_sender: oneshot::Sender<Result<NetworkActions, WorkerError>>,
     },
 }
 
@@ -613,7 +613,7 @@ impl ChainBatchRequestProcessor {
                     Ok(mut guard) => {
                         while requests.len() < batch_size_limit {
                             match receiver.try_recv() {
-                                Ok(req) => requests.push(req),
+                                Ok(request) => requests.push(request),
                                 Err(_) => break,
                             }
                         }
@@ -625,11 +625,11 @@ impl ChainBatchRequestProcessor {
                         tracing::error!(%error, "failed to obtain write lock");
                         for request in requests {
                             match request {
-                                BatchRequest::Update { result_tx, .. } => {
-                                    send_result(result_tx, Err(WorkerError::PoisonedWorker));
+                                BatchRequest::Update { result_sender, .. } => {
+                                    send_result(result_sender, Err(WorkerError::PoisonedWorker));
                                 }
-                                BatchRequest::Confirm { result_tx, .. } => {
-                                    send_result(result_tx, Err(WorkerError::PoisonedWorker));
+                                BatchRequest::Confirm { result_sender, .. } => {
+                                    send_result(result_sender, Err(WorkerError::PoisonedWorker));
                                 }
                             }
                         }
@@ -1132,36 +1132,36 @@ where
     > {
         Box::pin(wrap_future(async move {
             loop {
-                // Create the channel outside the closure so that the tx/rx
-                // always match regardless of CAS retries.
-                let (tx, rx) = oneshot::channel();
-                let shared_rx = rx.shared();
+                // Create the channel outside the closure so that the
+                // sender/receiver always match regardless of CAS retries.
+                let (sender, receiver) = oneshot::channel();
+                let shared_receiver = receiver.shared();
 
                 // The papaya guard is !Send, so it must be dropped before
                 // any .await point.
-                let wait_or_tx = {
+                let wait_or_sender = {
                     let pin = self.chain_workers.pin();
                     match pin.compute(chain_id, |existing| match existing {
                         Some((_, entry)) => match entry.peek() {
                             Some(Ok(weak)) => match weak.upgrade() {
                                 Some(arc) => papaya::Operation::Abort(Ok(arc)),
-                                None => papaya::Operation::Insert(shared_rx.clone()),
+                                None => papaya::Operation::Insert(shared_receiver.clone()),
                             },
-                            Some(Err(_)) => papaya::Operation::Insert(shared_rx.clone()),
+                            Some(Err(_)) => papaya::Operation::Insert(shared_receiver.clone()),
                             None => papaya::Operation::Abort(Err(entry.clone())),
                         },
-                        None => papaya::Operation::Insert(shared_rx.clone()),
+                        None => papaya::Operation::Insert(shared_receiver.clone()),
                     }) {
                         papaya::Compute::Aborted(Ok(arc), ..) => return Ok(arc),
                         papaya::Compute::Aborted(Err(wait), ..) => Either::Left(wait),
                         papaya::Compute::Inserted { .. } | papaya::Compute::Updated { .. } => {
-                            Either::Right(tx)
+                            Either::Right(sender)
                         }
                         papaya::Compute::Removed { .. } => unreachable!(),
                     }
                 };
 
-                match wait_or_tx {
+                match wait_or_sender {
                     Either::Left(wait) => {
                         // Another task is loading. Await the shared future.
                         if let Ok(weak) = wait.await {
@@ -1171,12 +1171,12 @@ where
                         }
                         // Loading failed or worker already dead; retry.
                     }
-                    Either::Right(tx) => {
+                    Either::Right(sender) => {
                         // We claimed the loading slot. Load from storage.
                         // On success, send the Weak through the channel.
-                        // On error, dropping tx wakes waiters so they can retry.
+                        // On error, dropping sender wakes waiters so they can retry.
                         let worker = self.load_chain_worker(chain_id).await?;
-                        if tx.send(Arc::downgrade(&worker)).is_err() {
+                        if sender.send(Arc::downgrade(&worker)).is_err() {
                             tracing::error!(%chain_id, "Receiver dropped while loading worker state.");
                             continue;
                         }
@@ -1372,14 +1372,14 @@ where
         bundles: Vec<(Epoch, MessageBundle)>,
         previous_height: Option<BlockHeight>,
     ) -> Result<CrossChainUpdateResult, WorkerError> {
-        let (result_tx, rx) = oneshot::channel();
+        let (result_sender, receiver) = oneshot::channel();
         let request = BatchRequest::Update {
             origin,
             bundles,
             previous_height,
-            result_tx,
+            result_sender,
         };
-        self.enqueue_and_drive(recipient, request, rx).await
+        self.enqueue_and_drive(recipient, request, receiver).await
     }
 
     /// Enqueues a confirmation request and cooperatively drives the
@@ -1390,13 +1390,13 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
     ) -> Result<NetworkActions, WorkerError> {
-        let (result_tx, rx) = oneshot::channel();
+        let (result_sender, receiver) = oneshot::channel();
         let request = BatchRequest::Confirm {
             recipient,
             latest_height,
-            result_tx,
+            result_sender,
         };
-        self.enqueue_and_drive(sender, request, rx).await
+        self.enqueue_and_drive(sender, request, receiver).await
     }
 
     /// Sends a [`BatchRequest`] to the per-chain driver and cooperatively
@@ -1405,24 +1405,24 @@ where
         &self,
         chain_id: ChainId,
         request: BatchRequest,
-        mut rx: oneshot::Receiver<Result<R, WorkerError>>,
+        mut receiver: oneshot::Receiver<Result<R, WorkerError>>,
     ) -> Result<R, WorkerError> {
-        let mut request = Some(request);
+        let mut pending = Some(request);
         loop {
             let (sender, future) = self.get_or_create_chain_batch(chain_id).await?;
-            if let Some(req) = request.take() {
-                if let Err(mpsc::error::SendError(req)) = sender.send(req) {
-                    request = Some(req);
+            if let Some(request) = pending.take() {
+                if let Err(mpsc::error::SendError(request)) = sender.send(request) {
+                    pending = Some(request);
                     continue; // Driver died; retry will create a new one.
                 }
             }
-            // Poll rx first (biased): if the result is already available,
+            // Poll the receiver first (biased): if the result is already available,
             // return it immediately without driving the batch future further.
-            match future::select(pin::pin!(&mut rx), future).await {
+            match future::select(pin::pin!(&mut receiver), future).await {
                 Either::Left((result, _)) => {
                     return result.expect("batch result sender dropped");
                 }
-                Either::Right(((), _)) => match rx.try_recv() {
+                Either::Right(((), _)) => match receiver.try_recv() {
                     Ok(result) => return result,
                     Err(oneshot::error::TryRecvError::Empty) => {}
                     Err(oneshot::error::TryRecvError::Closed) => {

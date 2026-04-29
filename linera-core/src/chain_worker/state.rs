@@ -1133,10 +1133,10 @@ where
                     origin,
                     bundles,
                     previous_height,
-                    result_tx,
+                    result_sender,
                 } => {
                     if need_rollback {
-                        send_result(result_tx, Err(WorkerError::BatchRolledBack));
+                        send_result(result_sender, Err(WorkerError::BatchRolledBack));
                         continue;
                     }
                     let result = self
@@ -1146,7 +1146,7 @@ where
                         Ok(update_result) => update_result,
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_tx, Err(error));
+                            send_result(result_sender, Err(error));
                             continue;
                         }
                     };
@@ -1155,15 +1155,15 @@ where
                         CrossChainUpdateResult::GapDetected { .. }
                         | CrossChainUpdateResult::NothingToDo => {}
                     }
-                    update_results.push((result_tx, update_result));
+                    update_results.push((result_sender, update_result));
                 }
                 BatchRequest::Confirm {
                     recipient,
                     latest_height,
-                    result_tx,
+                    result_sender,
                 } => {
                     if need_rollback {
-                        send_result(result_tx, Err(WorkerError::BatchRolledBack));
+                        send_result(result_sender, Err(WorkerError::BatchRolledBack));
                         continue;
                     }
                     match self
@@ -1178,11 +1178,11 @@ where
                                         .map_or(latest_height, |h| h.max(latest_height)),
                                 );
                             }
-                            confirm_results.push((result_tx, recipient));
+                            confirm_results.push((result_sender, recipient));
                         }
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_tx, Err(error));
+                            send_result(result_sender, Err(error));
                         }
                     }
                 }
@@ -1195,11 +1195,11 @@ where
             }
         }
         if need_rollback {
-            for (result_tx, _) in update_results {
-                send_result(result_tx, Err(WorkerError::BatchRolledBack));
+            for (result_sender, _) in update_results {
+                send_result(result_sender, Err(WorkerError::BatchRolledBack));
             }
-            for (result_tx, _) in confirm_results {
-                send_result(result_tx, Err(WorkerError::BatchRolledBack));
+            for (result_sender, _) in confirm_results {
+                send_result(result_sender, Err(WorkerError::BatchRolledBack));
             }
             return;
         }
@@ -1208,14 +1208,14 @@ where
             self.notify_delivery(height);
         }
 
-        for (result_tx, update_result) in update_results {
-            send_result(result_tx, Ok(update_result));
+        for (result_sender, update_result) in update_results {
+            send_result(result_sender, Ok(update_result));
         }
-        for (result_tx, recipient) in confirm_results {
+        for (result_sender, recipient) in confirm_results {
             let result = self
                 .create_cross_chain_actions_for_recipient(recipient)
                 .await;
-            send_result(result_tx, result);
+            send_result(result_sender, result);
         }
     }
 
