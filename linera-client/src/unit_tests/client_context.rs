@@ -136,10 +136,8 @@ async fn test_wallet_drops_non_fast_pending_proposal() -> anyhow::Result<()> {
     let ownership = ChainOwnership::multiple([(owner0, 100), (owner1, 100)], 10, timeout_config);
     client.change_ownership(ownership).await?;
 
-    // Validators 1 and 2 validate but don't confirm; validator 3 is offline. The burn fails
-    // and leaves a pending proposal in a multi-leader round.
-    builder.set_fault_type([1, 2], FaultType::DontProcessValidated);
-    builder.set_fault_type([3], FaultType::Offline);
+    // Three offline validators make the burn fail; the proposal stays pending.
+    builder.set_fault_type([1, 2, 3], FaultType::OfflineWithInfo);
     assert!(client
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await
