@@ -358,17 +358,17 @@ function pendingBundleCount(): number {
           </details>
         </li>
 
-        <!-- Confirmed Log -->
-        <li v-if="chain.confirmedLog?.entries?.length" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#chain-'+chain.chainId+'-confirmedlog-collapse'">
-          <span><strong>Confirmed Log</strong> ({{ chain.confirmedLog.entries.length }})</span>
+        <!-- Block Hashes -->
+        <li v-if="chain.blockHashes?.entries?.length" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#chain-'+chain.chainId+'-blockhashes-collapse'">
+          <span><strong>Block Hashes</strong> ({{ chain.blockHashes.entries.length }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
-        <div v-if="chain.confirmedLog?.entries?.length" class="collapse" :id="'chain-'+chain.chainId+'-confirmedlog-collapse'">
+        <div v-if="chain.blockHashes?.entries?.length" class="collapse" :id="'chain-'+chain.chainId+'-blockhashes-collapse'">
           <div class="list-group small">
-            <a v-for="(hash, i) in chain.confirmedLog.entries" :key="i"
-               @click="$root.route('block', [['block', hash]])"
+            <a v-for="entry in chain.blockHashes.entries" :key="entry.key"
+               @click="$root.route('block', [['block', entry.value]])"
                class="list-group-item list-group-item-action font-monospace p-1 ps-3">
-              {{ i }}: {{ short_hash(hash) }}
+              {{ entry.key }}: {{ short_hash(entry.value) }}
             </a>
           </div>
         </div>

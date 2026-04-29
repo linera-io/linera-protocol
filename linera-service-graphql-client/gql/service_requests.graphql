@@ -154,7 +154,10 @@ query Chain(
       currentRound
     }
     blockHashes {
-      keys
+      entries {
+        key
+        value
+      }
     }
     receivedLog {
       entries {
