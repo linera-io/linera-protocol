@@ -884,3 +884,28 @@ async fn prepare_test_with_dummy_mock_application(
 
     Ok((application, application_id, chain, block, time))
 }
+
+/// Regression test for `next_height_to_preprocess`: heights spanning a byte boundary
+/// (1 vs. 256) sort lexicographically in the opposite numeric order under BCS little-endian
+/// `u64` encoding, so a naive `indices().last()` would return the wrong height. The merged
+/// `block_hashes` map uses a big-endian custom serialization that preserves numeric order,
+/// and this test pins down that the numeric maximum is returned.
+#[tokio::test]
+async fn test_next_height_to_preprocess_with_misordered_keys() {
+    let chain_id = TestEnvironment::new().admin_chain_id();
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    chain
+        .block_hashes
+        .insert(&BlockHeight(256), CryptoHash::test_hash("a"))
+        .unwrap();
+    chain
+        .block_hashes
+        .insert(&BlockHeight(1), CryptoHash::test_hash("b"))
+        .unwrap();
+
+    assert_eq!(
+        chain.next_height_to_preprocess().await.unwrap(),
+        BlockHeight(257),
+    );
+}
