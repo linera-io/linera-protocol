@@ -205,11 +205,10 @@ impl EvmBridgeContract {
             log_index,
             logs.len()
         );
-        let bridge_contract_bytes = self
-            .state
-            .bridge_contract_address
-            .get()
-            .expect("bridge contract address not registered — call RegisterFungibleBridge first");
+        let bridge_contract_bytes =
+            self.state.bridge_contract_address.get().expect(
+                "bridge contract address not registered — call RegisterFungibleBridge first",
+            );
         let bridge_contract = alloy_primitives::Address::from(bridge_contract_bytes);
         let deposit = proof::parse_deposit_event(&logs[log_index as usize], bridge_contract)
             .expect("failed to parse DepositInitiated event");
