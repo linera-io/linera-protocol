@@ -1044,7 +1044,10 @@ where
             .or_default()
             .clone();
 
-        let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
+        // `chain_modes=None` means "no tracked/sender distinction" (validators) — treat
+        // every chain as tracked so it routes through `config.ttl`, not the unset
+        // `config.sender_chain_ttl` which would skip `spawn_keep_alive` entirely.
+        let is_tracked = self.chain_modes.as_ref().is_none_or(|chain_modes| {
             chain_modes
                 .read()
                 .unwrap()
