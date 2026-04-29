@@ -1467,9 +1467,6 @@ impl Operation {
             Some(SystemOperation::PublishDataBlob { blob_hash }) => {
                 vec![BlobId::new(*blob_hash, BlobType::Data)]
             }
-            Some(SystemOperation::PublishBcsApplicationDescription { blob_hash }) => {
-                vec![BlobId::new(*blob_hash, BlobType::BcsApplicationDescription)]
-            }
             Some(SystemOperation::Admin(AdminOperation::PublishCommitteeBlob { blob_hash })) => {
                 vec![BlobId::new(*blob_hash, BlobType::Committee)]
             }

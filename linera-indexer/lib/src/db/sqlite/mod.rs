@@ -286,9 +286,6 @@ impl SqliteDatabase {
                     SystemOperation::UpdateStreams(_) => "UpdateStreams",
                     SystemOperation::ChangeOwnership { .. } => "ChangeOwnership",
                     SystemOperation::VerifyBlob { .. } => "VerifyBlob",
-                    SystemOperation::PublishBcsApplicationDescription { .. } => {
-                        "PublishBcsApplicationDescription"
-                    }
                 };
                 ("System", None, Some(sys_op_type))
             }

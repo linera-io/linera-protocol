@@ -422,9 +422,6 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
               publishDataBlob {
                 blobHash
               }
-              publishBcsApplicationDescription {
-                blobHash
-              }
               verifyBlob {
                 blobId
               }
@@ -587,9 +584,6 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
               publishDataBlob {
                 blobHash
               }
-              publishBcsApplicationDescription {
-                blobHash
-              }
               verifyBlob {
                 blobId
               }
@@ -616,8 +610,4 @@ subscription Notifications($chainId: ChainId!) {
 
 mutation Transfer($chainId: ChainId!, $owner: AccountOwner!, $recipient_chain: ChainId!, $recipient_account: AccountOwner!, $amount: Amount!) {
   transfer(chainId: $chainId, owner: $owner, recipient: { chain_id: $recipient_chain, owner: $recipient_account }, amount: $amount)
-}
-
-query BcsApplicationDescription($hash: CryptoHash!) {
-  bcsApplicationDescription(hash: $hash)
 }

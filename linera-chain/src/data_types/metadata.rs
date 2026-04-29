@@ -98,8 +98,6 @@ pub struct SystemOperationMetadata {
     pub create_application: Option<CreateApplicationOperationMetadata>,
     /// Publish data blob operation details
     pub publish_data_blob: Option<PublishDataBlobMetadata>,
-    /// Publish BCS application-description blob operation details
-    pub publish_bcs_application_description: Option<PublishBcsApplicationDescriptionMetadata>,
     /// Verify blob operation details
     pub verify_blob: Option<VerifyBlobMetadata>,
     /// Publish module operation details
@@ -123,7 +121,6 @@ impl SystemOperationMetadata {
             admin: None,
             create_application: None,
             publish_data_blob: None,
-            publish_bcs_application_description: None,
             verify_blob: None,
             publish_module: None,
             epoch: None,
@@ -200,12 +197,6 @@ pub struct CreateApplicationOperationMetadata {
 /// Publish data blob operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct PublishDataBlobMetadata {
-    pub blob_hash: CryptoHash,
-}
-
-/// Publish BCS application-description blob operation metadata.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-pub struct PublishBcsApplicationDescriptionMetadata {
     pub blob_hash: CryptoHash,
 }
 
@@ -394,16 +385,6 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 ),
                 ..SystemOperationMetadata::new("UpdateStreams")
             },
-            SystemOperation::PublishBcsApplicationDescription { blob_hash } => {
-                SystemOperationMetadata {
-                    publish_bcs_application_description: Some(
-                        PublishBcsApplicationDescriptionMetadata {
-                            blob_hash: *blob_hash,
-                        },
-                    ),
-                    ..SystemOperationMetadata::new("PublishBcsApplicationDescription")
-                }
-            }
         }
     }
 }

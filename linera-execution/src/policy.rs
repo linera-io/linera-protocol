@@ -441,8 +441,7 @@ impl ResourceControlPolicy {
             BlobType::Data
             | BlobType::ApplicationDescription
             | BlobType::Committee
-            | BlobType::ChainDescription
-            | BlobType::BcsApplicationDescription => {}
+            | BlobType::ChainDescription => {}
         }
         Ok(())
     }

@@ -237,8 +237,6 @@ pub enum SystemOperation {
     ProcessRemovedEpoch(Epoch),
     /// Updates the event stream trackers.
     UpdateStreams(Vec<(ChainId, StreamId, u32)>),
-    /// Publishes a new BCS application-description blob.
-    PublishBcsApplicationDescription { blob_hash: CryptoHash },
 }
 
 /// Operations that are only allowed on the admin chain.
@@ -573,12 +571,6 @@ where
                     missing_events.is_empty(),
                     ExecutionError::EventsNotFound(missing_events)
                 );
-            }
-            PublishBcsApplicationDescription { blob_hash } => {
-                self.blob_published(
-                    &BlobId::new(blob_hash, BlobType::BcsApplicationDescription),
-                    txn_tracker,
-                )?;
             }
         }
 

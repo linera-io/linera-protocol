@@ -1182,13 +1182,6 @@ type PostedMessage {
 }
 
 """
-Publish BCS application-description blob operation metadata.
-"""
-type PublishBcsApplicationDescriptionMetadata {
-	blobHash: CryptoHash!
-}
-
-"""
 Publish data blob operation metadata.
 """
 type PublishDataBlobMetadata {
@@ -1209,10 +1202,6 @@ type QueryRoot {
 	block(hash: CryptoHash, chainId: ChainId!): ConfirmedBlock
 	eventsFromIndex(chainId: ChainId!, streamId: StreamIdInput!, startIndex: Int!): [IndexAndEvent!]!
 	blocks(from: CryptoHash, chainId: ChainId!, limit: Int): [ConfirmedBlock!]!
-	"""
-	Reads the bytes of a `BcsApplicationDescription` blob from local storage.
-	"""
-	bcsApplicationDescription(hash: CryptoHash!): [Int!]!
 	"""
 	Returns the version information on this node service.
 	"""
@@ -1387,10 +1376,6 @@ type SystemOperationMetadata {
 	Publish data blob operation details
 	"""
 	publishDataBlob: PublishDataBlobMetadata
-	"""
-	Publish BCS application-description blob operation details
-	"""
-	publishBcsApplicationDescription: PublishBcsApplicationDescriptionMetadata
 	"""
 	Verify blob operation details
 	"""

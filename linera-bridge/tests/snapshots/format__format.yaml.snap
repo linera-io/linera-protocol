@@ -98,8 +98,6 @@ BlobType:
       Committee: UNIT
     6:
       ChainDescription: UNIT
-    7:
-      BcsApplicationDescription: UNIT
 Block:
   STRUCT:
     - header:
@@ -531,11 +529,6 @@ SystemOperation:
               - TYPENAME: ChainId
               - TYPENAME: StreamId
               - U32
-    14:
-      PublishBcsApplicationDescription:
-        STRUCT:
-          - blob_hash:
-              TYPENAME: CryptoHash
 TimeDelta:
   NEWTYPESTRUCT: U64
 TimeoutConfig:
