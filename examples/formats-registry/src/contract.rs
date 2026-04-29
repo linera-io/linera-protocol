@@ -5,8 +5,8 @@
 
 mod state;
 
-use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
+    abis::formats_registry::{FormatsRegistryAbi, Operation},
     linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,

@@ -926,6 +926,204 @@ impl<Env: Environment> ClientContext<Env> {
     }
 }
 
+#[cfg(all(feature = "fs", not(web)))]
+impl<Env: Environment> ClientContext<Env> {
+    /// Publishes a module along with the JSON-encoded `Formats` description loaded
+    /// from `snap_path`. The module publication and the formats-registry write
+    /// happen atomically in a single block.
+    pub async fn publish_bcs_module(
+        &mut self,
+        chain_client: &ChainClient<Env>,
+        contract: PathBuf,
+        service: PathBuf,
+        vm_runtime: VmRuntime,
+        snap_path: PathBuf,
+        registry_application_id: ApplicationId,
+    ) -> Result<ModuleId, Error> {
+        let (blobs, module_id, registry_op_bytes) = self
+            .prepare_bcs_publication(&contract, &service, vm_runtime, &snap_path)
+            .await?;
+
+        info!("Publishing module and registering its formats");
+        self.apply_client_command(chain_client, |chain_client| {
+            let blobs = blobs.clone();
+            let registry_op_bytes = registry_op_bytes.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .execute_operations(
+                        vec![
+                            Operation::system(SystemOperation::PublishModule { module_id }),
+                            Operation::User {
+                                application_id: registry_application_id,
+                                bytes: registry_op_bytes,
+                            },
+                        ],
+                        blobs,
+                    )
+                    .await
+                    .context("Failed to publish module and register formats")
+            }
+        })
+        .await?;
+
+        info!("{}", "Module published and formats registered successfully!");
+        info!("Synchronizing client and processing inbox");
+        self.process_inbox(chain_client).await?;
+        Ok(module_id)
+    }
+
+    /// Publishes a module, registers its `Formats` description in the formats
+    /// registry, and creates an application from that module — all atomically in
+    /// a single block.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn publish_bcs_application(
+        &mut self,
+        chain_client: &ChainClient<Env>,
+        contract: PathBuf,
+        service: PathBuf,
+        vm_runtime: VmRuntime,
+        snap_path: PathBuf,
+        registry_application_id: ApplicationId,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<(ApplicationId, ModuleId), Error> {
+        let (blobs, module_id, registry_op_bytes) = self
+            .prepare_bcs_publication(&contract, &service, vm_runtime, &snap_path)
+            .await?;
+
+        info!("Publishing module, registering its formats and creating the application");
+        let application_id = self
+            .apply_client_command(chain_client, |chain_client| {
+                let blobs = blobs.clone();
+                let registry_op_bytes = registry_op_bytes.clone();
+                let parameters = parameters.clone();
+                let instantiation_argument = instantiation_argument.clone();
+                let required_application_ids = required_application_ids.clone();
+                let chain_client = chain_client.clone();
+                async move {
+                    let outcome: ClientOutcome<ConfirmedBlockCertificate> = chain_client
+                        .execute_operations(
+                            vec![
+                                Operation::system(SystemOperation::PublishModule { module_id }),
+                                Operation::User {
+                                    application_id: registry_application_id,
+                                    bytes: registry_op_bytes,
+                                },
+                                Operation::system(SystemOperation::CreateApplication {
+                                    module_id,
+                                    parameters,
+                                    instantiation_argument,
+                                    required_application_ids,
+                                }),
+                            ],
+                            blobs,
+                        )
+                        .await?;
+                    outcome.try_map(|certificate| {
+                        let mut creation: Vec<_> = certificate
+                            .block()
+                            .created_blob_ids()
+                            .into_iter()
+                            .filter(|blob_id| {
+                                blob_id.blob_type == BlobType::ApplicationDescription
+                            })
+                            .collect();
+                        if creation.len() != 1 {
+                            return Err(chain_client::Error::InternalError(
+                                "Unexpected number of application descriptions published",
+                            ));
+                        }
+                        let blob_id = creation.pop().expect("checked length");
+                        Ok(ApplicationId::new(blob_id.hash))
+                    })
+                }
+            })
+            .await?;
+
+        info!(
+            "{}",
+            "Module published, formats registered and application created successfully!"
+        );
+        info!("Synchronizing client and processing inbox");
+        self.process_inbox(chain_client).await?;
+        Ok((application_id, module_id))
+    }
+
+    /// Loads the bytecode files and the SNAP file, builds the bytecode blobs and
+    /// the BCS-encoded formats-registry write operation.
+    async fn prepare_bcs_publication(
+        &self,
+        contract: &Path,
+        service: &Path,
+        vm_runtime: VmRuntime,
+        snap_path: &Path,
+    ) -> Result<(Vec<linera_base::data_types::Blob>, ModuleId, Vec<u8>), Error> {
+        info!("Loading bytecode files");
+        let contract_bytecode = Bytecode::load_from_file(contract).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("failed to load contract bytecode from {contract:?}: {e}"),
+            )
+        })?;
+        let service_bytecode = Bytecode::load_from_file(service).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("failed to load service bytecode from {service:?}: {e}"),
+            )
+        })?;
+
+        let (blobs, module_id) =
+            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
+
+        info!("Loading formats from {snap_path:?}");
+        let formats = read_formats_from_snap(snap_path)?;
+        let value = serde_json::to_vec(&formats).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("failed to serialize Formats as JSON: {e}"),
+            )
+        })?;
+        let registry_op = linera_sdk::abis::formats_registry::Operation::Write {
+            module_id,
+            value,
+        };
+        let registry_op_bytes = bcs::to_bytes(&registry_op)?;
+        Ok((blobs, module_id, registry_op_bytes))
+    }
+}
+
+#[cfg(all(feature = "fs", not(web)))]
+fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, Error> {
+    let content = fs::read_to_string(path).map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("failed to read SNAP file {path:?}: {e}"),
+        )
+    })?;
+    let body = strip_snap_frontmatter(&content).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("SNAP file {path:?} is missing the `---` frontmatter delimiters"),
+        )
+    })?;
+    serde_yaml::from_str(body).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("failed to parse SNAP body in {path:?} as Formats: {e}"),
+        )
+        .into()
+    })
+}
+
+#[cfg(all(feature = "fs", not(web)))]
+fn strip_snap_frontmatter(content: &str) -> Option<&str> {
+    let rest = content.strip_prefix("---\n")?;
+    let end = rest.find("\n---\n")?;
+    Some(&rest[end + "\n---\n".len()..])
+}
+
 #[cfg(not(web))]
 impl<Env: Environment> ClientContext<Env> {
     pub async fn prepare_for_benchmark(

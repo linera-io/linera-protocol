@@ -5,8 +5,10 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use formats_registry::{FormatsRegistryAbi, Operation};
-use linera_sdk::test::{QueryOutcome, TestValidator};
+use linera_sdk::{
+    abis::formats_registry::{FormatsRegistryAbi, Operation},
+    test::{QueryOutcome, TestValidator},
+};
 
 /// Returns the GraphQL hex form of a `ModuleId`, as expected by the
 /// service's `get(moduleId: ...)` query.

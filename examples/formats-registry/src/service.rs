@@ -8,8 +8,8 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
+    abis::formats_registry::{FormatsRegistryAbi, Operation},
     linera_base_types::{ModuleId, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
