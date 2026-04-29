@@ -160,11 +160,6 @@ impl ServeOptions {
             .install_default()
             .expect("failed to install rustls crypto provider");
 
-        // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
-        rustls::crypto::ring::default_provider()
-            .install_default()
-            .expect("failed to install rustls crypto provider");
-
         Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
             self.wallet.as_deref(),
@@ -186,7 +181,7 @@ impl ServeOptions {
                 event_cache_size: self.event_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
-            self.monitor_scan_interval,
+            std::time::Duration::from_secs(self.monitor_scan_interval),
             self.monitor_start_block,
             self.max_retries,
             self.sqlite_path.as_deref(),
@@ -290,7 +285,7 @@ impl InitLightClientOptions {
             .find(|c| c.origin() == ChainOrigin::Root(0))
             .ok_or_else(|| anyhow::anyhow!("no admin chain (Root(0)) in genesis config"))?
             .id();
-        let admin_chain_bytes = <[u8; 32]>::from(*admin_chain_id.0.as_bytes());
+        let admin_chain_bytes = *admin_chain_id.0.as_bytes();
 
         let mut validators: Vec<String> = Vec::new();
         let mut weights: Vec<u64> = Vec::new();
