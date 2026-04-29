@@ -1548,6 +1548,7 @@ impl<Env: Environment> ChainClient<Env> {
         *proposal_guard = Some(PendingProposal {
             block: proposed_block,
             blobs,
+            round: None,
         });
         Ok(block)
     }
@@ -1989,6 +1990,9 @@ impl<Env: Environment> ChainClient<Env> {
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
         debug!("Proposing block for round {}", round);
+        if let Some(pending) = proposal_guard.as_mut() {
+            pending.round.get_or_insert(round);
+        }
 
         let already_handled_locally = info
             .manager

@@ -75,7 +75,10 @@ impl chain_listener::ClientContext for ClientContext {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let existing_owner = self.wallet().get(info.chain_id).and_then(|c| c.owner);
-        let pending_proposal = client.pending_proposal().await;
+        let pending_proposal = client
+            .pending_proposal()
+            .await
+            .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {

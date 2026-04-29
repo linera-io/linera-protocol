@@ -131,6 +131,7 @@ async fn test_save_wallet_with_pending_blobs() -> anyhow::Result<()> {
                         previous_block_hash: None,
                     },
                     blobs: vec![Blob::new_data(b"blob".to_vec())],
+                    round: None,
                 }),
                 ..admin_description.into()
             },

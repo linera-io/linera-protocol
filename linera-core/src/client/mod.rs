@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta, Timestamp,
+        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -2000,6 +2000,9 @@ impl Drop for AbortOnDrop {
 pub struct PendingProposal {
     pub block: ProposedBlock,
     pub blobs: Vec<Blob>,
+    /// The round in which this proposal was first submitted, if any.
+    #[serde(default)]
+    pub round: Option<Round>,
 }
 
 enum ReceiveCertificateMode {
