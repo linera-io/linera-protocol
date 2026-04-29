@@ -614,7 +614,7 @@ where
             .map_err(Self::view_error_to_status)?;
         let blob = blob
             .map(Arc::unwrap_or_clone)
-            .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+            .ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
 
@@ -634,7 +634,7 @@ where
             |(blob_id, maybe_blob)| {
                 let blob = maybe_blob
                     .map(Arc::unwrap_or_clone)
-                    .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+                    .ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
                 BlobContent::try_from(blob.into_content())
                     .map_err(|err| Status::internal(err.to_string()))
             },
@@ -705,7 +705,7 @@ where
             let certificates = match ResultReadCertificates::new(certificates, batch.to_vec()) {
                 ResultReadCertificates::Certificates(certificates) => certificates,
                 ResultReadCertificates::InvalidHashes(hashes) => {
-                    return Err(Status::not_found(format!("{:?}", hashes)))
+                    return Err(Status::not_found(format!("{hashes:?}")))
                 }
             };
             for certificate in certificates {
@@ -810,10 +810,10 @@ where
             .await
             .map_err(Self::view_error_to_status)?;
         let blob_state =
-            blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+            blob_state.ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
         let last_used_by = blob_state
             .last_used_by
-            .ok_or_else(|| Status::not_found(format!("Blob not found {}", blob_id)))?;
+            .ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
         Ok(Response::new(last_used_by.into()))
     }
 

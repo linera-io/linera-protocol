@@ -127,8 +127,8 @@ impl ClientWrapper {
             path_provider.path().display(),
             id
         );
-        let wallet = format!("wallet_{}.json", id);
-        let keystore = format!("keystore_{}.json", id);
+        let wallet = format!("wallet_{id}.json");
+        let keystore = format!("keystore_{id}.json");
         let binary_path = binary_dir.map(|dir| dir.join("linera"));
         Self {
             binary_path: sync::Mutex::new(binary_path),
@@ -394,7 +394,7 @@ impl ClientWrapper {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
         let mut command = self.command().await?;
-        let vm_runtime = format!("{}", vm_runtime);
+        let vm_runtime = format!("{vm_runtime}");
         command
             .arg("publish-and-create")
             .args([contract, service])
@@ -427,7 +427,7 @@ impl ClientWrapper {
             .await?
             .arg("publish-module")
             .args([contract, service])
-            .args(["--vm-runtime", &format!("{}", vm_runtime).to_lowercase()])
+            .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
@@ -543,7 +543,7 @@ impl ClientWrapper {
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let request = client
-                .get(format!("http://localhost:{}/", port))
+                .get(format!("http://localhost:{port}/"))
                 .send()
                 .await;
             if request.is_ok() {
@@ -584,7 +584,7 @@ impl ClientWrapper {
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let request = client
-                .get(format!("http://localhost:{}/", port))
+                .get(format!("http://localhost:{port}/"))
                 .send()
                 .await;
             if request.is_ok() {
@@ -675,7 +675,7 @@ impl ClientWrapper {
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
             let request = client
-                .get(format!("http://localhost:{}/", port))
+                .get(format!("http://localhost:{port}/"))
                 .send()
                 .await;
             if request.is_ok() {
@@ -1217,10 +1217,10 @@ impl ClientWrapper {
             add_validators.iter().chain(modify_validators.iter())
         {
             let public_key = ValidatorPublicKey::from_str(public_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", public_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {public_key_str}"))?;
 
             let account_key = AccountPublicKey::from_str(account_key_str)
-                .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
+                .with_context(|| format!("Invalid account public key: {account_key_str}"))?;
 
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port)
                 .parse()
@@ -1241,7 +1241,7 @@ impl ClientWrapper {
         // Remove validators (set to None)
         for validator_key_str in remove_validators {
             let public_key = ValidatorPublicKey::from_str(validator_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", validator_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {validator_key_str}"))?;
             changes.insert(public_key, None);
         }
 
@@ -2033,7 +2033,7 @@ impl<A> ApplicationWrapper<A> {
     pub async fn multiple_mutate(&self, mutations: &[String]) -> Result<Value> {
         let mut out = String::from("mutation {\n");
         for (index, mutation) in mutations.iter().enumerate() {
-            out = format!("{}  u{}: {}\n", out, index, mutation);
+            out = format!("{out}  u{index}: {mutation}\n");
         }
         out.push_str("}\n");
         self.run_graphql_query(&out).await

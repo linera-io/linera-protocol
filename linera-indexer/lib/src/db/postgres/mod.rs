@@ -141,7 +141,7 @@ impl PostgresDatabase {
     ) -> Result<(), PostgresError> {
         // Deserialize the block to extract denormalized data
         let block: Block = bincode::deserialize(data).map_err(|e| {
-            PostgresError::Serialization(format!("Failed to deserialize block: {}", e))
+            PostgresError::Serialization(format!("Failed to deserialize block: {e}"))
         })?;
 
         // Count aggregated data
@@ -291,7 +291,7 @@ impl PostgresDatabase {
         };
 
         let data = bincode::serialize(operation).map_err(|e| {
-            PostgresError::Serialization(format!("Failed to serialize operation: {}", e))
+            PostgresError::Serialization(format!("Failed to serialize operation: {e}"))
         })?;
 
         sqlx::query(
@@ -413,8 +413,7 @@ impl PostgresDatabase {
                 OracleResponse::Http(http_response) => {
                     let serialized = bincode::serialize(http_response).map_err(|e| {
                         PostgresError::Serialization(format!(
-                            "Failed to serialize HTTP response: {}",
-                            e
+                            "Failed to serialize HTTP response: {e}"
                         ))
                     })?;
                     ("Http", None, Some(serialized))
@@ -422,21 +421,20 @@ impl PostgresDatabase {
                 OracleResponse::Assert => ("Assert", None, None),
                 OracleResponse::Round(round) => {
                     let serialized = bincode::serialize(round).map_err(|e| {
-                        PostgresError::Serialization(format!("Failed to serialize round: {}", e))
+                        PostgresError::Serialization(format!("Failed to serialize round: {e}"))
                     })?;
                     ("Round", None, Some(serialized))
                 }
                 OracleResponse::Event(stream_id, index) => {
                     let serialized = bincode::serialize(&(stream_id, index)).map_err(|e| {
-                        PostgresError::Serialization(format!("Failed to serialize event: {}", e))
+                        PostgresError::Serialization(format!("Failed to serialize event: {e}"))
                     })?;
                     ("Event", None, Some(serialized))
                 }
                 OracleResponse::EventExists(event_exists) => {
                     let serialized = bincode::serialize(event_exists).map_err(|e| {
                         PostgresError::Serialization(format!(
-                            "Failed to serialize event exists: {}",
-                            e
+                            "Failed to serialize event exists: {e}"
                         ))
                     })?;
                     ("EventExists", None, Some(serialized))
@@ -801,7 +799,7 @@ impl PostgresDatabase {
             let index = row.get::<i64, _>("operation_index") as usize;
             let data: Vec<u8> = row.get("data");
             let operation: Operation = bincode::deserialize(&data).map_err(|e| {
-                PostgresError::Serialization(format!("Failed to deserialize operation: {}", e))
+                PostgresError::Serialization(format!("Failed to deserialize operation: {e}"))
             })?;
             operations.push((index, operation));
         }
@@ -904,22 +902,22 @@ impl PostgresDatabase {
 
         if chain_id.is_some() {
             param_count += 1;
-            query.push_str(&format!(" AND chain_id = ${}", param_count));
+            query.push_str(&format!(" AND chain_id = ${param_count}"));
         }
 
         if epoch.is_some() {
             param_count += 1;
-            query.push_str(&format!(" AND epoch = ${}", param_count));
+            query.push_str(&format!(" AND epoch = ${param_count}"));
         }
 
         if min_operations.is_some() {
             param_count += 1;
-            query.push_str(&format!(" AND operation_count >= ${}", param_count));
+            query.push_str(&format!(" AND operation_count >= ${param_count}"));
         }
 
         if min_messages.is_some() {
             param_count += 1;
-            query.push_str(&format!(" AND message_count >= ${}", param_count));
+            query.push_str(&format!(" AND message_count >= ${param_count}"));
         }
 
         query.push_str(" ORDER BY height DESC");
@@ -1007,13 +1005,13 @@ impl PostgresDatabase {
     /// Serialize a Message with consistent error handling
     fn serialize_message(message: &Message) -> Result<Vec<u8>, PostgresError> {
         bincode::serialize(message).map_err(|e| {
-            PostgresError::Serialization(format!("Failed to serialize message: {}", e))
+            PostgresError::Serialization(format!("Failed to serialize message: {e}"))
         })
     }
 
     fn deserialize_message(data: &[u8]) -> Result<Message, PostgresError> {
         bincode::deserialize(data).map_err(|e| {
-            PostgresError::Serialization(format!("Failed to deserialize message: {}", e))
+            PostgresError::Serialization(format!("Failed to deserialize message: {e}"))
         })
     }
 }

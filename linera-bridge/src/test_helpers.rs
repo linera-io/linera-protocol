@@ -354,13 +354,13 @@ pub fn deploy_contract(db: &mut CacheDB<EmptyDB>, deployer: Address, bytecode: V
     match result {
         ExecutionResult::Success { output, .. } => match output {
             Output::Create(_, Some(addr)) => addr,
-            other => panic!("expected Create output with address, got: {:?}", other),
+            other => panic!("expected Create output with address, got: {other:?}"),
         },
         ExecutionResult::Revert { output, .. } => {
             panic!("deployment reverted: {}", hex::encode(&output));
         }
         ExecutionResult::Halt { reason, .. } => {
-            panic!("deployment halted: {:?}", reason);
+            panic!("deployment halted: {reason:?}");
         }
     }
 }
@@ -413,12 +413,12 @@ pub fn try_call_contract<C: SolCall>(
                     .map_err(|e| format!("failed to decode return value: {e}"))?;
                 Ok((ret, logs, gas_used))
             }
-            other => Err(format!("expected Call output, got: {:?}", other)),
+            other => Err(format!("expected Call output, got: {other:?}")),
         },
         ExecutionResult::Revert { output, .. } => {
             Err(format!("call reverted: {}", hex::encode(&output)))
         }
-        ExecutionResult::Halt { reason, .. } => Err(format!("call halted: {:?}", reason)),
+        ExecutionResult::Halt { reason, .. } => Err(format!("call halted: {reason:?}")),
     }
 }
 

@@ -137,7 +137,7 @@ pub trait CommandExt: std::fmt::Debug {
 
     /// Description used for error reporting.
     fn description(&self) -> String {
-        format!("While executing {:?}", self)
+        format!("While executing {self:?}")
     }
 }
 

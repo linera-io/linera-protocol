@@ -368,11 +368,11 @@ where
     let block = cert.block();
     let responses = &block.body.oracle_responses;
     let [_, responses] = &responses[..] else {
-        panic!("Unexpected oracle responses: {:?}", responses);
+        panic!("Unexpected oracle responses: {responses:?}");
     };
     let [OracleResponse::Service(json)] = &responses[..] else {
         assert_eq!(&responses[..], &[]);
-        panic!("Unexpected oracle responses: {:?}", responses);
+        panic!("Unexpected oracle responses: {responses:?}");
     };
     let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
     assert_eq!(response_json["data"], json!({"value": 10}));
@@ -772,7 +772,7 @@ where
     // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
@@ -848,7 +848,7 @@ where
     // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
@@ -869,7 +869,7 @@ where
     // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
@@ -919,7 +919,7 @@ where
     // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
