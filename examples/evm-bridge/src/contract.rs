@@ -16,13 +16,15 @@ use linera_sdk::{
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
 
 /// On-chain state: tracks processed deposits, verified block hashes,
-/// and the registered wrapped-fungible application.
+/// the registered wrapped-fungible application, and the registered EVM
+/// FungibleBridge contract address.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<[u8; 32]>,
     pub verified_block_hashes: SetView<[u8; 32]>,
     pub fungible_app_id: RegisterView<Option<ApplicationId>>,
+    pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
 }
 
 pub struct EvmBridgeContract {
