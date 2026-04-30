@@ -171,6 +171,15 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_app_set)]
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
 
+    /// A set of application IDs whose messages must never be rejected. Bundles whose messages
+    /// are all from one of these applications bypass the other rejection rules (except
+    /// `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from
+    /// the same sender) are removed from the block for later retry instead of being rejected,
+    /// with a warning logged. Bundles that contain any message from an application not on this
+    /// list can be rejected.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub never_reject_application_ids: Option<HashSet<GenericApplicationId>>,
+
     /// Enable timing reports during operations
     #[cfg(not(web))]
     #[arg(long)]
@@ -313,14 +322,21 @@ impl Default for Options {
 impl Options {
     /// Creates [`chain_client::Options`] with the corresponding values.
     pub(crate) fn to_chain_client_options(&self) -> chain_client::Options {
-        let message_policy = MessagePolicy::new(
-            self.blanket_message_policy,
-            self.restrict_chain_ids_to.clone(),
-            self.reject_message_bundles_without_application_ids.clone(),
-            self.reject_message_bundles_with_other_application_ids
+        let message_policy = MessagePolicy {
+            blanket: self.blanket_message_policy,
+            restrict_chain_ids_to: self.restrict_chain_ids_to.clone(),
+            reject_message_bundles_without_application_ids: self
+                .reject_message_bundles_without_application_ids
                 .clone(),
-            self.process_events_from_application_ids.clone(),
-        );
+            reject_message_bundles_with_other_application_ids: self
+                .reject_message_bundles_with_other_application_ids
+                .clone(),
+            process_events_from_application_ids: self.process_events_from_application_ids.clone(),
+            never_reject_application_ids: self
+                .never_reject_application_ids
+                .clone()
+                .unwrap_or_default(),
+        };
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         chain_client::Options {

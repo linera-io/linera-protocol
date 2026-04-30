@@ -32,7 +32,7 @@ use linera_views::{
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::{
     block::{Block, ConfirmedBlock},
@@ -667,7 +667,7 @@ where
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
         chain_id = %block.chain_id,
         block_height = %block.height
@@ -681,10 +681,10 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
-        if !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort) {
+        if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
             assert!(
                 replaying_oracle_responses.is_none(),
                 "Cannot use AutoRetry policy when replaying oracle responses"
@@ -731,13 +731,17 @@ where
             block,
         )?;
 
-        // Extract max_failures from exec_policy.
-        let max_failures = match exec_policy.on_failure {
-            BundleFailurePolicy::Abort => 0,
-            BundleFailurePolicy::AutoRetry { max_failures } => max_failures,
+        // Extract failure-policy parameters from exec_policy.
+        let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
+            BundleFailurePolicy::Abort => (0, Arc::new(HashSet::new())),
+            BundleFailurePolicy::AutoRetry {
+                max_failures,
+                never_reject_application_ids,
+            } => (*max_failures, never_reject_application_ids.clone()),
         };
         let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
+        let mut never_reject_discarded_origins = HashSet::new();
 
         let time_budget = exec_policy.time_budget;
         let mut cumulative_bundle_time = Duration::ZERO;
@@ -824,25 +828,47 @@ where
                     // Do not increment i - the next transaction is now at i.
                 }
                 (
-                    Err(ChainError::ExecutionError(error, _context)),
+                    Err(ChainError::ExecutionError(error, context)),
                     Transaction::ReceiveMessages(incoming_bundle),
                     Some((saved_chain, saved_tracker)),
-                ) if !error.is_transient_error()
-                    && !incoming_bundle.bundle.is_protected()
-                    && incoming_bundle.action != MessageAction::Reject =>
-                {
+                ) if !error.is_transient_error() => {
                     // Restore checkpoint.
                     *chain = saved_chain;
                     block_execution_tracker.restore_checkpoint(&saved_tracker);
-                    // Reject the bundle: either a non-limit error, or the first bundle
-                    // exceeded limits (and is inherently too large for any block).
-                    info!(
-                        %error,
-                        index = i,
-                        origin = %incoming_bundle.origin,
-                        "Message bundle failed to execute and will be rejected"
-                    );
-                    incoming_bundle.action = MessageAction::Reject;
+
+                    let all_messages_never_reject = !never_reject_application_ids.is_empty()
+                        && incoming_bundle.messages().all(|posted_msg| {
+                            never_reject_application_ids
+                                .contains(&posted_msg.message.application_id())
+                        });
+                    if (all_messages_never_reject || incoming_bundle.bundle.is_protected())
+                        && incoming_bundle.action != MessageAction::Reject
+                    {
+                        let origin = incoming_bundle.origin;
+                        never_reject_discarded_origins.insert(origin);
+                        warn!(
+                            %error,
+                            index = i,
+                            %origin,
+                            "Message bundle cannot be rejected (protected or never-reject); \
+                            discarding the bundle (and same-sender subsequent bundles) for retry \
+                            in a later block"
+                        );
+                        Self::discard_remaining_bundles(block, i, Some(origin));
+                    } else if incoming_bundle.action == MessageAction::Reject {
+                        // Failed rejected bundles fail the block.
+                        return Err(ChainError::ExecutionError(error, context));
+                    } else {
+                        // Reject the bundle: either a non-limit error, or the first bundle
+                        // exceeded limits (and is inherently too large for any block).
+                        info!(
+                            %error,
+                            index = i,
+                            origin = %incoming_bundle.origin,
+                            "Message bundle failed to execute and will be rejected"
+                        );
+                        incoming_bundle.action = MessageAction::Reject;
+                    }
                     // Do not increment i - retry the transaction after modification.
                 }
                 (
@@ -952,6 +978,7 @@ where
                 operation_results,
             },
             resource_tracker,
+            never_reject_discarded_origins,
         ))
     }
 
@@ -1005,7 +1032,15 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            BlockExecutionOutcome,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        ChainError,
+    > {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
@@ -1056,7 +1091,9 @@ where
             policy,
         )
         .await
-        .map(|(outcome, tracker)| (block, outcome, tracker))
+        .map(|(outcome, tracker, never_reject_origins)| {
+            (block, outcome, tracker, never_reject_origins)
+        })
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain

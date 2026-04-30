@@ -1599,6 +1599,12 @@ pub struct MessagePolicy {
     /// A collection of applications: If `Some`, only event streams from those
     /// applications will be processed.
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications whose messages must never be rejected. Bundles whose
+    /// messages are all from one of these applications bypass the other rejection rules
+    /// (except `restrict_chain_ids_to`), and on execution failure they are discarded for
+    /// later retry instead of being rejected. A bundle that contains any message from an
+    /// application not on this list can be rejected. An empty set disables this feature.
+    pub never_reject_application_ids: HashSet<GenericApplicationId>,
 }
 
 /// A blanket policy to apply to all messages by default.
@@ -1628,35 +1634,6 @@ pub enum BlanketMessagePolicy {
 }
 
 impl MessagePolicy {
-    /// Constructs a new `MessagePolicy`.
-    pub fn new(
-        blanket: BlanketMessagePolicy,
-        restrict_chain_ids_to: Option<HashSet<ChainId>>,
-        reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
-        reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
-        process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
-    ) -> Self {
-        Self {
-            blanket,
-            restrict_chain_ids_to,
-            reject_message_bundles_without_application_ids,
-            reject_message_bundles_with_other_application_ids,
-            process_events_from_application_ids,
-        }
-    }
-
-    /// Constructs a new `MessagePolicy` that accepts all messages.
-    #[cfg(with_testing)]
-    pub fn new_accept_all() -> Self {
-        Self {
-            blanket: BlanketMessagePolicy::Accept,
-            restrict_chain_ids_to: None,
-            reject_message_bundles_without_application_ids: None,
-            reject_message_bundles_with_other_application_ids: None,
-            process_events_from_application_ids: None,
-        }
-    }
-
     /// Returns `true` if the blanket policy is to ignore messages.
     #[instrument(level = "trace", skip(self))]
     pub fn is_ignore(&self) -> bool {

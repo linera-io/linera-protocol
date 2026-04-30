@@ -68,7 +68,7 @@ where
     Ctx::Environment: 'static,
     <Ctx::Environment as linera_core::Environment>::Storage: Clone,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         chain_id: ChainId,
         controller_id: ApplicationId,

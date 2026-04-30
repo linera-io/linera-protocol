@@ -1148,7 +1148,7 @@ pub enum DatabaseToolCommand {
     ListEventIds,
 }
 
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 #[derive(Clone, clap::Parser)]
 pub enum NetCommand {
     /// Start a Local Linera Network

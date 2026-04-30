@@ -587,21 +587,10 @@ impl Block {
             && *previous_block_hash == self.header.previous_block_hash
     }
 
-    /// Returns whether the outcomes of the block's execution match the passed values.
-    #[cfg(with_testing)]
-    #[expect(clippy::too_many_arguments)]
-    pub fn outcome_matches(
-        &self,
-        expected_messages: &[Vec<OutgoingMessage>],
-        expected_previous_message_blocks: &BTreeMap<ChainId, (CryptoHash, BlockHeight)>,
-        expected_previous_event_blocks: &BTreeMap<StreamId, (CryptoHash, BlockHeight)>,
-        expected_oracle_responses: &[Vec<OracleResponse>],
-        expected_events: &[Vec<Event>],
-        expected_blobs: &[Vec<Blob>],
-        expected_operation_results: &[OperationResult],
-    ) -> bool {
-        let BlockBody {
-            transactions: _,
+    /// Returns whether the block's execution produced the given outcome.
+    pub fn outcome_matches(&self, expected: &BlockExecutionOutcome) -> bool {
+        let BlockExecutionOutcome {
+            state_hash,
             messages,
             previous_message_blocks,
             previous_event_blocks,
@@ -609,14 +598,15 @@ impl Block {
             events,
             blobs,
             operation_results,
-        } = &self.body;
-        messages == expected_messages
-            && previous_message_blocks == expected_previous_message_blocks
-            && previous_event_blocks == expected_previous_event_blocks
-            && oracle_responses == expected_oracle_responses
-            && events == expected_events
-            && blobs == expected_blobs
-            && operation_results == expected_operation_results
+        } = expected;
+        self.header.state_hash == *state_hash
+            && self.body.messages == *messages
+            && self.body.previous_message_blocks == *previous_message_blocks
+            && self.body.previous_event_blocks == *previous_event_blocks
+            && self.body.oracle_responses == *oracle_responses
+            && self.body.events == *events
+            && self.body.blobs == *blobs
+            && self.body.operation_results == *operation_results
     }
 
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {

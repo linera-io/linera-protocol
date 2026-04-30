@@ -146,7 +146,7 @@ impl Options {
             max_pending_message_bundles: 10,
             max_block_limit_errors: 3,
             staging_bundles_time_budget: None,
-            message_policy: MessagePolicy::new_accept_all(),
+            message_policy: MessagePolicy::default(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
@@ -169,6 +169,9 @@ impl Options {
         BundleExecutionPolicy {
             on_failure: BundleFailurePolicy::AutoRetry {
                 max_failures: self.max_block_limit_errors,
+                never_reject_application_ids: Arc::new(
+                    self.message_policy.never_reject_application_ids.clone(),
+                ),
             },
             time_budget: self.staging_bundles_time_budget,
         }
@@ -199,6 +202,9 @@ pub struct ChainClient<Env: Environment> {
     initial_block_hash: Option<CryptoHash>,
     /// Optional timing sender for benchmarking.
     timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
+    /// Sender chain IDs whose bundles were discarded due to the never-reject policy.
+    /// These origins are excluded from `process_inbox` until the client is restarted.
+    skipped_origins: Arc<papaya::HashSet<ChainId>>,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -211,6 +217,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
             initial_next_block_height: self.initial_next_block_height,
             initial_block_hash: self.initial_block_hash,
             timing_sender: self.timing_sender.clone(),
+            skipped_origins: self.skipped_origins.clone(),
         }
     }
 }
@@ -321,6 +328,12 @@ pub enum Error {
          The committed certificate hash is {0}"
     )]
     Conflict(CryptoHash),
+
+    #[error(
+        "Execution outcome mismatch: AutoRetry and committed execution produced \
+         different outcomes for the same block"
+    )]
+    ExecutionOutcomeMismatch,
 }
 
 impl From<Infallible> for Error {
@@ -353,6 +366,7 @@ impl<Env: Environment> ChainClient<Env> {
             initial_block_hash,
             initial_next_block_height,
             timing_sender,
+            skipped_origins: Arc::new(papaya::HashSet::new()),
         }
     }
 
@@ -550,10 +564,12 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
+        let skipped = self.skipped_origins.pin();
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
+            .filter(|bundle| !skipped.contains(&bundle.origin))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
@@ -1484,7 +1500,7 @@ impl<Env: Environment> ChainClient<Env> {
         let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let (block, _) = self
+        let (block, _, never_reject_origins) = self
             .client
             .stage_block_execution(
                 proposed_block,
@@ -1493,10 +1509,19 @@ impl<Env: Environment> ChainClient<Env> {
                 self.options.bundle_execution_policy(),
             )
             .await?;
-        let (proposed_block, _) = block.clone().into_proposal();
+        // Record origins whose bundles were discarded due to the never-reject policy so
+        // that `process_inbox` stops retrying them until the client is restarted.
+        if !never_reject_origins.is_empty() {
+            let skipped = self.skipped_origins.pin();
+            for origin in never_reject_origins {
+                skipped.insert(origin);
+            }
+        }
+        let (proposed_block, auto_retry_outcome) = block.clone().into_proposal();
         *proposal_guard = Some(PendingProposal {
             block: proposed_block,
             blobs,
+            auto_retry_outcome: Some(auto_retry_outcome),
         });
         Ok(block)
     }
@@ -1671,7 +1696,7 @@ impl<Env: Environment> ChainClient<Env> {
             )
             .await
         {
-            Ok((_, response)) => Ok((
+            Ok((_, response, _)) => Ok((
                 response.info.chain_balance,
                 response.info.requested_owner_balance,
             )),
@@ -1898,7 +1923,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .get_locking_blobs(&blob_ids, self.chain_id)
                         .await?
                         .ok_or_else(|| Error::InternalError("Missing local locking blobs"))?;
-                    let block = self
+                    let (block, _, _) = self
                         .client
                         .stage_block_execution(
                             proposed_block,
@@ -1906,8 +1931,7 @@ impl<Env: Environment> ChainClient<Env> {
                             blobs.clone(),
                             BundleExecutionPolicy::committed(),
                         )
-                        .await?
-                        .0;
+                        .await?;
                     debug!("Retrying locking block from fast round.");
                     (block, blobs)
                 }
@@ -1916,8 +1940,9 @@ impl<Env: Environment> ChainClient<Env> {
             // Otherwise we are free to propose our own pending block.
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
+            let staging_outcome = pending.auto_retry_outcome.as_ref();
             let round = self.round_for_oracle(&info, &owner).await?;
-            let (block, _) = self
+            let (block, _, _) = self
                 .client
                 .stage_block_execution(
                     proposed_block,
@@ -1926,6 +1951,15 @@ impl<Env: Environment> ChainClient<Env> {
                     BundleExecutionPolicy::committed(),
                 )
                 .await?;
+            // Sanity check: the committed execution should produce the same outcome
+            // as the initial AutoRetry execution. A mismatch indicates a divergence
+            // between the two execution paths.
+            if let Some(staging_outcome) = staging_outcome {
+                ensure!(
+                    block.outcome_matches(staging_outcome),
+                    Error::ExecutionOutcomeMismatch
+                );
+            }
             debug!("Proposing the local pending block.");
             (block, blobs)
         } else {

@@ -28,7 +28,10 @@ use linera_base::{
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
-    data_types::{BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote, ProposedBlock},
+    data_types::{
+        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
+        ProposedBlock,
+    },
     manager::LockingBlock,
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
@@ -266,7 +269,7 @@ pub struct Client<Env: Environment> {
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         environment: Env,
         admin_chain_id: ChainId,
@@ -1946,12 +1949,17 @@ impl<Env: Environment> Client<Env> {
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
+    ) -> Result<(Block, ChainInfoResponse, HashSet<ChainId>), chain_client::Error> {
         let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone(), policy)
+                .stage_block_execution(
+                    block.clone(),
+                    round,
+                    published_blobs.clone(),
+                    policy.clone(),
+                )
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
@@ -1972,7 +1980,7 @@ impl<Env: Environment> Client<Env> {
                 }
                 // All reported events were already downloaded; don't loop forever.
             }
-            if let Ok((_, executed_block, _, _)) = &result {
+            if let Ok((_, executed_block, _, _, _)) = &result {
                 let hash = CryptoHash::new(executed_block);
                 let notification = Notification {
                     chain_id: executed_block.header.chain_id,
@@ -1983,8 +1991,14 @@ impl<Env: Environment> Client<Env> {
                 };
                 self.notifier.notify(&[notification]);
             }
-            let (_modified_block, executed_block, response, _resource_tracker) = result?;
-            return Ok((executed_block, response));
+            let (
+                _modified_block,
+                executed_block,
+                response,
+                _resource_tracker,
+                never_reject_origins,
+            ) = result?;
+            return Ok((executed_block, response, never_reject_origins));
         }
     }
 }
@@ -2043,6 +2057,10 @@ impl Drop for AbortOnDrop {
 pub struct PendingProposal {
     pub block: ProposedBlock,
     pub blobs: Vec<Blob>,
+    /// The execution outcome from the AutoRetry execution, used as a sanity check
+    /// against the committed execution outcome.
+    #[serde(default)]
+    pub auto_retry_outcome: Option<BlockExecutionOutcome>,
 }
 
 enum ReceiveCertificateMode {
