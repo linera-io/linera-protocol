@@ -360,6 +360,19 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
             }
             let new_key_values = view.map.key_values().await?;
             assert_eq!(new_state_vec, new_key_values);
+            // Global first/last over the whole map (empty prefix returns full keys).
+            let global_first = new_state_vec.first().cloned();
+            let global_last = new_state_vec.last().cloned();
+            assert_eq!(
+                view.map.first_key(Vec::new()).await?,
+                global_first.as_ref().map(|(k, _)| k.clone())
+            );
+            assert_eq!(
+                view.map.last_key(Vec::new()).await?,
+                global_last.as_ref().map(|(k, _)| k.clone())
+            );
+            assert_eq!(view.map.first_key_value(Vec::new()).await?, global_first);
+            assert_eq!(view.map.last_key_value(Vec::new()).await?, global_last);
             for u in 0..4 {
                 let part_state_vec = new_state_vec
                     .iter()
@@ -368,6 +381,23 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                     .collect::<Vec<_>>();
                 let part_key_values = view.map.key_values_by_prefix(vec![u]).await?;
                 assert_eq!(part_state_vec, part_key_values);
+                // first/last_{key,key_value} return keys with the prefix stripped.
+                let stripped = part_state_vec
+                    .iter()
+                    .map(|(k, v)| (k[1..].to_vec(), *v))
+                    .collect::<Vec<_>>();
+                let expected_first = stripped.first().cloned();
+                let expected_last = stripped.last().cloned();
+                assert_eq!(
+                    view.map.first_key(vec![u]).await?,
+                    expected_first.as_ref().map(|(k, _)| k.clone())
+                );
+                assert_eq!(
+                    view.map.last_key(vec![u]).await?,
+                    expected_last.as_ref().map(|(k, _)| k.clone())
+                );
+                assert_eq!(view.map.first_key_value(vec![u]).await?, expected_first);
+                assert_eq!(view.map.last_key_value(vec![u]).await?, expected_last);
             }
             let keys_vec = all_keys.iter().cloned().collect::<Vec<_>>();
             let values = view.map.multi_get(keys_vec.clone()).await?;
