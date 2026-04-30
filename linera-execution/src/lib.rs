@@ -1507,6 +1507,14 @@ impl Operation {
                 | SystemOperation::UpdateStream { .. }
         )
     }
+
+    /// Returns whether this operation is an `UpdateStream` operation.
+    pub fn is_update_stream(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        matches!(**system_op, SystemOperation::UpdateStream { .. })
+    }
 }
 
 impl From<SystemMessage> for Message {

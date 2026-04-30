@@ -25,9 +25,7 @@ use linera_base::{
     },
     time::Duration,
 };
-use linera_execution::{
-    committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemOperation,
-};
+use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -166,8 +164,7 @@ impl Transaction {
     pub fn is_update_stream(&self) -> bool {
         matches!(
             self,
-            Transaction::ExecuteOperation(Operation::System(op))
-            if matches!(**op, SystemOperation::UpdateStream { .. })
+            Transaction::ExecuteOperation(op) if op.is_update_stream()
         )
     }
 }
