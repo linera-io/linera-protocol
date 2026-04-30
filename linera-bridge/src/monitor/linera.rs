@@ -11,6 +11,7 @@ use std::{
 };
 
 use alloy::{primitives::Address, providers::Provider};
+use linera_base::data_types::BlockHeight;
 use tokio::sync::RwLock;
 
 use super::{MonitorState, PendingBurn};
@@ -48,10 +49,10 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
             let state = monitor.read().await;
             for b in state.burns_ready_for_retry(max_retries) {
                 let _ = pending_burn_tx.try_send(PendingBurn {
-                    linera_height: b.value.linera_height,
+                    height: b.value.height,
                     burn_index: b.value.burn_index,
-                    evm_recipient: b.value.evm_recipient.clone(),
-                    amount: b.value.amount.clone(),
+                    evm_recipient: b.value.evm_recipient,
+                    amount: b.value.amount,
                 });
             }
         }
@@ -60,7 +61,7 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
         tracing::trace!(
             pending = summary.burns_pending,
             completed = summary.burns_forwarded,
-            last_height = summary.last_scanned_linera_height,
+            last_height = %summary.last_scanned_linera_height,
             "Linera burn scan complete"
         );
 
@@ -77,14 +78,14 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
     mut pending_rx: tokio::sync::mpsc::Receiver<PendingBurn>,
 ) -> anyhow::Result<()> {
     while let Some(pending) = pending_rx.recv().await {
-        let credit_height = pending.linera_height;
+        let credit_height = pending.height;
         let burn_index = pending.burn_index;
         {
             let mut state = monitor.write().await;
             if let Some(b) = state.burns.get_mut(&(credit_height, burn_index)) {
                 if b.forwarded {
                     tracing::trace!(
-                        credit_height,
+                        ?credit_height,
                         burn_index,
                         "Burn already completed, skipping"
                     );
@@ -96,7 +97,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             }
         }
 
-        tracing::info!(credit_height, burn_index, "Processing burn...");
+        tracing::info!(?credit_height, burn_index, "Processing burn...");
 
         // Read the certificate at the burn's block height (already contains the auto-burn).
         let cert = match async {
@@ -108,7 +109,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
                     anyhow::bail!("Block at height {} not found", credit_height);
                 };
                 let c = linera_client.read_certificate(h).await?;
-                if c.block().header.height.0 == credit_height {
+                if c.block().header.height == credit_height {
                     break Ok(c);
                 }
                 hash = c.block().header.previous_block_hash;
@@ -119,7 +120,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             Ok(cert) => cert,
             Err(e) => {
                 tracing::warn!(
-                    credit_height,
+                    ?credit_height,
                     burn_index,
                     "Failed to read certificate: {e:#}"
                 );
@@ -140,7 +141,7 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
                 .await
             {
                 tracing::warn!(
-                    credit_height,
+                    ?credit_height,
                     burn_index,
                     "Failed to store burn raw bytes: {e:#}"
                 );
@@ -150,16 +151,16 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
         // Forward cert to EVM.
         let completed = match evm_client.forward_cert(&cert).await {
             Ok(()) => {
-                tracing::info!(credit_height, burn_index, "Burn forwarded to EVM");
+                tracing::info!(?credit_height, burn_index, "Burn forwarded to EVM");
                 true
             }
             Err(e) => {
                 let msg = format!("{e:#}");
                 if msg.contains("already verified") {
-                    tracing::trace!(credit_height, burn_index, "Block already verified on EVM");
+                    tracing::trace!(?credit_height, burn_index, "Block already verified on EVM");
                     true
                 } else {
-                    tracing::warn!(credit_height, burn_index, "EVM forwarding failed: {e:#}");
+                    tracing::warn!(?credit_height, burn_index, "EVM forwarding failed: {e:#}");
                     monitor
                         .write()
                         .await
@@ -191,8 +192,8 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
 
     linera_client.sync().await?;
     let info = linera_client.chain_info().await?;
-    let current_height = info.next_block_height.0;
-    if current_height == 0 || current_height <= last_height {
+    let current_height = info.next_block_height;
+    if current_height.0 == 0 || current_height <= last_height {
         return Ok(());
     }
 
@@ -202,7 +203,7 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     let mut hash = info.block_hash;
     while let Some(h) = hash {
         let block = linera_client.read_confirmed_block(h).await?;
-        let height = block.block().header.height.0;
+        let height = block.block().header.height;
         if height < last_height {
             break;
         }
@@ -213,27 +214,31 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
 
     let mut new_burns = Vec::new();
     for block in &blocks {
-        let height = block.block().header.height.0;
+        let height = block.block().header.height;
         let burn_events = find_burn_events(&block.block().body.events, fungible_app_id);
         for (burn_index, burn_event) in burn_events.into_iter().enumerate() {
-            let recipient = format!("0x{}", hex::encode(burn_event.target));
-            new_burns.push((height, burn_index, recipient, burn_event.amount.to_string()));
+            new_burns.push((
+                height,
+                burn_index,
+                Address::from(burn_event.target),
+                burn_event.amount,
+            ));
         }
     }
 
     for (height, burn_index, recipient, amount) in &new_burns {
-        tracing::info!(height, burn_index, recipient, amount, "Discovered burn");
+        tracing::info!(?height, burn_index, %recipient, %amount, "Discovered burn");
         let _ = pending_burn_tx.try_send(PendingBurn {
-            linera_height: *height,
+            height: *height,
             burn_index: *burn_index,
-            evm_recipient: recipient.clone(),
-            amount: amount.clone(),
+            evm_recipient: *recipient,
+            amount: *amount,
         });
     }
 
     let mut state = monitor.write().await;
     state.last_scanned_linera_height = current_height;
-    crate::relay::metrics::set_last_scanned_linera_height(current_height);
+    crate::relay::metrics::set_last_scanned_linera_height(current_height.0);
     Ok(())
 }
 
@@ -241,15 +246,12 @@ async fn check_burn_completion(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
 ) -> anyhow::Result<()> {
-    let pending: Vec<(u64, usize, Address)> = {
+    let pending: Vec<(BlockHeight, usize, Address)> = {
         let state = monitor.read().await;
         state
             .pending_burns()
             .into_iter()
-            .filter_map(|b| {
-                let addr: Address = b.value.evm_recipient.parse().ok()?;
-                Some((b.value.linera_height, b.value.burn_index, addr))
-            })
+            .map(|b| (b.value.height, b.value.burn_index, b.value.evm_recipient))
             .collect()
     };
 

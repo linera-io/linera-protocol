@@ -157,7 +157,7 @@ impl ServeOptions {
             self.evm_light_client_address.as_deref(),
             self.port,
             &self.common_storage_options,
-            self.monitor_scan_interval,
+            std::time::Duration::from_secs(self.monitor_scan_interval),
             self.monitor_start_block,
             self.max_retries,
             self.sqlite_path.as_deref(),
@@ -261,7 +261,7 @@ impl InitLightClientOptions {
             .find(|c| c.origin() == ChainOrigin::Root(0))
             .ok_or_else(|| anyhow::anyhow!("no admin chain (Root(0)) in genesis config"))?
             .id();
-        let admin_chain_bytes = <[u8; 32]>::from(*admin_chain_id.0.as_bytes());
+        let admin_chain_bytes = *admin_chain_id.0.as_bytes();
 
         let mut validators: Vec<String> = Vec::new();
         let mut weights: Vec<u64> = Vec::new();
