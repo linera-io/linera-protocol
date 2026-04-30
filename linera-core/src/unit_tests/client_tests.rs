@@ -2955,9 +2955,7 @@ where
         },
         // Origin not in the allowlist.
         MessagePolicy {
-            restrict_chain_ids_to: Some(
-                [receiver.chain_id()].into_iter().collect(),
-            ),
+            restrict_chain_ids_to: Some([receiver.chain_id()].into_iter().collect()),
             ..Default::default()
         },
     ] {
@@ -3008,8 +3006,7 @@ where
     let recipient = Account::chain(receiver.chain_id());
 
     // Mark sender_b's bundles as priority for the receiver.
-    receiver.options_mut().priority_bundle_origins =
-        [sender_b.chain_id()].into_iter().collect();
+    receiver.options_mut().priority_bundle_origins = [sender_b.chain_id()].into_iter().collect();
 
     // Send from sender_a first (would normally come first by timestamp), then sender_b.
     sender_a

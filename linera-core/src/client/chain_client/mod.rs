@@ -568,12 +568,12 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         let skipped = self.skipped_origins.pin();
-        let mut bundles: Vec<_> = info
+        let mut bundles = info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
             .filter(|bundle| !skipped.contains(&bundle.origin))
-            .collect();
+            .collect::<Vec<_>>();
         let priority_origins = &self.options.priority_bundle_origins;
         bundles.sort_by(|a, b| {
             let a_priority = priority_origins.contains(&a.origin);
