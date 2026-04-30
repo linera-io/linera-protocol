@@ -812,6 +812,11 @@ impl<Env: Environment> Client<Env> {
 
     /// Returns all committees known to the process at epochs up to and including the admin
     /// chain's current epoch, together with that epoch.
+    ///
+    /// On a miss in the shared cache / storage path (introduced in #6122), falls back to the
+    /// admin chain's own `system::committees` view in chain state and seeds the shared cache
+    /// from it. Transitional: depends on chain-state committees still being populated, so
+    /// must be revisited if/when #6114 is ported to testnet.
     #[instrument(level = "trace", skip_all)]
     async fn admin_committees(
         &self,
@@ -820,25 +825,55 @@ impl<Env: Environment> Client<Env> {
         let info = self.local_node.handle_chain_info_query(query).await?.info;
         let max_epoch = info.epoch;
         let mut committees = BTreeMap::new();
+        let mut needs_fallback = false;
         for index in 0..=max_epoch.0 {
             let epoch = Epoch(index);
             if let Some(committee) = self.storage_client().get_or_load_committee(epoch).await? {
                 committees.insert(epoch, (*committee).clone());
+            } else {
+                needs_fallback = true;
+            }
+        }
+        if needs_fallback {
+            let info = self.chain_info_with_committees(self.admin_chain_id).await?;
+            if let Some(chain_state) = info.requested_committees.as_ref() {
+                for (epoch, committee) in chain_state {
+                    if !committees.contains_key(epoch) {
+                        self.storage_client()
+                            .shared_committees()
+                            .insert(*epoch, Arc::new(committee.clone()));
+                        committees.insert(*epoch, committee.clone());
+                    }
+                }
             }
         }
         Ok((max_epoch, committees))
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
+    ///
+    /// See `admin_committees` for the fallback rationale (transitional).
     pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         let query = ChainInfoQuery::new(self.admin_chain_id);
         let info = self.local_node.handle_chain_info_query(query).await?.info;
-        let committee = self
-            .storage_client()
-            .get_or_load_committee(info.epoch)
-            .await?
+        let epoch = info.epoch;
+        if let Some(committee) = self.storage_client().get_or_load_committee(epoch).await? {
+            return Ok((epoch, committee));
+        }
+        // Slow path: events/blob missing in storage. Use the admin chain's own
+        // `committees` view (still populated until #6114 is ported) and seed the
+        // shared cache so subsequent calls hit the fast path.
+        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
+        let committee = info
+            .requested_committees
+            .as_ref()
+            .and_then(|m| m.get(&epoch).cloned())
             .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
-        Ok((info.epoch, committee))
+        let arc_committee = self
+            .storage_client()
+            .shared_committees()
+            .insert(epoch, Arc::new(committee));
+        Ok((epoch, arc_committee))
     }
 
     /// Obtains the validators for the latest epoch.
