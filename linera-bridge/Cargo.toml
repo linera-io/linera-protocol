@@ -19,7 +19,6 @@ offchain = [
     "dep:alloy-sol-types",
     "dep:async-trait",
     "dep:bcs",
-    "dep:linera-base",
     "dep:linera-execution",
     "dep:op-alloy-network",
     "dep:thiserror",
@@ -66,6 +65,7 @@ alloy-primitives.workspace = true
 alloy-rlp.workspace = true
 alloy-trie.workspace = true
 anyhow.workspace = true
+linera-base.workspace = true
 serde.workspace = true
 thiserror = { workspace = true, optional = true }
 
@@ -82,7 +82,6 @@ alloy = { workspace = true, optional = true, default-features = false, features 
 ] }
 alloy-sol-types = { workspace = true, optional = true }
 bcs = { workspace = true, optional = true }
-linera-base = { workspace = true, optional = true }
 linera-execution = { workspace = true, optional = true }
 op-alloy-network = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }

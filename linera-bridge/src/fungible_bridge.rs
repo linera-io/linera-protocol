@@ -333,8 +333,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -364,14 +364,8 @@ mod tests {
 
         // chain id = 1 in revm mainnet context
         assert_eq!(event.data.source_chain_id, alloy_primitives::U256::from(1));
-        assert_eq!(
-            event.data.target_chain_id,
-            alloy_primitives::B256::from(<[u8; 32]>::from(*t.chain_id.as_bytes()))
-        );
-        assert_eq!(
-            event.data.target_application_id,
-            alloy_primitives::B256::from(<[u8; 32]>::from(*t.app_id.as_bytes()))
-        );
+        assert_eq!(event.data.target_chain_id, *t.chain_id.as_bytes());
+        assert_eq!(event.data.target_application_id, *t.app_id.as_bytes());
         assert_eq!(
             event.data.target_account_owner,
             alloy_primitives::B256::from(target_owner_bytes())
@@ -419,8 +413,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -451,8 +445,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -480,7 +474,7 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
                 target_application_id: [0xFF; 32].into(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
@@ -516,8 +510,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(too_much),
             },

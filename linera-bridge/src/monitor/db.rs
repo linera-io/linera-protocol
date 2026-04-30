@@ -10,6 +10,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use linera_base::data_types::BlockHeight;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
@@ -164,23 +165,28 @@ impl BridgeDb {
             "INSERT OR IGNORE INTO burns (linera_height, burn_index, evm_recipient, amount)
              VALUES (?, ?, ?, ?)",
         )
-        .bind(burn.linera_height as i64)
+        .bind(burn.height.0 as i64)
         .bind(burn.burn_index as i64)
-        .bind(&burn.evm_recipient)
-        .bind(&burn.amount)
+        .bind(format!("{:#x}", burn.evm_recipient))
+        .bind(burn.amount.to_string())
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
     /// Updates a burn's status and timestamp.
-    pub async fn update_burn_status(&self, height: u64, index: usize, status: &str) -> Result<()> {
+    pub async fn update_burn_status(
+        &self,
+        height: BlockHeight,
+        index: usize,
+        status: &str,
+    ) -> Result<()> {
         sqlx::query(
             "UPDATE burns SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE linera_height = ? AND burn_index = ?",
         )
         .bind(status)
-        .bind(height as i64)
+        .bind(height.0 as i64)
         .bind(index as i64)
         .execute(&self.pool)
         .await?;
@@ -188,13 +194,18 @@ impl BridgeDb {
     }
 
     /// Stores raw BCS-serialized certificate bytes for a burn.
-    pub async fn store_burn_raw(&self, height: u64, index: usize, raw: &[u8]) -> Result<()> {
+    pub async fn store_burn_raw(
+        &self,
+        height: BlockHeight,
+        index: usize,
+        raw: &[u8],
+    ) -> Result<()> {
         sqlx::query(
             "UPDATE burns SET raw_cert = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
              WHERE linera_height = ? AND burn_index = ?",
         )
         .bind(raw)
-        .bind(height as i64)
+        .bind(height.0 as i64)
         .bind(index as i64)
         .execute(&self.pool)
         .await?;
@@ -207,6 +218,7 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
     use alloy::primitives::{Address, B256, U256};
+    use linera_base::data_types::Amount;
     use test_case::test_case;
 
     use super::*;
@@ -227,7 +239,7 @@ mod tests {
     fn test_deposit_key() -> DepositKey {
         DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 0,
         }
@@ -245,10 +257,12 @@ mod tests {
 
     fn test_burn() -> PendingBurn {
         PendingBurn {
-            linera_height: 100,
+            height: BlockHeight(100),
             burn_index: 0,
-            evm_recipient: "0xabcdef1234567890abcdef1234567890abcdef12".to_string(),
-            amount: "500000".to_string(),
+            evm_recipient: "0xabcdef1234567890abcdef1234567890abcdef12"
+                .parse()
+                .unwrap(),
+            amount: Amount::from_attos(500_000),
         }
     }
 
@@ -348,14 +362,15 @@ mod tests {
         let db = open_db(use_file).await;
         db.insert_burn(&test_burn()).await.unwrap();
 
+        let burn = test_burn();
         let row: (String, String, String) = sqlx::query_as(
             "SELECT evm_recipient, amount, status FROM burns WHERE linera_height = 100",
         )
         .fetch_one(&db.pool)
         .await
         .unwrap();
-        assert_eq!(row.0, "0xabcdef1234567890abcdef1234567890abcdef12");
-        assert_eq!(row.1, "500000");
+        assert_eq!(row.0, format!("{:#x}", burn.evm_recipient));
+        assert_eq!(row.1, burn.amount.to_string());
         assert_eq!(row.2, "pending");
     }
 
@@ -365,7 +380,9 @@ mod tests {
     async fn test_complete_burn(use_file: bool) {
         let db = open_db(use_file).await;
         db.insert_burn(&test_burn()).await.unwrap();
-        db.update_burn_status(100, 0, "completed").await.unwrap();
+        db.update_burn_status(BlockHeight(100), 0, "completed")
+            .await
+            .unwrap();
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM burns WHERE linera_height = 100")
@@ -398,7 +415,9 @@ mod tests {
         db.insert_burn(&test_burn()).await.unwrap();
 
         let cert_bytes = vec![10, 20, 30, 40, 50];
-        db.store_burn_raw(100, 0, &cert_bytes).await.unwrap();
+        db.store_burn_raw(BlockHeight(100), 0, &cert_bytes)
+            .await
+            .unwrap();
 
         let (raw,): (Vec<u8>,) =
             sqlx::query_as("SELECT raw_cert FROM burns WHERE linera_height = 100")

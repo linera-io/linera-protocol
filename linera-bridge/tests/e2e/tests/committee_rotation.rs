@@ -97,7 +97,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             Some(&light_client.to_string()),
             relay_port,
             &linera_storage_runtime::CommonStorageOptions::with_defaults(),
-            5,  // monitor_scan_interval
+            std::time::Duration::from_secs(5),  // monitor_scan_interval
             0,  // monitor_start_block
             5,  // max_retries
             None,

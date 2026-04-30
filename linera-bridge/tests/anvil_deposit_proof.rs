@@ -24,6 +24,10 @@ use alloy::{
 };
 use alloy_primitives::{Bytes, B256, U256};
 use alloy_sol_types::{SolCall, SolValue};
+use linera_base::{
+    crypto::CryptoHash,
+    identifiers::{AccountOwner, ApplicationId, ChainId},
+};
 use linera_bridge::{
     evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE},
     proof::{
@@ -258,9 +262,18 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
 
     // Anvil's default chain ID is 31337
     assert_eq!(deposit.source_chain_id, U256::from(31337u64));
-    assert_eq!(deposit.target_chain_id, target_chain_id);
-    assert_eq!(deposit.target_application_id, target_application_id);
-    assert_eq!(deposit.target_account_owner, target_owner);
+    assert_eq!(
+        deposit.target_chain_id,
+        ChainId(CryptoHash::from(target_chain_id.0))
+    );
+    assert_eq!(
+        deposit.target_application_id,
+        ApplicationId::new(CryptoHash::from(target_application_id.0))
+    );
+    assert_eq!(
+        deposit.target_account_owner,
+        AccountOwner::from(target_owner.0)
+    );
     assert_eq!(deposit.depositor, deployer);
     assert_eq!(deposit.token, token_address);
     assert_eq!(deposit.amount, deposit_amount);

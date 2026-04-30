@@ -19,7 +19,10 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
-use linera_base::identifiers::ApplicationId;
+use linera_base::{
+    data_types::{Amount, BlockHeight},
+    identifiers::ApplicationId,
+};
 use linera_execution::{Query, QueryResponse};
 use tokio::sync::RwLock;
 
@@ -56,10 +59,10 @@ pub struct PendingDeposit {
 /// A pending burn detected by the Linera scanner, sent to the retry loop.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingBurn {
-    pub linera_height: u64,
+    pub height: BlockHeight,
     pub burn_index: usize,
-    pub evm_recipient: String,
-    pub amount: String,
+    pub evm_recipient: Address,
+    pub amount: Amount,
 }
 
 /// Wraps a pending bridging request with tracking metadata.
@@ -93,9 +96,9 @@ pub type TrackedBurn = Tracked<PendingBurn>;
 /// In-memory monitoring state shared across scan loops and HTTP handlers.
 pub struct MonitorState {
     pub(crate) deposits: HashMap<DepositKey, TrackedDeposit>,
-    pub(crate) burns: HashMap<(u64, usize), TrackedBurn>,
+    pub(crate) burns: HashMap<(BlockHeight, usize), TrackedBurn>,
     pub(crate) last_scanned_evm_block: u64,
-    pub(crate) last_scanned_linera_height: u64,
+    pub(crate) last_scanned_linera_height: BlockHeight,
     db: Option<db::BridgeDb>,
 }
 
@@ -105,7 +108,7 @@ impl MonitorState {
             deposits: HashMap::new(),
             burns: HashMap::new(),
             last_scanned_evm_block: start_evm_block,
-            last_scanned_linera_height: 0,
+            last_scanned_linera_height: BlockHeight(0),
             db: None,
         }
     }
@@ -157,7 +160,7 @@ impl MonitorState {
     /// Uses Entry API instead of insert() to avoid overwriting existing entries
     /// that may have accumulated retry state.
     pub async fn track_burn(&mut self, pending: PendingBurn) -> bool {
-        let key = (pending.linera_height, pending.burn_index);
+        let key = (pending.height, pending.burn_index);
         match self.burns.entry(key) {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
@@ -173,28 +176,17 @@ impl MonitorState {
         }
     }
 
-    pub async fn complete_burn(&mut self, linera_height: u64, burn_index: usize) {
-        if let Some(b) = self.burns.get_mut(&(linera_height, burn_index)) {
+    pub async fn complete_burn(&mut self, height: BlockHeight, burn_index: usize) {
+        if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
             b.forwarded = true;
             crate::relay::metrics::burn_completed();
             if let Some(db) = &self.db {
-                if let Err(e) = db
-                    .update_burn_status(linera_height, burn_index, "completed")
-                    .await
-                {
-                    tracing::warn!(
-                        linera_height,
-                        burn_index,
-                        "Failed to update burn status in SQLite: {e:#}"
-                    );
+                if let Err(e) = db.update_burn_status(height, burn_index, "completed").await {
+                    tracing::warn!(?height, burn_index, "Failed to update burn status in SQLite: {e:#}");
                 }
             }
         } else {
-            tracing::warn!(
-                linera_height,
-                burn_index,
-                "Attempted to complete unknown burn"
-            );
+            tracing::warn!(?height, burn_index, "Attempted to complete unknown burn");
         }
     }
 
@@ -263,24 +255,20 @@ impl MonitorState {
         }
     }
 
-    pub fn mark_burn_retried(&mut self, height: u64, burn_index: usize) {
+    pub fn mark_burn_retried(&mut self, height: BlockHeight, burn_index: usize) {
         if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
             b.retry_count += 1;
             b.last_retry_at = Some(Instant::now());
         }
     }
 
-    pub async fn mark_burn_failed(&mut self, height: u64, burn_index: usize) {
+    pub async fn mark_burn_failed(&mut self, height: BlockHeight, burn_index: usize) {
         if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
             b.failed = true;
             crate::relay::metrics::burn_failed();
             if let Some(db) = &self.db {
                 if let Err(e) = db.update_burn_status(height, burn_index, "failed").await {
-                    tracing::warn!(
-                        height,
-                        burn_index,
-                        "Failed to update burn status in SQLite: {e:#}"
-                    );
+                    tracing::warn!(?height, burn_index, "Failed to update burn status in SQLite: {e:#}");
                 }
             }
         }
@@ -305,7 +293,7 @@ pub struct StatusSummary {
     pub burns_pending: usize,
     pub burns_forwarded: usize,
     pub last_scanned_evm_block: u64,
-    pub last_scanned_linera_height: u64,
+    pub last_scanned_linera_height: BlockHeight,
 }
 
 /// Runs deposit and burn retry loops concurrently.
@@ -350,6 +338,7 @@ fn retry_eligible(retry_count: u32, last_retry_at: Option<Instant>, max_retries:
 #[cfg(test)]
 mod tests {
     use alloy::primitives::{Address, B256, U256};
+    use linera_base::data_types::{Amount, BlockHeight};
 
     use super::*;
 
@@ -357,7 +346,7 @@ mod tests {
     fn test_deposit_key_hash_matches_evm_bridge() {
         let key = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 0,
         };
@@ -370,13 +359,13 @@ mod tests {
     fn test_deposit_key_different_log_index_different_hash() {
         let key1 = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 0,
         };
         let key2 = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 5,
             log_index: 1,
         };
@@ -389,7 +378,7 @@ mod tests {
 
         let key = DepositKey {
             source_chain_id: 8453,
-            block_hash: [0xAA; 32],
+            block_hash: B256::from([0xAA; 32]),
             tx_index: 1,
             log_index: 0,
         };
@@ -418,17 +407,17 @@ mod tests {
 
         state
             .track_burn(PendingBurn {
-                linera_height: 10,
+                height: BlockHeight(10),
                 burn_index: 0,
-                evm_recipient: "0xabcd".to_string(),
-                amount: "500".to_string(),
+                evm_recipient: Address::from([0xab; 20]),
+                amount: Amount::from_attos(500),
             })
             .await;
 
         assert_eq!(state.pending_burns().len(), 1);
         assert_eq!(state.completed_burns().len(), 0);
 
-        state.complete_burn(10, 0).await;
+        state.complete_burn(BlockHeight(10), 0).await;
 
         assert_eq!(state.pending_burns().len(), 0);
         assert_eq!(state.completed_burns().len(), 1);
@@ -440,7 +429,7 @@ mod tests {
 
         let key = DepositKey {
             source_chain_id: 1,
-            block_hash: [0; 32],
+            block_hash: B256::ZERO,
             tx_index: 0,
             log_index: 0,
         };
@@ -455,10 +444,10 @@ mod tests {
             .await;
         state
             .track_burn(PendingBurn {
-                linera_height: 5,
+                height: BlockHeight(5),
                 burn_index: 0,
-                evm_recipient: "0x1234".to_string(),
-                amount: "100".to_string(),
+                evm_recipient: Address::from([0x12; 20]),
+                amount: Amount::from_attos(100),
             })
             .await;
 
@@ -497,7 +486,7 @@ mod tests {
         let mut state = MonitorState::new(0);
         let key = DepositKey {
             source_chain_id: 1,
-            block_hash: [0; 32],
+            block_hash: B256::ZERO,
             tx_index: 0,
             log_index: 0,
         };
