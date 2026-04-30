@@ -2911,10 +2911,11 @@ where
     let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
     let recipient = Account::chain(receiver.chain_id());
     let sender_id = sender.chain_id();
+    // `process_notification_from` is point-to-point, so pick an honest validator.
     let validator = builder
         .initial_committee
         .validator_addresses()
-        .next()
+        .find(|(public_key, _)| builder.fault_type(public_key) == Some(FaultType::Honest))
         .unwrap();
     let storage = receiver.storage_client().clone();
 
