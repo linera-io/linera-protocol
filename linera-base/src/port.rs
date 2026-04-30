@@ -23,5 +23,5 @@ pub async fn get_free_port() -> Result<u16> {
 /// Provides a local endpoint that is currently available
 pub async fn get_free_endpoint() -> Result<String> {
     let port = get_free_port().await?;
-    Ok(format!("127.0.0.1:{}", port))
+    Ok(format!("127.0.0.1:{port}"))
 }

@@ -411,8 +411,7 @@ where
                 <Application::Abi as ContractAbi>::deserialize_operation(bytes).unwrap_or_else(
                     |error| {
                         panic!(
-                            "Failed to deserialize scheduled operation #{index} (0x{}): {error}",
-                            hex_bytes
+                            "Failed to deserialize scheduled operation #{index} (0x{hex_bytes}): {error}"
                         )
                     },
                 )

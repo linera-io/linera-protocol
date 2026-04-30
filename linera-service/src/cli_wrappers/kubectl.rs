@@ -20,7 +20,7 @@ impl KubectlInstance {
             .arg("port-forward")
             .arg(resource)
             .arg(ports)
-            .args(["--context", &format!("kind-{}", cluster_id)])
+            .args(["--context", &format!("kind-{cluster_id}")])
             .spawn()
             .context("Port forwarding failed")?;
 

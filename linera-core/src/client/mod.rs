@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta, Timestamp,
+        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -28,7 +28,10 @@ use linera_base::{
 #[cfg(not(target_arch = "wasm32"))]
 use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
-    data_types::{BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote, ProposedBlock},
+    data_types::{
+        BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
+        ProposedBlock,
+    },
     manager::LockingBlock,
     types::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
@@ -2056,6 +2059,13 @@ impl Drop for AbortOnDrop {
 pub struct PendingProposal {
     pub block: ProposedBlock,
     pub blobs: Vec<Blob>,
+    /// The execution outcome from the AutoRetry execution, used as a sanity check
+    /// against the committed execution outcome.
+    #[serde(default)]
+    pub auto_retry_outcome: Option<BlockExecutionOutcome>,
+    /// The round in which this proposal was first submitted, if any.
+    #[serde(default)]
+    pub round: Option<Round>,
 }
 
 enum ReceiveCertificateMode {

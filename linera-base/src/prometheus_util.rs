@@ -317,10 +317,7 @@ mod tests {
         for (i, (l, r)) in left.iter().zip(right.iter()).enumerate() {
             assert!(
                 (l - r).abs() < EPSILON,
-                "Vectors differ at index {}: {} != {}",
-                i,
-                l,
-                r
+                "Vectors differ at index {i}: {l} != {r}"
             );
         }
     }

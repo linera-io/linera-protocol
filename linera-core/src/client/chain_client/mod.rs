@@ -328,6 +328,12 @@ pub enum Error {
          The committed certificate hash is {0}"
     )]
     Conflict(CryptoHash),
+
+    #[error(
+        "Execution outcome mismatch: AutoRetry and committed execution produced \
+         different outcomes for the same block"
+    )]
+    ExecutionOutcomeMismatch,
 }
 
 impl From<Infallible> for Error {
@@ -1508,10 +1514,12 @@ impl<Env: Environment> ChainClient<Env> {
                 skipped.insert(origin);
             }
         }
-        let (proposed_block, _) = block.clone().into_proposal();
+        let (proposed_block, auto_retry_outcome) = block.clone().into_proposal();
         *proposal_guard = Some(PendingProposal {
             block: proposed_block,
             blobs,
+            auto_retry_outcome: Some(auto_retry_outcome),
+            round: None,
         });
         Ok(block)
     }
@@ -1930,6 +1938,7 @@ impl<Env: Environment> ChainClient<Env> {
             // Otherwise we are free to propose our own pending block.
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
+            let staging_outcome = pending.auto_retry_outcome.as_ref();
             let round = self.round_for_oracle(&info, &owner).await?;
             let (block, _, _) = self
                 .client
@@ -1940,6 +1949,15 @@ impl<Env: Environment> ChainClient<Env> {
                     BundleExecutionPolicy::committed(),
                 )
                 .await?;
+            // Sanity check: the committed execution should produce the same outcome
+            // as the initial AutoRetry execution. A mismatch indicates a divergence
+            // between the two execution paths.
+            if let Some(staging_outcome) = staging_outcome {
+                ensure!(
+                    block.outcome_matches(staging_outcome),
+                    Error::ExecutionOutcomeMismatch
+                );
+            }
             debug!("Proposing the local pending block.");
             (block, blobs)
         } else {
@@ -1956,6 +1974,9 @@ impl<Env: Environment> ChainClient<Env> {
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
         debug!("Proposing block for round {}", round);
+        if let Some(pending) = proposal_guard.as_mut() {
+            pending.round.get_or_insert(round);
+        }
 
         let already_handled_locally = info
             .manager

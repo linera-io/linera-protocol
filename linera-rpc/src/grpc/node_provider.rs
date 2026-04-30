@@ -56,7 +56,7 @@ impl ValidatorNodeProvider for GrpcNodeProvider {
             self.pool
                 .channel(http_address.clone())
                 .map_err(|error| NodeError::GrpcError {
-                    error: format!("error creating channel: {}", error),
+                    error: format!("error creating channel: {error}"),
                 })?;
 
         Ok(GrpcClient::new(

@@ -42,7 +42,7 @@ impl std::str::FromStr for BuildMode {
 
 impl std::fmt::Display for BuildMode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -477,7 +477,7 @@ impl LocalKubernetesNet {
                     kind_cluster.load_docker_image(&explorer_image_name).await?;
                 }
 
-                let server_config_filename = format!("server_{}.json", validator_number);
+                let server_config_filename = format!("server_{validator_number}.json");
                 fs_err::copy(
                     path_provider_path.join(&server_config_filename),
                     base_dir.join(&server_config_filename),
