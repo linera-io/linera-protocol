@@ -6,6 +6,7 @@
 #![recursion_limit = "256"]
 
 mod entrypoint;
+mod formats;
 mod graphql;
 mod input_type;
 mod js_utils;
@@ -932,6 +933,92 @@ pub async fn start(app: JsValue) {
             route_aux(&app, &data, &path, &args, true).await;
         }
     }
+}
+
+/// Decode the bytes of a `User` operation against the formats published by its
+/// application's module in the configured `formats_registry`. Returns
+/// `JsValue::NULL` if no registry is configured, the application's module has
+/// no entry, or decoding fails for any reason; in the failure case the error is
+/// also logged to the JS console.
+#[wasm_bindgen]
+pub async fn decode_user_operation(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    let data = match from_value::<Data>(app) {
+        Ok(d) => d,
+        Err(e) => {
+            log_str(&format!("decode_user_operation: cannot parse vue data: {e}"));
+            return JsValue::NULL;
+        }
+    };
+    let Some(registry_app_id) = data.config.formats_registry.as_ref() else {
+        return JsValue::NULL;
+    };
+    let registry_app_id_hex = serde_json::to_value(registry_app_id)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned));
+    let Some(registry_app_id_hex) = registry_app_id_hex else {
+        log_str("decode_user_operation: registry application id is not a string");
+        return JsValue::NULL;
+    };
+    let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
+    let bytes = match hex::decode(&bytes_hex) {
+        Ok(b) => b,
+        Err(e) => {
+            log_str(&format!("decode_user_operation: invalid hex: {e}"));
+            return JsValue::NULL;
+        }
+    };
+    let module_id_hex = match application_module_id(&node, data.chain, &application_id).await {
+        Ok(Some(m)) => m,
+        Ok(None) => {
+            log_str(&format!(
+                "decode_user_operation: application {application_id} not found on chain"
+            ));
+            return JsValue::NULL;
+        }
+        Err(e) => {
+            log_str(&format!("decode_user_operation: {e}"));
+            return JsValue::NULL;
+        }
+    };
+    let formats = match formats::fetch_formats(&node, &registry_app_id_hex, &module_id_hex).await {
+        Ok(Some(f)) => f,
+        Ok(None) => return JsValue::NULL,
+        Err(e) => {
+            log_str(&format!("decode_user_operation: {e}"));
+            return JsValue::NULL;
+        }
+    };
+    match formats.decode_operation(&bytes) {
+        Ok(value) => value.serialize(&SER).unwrap_or(JsValue::NULL),
+        Err(e) => {
+            log_str(&format!("decode_user_operation: BCS decode failed: {e}"));
+            JsValue::NULL
+        }
+    }
+}
+
+/// Look up the `module_id` (as a hex string) of a deployed application on the
+/// given chain. Returns `Ok(None)` if no application with the given id exists
+/// on that chain.
+async fn application_module_id(
+    node: &str,
+    chain_id: ChainId,
+    application_id: &str,
+) -> Result<Option<String>> {
+    let apps = get_applications(node, chain_id).await?;
+    let Some(app) = apps.into_iter().find(|a| a.id == application_id) else {
+        return Ok(None);
+    };
+    let description: Value = serde_json::to_value(&app.description)
+        .context("application description is not JSON-serializable")?;
+    Ok(description
+        .get("module_id")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned))
 }
 
 /// Saves config to local storage.

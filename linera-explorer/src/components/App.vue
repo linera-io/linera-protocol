@@ -1,5 +1,5 @@
 <script lang="ts">
-import { data, save_config, route } from '../../pkg/linera_explorer'
+import { data, save_config, route, decode_user_operation } from '../../pkg/linera_explorer'
 import Block from './Block.vue'
 import Blocks from './Blocks.vue'
 import Chain from './Chain.vue'
@@ -24,7 +24,10 @@ export default {
       }
       save_config(this)
     },
-    route(name?: string, args?: [string, string][]) { route(this, name, args) }
+    route(name?: string, args?: [string, string][]) { route(this, name, args) },
+    decode_user_operation(application_id: string, bytes_hex: string) {
+      return decode_user_operation(this, application_id, bytes_hex)
+    }
   },
   components: {
     Block,

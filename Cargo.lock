@@ -5696,6 +5696,7 @@ name = "linera-explorer"
 version = "0.15.17"
 dependencies = [
  "anyhow",
+ "bcs",
  "console_error_panic_hook",
  "futures",
  "graphql_client",
@@ -5707,6 +5708,7 @@ dependencies = [
  "once_cell",
  "reqwest 0.11.27",
  "serde",
+ "serde-reflection",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "url",
