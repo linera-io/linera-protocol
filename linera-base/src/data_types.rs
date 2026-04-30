@@ -1708,8 +1708,13 @@ mod metrics {
 mod tests {
     use std::str::FromStr;
 
-    use super::{Amount, BlobContent};
-    use crate::identifiers::BlobType;
+    use super::{Amount, ApplicationDescription, BlobContent};
+    use crate::{
+        crypto::CryptoHash,
+        data_types::BlockHeight,
+        identifiers::{BlobType, ChainId, ModuleId},
+        vm::VmRuntime,
+    };
 
     #[test]
     fn display_amount() {
@@ -1766,5 +1771,41 @@ mod tests {
 
         assert_eq!(hash1, hash2, "Hashes should be equal for same content");
         assert_eq!(blob1.bytes(), blob2.bytes(), "Byte content should be equal");
+    }
+
+    /// `linera-explorer` running on `wasm32` does not have access to the
+    /// strongly-typed `ApplicationDescription`: the GraphQL client substitutes
+    /// it for `serde_json::Value`. The explorer therefore fetches the module ID
+    /// for an application by indexing into the JSON object as
+    /// `description["module_id"]`. This test pins that field name and the
+    /// hex-string shape of the serialized `ModuleId` so a future rename or
+    /// representation change immediately breaks here instead of silently in the
+    /// browser.
+    #[test]
+    fn application_description_serializes_module_id_as_hex_string() {
+        let module_id = ModuleId::new(
+            CryptoHash::test_hash("contract-bytecode"),
+            CryptoHash::test_hash("service-bytecode"),
+            VmRuntime::Wasm,
+        );
+        let description = ApplicationDescription {
+            module_id,
+            creator_chain_id: ChainId(CryptoHash::test_hash("chain")),
+            block_height: BlockHeight(0),
+            application_index: 0,
+            parameters: Vec::new(),
+            required_application_ids: Vec::new(),
+        };
+
+        let value = serde_json::to_value(&description).unwrap();
+        let module_id_value = value
+            .get("module_id")
+            .expect("`module_id` is the field name the explorer indexes into");
+        let hex = module_id_value
+            .as_str()
+            .expect("`module_id` must serialize as a hex string in human-readable form");
+        let roundtrip: ModuleId =
+            serde_json::from_value(serde_json::Value::String(hex.to_owned())).unwrap();
+        assert_eq!(roundtrip, module_id);
     }
 }

@@ -2028,6 +2028,16 @@ async fn test_publish_bcs_module_registers_formats(
     let stored_formats: Formats = serde_json::from_slice(&stored_bytes)?;
     let expected_formats = CounterApplication::formats().unwrap();
     assert_eq!(stored_formats, expected_formats);
+
+    // Roundtrip: BCS-encode a sample counter operation, then decode it back to
+    // JSON using the formats fetched from the registry. This exercises the
+    // exact path the explorer relies on: registry-stored Formats →
+    // Formats::decode_operation on user-operation bytes.
+    let sample_operation: u64 = 42;
+    let operation_bytes = bcs::to_bytes(&sample_operation)?;
+    let decoded = stored_formats.decode_operation(&operation_bytes)?;
+    assert_eq!(decoded, serde_json::json!(sample_operation));
+
     node_service.ensure_is_running()?;
 
     net.ensure_is_running().await?;

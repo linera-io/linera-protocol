@@ -1,6 +1,26 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import Op from './Op.vue'
 import { set_test_config } from './utils'
+
+// `Op.vue` reads `config` and `decode_user_operation` from `$root` (which at
+// runtime is `App.vue`). vue-test-utils inserts its own VTUROOT wrapper so we
+// can't make our own component the root — instead we expose those names via
+// `globalProperties`, which the instance proxy falls back to and which `$root`
+// therefore resolves to as well.
+function mountWithRoot(op: any, opts: { formats_registry?: string | null, decode?: (app: string, bytes: string) => any } = {}) {
+  return mount(Op, {
+    props: { id: 'user-op', op },
+    global: {
+      config: {
+        globalProperties: {
+          config: { formats_registry: opts.formats_registry ?? null },
+          decode_user_operation: (application_id: string, bytes_hex: string) =>
+            opts.decode ? opts.decode(application_id, bytes_hex) : null
+        }
+      }
+    }
+  })
+}
 
 describe('Op Component', () => {
   beforeAll(async () => {
@@ -145,6 +165,38 @@ describe('Op Component', () => {
 
     // Check that warning is displayed
     expect(wrapper.text()).toContain('Warning: No structured operation data available')
+  })
+
+  test('renders decoded user operation when registry is configured', async () => {
+    const decode = vi.fn(async (_app: string, _bytes: string) => ({ counterValue: 42 }))
+    const wrapper = mountWithRoot(
+      {
+        operationType: 'User',
+        applicationId: 'app-123',
+        userBytesHex: '2a00000000000000'
+      },
+      { formats_registry: 'fake-registry-app-id', decode }
+    )
+    await flushPromises()
+    expect(decode).toHaveBeenCalledWith('app-123', '2a00000000000000')
+    expect(wrapper.text()).toContain('Decoded Operation:')
+    expect(wrapper.text()).toContain('counterValue')
+    expect(wrapper.text()).toContain('42')
+  })
+
+  test('does not attempt to decode when registry is not configured', async () => {
+    const decode = vi.fn()
+    const wrapper = mountWithRoot(
+      {
+        operationType: 'User',
+        applicationId: 'app-123',
+        userBytesHex: '2a00000000000000'
+      },
+      { formats_registry: null, decode }
+    )
+    await flushPromises()
+    expect(decode).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('Decoded Operation:')
   })
 
   test('handles unknown operation type', () => {
