@@ -343,6 +343,34 @@ where
         cache.insert_find_key_values(key_prefix.to_vec(), &key_values);
         Ok(key_values)
     }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.store.find_first_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.store.find_last_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        self.store.find_first_key_value_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        self.store.find_last_key_value_by_prefix(key_prefix).await
+    }
 }
 
 impl<K> WritableKeyValueStore for LruCachingStore<K>

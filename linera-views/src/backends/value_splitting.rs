@@ -252,6 +252,39 @@ where
         }
         Ok(key_values)
     }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        // The smallest stored key under any user-key prefix is `K|0` for the smallest
+        // user key `K`, since `K|0 < K|1 < ... < K'|0 < ...`. So strip the trailing
+        // 4-byte segment index.
+        Ok(self
+            .store
+            .find_first_key_by_prefix(key_prefix)
+            .await?
+            .map(|mut key| {
+                key.truncate(key.len() - 4);
+                key
+            }))
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        // The largest stored key under any user-key prefix is `K|n` for the largest
+        // user key `K` and its highest segment index `n`. Strip the trailing 4 bytes.
+        Ok(self
+            .store
+            .find_last_key_by_prefix(key_prefix)
+            .await?
+            .map(|mut key| {
+                key.truncate(key.len() - 4);
+                key
+            }))
+    }
 }
 
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>
@@ -467,6 +500,34 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
         self.inner.find_keys_by_prefix(key_prefix).await
+    }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        self.inner.find_first_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        self.inner.find_last_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        self.inner.find_first_key_value_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        self.inner.find_last_key_value_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
