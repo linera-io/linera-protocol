@@ -18,8 +18,6 @@ use serde::{Deserialize, Serialize};
 pub struct BridgeParameters {
     /// EVM chain ID of the source chain (e.g. 8453 for Base).
     pub source_chain_id: u64,
-    /// Address of the FungibleBridge contract on EVM.
-    pub bridge_contract_address: [u8; 20],
     /// ERC-20 token address on the source EVM chain.
     pub token_address: [u8; 20],
     /// JSON-RPC endpoint of the source EVM chain for finality verification.
@@ -48,4 +46,8 @@ pub enum BridgeOperation {
     /// the latest finalized block. Caches the hash only when submitted by an
     /// authenticated signer (chain owner) to prevent state bloat.
     VerifyBlockHash { block_hash: [u8; 32] },
+    /// Register the EVM FungibleBridge contract address.
+    /// Can only be called once, by the chain owner.
+    /// Must be set before ProcessDeposit can succeed.
+    RegisterFungibleBridge { address: [u8; 20] },
 }

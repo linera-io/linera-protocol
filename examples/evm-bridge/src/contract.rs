@@ -15,13 +15,15 @@ use linera_sdk::{
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
 
 /// On-chain state: tracks processed deposits, verified block hashes,
-/// and the registered wrapped-fungible application.
+/// the registered wrapped-fungible application, and the registered EVM
+/// FungibleBridge contract address.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<[u8; 32]>,
     pub verified_block_hashes: SetView<[u8; 32]>,
     pub fungible_app_id: RegisterView<Option<ApplicationId>>,
+    pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
 }
 
 pub struct EvmBridgeContract {
@@ -103,6 +105,16 @@ impl Contract for EvmBridgeContract {
                         .insert(&block_hash)
                         .expect("failed to insert verified block hash");
                 }
+            }
+            BridgeOperation::RegisterFungibleBridge { address } => {
+                self.runtime
+                    .authenticated_owner()
+                    .expect("RegisterFungibleBridge requires an authenticated signer");
+                assert!(
+                    self.state.bridge_contract_address.get().is_none(),
+                    "bridge contract address is already registered and cannot be changed"
+                );
+                self.state.bridge_contract_address.set(Some(address));
             }
         }
     }
@@ -189,7 +201,11 @@ impl EvmBridgeContract {
             log_index,
             logs.len()
         );
-        let bridge_contract = alloy_primitives::Address::from(params.bridge_contract_address);
+        let bridge_contract_bytes =
+            self.state.bridge_contract_address.get().expect(
+                "bridge contract address not registered — call RegisterFungibleBridge first",
+            );
+        let bridge_contract = alloy_primitives::Address::from(bridge_contract_bytes);
         let deposit = proof::parse_deposit_event(&logs[log_index as usize], bridge_contract)
             .expect("failed to parse DepositInitiated event");
 
