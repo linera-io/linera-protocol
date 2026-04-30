@@ -1959,6 +1959,87 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_publish_bcs_module_registers_formats(
+    config: impl LineraNetConfig,
+) -> Result<()> {
+    use counter::{formats::CounterApplication, CounterAbi};
+    use linera_sdk::{
+        abis::formats_registry::FormatsRegistryAbi,
+        formats::{BcsApplication, Formats},
+    };
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.load_wallet()?.default_chain().unwrap();
+
+    // Publish-and-create the formats registry application.
+    let (registry_contract, registry_service) =
+        client.build_example("formats-registry").await?;
+    let registry_app_id = client
+        .publish_and_create::<FormatsRegistryAbi, (), ()>(
+            registry_contract,
+            registry_service,
+            VmRuntime::Wasm,
+            &(),
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+
+    // Publish the counter module while atomically registering its serde
+    // `Formats` description in the registry.
+    let (contract, service) = client.build_example("counter").await?;
+    let snap_path =
+        ClientWrapper::example_path("counter")?.join("tests/snapshots/format__format.snap");
+    let module_id = client
+        .publish_bcs_module::<CounterAbi, (), u64>(
+            contract,
+            service,
+            snap_path,
+            registry_app_id.forget_abi(),
+            VmRuntime::Wasm,
+            None,
+        )
+        .await?;
+
+    // Read the formats back from the registry through its GraphQL service.
+    let port = get_node_port().await;
+    let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
+    let registry_application = node_service.make_application(&chain, &registry_app_id)?;
+    let module_id_hex = serde_json::to_value(module_id.forget_abi())?
+        .as_str()
+        .expect("ModuleId serializes to a JSON string")
+        .to_owned();
+    let response = registry_application
+        .query(format!(r#"get(moduleId: "{module_id_hex}")"#))
+        .await?;
+    let stored_bytes: Vec<u8> = response["get"]
+        .as_array()
+        .expect("get must return a JSON array of bytes")
+        .iter()
+        .map(|byte| byte.as_u64().expect("byte") as u8)
+        .collect();
+
+    let stored_formats: Formats = serde_json::from_slice(&stored_bytes)?;
+    let expected_formats = CounterApplication::formats().unwrap();
+    assert_eq!(stored_formats, expected_formats);
+    node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(LeakChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_wasm_end_to_end_social_event_streams(config: impl LineraNetConfig) -> Result<()> {

@@ -55,10 +55,9 @@ impl Contract for FormatsRegistryContract {
                     existing.is_none(),
                     "formats are already registered for this module"
                 );
-                let blob_hash = self.runtime.create_data_blob(value);
                 self.state
                     .formats
-                    .insert(&module_id, blob_hash)
+                    .insert(&module_id, value)
                     .expect("storage");
             }
         }

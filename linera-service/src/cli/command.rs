@@ -885,6 +885,33 @@ pub enum ClientCommand {
         publisher: Option<ChainId>,
     },
 
+    /// Publish a module along with the JSON-encoded `Formats` description loaded
+    /// from an insta SNAP file. The publication and the formats-registry write
+    /// happen atomically in a single block.
+    PublishBcsModule {
+        /// Path to the Wasm file for the application "contract" bytecode.
+        contract: PathBuf,
+
+        /// Path to the Wasm file for the application "service" bytecode.
+        service: PathBuf,
+
+        /// Path to the insta SNAP file containing the YAML serialization of the
+        /// application's `Formats`.
+        snap_path: PathBuf,
+
+        /// The application ID of the formats registry that will receive the
+        /// JSON-encoded formats.
+        registry_application_id: ApplicationId,
+
+        /// The virtual machine runtime to use.
+        #[arg(long, default_value = "wasm")]
+        vm_runtime: VmRuntime,
+
+        /// An optional chain ID to publish the module. The default chain of the wallet
+        /// is used otherwise.
+        publisher: Option<ChainId>,
+    },
+
     /// Print events from a specific chain and stream from a specified index.
     ListEventsFromIndex {
         /// The chain to query. If omitted, query the default chain of the wallet.
@@ -1101,6 +1128,7 @@ impl ClientCommand {
             | ClientCommand::RevokeEpochs { .. }
             | ClientCommand::CreateGenesisConfig { .. }
             | ClientCommand::PublishModule { .. }
+            | ClientCommand::PublishBcsModule { .. }
             | ClientCommand::ListEventsFromIndex { .. }
             | ClientCommand::PublishDataBlob { .. }
             | ClientCommand::ReadDataBlob { .. }

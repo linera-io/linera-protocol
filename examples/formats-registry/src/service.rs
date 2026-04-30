@@ -45,7 +45,6 @@ impl Service for FormatsRegistryService {
         let schema = Schema::build(
             QueryRoot {
                 state: self.state.clone(),
-                runtime: self.runtime.clone(),
             },
             MutationRoot {
                 runtime: self.runtime.clone(),
@@ -59,7 +58,6 @@ impl Service for FormatsRegistryService {
 
 struct QueryRoot {
     state: Arc<FormatsRegistryState>,
-    runtime: Arc<ServiceRuntime<FormatsRegistryService>>,
 }
 
 #[Object]
@@ -67,8 +65,7 @@ impl QueryRoot {
     /// Returns the bytes registered for the given module, or `None` if the
     /// module has no entry yet.
     async fn get(&self, module_id: ModuleId) -> Option<Vec<u8>> {
-        let blob_hash = self.state.formats.get(&module_id).await.unwrap()?;
-        Some(self.runtime.read_data_blob(blob_hash))
+        self.state.formats.get(&module_id).await.unwrap()
     }
 }
 

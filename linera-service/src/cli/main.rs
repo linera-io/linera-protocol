@@ -1380,6 +1380,42 @@ impl Runnable for Job {
                 );
             }
 
+            PublishBcsModule {
+                contract,
+                service,
+                snap_path,
+                registry_application_id,
+                vm_runtime,
+                publisher,
+            } => {
+                let mut context = options
+                    .create_client_context(storage, wallet, keystore)
+                    .await?;
+
+                let start_time = Instant::now();
+                let publisher = publisher.unwrap_or_else(|| context.default_chain());
+                info!(
+                    "Publishing module and registering its formats on chain {}",
+                    publisher
+                );
+                let chain_client = context.make_chain_client(publisher).await?;
+                let module_id = context
+                    .publish_bcs_module(
+                        &chain_client,
+                        contract,
+                        service,
+                        vm_runtime,
+                        snap_path,
+                        registry_application_id,
+                    )
+                    .await?;
+                println!("{module_id}");
+                info!(
+                    "Module published and formats registered in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+
             ListEventsFromIndex {
                 chain_id,
                 stream_id,
