@@ -8,7 +8,7 @@ use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
-    linera_base_types::{Account, AccountOwner, Amount, ApplicationId, ChainId, WithContractAbi},
+    linera_base_types::{Account, Amount, ApplicationId, WithContractAbi},
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
@@ -208,7 +208,7 @@ impl EvmBridgeContract {
         // 5. Replay protection
         let deposit_key = DepositKey {
             source_chain_id: params.source_chain_id,
-            block_hash: block_hash.0,
+            block_hash,
             tx_index,
             log_index,
         };
@@ -237,15 +237,12 @@ impl EvmBridgeContract {
         }
 
         // 6. Convert deposit fields to Linera types and call Mint
-        let target_chain_id =
-            ChainId::try_from(deposit.target_chain_id.as_slice()).expect("invalid target chain ID");
-        let target_owner = AccountOwner::from(deposit.target_account_owner.0);
         let amount = Amount::try_from(deposit.amount).expect("deposit amount exceeds u128");
 
         let mint_op = WrappedFungibleOperation::Mint {
             target_account: Account {
-                chain_id: target_chain_id,
-                owner: target_owner,
+                chain_id: deposit.target_chain_id,
+                owner: deposit.target_account_owner,
             },
             amount,
         };

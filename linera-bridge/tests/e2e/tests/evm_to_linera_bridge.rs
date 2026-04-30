@@ -20,10 +20,13 @@ use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, Bytecode},
-    identifiers::{AccountOwner, ApplicationId},
+    identifiers::AccountOwner,
     vm::VmRuntime,
 };
-use linera_bridge::proof::gen::{DepositProofClient as _, HttpDepositProofClient};
+use linera_bridge::{
+    abi::{BridgeOperation, BridgeParameters},
+    proof::gen::{DepositProofClient as _, HttpDepositProofClient},
+};
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
     start_compose, wait_for_light_client,
@@ -35,39 +38,8 @@ use linera_execution::{Operation, Query, QueryResponse, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use wrapped_fungible::{InitialState, WrappedParameters};
-
-// ── Inline evm-bridge types ─────────────────────────────────────────────────
-// Inlined to avoid a dependency on evm-bridge, which pulls in linera-bridge
-// with the `chain` feature — that disables `proof::gen` via feature unification.
-
-/// Must match `evm_bridge::BridgeParameters` field-for-field for BCS compatibility.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct BridgeParameters {
-    source_chain_id: u64,
-    bridge_contract_address: [u8; 20],
-    token_address: [u8; 20],
-    rpc_endpoint: String,
-}
-
-/// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
-#[derive(Debug, Deserialize, Serialize)]
-enum BridgeOperation {
-    RegisterFungibleApp {
-        app_id: ApplicationId,
-    },
-    ProcessDeposit {
-        block_header_rlp: Vec<u8>,
-        receipt_rlp: Vec<u8>,
-        proof_nodes: Vec<Vec<u8>>,
-        tx_index: u64,
-        log_index: u64,
-    },
-    VerifyBlockHash {
-        block_hash: [u8; 32],
-    },
-}
 
 // ── Solidity interfaces for EVM calls ───────────────────────────────────────
 
@@ -367,7 +339,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let log_index = proof.log_indices[0];
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337, // Anvil chain ID
-        block_hash: deposit_receipt.block_hash.unwrap().0,
+        block_hash: deposit_receipt.block_hash.unwrap(),
         tx_index,
         log_index,
     };

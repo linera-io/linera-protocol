@@ -8,6 +8,9 @@
 /// EVM receipt proof verification and deposit event parsing.
 pub mod proof;
 
+/// Canonical BCS-stable ABI types for the EVM→Linera bridge application.
+pub mod abi;
+
 // -- Off-chain only (requires `not(chain)` / default features) --
 
 /// EVM contract ABIs, relay clients, and Solidity sources.

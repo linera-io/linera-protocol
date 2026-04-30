@@ -18,6 +18,10 @@ use alloy::{
 };
 use alloy_primitives::{Bytes, B256, U256};
 use alloy_sol_types::{SolCall, SolValue};
+use linera_base::{
+    crypto::CryptoHash,
+    identifiers::{AccountOwner, ApplicationId, ChainId},
+};
 use linera_bridge::{
     evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE},
     proof::{
@@ -68,6 +72,8 @@ contract MockERC20 {
 // ABI bindings for contract interactions
 alloy_sol_types::sol! {
     function approve(address spender, uint256 amount) external returns (bool);
+
+    function registerFungibleApplicationId(bytes32 _fungibleApplicationId) external;
 
     function deposit(
         bytes32 target_chain_id,
@@ -132,10 +138,9 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         "FungibleBridge",
     );
     let bridge_constructor = (
-        deployer,                                // light_client (unused by deposit)
-        <[u8; 32]>::from(target_chain_id),       // chainId
-        <[u8; 32]>::from(target_application_id), // applicationId
-        token_address,                           // token
+        deployer,                          // light_client (unused by deposit)
+        <[u8; 32]>::from(target_chain_id), // chainId
+        token_address,                     // token
     )
         .abi_encode_params();
 
@@ -145,6 +150,18 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     let tx = TransactionRequest::default().with_deploy_code(Bytes::from(bridge_deploy));
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
     let bridge_address = receipt.contract_address.ok_or("missing bridge address")?;
+
+    // Register the wrapped-fungible application ID on the bridge.
+    // Since #5929 the application ID is set post-deployment via this call
+    // rather than through the constructor.
+    let register_data = registerFungibleApplicationIdCall {
+        _fungibleApplicationId: target_application_id,
+    }
+    .abi_encode();
+    let tx = TransactionRequest::default()
+        .to(bridge_address)
+        .input(register_data.into());
+    provider.send_transaction(tx).await?.get_receipt().await?;
 
     // 4. Approve bridge to spend tokens, then deposit
     let deposit_amount = U256::from(1_000_000u64);
@@ -203,9 +220,18 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
 
     // Anvil's default chain ID is 31337
     assert_eq!(deposit.source_chain_id, U256::from(31337u64));
-    assert_eq!(deposit.target_chain_id, target_chain_id);
-    assert_eq!(deposit.target_application_id, target_application_id);
-    assert_eq!(deposit.target_account_owner, target_owner);
+    assert_eq!(
+        deposit.target_chain_id,
+        ChainId(CryptoHash::from(target_chain_id.0))
+    );
+    assert_eq!(
+        deposit.target_application_id,
+        ApplicationId::new(CryptoHash::from(target_application_id.0))
+    );
+    assert_eq!(
+        deposit.target_account_owner,
+        AccountOwner::from(target_owner.0)
+    );
     assert_eq!(deposit.depositor, deployer);
     assert_eq!(deposit.token, token_address);
     assert_eq!(deposit.amount, deposit_amount);
