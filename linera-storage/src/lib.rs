@@ -243,6 +243,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
             return Ok(Some(committee));
         }
         let Some(net_description) = self.read_network_description().await? else {
+            tracing::warn!(
+                ?epoch,
+                "get_or_load_committee: NetworkDescription missing in storage"
+            );
             return Ok(None);
         };
         let blob_hash = if epoch.0 == 0 {
@@ -253,13 +257,25 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
                 stream_id: StreamId::system(EPOCH_STREAM_NAME),
                 index: epoch.0,
             };
-            match self.read_event(event_id).await? {
+            match self.read_event(event_id.clone()).await? {
                 Some(bytes) => bcs::from_bytes(&bytes)?,
-                None => return Ok(None),
+                None => {
+                    tracing::warn!(
+                        ?epoch,
+                        ?event_id,
+                        "get_or_load_committee: NewCommittee event missing in storage"
+                    );
+                    return Ok(None);
+                }
             }
         };
         let blob_id = BlobId::new(blob_hash, BlobType::Committee);
         let Some(blob) = self.read_blob(blob_id).await? else {
+            tracing::warn!(
+                ?epoch,
+                ?blob_id,
+                "get_or_load_committee: committee blob missing in storage"
+            );
             return Ok(None);
         };
         let committee: Committee = bcs::from_bytes(blob.bytes())?;
