@@ -815,8 +815,8 @@ impl<Env: Environment> Client<Env> {
     ///
     /// On a miss in the shared cache / storage path (introduced in #6122), falls back to the
     /// admin chain's own `system::committees` view in chain state and seeds the shared cache
-    /// from it. Transitional: depends on chain-state committees still being populated, so
-    /// must be revisited if/when #6114 is ported to testnet.
+    /// from it. This relies on chain-state committees still being populated, which is the
+    /// case on testnet — #6114 (which removes that view) is not being ported here.
     #[instrument(level = "trace", skip_all)]
     async fn admin_committees(
         &self,
@@ -861,8 +861,8 @@ impl<Env: Environment> Client<Env> {
             return Ok((epoch, committee));
         }
         // Slow path: events/blob missing in storage. Use the admin chain's own
-        // `committees` view (still populated until #6114 is ported) and seed the
-        // shared cache so subsequent calls hit the fast path.
+        // `committees` view (still populated on testnet — #6114 is not being
+        // ported) and seed the shared cache so subsequent calls hit the fast path.
         let info = self.chain_info_with_committees(self.admin_chain_id).await?;
         let committee = info
             .requested_committees
