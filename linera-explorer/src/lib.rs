@@ -935,6 +935,79 @@ pub async fn start(app: JsValue) {
     }
 }
 
+/// Fetch the registered `Formats` for a deployed application by chaining
+/// `applications -> module_id -> formats_registry::get`. Returns `None` when no
+/// registry is configured, the app does not exist on the active chain, or the
+/// registry has no entry for that module. All failures are logged to the JS
+/// console with the caller's `op` label so the explorer never throws into Vue.
+async fn fetch_user_app_formats(
+    op: &str,
+    app: JsValue,
+    application_id: &str,
+) -> Option<formats::Formats> {
+    let data = match from_value::<Data>(app) {
+        Ok(d) => d,
+        Err(e) => {
+            log_str(&format!("{op}: cannot parse vue data: {e}"));
+            return None;
+        }
+    };
+    let registry_app_id = data.config.formats_registry.as_ref()?;
+    let registry_app_id_hex = serde_json::to_value(registry_app_id)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))?;
+    let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
+    let module_id_hex = match application_module_id(&node, data.chain, application_id).await {
+        Ok(Some(m)) => m,
+        Ok(None) => {
+            log_str(&format!(
+                "{op}: application {application_id} not found on chain"
+            ));
+            return None;
+        }
+        Err(e) => {
+            log_str(&format!("{op}: {e}"));
+            return None;
+        }
+    };
+    match formats::fetch_formats(&node, &registry_app_id_hex, &module_id_hex).await {
+        Ok(f) => f,
+        Err(e) => {
+            log_str(&format!("{op}: {e}"));
+            None
+        }
+    }
+}
+
+/// Run a `Formats::decode_*` method against `bytes_hex`, returning a JS value or
+/// `JsValue::NULL` if anything in the pipeline fails. Errors are logged with
+/// the `op` label.
+async fn decode_user_bytes(
+    op: &str,
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+    decode: fn(&formats::Formats, &[u8]) -> linera_sdk::bcs::Result<Value>,
+) -> JsValue {
+    let bytes = match hex::decode(&bytes_hex) {
+        Ok(b) => b,
+        Err(e) => {
+            log_str(&format!("{op}: invalid hex: {e}"));
+            return JsValue::NULL;
+        }
+    };
+    let Some(formats) = fetch_user_app_formats(op, app, &application_id).await else {
+        return JsValue::NULL;
+    };
+    match decode(&formats, &bytes) {
+        Ok(value) => value.serialize(&SER).unwrap_or(JsValue::NULL),
+        Err(e) => {
+            log_str(&format!("{op}: BCS decode failed: {e}"));
+            JsValue::NULL
+        }
+    }
+}
+
 /// Decode the bytes of a `User` operation against the formats published by its
 /// application's module in the configured `formats_registry`. Returns
 /// `JsValue::NULL` if no registry is configured, the application's module has
@@ -946,59 +1019,68 @@ pub async fn decode_user_operation(
     application_id: String,
     bytes_hex: String,
 ) -> JsValue {
-    let data = match from_value::<Data>(app) {
-        Ok(d) => d,
-        Err(e) => {
-            log_str(&format!("decode_user_operation: cannot parse vue data: {e}"));
-            return JsValue::NULL;
-        }
-    };
-    let Some(registry_app_id) = data.config.formats_registry.as_ref() else {
-        return JsValue::NULL;
-    };
-    let registry_app_id_hex = serde_json::to_value(registry_app_id)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_owned));
-    let Some(registry_app_id_hex) = registry_app_id_hex else {
-        log_str("decode_user_operation: registry application id is not a string");
-        return JsValue::NULL;
-    };
-    let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
-    let bytes = match hex::decode(&bytes_hex) {
-        Ok(b) => b,
-        Err(e) => {
-            log_str(&format!("decode_user_operation: invalid hex: {e}"));
-            return JsValue::NULL;
-        }
-    };
-    let module_id_hex = match application_module_id(&node, data.chain, &application_id).await {
-        Ok(Some(m)) => m,
-        Ok(None) => {
-            log_str(&format!(
-                "decode_user_operation: application {application_id} not found on chain"
-            ));
-            return JsValue::NULL;
-        }
-        Err(e) => {
-            log_str(&format!("decode_user_operation: {e}"));
-            return JsValue::NULL;
-        }
-    };
-    let formats = match formats::fetch_formats(&node, &registry_app_id_hex, &module_id_hex).await {
-        Ok(Some(f)) => f,
-        Ok(None) => return JsValue::NULL,
-        Err(e) => {
-            log_str(&format!("decode_user_operation: {e}"));
-            return JsValue::NULL;
-        }
-    };
-    match formats.decode_operation(&bytes) {
-        Ok(value) => value.serialize(&SER).unwrap_or(JsValue::NULL),
-        Err(e) => {
-            log_str(&format!("decode_user_operation: BCS decode failed: {e}"));
-            JsValue::NULL
-        }
-    }
+    decode_user_bytes(
+        "decode_user_operation",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_operation,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application cross-chain message. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_message(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_message",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_message,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application operation response. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_response(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_response",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_response,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application event-stream value. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_event_value(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_event_value",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_event_value,
+    )
+    .await
 }
 
 /// Look up the `module_id` (as a hex string) of a deployed application on the

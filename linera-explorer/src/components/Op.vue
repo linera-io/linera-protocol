@@ -1,29 +1,9 @@
 <script setup lang="ts">
-import { ref, watch, getCurrentInstance } from 'vue'
 import Json from './Json.vue'
+import DecodedBytes from './DecodedBytes.vue'
 import { copyToClipboard } from './utils'
 
-const props = defineProps<{op: any, id: string, index?: number}>()
-
-const decoded = ref<any>(null)
-const decoding = ref(false)
-
-async function tryDecode() {
-  decoded.value = null
-  if (props.op?.operationType !== 'User') return
-  if (!props.op.applicationId || !props.op.userBytesHex) return
-  const root: any = getCurrentInstance()?.proxy?.$root
-  if (!root?.config?.formats_registry) return
-  decoding.value = true
-  try {
-    const value = await root.decode_user_operation(props.op.applicationId, props.op.userBytesHex)
-    decoded.value = value ?? null
-  } finally {
-    decoding.value = false
-  }
-}
-
-watch(() => [props.op?.applicationId, props.op?.userBytesHex], tryDecode, { immediate: true })
+defineProps<{op: any, id: string, index?: number}>()
 </script>
 
 <template>
@@ -255,12 +235,8 @@ watch(() => [props.op?.applicationId, props.op?.userBytesHex], tryDecode, { imme
           <strong>Operation Data (hex):</strong>
           <pre class="mt-2 p-2 bg-light"><code>{{ op.userBytesHex }}</code></pre>
         </div>
-        <div v-if="decoding" class="mb-3 text-muted small">
-          <span class="spinner-border spinner-border-sm me-2"></span>Decoding operation...
-        </div>
-        <div v-else-if="decoded !== null" class="mb-3">
-          <strong>Decoded Operation:</strong>
-          <div class="mt-2"><Json :data="decoded"/></div>
+        <div v-if="op.applicationId && op.userBytesHex" class="mb-3">
+          <DecodedBytes :application-id="op.applicationId" :bytes-hex="op.userBytesHex" kind="operation"/>
         </div>
         <Json :data="op"/>
       </div>

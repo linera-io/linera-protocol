@@ -16,7 +16,7 @@ function mountWithRoot(op: any, opts: { formats_registry?: string | null, decode
           config: { formats_registry: opts.formats_registry ?? null },
           decode_user_operation: (application_id: string, bytes_hex: string) =>
             opts.decode ? opts.decode(application_id, bytes_hex) : null
-        }
+        } as any
       }
     }
   })

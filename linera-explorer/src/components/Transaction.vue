@@ -2,6 +2,7 @@
 import { TransactionMetadata } from '../../gql/service'
 import Op from './Op.vue'
 import Json from './Json.vue'
+import DecodedBytes from './DecodedBytes.vue'
 
 defineProps<{
   transaction: TransactionMetadata,
@@ -96,6 +97,13 @@ defineProps<{
                     <span class="badge bg-success mb-2">User Message</span>
                     <div v-if="msg.messageMetadata.applicationId" class="small">
                       <strong>Application:</strong> {{ short_app_id(msg.messageMetadata.applicationId) }}
+                    </div>
+                    <div v-if="msg.messageMetadata.userBytesHex" class="small mt-2">
+                      <strong>Message Data (hex):</strong>
+                      <pre class="mt-1 p-2 bg-light"><code>{{ msg.messageMetadata.userBytesHex }}</code></pre>
+                    </div>
+                    <div v-if="msg.messageMetadata.applicationId && msg.messageMetadata.userBytesHex" class="mt-2">
+                      <DecodedBytes :application-id="msg.messageMetadata.applicationId" :bytes-hex="msg.messageMetadata.userBytesHex" kind="message"/>
                     </div>
                   </div>
                 </div>
