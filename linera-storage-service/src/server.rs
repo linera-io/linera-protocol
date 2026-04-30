@@ -27,11 +27,14 @@ use crate::key_value_store::{
     statement::Operation,
     storage_service_server::{StorageService, StorageServiceServer},
     KeyValue, OptValue, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
-    ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
-    ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
-    RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace, RequestExistsNamespace,
-    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestListRootKeys,
-    RequestReadMultiValues, RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
+    ReplyFindFirstKeyByPrefix, ReplyFindFirstKeyValueByPrefix, ReplyFindKeyValuesByPrefix,
+    ReplyFindKeysByPrefix, ReplyFindLastKeyByPrefix, ReplyFindLastKeyValueByPrefix, ReplyListAll,
+    ReplyListRootKeys, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
+    RequestContainsKey, RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
+    RequestExistsNamespace, RequestFindFirstKeyByPrefix, RequestFindFirstKeyValueByPrefix,
+    RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestFindLastKeyByPrefix,
+    RequestFindLastKeyValueByPrefix, RequestListRootKeys, RequestReadMultiValues,
+    RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
 };
 
 pub mod key_value_store {
@@ -155,6 +158,94 @@ impl StorageServer {
                 .await
                 .map_err(|e| {
                     Status::unknown(format!("RocksDB error {e:?} at find_key_values_by_prefix"))
+                }),
+        }
+    }
+
+    pub async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Status> {
+        match &self.store {
+            LocalStore::Memory(store) => {
+                store.find_first_key_by_prefix(key_prefix).await.map_err(|e| {
+                    Status::unknown(format!("Memory error {e:?} at find_first_key_by_prefix"))
+                })
+            }
+            #[cfg(with_rocksdb)]
+            LocalStore::RocksDb(store) => {
+                store.find_first_key_by_prefix(key_prefix).await.map_err(|e| {
+                    Status::unknown(format!("RocksDB error {e:?} at find_first_key_by_prefix"))
+                })
+            }
+        }
+    }
+
+    pub async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Status> {
+        match &self.store {
+            LocalStore::Memory(store) => {
+                store.find_last_key_by_prefix(key_prefix).await.map_err(|e| {
+                    Status::unknown(format!("Memory error {e:?} at find_last_key_by_prefix"))
+                })
+            }
+            #[cfg(with_rocksdb)]
+            LocalStore::RocksDb(store) => {
+                store.find_last_key_by_prefix(key_prefix).await.map_err(|e| {
+                    Status::unknown(format!("RocksDB error {e:?} at find_last_key_by_prefix"))
+                })
+            }
+        }
+    }
+
+    pub async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Status> {
+        match &self.store {
+            LocalStore::Memory(store) => store
+                .find_first_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(|e| {
+                    Status::unknown(format!(
+                        "Memory error {e:?} at find_first_key_value_by_prefix"
+                    ))
+                }),
+            #[cfg(with_rocksdb)]
+            LocalStore::RocksDb(store) => store
+                .find_first_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(|e| {
+                    Status::unknown(format!(
+                        "RocksDB error {e:?} at find_first_key_value_by_prefix"
+                    ))
+                }),
+        }
+    }
+
+    pub async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Status> {
+        match &self.store {
+            LocalStore::Memory(store) => store
+                .find_last_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(|e| {
+                    Status::unknown(format!(
+                        "Memory error {e:?} at find_last_key_value_by_prefix"
+                    ))
+                }),
+            #[cfg(with_rocksdb)]
+            LocalStore::RocksDb(store) => store
+                .find_last_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(|e| {
+                    Status::unknown(format!(
+                        "RocksDB error {e:?} at find_last_key_value_by_prefix"
+                    ))
                 }),
         }
     }
@@ -454,6 +545,90 @@ impl StorageService for StorageServer {
             let (message_index, num_chunks) = self.insert_pending_read(key_values).await;
             ReplyFindKeyValuesByPrefix {
                 key_values: Vec::default(),
+                message_index,
+                num_chunks,
+            }
+        };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
+    async fn process_find_first_key_by_prefix(
+        &self,
+        request: Request<RequestFindFirstKeyByPrefix>,
+    ) -> Result<Response<ReplyFindFirstKeyByPrefix>, Status> {
+        let request = request.into_inner();
+        let RequestFindFirstKeyByPrefix { key_prefix } = request;
+        let key = self.find_first_key_by_prefix(&key_prefix).await?;
+        let response = ReplyFindFirstKeyByPrefix { key };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
+    async fn process_find_last_key_by_prefix(
+        &self,
+        request: Request<RequestFindLastKeyByPrefix>,
+    ) -> Result<Response<ReplyFindLastKeyByPrefix>, Status> {
+        let request = request.into_inner();
+        let RequestFindLastKeyByPrefix { key_prefix } = request;
+        let key = self.find_last_key_by_prefix(&key_prefix).await?;
+        let response = ReplyFindLastKeyByPrefix { key };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
+    async fn process_find_first_key_value_by_prefix(
+        &self,
+        request: Request<RequestFindFirstKeyValueByPrefix>,
+    ) -> Result<Response<ReplyFindFirstKeyValueByPrefix>, Status> {
+        let request = request.into_inner();
+        let RequestFindFirstKeyValueByPrefix { key_prefix } = request;
+        let key_value = self.find_first_key_value_by_prefix(&key_prefix).await?;
+        let size = key_value
+            .as_ref()
+            .map(|(k, v)| k.len() + v.len())
+            .unwrap_or(0);
+        let response = if size < MAX_PAYLOAD_SIZE {
+            let key_value = key_value.map(|(key, value)| KeyValue { key, value });
+            ReplyFindFirstKeyValueByPrefix {
+                key_value,
+                message_index: 0,
+                num_chunks: 0,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(key_value).await;
+            ReplyFindFirstKeyValueByPrefix {
+                key_value: None,
+                message_index,
+                num_chunks,
+            }
+        };
+        Ok(Response::new(response))
+    }
+
+    #[instrument(target = "store_server", skip_all, err, fields(key_prefix_len = ?request.get_ref().key_prefix.len()))]
+    async fn process_find_last_key_value_by_prefix(
+        &self,
+        request: Request<RequestFindLastKeyValueByPrefix>,
+    ) -> Result<Response<ReplyFindLastKeyValueByPrefix>, Status> {
+        let request = request.into_inner();
+        let RequestFindLastKeyValueByPrefix { key_prefix } = request;
+        let key_value = self.find_last_key_value_by_prefix(&key_prefix).await?;
+        let size = key_value
+            .as_ref()
+            .map(|(k, v)| k.len() + v.len())
+            .unwrap_or(0);
+        let response = if size < MAX_PAYLOAD_SIZE {
+            let key_value = key_value.map(|(key, value)| KeyValue { key, value });
+            ReplyFindLastKeyValueByPrefix {
+                key_value,
+                message_index: 0,
+                num_chunks: 0,
+            }
+        } else {
+            let (message_index, num_chunks) = self.insert_pending_read(key_value).await;
+            ReplyFindLastKeyValueByPrefix {
+                key_value: None,
                 message_index,
                 num_chunks,
             }
