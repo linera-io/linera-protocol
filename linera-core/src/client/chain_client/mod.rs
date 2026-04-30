@@ -2791,6 +2791,15 @@ impl<Env: Environment> ChainClient<Env> {
         }
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
+                if self.options.message_policy.ignores_origin(&origin) {
+                    trace!(
+                        chain_id = %self.chain_id,
+                        %origin,
+                        %height,
+                        "Skipping NewIncomingBundle notification: origin filtered by message_policy"
+                    );
+                    return Ok(());
+                }
                 if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,

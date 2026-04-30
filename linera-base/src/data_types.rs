@@ -1647,6 +1647,19 @@ impl MessagePolicy {
     pub fn is_reject(&self) -> bool {
         matches!(self.blanket, BlanketMessagePolicy::Reject)
     }
+
+    /// Returns `true` if every message from `origin` would be unconditionally dropped:
+    /// blanket policy is `Ignore`, the origin is in `ignore_chain_ids`, or
+    /// `restrict_chain_ids_to` is `Some` and does not contain the origin.
+    #[instrument(level = "trace", skip(self))]
+    pub fn ignores_origin(&self, origin: &ChainId) -> bool {
+        self.is_ignore()
+            || self.ignore_chain_ids.contains(origin)
+            || self
+                .restrict_chain_ids_to
+                .as_ref()
+                .is_some_and(|set| !set.contains(origin))
+    }
 }
 
 doc_scalar!(Bytecode, "A module bytecode (WebAssembly or EVM)");
