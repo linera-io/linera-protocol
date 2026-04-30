@@ -306,6 +306,64 @@ where
         }
         Ok(None)
     }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        // Fast path: if the first stored key under the prefix is a head segment whose
+        // value advertises a single segment (`count == 1`), the value is fully
+        // contained in this entry and we can return it after stripping the count
+        // prefix and the trailing index bytes from the key. Otherwise fall back to a
+        // full assembly via `find_key_values_by_prefix`.
+        if let Some((key, value)) = self
+            .store
+            .find_first_key_value_by_prefix(key_prefix)
+            .await?
+        {
+            if Self::read_index_from_key(&key)? == 0 && Self::read_count_from_value(&value)? == 1 {
+                let mut key = key;
+                key.truncate(key.len() - 4);
+                return Ok(Some((key, value[4..].to_vec())));
+            }
+        } else {
+            return Ok(None);
+        }
+        Ok(self
+            .find_key_values_by_prefix(key_prefix)
+            .await?
+            .into_iter()
+            .next())
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        // Fast path: see `find_first_key_value_by_prefix`. If the last stored key is
+        // a single-segment head (`index == 0` and `count == 1`), it's a complete
+        // entry. Otherwise the last key may be a continuation of a multi-segment
+        // value or a leftover from a partial delete, so we fall back to a full
+        // prefix scan to find the last assembled head key/value pair.
+        if let Some((key, value)) = self
+            .store
+            .find_last_key_value_by_prefix(key_prefix)
+            .await?
+        {
+            if Self::read_index_from_key(&key)? == 0 && Self::read_count_from_value(&value)? == 1 {
+                let mut key = key;
+                key.truncate(key.len() - 4);
+                return Ok(Some((key, value[4..].to_vec())));
+            }
+        } else {
+            return Ok(None);
+        }
+        Ok(self
+            .find_key_values_by_prefix(key_prefix)
+            .await?
+            .into_iter()
+            .next_back())
+    }
 }
 
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>
