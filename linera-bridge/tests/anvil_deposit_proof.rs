@@ -73,6 +73,8 @@ contract MockERC20 {
 alloy_sol_types::sol! {
     function approve(address spender, uint256 amount) external returns (bool);
 
+    function registerFungibleApplicationId(bytes32 _fungibleApplicationId) external;
+
     function deposit(
         bytes32 target_chain_id,
         bytes32 target_application_id,
@@ -136,10 +138,9 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         "FungibleBridge",
     );
     let bridge_constructor = (
-        deployer,                                // light_client (unused by deposit)
-        <[u8; 32]>::from(target_chain_id),       // chainId
-        <[u8; 32]>::from(target_application_id), // applicationId
-        token_address,                           // token
+        deployer,                          // light_client (unused by deposit)
+        <[u8; 32]>::from(target_chain_id), // chainId
+        token_address,                     // token
     )
         .abi_encode_params();
 
@@ -149,6 +150,18 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     let tx = TransactionRequest::default().with_deploy_code(Bytes::from(bridge_deploy));
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
     let bridge_address = receipt.contract_address.ok_or("missing bridge address")?;
+
+    // Register the wrapped-fungible application ID on the bridge.
+    // Since #5929 the application ID is set post-deployment via this call
+    // rather than through the constructor.
+    let register_data = registerFungibleApplicationIdCall {
+        _fungibleApplicationId: target_application_id,
+    }
+    .abi_encode();
+    let tx = TransactionRequest::default()
+        .to(bridge_address)
+        .input(register_data.into());
+    provider.send_transaction(tx).await?.get_receipt().await?;
 
     // 4. Approve bridge to spend tokens, then deposit
     let deposit_amount = U256::from(1_000_000u64);
