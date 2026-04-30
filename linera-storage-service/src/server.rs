@@ -596,9 +596,7 @@ impl StorageService for StorageServer {
         let request = request.into_inner();
         let RequestFindFirstKeyValueByPrefix { key_prefix } = request;
         let key_value = self.find_first_key_value_by_prefix(&key_prefix).await?;
-        let size = key_value
-            .as_ref()
-            .map_or(0, |(k, v)| k.len() + v.len());
+        let size = key_value.as_ref().map_or(0, |(k, v)| k.len() + v.len());
         let response = if size < MAX_PAYLOAD_SIZE {
             let key_value = key_value.map(|(key, value)| KeyValue { key, value });
             ReplyFindFirstKeyValueByPrefix {
@@ -625,9 +623,7 @@ impl StorageService for StorageServer {
         let request = request.into_inner();
         let RequestFindLastKeyValueByPrefix { key_prefix } = request;
         let key_value = self.find_last_key_value_by_prefix(&key_prefix).await?;
-        let size = key_value
-            .as_ref()
-            .map_or(0, |(k, v)| k.len() + v.len());
+        let size = key_value.as_ref().map_or(0, |(k, v)| k.len() + v.len());
         let response = if size < MAX_PAYLOAD_SIZE {
             let key_value = key_value.map(|(key, value)| KeyValue { key, value });
             ReplyFindLastKeyValueByPrefix {
