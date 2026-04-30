@@ -257,33 +257,54 @@ where
         &self,
         key_prefix: &[u8],
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        // The smallest stored key under any user-key prefix is `K|0` for the smallest
-        // user key `K`, since `K|0 < K|1 < ... < K'|0 < ...`. So strip the trailing
-        // 4-byte segment index.
-        Ok(self
-            .store
-            .find_first_key_by_prefix(key_prefix)
-            .await?
-            .map(|mut key| {
+        // Each user key `K` is stored as `K|0`, `K|1`, ..., `K|n`, where `K|0` is the
+        // head segment. A `DeleteKey` only deletes the head, leaving continuations as
+        // leftover keys with index > 0. If the smallest stored key under the prefix has
+        // index 0, it's a real head key and we strip the trailing 4 bytes. Otherwise we
+        // fall back to a full prefix scan and pick the first head key.
+        if let Some(key) = self.store.find_first_key_by_prefix(key_prefix).await? {
+            if Self::read_index_from_key(&key)? == 0 {
+                let mut key = key;
                 key.truncate(key.len() - 4);
-                key
-            }))
+                return Ok(Some(key));
+            }
+        } else {
+            return Ok(None);
+        }
+        for mut key in self.store.find_keys_by_prefix(key_prefix).await? {
+            if Self::read_index_from_key(&key)? == 0 {
+                key.truncate(key.len() - 4);
+                return Ok(Some(key));
+            }
+        }
+        Ok(None)
     }
 
     async fn find_last_key_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        // The largest stored key under any user-key prefix is `K|n` for the largest
-        // user key `K` and its highest segment index `n`. Strip the trailing 4 bytes.
-        Ok(self
-            .store
-            .find_last_key_by_prefix(key_prefix)
-            .await?
-            .map(|mut key| {
+        // The largest stored key is `K|n` for the largest user key `K` and its highest
+        // segment index `n`. If `n == 0`, `K` had a single segment and the head is
+        // present, so we can strip the trailing 4 bytes. Otherwise the last key may be
+        // a continuation of a live `K` or a leftover from a partial delete; we can't
+        // tell, so fall back to a full prefix scan and pick the last head key.
+        if let Some(key) = self.store.find_last_key_by_prefix(key_prefix).await? {
+            if Self::read_index_from_key(&key)? == 0 {
+                let mut key = key;
                 key.truncate(key.len() - 4);
-                key
-            }))
+                return Ok(Some(key));
+            }
+        } else {
+            return Ok(None);
+        }
+        for mut key in self.store.find_keys_by_prefix(key_prefix).await?.into_iter().rev() {
+            if Self::read_index_from_key(&key)? == 0 {
+                key.truncate(key.len() - 4);
+                return Ok(Some(key));
+            }
+        }
+        Ok(None)
     }
 }
 
