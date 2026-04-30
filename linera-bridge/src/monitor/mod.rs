@@ -182,7 +182,11 @@ impl MonitorState {
             crate::relay::metrics::burn_completed();
             if let Some(db) = &self.db {
                 if let Err(e) = db.update_burn_status(height, burn_index, "completed").await {
-                    tracing::warn!(?height, burn_index, "Failed to update burn status in SQLite: {e:#}");
+                    tracing::warn!(
+                        ?height,
+                        burn_index,
+                        "Failed to update burn status in SQLite: {e:#}"
+                    );
                 }
             }
         } else {
@@ -268,7 +272,11 @@ impl MonitorState {
             crate::relay::metrics::burn_failed();
             if let Some(db) = &self.db {
                 if let Err(e) = db.update_burn_status(height, burn_index, "failed").await {
-                    tracing::warn!(?height, burn_index, "Failed to update burn status in SQLite: {e:#}");
+                    tracing::warn!(
+                        ?height,
+                        burn_index,
+                        "Failed to update burn status in SQLite: {e:#}"
+                    );
                 }
             }
         }

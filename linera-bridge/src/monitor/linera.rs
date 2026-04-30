@@ -84,7 +84,11 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             let mut state = monitor.write().await;
             if let Some(b) = state.burns.get_mut(&(credit_height, burn_index)) {
                 if b.forwarded {
-                    tracing::trace!(?credit_height, burn_index, "Burn already completed, skipping");
+                    tracing::trace!(
+                        ?credit_height,
+                        burn_index,
+                        "Burn already completed, skipping"
+                    );
                     continue;
                 }
                 b.last_retry_at = Some(Instant::now());
