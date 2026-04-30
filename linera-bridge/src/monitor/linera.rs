@@ -236,7 +236,12 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
             evm_recipient: *recipient,
             amount: *amount,
         }) {
-            tracing::warn!(?error, ?height, burn_index, "Failed to enqueue discovered burn");
+            tracing::warn!(
+                ?error,
+                ?height,
+                burn_index,
+                "Failed to enqueue discovered burn"
+            );
         }
     }
 

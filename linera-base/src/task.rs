@@ -74,8 +74,7 @@ impl<R: 'static> Task<R> {
     ) -> Self {
         let (abortable_future, abort_handle) = future::abortable(future);
         let (task, output) = abortable_future.remote_handle();
-        // Discard the spawn handle: the task is driven via `output`, and on `wasm_bindgen_futures::spawn_local` the return type is `()`.
-        drop(spawn(task));
+        spawn(task);
         Self {
             abort_handle,
             output,
