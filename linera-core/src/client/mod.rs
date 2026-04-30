@@ -279,7 +279,6 @@ impl<Env: Environment> Client<Env> {
         chain_worker_ttl: Option<Duration>,
         sender_chain_worker_ttl: Option<Duration>,
         priority_bundle_origins: HashSet<ChainId>,
-        ignored_bundle_origins: HashSet<ChainId>,
         options: chain_client::Options,
         block_cache_size: usize,
         execution_state_cache_size: usize,
@@ -296,7 +295,6 @@ impl<Env: Environment> Client<Env> {
             block_cache_size,
             execution_state_cache_size,
             priority_bundle_origins,
-            ignored_bundle_origins,
             ..ChainWorkerConfig::default()
         };
         let state = WorkerState::new(

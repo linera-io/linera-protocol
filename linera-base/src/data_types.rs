@@ -1590,6 +1590,8 @@ pub struct MessagePolicy {
     /// accepted. `Option::None` means that messages from all chains are accepted. An empty
     /// `HashSet` denotes that messages from no chains are accepted.
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    /// A collection of chains whose incoming messages should be ignored.
+    pub ignore_chain_ids: HashSet<ChainId>,
     /// A collection of applications: If `Some`, only bundles with at least one message by any
     /// of these applications will be accepted.
     pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,

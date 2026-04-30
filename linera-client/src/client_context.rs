@@ -328,7 +328,6 @@ where
             util::non_zero_duration(options.chain_worker_ttl),
             util::non_zero_duration(options.sender_chain_worker_ttl),
             options.prioritize_bundles_from.clone().unwrap_or_default(),
-            options.ignore_bundles_from.clone().unwrap_or_default(),
             options.to_chain_client_options(),
             block_cache_size,
             execution_state_cache_size,

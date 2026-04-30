@@ -1125,7 +1125,6 @@ where
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
             HashSet::new(),
-            HashSet::new(),
             options,
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,

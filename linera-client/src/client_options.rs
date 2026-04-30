@@ -329,6 +329,7 @@ impl Options {
         let message_policy = MessagePolicy {
             blanket: self.blanket_message_policy,
             restrict_chain_ids_to: self.restrict_chain_ids_to.clone(),
+            ignore_chain_ids: self.ignore_bundles_from.clone().unwrap_or_default(),
             reject_message_bundles_without_application_ids: self
                 .reject_message_bundles_without_application_ids
                 .clone(),
