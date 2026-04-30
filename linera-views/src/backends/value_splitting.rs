@@ -298,7 +298,13 @@ where
         } else {
             return Ok(None);
         }
-        for mut key in self.store.find_keys_by_prefix(key_prefix).await?.into_iter().rev() {
+        for mut key in self
+            .store
+            .find_keys_by_prefix(key_prefix)
+            .await?
+            .into_iter()
+            .rev()
+        {
             if Self::read_index_from_key(&key)? == 0 {
                 key.truncate(key.len() - 4);
                 return Ok(Some(key));
@@ -345,11 +351,7 @@ where
         // entry. Otherwise the last key may be a continuation of a multi-segment
         // value or a leftover from a partial delete, so we fall back to a full
         // prefix scan to find the last assembled head key/value pair.
-        if let Some((key, value)) = self
-            .store
-            .find_last_key_value_by_prefix(key_prefix)
-            .await?
-        {
+        if let Some((key, value)) = self.store.find_last_key_value_by_prefix(key_prefix).await? {
             if Self::read_index_from_key(&key)? == 0 && Self::read_count_from_value(&value)? == 1 {
                 let mut key = key;
                 key.truncate(key.len() - 4);

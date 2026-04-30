@@ -33,8 +33,8 @@ use crate::key_value_store::{
     RequestContainsKey, RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
     RequestExistsNamespace, RequestFindFirstKeyByPrefix, RequestFindFirstKeyValueByPrefix,
     RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestFindLastKeyByPrefix,
-    RequestFindLastKeyValueByPrefix, RequestListRootKeys, RequestReadMultiValues,
-    RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended,
+    RequestFindLastKeyValueByPrefix, RequestListRootKeys, RequestReadMultiValues, RequestReadValue,
+    RequestSpecificChunk, RequestWriteBatchExtended,
 };
 
 pub mod key_value_store {
@@ -168,15 +168,21 @@ impl StorageServer {
     ) -> Result<Option<Vec<u8>>, Status> {
         match &self.store {
             LocalStore::Memory(store) => {
-                store.find_first_key_by_prefix(key_prefix).await.map_err(|e| {
-                    Status::unknown(format!("Memory error {e:?} at find_first_key_by_prefix"))
-                })
+                store
+                    .find_first_key_by_prefix(key_prefix)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("Memory error {e:?} at find_first_key_by_prefix"))
+                    })
             }
             #[cfg(with_rocksdb)]
             LocalStore::RocksDb(store) => {
-                store.find_first_key_by_prefix(key_prefix).await.map_err(|e| {
-                    Status::unknown(format!("RocksDB error {e:?} at find_first_key_by_prefix"))
-                })
+                store
+                    .find_first_key_by_prefix(key_prefix)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("RocksDB error {e:?} at find_first_key_by_prefix"))
+                    })
             }
         }
     }
@@ -187,15 +193,21 @@ impl StorageServer {
     ) -> Result<Option<Vec<u8>>, Status> {
         match &self.store {
             LocalStore::Memory(store) => {
-                store.find_last_key_by_prefix(key_prefix).await.map_err(|e| {
-                    Status::unknown(format!("Memory error {e:?} at find_last_key_by_prefix"))
-                })
+                store
+                    .find_last_key_by_prefix(key_prefix)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("Memory error {e:?} at find_last_key_by_prefix"))
+                    })
             }
             #[cfg(with_rocksdb)]
             LocalStore::RocksDb(store) => {
-                store.find_last_key_by_prefix(key_prefix).await.map_err(|e| {
-                    Status::unknown(format!("RocksDB error {e:?} at find_last_key_by_prefix"))
-                })
+                store
+                    .find_last_key_by_prefix(key_prefix)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("RocksDB error {e:?} at find_last_key_by_prefix"))
+                    })
             }
         }
     }
