@@ -4,7 +4,7 @@
 //! Tests for [`ClientContext::update_wallet_from_client`].
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::Duration,
 };
@@ -49,7 +49,6 @@ async fn make_context(
         format!("Client node for {:.8}", chain_id),
         Some(Duration::from_secs(30)),
         Some(Duration::from_secs(1)),
-        HashSet::new(),
         chain_client::Options::test_default(),
         DEFAULT_BLOCK_CACHE_SIZE,
         DEFAULT_EXECUTION_STATE_CACHE_SIZE,

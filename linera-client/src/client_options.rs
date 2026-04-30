@@ -348,6 +348,7 @@ impl Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
             staging_bundles_time_budget: self.staging_bundles_time_budget,
+            priority_bundle_origins: self.prioritize_bundles_from.clone().unwrap_or_default(),
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,

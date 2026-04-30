@@ -2895,6 +2895,54 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_priority_bundle_origins<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let sender_a = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let sender_b = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
+    let mut receiver = builder.add_root_chain(3, Amount::ZERO).await?;
+    let recipient = Account::chain(receiver.chain_id());
+
+    // Mark sender_b's bundles as priority for the receiver.
+    receiver.options_mut().priority_bundle_origins =
+        [sender_b.chain_id()].into_iter().collect();
+
+    // Send from sender_a first (would normally come first by timestamp), then sender_b.
+    sender_a
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    sender_b
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await?;
+    let cert = receiver.process_inbox().await?.0.pop().unwrap();
+    let bundles: Vec<_> = cert.block().body.incoming_bundles().collect();
+    assert_eq!(bundles.len(), 2);
+    assert_eq!(
+        bundles[0].origin,
+        sender_b.chain_id(),
+        "Priority bundle from sender_b should be first"
+    );
+    assert_eq!(
+        bundles[1].origin,
+        sender_a.chain_id(),
+        "Non-priority bundle from sender_a should be second"
+    );
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
