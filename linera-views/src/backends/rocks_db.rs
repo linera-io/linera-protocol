@@ -237,6 +237,31 @@ impl RocksDbStoreExecutor {
         Ok(key_values)
     }
 
+    /// Returns an iterator positioned at the largest key with the given prefix, if any.
+    /// `total_order_seek` is enabled because the database uses a fixed-length prefix
+    /// extractor; without it, `seek_for_prev` only searches within the bloom-prefix
+    /// scope and misses keys whose extractor-prefix differs from the seek target.
+    fn get_find_prefix_reverse_iterator(
+        &self,
+        prefix: &[u8],
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
+        let mut read_opts = rocksdb::ReadOptions::default();
+        read_opts.set_async_io(true);
+        read_opts.set_total_order_seek(true);
+        let upper_bound = get_upper_bound_option(prefix);
+        let mut iter = self.db.raw_iterator_opt(read_opts);
+        match upper_bound.as_deref() {
+            Some(ub) => {
+                iter.seek_for_prev(ub);
+                if iter.key().is_some_and(|k| k == ub) {
+                    iter.prev();
+                }
+            }
+            None => iter.seek_to_last(),
+        }
+        iter
+    }
+
     fn find_first_key_by_prefix_internal(
         &self,
         key_prefix: Vec<u8>,
@@ -259,18 +284,11 @@ impl RocksDbStoreExecutor {
         prefix.extend(key_prefix);
         let len = prefix.len();
 
-        // RocksDB's reverse-iteration primitives interact awkwardly with our
-        // prefix-bounded scans (see e.g. interactions with prefix bloom filters and
-        // `iterate_upper_bound` on `seek_to_last`). Walking forward with the same
-        // bounded iterator that powers `find_keys_by_prefix` and keeping the last
-        // entry is robust and stays linear only in the size of the prefix range.
-        let mut iter = self.get_find_prefix_iterator(&prefix);
-        let mut last_key = None;
-        while let Some(key) = iter.key() {
-            last_key = Some(key[len..].to_vec());
-            iter.next();
-        }
-        Ok(last_key)
+        let iter = self.get_find_prefix_reverse_iterator(&prefix);
+        Ok(iter
+            .key()
+            .filter(|k| k.starts_with(&prefix))
+            .map(|key| key[len..].to_vec()))
     }
 
     #[expect(clippy::type_complexity)]
@@ -299,14 +317,11 @@ impl RocksDbStoreExecutor {
         prefix.extend(key_prefix);
         let len = prefix.len();
 
-        // See `find_last_key_by_prefix_internal` for why we walk forward.
-        let mut iter = self.get_find_prefix_iterator(&prefix);
-        let mut last = None;
-        while let Some((key, value)) = iter.item() {
-            last = Some((key[len..].to_vec(), value.to_vec()));
-            iter.next();
-        }
-        Ok(last)
+        let iter = self.get_find_prefix_reverse_iterator(&prefix);
+        Ok(iter
+            .item()
+            .filter(|(k, _)| k.starts_with(&prefix))
+            .map(|(key, value)| (key[len..].to_vec(), value.to_vec())))
     }
 
     fn write_batch_internal(
