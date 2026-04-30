@@ -187,6 +187,8 @@ counter-no-graphql.workspace = true
 criterion = { workspace = true, features = ["async_tokio"] }
 crowd-funding.workspace = true
 ethereum-tracker.workspace = true
+event-emitter.workspace = true
+event-subscriber.workspace = true
 fungible.workspace = true
 linera-base = { workspace = true, features = ["test"] }
 linera-chain = { workspace = true, features = ["test"] }
@@ -197,8 +199,6 @@ linera-execution = { workspace = true, features = ["test"] }
 linera-rpc = { workspace = true, features = ["test"] }
 linera-sdk = { workspace = true, features = ["wasmer", "test"] }
 linera-service = { path = ".", default-features = false, features = ["test"] }
-event-emitter.workspace = true
-event-subscriber.workspace = true
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
 matching-engine.workspace = true

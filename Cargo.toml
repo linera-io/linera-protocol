@@ -355,10 +355,10 @@ counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
-fungible = { path = "./examples/fungible" }
-hex-game = { path = "./examples/hex-game" }
 event-emitter = { path = "./examples/event-emitter" }
 event-subscriber = { path = "./examples/event-subscriber" }
+fungible = { path = "./examples/fungible" }
+hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
 meta-counter = { path = "./linera-sdk/tests/fixtures/meta-counter" }
 native-fungible = { path = "./examples/native-fungible" }
