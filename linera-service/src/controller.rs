@@ -176,7 +176,8 @@ where
             pending_services
                 .retain(|_, pending_service| pending_service.start_block_height > height);
             if pending_services.is_empty() {
-                let _ = self.pending_services_notifications.remove(&chain_id);
+                // We don't need the removed Notify handle; an absent entry is fine too.
+                drop(self.pending_services_notifications.remove(&chain_id));
             }
         }
     }

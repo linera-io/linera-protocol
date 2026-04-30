@@ -48,12 +48,14 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
         {
             let state = monitor.read().await;
             for b in state.burns_ready_for_retry(max_retries) {
-                let _ = pending_burn_tx.try_send(PendingBurn {
+                if let Err(error) = pending_burn_tx.try_send(PendingBurn {
                     height: b.value.height,
                     burn_index: b.value.burn_index,
                     evm_recipient: b.value.evm_recipient,
                     amount: b.value.amount,
-                });
+                }) {
+                    tracing::warn!(?error, "Failed to enqueue burn for retry");
+                }
             }
         }
 
@@ -228,12 +230,14 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
 
     for (height, burn_index, recipient, amount) in &new_burns {
         tracing::info!(?height, burn_index, %recipient, %amount, "Discovered burn");
-        let _ = pending_burn_tx.try_send(PendingBurn {
+        if let Err(error) = pending_burn_tx.try_send(PendingBurn {
             height: *height,
             burn_index: *burn_index,
             evm_recipient: *recipient,
             amount: *amount,
-        });
+        }) {
+            tracing::warn!(?error, ?height, burn_index, "Failed to enqueue discovered burn");
+        }
     }
 
     let mut state = monitor.write().await;
