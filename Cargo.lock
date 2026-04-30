@@ -5533,6 +5533,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
+ "serde_yaml 0.8.26",
  "serde_yaml 0.9.34+deprecated",
  "social",
  "tempfile",

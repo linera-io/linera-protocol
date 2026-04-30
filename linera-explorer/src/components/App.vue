@@ -1,5 +1,5 @@
 <script lang="ts">
-import { data, save_config, route, decode_user_operation, decode_user_message, decode_user_response, decode_user_event_value } from '../../pkg/linera_explorer'
+import { data, save_config, route, decode_user_operation, decode_user_message, decode_user_response, decode_user_event_value, fetch_user_app_formats_js } from '../../pkg/linera_explorer'
 import Block from './Block.vue'
 import Blocks from './Blocks.vue'
 import Chain from './Chain.vue'
@@ -36,6 +36,9 @@ export default {
     },
     decode_user_event_value(application_id: string, bytes_hex: string) {
       return decode_user_event_value(this, application_id, bytes_hex)
+    },
+    fetch_user_app_formats(application_id: string) {
+      return fetch_user_app_formats_js(this, application_id)
     }
   },
   components: {

@@ -1083,6 +1083,20 @@ pub async fn decode_user_event_value(
     .await
 }
 
+/// Fetch the registered [`Formats`] for a deployed application and return them
+/// as a JS object, or `JsValue::NULL` if no entry is available (no registry
+/// configured, the app is not on the active chain, or the registry has no
+/// entry for that module).
+#[wasm_bindgen]
+pub async fn fetch_user_app_formats_js(app: JsValue, application_id: String) -> JsValue {
+    let Some(formats) =
+        fetch_user_app_formats("fetch_user_app_formats_js", app, &application_id).await
+    else {
+        return JsValue::NULL;
+    };
+    formats.serialize(&SER).unwrap_or(JsValue::NULL)
+}
+
 /// Look up the `module_id` (as a hex string) of a deployed application on the
 /// given chain. Returns `Ok(None)` if no application with the given id exists
 /// on that chain.

@@ -1108,7 +1108,7 @@ fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, E
             format!("SNAP file {path:?} is missing the `---` frontmatter delimiters"),
         )
     })?;
-    serde_yaml::from_str(body).map_err(|e| {
+    serde_yaml_08::from_str(body).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("failed to parse SNAP body in {path:?} as Formats: {e}"),
@@ -1122,6 +1122,35 @@ fn strip_snap_frontmatter(content: &str) -> Option<&str> {
     let rest = content.strip_prefix("---\n")?;
     let end = rest.find("\n---\n")?;
     Some(&rest[end + "\n---\n".len()..])
+}
+
+#[cfg(all(test, feature = "fs", not(web)))]
+mod snap_loader_tests {
+    use super::read_formats_from_snap;
+
+    #[test]
+    fn parses_fungible_snap() {
+        let path = std::path::Path::new(
+            "../examples/fungible/tests/snapshots/format__format.snap",
+        );
+        read_formats_from_snap(path).expect("fungible snap should parse");
+    }
+
+    #[test]
+    fn parses_social_snap() {
+        let path = std::path::Path::new(
+            "../examples/social/tests/snapshots/format__format.snap",
+        );
+        read_formats_from_snap(path).expect("social snap should parse");
+    }
+
+    #[test]
+    fn parses_counter_snap() {
+        let path = std::path::Path::new(
+            "../examples/counter/tests/snapshots/format__format.snap",
+        );
+        read_formats_from_snap(path).expect("counter snap should parse");
+    }
 }
 
 #[cfg(not(web))]
