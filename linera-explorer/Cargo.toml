@@ -17,7 +17,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-bcs.workspace = true
 console_error_panic_hook = "0.1"
 futures.workspace = true
 graphql_client = { version = "0.13", features = ["reqwest-rustls"] }
@@ -25,11 +24,11 @@ hex.workspace = true
 js-sys = "0.3"
 linera-base.workspace = true
 linera-indexer-graphql-client.workspace = true
+linera-sdk = { workspace = true, features = ["format-decode"] }
 linera-service-graphql-client.workspace = true
 once_cell = "1.19.0"
 reqwest.workspace = true
 serde = { workspace = true, features = ["derive"] }
-serde-reflection.workspace = true
 serde-wasm-bindgen = "0.6"
 serde_json.workspace = true
 url = "2.5"
