@@ -228,7 +228,8 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
              --constructor-args \
              {light_client} \
              {chain_a_bytes32} \
-             {erc20_addr}"
+             {erc20_addr} \
+             {app_id_bytes32}"
         ),
         project_name,
         &compose_file,
@@ -236,23 +237,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     .await;
     let bridge_addr = parse_deployed_address(&bridge_output)?;
     tracing::info!(%bridge_addr, "FungibleBridge deployed");
-
-    // Register the wrapped-fungible application ID
-    tracing::info!("Registering applicationId in FungibleBridge...");
-    exec_ok(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "cast send --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             {bridge_addr} \
-             'registerFungibleApplicationId(bytes32)' \
-             {app_id_bytes32}"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
 
     // ── 7. Fund FungibleBridge with ERC20 tokens ──
     tracing::info!("Funding FungibleBridge with ERC20 tokens...");

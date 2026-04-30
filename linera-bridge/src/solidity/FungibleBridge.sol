@@ -31,29 +31,21 @@ contract FungibleBridge is Microchain {
 
     // WrappedFungible application ID on Linera,
     // used to identify Burn events in the block stream.
-    // Set once via registerFungibleApplicationId after deployment.
-    bytes32 public fungibleApplicationId;
+    bytes32 public immutable fungibleApplicationId;
     // The ERC-20 token being bridged.
     IERC20 public immutable token;
-    // The deployer, authorized to register the application ID.
-    address public immutable deployer;
     uint256 public depositNonce;
 
     constructor(
         address _lightClient,
         bytes32 _chainId,
-        address _token
+        address _token,
+        bytes32 _fungibleApplicationId
     )
         Microchain(_lightClient, _chainId)
     {
+        require(_fungibleApplicationId != bytes32(0), "fungibleApplicationId must be non-zero");
         token = IERC20(_token);
-        deployer = msg.sender;
-    }
-
-    /// Registers the wrapped-fungible application ID. Can only be called once, by the deployer.
-    function registerFungibleApplicationId(bytes32 _fungibleApplicationId) external {
-        require(msg.sender == deployer, "only deployer can register");
-        require(fungibleApplicationId == bytes32(0), "application ID already registered");
         fungibleApplicationId = _fungibleApplicationId;
     }
 
