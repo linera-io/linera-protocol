@@ -18,7 +18,7 @@ use futures::{
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     abi::Abi,
-    crypto::{signer, AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
         ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
@@ -51,7 +51,7 @@ use linera_execution::{
         AdminOperation, OpenChainConfig, SystemOperation, EPOCH_STREAM_NAME,
         REMOVED_EPOCH_STREAM_NAME,
     },
-    ExecutionError, Operation, Query, QueryOutcome, QueryResponse, SystemQuery, SystemResponse,
+    ExecutionError, Operation, Query, QueryOutcome,
 };
 use linera_storage::{Clock as _, Storage as _};
 use linera_views::ViewError;
@@ -71,7 +71,7 @@ use super::{
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     environment::Environment,
-    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{
         CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode,
         ValidatorNodeProvider as _,
@@ -151,7 +151,7 @@ impl Options {
             max_block_limit_errors: 3,
             max_new_events_per_block: 10,
             staging_bundles_time_budget: None,
-            message_policy: MessagePolicy::new_accept_all(),
+            message_policy: MessagePolicy::default(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
@@ -174,6 +174,9 @@ impl Options {
         BundleExecutionPolicy {
             on_failure: BundleFailurePolicy::AutoRetry {
                 max_failures: self.max_block_limit_errors,
+                never_reject_application_ids: Arc::new(
+                    self.message_policy.never_reject_application_ids.clone(),
+                ),
             },
             time_budget: self.staging_bundles_time_budget,
         }
@@ -204,6 +207,9 @@ pub struct ChainClient<Env: Environment> {
     initial_block_hash: Option<CryptoHash>,
     /// Optional timing sender for benchmarking.
     timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
+    /// Sender chain IDs whose bundles were discarded due to the never-reject policy.
+    /// These origins are excluded from `process_inbox` until the client is restarted.
+    skipped_origins: Arc<papaya::HashSet<ChainId>>,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -216,6 +222,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
             initial_next_block_height: self.initial_next_block_height,
             initial_block_hash: self.initial_block_hash,
             timing_sender: self.timing_sender.clone(),
+            skipped_origins: self.skipped_origins.clone(),
         }
     }
 }
@@ -359,6 +366,7 @@ impl<Env: Environment> ChainClient<Env> {
             initial_block_hash,
             initial_next_block_height,
             timing_sender,
+            skipped_origins: Arc::new(papaya::HashSet::new()),
         }
     }
 
@@ -515,9 +523,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id)
-            .with_manager_values()
-            .with_committees();
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self
             .client
             .local_node
@@ -559,10 +565,12 @@ impl<Env: Environment> ChainClient<Env> {
             );
         }
 
+        let skipped = self.skipped_origins.pin();
         Ok(info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
+            .filter(|bundle| !skipped.contains(&bundle.origin))
             .take(self.options.max_pending_message_bundles)
             .collect())
     }
@@ -653,28 +661,46 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
         let info = self.chain_info_with_committees().await?;
-        let epoch = info.epoch;
-        let committees = info.into_committees()?;
-        Ok((epoch, committees))
+        let committees = info
+            .requested_committees
+            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
+        Ok((info.epoch, committees))
     }
 
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
-    pub async fn local_committee(&self) -> Result<Committee, Error> {
-        let info = match self.chain_info_with_committees().await {
+    pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
+        let info = match self.chain_info().await {
             Ok(info) => info,
             Err(LocalNodeError::BlobsNotFound(_)) => {
                 self.synchronize_chain_state(self.chain_id).await?;
-                self.chain_info_with_committees().await?
+                self.chain_info().await?
+            }
+            Err(LocalNodeError::EventsNotFound(event_ids))
+                if event_ids
+                    .iter()
+                    .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)) =>
+            {
+                // `initialize_and_save_if_needed` couldn't start the chain because
+                // the admin chain's epoch events aren't synced yet.
+                self.synchronize_chain_state(self.client.admin_chain_id)
+                    .await?;
+                self.chain_info().await?
             }
             Err(err) => return Err(err.into()),
         };
-        Ok(info.into_current_committee()?)
+        let committee = self
+            .client
+            .storage_client()
+            .get_or_load_committee(info.epoch)
+            .await?
+            .ok_or_else(|| LocalNodeError::InactiveChain(self.chain_id))?;
+        Ok(committee)
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
     #[instrument(level = "trace")]
-    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         self.client.admin_committee().await
     }
 
@@ -826,7 +852,7 @@ impl<Env: Environment> ChainClient<Env> {
             );
         };
         if let Ok(new_committee) = self.local_committee().await {
-            if Some(&new_committee) != old_committee {
+            if Some(&*new_committee) != old_committee {
                 // If the configuration just changed, communicate to the new committee as well.
                 // (This is actually more important that updating the previous committee.)
                 let new_committee_start = linera_base::time::Instant::now();
@@ -1073,7 +1099,7 @@ impl<Env: Environment> ChainClient<Env> {
             .next_outbox_heights(received_logs.chains(), self.chain_id)
             .await?;
 
-        validator_trackers.filter_out_already_known(&mut received_logs, local_next_heights);
+        validator_trackers.filter_out_already_known(&mut received_logs, &local_next_heights);
 
         debug!(
             remaining_total_certificates = %received_logs.num_certs(),
@@ -1242,8 +1268,9 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace")]
     pub async fn request_leader_timeout(&self) -> Result<TimeoutCertificate, Error> {
         let chain_id = self.chain_id;
-        let info = self.chain_info_with_committees().await?;
-        let committee = info.current_committee()?;
+        let committee = self.local_committee().await?;
+        let info = self.chain_info().await?;
+        let committee = &committee;
         let height = info.next_block_height;
         let round = info.manager.current_round;
         let action = CommunicateAction::RequestTimeout {
@@ -1285,7 +1312,7 @@ impl<Env: Environment> ChainClient<Env> {
     #[instrument(level = "trace", skip_all)]
     pub async fn synchronize_chain_state_from_committee(
         &self,
-        committee: Committee,
+        committee: Arc<Committee>,
     ) -> Result<Box<ChainInfo>, Error> {
         Box::pin(
             self.client
@@ -1487,7 +1514,7 @@ impl<Env: Environment> ChainClient<Env> {
                 use the `linera retry-pending-block` command to commit that first"
             )
         );
-        let info = self.chain_info_with_committees().await?;
+        let info = self.chain_info_with_manager_values().await?;
         let timestamp = self.next_timestamp(&transactions, info.timestamp);
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
@@ -1502,17 +1529,26 @@ impl<Env: Environment> ChainClient<Env> {
         let round = self.round_for_oracle(&info, &identity).await?;
         // Make sure every incoming message succeeds and otherwise remove them.
         // Also, compute the final certified hash while we're at it.
-        let (block, _) = Box::pin(self.client.stage_block_execution(
+        let (block, _, never_reject_origins) = Box::pin(self.client.stage_block_execution(
             proposed_block,
             round,
             blobs.clone(),
             self.options.bundle_execution_policy(),
         ))
         .await?;
+        // Record origins whose bundles were discarded due to the never-reject policy so
+        // that `process_inbox` stops retrying them until the client is restarted.
+        if !never_reject_origins.is_empty() {
+            let skipped = self.skipped_origins.pin();
+            for origin in never_reject_origins {
+                skipped.insert(origin);
+            }
+        }
         let (proposed_block, _) = block.clone().into_proposal();
         *proposal_guard = Some(PendingProposal {
             block: proposed_block,
             blobs,
+            round: None,
         });
         Ok(block)
     }
@@ -1558,11 +1594,12 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Queries a system application.
+    #[cfg(with_testing)]
     #[instrument(level = "trace", skip(query))]
     pub async fn query_system_application(
         &self,
-        query: SystemQuery,
-    ) -> Result<QueryOutcome<SystemResponse>, Error> {
+        query: linera_execution::SystemQuery,
+    ) -> Result<QueryOutcome<linera_execution::SystemResponse>, Error> {
         let (
             QueryOutcome {
                 response,
@@ -1571,7 +1608,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(Query::System(query), None).await?;
         match response {
-            QueryResponse::System(response) => Ok(QueryOutcome {
+            linera_execution::QueryResponse::System(response) => Ok(QueryOutcome {
                 response,
                 operations,
             }),
@@ -1596,7 +1633,7 @@ impl<Env: Environment> ChainClient<Env> {
             _,
         ) = self.query_application(query, None).await?;
         match response {
-            QueryResponse::User(response_bytes) => {
+            linera_execution::QueryResponse::User(response_bytes) => {
                 let response = serde_json::from_slice(&response_bytes)?;
                 Ok(QueryOutcome {
                     response,
@@ -1683,7 +1720,7 @@ impl<Env: Environment> ChainClient<Env> {
         ))
         .await
         {
-            Ok((_, response)) => Ok((
+            Ok((_, response, _)) => Ok((
                 response.info.chain_balance,
                 response.info.requested_owner_balance,
             )),
@@ -1910,7 +1947,7 @@ impl<Env: Environment> ChainClient<Env> {
                         .get_locking_blobs(&blob_ids, self.chain_id)
                         .await?
                         .ok_or_else(|| Error::InternalError("Missing local locking blobs"))?;
-                    let block = self
+                    let (block, _, _) = self
                         .client
                         .stage_block_execution(
                             proposed_block,
@@ -1918,8 +1955,7 @@ impl<Env: Environment> ChainClient<Env> {
                             blobs.clone(),
                             BundleExecutionPolicy::committed(),
                         )
-                        .await?
-                        .0;
+                        .await?;
                     debug!("Retrying locking block from fast round.");
                     (block, blobs)
                 }
@@ -1929,7 +1965,7 @@ impl<Env: Environment> ChainClient<Env> {
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
             let round = self.round_for_oracle(&info, &owner).await?;
-            let (block, _) = self
+            let (block, _, _) = self
                 .client
                 .stage_block_execution(
                     proposed_block,
@@ -1954,6 +1990,9 @@ impl<Env: Environment> ChainClient<Env> {
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
         debug!("Proposing block for round {}", round);
+        if let Some(pending) = proposal_guard.as_mut() {
+            pending.round.get_or_insert(round);
+        }
 
         let already_handled_locally = info
             .manager
@@ -2139,8 +2178,9 @@ impl<Env: Environment> ChainClient<Env> {
                 "Conflicting proposal in the current round",
             ));
         };
-        let current_committee = info
-            .current_committee()?
+        let current_committee = self
+            .local_committee()
+            .await?
             .validators
             .values()
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
@@ -2166,10 +2206,11 @@ impl<Env: Environment> ChainClient<Env> {
     /// Rotates the key of the chain.
     ///
     /// Replaces current owners of the chain with the new key pair.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn rotate_key_pair(
         &self,
-        public_key: AccountPublicKey,
+        public_key: linera_base::crypto::AccountPublicKey,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         Box::pin(self.transfer_ownership(public_key.into())).await
     }
@@ -2659,6 +2700,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Sends money to a chain.
     /// Do not check balance. (This may block the client)
     /// Do not confirm the transaction.
+    #[cfg(with_testing)]
     #[instrument(level = "trace")]
     pub async fn transfer_to_account_unsafe_unconfirmed(
         &self,
@@ -2710,7 +2752,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn local_chain_info(
         &self,
         chain_id: ChainId,
-        local_node: &mut LocalNodeClient<Env::Storage>,
+        local_node: &LocalNodeClient<Env::Storage>,
     ) -> Result<Option<Box<ChainInfo>>, Error> {
         match local_node.chain_info(chain_id).await {
             Ok(info) => Ok(Some(info)),
@@ -2723,7 +2765,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn local_next_block_height(
         &self,
         chain_id: ChainId,
-        local_node: &mut LocalNodeClient<Env::Storage>,
+        local_node: &LocalNodeClient<Env::Storage>,
     ) -> Result<BlockHeight, Error> {
         Ok(self
             .local_chain_info(chain_id, local_node)
@@ -2746,7 +2788,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn process_notification(
         &self,
         remote_node: RemoteNode<Env::ValidatorNode>,
-        mut local_node: LocalNodeClient<Env::Storage>,
+        local_node: LocalNodeClient<Env::Storage>,
         notification: Notification,
     ) -> Result<(), Error> {
         let listening_mode = self.client.chain_mode(notification.chain_id);
@@ -2793,9 +2835,7 @@ impl<Env: Environment> ChainClient<Env> {
                 ..
             } => {
                 let chain_id = notification.chain_id;
-                let local_height = self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?;
+                let local_height = self.local_next_block_height(chain_id, &local_node).await?;
                 if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -2824,20 +2864,14 @@ impl<Env: Environment> ChainClient<Env> {
                     self.client
                         .synchronize_chain_state_from(&remote_node, chain_id)
                         .await?;
-                    if self
-                        .local_next_block_height(chain_id, &mut local_node)
-                        .await?
-                        <= height
-                    {
+                    if self.local_next_block_height(chain_id, &local_node).await? <= height {
                         error!("NewBlock: Fail to synchronize new block after notification");
                     }
                 }
             }
             Reason::NewEvents { height, hash, .. } => {
                 let chain_id = notification.chain_id;
-                let local_height = self
-                    .local_next_block_height(chain_id, &mut local_node)
-                    .await?;
+                let local_height = self.local_next_block_height(chain_id, &local_node).await?;
                 if local_height > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -2861,7 +2895,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
-                if let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? {
+                if let Some(info) = self.local_chain_info(chain_id, &local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!(
                             chain_id = %self.chain_id,
@@ -2873,7 +2907,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
-                let Some(info) = self.local_chain_info(chain_id, &mut local_node).await? else {
+                let Some(info) = self.local_chain_info(chain_id, &local_node).await? else {
                     error!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to read local chain info for {chain_id}"

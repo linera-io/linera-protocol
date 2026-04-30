@@ -40,7 +40,8 @@ defineProps<{
             <div class="row">
               <div class="col-md-6">
                 <strong>Origin:</strong>
-                <a @click="$root.route(undefined, [['chain', transaction.incomingBundle.origin.sender || transaction.incomingBundle.origin]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender || transaction.incomingBundle.origin) }}</a>
+                <a v-if="transaction.incomingBundle.origin.sender" @click="$root.route(undefined, [['chain', transaction.incomingBundle.origin.sender]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(transaction.incomingBundle.origin.sender) }}</a>
+                <span v-else class="font-monospace">{{ typeof transaction.incomingBundle.origin === 'string' ? transaction.incomingBundle.origin : JSON.stringify(transaction.incomingBundle.origin) }}</span>
               </div>
               <div class="col-md-6">
                 <strong>Action:</strong>

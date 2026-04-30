@@ -105,7 +105,7 @@ pub trait ClientContext {
                 chain_id,
                 chain.block_hash,
                 chain.next_block_height,
-                chain.pending_proposal,
+                &chain.pending_proposal,
                 chain.owner,
                 self.timing_sender(),
             ))
@@ -163,7 +163,7 @@ struct ListeningClient<C: ClientContext> {
 }
 
 impl<C: ClientContext + 'static> ListeningClient<C> {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         client: ContextChainClient<C>,
         abort_handle: AbortOnDrop,

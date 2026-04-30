@@ -60,6 +60,7 @@ where
         if self
             .system
             .current_committee()
+            .await?
             .is_some_and(|(_epoch, committee)| {
                 committee
                     .policy()
@@ -248,7 +249,7 @@ where
                             context,
                             bytes,
                             &mut endpoint.incoming_execution_requests,
-                            &mut endpoint.runtime_request_sender,
+                            &endpoint.runtime_request_sender,
                         )
                         .await?
                     }
@@ -304,11 +305,7 @@ where
                 );
 
                 for (code, description) in codes.0.into_iter().zip(descriptions) {
-                    runtime.preload_service(
-                        ApplicationId::from(&description),
-                        code,
-                        description,
-                    )?;
+                    runtime.preload_service(ApplicationId::from(&description), code, description);
                 }
 
                 runtime.run_query(application_id, query)
@@ -330,7 +327,7 @@ where
         incoming_execution_requests: &mut futures::channel::mpsc::UnboundedReceiver<
             ExecutionRequest,
         >,
-        runtime_request_sender: &mut std::sync::mpsc::Sender<ServiceRuntimeRequest>,
+        runtime_request_sender: &std::sync::mpsc::Sender<ServiceRuntimeRequest>,
     ) -> Result<QueryOutcome<Vec<u8>>, ExecutionError> {
         let (outcome_sender, outcome_receiver) = oneshot::channel();
         let mut outcome_receiver = outcome_receiver.fuse();

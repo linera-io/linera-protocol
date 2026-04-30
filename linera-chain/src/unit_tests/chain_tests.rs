@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(clippy::large_futures)]
+#![expect(clippy::large_futures)]
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -67,15 +67,17 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
         local_time: Timestamp,
         published_blobs: &[Blob],
     ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
-        self.execute_block(
-            block,
-            local_time,
-            None,
-            published_blobs,
-            None,
-            BundleExecutionPolicy::committed(),
-        )
-        .await
+        let (block, outcome, tracker, _) = self
+            .execute_block(
+                block,
+                local_time,
+                None,
+                published_blobs,
+                None,
+                BundleExecutionPolicy::committed(),
+            )
+            .await?;
+        Ok((block, outcome, tracker))
     }
 }
 
@@ -122,13 +124,13 @@ impl TestEnvironment {
     fn make_app_description(&self) -> (ApplicationDescription, Blob, Blob) {
         let contract = Bytecode::new(b"contract".into());
         let service = Bytecode::new(b"service".into());
-        self.make_app_from_bytecodes(contract, service)
+        self.make_app_from_bytecodes(&contract, &service)
     }
 
     fn make_app_from_bytecodes(
         &self,
-        contract: Bytecode,
-        service: Bytecode,
+        contract: &Bytecode,
+        service: &Bytecode,
     ) -> (ApplicationDescription, Blob, Blob) {
         let contract_blob = Blob::new_contract_bytecode(contract.compress());
         let service_blob = Blob::new_service_bytecode(service.compress());
@@ -278,8 +280,8 @@ async fn test_application_permissions() -> anyhow::Result<()> {
     let application = MockApplication::default();
 
     let (another_app, another_contract, another_service) = env.make_app_from_bytecodes(
-        Bytecode::new(b"contractB".into()),
-        Bytecode::new(b"serviceB".into()),
+        &Bytecode::new(b"contractB".into()),
+        &Bytecode::new(b"serviceB".into()),
     );
     let another_app_id = ApplicationId::from(&another_app);
 
@@ -936,6 +938,30 @@ async fn prepare_test_with_dummy_mock_application(
     });
 
     Ok((application, application_id, chain, block, time))
+}
+
+/// `BlockHeight` is BCS-encoded as a little-endian `u64`, so the lexicographic
+/// order of `preprocessed_blocks` keys does not match the numeric order of heights:
+/// height 1 → `[01, 00, ..]` sorts after height 256 → `[00, 01, ..]`. This regression
+/// test pins down that `next_height_to_preprocess` returns the numeric maximum.
+#[tokio::test]
+async fn test_next_height_to_preprocess_with_misordered_keys() {
+    let chain_id = TestEnvironment::new().admin_chain_id();
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    chain
+        .preprocessed_blocks
+        .insert(&BlockHeight(256), CryptoHash::test_hash("a"))
+        .unwrap();
+    chain
+        .preprocessed_blocks
+        .insert(&BlockHeight(1), CryptoHash::test_hash("b"))
+        .unwrap();
+
+    assert_eq!(
+        chain.next_height_to_preprocess().await.unwrap(),
+        BlockHeight(257),
+    );
 }
 
 /// View struct without a trailing field, simulating the `ChainStateView` layout

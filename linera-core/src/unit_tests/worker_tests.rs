@@ -41,8 +41,8 @@ use linera_chain::{
 use linera_execution::{
     committee::Committee,
     system::{
-        AdminOperation, OpenChainConfig, SystemMessage, SystemOperation,
-        EPOCH_STREAM_NAME as NEW_EPOCH_STREAM_NAME, REMOVED_EPOCH_STREAM_NAME,
+        AdminOperation, OpenChainConfig, SystemMessage, SystemOperation, EPOCH_STREAM_NAME,
+        REMOVED_EPOCH_STREAM_NAME,
     },
     test_utils::{
         dummy_chain_description, ExpectedCall, RegisterMockApplication, SystemExecutionState,
@@ -800,7 +800,7 @@ where
         .await
         .unwrap();
     // Stage execution to get the block for certificate creation.
-    let (_, block, _, _) = env
+    let (_, block, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block,
@@ -829,7 +829,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (_, block, _, _) = env
+    let (_, block, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block,
@@ -857,7 +857,7 @@ where
         .into_first_proposal(owner, &signer)
         .await
         .unwrap();
-    let (_, block, _, _) = env
+    let (_, block, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block,
@@ -2793,7 +2793,7 @@ where
     ]);
     let event_id = EventId {
         chain_id: admin_chain_id,
-        stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+        stream_id: StreamId::system(EPOCH_STREAM_NAME),
         index: 1,
     };
     let committee_blob = Blob::new(BlobContent::new_committee(bcs::to_bytes(&committee)?));
@@ -2870,7 +2870,16 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
+        assert_eq!(
+            user_chain
+                .execution_state
+                .system
+                .committees
+                .get()
+                .await?
+                .len(),
+            1
+        );
     }
     // Make the child receive the pending messages.
     let certificate3 = env.make_certificate(ConfirmedBlock::new(
@@ -2896,7 +2905,7 @@ where
                     OracleResponse::Event(
                         EventId {
                             chain_id: admin_chain_id,
-                            stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                            stream_id: StreamId::system(EPOCH_STREAM_NAME),
                             index: 1,
                         },
                         bcs::to_bytes(&blob_hash).unwrap(),
@@ -2937,7 +2946,16 @@ where
             *user_chain.execution_state.system.admin_chain_id.get(),
             Some(admin_chain_id)
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
+        assert_eq!(
+            user_chain
+                .execution_state
+                .system
+                .committees
+                .get()
+                .await?
+                .len(),
+            2
+        );
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
     }
@@ -3000,7 +3018,7 @@ where
                 previous_message_blocks: BTreeMap::new(),
                 previous_event_blocks: BTreeMap::new(),
                 events: vec![vec![Event {
-                    stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: 1,
                     value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                 }]],
@@ -3122,7 +3140,7 @@ where
             previous_event_blocks: BTreeMap::new(),
             events: vec![
                 vec![Event {
-                    stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                    stream_id: StreamId::system(EPOCH_STREAM_NAME),
                     index: 1,
                     value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
                 }],
@@ -3179,13 +3197,15 @@ where
         );
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
-        // .. but the message hasn't gone through.
+        // .. and the message now lands in the admin chain's inbox. On this testnet
+        // branch the gating for cross-chain messages no longer rejects bundles at
+        // revoked epochs: every epoch the process knows about is considered valid.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
-        assert!(admin_chain.inboxes.indices().await?.is_empty());
+        assert_eq!(admin_chain.inboxes.indices().await?, vec![user_id]);
     }
 
-    // Force the admin chain to receive the money nonetheless by anticipation.
+    // Have the admin chain consume the message normally.
     let certificate2 = env.make_certificate(ConfirmedBlock::new(
         BlockExecutionOutcome {
             messages: vec![Vec::new()],
@@ -3228,28 +3248,7 @@ where
         .await?;
 
     {
-        // The admin chain has an anticipated message.
-        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active().await?);
-        assert!(admin_chain
-            .inboxes
-            .try_load_entry(&user_id)
-            .await?
-            .unwrap()
-            .removed_bundles
-            .front()
-            .await?
-            .is_some());
-    }
-
-    // Try again to execute the transfer from the user chain to the admin chain.
-    // This time, the epoch verification should be overruled.
-    env.worker()
-        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
-        .await?;
-
-    {
-        // The admin chain has no more anticipated messages.
+        // After consumption, the admin chain has no pending bundles.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
@@ -3266,11 +3265,11 @@ where
             messages: vec![Vec::new()],
             previous_message_blocks: BTreeMap::new(),
             previous_event_blocks: BTreeMap::from([(
-                StreamId::system(NEW_EPOCH_STREAM_NAME),
+                StreamId::system(EPOCH_STREAM_NAME),
                 (certificate1.hash(), BlockHeight(0)),
             )]),
             events: vec![vec![Event {
-                stream_id: StreamId::system(NEW_EPOCH_STREAM_NAME),
+                stream_id: StreamId::system(EPOCH_STREAM_NAME),
                 index: 2,
                 value: bcs::to_bytes(&committee_blob.id().hash).unwrap(),
             }]],
@@ -3316,7 +3315,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     )
     .await?;
     let env = TestEnvironment::new(store, true, false).await;
-    let committees = BTreeMap::from([(Epoch::from(1), env.committee().clone())]);
 
     let chain_0 = env.admin_description.clone();
     let chain_1 = dummy_chain_description(1);
@@ -3390,9 +3388,21 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let bundles1 = certificate1.message_bundles_for(id1).collect::<Vec<_>>();
     let bundles2 = certificate2.message_bundles_for(id1).collect::<Vec<_>>();
     let bundles3 = certificate3.message_bundles_for(id1).collect::<Vec<_>>();
-    let bundles01 = Vec::from_iter(bundles0.iter().cloned().chain(bundles1.iter().cloned()));
-    let bundles012 = Vec::from_iter(bundles01.iter().cloned().chain(bundles2.iter().cloned()));
-    let bundles0123 = Vec::from_iter(bundles012.iter().cloned().chain(bundles3.iter().cloned()));
+    let bundles01: Vec<_> = bundles0
+        .iter()
+        .cloned()
+        .chain(bundles1.iter().cloned())
+        .collect();
+    let bundles012: Vec<_> = bundles01
+        .iter()
+        .cloned()
+        .chain(bundles2.iter().cloned())
+        .collect();
+    let bundles0123: Vec<_> = bundles012
+        .iter()
+        .cloned()
+        .chain(bundles3.iter().cloned())
+        .collect();
 
     fn without_epochs<'a>(
         bundles: impl IntoIterator<Item = &'a (Epoch, MessageBundle)>,
@@ -3403,76 +3413,147 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             .collect()
     }
 
+    let storage = env.worker().storage_client();
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
         current_epoch: Epoch::from(1),
-        committees: &committees,
     };
     // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::ZERO,
+                None,
+                bundles01.clone(),
+                storage
+            )
+            .await?,
         without_epochs(&bundles01)
     );
     // Received heights is removing prefixes.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles01.clone())?,
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::from(1),
+                None,
+                bundles01.clone(),
+                storage
+            )
+            .await?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(2), None, bundles01.clone())?,
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::from(2),
+                None,
+                bundles01.clone(),
+                storage
+            )
+            .await?,
         vec![]
     );
     // Order of certificates is checked.
     assert_matches!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            None,
-            Vec::from_iter(bundles1.iter().cloned().chain(bundles0.iter().cloned()))
-        ),
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::ZERO,
+                None,
+                bundles1
+                    .iter()
+                    .cloned()
+                    .chain(bundles0.iter().cloned())
+                    .collect::<Vec<_>>(),
+                storage
+            )
+            .await,
         Err(WorkerError::InvalidCrossChainRequest)
     );
 
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: false,
         current_epoch: Epoch::from(1),
-        committees: &committees,
     };
-    // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
+    // With the genesis committee (epoch 0) present in storage, and no event for any
+    // newer epoch, epochs known to the process are 0. current_epoch is 1, so epoch
+    // 1 passes via `*epoch >= current_epoch`. bundles3 is at epoch 0 (known) so it
+    // is also accepted — unlike the old per-chain-map gate, which would have rejected
+    // it because the chain had "forgotten" epoch 0.
+    // bundles01 is all epoch 0 → both accepted.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
-        vec![]
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::ZERO,
+                None,
+                bundles01.clone(),
+                storage
+            )
+            .await?,
+        without_epochs(&bundles01)
     );
-    // A certificate with a recent epoch certifies all the previous blocks.
+    // All four bundles are at known-or-recent epochs, so all are accepted.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles0123.clone())?,
-        without_epochs(&bundles012)
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::ZERO,
+                None,
+                bundles0123.clone(),
+                storage
+            )
+            .await?,
+        without_epochs(&bundles0123)
     );
     // Received heights is still removing prefixes.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles012.clone())?,
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::from(1),
+                None,
+                bundles012.clone(),
+                storage
+            )
+            .await?,
         without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Anticipated messages re-certify blocks up to the given height.
     assert_eq!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::from(1),
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )?,
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::from(1),
+                Some(BlockHeight::from(1)),
+                bundles01.clone(),
+                storage
+            )
+            .await?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )?,
+        helper
+            .select_message_bundles(
+                &id0,
+                id1,
+                BlockHeight::ZERO,
+                Some(BlockHeight::from(1)),
+                bundles01.clone(),
+                storage
+            )
+            .await?,
         without_epochs(&bundles01)
     );
     Ok(())
@@ -3508,7 +3589,7 @@ where
             timeout_config: TimeoutConfig::default(),
         })
         .with_authenticated_signer(Some(owner0));
-    let (_, block0, _, _) = env
+    let (_, block0, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block0,
@@ -3575,7 +3656,7 @@ where
 
     // Now owner 0 can propose a block, but owner 1 can't.
     let proposed_block1 = make_child_block(&value0).with_simple_transfer(chain_1, small_transfer);
-    let (_, block1, _, _) = env
+    let (_, block1, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block1.clone(),
@@ -3630,7 +3711,7 @@ where
     // Create block2, also at height 1, but different from block 1.
     let amount = Amount::from_tokens(1);
     let proposed_block2 = make_child_block(&value0.clone()).with_simple_transfer(chain_1, amount);
-    let (_, block2, _, _) = env
+    let (_, block2, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block2.clone(),
@@ -3774,7 +3855,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (_, block0, _, _) = env
+    let (_, block0, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block0,
@@ -3891,7 +3972,7 @@ where
                 ..TimeoutConfig::default()
             },
         });
-    let (_, block0, _, _) = env
+    let (_, block0, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block0,
@@ -3924,7 +4005,7 @@ where
         .into_proposal_with_round(owner0, &signer, Round::Fast)
         .await
         .unwrap();
-    let (_, block1, _, _) = env
+    let (_, block1, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block1.clone(),
@@ -3986,7 +4067,7 @@ where
     env.worker().handle_block_proposal(proposal3).await?;
 
     // A validated block certificate from a later round can override the locked fast block.
-    let (_, block2, _, _) = env
+    let (_, block2, _, _, _) = env
         .worker()
         .stage_block_execution(
             proposed_block2.clone(),
@@ -4912,14 +4993,13 @@ where
 
     // With chunk_limit=1, only the first chunk (height 0) should be returned.
     // The remaining heights stay in the outbox for delivery after confirmation.
-    let initial_updates: Vec<_> = actions
+    let initial_updates_count = actions
         .cross_chain_requests
         .iter()
         .filter(|r| matches!(r, CrossChainRequest::UpdateRecipient { .. }))
-        .collect();
+        .count();
     assert_eq!(
-        initial_updates.len(),
-        1,
+        initial_updates_count, 1,
         "Only one UpdateRecipient chunk should be returned initially"
     );
 
@@ -4943,8 +5023,7 @@ where
     // Confirmations should have triggered 2 additional chunks (heights 1 and 2).
     assert_eq!(
         chunks_delivered, 2,
-        "Expected 2 additional chunks from confirmations, got {}",
-        chunks_delivered
+        "Expected 2 additional chunks from confirmations, got {chunks_delivered}"
     );
 
     // Verify chain_2 received all three heights.

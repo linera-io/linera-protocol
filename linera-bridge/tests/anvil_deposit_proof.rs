@@ -96,12 +96,12 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),
     ] {
         let mut f = File::create(path.join(name)).unwrap();
-        writeln!(f, "{}", content).unwrap();
+        writeln!(f, "{content}").unwrap();
     }
 
     // Write the contract under test
     let mut test_file = File::create(path.join(file_name)).unwrap();
-    writeln!(test_file, "{}", source_code).unwrap();
+    writeln!(test_file, "{source_code}").unwrap();
 
     // Solc standard JSON config
     let config = serde_json::json!({

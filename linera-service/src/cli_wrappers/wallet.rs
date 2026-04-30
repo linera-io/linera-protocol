@@ -121,13 +121,9 @@ impl ClientWrapper {
         on_drop: OnClientDrop,
         extra_args: Vec<String>,
     ) -> Self {
-        let storage = format!(
-            "rocksdb:{}/client_{}.db",
-            path_provider.path().display(),
-            id
-        );
-        let wallet = format!("wallet_{}.json", id);
-        let keystore = format!("keystore_{}.json", id);
+        let storage = format!("rocksdb:{}/client_{id}.db", path_provider.path().display(),);
+        let wallet = format!("wallet_{id}.json");
+        let keystore = format!("keystore_{id}.json");
         Self {
             binary_path: sync::Mutex::new(None),
             testing_prng_seed,
@@ -224,7 +220,7 @@ impl ClientWrapper {
         self.command_with_envs_and_arguments(
             &[(
                 "RUST_LOG",
-                &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+                &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
             )],
             arguments,
         )
@@ -234,7 +230,7 @@ impl ClientWrapper {
     async fn command(&self) -> Result<Command> {
         self.command_with_envs(&[(
             "RUST_LOG",
-            &std::env::var("RUST_LOG").unwrap_or(String::from("linera=debug")),
+            &std::env::var("RUST_LOG").unwrap_or_else(|_| String::from("linera=debug")),
         )])
         .await
     }
@@ -389,7 +385,7 @@ impl ClientWrapper {
         let json_parameters = serde_json::to_string(parameters)?;
         let json_argument = serde_json::to_string(argument)?;
         let mut command = self.command().await?;
-        let vm_runtime = format!("{}", vm_runtime);
+        let vm_runtime = format!("{vm_runtime}");
         command
             .arg("publish-and-create")
             .args([contract, service])
@@ -422,7 +418,7 @@ impl ClientWrapper {
             .await?
             .arg("publish-module")
             .args([contract, service])
-            .args(["--vm-runtime", &format!("{}", vm_runtime).to_lowercase()])
+            .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
@@ -496,7 +492,7 @@ impl ClientWrapper {
     }
 
     /// Runs `linera service` with all available options.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn run_node_service_with_all_options(
         &self,
         port: impl Into<Option<u16>>,
@@ -537,10 +533,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -578,10 +571,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 tracing::info!("Node service has started");
                 return Ok(NodeService::new(port, child));
@@ -667,10 +657,7 @@ impl ClientWrapper {
         let client = reqwest_client();
         for i in 0..10 {
             linera_base::time::timer::sleep(Duration::from_secs(i)).await;
-            let request = client
-                .get(format!("http://localhost:{}/", port))
-                .send()
-                .await;
+            let request = client.get(format!("http://localhost:{port}/")).send().await;
             if request.is_ok() {
                 info!("Faucet has started");
                 return Ok(FaucetService::new(port, child, temp_dir));
@@ -785,8 +772,8 @@ impl ClientWrapper {
         Ok(())
     }
 
-    fn benchmark_command_internal(command: &mut Command, args: BenchmarkCommand) -> Result<()> {
-        let mut formatted_args = to_args(&args)?;
+    fn benchmark_command_internal(command: &mut Command, args: &BenchmarkCommand) -> Result<()> {
+        let mut formatted_args = to_args(args)?;
         let subcommand = formatted_args.remove(0);
         // The subcommand is followed by the flattened options, which are preceded by "options".
         // So remove that as well.
@@ -821,7 +808,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_envs_and_arguments(envs, self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -829,7 +816,7 @@ impl ClientWrapper {
         let mut command = self
             .command_with_arguments(self.required_command_arguments())
             .await?;
-        Self::benchmark_command_internal(&mut command, args)?;
+        Self::benchmark_command_internal(&mut command, &args)?;
         Ok(command)
     }
 
@@ -1165,10 +1152,10 @@ impl ClientWrapper {
             add_validators.iter().chain(modify_validators.iter())
         {
             let public_key = ValidatorPublicKey::from_str(public_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", public_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {public_key_str}"))?;
 
             let account_key = AccountPublicKey::from_str(account_key_str)
-                .with_context(|| format!("Invalid account public key: {}", account_key_str))?;
+                .with_context(|| format!("Invalid account public key: {account_key_str}"))?;
 
             let address = format!("{}:127.0.0.1:{}", self.network.short(), port)
                 .parse()
@@ -1189,7 +1176,7 @@ impl ClientWrapper {
         // Remove validators (set to None)
         for validator_key_str in remove_validators {
             let public_key = ValidatorPublicKey::from_str(validator_key_str)
-                .with_context(|| format!("Invalid validator public key: {}", validator_key_str))?;
+                .with_context(|| format!("Invalid validator public key: {validator_key_str}"))?;
             changes.insert(public_key, None);
         }
 
@@ -1926,7 +1913,7 @@ impl<A> ApplicationWrapper<A> {
     pub async fn multiple_mutate(&self, mutations: &[String]) -> Result<Value> {
         let mut out = String::from("mutation {\n");
         for (index, mutation) in mutations.iter().enumerate() {
-            out = format!("{}  u{}: {}\n", out, index, mutation);
+            out = format!("{out}  u{index}: {mutation}\n");
         }
         out.push_str("}\n");
         self.run_graphql_query(&out).await

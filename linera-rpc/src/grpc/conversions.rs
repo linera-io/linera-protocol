@@ -49,6 +49,11 @@ pub enum GrpcProtoConversionError {
     InconsistentChainId,
     #[error("Unrecognized certificate type")]
     InvalidCertificateType,
+    #[error(
+        "Chain info queries asking for committees are reserved for local clients; \
+         validators serve committees via the event stream and the committee blob store"
+    )]
+    UnsupportedRequestCommittees,
 }
 
 impl From<ed25519_dalek::SignatureError> for GrpcProtoConversionError {
@@ -617,6 +622,14 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
     type Error = GrpcProtoConversionError;
 
     fn try_from(chain_info_query: api::ChainInfoQuery) -> Result<Self, Self::Error> {
+        // Defense in depth: every in-process caller has been moved off of
+        // `request_committees`, so a gRPC query that still asks for them is either a
+        // stale client or an attempt to force the validator to load the chain-local
+        // committees view. Reject before we hand the query to the worker.
+        ensure!(
+            !chain_info_query.request_committees,
+            GrpcProtoConversionError::UnsupportedRequestCommittees
+        );
         let request_sent_certificate_hashes_by_heights = chain_info_query
             .request_sent_certificate_hashes_by_heights
             .map(|heights| bincode::deserialize(&heights))
@@ -1177,7 +1190,7 @@ pub mod tests {
     impl BcsSignable<'_> for Foo {}
 
     fn dummy_chain_id(index: u32) -> ChainId {
-        ChainId(CryptoHash::test_hash(format!("chain{}", index)))
+        ChainId(CryptoHash::test_hash(format!("chain{index}")))
     }
 
     fn get_block() -> ProposedBlock {
@@ -1186,7 +1199,7 @@ pub mod tests {
 
     /// A convenience function for testing. It converts a type into its
     /// RPC equivalent and back - asserting that the two are equal.
-    fn round_trip_check<T, M>(value: T)
+    fn round_trip_check<T, M>(value: &T)
     where
         T: TryFrom<M> + Clone + Debug + Eq,
         M: TryFrom<T>,
@@ -1194,16 +1207,17 @@ pub mod tests {
         M::Error: Debug,
     {
         let message = M::try_from(value.clone()).unwrap();
-        assert_eq!(value, message.try_into().unwrap());
+        let round_trip_value: T = message.try_into().unwrap();
+        assert_eq!(value, &round_trip_value);
     }
 
     #[test]
     pub fn test_public_key() {
         let account_key = AccountSecretKey::generate().public();
-        round_trip_check::<_, api::AccountPublicKey>(account_key);
+        round_trip_check::<_, api::AccountPublicKey>(&account_key);
 
         let validator_key = ValidatorKeypair::generate().public_key;
-        round_trip_check::<_, api::ValidatorPublicKey>(validator_key);
+        round_trip_check::<_, api::ValidatorPublicKey>(&validator_key);
     }
 
     #[test]
@@ -1211,30 +1225,30 @@ pub mod tests {
         let validator_key_pair = ValidatorKeypair::generate();
         let validator_signature =
             ValidatorSignature::new(&Foo("test".into()), &validator_key_pair.secret_key);
-        round_trip_check::<_, api::ValidatorSignature>(validator_signature);
+        round_trip_check::<_, api::ValidatorSignature>(&validator_signature);
 
         let account_key_pair = AccountSecretKey::generate();
         let account_signature = account_key_pair.sign(&Foo("test".into()));
-        round_trip_check::<_, api::AccountSignature>(account_signature);
+        round_trip_check::<_, api::AccountSignature>(&account_signature);
     }
 
     #[test]
     pub fn test_owner() {
         let key_pair = AccountSecretKey::generate();
         let owner = AccountOwner::from(key_pair.public());
-        round_trip_check::<_, api::AccountOwner>(owner);
+        round_trip_check::<_, api::AccountOwner>(&owner);
     }
 
     #[test]
     pub fn test_block_height() {
         let block_height = BlockHeight::from(10);
-        round_trip_check::<_, api::BlockHeight>(block_height);
+        round_trip_check::<_, api::BlockHeight>(&block_height);
     }
 
     #[test]
     pub fn test_chain_id() {
         let chain_id = dummy_chain_id(0);
-        round_trip_check::<_, api::ChainId>(chain_id);
+        round_trip_check::<_, api::ChainId>(&chain_id);
     }
 
     #[test]
@@ -1262,7 +1276,7 @@ pub mod tests {
             info: chain_info.clone(),
             signature: None,
         };
-        round_trip_check::<_, api::ChainInfoResponse>(chain_info_response_none);
+        round_trip_check::<_, api::ChainInfoResponse>(&chain_info_response_none);
 
         let chain_info_response_some = ChainInfoResponse {
             // `info` is bincode so no need to test conversions extensively
@@ -1272,13 +1286,13 @@ pub mod tests {
                 &ValidatorKeypair::generate().secret_key,
             )),
         };
-        round_trip_check::<_, api::ChainInfoResponse>(chain_info_response_some);
+        round_trip_check::<_, api::ChainInfoResponse>(&chain_info_response_some);
     }
 
     #[test]
     pub fn test_chain_info_query() {
         let chain_info_query_none = ChainInfoQuery::new(dummy_chain_id(0));
-        round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_none);
+        round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_none);
 
         let chain_info_query_some = ChainInfoQuery {
             chain_id: dummy_chain_id(0),
@@ -1294,7 +1308,22 @@ pub mod tests {
             request_sent_certificate_hashes_in_range: None,
             create_network_actions: true,
         };
-        round_trip_check::<_, api::ChainInfoQuery>(chain_info_query_some);
+        round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_some);
+    }
+
+    #[test]
+    pub fn reject_chain_info_query_with_request_committees() {
+        let proto = api::ChainInfoQuery {
+            chain_id: Some(dummy_chain_id(0).into()),
+            request_committees: true,
+            request_owner_balance: Some(AccountOwner::CHAIN.try_into().unwrap()),
+            ..api::ChainInfoQuery::default()
+        };
+        let error = ChainInfoQuery::try_from(proto).unwrap_err();
+        assert!(matches!(
+            error,
+            GrpcProtoConversionError::UnsupportedRequestCommittees
+        ));
     }
 
     #[test]
@@ -1302,13 +1331,13 @@ pub mod tests {
         let chain_id = dummy_chain_id(2);
         let blob_id = Blob::new(BlobContent::new_data(*b"foo")).id();
         let pending_blob_request = (chain_id, blob_id);
-        round_trip_check::<_, api::PendingBlobRequest>(pending_blob_request);
+        round_trip_check::<_, api::PendingBlobRequest>(&pending_blob_request);
     }
 
     #[test]
     pub fn test_pending_blob_result() {
         let blob = BlobContent::new_data(*b"foo");
-        round_trip_check::<_, api::PendingBlobResult>(blob);
+        round_trip_check::<_, api::PendingBlobResult>(&blob);
     }
 
     #[test]
@@ -1316,7 +1345,7 @@ pub mod tests {
         let chain_id = dummy_chain_id(2);
         let blob_content = BlobContent::new_data(*b"foo");
         let pending_blob_request = (chain_id, blob_content);
-        round_trip_check::<_, api::HandlePendingBlobRequest>(pending_blob_request);
+        round_trip_check::<_, api::HandlePendingBlobRequest>(&pending_blob_request);
     }
 
     #[test]
@@ -1339,7 +1368,7 @@ pub mod tests {
             wait_for_outgoing_messages: true,
         };
 
-        round_trip_check::<_, api::LiteCertificate>(request);
+        round_trip_check::<_, api::LiteCertificate>(&request);
     }
 
     #[test]
@@ -1361,7 +1390,7 @@ pub mod tests {
         );
         let request = HandleValidatedCertificateRequest { certificate };
 
-        round_trip_check::<_, api::HandleValidatedCertificateRequest>(request);
+        round_trip_check::<_, api::HandleValidatedCertificateRequest>(&request);
     }
 
     #[test]
@@ -1372,7 +1401,7 @@ pub mod tests {
             bundles: vec![],
             previous_height: Some(BlockHeight::from(42)),
         };
-        round_trip_check::<_, api::CrossChainRequest>(cross_chain_request_update_recipient);
+        round_trip_check::<_, api::CrossChainRequest>(&cross_chain_request_update_recipient);
 
         let cross_chain_request_confirm_updated_recipient =
             CrossChainRequest::ConfirmUpdatedRecipient {
@@ -1381,7 +1410,7 @@ pub mod tests {
                 latest_height: BlockHeight(1),
             };
         round_trip_check::<_, api::CrossChainRequest>(
-            cross_chain_request_confirm_updated_recipient,
+            &cross_chain_request_confirm_updated_recipient,
         );
     }
 
@@ -1413,7 +1442,7 @@ pub mod tests {
             original_proposal: Some(OriginalProposal::Regular { certificate }),
         };
 
-        round_trip_check::<_, api::BlockProposal>(block_proposal);
+        round_trip_check::<_, api::BlockProposal>(&block_proposal);
     }
 
     #[test]

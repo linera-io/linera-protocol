@@ -106,7 +106,7 @@ where
                             }
                         }
                     }
-                    writeln!(output, "{}", quote)?;
+                    writeln!(output, "{quote}")?;
                 }
             } else if let Some(uri) = line.strip_prefix("```gql,uri=") {
                 let mut quote = String::new();

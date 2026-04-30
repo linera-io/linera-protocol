@@ -458,6 +458,7 @@ where
 
                         let (_epoch, committee) = system
                             .current_committee()
+                            .await?
                             .ok_or_else(|| ExecutionError::UnauthorizedHttpRequest(url.clone()))?;
                         let allowed_hosts = &committee.policy().http_request_allow_list;
 
@@ -917,11 +918,7 @@ where
                 );
 
                 for (code, description) in codes.0.into_iter().zip(descriptions) {
-                    runtime.preload_contract(
-                        ApplicationId::from(&description),
-                        code,
-                        description,
-                    )?;
+                    runtime.preload_contract(ApplicationId::from(&description), code, description);
                 }
 
                 runtime.run_action(application_id, chain_id, action)

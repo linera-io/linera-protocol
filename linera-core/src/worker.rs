@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex, RwLock},
     time::Duration,
 };
@@ -641,6 +641,7 @@ where
     StorageClient: Storage,
 {
     /// Sets the cross-chain message chunk limit.
+    #[cfg(with_testing)]
     pub fn set_cross_chain_message_chunk_limit(&mut self, limit: usize) {
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
@@ -651,6 +652,7 @@ where
     }
 
     /// Sets the priority bundle origins.
+    #[cfg(with_testing)]
     pub fn with_priority_bundle_origins(
         mut self,
         origins: std::collections::HashSet<ChainId>,
@@ -1035,7 +1037,10 @@ where
             .or_default()
             .clone();
 
-        let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
+        // `chain_modes=None` means "no tracked/sender distinction" (validators) — treat
+        // every chain as tracked so it routes through `config.ttl`, not the unset
+        // `config.sender_chain_ttl` which would skip `spawn_keep_alive` entirely.
+        let is_tracked = self.chain_modes.as_ref().is_none_or(|chain_modes| {
             chain_modes
                 .read()
                 .unwrap()
@@ -1080,7 +1085,16 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            Block,
+            ChainInfoResponse,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        WorkerError,
+    > {
         let chain_id = block.chain_id;
         self.chain_write(chain_id, move |mut guard| async move {
             guard

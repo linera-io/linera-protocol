@@ -35,7 +35,7 @@ use linera_views::{
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
 use crate::{
     block::{Block, ConfirmedBlock},
@@ -499,14 +499,7 @@ where
         // Recompute the state hash.
         let hash = self.execution_state.crypto_hash_mut().await?;
         self.execution_state_hash.set(Some(hash));
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
-        // Last, reset the consensus state based on the current ownership.
-        self.manager.reset(
-            self.execution_state.system.ownership.get().await?.clone(),
-            BlockHeight(0),
-            local_time,
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights()),
-        )?;
+        self.reset_chain_manager(BlockHeight(0), local_time).await?;
         Ok(())
     }
 
@@ -514,7 +507,9 @@ where
     ///
     /// The "+ 1" is so that it can be used in the same places as `next_block_height`.
     pub async fn next_height_to_preprocess(&self) -> Result<BlockHeight, ChainError> {
-        if let Some(height) = self.preprocessed_blocks.indices().await?.last() {
+        // `indices()` returns heights in serialization order (BCS little-endian for `u64`),
+        // which does not match numeric order, so we take the numeric max rather than the last.
+        if let Some(height) = self.preprocessed_blocks.indices().await?.into_iter().max() {
             return Ok(height.saturating_add(BlockHeight(1)));
         }
         Ok(self.tip_state.get().next_block_height)
@@ -607,10 +602,11 @@ where
         }
     }
 
-    pub fn current_committee(&self) -> Result<(Epoch, &Committee), ChainError> {
+    pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
         self.execution_state
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
@@ -716,10 +712,10 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
-    ) -> Result<(BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
-        if !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort) {
+        if !matches!(&exec_policy.on_failure, BundleFailurePolicy::Abort) {
             assert!(
                 replaying_oracle_responses.is_none(),
                 "Cannot use AutoRetry policy when replaying oracle responses"
@@ -733,6 +729,7 @@ where
         let committee_policy = chain
             .system
             .current_committee()
+            .await?
             .ok_or_else(|| ChainError::InactiveChain(block.chain_id))?
             .1
             .policy()
@@ -764,13 +761,17 @@ where
             block,
         )?;
 
-        // Extract failure policy settings.
-        let max_failures = match exec_policy.on_failure {
-            BundleFailurePolicy::Abort => 0,
-            BundleFailurePolicy::AutoRetry { max_failures } => max_failures,
+        // Extract failure-policy parameters from exec_policy.
+        let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
+            BundleFailurePolicy::Abort => (0, Arc::new(HashSet::new())),
+            BundleFailurePolicy::AutoRetry {
+                max_failures,
+                never_reject_application_ids,
+            } => (*max_failures, never_reject_application_ids.clone()),
         };
         let auto_retry = !matches!(exec_policy.on_failure, BundleFailurePolicy::Abort);
         let mut failure_count = 0u32;
+        let mut never_reject_discarded_origins = HashSet::new();
 
         // Track cumulative bundle execution time if time budget is set.
         let time_budget = exec_policy.time_budget;
@@ -840,8 +841,12 @@ where
 
             // Restore checkpoint.
             *chain = saved_chain;
-            block_execution_tracker.restore_checkpoint(saved_tracker);
+            block_execution_tracker.restore_checkpoint(&saved_tracker);
 
+            let all_messages_never_reject = !never_reject_application_ids.is_empty()
+                && incoming_bundle.messages().all(|posted_msg| {
+                    never_reject_application_ids.contains(&posted_msg.message.application_id())
+                });
             if error.is_limit_error() && i > 0 {
                 failure_count += 1;
                 // If we've exceeded max failures, discard all remaining message bundles.
@@ -865,10 +870,23 @@ where
                 };
                 Self::discard_remaining_bundles(block, i, maybe_sender);
                 // Continue without incrementing i (next transaction is now at i).
-            } else if incoming_bundle.bundle.is_protected()
-                || incoming_bundle.action == MessageAction::Reject
+            } else if (all_messages_never_reject || incoming_bundle.bundle.is_protected())
+                && incoming_bundle.action != MessageAction::Reject
             {
-                // Protected bundles cannot be rejected. Failed rejected bundles fail the block.
+                let origin = incoming_bundle.origin;
+                never_reject_discarded_origins.insert(origin);
+                warn!(
+                    %error,
+                    index = i,
+                    %origin,
+                    "Message bundle cannot be rejected (protected or never-reject); \
+                    discarding the bundle (and same-sender subsequent bundles) for retry \
+                    in a later block"
+                );
+                Self::discard_remaining_bundles(block, i, Some(origin));
+                // Continue without incrementing i (next transaction is now at i).
+            } else if incoming_bundle.action == MessageAction::Reject {
+                // Failed rejected bundles fail the block.
                 return Err(ChainError::ExecutionError(error, context));
             } else {
                 // Reject the bundle: either a non-limit error, or the first bundle
@@ -949,6 +967,7 @@ where
                 operation_results,
             },
             resource_tracker,
+            never_reject_discarded_origins,
         ))
     }
 
@@ -993,7 +1012,15 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, BlockExecutionOutcome, ResourceTracker), ChainError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            BlockExecutionOutcome,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        ChainError,
+    > {
         assert_eq!(
             block.chain_id,
             self.execution_state.context().extra().chain_id()
@@ -1025,15 +1052,12 @@ where
         }
 
         let mandatory_apps_need_accepted_message = self
-            .execution_state
-            .system
             .current_committee()
-            .is_some_and(|(_epoch, committee)| {
-                committee
-                    .policy()
-                    .http_request_allow_list
-                    .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE)
-            });
+            .await?
+            .1
+            .policy()
+            .http_request_allow_list
+            .contains(FLAG_MANDATORY_APPS_NEED_ACCEPTED_MESSAGE);
         Self::check_app_permissions(
             self.execution_state
                 .system
@@ -1057,7 +1081,9 @@ where
             policy,
         )
         .await
-        .map(|(outcome, tracker)| (block, outcome, tracker))
+        .map(|(outcome, tracker, never_reject_origins)| {
+            (block, outcome, tracker, never_reject_origins)
+        })
     }
 
     /// Tracks emitted events per stream and returns the set of streams where new contiguous
@@ -1170,16 +1196,6 @@ where
         Ok(updated_streams)
     }
 
-    /// Returns whether this is a child chain.
-    pub async fn is_child(&self) -> Result<bool, ChainError> {
-        let description = self.execution_state.system.description.get().await?;
-        let Some(description) = description else {
-            // Root chains are always initialized, so this must be a child chain.
-            return Ok(true);
-        };
-        Ok(description.is_child())
-    }
-
     /// Verifies that the block is valid according to the chain's application permission settings.
     #[instrument(skip_all, fields(
         block_height = %block.height,
@@ -1190,9 +1206,11 @@ where
         block: &ProposedBlock,
         mandatory_apps_need_accepted_message: bool,
     ) -> Result<(), ChainError> {
-        let mut mandatory = HashSet::<ApplicationId>::from_iter(
-            app_permissions.mandatory_applications.iter().copied(),
-        );
+        let mut mandatory = app_permissions
+            .mandatory_applications
+            .iter()
+            .copied()
+            .collect::<HashSet<ApplicationId>>();
         for transaction in &block.transactions {
             match transaction {
                 Transaction::ExecuteOperation(operation)
@@ -1271,10 +1289,11 @@ where
         next_height: BlockHeight,
         local_time: Timestamp,
     ) -> Result<(), ChainError> {
-        let maybe_committee = self.execution_state.system.current_committee().into_iter();
+        let maybe_committee = self.execution_state.system.current_committee().await?;
         let ownership = self.execution_state.system.ownership.get().await?.clone();
-        let fallback_owners =
-            maybe_committee.flat_map(|(_, committee)| committee.account_keys_and_weights());
+        let fallback_owners = maybe_committee
+            .iter()
+            .flat_map(|(_, committee)| committee.account_keys_and_weights());
         self.pending_validated_blobs.clear();
         self.pending_proposed_blobs.clear();
         self.manager

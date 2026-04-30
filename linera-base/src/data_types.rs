@@ -13,7 +13,6 @@ use std::{
     hash::Hash,
     io, iter,
     num::ParseIntError,
-    path::Path,
     str::FromStr,
     sync::Arc,
 };
@@ -190,12 +189,6 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
-    /// Returns the given duration, rounded to the nearest microsecond and capped to the maximum
-    /// [`TimeDelta`] value.
-    pub fn from_duration(duration: Duration) -> Self {
-        TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
-    }
-
     /// Returns this [`TimeDelta`] as a number of microseconds.
     pub const fn as_micros(&self) -> u64 {
         self.0
@@ -365,24 +358,6 @@ pub struct SendMessageRequest<Message> {
     pub grant: Resources,
     /// The message itself.
     pub message: Message,
-}
-
-impl<Message> SendMessageRequest<Message>
-where
-    Message: Serialize,
-{
-    /// Serializes the internal `Message` type into raw bytes.
-    pub fn into_raw(self) -> SendMessageRequest<Vec<u8>> {
-        let message = bcs::to_bytes(&self.message).expect("Failed to serialize message");
-
-        SendMessageRequest {
-            destination: self.destination,
-            authenticated: self.authenticated,
-            is_tracked: self.is_tracked,
-            grant: self.grant,
-            message,
-        }
-    }
 }
 
 /// An error type for arithmetic errors.
@@ -655,9 +630,9 @@ impl Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Round::Fast => write!(f, "fast round"),
-            Round::MultiLeader(r) => write!(f, "multi-leader round {}", r),
-            Round::SingleLeader(r) => write!(f, "single-leader round {}", r),
-            Round::Validator(r) => write!(f, "validator round {}", r),
+            Round::MultiLeader(r) => write!(f, "multi-leader round {r}"),
+            Round::SingleLeader(r) => write!(f, "single-leader round {r}"),
+            Round::Validator(r) => write!(f, "validator round {r}"),
         }
     }
 }
@@ -784,11 +759,6 @@ pub enum ChainOrigin {
 }
 
 impl ChainOrigin {
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        matches!(self, ChainOrigin::Child { .. })
-    }
-
     /// Returns the root chain number, if this is a root chain.
     pub fn root(&self) -> Option<u32> {
         match self {
@@ -937,11 +907,6 @@ impl ChainDescription {
     pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
-
-    /// Whether the chain was created by another chain.
-    pub fn is_child(&self) -> bool {
-        self.origin.is_child()
-    }
 }
 
 impl BcsHashable<'_> for ChainDescription {}
@@ -1024,6 +989,7 @@ impl ApplicationPermissions {
 
     /// Creates new `ApplicationPermissions` where the given applications are the only ones
     /// whose operations are allowed and mandatory, and they can also close the chain.
+    #[cfg(with_testing)]
     pub fn new_multiple(app_ids: Vec<ApplicationId>) -> Self {
         Self {
             execute_operations: Some(app_ids.clone()),
@@ -1515,11 +1481,6 @@ impl Blob {
         self.content.bytes()
     }
 
-    /// Loads data blob from a file.
-    pub fn load_data_blob_from_file(path: impl AsRef<Path>) -> io::Result<Self> {
-        Ok(Self::new_data(fs::read(path)?))
-    }
-
     /// Returns whether the blob is of [`BlobType::Committee`] variant.
     pub fn is_committee_blob(&self) -> bool {
         self.content().blob_type().is_committee_blob()
@@ -1627,6 +1588,12 @@ pub struct MessagePolicy {
     /// A collection of applications: If `Some`, only event streams from those
     /// applications will be processed.
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+    /// A collection of applications whose messages must never be rejected. Bundles whose
+    /// messages are all from one of these applications bypass the other rejection rules
+    /// (except `restrict_chain_ids_to`), and on execution failure they are discarded for
+    /// later retry instead of being rejected. A bundle that contains any message from an
+    /// application not on this list can be rejected. An empty set disables this feature.
+    pub never_reject_application_ids: HashSet<GenericApplicationId>,
 }
 
 /// A blanket policy to apply to all messages by default.
@@ -1656,35 +1623,6 @@ pub enum BlanketMessagePolicy {
 }
 
 impl MessagePolicy {
-    /// Constructs a new `MessagePolicy`.
-    pub fn new(
-        blanket: BlanketMessagePolicy,
-        restrict_chain_ids_to: Option<HashSet<ChainId>>,
-        reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
-        reject_message_bundles_with_other_application_ids: Option<HashSet<GenericApplicationId>>,
-        process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
-    ) -> Self {
-        Self {
-            blanket,
-            restrict_chain_ids_to,
-            reject_message_bundles_without_application_ids,
-            reject_message_bundles_with_other_application_ids,
-            process_events_from_application_ids,
-        }
-    }
-
-    /// Constructs a new `MessagePolicy` that accepts all messages.
-    #[cfg(with_testing)]
-    pub fn new_accept_all() -> Self {
-        Self {
-            blanket: BlanketMessagePolicy::Accept,
-            restrict_chain_ids_to: None,
-            reject_message_bundles_without_application_ids: None,
-            reject_message_bundles_with_other_application_ids: None,
-            process_events_from_application_ids: None,
-        }
-    }
-
     /// Returns `true` if the blanket policy is to ignore messages.
     #[instrument(level = "trace", skip(self))]
     pub fn is_ignore(&self) -> bool {

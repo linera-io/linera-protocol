@@ -25,6 +25,6 @@ linera-client
 linera-faucet-client
 linera-faucet-server
 # linera-bridge — excluded because it depends on unpublished example crates (fungible, wrapped-fungible)
-linera-exporter --no-verify
+linera-exporter
 linera-service
 linera-service-graphql-client

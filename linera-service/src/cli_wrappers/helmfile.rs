@@ -65,7 +65,7 @@ impl HelmFile {
             .env("LINERA_HELMFILE_LINERA_IMAGE", docker_image_name)
             .arg("sync")
             .arg("--wait")
-            .args(["--kube-context", &format!("kind-{}", cluster_id)])
+            .args(["--kube-context", &format!("kind-{cluster_id}")])
             .spawn_and_wait()
             .await
     }

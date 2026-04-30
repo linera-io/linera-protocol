@@ -4993,23 +4993,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
-name = "jemalloc_pprof"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74ff642505c7ce8d31c0d43ec0e235c6fd4585d9b8172d8f9dd04d36590200b5"
-dependencies = [
- "anyhow",
- "libc",
- "mappings",
- "once_cell",
- "pprof_util",
- "tempfile",
- "tikv-jemalloc-ctl",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "jobserver"
 version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5348,7 +5331,7 @@ dependencies = [
 
 [[package]]
 name = "linera-base"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "allocative",
  "alloy-primitives",
@@ -5410,7 +5393,7 @@ dependencies = [
 
 [[package]]
 name = "linera-bridge"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "alloy",
  "alloy-primitives",
@@ -5463,7 +5446,7 @@ dependencies = [
 
 [[package]]
 name = "linera-cache"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "cfg_aliases",
  "linera-base",
@@ -5478,7 +5461,7 @@ dependencies = [
 
 [[package]]
 name = "linera-chain"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "allocative",
  "anyhow",
@@ -5509,7 +5492,7 @@ dependencies = [
 
 [[package]]
 name = "linera-client"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "amm",
  "anyhow",
@@ -5571,7 +5554,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -5628,7 +5611,7 @@ dependencies = [
 
 [[package]]
 name = "linera-ethereum"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "alloy",
  "alloy-primitives",
@@ -5649,7 +5632,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "allocative",
  "alloy-primitives",
@@ -5710,7 +5693,7 @@ dependencies = [
 
 [[package]]
 name = "linera-explorer"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -5736,7 +5719,7 @@ dependencies = [
 
 [[package]]
 name = "linera-exporter"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5751,7 +5734,6 @@ dependencies = [
  "linera-base",
  "linera-chain",
  "linera-core",
- "linera-ethereum",
  "linera-execution",
  "linera-metrics",
  "linera-rpc",
@@ -5782,7 +5764,7 @@ dependencies = [
 
 [[package]]
 name = "linera-faucet-client"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "linera-base",
  "linera-client",
@@ -5797,7 +5779,7 @@ dependencies = [
 
 [[package]]
 name = "linera-faucet-server"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -5830,7 +5812,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "allocative",
  "assert_matches",
@@ -5869,7 +5851,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-example"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -5894,7 +5876,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-graphql-client"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "graphql_client",
  "linera-base",
@@ -5911,7 +5893,7 @@ dependencies = [
 
 [[package]]
 name = "linera-indexer-plugins"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -5928,6 +5910,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "linera-jemalloc-ctl"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "098410db64dbf9b74f23f99e43e58674620b21be840367637dcf0b6d3c4d0e42"
+dependencies = [
+ "libc",
+ "linera-jemalloc-sys",
+ "paste",
+]
+
+[[package]]
+name = "linera-jemalloc-sys"
+version = "0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e77f5478fd8bd96552edc59ec5bdb2cff8c470e0f5284cd38a70b9f5782dbfc"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
+name = "linera-jemallocator"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8630abf3d99c33454e1c035a0226717a28c028c7254e151abb866b6ebd59af1b"
+dependencies = [
+ "libc",
+ "linera-jemalloc-sys",
+]
+
+[[package]]
 name = "linera-kywasmtime"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5940,12 +5953,15 @@ dependencies = [
 
 [[package]]
 name = "linera-metrics"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "axum",
- "jemalloc_pprof",
+ "linera-jemalloc-ctl",
+ "mappings",
+ "pprof_util",
  "prometheus",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tokio-util",
@@ -5960,7 +5976,7 @@ checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-persistent"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "cfg-if",
  "cfg_aliases",
@@ -5977,7 +5993,7 @@ dependencies = [
 
 [[package]]
 name = "linera-rpc"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6026,7 +6042,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -6058,7 +6074,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-derive"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -6067,7 +6083,7 @@ dependencies = [
 
 [[package]]
 name = "linera-service"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -6118,6 +6134,7 @@ dependencies = [
  "linera-exporter",
  "linera-faucet-client",
  "linera-faucet-server",
+ "linera-jemallocator",
  "linera-metrics",
  "linera-persistent",
  "linera-rpc",
@@ -6153,7 +6170,6 @@ dependencies = [
  "test-log",
  "test-strategy",
  "thiserror 1.0.69",
- "tikv-jemallocator",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -6171,7 +6187,7 @@ dependencies = [
 
 [[package]]
 name = "linera-service-graphql-client"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "fungible",
@@ -6197,7 +6213,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6224,7 +6240,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-runtime"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6243,7 +6259,7 @@ dependencies = [
 
 [[package]]
 name = "linera-storage-service"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -6289,7 +6305,7 @@ dependencies = [
 
 [[package]]
 name = "linera-version"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -6309,7 +6325,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "allocative",
  "anyhow",
@@ -6358,7 +6374,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "cfg_aliases",
  "deluxe",
@@ -6371,7 +6387,7 @@ dependencies = [
 
 [[package]]
 name = "linera-wallet-json"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "dirs",
@@ -6524,7 +6540,7 @@ dependencies = [
 
 [[package]]
 name = "linera-web"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "console_error_panic_hook",
  "futures",
@@ -6553,7 +6569,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -6573,7 +6589,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-macros"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "cfg_aliases",
  "heck 0.4.1",
@@ -6585,7 +6601,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-test-modules"
-version = "0.15.16"
+version = "0.15.17"
 dependencies = [
  "wit-bindgen 0.7.0",
 ]
@@ -10669,35 +10685,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
 dependencies = [
  "num_cpus",
-]
-
-[[package]]
-name = "tikv-jemalloc-ctl"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f21f216790c8df74ce3ab25b534e0718da5a1916719771d3fec23315c99e468b"
-dependencies = [
- "libc",
- "paste",
- "tikv-jemalloc-sys",
-]
-
-[[package]]
-name = "tikv-jemalloc-sys"
-version = "0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
-source = "git+https://github.com/linera-io/jemallocator.git?rev=16f3e75fb145e12f5ae15ed232d1368d4539fc14#16f3e75fb145e12f5ae15ed232d1368d4539fc14"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
-name = "tikv-jemallocator"
-version = "0.6.1"
-source = "git+https://github.com/linera-io/jemallocator.git?rev=16f3e75fb145e12f5ae15ed232d1368d4539fc14#16f3e75fb145e12f5ae15ed232d1368d4539fc14"
-dependencies = [
- "libc",
- "tikv-jemalloc-sys",
 ]
 
 [[package]]

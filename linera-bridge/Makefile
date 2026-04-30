@@ -82,12 +82,6 @@ build-wasm: ## Build all Wasm files needed for bridge demo
 		-p fungible -p wrapped-fungible -p evm-bridge
 
 build-all: build-wasm ## Build Wasm files and all docker images (debug mode)
-	cd $(DOCKER_DIR) && docker build \
-		-f ./Dockerfile.exporter \
-		--build-arg build_flag="" \
-		--build-arg build_folder=debug \
-		--build-arg build_features=scylladb,metrics \
-		-t linera-exporter ..
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile \
 		--build-arg build_flag="" \
 		--build-arg build_folder=debug \

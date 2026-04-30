@@ -51,7 +51,7 @@ impl std::str::FromStr for BuildMode {
 
 impl std::fmt::Display for BuildMode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -466,7 +466,7 @@ impl LocalKubernetesNet {
         Ok(())
     }
 
-    async fn run(&mut self) -> Result<()> {
+    async fn run(&self) -> Result<()> {
         let github_root = get_github_root().await?;
         // Build Docker images
         let (docker_image_name, indexer_image_name, explorer_image_name) = if self.no_build {
@@ -549,7 +549,7 @@ impl LocalKubernetesNet {
                 kind_cluster.load_docker_image(&indexer_image_name).await?;
                 kind_cluster.load_docker_image(&explorer_image_name).await?;
 
-                let server_config_filename = format!("server_{}.json", i);
+                let server_config_filename = format!("server_{i}.json");
                 fs_err::copy(
                     tmp_dir_path.join(&server_config_filename),
                     base_dir.join(&server_config_filename),

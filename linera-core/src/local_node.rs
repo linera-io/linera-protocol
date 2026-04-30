@@ -3,21 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
 use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
-    data_types::{ArithmeticError, Blob, BlockHeight, Epoch},
+    data_types::{ArithmeticError, Blob, BlockHeight},
     identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, GenericCertificate},
 };
-use linera_execution::{committee::Committee, BlobState, Query, QueryOutcome, ResourceTracker};
+use linera_execution::{BlobState, Query, QueryOutcome, ResourceTracker};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use thiserror::Error;
@@ -146,7 +146,16 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), LocalNodeError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            Block,
+            ChainInfoResponse,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        LocalNodeError,
+    > {
         Ok(self
             .node
             .state
@@ -298,8 +307,9 @@ where
         chain_ids: impl IntoIterator<Item = &ChainId>,
         receiver_id: ChainId,
     ) -> Result<BTreeMap<ChainId, BlockHeight>, LocalNodeError> {
-        let futures =
-            FuturesUnordered::from_iter(chain_ids.into_iter().map(|chain_id| async move {
+        let futures = chain_ids
+            .into_iter()
+            .map(|chain_id| async move {
                 let (next_block_height, next_height_to_schedule) = match self
                     .get_tip_state_and_outbox_info(*chain_id, receiver_id)
                     .await
@@ -316,7 +326,8 @@ where
                     next_block_height
                 };
                 Ok::<_, LocalNodeError>((*chain_id, next_height))
-            }));
+            })
+            .collect::<FuturesUnordered<_>>();
         futures.try_collect().await
     }
 
@@ -453,40 +464,5 @@ where
     /// Gets the chain manager's seed for leader election.
     pub async fn get_manager_seed(&self, chain_id: ChainId) -> Result<u64, LocalNodeError> {
         Ok(self.node.state.get_manager_seed(chain_id).await?)
-    }
-}
-
-/// Extension trait for [`ChainInfo`]s from our local node. These should always be valid and
-/// contain the requested information.
-pub trait LocalChainInfoExt {
-    /// Returns the requested map of committees.
-    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError>;
-
-    /// Returns the current committee.
-    fn into_current_committee(self) -> Result<Committee, LocalNodeError>;
-
-    /// Returns a reference to the current committee.
-    fn current_committee(&self) -> Result<&Committee, LocalNodeError>;
-}
-
-impl LocalChainInfoExt for ChainInfo {
-    fn into_committees(self) -> Result<BTreeMap<Epoch, Committee>, LocalNodeError> {
-        self.requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)
-    }
-
-    fn into_current_committee(self) -> Result<Committee, LocalNodeError> {
-        self.requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .remove(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
-    }
-
-    fn current_committee(&self) -> Result<&Committee, LocalNodeError> {
-        self.requested_committees
-            .as_ref()
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .get(&self.epoch)
-            .ok_or(LocalNodeError::InactiveChain(self.chain_id))
     }
 }

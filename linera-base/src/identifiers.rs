@@ -54,7 +54,7 @@ impl fmt::Debug for AccountOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Reserved(byte) => f.debug_tuple("Reserved").field(byte).finish(),
-            Self::Address32(hash) => write!(f, "Address32({:?})", hash),
+            Self::Address32(hash) => write!(f, "Address32({hash:?})"),
             Self::Address20(bytes) => write!(f, "Address20({})", hex::encode(bytes)),
         }
     }
@@ -259,7 +259,7 @@ impl BlobType {
 
 impl fmt::Display for BlobType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -267,8 +267,7 @@ impl std::str::FromStr for BlobType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(&format!("\"{s}\""))
-            .with_context(|| format!("Invalid BlobType: {}", s))
+        serde_json::from_str(&format!("\"{s}\"")).with_context(|| format!("Invalid BlobType: {s}"))
     }
 }
 
@@ -380,7 +379,7 @@ pub struct ApplicationId<A = ()> {
     #[witty(skip)]
     #[debug(skip)]
     #[allocative(skip)]
-    _phantom: PhantomData<A>,
+    phantom: PhantomData<A>,
 }
 
 /// A unique identifier for an application.
@@ -432,17 +431,6 @@ impl std::str::FromStr for GenericApplicationId {
             return Ok(GenericApplicationId::User(application_id));
         }
         Err(anyhow!("Invalid parsing of GenericApplicationId"))
-    }
-}
-
-impl GenericApplicationId {
-    /// Returns the `ApplicationId`, or `None` if it is `System`.
-    pub fn user_application_id(&self) -> Option<&ApplicationId> {
-        if let GenericApplicationId::User(app_id) = self {
-            Some(app_id)
-        } else {
-            None
-        }
     }
 }
 
@@ -498,7 +486,7 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     pub vm_runtime: VmRuntime,
     #[witty(skip)]
     #[debug(skip)]
-    _phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
+    phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
 }
 
 /// The name of an event stream.
@@ -726,7 +714,7 @@ impl<Abi, Parameters, InstantiationArgument> PartialEq
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom,
+            phantom: _,
         } = other;
         self.contract_blob_hash == *contract_blob_hash
             && self.service_blob_hash == *service_blob_hash
@@ -755,7 +743,7 @@ impl<Abi, Parameters, InstantiationArgument> Ord
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom,
+            phantom: _,
         } = other;
         (
             self.contract_blob_hash,
@@ -774,7 +762,7 @@ impl<Abi, Parameters, InstantiationArgument> Hash
             contract_blob_hash: contract_blob_id,
             service_blob_hash: service_blob_id,
             vm_runtime: vm_runtime_id,
-            _phantom,
+            phantom: _,
         } = self;
         contract_blob_id.hash(state);
         service_blob_id.hash(state);
@@ -828,7 +816,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         } else {
             let serializable_module_id = SerializableModuleId::deserialize(deserializer)?;
@@ -836,7 +824,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         }
     }
@@ -853,7 +841,7 @@ impl ModuleId {
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -865,7 +853,7 @@ impl ModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -904,7 +892,7 @@ impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, Instantia
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -986,13 +974,13 @@ impl<'de, A> Deserialize<'de> for ApplicationId<A> {
                 bcs::from_bytes(&application_id_bytes).map_err(serde::de::Error::custom)?;
             Ok(ApplicationId {
                 application_description_hash: application_id.application_description_hash,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         } else {
             let value = SerializableApplicationId::deserialize(deserializer)?;
             Ok(ApplicationId {
                 application_description_hash: value.application_description_hash,
-                _phantom: PhantomData,
+                phantom: PhantomData,
             })
         }
     }
@@ -1003,7 +991,7 @@ impl ApplicationId {
     pub fn new(application_description_hash: CryptoHash) -> Self {
         ApplicationId {
             application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 
@@ -1020,7 +1008,7 @@ impl ApplicationId {
     pub fn with_abi<A>(self) -> ApplicationId<A> {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -1030,7 +1018,7 @@ impl<A> ApplicationId<A> {
     pub fn forget_abi(self) -> ApplicationId {
         ApplicationId {
             application_description_hash: self.application_description_hash,
-            _phantom: PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -1108,7 +1096,7 @@ impl fmt::Display for AccountOwner {
             AccountOwner::Reserved(value) => {
                 write!(f, "0x{}", hex::encode(&value.to_be_bytes()[..]))?
             }
-            AccountOwner::Address32(value) => write!(f, "0x{}", value)?,
+            AccountOwner::Address32(value) => write!(f, "0x{value}")?,
             AccountOwner::Address20(value) => write!(f, "0x{}", hex::encode(&value[..]))?,
         };
 

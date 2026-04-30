@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ConfirmedBlock } from '../../gql/service'
-import { getOperations, getIncomingBundles } from './utils'
+import { getOperations, getIncomingBundles, formatTimestamp, displayValue, copyToClipboard } from './utils'
 import Json from './Json.vue'
 // Op is now imported by Transaction.vue
 import Transaction from './Transaction.vue'
@@ -39,7 +39,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
       <ul class="list-group">
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Hash</strong></span>
-          {{ block.hash }}
+          <span class="font-monospace text-break">{{ block.hash }} <a role="button" class="ms-1" @click="copyToClipboard(block.hash, $event)" title="Copy hash"><i class="bi bi-clipboard"></i></a></span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Epoch</strong></span>
@@ -51,11 +51,11 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Timestamp</strong></span>
-          <span>{{ (new Date(Number(block.block.header.timestamp)/1000)).toLocaleString() }}</span>
+          <span>{{ formatTimestamp(block.block.header.timestamp) }}</span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Signer</strong></span>
-          <span>{{ block.block.header.authenticatedSigner }}</span>
+          <span class="font-monospace text-break">{{ block.block.header.authenticatedSigner }} <a v-if="block.block.header.authenticatedSigner" role="button" class="ms-1" @click="copyToClipboard(block.block.header.authenticatedSigner, $event)" title="Copy signer"><i class="bi bi-clipboard"></i></a></span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Previous Block</strong></span>
@@ -64,7 +64,7 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>State Hash</strong></span>
-          <span>{{ block.block.header.stateHash }}</span>
+          <span class="font-monospace text-break">{{ block.block.header.stateHash }} <a role="button" class="ms-1" @click="copyToClipboard(block.block.header.stateHash, $event)" title="Copy state hash"><i class="bi bi-clipboard"></i></a></span>
         </li>
         <li class="list-group-item d-flex justify-content-between">
           <span><strong>Status</strong></span>
@@ -126,9 +126,9 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
           <ul class="list-group">
             <li v-for="(hash, id) in block.block.body.previousMessageBlocks" class="list-group-item p-0" key="block.hash+'-previousmessageblock-'+id">
               <div class="card">
-                <div class="card-header">Previous message from chain {{ id }} was sent at block</div>
+                <div class="card-header">Previous message from chain <a @click="$root.route(undefined, [['chain', String(id)]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(String(id)) }}</a> was sent at block</div>
                 <div class="card-body">
-                  <a @click="$root.route('block', [['block', hash]])" class="btn btn-link">{{ hash }}</a>
+                  <a @click="$root.route('block', [['block', displayValue(hash)]])" class="btn btn-link">{{ displayValue(hash) }}</a>
                 </div>
               </div>
             </li>

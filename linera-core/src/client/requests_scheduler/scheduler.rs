@@ -148,7 +148,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// Creates a new `RequestsScheduler` with the provided configuration.
     pub fn new(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
-        config: RequestsSchedulerConfig,
+        config: &RequestsSchedulerConfig,
     ) -> Self {
         Self::with_config(
             nodes,
@@ -174,7 +174,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     /// - `max_cache_size`: Maximum number of entries in the cache
     /// - `max_request_ttl`: Maximum latency for an in-flight request before we stop deduplicating it
     /// - `retry_delay_ms`: Delay in milliseconds between starting requests to different peers.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn with_config(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
         weights: ScoringWeights,
@@ -463,29 +463,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
         key: &RequestKey,
     ) -> Option<Vec<RemoteNode<Env::ValidatorNode>>> {
         self.in_flight_tracker.get_alternative_peers(key).await
-    }
-
-    /// Returns current performance metrics for all managed nodes.
-    ///
-    /// Each entry contains:
-    /// - Performance score (f64, normalized 0.0-1.0)
-    /// - EMA success rate (f64, 0.0-1.0)
-    /// - Total requests processed (u64)
-    ///
-    /// Useful for monitoring and debugging node performance.
-    pub async fn get_node_scores(&self) -> BTreeMap<ValidatorPublicKey, (f64, f64, u64)> {
-        let nodes = self.nodes.read().await;
-        let mut result = BTreeMap::new();
-
-        for (key, info) in nodes.iter() {
-            let score = info.calculate_score();
-            result.insert(
-                *key,
-                (score, info.ema_success_rate(), info.total_requests()),
-            );
-        }
-
-        result
     }
 
     /// Wraps a request operation with performance tracking and capacity management.
@@ -971,6 +948,7 @@ mod tests {
     }
 
     /// Helper function to create a test result
+    #[allow(clippy::unnecessary_wraps)]
     fn test_result_ok() -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         Ok(vec![])
     }
@@ -1492,8 +1470,7 @@ mod tests {
             let delay = times[1].1.as_millis();
             assert!(
                 delay < 50,
-                "Second peer should be called immediately on first failure, got {}ms",
-                delay
+                "Second peer should be called immediately on first failure, got {delay}ms"
             );
         }
 
@@ -1504,8 +1481,7 @@ mod tests {
         let total_time = Instant::now().duration_since(start_time).as_millis();
         assert!(
             total_time < 500,
-            "Total time should be less than 500ms (sequential would be ~650ms), got {}ms",
-            total_time
+            "Total time should be less than 500ms (sequential would be ~650ms), got {total_time}ms"
         );
     }
 }

@@ -102,13 +102,13 @@ impl ValidatorQueryResults {
         reference: Option<&ValidatorQueryResults>,
     ) {
         if let Some(key) = public_key {
-            println!("Public key: {}", key);
+            println!("Public key: {key}");
         }
         if let Some(address) = address {
-            println!("Address: {}", address);
+            println!("Address: {address}");
         }
         if let Some(w) = weight {
-            println!("Weight: {}", w);
+            println!("Weight: {w}");
         }
 
         let ref_version = reference.and_then(|ref_results| ref_results.version_info.as_ref().ok());
@@ -159,7 +159,7 @@ impl ValidatorQueryResults {
             Ok(info) => {
                 if ref_info.is_none_or(|ref_info| info.block_hash != ref_info.block_hash) {
                     if let Some(hash) = info.block_hash {
-                        println!("Block hash: {}", hash);
+                        println!("Block hash: {hash}");
                     } else {
                         println!("Block hash: None");
                     }
@@ -273,7 +273,7 @@ where
     // not worth refactoring this because
     // https://github.com/linera-io/linera-protocol/issues/5082
     // https://github.com/linera-io/linera-protocol/issues/5083
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn new(
         storage: S,
         wallet: W,
@@ -325,7 +325,7 @@ where
             options.prioritize_bundles_from.clone().unwrap_or_default(),
             options.ignore_bundles_from.clone().unwrap_or_default(),
             options.to_chain_client_options(),
-            options.to_requests_scheduler_config(),
+            &options.to_requests_scheduler_config(),
             block_cache_size,
             execution_state_cache_size,
         );
@@ -425,11 +425,17 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?
             .and_then(|chain| chain.owner);
 
+        // Only persist proposals that were made in the fast round: they need to be
+        // remembered across sessions to make sure there are no conflicting fast proposals.
+        let pending_proposal = chain_client
+            .pending_proposal()
+            .await
+            .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         self.wallet()
             .insert(
                 info.chain_id,
                 wallet::Chain {
-                    pending_proposal: chain_client.pending_proposal().await,
+                    pending_proposal,
                     owner: existing_owner,
                     ..info.as_ref().into()
                 },
@@ -1030,7 +1036,10 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().await;
+                let pending_proposal = chain_client
+                    .pending_proposal()
+                    .await
+                    .filter(|p| p.round.is_some_and(|r| r.is_fast()));
                 self.wallet()
                     .insert(
                         info.chain_id,
@@ -1182,7 +1191,7 @@ impl<Env: Environment> ClientContext<Env> {
                         chain_id,
                         None,
                         BlockHeight::ZERO,
-                        None,
+                        &None,
                         Some(owner),
                         self.timing_sender(),
                     );

@@ -91,11 +91,11 @@ impl Exporter {
                 "stream established, resuming export"
             );
 
-            let mut streamer = ExportTaskQueue::new(
+            let streamer = ExportTaskQueue::new(
                 self.work_queue_size,
                 start_height,
                 outgoing_stream,
-                storage.clone()?,
+                storage.clone(),
             );
 
             let mut acknowledgement_task =
@@ -215,7 +215,7 @@ where
         }
     }
 
-    async fn run(&mut self) -> anyhow::Result<()> {
+    async fn run(&self) -> anyhow::Result<()> {
         let keepalive_period = Duration::from_secs(30);
         let mut index = self.start_height;
         let mut futures = FuturesOrdered::new();

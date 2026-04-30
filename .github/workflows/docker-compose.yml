@@ -35,8 +35,8 @@ permissions:
 
 jobs:
   compose:
-    if: ${{ github.event_name == 'merge_group' }}
-    runs-on: linera-io-self-hosted-ci
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
+    runs-on: linera-io-self-hosted-builder
     timeout-minutes: 40
 
     steps:
@@ -45,10 +45,7 @@ jobs:
           fetch-depth: 0
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "34.1"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/install-protoc
       # TODO(#2709): Uncomment once this workflow runs in a custom runner
       # - name: Update aio-max-nr
         # run: echo 1048576 > /proc/sys/fs/aio-max-nr

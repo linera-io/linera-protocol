@@ -267,16 +267,6 @@ where
         self.validated_vote.get().as_ref()
     }
 
-    /// Returns the most recent timeout vote we cast.
-    pub fn timeout_vote(&self) -> Option<&Vote<Timeout>> {
-        self.timeout_vote.get().as_ref()
-    }
-
-    /// Returns the most recent fallback vote we cast.
-    pub fn fallback_vote(&self) -> Option<&Vote<Timeout>> {
-        self.fallback_vote.get().as_ref()
-    }
-
     /// Returns the lowest round where we can still vote to validate or confirm a block. This is
     /// the round to which the timeout applies.
     ///
@@ -449,7 +439,7 @@ where
     /// Signs a vote to validate the proposed block.
     pub fn create_vote(
         &mut self,
-        proposal: BlockProposal,
+        proposal: &BlockProposal,
         block: Block,
         key_pair: Option<&ValidatorSecretKey>,
         local_time: Timestamp,

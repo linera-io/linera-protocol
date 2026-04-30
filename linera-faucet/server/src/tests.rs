@@ -190,14 +190,14 @@ impl FaucetTestEnv {
     /// reusing the existing context and shared state infrastructure.
     fn new_faucet_instance(
         &self,
-        faucet_storage: Arc<FaucetDatabase>,
+        faucet_storage: &Arc<FaucetDatabase>,
         batch_config: BatchProcessorConfig,
     ) -> (MutationRoot<environment::TestStorage>, BatchProcessorHandle) {
         let pending_requests = Arc::new(Mutex::new(VecDeque::new()));
         let request_notifier = Arc::new(Notify::new());
 
         let root = MutationRoot {
-            faucet_storage: Arc::clone(&faucet_storage),
+            faucet_storage: Arc::clone(faucet_storage),
             pending_requests: Arc::clone(&pending_requests),
             request_notifier: Arc::clone(&request_notifier),
             storage: self.client.storage_client().clone(),
@@ -209,7 +209,7 @@ impl FaucetTestEnv {
             batch_config,
             Arc::clone(&self.context),
             self.client.clone(),
-            Arc::clone(&faucet_storage),
+            Arc::clone(faucet_storage),
             Arc::clone(&pending_requests),
             Arc::clone(&request_notifier),
         );
@@ -500,7 +500,7 @@ async fn test_faucet_persistence() -> anyhow::Result<()> {
     );
 
     // Restart with a new MutationRoot and batch processor
-    let (root_2, handle_2) = env.new_faucet_instance(faucet_storage_2, batch_config);
+    let (root_2, handle_2) = env.new_faucet_instance(&faucet_storage_2, batch_config);
 
     // Verify that the new instance returns the same chain IDs for the same owners
     let chain_1_after_restart = root_2
@@ -606,7 +606,7 @@ async fn test_blockchain_sync_after_database_deletion() -> anyhow::Result<()> {
     faucet_storage_2.sync_with_blockchain(&env.client).await?;
 
     // Restart with a new MutationRoot and batch processor
-    let (root_2, handle_2) = env.new_faucet_instance(faucet_storage_2, batch_config);
+    let (root_2, handle_2) = env.new_faucet_instance(&faucet_storage_2, batch_config);
 
     // === PHASE 4: Verify blockchain sync restored the correct mappings ===
 

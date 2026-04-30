@@ -17,7 +17,8 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_execution::{
-    BlobState, ExecutionRuntimeConfig, UserContractCode, UserServiceCode, WasmRuntime,
+    BlobState, ExecutionRuntimeConfig, SharedCommittees, UserContractCode, UserServiceCode,
+    WasmRuntime,
 };
 use linera_views::{
     backends::dual::{DualStoreRootKeyAssignment, StoreInUse},
@@ -251,7 +252,7 @@ fn get_block_keys() -> Vec<Vec<u8>> {
 }
 
 #[derive(Default)]
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 pub(crate) struct MultiPartitionBatch {
     keys_value_bytes: Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>,
 }
@@ -273,13 +274,12 @@ impl MultiPartitionBatch {
         self.put_key_values(root_key, vec![(key, value)]);
     }
 
-    fn add_blob(&mut self, blob: &Blob) -> Result<(), ViewError> {
+    fn add_blob(&mut self, blob: &Blob) {
         #[cfg(with_metrics)]
         metrics::WRITE_BLOB_COUNTER.inc();
         let root_key = RootKey::Blob(blob.id()).bytes();
         let key = BLOB_KEY.to_vec();
         self.put_key_value(root_key, key, blob.bytes().to_vec());
-        Ok(())
     }
 
     fn add_blob_state(&mut self, blob_id: BlobId, blob_state: &BlobState) -> Result<(), ViewError> {
@@ -328,13 +328,12 @@ impl MultiPartitionBatch {
         Ok(())
     }
 
-    fn add_event(&mut self, event_id: EventId, value: Vec<u8>) -> Result<(), ViewError> {
+    fn add_event(&mut self, event_id: &EventId, value: Vec<u8>) {
         #[cfg(with_metrics)]
         metrics::WRITE_EVENT_COUNTER.inc();
-        let key = to_event_key(&event_id);
+        let key = to_event_key(event_id);
         let root_key = RootKey::Event(event_id.chain_id).bytes();
         self.put_key_value(root_key, key, value);
-        Ok(())
     }
 
     fn add_network_description(
@@ -413,6 +412,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
     wasm_runtime: Option<WasmRuntime>,
     user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
     user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    shared_committees: SharedCommittees,
     caches: StorageCaches,
     execution_runtime_config: ExecutionRuntimeConfig,
 }
@@ -1041,14 +1041,10 @@ impl Clock for WallClock {
         Timestamp::now()
     }
 
-    async fn sleep(&self, delta: TimeDelta) {
-        linera_base::time::timer::sleep(delta.as_duration()).await
-    }
-
     async fn sleep_until(&self, timestamp: Timestamp) {
         let delta = timestamp.delta_since(Timestamp::now());
         if delta > TimeDelta::ZERO {
-            self.sleep(delta).await
+            linera_base::time::timer::sleep(delta.as_duration()).await
         }
     }
 }
@@ -1072,11 +1068,6 @@ impl TestClockInner {
             // Receiver may have been dropped if the sleep was cancelled.
             sender.send(()).ok();
         }
-    }
-
-    fn add_sleep(&mut self, delta: TimeDelta) -> Receiver<()> {
-        let target_time = self.time.saturating_add(delta);
-        self.add_sleep_until(target_time)
     }
 
     fn add_sleep_until(&mut self, time: Timestamp) -> Receiver<()> {
@@ -1112,15 +1103,6 @@ pub struct TestClock(Arc<std::sync::Mutex<TestClockInner>>);
 impl Clock for TestClock {
     fn current_time(&self) -> Timestamp {
         self.lock().time
-    }
-
-    async fn sleep(&self, delta: TimeDelta) {
-        if delta == TimeDelta::ZERO {
-            return;
-        }
-        let receiver = self.lock().add_sleep(delta);
-        // Sender may have been dropped if the clock was dropped; just stop waiting.
-        receiver.await.ok();
     }
 
     async fn sleep_until(&self, timestamp: Timestamp) {
@@ -1434,7 +1416,7 @@ where
     #[instrument(skip_all, fields(blob_id = %blob.id()))]
     async fn write_blob(&self, blob: &Blob) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
-        batch.add_blob(blob)?;
+        batch.add_blob(blob);
         self.write_batch(batch).await?;
         Ok(())
     }
@@ -1488,7 +1470,7 @@ where
             let has_state = store.contains_key(BLOB_STATE_KEY).await?;
             blob_states.push(has_state);
             if has_state {
-                batch.add_blob(blob)?;
+                batch.add_blob(blob);
             }
         }
         self.write_batch(batch).await?;
@@ -1502,7 +1484,7 @@ where
         }
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         self.write_batch(batch).await
     }
@@ -1515,7 +1497,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for blob in blobs {
-            batch.add_blob(blob)?;
+            batch.add_blob(blob);
         }
         batch.add_certificate(certificate)?;
         self.write_batch(batch).await
@@ -1839,7 +1821,7 @@ where
     ) -> Result<(), ViewError> {
         let mut batch = MultiPartitionBatch::new();
         for (event_id, value) in events {
-            batch.add_event(event_id, value)?;
+            batch.add_event(&event_id, value);
         }
         self.write_batch(batch).await
     }
@@ -1865,6 +1847,10 @@ where
         batch.add_network_description(information)?;
         self.write_batch(batch).await?;
         Ok(())
+    }
+
+    fn shared_committees(&self) -> &SharedCommittees {
+        &self.shared_committees
     }
 
     fn wasm_runtime(&self) -> Option<WasmRuntime> {
@@ -1963,6 +1949,7 @@ where
             wasm_runtime,
             user_contracts: Arc::new(papaya::HashMap::new()),
             user_services: Arc::new(papaya::HashMap::new()),
+            shared_committees: SharedCommittees::new(),
             caches: StorageCaches::new(cache_sizes),
             execution_runtime_config: ExecutionRuntimeConfig::default(),
         }

@@ -41,6 +41,40 @@ export function set_test_config() : Promise<void> {
   })
 }
 
+// BigInt-safe display: converts BigInts to strings for display and JSON.stringify.
+export function displayValue(v: any): string {
+  if (typeof v === 'bigint') return v.toString()
+  if (typeof v === 'object' && v !== null) {
+    return JSON.stringify(v, (_k, val) => typeof val === 'bigint' ? val.toString() : val)
+  }
+  return String(v)
+}
+
+// Format a Linera timestamp (microseconds since epoch) as a UTC string.
+export function formatTimestamp(ts: any): string {
+  const n = Number(typeof ts === 'bigint' ? ts.toString() : ts)
+  if (isNaN(n)) return String(ts)
+  return new Date(n / 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')
+}
+
+// Copy text to clipboard with visual feedback on the clicked element.
+export function copyToClipboard(text: string, event?: MouseEvent) {
+  navigator.clipboard.writeText(text).then(() => {
+    if (event) {
+      const el = event.currentTarget as HTMLElement
+      const icon = el.querySelector('.bi-clipboard')
+      if (icon) {
+        icon.classList.remove('bi-clipboard')
+        icon.classList.add('bi-check2')
+        setTimeout(() => {
+          icon.classList.remove('bi-check2')
+          icon.classList.add('bi-clipboard')
+        }, 1500)
+      }
+    }
+  })
+}
+
 // Extract operations from transaction metadata
 export function getOperations(transactionMetadata: TransactionMetadata[]): Operation[] {
   return transactionMetadata

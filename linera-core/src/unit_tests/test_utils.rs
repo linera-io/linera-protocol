@@ -187,7 +187,7 @@ where
             .read_network_description()
             .await
             .transpose()
-            .ok_or(NodeError::ViewError {
+            .ok_or_else(|| NodeError::ViewError {
                 error: "missing NetworkDescription".to_owned(),
             })??)
     }
@@ -384,15 +384,15 @@ where
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
         let client = self.client.clone();
-        let mut validator = client.lock().await;
+        let validator = client.lock().await;
         let result = async move {
             match validator.state.full_certificate(certificate).await? {
                 Either::Left(confirmed) => {
-                    self.do_handle_certificate_internal(confirmed, &mut validator)
+                    self.do_handle_certificate_internal(confirmed, &validator)
                         .await
                 }
                 Either::Right(validated) => {
-                    self.do_handle_certificate_internal(validated, &mut validator)
+                    self.do_handle_certificate_internal(validated, &validator)
                         .await
                 }
             }
@@ -404,7 +404,7 @@ where
     async fn do_handle_certificate_internal<T: ProcessableCertificate>(
         &self,
         certificate: GenericCertificate<T>,
-        validator: &mut MutexGuard<'_, LocalValidator<S>>,
+        validator: &MutexGuard<'_, LocalValidator<S>>,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self.fault_type {
             FaultType::DontProcessValidated if T::KIND == CertificateKind::Validated => {
@@ -443,9 +443,9 @@ where
         certificate: GenericCertificate<T>,
         sender: oneshot::Sender<Result<ChainInfoResponse, NodeError>>,
     ) -> Result<(), Result<ChainInfoResponse, NodeError>> {
-        let mut validator = self.client.lock().await;
+        let validator = self.client.lock().await;
         let result = self
-            .do_handle_certificate_internal(certificate, &mut validator)
+            .do_handle_certificate_internal(certificate, &validator)
             .await;
         sender.send(result)
     }
@@ -516,7 +516,7 @@ where
             .await
             .map_err(Into::into);
         let blob = match blob {
-            Ok(blob) => blob.ok_or(NodeError::BlobsNotFound(vec![blob_id])),
+            Ok(blob) => blob.ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error),
         };
         sender.send(blob.map(|blob| Arc::unwrap_or_clone(blob).into_content()))
@@ -596,7 +596,7 @@ where
             Ok(certificates) => match ResultReadCertificates::new(certificates, hashes) {
                 ResultReadCertificates::Certificates(certificates) => Ok(certificates),
                 ResultReadCertificates::InvalidHashes(hashes) => {
-                    panic!("Missing certificates: {:?}", hashes)
+                    panic!("Missing certificates: {hashes:?}")
                 }
             },
         };
@@ -890,7 +890,7 @@ where
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
             let config = ChainWorkerConfig {
-                nickname: format!("Node {}", i),
+                nickname: format!("Node {i}"),
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(validator_keypair.secret_key));
@@ -1098,17 +1098,17 @@ where
             self.admin_chain_id(),
             false,
             [(chain_id, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id),
+            format!("Client node for {chain_id:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
             HashSet::new(),
             HashSet::new(),
             options,
-            crate::client::RequestsSchedulerConfig::default(),
+            &crate::client::RequestsSchedulerConfig::default(),
             crate::worker::DEFAULT_BLOCK_CACHE_SIZE,
             crate::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
         ));
-        Ok(client.create_chain_client(chain_id, block_hash, block_height, None, owner, None))
+        Ok(client.create_chain_client(chain_id, block_hash, block_height, &None, owner, None))
     }
 
     pub async fn make_client(

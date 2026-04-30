@@ -19,7 +19,7 @@ use gql_service::{
     block::{self, BlockBlock as Block},
     blocks::{self, BlocksBlocks as Blocks},
     chain::{self, ChainChain as Chain},
-    chains, notifications, request, Chains, Reason,
+    chains, notifications, request, transfer, Chains, Reason,
 };
 use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
@@ -63,7 +63,10 @@ enum Page {
         blocks: Vec<Blocks>,
         apps: Vec<Application>,
     },
-    Blocks(Vec<Blocks>),
+    Blocks {
+        blocks: Vec<Blocks>,
+        limit: u32,
+    },
     Block(Box<Block>),
     Applications(Vec<Application>),
     Application {
@@ -78,6 +81,9 @@ enum Page {
         name: String,
         link: String,
         queries: Value,
+    },
+    Transfer {
+        result: Option<String>,
     },
     Error(String),
 }
@@ -158,7 +164,7 @@ pub enum AddressKind {
     Indexer,
 }
 
-fn url(config: &Config, protocol: Protocol, kind: AddressKind) -> String {
+fn url(config: &Config, protocol: &Protocol, kind: &AddressKind) -> String {
     let protocol = match protocol {
         Protocol::Http => "http",
         Protocol::Websocket => "ws",
@@ -168,7 +174,7 @@ fn url(config: &Config, protocol: Protocol, kind: AddressKind) -> String {
         AddressKind::Node => &config.node,
         AddressKind::Indexer => &config.indexer,
     };
-    format!("{}{}://{}", protocol, tls, address)
+    format!("{protocol}{tls}://{address}")
 }
 
 async fn get_chain(node: &str, chain_id: ChainId) -> Result<Box<Chain>> {
@@ -183,7 +189,7 @@ async fn get_chain(node: &str, chain_id: ChainId) -> Result<Box<Chain>> {
     let chain = request::<gql_service::Chain, _>(&client, node, variables)
         .await?
         .chain;
-    log_str(&serde_json::to_string_pretty(&chain).unwrap());
+    // log_str(&serde_json::to_string_pretty(&chain).unwrap());
     Ok(Box::new(chain))
 }
 
@@ -216,7 +222,7 @@ async fn get_applications(node: &str, chain_id: ChainId) -> Result<Vec<Applicati
 
 async fn get_operations(indexer: &str, chain_id: ChainId) -> Result<Vec<Operations>> {
     let client = reqwest_client();
-    let operations_indexer = format!("{}/operations", indexer);
+    let operations_indexer = format!("{indexer}/operations");
     let variables = operations::Variables {
         from: OperationsKeyKind::Last(chain_id),
         limit: None,
@@ -244,7 +250,7 @@ async fn home(node: &str, chain_id: ChainId) -> Result<(Page, String)> {
             blocks,
             apps,
         },
-        format!("/?chain={}", chain_id),
+        format!("/?chain={chain_id}"),
     ))
 }
 
@@ -253,11 +259,13 @@ async fn blocks(
     node: &str,
     chain_id: ChainId,
     from: Option<CryptoHash>,
-    limit: Option<u32>,
+    limit: u32,
 ) -> Result<(Page, String)> {
-    // TODO: limit is not used in the UI, it should be implemented with some path arguments and select input
-    let blocks = get_blocks(node, chain_id, from, limit).await?;
-    Ok((Page::Blocks(blocks), format!("/blocks?chain={}", chain_id)))
+    let blocks = get_blocks(node, chain_id, from, Some(limit)).await?;
+    Ok((
+        Page::Blocks { blocks, limit },
+        format!("/blocks?chain={chain_id}"),
+    ))
 }
 
 /// Returns the block page.
@@ -271,7 +279,7 @@ async fn block(node: &str, chain_id: ChainId, hash: Option<CryptoHash>) -> Resul
     let hash = block.hash;
     Ok((
         Page::Block(Box::new(block)),
-        format!("/block/{}?chain={}", hash, chain_id),
+        format!("/block/{hash}?chain={chain_id}"),
     ))
 }
 
@@ -309,7 +317,7 @@ async fn applications(node: &str, chain_id: ChainId) -> Result<(Page, String)> {
     let applications = get_applications(node, chain_id).await?;
     Ok((
         Page::Applications(applications),
-        format!("/applications?chain={}", chain_id),
+        format!("/applications?chain={chain_id}"),
     ))
 }
 
@@ -318,7 +326,7 @@ async fn operations(indexer: &str, chain_id: ChainId) -> Result<(Page, String)> 
     let operations = get_operations(indexer, chain_id).await?;
     Ok((
         Page::Operations(operations),
-        format!("/operations?chain={}", chain_id),
+        format!("/operations?chain={chain_id}"),
     ))
 }
 
@@ -329,7 +337,7 @@ async fn operation(
     chain_id: ChainId,
 ) -> Result<(Page, String)> {
     let client = reqwest_client();
-    let operations_indexer = format!("{}/operations", indexer);
+    let operations_indexer = format!("{indexer}/operations");
     let key = match key {
         Some(key) => OperationKeyKind::Key(key),
         None => OperationKeyKind::Last(chain_id),
@@ -471,7 +479,7 @@ async fn application(app: Application) -> Result<(Page, String)> {
 
 /// Returns the plugin page.
 async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
-    let link = format!("{}/{}", indexer, plugin);
+    let link = format!("{indexer}/{plugin}");
     let schema = graphql::introspection(&link).await?;
     let sch = &schema["data"]["__schema"];
     let types = sch["types"]
@@ -481,7 +489,7 @@ async fn plugin(plugin: &str, indexer: &str) -> Result<(Page, String)> {
     let queries =
         list_entrypoints(&types, &sch["queryType"]["name"]).unwrap_or(Value::Array(Vec::new()));
     let queries = fill_type(&queries, &types);
-    let pathname = format!("/plugin?plugin={}", plugin);
+    let pathname = format!("/plugin?plugin={plugin}");
     Ok((
         Page::Plugin {
             name: plugin.to_string(),
@@ -542,7 +550,7 @@ fn page_name_and_args(page: &Page) -> (&str, Vec<(String, String)>) {
     match page {
         Page::Unloaded | Page::Home { .. } => ("", Vec::new()),
         Page::Block(b) => ("block", vec![("block".to_string(), b.hash.to_string())]),
-        Page::Blocks { .. } => ("blocks", Vec::new()),
+        Page::Blocks { limit, .. } => ("blocks", vec![("limit".to_string(), limit.to_string())]),
         Page::Applications(_) => ("applications", Vec::new()),
         Page::Application { app, .. } => (
             "application",
@@ -557,6 +565,7 @@ fn page_name_and_args(page: &Page) -> (&str, Vec<(String, String)>) {
             ],
         ),
         Page::Plugin { name, .. } => ("plugin", vec![("plugin".to_string(), name.to_string())]),
+        Page::Transfer { .. } => ("transfer", Vec::new()),
         Page::Error(_) => ("error", Vec::new()),
     }
 }
@@ -611,7 +620,11 @@ async fn page(
             let hash = find_arg_map(args, "block", CryptoHash::from_str)?;
             block(node, chain_id, hash).await
         }
-        "blocks" => blocks(node, chain_id, None, Some(20)).await,
+        "blocks" => {
+            let from = find_arg_map(args, "from", CryptoHash::from_str)?;
+            let limit = find_arg_map(args, "limit", u32::from_str)?.unwrap_or(20);
+            blocks(node, chain_id, from, limit).await
+        }
         "applications" => applications(node, chain_id).await,
         "application" => {
             let app_arg = find_arg(args, "app").context("unknown application")?;
@@ -634,13 +647,48 @@ async fn page(
                 }
             }
         }
+        "transfer" => {
+            let recipient_chain = find_arg(args, "recipient_chain");
+            let recipient_owner = find_arg(args, "recipient_owner");
+            let amount = find_arg(args, "amount");
+            match (recipient_chain, amount) {
+                (Some(recipient_chain), Some(amount)) => {
+                    let owner = find_arg(args, "owner").context("missing owner")?;
+                    let recipient_owner = recipient_owner.unwrap_or_else(|| owner.clone());
+                    let variables = transfer::Variables {
+                        chain_id,
+                        owner: serde_json::from_value(Value::String(owner))
+                            .context("invalid owner")?,
+                        recipient_chain: ChainId::from_str(&recipient_chain)
+                            .context("invalid recipient chain")?,
+                        recipient_account: serde_json::from_value(Value::String(recipient_owner))
+                            .context("invalid recipient owner")?,
+                        amount: serde_json::from_value(Value::String(amount))
+                            .context("invalid amount")?,
+                    };
+                    let client = reqwest_client();
+                    let node_url = url(&Config::load(), &Protocol::Http, &AddressKind::Node);
+                    request::<gql_service::Transfer, _>(&client, &node_url, variables).await?;
+                    Ok((
+                        Page::Transfer {
+                            result: Some("Transfer successful!".to_string()),
+                        },
+                        format!("/transfer?chain={chain_id}"),
+                    ))
+                }
+                _ => Ok((
+                    Page::Transfer { result: None },
+                    format!("/transfer?chain={chain_id}"),
+                )),
+            }
+        }
         "operations" => operations(indexer, chain_id).await,
         "plugin" => {
             let name = find_arg(args, "plugin").context("unknown plugin")?;
             plugin(&name, indexer).await
         }
         "error" => {
-            let msg = find_arg(args, "msg").unwrap_or("unknown error".to_string());
+            let msg = find_arg(args, "msg").unwrap_or_else(|| "unknown error".to_string());
             Err(anyhow::Error::msg(msg))
         }
         _ => Err(anyhow!("unknown page")),
@@ -660,8 +708,8 @@ async fn route_aux(
         (Some(p), _) => (p, args.to_vec()),
         (_, p) => page_name_and_args(p),
     };
-    let node = url(&data.config, Protocol::Http, AddressKind::Node);
-    let indexer = url(&data.config, Protocol::Http, AddressKind::Indexer);
+    let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
+    let indexer = url(&data.config, &Protocol::Http, &AddressKind::Indexer);
     let result = match chain_info {
         Err(e) => Err(e),
         Ok((chain_id, chain_changed)) => {
@@ -671,7 +719,7 @@ async fn route_aux(
                     // Ignore close errors; we're switching to a new connection anyway.
                     ws.close().await.ok();
                 }
-                let address = url(&data.config, Protocol::Websocket, AddressKind::Node);
+                let address = url(&data.config, &Protocol::Websocket, &AddressKind::Node);
                 subscribe_chain(app, &address, chain_id).await;
             };
             page_result
@@ -706,9 +754,9 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
 }
 
 #[wasm_bindgen]
-pub fn short_crypto_hash(s: String) -> String {
-    let hash = CryptoHash::from_str(&s).expect("not a crypto hash");
-    format!("{:?}", hash)
+pub fn short_crypto_hash(s: &str) -> String {
+    let hash = CryptoHash::from_str(s).expect("not a crypto hash");
+    format!("{hash:?}")
 }
 
 #[wasm_bindgen]
@@ -731,12 +779,10 @@ fn set_onpopstate(app: JsValue) {
 
 /// Subscribes to notifications for one chain
 async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
-    let (ws, mut wsio) = WsMeta::connect(
-        &format!("{}/ws", address),
-        Some(vec!["graphql-transport-ws"]),
-    )
-    .await
-    .expect("cannot connect to websocket");
+    let (ws, mut wsio) =
+        WsMeta::connect(&format!("{address}/ws"), Some(vec!["graphql-transport-ws"]))
+            .await
+            .expect("cannot connect to websocket");
     wsio.send(WsMessage::Text(
         "{\"type\": \"connection_init\", \"payload\": {}}".to_string(),
     ))
@@ -744,13 +790,9 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
     .expect("cannot send to websocket");
     wsio.next().await;
     let uuid = Uuid::new_v3(&Uuid::NAMESPACE_DNS, b"linera.dev");
-    let payload_query = format!(
-        r#"subscription {{ notifications(chainId: \"{}\") }}"#,
-        chain
-    );
+    let payload_query = format!(r#"subscription {{ notifications(chainId: \"{chain}\") }}"#);
     let query = format!(
-        r#"{{ "id": "{}", "type": "subscribe", "payload": {{"query": "{}"}} }}"#,
-        uuid, payload_query
+        r#"{{ "id": "{uuid}", "type": "subscribe", "payload": {{"query": "{payload_query}"}} }}"#
     );
     wsio.send(WsMessage::Text(query))
         .await
@@ -760,18 +802,28 @@ async fn subscribe_chain(app: &JsValue, address: &str, chain: ChainId) {
         while let Some(evt) = wsio.next().await {
             match evt {
                 WsMessage::Text(message) => {
-                    let graphql_message = serde_json::from_str::<
+                    let graphql_message = match serde_json::from_str::<
                         GQuery<Response<notifications::ResponseData>>,
                     >(&message)
-                    .expect("unexpected websocket response");
+                    {
+                        Ok(msg) => msg,
+                        Err(e) => {
+                            log_str(&format!("ignoring websocket message: {e}"));
+                            continue;
+                        }
+                    };
                     if let Some(payload) = graphql_message.payload {
                         if let Some(message_data) = payload.data {
                             let data =
                                 from_value::<Data>(app.clone()).expect("cannot parse vue data");
-                            if let Reason::NewBlock { .. } = message_data.notifications.reason {
-                                if message_data.notifications.chain_id == chain {
-                                    route_aux(&app, &data, &None, &Vec::new(), false).await
-                                }
+                            let should_refresh = matches!(
+                                &message_data.notifications.reason,
+                                Reason::NewBlock { .. }
+                                    | Reason::BlockExecuted { .. }
+                                    | Reason::NewEvents { .. }
+                            );
+                            if should_refresh && message_data.notifications.chain_id == chain {
+                                route_aux(&app, &data, &None, &Vec::new(), false).await
                             }
                         }
                         if let Some(errors) = payload.errors {
@@ -794,7 +846,7 @@ pub async fn start(app: JsValue) {
     console_error_panic_hook::set_once();
     set_onpopstate(app.clone());
     let data = from_value::<Data>(app.clone()).expect("cannot parse vue data");
-    let address = url(&data.config, Protocol::Http, AddressKind::Node);
+    let address = url(&data.config, &Protocol::Http, &AddressKind::Node);
     let default_chain = chains(&app, &address).await;
     match default_chain {
         Err(e) => {
@@ -808,7 +860,7 @@ pub async fn start(app: JsValue) {
             .await
         }
         Ok(default_chain) => {
-            let indexer = url(&data.config, Protocol::Http, AddressKind::Indexer);
+            let indexer = url(&data.config, &Protocol::Http, &AddressKind::Indexer);
             plugins(&app, &indexer).await;
             let uri = web_sys::window()
                 .expect("window object not found")
@@ -824,6 +876,7 @@ pub async fn start(app: JsValue) {
                 "/applications" => Some("applications".to_string()),
                 "/operations" => Some("operations".to_string()),
                 "/operation" => Some("operation".to_string()),
+                "/transfer" => Some("transfer".to_string()),
                 "/plugin" => Some("plugin".to_string()),
                 pathname => match (
                     pathname.strip_prefix("/block/"),
@@ -834,7 +887,7 @@ pub async fn start(app: JsValue) {
                         Some("block".to_string())
                     }
                     (_, Some(app_id)) => {
-                        let link = format!("{}/applications/{}", address, app_id);
+                        let link = format!("{address}/applications/{app_id}");
                         let app =
                             serde_json::json!({"id": app_id, "link": link, "description": ""})
                                 .to_string();

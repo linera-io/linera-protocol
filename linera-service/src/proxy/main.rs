@@ -3,7 +3,7 @@
 
 #[cfg(feature = "jemalloc")]
 #[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 
 /// Configure jemalloc profiling infrastructure at startup with sampling disabled.
 /// Profiling is activated at runtime only when `--enable-memory-profiling` is passed.
@@ -284,10 +284,11 @@ where
     S: Storage + Clone + Send + Sync + 'static,
 {
     #[instrument(name = "SimpleProxy::run", skip_all, fields(port = self.public_config.port, metrics_port = self.metrics_port()), err)]
+    #[cfg_attr(not(with_metrics), allow(unused_variables))]
     async fn run(
         self,
         shutdown_signal: CancellationToken,
-        _enable_memory_profiling: bool,
+        enable_memory_profiling: bool,
     ) -> Result<()> {
         info!("Starting proxy");
         let mut join_set = JoinSet::new();
@@ -297,7 +298,7 @@ where
         monitoring_server::start_metrics_with_profiling(
             address,
             shutdown_signal.clone(),
-            _enable_memory_profiling,
+            enable_memory_profiling,
         )
         .await;
 

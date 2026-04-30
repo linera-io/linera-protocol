@@ -146,6 +146,7 @@ impl BlockBuilder {
     ///
     /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by
     /// `application`.
+    #[expect(clippy::needless_pass_by_value)]
     pub fn with_operation<Abi>(
         &mut self,
         application_id: ApplicationId<Abi>,
@@ -244,7 +245,7 @@ impl BlockBuilder {
                     .clone()
             })
             .collect();
-        let (_, block, _, resource_tracker) = self
+        let (_, block, _, resource_tracker, _) = self
             .validator
             .worker()
             .stage_block_execution(

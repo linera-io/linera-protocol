@@ -185,6 +185,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--reject-message-bundles-without-application-ids <REJECT_MESSAGE_BUNDLES_WITHOUT_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles with at least one message from one of these applications will be accepted
 * `--reject-message-bundles-with-other-application-ids <REJECT_MESSAGE_BUNDLES_WITH_OTHER_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles where all messages are from one of these applications will be accepted
 * `--process-events-from-application-ids <PROCESS_EVENTS_FROM_APPLICATION_IDS>` — A set of application IDs. If specified, only events coming from streams created by applications from this set will be processed
+* `--never-reject-application-ids <NEVER_REJECT_APPLICATION_IDS>` — A set of application IDs whose messages must never be rejected. Bundles whose messages are all from one of these applications bypass the other rejection rules (except `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from the same sender) are removed from the block for later retry instead of being rejected, with a warning logged. Bundles that contain any message from an application not on this list can be rejected
 * `--timings` — Enable timing reports during operations
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
 

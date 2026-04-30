@@ -20,7 +20,6 @@ path = "src/main.rs"
 
 [features]
 default = ["rocksdb", "storage-service"]
-evm-exporter = ["dep:linera-ethereum"]
 metrics = ["dep:linera-metrics", "dep:prometheus", "linera-base/metrics"]
 rocksdb = ["linera-views/rocksdb", "linera-storage-runtime/rocksdb"]
 dynamodb = ["linera-views/dynamodb", "linera-storage-runtime/dynamodb"]
@@ -41,7 +40,6 @@ futures.workspace = true
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-core.workspace = true
-linera-ethereum = { workspace = true, optional = true }
 linera-execution.workspace = true
 linera-metrics = { workspace = true, optional = true }
 linera-rpc.workspace = true

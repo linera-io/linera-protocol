@@ -106,7 +106,7 @@ pub fn event_name_from_expanded(event_name_expanded: &str) -> String {
 fn parse_entry(entry: B256, ethereum_type: &str) -> Result<EthereumDataType, EthereumServiceError> {
     if ethereum_type == "address" {
         let address = Address::from_word(entry);
-        let address = format!("{:?}", address);
+        let address = format!("{address:?}");
         return Ok(EthereumDataType::Address(address));
     }
     if ethereum_type == "uint256" {
@@ -188,7 +188,7 @@ fn get_inner_event_type(event_name_expanded: &str) -> Result<String, EthereumSer
 
 pub fn parse_log(
     event_name_expanded: &str,
-    log: Log,
+    log: &Log,
 ) -> Result<EthereumEvent, EthereumServiceError> {
     let inner_types = get_inner_event_type(event_name_expanded)?;
     let ethereum_types = inner_types

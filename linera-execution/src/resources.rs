@@ -304,9 +304,9 @@ impl fmt::Display for ResourceTracker {
 
         let mut lines_iter = lines.into_iter();
         if let Some(first) = lines_iter.next() {
-            write!(f, "{}", first)?;
+            write!(f, "{first}")?;
             for line in lines_iter {
-                write!(f, "\n  {}", line)?;
+                write!(f, "\n  {line}")?;
             }
         }
 
@@ -730,7 +730,7 @@ where
 
     /// Tracks the size of a response produced by an oracle.
     pub(crate) fn track_service_oracle_response(
-        &mut self,
+        &self,
         response_bytes: usize,
     ) -> Result<(), ExecutionError> {
         ensure!(

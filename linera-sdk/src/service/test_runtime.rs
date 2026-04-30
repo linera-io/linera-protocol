@@ -401,9 +401,9 @@ where
             .enumerate()
             .map(|(index, bytes)| {
                 bcs::from_bytes(&bytes).unwrap_or_else(|error| {
+                    let hex_bytes = hex::encode(bytes);
                     panic!(
-                        "Failed to deserialize scheduled operation #{index} (0x{}): {error}",
-                        hex::encode(bytes)
+                        "Failed to deserialize scheduled operation #{index} (0x{hex_bytes}): {error}"
                     )
                 })
             })
@@ -464,6 +464,7 @@ where
     ///
     /// Cannot be used in fast blocks: A block using this call should be proposed by a regular
     /// owner, not a super owner.
+    #[expect(clippy::needless_pass_by_value)]
     pub fn http_request(&self, request: http::Request) -> http::Response {
         let maybe_request = self.expected_http_requests.lock().unwrap().pop_front();
         let (expected_request, response) = maybe_request.expect("Unexpected HTTP request");

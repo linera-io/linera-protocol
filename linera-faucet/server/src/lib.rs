@@ -328,7 +328,7 @@ where
 
     /// Returns the current committee, including weights and resource policy.
     async fn current_committee(&self) -> Result<Committee, Error> {
-        Ok(self.client.local_committee().await?)
+        Ok((*self.client.local_committee().await?).clone())
     }
 
     /// Returns the current epoch of the faucet's chain.
@@ -347,7 +347,7 @@ where
 
         let chain_id = self.faucet_storage.get_chain_id(&owner).await?;
 
-        chain_id.ok_or(Error::new("This user has no chain yet"))
+        chain_id.ok_or_else(|| Error::new("This user has no chain yet"))
     }
 
     /// Returns the initial claim for the given owner, if any.
@@ -630,18 +630,14 @@ where
         })?
         .ok_or_else(|| {
             tracing::error!(?chain_id, "chain description blob not found for chain");
-            Error::new(format!(
-                "Chain description not found for chain {}",
-                chain_id
-            ))
+            Error::new(format!("Chain description not found for chain {chain_id}"))
         })?;
 
     // Deserialize the chain description from the blob bytes
     let description = bcs::from_bytes::<ChainDescription>(blob.bytes()).map_err(|e| {
         tracing::error!(?e, ?chain_id, "failed to deserialize chain description",);
         Error::new(format!(
-            "Invalid chain description data for chain {}",
-            chain_id
+            "Invalid chain description data for chain {chain_id}"
         ))
     })?;
 
@@ -1003,7 +999,7 @@ where
             .collect();
 
         #[cfg(with_metrics)]
-        let _store_chains_start = std::time::Instant::now();
+        let store_chains_start = std::time::Instant::now();
 
         let store_initial = async {
             if initial_chains.is_empty() {
@@ -1023,13 +1019,13 @@ where
         };
 
         if let Err(e) = futures::try_join!(store_initial, store_daily) {
-            let error_msg = format!("Failed to save claims to database: {}", e);
+            let error_msg = format!("Failed to save claims to database: {e}");
             Self::send_err(requests, error_msg.clone());
             anyhow::bail!(error_msg);
         }
         #[cfg(with_metrics)]
         {
-            let elapsed_ms = _store_chains_start.elapsed().as_secs_f64() * 1000.0;
+            let elapsed_ms = store_chains_start.elapsed().as_secs_f64() * 1000.0;
             metrics::STORE_CHAIN_LATENCY
                 .with_label_values(&[])
                 .observe(elapsed_ms);

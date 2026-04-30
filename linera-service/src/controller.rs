@@ -54,7 +54,7 @@ where
     Ctx::Environment: 'static,
     <Ctx::Environment as linera_core::Environment>::Storage: Clone,
 {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         chain_id: ChainId,
         controller_id: ApplicationId,
@@ -216,6 +216,7 @@ where
         }
     }
 
+    #[expect(clippy::needless_pass_by_ref_mut)]
     async fn register_worker(&mut self) {
         let capabilities = self.operators.keys().cloned().collect();
         let command = WorkerCommand::RegisterWorker { capabilities };

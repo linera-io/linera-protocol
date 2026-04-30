@@ -54,11 +54,11 @@ struct ServeOptions {
     #[arg(long)]
     rpc_url: String,
 
-    /// Path to the wallet state file. Must already exist (use `linera-bridge-init`).
+    /// Path to the wallet state file.
     #[arg(long = "wallet", env = "LINERA_WALLET")]
     wallet: Option<PathBuf>,
 
-    /// Path to the keystore file. Must already exist (use `linera-bridge-init`).
+    /// Path to the keystore file.
     #[arg(long = "keystore", env = "LINERA_KEYSTORE")]
     keystore: Option<PathBuf>,
 
@@ -66,11 +66,11 @@ struct ServeOptions {
     #[arg(long = "storage", env = "LINERA_STORAGE")]
     storage: Option<String>,
 
-    /// Linera bridge chain ID (produced by `linera-bridge-init`).
+    /// Linera bridge chain ID
     #[arg(long)]
     linera_bridge_chain_id: linera_base::identifiers::ChainId,
 
-    /// Owner of the bridge chain (produced by `linera-bridge-init`).
+    /// Owner of the bridge chain
     #[arg(long)]
     linera_bridge_chain_owner: linera_base::identifiers::AccountOwner,
 

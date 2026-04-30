@@ -110,7 +110,7 @@ impl QuerySubscriptionManager {
     /// after the first query. Callers should filter out `None` values from the stream.
     pub fn subscribe<C: ClientContext + 'static>(
         self: &Arc<Self>,
-        key: SubscriptionKey,
+        key: &SubscriptionKey,
         context: Arc<futures::lock::Mutex<C>>,
         token: CancellationToken,
     ) -> anyhow::Result<watch::Receiver<Option<String>>> {
@@ -124,7 +124,7 @@ impl QuerySubscriptionManager {
         let mut watchers = self.watchers.lock().unwrap();
 
         // If a watcher already exists, reuse it. The current value is always available.
-        if let Some(state) = watchers.get(&key) {
+        if let Some(state) = watchers.get(key) {
             return Ok(state.sender.subscribe());
         }
 

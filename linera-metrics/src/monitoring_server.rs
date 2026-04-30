@@ -107,7 +107,7 @@ pub fn start_metrics_with_extras(
             .with_graceful_shutdown(shutdown_signal.cancelled_owned())
             .await
         {
-            panic!("Error serving metrics: {}", e);
+            panic!("Error serving metrics: {e}");
         }
     });
 }

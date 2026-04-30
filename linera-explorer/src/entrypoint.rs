@@ -41,7 +41,7 @@ fn forge_arg_type(arg: &Value, non_null: bool) -> Option<String> {
                 .iter()
                 .filter_map(|x| {
                     let name = x["name"].as_str().unwrap();
-                    forge_arg_type(&x["type"], false).map(|arg| format!("{}: {}", name, arg))
+                    forge_arg_type(&x["type"], false).map(|arg| format!("{name}: {arg}"))
                 })
                 .collect::<Vec<_>>();
             Some(format!("{{{}}}", args.join(", ")))
@@ -62,7 +62,7 @@ fn forge_arg(arg: &Value) -> Option<String> {
 }
 
 /// Forges query arguments.
-fn forge_args(args: Vec<Value>) -> String {
+fn forge_args(args: &[Value]) -> String {
     let args = args.iter().filter_map(forge_arg).collect::<Vec<_>>();
     if !args.is_empty() {
         format!("({})", args.join(","))
@@ -113,7 +113,7 @@ fn forge_response(output: &Value) -> String {
     if empty_response_aux(output) {
         "".to_string()
     } else {
-        forge_response_type(output, None, true).unwrap_or("".to_string())
+        forge_response_type(output, None, true).unwrap_or_default()
     }
 }
 
@@ -125,8 +125,8 @@ pub async fn query(app: JsValue, query: JsValue, kind: String) {
     let fetch_json = js_to_json(&query);
     let name = fetch_json["name"].as_str().unwrap();
     let args = fetch_json["args"].as_array().unwrap().to_vec();
-    let args = forge_args(args);
-    let input = format!("{}{}", name, args);
+    let args = forge_args(&args);
+    let input = format!("{name}{args}");
     let response = forge_response(&fetch_json["type"]);
     let body =
         serde_json::json!({ "query": format!("{} {{{} {}}}", kind, input, response) }).to_string();
@@ -162,8 +162,8 @@ pub async fn query(app: JsValue, query: JsValue, kind: String) {
 
 /// Checks if response fields are not needed.
 #[wasm_bindgen]
-pub fn empty_response(output: JsValue) -> bool {
-    let output = js_to_json(&output);
+pub fn empty_response(output: &JsValue) -> bool {
+    let output = js_to_json(output);
     empty_response_aux(&output)
 }
 
@@ -236,7 +236,7 @@ mod tests {
                }
             }
         );
-        let result = super::forge_args(vec![json]);
+        let result = super::forge_args(&[json]);
         assert_eq!(
             &result,
             "(arg: {field1: [\"foo\"], field2: E2, field3: {field31: true, field32: 42}})"

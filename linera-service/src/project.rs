@@ -258,10 +258,9 @@ impl Project {
     /// Adds [`linera_sdk`] dependencies in production mode.
     fn linera_sdk_production_dependencies() -> (String, String) {
         let version = env!("CARGO_PKG_VERSION");
-        let linera_sdk_dep = format!("linera-sdk = \"{}\"", version);
+        let linera_sdk_dep = format!("linera-sdk = \"{version}\"");
         let linera_sdk_dev_dep = format!(
-            "linera-sdk = {{ version = \"{}\", features = [\"test\", \"wasmer\"] }}",
-            version
+            "linera-sdk = {{ version = \"{version}\", features = [\"test\", \"wasmer\"] }}"
         );
         (linera_sdk_dep, linera_sdk_dev_dep)
     }
@@ -271,8 +270,8 @@ impl Project {
             Some(name) => name,
             None => self.project_package_name()?.replace('-', "_"),
         };
-        let contract_name = format!("{}_contract", name);
-        let service_name = format!("{}_service", name);
+        let contract_name = format!("{name}_contract");
+        let service_name = format!("{name}_service");
         let cargo_build = Command::new("cargo")
             .arg("build")
             .arg("--release")

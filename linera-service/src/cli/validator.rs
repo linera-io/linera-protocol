@@ -290,7 +290,7 @@ impl Add {
                 let chain_client = chain_client.clone();
                 async move {
                     // Create the new committee.
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -303,9 +303,9 @@ impl Add {
                         },
                     );
 
-                    committee = Committee::new(validators, policy);
+                    let new_committee = Committee::new(validators, policy);
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }
@@ -328,7 +328,7 @@ impl Add {
 impl BatchQuery {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let batch = parse_query_batch_file(self.file.clone())
             .context("parsing query batch file `{file}`")?;
@@ -439,7 +439,7 @@ impl Update {
         if !adds.is_empty() {
             println!("Validators to ADD:");
             for (pk, spec) in &adds {
-                println!("  + {}", pk);
+                println!("  + {pk}");
                 println!("    Address:     {}", spec.address);
                 println!("    Account Key: {}", spec.account_key);
                 println!("    Votes:       {}", spec.votes.0.get());
@@ -450,7 +450,7 @@ impl Update {
         if !modifies.is_empty() {
             println!("Validators to MODIFY:");
             for (pk, spec) in &modifies {
-                println!("  * {}", pk);
+                println!("  * {pk}");
                 println!("    New Address:     {}", spec.address);
                 println!("    New Account Key: {}", spec.account_key);
                 println!("    New Votes:       {}", spec.votes.0.get());
@@ -461,7 +461,7 @@ impl Update {
         if !removes.is_empty() {
             println!("Validators to REMOVE:");
             for pk in &removes {
-                println!("  - {}", pk);
+                println!("  - {pk}");
             }
             println!();
         }
@@ -499,7 +499,7 @@ impl Update {
 
             let input = input.trim();
             if input != "YES" {
-                println!("\nOperation cancelled. (Expected 'YES', got '{}')", input);
+                println!("\nOperation cancelled. (Expected 'YES', got '{input}')");
                 return Ok(());
             }
             println!("\nConfirmed. Proceeding with batch update...\n");
@@ -535,7 +535,7 @@ impl Update {
                 let batch = batch_clone.clone();
                 async move {
                     // Get current committee
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -586,9 +586,9 @@ impl Update {
                     }
 
                     // Create new committee
-                    committee = Committee::new(validators, policy);
+                    let new_committee = Committee::new(validators, policy);
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }
@@ -612,7 +612,7 @@ impl Update {
 impl List {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let chain_id = self.chain_id.unwrap_or_else(|| context.default_chain());
         println!("Querying validators about chain {chain_id}.\n");
@@ -684,7 +684,7 @@ impl List {
 impl Query {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let node = context.make_node_provider().make_node(&self.address)?;
         let chain_id = self.chain_id.unwrap_or_else(|| context.default_chain());
@@ -714,7 +714,7 @@ impl Query {
 impl QueryBlock {
     async fn run(
         &self,
-        context: &mut ClientContext<impl linera_core::Environment>,
+        context: &ClientContext<impl linera_core::Environment>,
     ) -> anyhow::Result<()> {
         let node = context.make_node_provider().make_node(&self.address)?;
         let chain_id = self.chain_id.unwrap_or_else(|| context.default_chain());
@@ -731,7 +731,7 @@ impl QueryBlock {
         match result {
             Ok(certificates) => {
                 let confirmed_block = certificates[0].inner();
-                println!("{:#?}", confirmed_block);
+                println!("{confirmed_block:#?}");
             }
             Err(error) => {
                 tracing::error!("{}", error);
@@ -761,7 +761,7 @@ impl Remove {
                 let chain_client = chain_client.clone();
                 async move {
                     // Create the new committee.
-                    let mut committee = chain_client.local_committee().await?;
+                    let committee = chain_client.local_committee().await?;
                     let policy = committee.policy().clone();
                     let mut validators = committee.validators().clone();
 
@@ -770,9 +770,9 @@ impl Remove {
                         return Ok(ClientOutcome::Committed(None));
                     }
 
-                    committee = Committee::new(validators, policy);
+                    let new_committee = Committee::new(validators, policy);
                     chain_client
-                        .stage_new_committee(committee)
+                        .stage_new_committee(new_committee)
                         .await
                         .map(|outcome| outcome.map(Some))
                 }
@@ -795,9 +795,7 @@ impl Remove {
 impl Sync {
     async fn run(
         &self,
-        context: &mut ClientContext<
-            impl linera_core::Environment<ValidatorNode = linera_rpc::Client>,
-        >,
+        context: &ClientContext<impl linera_core::Environment<ValidatorNode = linera_rpc::Client>>,
     ) -> anyhow::Result<()> {
         tracing::info!("Starting sync operation for validator at {}", self.address);
 

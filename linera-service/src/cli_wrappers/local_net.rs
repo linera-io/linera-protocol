@@ -696,21 +696,6 @@ impl LocalNet {
                         "#
                     )
                 }
-                Destination::EvmChain {
-                    endpoint,
-                    light_client_address,
-                    private_key,
-                } => {
-                    format!(
-                        r#"
-                        [[destination_config.destinations]]
-                        endpoint = "{endpoint}"
-                        light_client_address = "{light_client_address}"
-                        private_key = "{private_key}"
-                        kind = "EvmChain"
-                        "#
-                    )
-                }
             };
 
             config.push_str(&destination_string_to_push);
@@ -748,7 +733,7 @@ impl LocalNet {
         Ok(())
     }
 
-    async fn run_proxy(&mut self, validator: usize, proxy_id: usize) -> Result<Child> {
+    async fn run_proxy(&self, validator: usize, proxy_id: usize) -> Result<Child> {
         let storage = self
             .initialized_validator_storages
             .get(&validator)
@@ -756,7 +741,7 @@ impl LocalNet {
         let child = self
             .command_for_binary("linera-proxy")
             .await?
-            .arg(format!("server_{}.json", validator))
+            .arg(format!("server_{validator}.json"))
             .args(["--storage", &storage.to_string()])
             .args(["--id", &proxy_id.to_string()])
             .spawn_into()?;
@@ -783,7 +768,7 @@ impl LocalNet {
         Ok(child)
     }
 
-    async fn run_exporter(&mut self, validator: usize, exporter_id: u32) -> Result<Child> {
+    async fn run_exporter(&self, validator: usize, exporter_id: u32) -> Result<Child> {
         let config_path = format!("exporter_config_{validator}:{exporter_id}.toml");
         let storage = self
             .initialized_validator_storages
@@ -910,7 +895,7 @@ impl LocalNet {
         Ok(())
     }
 
-    async fn run_server(&mut self, validator: usize, shard: usize) -> Result<Child> {
+    async fn run_server(&self, validator: usize, shard: usize) -> Result<Child> {
         let mut storage = self
             .initialized_validator_storages
             .get(&validator)
@@ -928,7 +913,7 @@ impl LocalNet {
         command
             .arg("run")
             .args(["--storage", &storage.to_string()])
-            .args(["--server", &format!("server_{}.json", validator)])
+            .args(["--server", &format!("server_{validator}.json")])
             .args(["--shard", &shard.to_string()])
             .args(self.cross_chain_config.to_args());
         let child = command.spawn_into()?;

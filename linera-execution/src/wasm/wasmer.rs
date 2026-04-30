@@ -77,7 +77,7 @@ impl WasmContractModule {
         let mut contract_cache = CONTRACT_CACHE.lock().await;
         let module = contract_cache
             .get_or_insert_with(contract_bytecode, "contract", |bytecode| {
-                let metered_bytecode = add_metering(bytecode)?;
+                let metered_bytecode = add_metering(&bytecode)?;
                 wasmer::Module::new(&*CONTRACT_ENGINE, metered_bytecode)
                     .map_err(anyhow::Error::from)
             })

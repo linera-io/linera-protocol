@@ -36,7 +36,7 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct EthereumClient {
     pub provider: FillProvider<
@@ -54,8 +54,8 @@ pub struct EthereumClient {
 impl EthereumClient {
     /// Connects to an existing Ethereum node and creates an `EthereumClient`
     /// if successful.
-    pub fn new(url: String) -> Result<Self, EthereumServiceError> {
-        let rpc_url = Url::parse(&url)?;
+    pub fn new(url: &str) -> Result<Self, EthereumServiceError> {
+        let rpc_url = Url::parse(url)?;
         // this address is in the anvil test.
         let pk: PrivateKeySigner =
             "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
@@ -81,7 +81,7 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let port = get_free_port().await?;
     let anvil_instance = Anvil::new().port(port).try_spawn()?;
     let endpoint = anvil_instance.endpoint();
-    let ethereum_client = EthereumClient::new(endpoint.clone())?;
+    let ethereum_client = EthereumClient::new(&endpoint)?;
     let rpc_url = Url::parse(&endpoint)?;
     Ok(AnvilTest {
         anvil_instance,
@@ -94,7 +94,7 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
 impl AnvilTest {
     pub fn get_address(&self, index: usize) -> String {
         let address = self.anvil_instance.addresses()[index];
-        format!("{:?}", address)
+        format!("{address:?}")
     }
 }
 
@@ -111,7 +111,7 @@ impl SimpleTokenContractFunction {
             SimpleTokenContract::deploy(&anvil_test.ethereum_client.provider, initial_supply)
                 .await?;
         let contract_address = simple_token.address();
-        let contract_address = format!("{:?}", contract_address);
+        let contract_address = format!("{contract_address:?}");
         Ok(Self {
             contract_address,
             anvil_test,
@@ -173,7 +173,7 @@ impl EventNumericsContractFunction {
                 .await?;
         // Getting the contract address
         let contract_address = event_numerics.address();
-        let contract_address = format!("{:?}", contract_address);
+        let contract_address = format!("{contract_address:?}");
         Ok(Self {
             contract_address,
             anvil_test,

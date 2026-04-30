@@ -132,6 +132,7 @@ impl ChainOwnership {
     }
 
     /// Adds a regular owner.
+    #[cfg(with_testing)]
     pub fn with_regular_owner(mut self, owner: AccountOwner, weight: u64) -> Self {
         self.owners.insert(owner, weight);
         self

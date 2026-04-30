@@ -49,7 +49,7 @@ impl std::str::FromStr for TransportProtocol {
 
 impl std::fmt::Display for TransportProtocol {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -301,7 +301,7 @@ where
     /// Gracefully shuts down the server, waiting for existing tasks to finish.
     async fn shutdown(&mut self) {
         let handlers = mem::take(&mut self.active_handlers);
-        let mut handler_results = FuturesUnordered::from_iter(handlers.into_values());
+        let mut handler_results: FuturesUnordered<_> = handlers.into_values().collect();
 
         while let Some(result) = handler_results.next().await {
             if let Err(error) = result {
@@ -457,7 +457,7 @@ where
                 result = self.connection.next() => match result {
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
-                        Self::handle_error(error);
+                        Self::handle_error(&error);
                         return;
                     }
                     None => break,
@@ -479,9 +479,9 @@ where
     ///
     /// Ignores a successful connection termination, while logging an unexpected connection
     /// termination or any other error.
-    fn handle_error(error: codec::Error) {
+    fn handle_error(error: &codec::Error) {
         if !matches!(
-            &error,
+            error,
             codec::Error::IoError(error)
                 if error.kind() == io::ErrorKind::UnexpectedEof
                 || error.kind() == io::ErrorKind::ConnectionReset

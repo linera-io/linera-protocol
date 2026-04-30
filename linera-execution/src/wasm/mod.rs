@@ -206,7 +206,7 @@ impl UserServiceModule for WasmServiceModule {
 }
 
 /// Instrument the [`Bytecode`] to add fuel metering.
-pub fn add_metering(bytecode: Bytecode) -> Result<Bytecode, WasmExecutionError> {
+pub fn add_metering(bytecode: &Bytecode) -> Result<Bytecode, WasmExecutionError> {
     struct WasmtimeRules;
 
     impl gas_metering::Rules for WasmtimeRules {
@@ -350,9 +350,6 @@ impl From<::wasmer::InstantiationError> for WasmExecutionError {
 pub mod test {
     use std::{path::Path, sync::LazyLock};
 
-    #[cfg(with_fs)]
-    use super::{WasmContractModule, WasmRuntime, WasmServiceModule};
-
     fn build_applications_in_directory(dir: &str) -> Result<(), std::io::Error> {
         let output = std::process::Command::new("cargo")
             .current_dir(dir)
@@ -390,17 +387,5 @@ pub mod test {
             }
         }
         Err(std::io::Error::last_os_error())
-    }
-
-    #[cfg(with_fs)]
-    pub async fn build_example_application(
-        name: &str,
-        wasm_runtime: impl Into<Option<WasmRuntime>>,
-    ) -> Result<(WasmContractModule, WasmServiceModule), anyhow::Error> {
-        let (contract_path, service_path) = get_example_bytecode_paths(name)?;
-        let wasm_runtime = wasm_runtime.into().unwrap_or_default();
-        let contract = WasmContractModule::from_file(&contract_path, wasm_runtime).await?;
-        let service = WasmServiceModule::from_file(&service_path, wasm_runtime).await?;
-        Ok((contract, service))
     }
 }

@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta, Timestamp,
+        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -47,7 +47,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use crate::{
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     environment::{wallet::Wallet as _, Environment},
-    local_node::{LocalChainInfoExt as _, LocalNodeClient, LocalNodeError},
+    local_node::{LocalNodeClient, LocalNodeError},
     node::{CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider as _},
     notifier::{ChannelNotifier, Notifier as _},
     remote_node::RemoteNode,
@@ -260,7 +260,7 @@ pub struct Client<Env: Environment> {
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         environment: Env,
         admin_chain_id: ChainId,
@@ -272,7 +272,7 @@ impl<Env: Environment> Client<Env> {
         priority_bundle_origins: HashSet<ChainId>,
         ignored_bundle_origins: HashSet<ChainId>,
         options: chain_client::Options,
-        requests_scheduler_config: requests_scheduler::RequestsSchedulerConfig,
+        requests_scheduler_config: &requests_scheduler::RequestsSchedulerConfig,
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Self {
@@ -442,7 +442,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         block_hash: Option<CryptoHash>,
         next_block_height: BlockHeight,
-        pending_proposal: Option<PendingProposal>,
+        pending_proposal: &Option<PendingProposal>,
         preferred_owner: Option<AccountOwner>,
         timing_sender: Option<mpsc::UnboundedSender<(u64, TimingType)>>,
     ) -> ChainClient<Env> {
@@ -716,9 +716,18 @@ impl<Env: Environment> Client<Env> {
         until_block_time: Option<Timestamp>,
     ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
         let mut info = None;
+        // Blobs created by these certs are already embedded in the downloaded
+        // block bodies, so they don't need to be fetched from a validator. The
+        // chain worker resolves them from `Block::created_blobs()` during
+        // `handle_certificate`.
+        let created_blob_ids: BTreeSet<BlobId> = certificates
+            .iter()
+            .flat_map(|certificate| certificate.value().block().created_blob_ids())
+            .collect();
         let required_blob_ids: Vec<_> = certificates
             .iter()
             .flat_map(|certificate| certificate.value().required_blob_ids())
+            .filter(|blob_id| !created_blob_ids.contains(blob_id))
             .collect();
 
         match self
@@ -801,20 +810,35 @@ impl<Env: Environment> Client<Env> {
         Ok(info)
     }
 
-    /// Obtains all the committees trusted by any of the given chains. Also returns the highest
-    /// of their epochs.
+    /// Returns all committees known to the process at epochs up to and including the admin
+    /// chain's current epoch, together with that epoch.
     #[instrument(level = "trace", skip_all)]
     async fn admin_committees(
         &self,
     ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        Ok((info.epoch, info.into_committees()?))
+        let query = ChainInfoQuery::new(self.admin_chain_id);
+        let info = self.local_node.handle_chain_info_query(query).await?.info;
+        let max_epoch = info.epoch;
+        let mut committees = BTreeMap::new();
+        for index in 0..=max_epoch.0 {
+            let epoch = Epoch(index);
+            if let Some(committee) = self.storage_client().get_or_load_committee(epoch).await? {
+                committees.insert(epoch, (*committee).clone());
+            }
+        }
+        Ok((max_epoch, committees))
     }
 
     /// Obtains the committee for the latest epoch on the admin chain.
-    pub async fn admin_committee(&self) -> Result<(Epoch, Committee), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        Ok((info.epoch, info.into_current_committee()?))
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
+        let query = ChainInfoQuery::new(self.admin_chain_id);
+        let info = self.local_node.handle_chain_info_query(query).await?.info;
+        let committee = self
+            .storage_client()
+            .get_or_load_committee(info.epoch)
+            .await?
+            .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
+        Ok((info.epoch, committee))
     }
 
     /// Obtains the validators for the latest epoch.
@@ -1587,7 +1611,7 @@ impl<Env: Environment> Client<Env> {
     pub async fn synchronize_chain_state_from_committee(
         &self,
         chain_id: ChainId,
-        committee: Committee,
+        committee: Arc<Committee>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         #[cfg(with_metrics)]
         let _latency = if !self.is_chain_follow_only(chain_id).await {
@@ -1868,12 +1892,17 @@ impl<Env: Environment> Client<Env> {
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(Block, ChainInfoResponse), chain_client::Error> {
+    ) -> Result<(Block, ChainInfoResponse, HashSet<ChainId>), chain_client::Error> {
         let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .local_node
-                .stage_block_execution(block.clone(), round, published_blobs.clone(), policy)
+                .stage_block_execution(
+                    block.clone(),
+                    round,
+                    published_blobs.clone(),
+                    policy.clone(),
+                )
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let validators = self.validator_nodes().await?;
@@ -1894,7 +1923,7 @@ impl<Env: Environment> Client<Env> {
                 }
                 // All reported events were already downloaded; don't loop forever.
             }
-            if let Ok((_, executed_block, _, _)) = &result {
+            if let Ok((_, executed_block, _, _, _)) = &result {
                 let hash = CryptoHash::new(executed_block);
                 let notification = Notification {
                     chain_id: executed_block.header.chain_id,
@@ -1905,8 +1934,14 @@ impl<Env: Environment> Client<Env> {
                 };
                 self.notifier.notify(&[notification]);
             }
-            let (_modified_block, executed_block, response, _resource_tracker) = result?;
-            return Ok((executed_block, response));
+            let (
+                _modified_block,
+                executed_block,
+                response,
+                _resource_tracker,
+                never_reject_origins,
+            ) = result?;
+            return Ok((executed_block, response, never_reject_origins));
         }
     }
 }
@@ -1965,6 +2000,9 @@ impl Drop for AbortOnDrop {
 pub struct PendingProposal {
     pub block: ProposedBlock,
     pub blobs: Vec<Blob>,
+    /// The round in which this proposal was first submitted, if any.
+    #[serde(default)]
+    pub round: Option<Round>,
 }
 
 enum ReceiveCertificateMode {
