@@ -1086,9 +1086,11 @@ where
     let count_update_streams: usize = certs
         .iter()
         .map(|cert| {
-            cert.block().body.operations().filter(|op| {
-            matches!(op, Operation::System(op) if matches!(**op, SystemOperation::UpdateStream { .. }))
-        }).count()
+            cert.block()
+                .body
+                .operations()
+                .filter(|op| op.is_update_stream())
+                .count()
         })
         .sum();
     assert_eq!(
