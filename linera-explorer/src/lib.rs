@@ -23,7 +23,11 @@ use gql_service::{
 };
 use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::BlockHeight,
+    identifiers::{ApplicationId, ChainId},
+};
 use linera_indexer_graphql_client::{
     indexer::{plugins, Plugins},
     operations as gql_operations,
@@ -95,6 +99,33 @@ pub struct Config {
     indexer: String,
     node: String,
     tls: bool,
+    /// Application ID of the formats registry, used to decode BCS-encoded user
+    /// operations. `None` means no registry is configured.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_application_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    formats_registry: Option<ApplicationId>,
+}
+
+/// Deserialize an optional [`ApplicationId`], treating both a missing field and
+/// an empty string as `None`. This lets the Vue UI bind the field directly to a
+/// text input: clearing the input produces `""`, which round-trips back to
+/// `None` instead of a parse error.
+fn deserialize_optional_application_id<'de, D>(de: D) -> Result<Option<ApplicationId>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::IntoDeserializer;
+    let opt = Option::<String>::deserialize(de)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => {
+            let de = <&str as IntoDeserializer<D::Error>>::into_deserializer(s);
+            ApplicationId::deserialize(de).map(Some)
+        }
+    }
 }
 
 impl Config {
@@ -104,6 +135,7 @@ impl Config {
             indexer: "localhost:8081".to_string(),
             node: "localhost:8080".to_string(),
             tls: false,
+            formats_registry: None,
         };
         // Return default if window doesn't exist (e.g., in test environment).
         let Some(window) = web_sys::window() else {

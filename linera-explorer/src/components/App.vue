@@ -14,6 +14,16 @@ export default {
   data() { return data() },
   methods: {
     save_config() { save_config(this) },
+    on_formats_registry_change() {
+      // Treat an empty/whitespace input as "no registry configured" so the
+      // optional ApplicationId field round-trips to None instead of a parse
+      // error.
+      if (typeof this.config.formats_registry === 'string'
+          && this.config.formats_registry.trim() === '') {
+        this.config.formats_registry = null
+      }
+      save_config(this)
+    },
     route(name?: string, args?: [string, string][]) { route(this, name, args) }
   },
   components: {
@@ -73,6 +83,12 @@ export default {
                 <input v-model="config.node" class="form-control" @change="save_config" style="width:190px">
                 <span class="input-group-text">indexer</span>
                 <input v-model="config.indexer" class="form-control" @change="save_config" style="width:190px">
+              </div>
+            </li>
+            <li class="nav-item mx-2">
+              <div class="input-group">
+                <span class="input-group-text">formats registry</span>
+                <input v-model="config.formats_registry" class="form-control font-monospace" placeholder="application id (optional)" @change="on_formats_registry_change" style="width:260px">
               </div>
             </li>
             <li class="nav-item mx-2">
