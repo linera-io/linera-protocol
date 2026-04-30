@@ -17,11 +17,26 @@ pub trait MaybeSend: Send {}
 #[cfg(not(web))]
 impl<T: Send> MaybeSend for T {}
 
+/// `Sync` on native targets; no bound on web (where there's only one thread).
+///
+/// Use this in generic bounds that need `Sync` on native but should compile on
+/// web without the bound.
+#[cfg(not(web))]
+pub trait MaybeSync: Sync {}
+#[cfg(not(web))]
+impl<T: Sync> MaybeSync for T {}
+
 /// `Send` on native targets; no bound on web (where there's only one thread).
 #[cfg(web)]
 pub trait MaybeSend {}
 #[cfg(web)]
 impl<T> MaybeSend for T {}
+
+/// `Sync` on native targets; no bound on web (where there's only one thread).
+#[cfg(web)]
+pub trait MaybeSync {}
+#[cfg(web)]
+impl<T> MaybeSync for T {}
 
 /// Spawns `future` on the runtime and awaits its completion.
 ///
