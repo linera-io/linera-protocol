@@ -490,6 +490,28 @@ where
             .observe(key_prefix.len() as f64);
         self.store.find_key_values_by_prefix_iter(key_prefix)
     }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        self.counter
+            .find_keys_by_prefix_prefix_size
+            .with_label_values(&[])
+            .observe(key_prefix.len() as f64);
+        self.store.find_keys_by_prefix_rev_iter(key_prefix)
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        self.counter
+            .find_key_values_by_prefix_prefix_size
+            .with_label_values(&[])
+            .observe(key_prefix.len() as f64);
+        self.store.find_key_values_by_prefix_rev_iter(key_prefix)
+    }
 }
 
 impl<S> WritableKeyValueStore for MeteredStore<S>

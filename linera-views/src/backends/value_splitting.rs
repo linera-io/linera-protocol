@@ -304,6 +304,71 @@ where
             }
         })
     }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_keys_by_prefix_rev_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let big_key = item.map_err(ValueSplittingError::InnerStoreError)?;
+                let len = big_key.len();
+                if Self::read_index_from_key(&big_key)? == 0 {
+                    yield Ok(big_key[0..len - 4].to_vec());
+                }
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_key_values_by_prefix_rev_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let (mut big_key, value) =
+                    item.map_err(ValueSplittingError::InnerStoreError)?;
+                let last_index = Self::read_index_from_key(&big_key)?;
+                big_key.truncate(big_key.len() - 4);
+                let key = big_key;
+                // Collect segments in reverse order: from last_index down to 0.
+                let mut segments: Vec<(u32, Vec<u8>)> = vec![(last_index, value)];
+                while segments.last().unwrap().0 > 0 {
+                    let expected = segments.last().unwrap().0 - 1;
+                    let next = stream.next().await
+                        .ok_or(ValueSplittingError::MissingSegment)?;
+                    let (big_key2, value2) =
+                        next.map_err(ValueSplittingError::InnerStoreError)?;
+                    if !(Self::read_index_from_key(&big_key2)? == expected
+                        && big_key2.starts_with(&key)
+                        && big_key2.len() == key.len() + 4)
+                    {
+                        yield Err(ValueSplittingError::MissingSegment);
+                        return;
+                    }
+                    segments.push((expected, value2));
+                }
+                // Segment 0 carries the count; indices >= count are stranded leftovers.
+                let (_, segment_zero_value) = segments.last().unwrap();
+                let count = Self::read_count_from_value(segment_zero_value)?;
+                if count == 0 || count > last_index + 1 {
+                    yield Err(ValueSplittingError::MissingSegment);
+                    return;
+                }
+                let mut big_value = Vec::new();
+                for (idx, val) in segments.iter().rev() {
+                    if *idx == 0 {
+                        big_value.extend_from_slice(&val[4..]);
+                    } else if *idx < count {
+                        big_value.extend_from_slice(val);
+                    }
+                }
+                yield Ok((key, big_value));
+            }
+        })
+    }
 }
 
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>

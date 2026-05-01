@@ -136,6 +136,42 @@ pub trait ReadableKeyValueStore: WithError {
         })
     }
 
+    /// Returns a boxed stream that yields the keys matching the prefix in
+    /// reverse (descending) order. The prefix is not included in the returned
+    /// keys. The stream may be dropped early to stop the iteration. The default
+    /// implementation downloads the full list eagerly via `find_keys_by_prefix`
+    /// and yields the entries in reverse afterwards; backends should override
+    /// this to stream incrementally whenever possible.
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let keys = self.find_keys_by_prefix(key_prefix).await?;
+            for key in keys.into_iter().rev() {
+                yield Ok(key);
+            }
+        })
+    }
+
+    /// Returns a boxed stream that yields the `(key, value)` pairs matching the
+    /// prefix in reverse (descending) order. The prefix is not included in the
+    /// returned keys. The stream may be dropped early to stop the iteration.
+    /// The default implementation downloads the full list eagerly via
+    /// `find_key_values_by_prefix` and yields the entries in reverse afterwards;
+    /// backends should override this to stream incrementally whenever possible.
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let key_values = self.find_key_values_by_prefix(key_prefix).await?;
+            for key_value in key_values.into_iter().rev() {
+                yield Ok(key_value);
+            }
+        })
+    }
+
     // We can't use `async fn` here in the below implementations due to
     // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed
     // we can revert them to `async fn` syntax, which is neater.

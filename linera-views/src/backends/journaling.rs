@@ -227,6 +227,30 @@ where
             }
         })
     }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_keys_by_prefix_rev_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                yield item.map_err(JournalingError::Inner);
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_key_values_by_prefix_rev_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                yield item.map_err(JournalingError::Inner);
+            }
+        })
+    }
 }
 
 impl<D> KeyValueDatabase for JournalingKeyValueDatabase<D>

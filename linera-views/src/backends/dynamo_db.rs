@@ -609,6 +609,24 @@ impl DynamoDbStoreInternal {
         key_prefix: &[u8],
         start_key_map: Option<HashMap<String, AttributeValue>>,
     ) -> Result<QueryOutput, DynamoDbStoreInternalError> {
+        self.get_query_output_with_direction(
+            attribute_str,
+            start_key,
+            key_prefix,
+            start_key_map,
+            true,
+        )
+        .await
+    }
+
+    async fn get_query_output_with_direction(
+        &self,
+        attribute_str: &str,
+        start_key: &[u8],
+        key_prefix: &[u8],
+        start_key_map: Option<HashMap<String, AttributeValue>>,
+        forward: bool,
+    ) -> Result<QueryOutput, DynamoDbStoreInternalError> {
         let _guard = self.acquire().await;
         let start_key = start_key.to_vec();
         let mut prefixed_key_prefix = vec![1];
@@ -627,6 +645,7 @@ impl DynamoDbStoreInternal {
                 AttributeValue::B(Blob::new(prefixed_key_prefix)),
             )
             .set_exclusive_start_key(start_key_map)
+            .scan_index_forward(forward)
             .send()
             .boxed_sync()
             .await?;
@@ -940,6 +959,71 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
                         &self.start_key,
                         key_prefix,
                         start_key_map,
+                    )
+                    .await?;
+                let last_evaluated = response.last_evaluated_key.clone();
+                for item in response.items.iter().flatten() {
+                    yield extract_key_value(prefix_len, item)
+                        .map(|(k, v)| (k.to_vec(), v.to_vec()));
+                }
+                match last_evaluated {
+                    None => break,
+                    Some(value) => {
+                        start_key_map = Some(value);
+                    }
+                }
+            }
+        })
+    }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            check_key_size(key_prefix)?;
+            let prefix_len = key_prefix.len();
+            let mut start_key_map = None;
+            loop {
+                let response = self
+                    .get_query_output_with_direction(
+                        KEY_ATTRIBUTE,
+                        &self.start_key,
+                        key_prefix,
+                        start_key_map,
+                        false,
+                    )
+                    .await?;
+                let last_evaluated = response.last_evaluated_key.clone();
+                for item in response.items.iter().flatten() {
+                    yield extract_key(prefix_len, item).map(|k| k.to_vec());
+                }
+                match last_evaluated {
+                    None => break,
+                    Some(value) => {
+                        start_key_map = Some(value);
+                    }
+                }
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            check_key_size(key_prefix)?;
+            let prefix_len = key_prefix.len();
+            let mut start_key_map = None;
+            loop {
+                let response = self
+                    .get_query_output_with_direction(
+                        KEY_VALUE_ATTRIBUTE,
+                        &self.start_key,
+                        key_prefix,
+                        start_key_map,
+                        false,
                     )
                     .await?;
                 let last_evaluated = response.last_evaluated_key.clone();

@@ -412,6 +412,70 @@ where
             }
         })
     }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            if let Some(cache) = self.get_exclusive_cache() {
+                let cached = {
+                    let mut cache = cache.lock().unwrap();
+                    cache.query_find_keys(key_prefix)
+                };
+                if let Some(keys) = cached {
+                    #[cfg(with_metrics)]
+                    metrics::FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT
+                        .with_label_values(&[])
+                        .inc();
+                    for key in keys.into_iter().rev() {
+                        yield Ok(key);
+                    }
+                    return;
+                }
+                #[cfg(with_metrics)]
+                metrics::FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT
+                    .with_label_values(&[])
+                    .inc();
+            }
+            let mut stream = self.store.find_keys_by_prefix_rev_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                yield item;
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            if let Some(cache) = self.get_exclusive_cache() {
+                let cached = {
+                    let mut cache = cache.lock().unwrap();
+                    cache.query_find_key_values(key_prefix)
+                };
+                if let Some(key_values) = cached {
+                    #[cfg(with_metrics)]
+                    metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
+                        .with_label_values(&[])
+                        .inc();
+                    for key_value in key_values.into_iter().rev() {
+                        yield Ok(key_value);
+                    }
+                    return;
+                }
+                #[cfg(with_metrics)]
+                metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT
+                    .with_label_values(&[])
+                    .inc();
+            }
+            let mut stream = self.store.find_key_values_by_prefix_rev_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                yield item;
+            }
+        })
+    }
 }
 
 impl<K> WritableKeyValueStore for LruCachingStore<K>

@@ -113,6 +113,10 @@ struct ScyllaDbClient {
     find_keys_by_prefix_bounded: PreparedStatement,
     find_key_values_by_prefix_unbounded: PreparedStatement,
     find_key_values_by_prefix_bounded: PreparedStatement,
+    find_keys_by_prefix_rev_unbounded: PreparedStatement,
+    find_keys_by_prefix_rev_bounded: PreparedStatement,
+    find_key_values_by_prefix_rev_unbounded: PreparedStatement,
+    find_key_values_by_prefix_rev_bounded: PreparedStatement,
     multi_key_values: papaya::HashMap<usize, PreparedStatement>,
     multi_keys: papaya::HashMap<usize, PreparedStatement>,
 }
@@ -180,6 +184,34 @@ impl ScyllaDbClient {
             ))
             .await?;
 
+        let find_keys_by_prefix_rev_unbounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k DESC"
+            ))
+            .await?;
+
+        let find_keys_by_prefix_rev_bounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k DESC"
+            ))
+            .await?;
+
+        let find_key_values_by_prefix_rev_unbounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k DESC"
+            ))
+            .await?;
+
+        let find_key_values_by_prefix_rev_bounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k DESC"
+            ))
+            .await?;
+
         Ok(Self {
             session,
             namespace,
@@ -193,6 +225,10 @@ impl ScyllaDbClient {
             find_keys_by_prefix_bounded,
             find_key_values_by_prefix_unbounded,
             find_key_values_by_prefix_bounded,
+            find_keys_by_prefix_rev_unbounded,
+            find_keys_by_prefix_rev_bounded,
+            find_key_values_by_prefix_rev_unbounded,
+            find_key_values_by_prefix_rev_bounded,
             multi_key_values: papaya::HashMap::new(),
             multi_keys: papaya::HashMap::new(),
         })
@@ -719,6 +755,66 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
             let len = key_prefix.len();
             let query_unbounded = &self.store.find_key_values_by_prefix_unbounded;
             let query_bounded = &self.store.find_key_values_by_prefix_bounded;
+            let rows = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (self.root_key.clone(), key_prefix.clone());
+                    Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+                }
+                Some(upper_bound) => {
+                    let values = (self.root_key.clone(), key_prefix.clone(), upper_bound);
+                    Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
+                }
+            };
+            let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
+            while let Some(row) = rows.next().await {
+                let (key, value) = row?;
+                yield Ok((key[len..].to_vec(), value));
+            }
+        })
+    }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let key_prefix = key_prefix.to_vec();
+            ScyllaDbClient::check_key_size(&key_prefix)?;
+            let _guard = self.acquire().await;
+            let session = &self.store.session;
+            let len = key_prefix.len();
+            let query_unbounded = &self.store.find_keys_by_prefix_rev_unbounded;
+            let query_bounded = &self.store.find_keys_by_prefix_rev_bounded;
+            let rows = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (self.root_key.clone(), key_prefix.clone());
+                    Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+                }
+                Some(upper_bound) => {
+                    let values = (self.root_key.clone(), key_prefix.clone(), upper_bound);
+                    Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
+                }
+            };
+            let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
+            while let Some(row) = rows.next().await {
+                let (key,) = row?;
+                yield Ok(key[len..].to_vec());
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let key_prefix = key_prefix.to_vec();
+            ScyllaDbClient::check_key_size(&key_prefix)?;
+            let _guard = self.acquire().await;
+            let session = &self.store.session;
+            let len = key_prefix.len();
+            let query_unbounded = &self.store.find_key_values_by_prefix_rev_unbounded;
+            let query_bounded = &self.store.find_key_values_by_prefix_rev_bounded;
             let rows = match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = (self.root_key.clone(), key_prefix.clone());

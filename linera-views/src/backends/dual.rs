@@ -236,6 +236,50 @@ where
             }
         })
     }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            match self {
+                Self::First(store) => {
+                    let mut stream = store.find_keys_by_prefix_rev_iter(key_prefix);
+                    while let Some(item) = stream.next().await {
+                        yield item.map_err(DualStoreError::First);
+                    }
+                }
+                Self::Second(store) => {
+                    let mut stream = store.find_keys_by_prefix_rev_iter(key_prefix);
+                    while let Some(item) = stream.next().await {
+                        yield item.map_err(DualStoreError::Second);
+                    }
+                }
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            match self {
+                Self::First(store) => {
+                    let mut stream = store.find_key_values_by_prefix_rev_iter(key_prefix);
+                    while let Some(item) = stream.next().await {
+                        yield item.map_err(DualStoreError::First);
+                    }
+                }
+                Self::Second(store) => {
+                    let mut stream = store.find_key_values_by_prefix_rev_iter(key_prefix);
+                    while let Some(item) = stream.next().await {
+                        yield item.map_err(DualStoreError::Second);
+                    }
+                }
+            }
+        })
+    }
 }
 
 impl<S1, S2> WritableKeyValueStore for DualStore<S1, S2>

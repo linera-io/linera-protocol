@@ -198,6 +198,32 @@ impl RocksDbStoreExecutor {
         iter
     }
 
+    /// Returns an iterator positioned at the largest key starting with `prefix`,
+    /// iterating in reverse. `total_order_seek` is enabled because the database
+    /// uses a fixed-length prefix extractor; without it, `seek_for_prev` would
+    /// only search within the bloom-prefix scope and could miss keys whose
+    /// extractor-prefix differs from the seek target.
+    fn get_find_prefix_reverse_iterator(
+        &self,
+        prefix: &[u8],
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
+        let mut read_opts = rocksdb::ReadOptions::default();
+        read_opts.set_async_io(true);
+        read_opts.set_total_order_seek(true);
+        let upper_bound = get_upper_bound_option(prefix);
+        let mut iter = self.db.raw_iterator_opt(read_opts);
+        match upper_bound.as_deref() {
+            Some(ub) => {
+                iter.seek_for_prev(ub);
+                if iter.key().is_some_and(|k| k == ub) {
+                    iter.prev();
+                }
+            }
+            None => iter.seek_to_last(),
+        }
+        iter
+    }
+
     fn find_keys_by_prefix_internal(
         &self,
         key_prefix: Vec<u8>,
@@ -602,6 +628,88 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
                         return;
                     }
                     iter.next();
+                }
+                if let Err(error) = iter.status() {
+                    let _ = tx.blocking_send(Err(error.into()));
+                }
+            });
+            while let Some(item) = rx.recv().await {
+                yield item;
+            }
+            if let Err(error) = handle.await {
+                yield Err(RocksDbStoreInternalError::TokioJoinError(error));
+            }
+        })
+    }
+
+    fn find_keys_by_prefix_rev_iter(
+        &self,
+        key_prefix: &[u8],
+    ) -> FindKeysStream<'_, Self::Error> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        Box::pin(async_stream::stream! {
+            if let Err(error) = check_key_size(&key_prefix) {
+                yield Err(error);
+                return;
+            }
+            let (tx, mut rx) =
+                tokio::sync::mpsc::channel::<Result<Vec<u8>, RocksDbStoreInternalError>>(1);
+            let handle = tokio::task::spawn_blocking(move || {
+                let mut prefix = executor.start_key.clone();
+                prefix.extend(&key_prefix);
+                let len = prefix.len();
+                let mut iter = executor.get_find_prefix_reverse_iterator(&prefix);
+                while let Some(key) = iter.key() {
+                    if !key.starts_with(&prefix) {
+                        break;
+                    }
+                    if tx.blocking_send(Ok(key[len..].to_vec())).is_err() {
+                        return;
+                    }
+                    iter.prev();
+                }
+                if let Err(error) = iter.status() {
+                    let _ = tx.blocking_send(Err(error.into()));
+                }
+            });
+            while let Some(item) = rx.recv().await {
+                yield item;
+            }
+            if let Err(error) = handle.await {
+                yield Err(RocksDbStoreInternalError::TokioJoinError(error));
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter(
+        &self,
+        key_prefix: &[u8],
+    ) -> FindKeyValuesStream<'_, Self::Error> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        Box::pin(async_stream::stream! {
+            if let Err(error) = check_key_size(&key_prefix) {
+                yield Err(error);
+                return;
+            }
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<
+                Result<(Vec<u8>, Vec<u8>), RocksDbStoreInternalError>,
+            >(1);
+            let handle = tokio::task::spawn_blocking(move || {
+                let mut prefix = executor.start_key.clone();
+                prefix.extend(&key_prefix);
+                let len = prefix.len();
+                let mut iter = executor.get_find_prefix_reverse_iterator(&prefix);
+                while let Some((key, value)) = iter.item() {
+                    if !key.starts_with(&prefix) {
+                        break;
+                    }
+                    let pair = (key[len..].to_vec(), value.to_vec());
+                    if tx.blocking_send(Ok(pair)).is_err() {
+                        return;
+                    }
+                    iter.prev();
                 }
                 if let Err(error) = iter.status() {
                     let _ = tx.blocking_send(Err(error.into()));
