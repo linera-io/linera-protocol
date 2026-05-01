@@ -103,7 +103,7 @@ watch(() => props.apps.map(a => a.id).join('|'), refreshFormats, { immediate: tr
               <span class="spinner-border spinner-border-sm text-muted"></span>
             </template>
             <template v-else-if="formatsState[a.id] === false">
-              <button class="btn btn-link btn-sm text-muted" disabled :title="($root.config?.formats_registry_chain && $root.config?.formats_registry_app_id) ? 'No formats registered for this module' : 'Set the formats registry chain and app id in the navbar'">
+              <button class="btn btn-link btn-sm text-muted" disabled :title="(($root as any).config?.formats_registry_chain && ($root as any).config?.formats_registry_app_id) ? 'No formats registered for this module' : 'Set the formats registry chain and app id in the navbar'">
                 <i class="bi bi-x-circle"></i>
               </button>
             </template>
