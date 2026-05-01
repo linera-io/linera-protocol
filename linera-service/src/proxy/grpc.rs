@@ -630,15 +630,13 @@ where
             .read_blobs(&blob_ids)
             .await
             .map_err(Self::view_error_to_status)?;
-        let stream = futures::stream::iter(blob_ids.into_iter().zip(blobs).map(
-            |(blob_id, maybe_blob)| {
-                let blob = maybe_blob
-                    .map(Arc::unwrap_or_clone)
-                    .ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
-                BlobContent::try_from(blob.into_content())
-                    .map_err(|err| Status::internal(err.to_string()))
-            },
-        ));
+        let stream = futures::stream::iter(blobs.into_iter().filter_map(|maybe_blob| {
+            let blob = maybe_blob?;
+            Some(
+                BlobContent::try_from(blob.content().clone())
+                    .map_err(|err| Status::internal(err.to_string())),
+            )
+        }));
         Ok(Response::new(Box::pin(stream)))
     }
 

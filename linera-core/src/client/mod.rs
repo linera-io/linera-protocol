@@ -788,10 +788,10 @@ impl<Env: Environment> Client<Env> {
         // block bodies, so they don't need to be fetched from a validator. The
         // chain worker resolves them from `Block::created_blobs()` during
         // `handle_certificate`.
-        let created_blob_ids: BTreeSet<BlobId> = certificates
+        let created_blob_ids = certificates
             .iter()
             .flat_map(|certificate| certificate.value().block().created_blob_ids())
-            .collect();
+            .collect::<BTreeSet<BlobId>>();
         let required_blob_ids: Vec<_> = certificates
             .iter()
             .flat_map(|certificate| certificate.value().required_blob_ids())
