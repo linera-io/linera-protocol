@@ -2744,8 +2744,11 @@ where
         }
     }
     // Process any pending block. If pending proposal was already committed via conflict,
-    // this will return None for the certificate.
-    let _ = client1.process_pending_block().await;
+    // this will return None for the certificate, and a remote conflict may surface as an
+    // error here.
+    if let Err(error) = client1.process_pending_block().await {
+        tracing::debug!("process_pending_block returned error after race: {error}");
+    }
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
     client0.synchronize_from_validators().await.unwrap();
