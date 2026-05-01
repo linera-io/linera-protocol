@@ -941,12 +941,15 @@ where
         tracing::warn!(%chain_id, "Evicting poisoned chain worker from cache");
         let pin = self.chain_workers.pin();
         let weak_poisoned = Arc::downgrade(poisoned);
-        let _ = pin.remove_if(&chain_id, |_key, future| {
+        let removed = pin.remove_if(&chain_id, |_key, future| {
             future
                 .peek()
                 .and_then(|r| r.clone().ok())
                 .is_some_and(|weak| weak.ptr_eq(&weak_poisoned))
         });
+        if removed.is_err() {
+            tracing::trace!(%chain_id, "Poisoned worker entry already replaced; skipping eviction");
+        }
     }
 
     /// Gets or creates a chain worker for the given chain.
