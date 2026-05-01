@@ -2,13 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    io, mem,
-    net::SocketAddr,
-    pin::{pin, Pin},
-    sync::Arc,
-};
+use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{
@@ -16,7 +10,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
-use linera_base::identifiers::BlobId;
+use linera_base::{data_types::Blob, identifiers::BlobId};
 use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -87,14 +81,10 @@ pub trait ConnectionPool: Send {
 pub trait MessageHandler: Clone {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
 
-    /// Handle a batch blob download request by streaming one
+    /// Handles a batch blob download request by streaming one
     /// `RpcMessage::DownloadBlobResponse` per requested blob ID.
-    /// Returns `None` if not supported.
-    async fn handle_download_blobs(
-        &mut self,
-        _blob_ids: Vec<BlobId>,
-    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
-        None
+    async fn handle_download_blobs(&mut self, _blob_ids: Vec<BlobId>) -> Vec<Blob> {
+        vec![]
     }
 }
 
@@ -498,21 +488,15 @@ where
 
     /// Handles a batch blob download request by streaming one response per blob.
     async fn handle_download_blobs(&mut self, blob_ids: Vec<BlobId>) {
-        let Some(mut stream) = self.handler.handle_download_blobs(blob_ids).await else {
-            return;
-        };
-        loop {
-            tokio::select! { biased;
-                _ = self.shutdown_signal.cancelled() => break,
-                msg = stream.next() => match msg {
-                    Some(message) => {
-                        if let Err(error) = self.connection.send(message).await {
-                            error!("Failed to send blob response: {error}");
-                            break;
-                        }
-                    }
-                    None => break,
-                }
+        let blobs = self.handler.handle_download_blobs(blob_ids).await;
+        for blob in blobs {
+            if self.shutdown_signal.is_cancelled() {
+                break;
+            }
+            let msg = RpcMessage::DownloadBlobResponse(Box::new(blob.into_content()));
+            if let Err(error) = self.connection.send(msg).await {
+                error!("Failed to send blob response: {error}");
+                break;
             }
         }
     }

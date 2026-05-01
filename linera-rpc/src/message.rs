@@ -71,11 +71,6 @@ pub enum RpcMessage {
     PreviousEventBlocks(Box<(ChainId, Vec<StreamId>)>),
     PreviousEventBlocksResponse(Box<BTreeMap<StreamId, (BlockHeight, CryptoHash)>>),
 
-    // New variant added by the streaming DownloadBlobs RPC backport.
-    // IMPORTANT: this variant must remain at the end of the enum to preserve
-    // wire-format compatibility with testnet_conway validators (the
-    // serde_reflection format used by the simple transport encodes the variant
-    // index, so existing variants must keep their existing indices).
     DownloadBlobs(Vec<BlobId>),
 }
 

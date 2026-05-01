@@ -11,11 +11,11 @@ static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 #[export_name = "malloc_conf"]
 pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
-use std::{net::SocketAddr, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
-use futures::{FutureExt as _, SinkExt, Stream, StreamExt};
+use futures::{FutureExt as _, SinkExt, StreamExt};
 use linera_base::{identifiers::BlobId, listen_for_shutdown_signals};
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
@@ -278,29 +278,15 @@ where
         }
     }
 
-    async fn handle_download_blobs(
-        &mut self,
-        blob_ids: Vec<BlobId>,
-    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
-        let blobs = match self.storage.read_blobs(&blob_ids).await {
-            Ok(blobs) => blobs,
-            Err(error) => {
-                return Some(Box::pin(futures::stream::once(async move {
-                    RpcMessage::Error(Box::new(NodeError::from(error)))
-                })));
-            }
+    async fn handle_download_blobs(&mut self, blob_ids: Vec<BlobId>) -> Vec<Blob> {
+        let Ok(blobs) = self.storage.read_blobs(&blob_ids).await else {
+            return vec![];
         };
-        let messages =
-            blob_ids
-                .into_iter()
-                .zip(blobs)
-                .map(|(blob_id, maybe_blob)| match maybe_blob {
-                    Some(blob) => RpcMessage::DownloadBlobResponse(Box::new(
-                        Arc::unwrap_or_clone(blob).into_content(),
-                    )),
-                    None => RpcMessage::Error(Box::new(NodeError::BlobsNotFound(vec![blob_id]))),
-                });
-        Some(Box::pin(futures::stream::iter(messages)))
+        blobs
+            .into_iter()
+            .flatten()
+            .map(Arc::unwrap_or_clone)
+            .collect()
     }
 }
 
