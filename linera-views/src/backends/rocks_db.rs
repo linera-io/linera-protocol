@@ -35,10 +35,6 @@ use crate::{
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
 
-/// Channel buffer for streaming results from the blocking RocksDB iterator
-/// to the async stream consumer.
-const FIND_STREAM_BUFFER: usize = 16;
-
 /// The prefixes being used in the system
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
 static STORED_ROOT_KEYS_PREFIX: u8 = 1;
@@ -555,9 +551,8 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
                 yield Err(error);
                 return;
             }
-            let (tx, mut rx) = tokio::sync::mpsc::channel::<
-                Result<Vec<u8>, RocksDbStoreInternalError>,
-            >(FIND_STREAM_BUFFER);
+            let (tx, mut rx) =
+                tokio::sync::mpsc::channel::<Result<Vec<u8>, RocksDbStoreInternalError>>(1);
             let handle = tokio::task::spawn_blocking(move || {
                 let mut prefix = executor.start_key.clone();
                 prefix.extend(&key_prefix);
@@ -595,7 +590,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             }
             let (tx, mut rx) = tokio::sync::mpsc::channel::<
                 Result<(Vec<u8>, Vec<u8>), RocksDbStoreInternalError>,
-            >(FIND_STREAM_BUFFER);
+            >(1);
             let handle = tokio::task::spawn_blocking(move || {
                 let mut prefix = executor.start_key.clone();
                 prefix.extend(&key_prefix);
