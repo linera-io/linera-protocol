@@ -27,7 +27,7 @@ use js_utils::{getf, log_str, parse, setf, stringify, SER};
 use linera_base::{
     crypto::CryptoHash,
     data_types::BlockHeight,
-    identifiers::{ApplicationId, ChainId},
+    identifiers::ChainId,
 };
 use linera_indexer_graphql_client::{
     indexer::{plugins, Plugins},
@@ -100,49 +100,17 @@ pub struct Config {
     indexer: String,
     node: String,
     tls: bool,
-    /// Chain id where the formats registry application is deployed. Must be set
-    /// together with [`Self::formats_registry_app_id`] to enable BCS decoding.
-    #[serde(default, deserialize_with = "deserialize_optional_chain_id")]
-    formats_registry_chain: Option<ChainId>,
-    /// Application ID of the formats registry, used to decode BCS-encoded user
-    /// operations. Must be set together with [`Self::formats_registry_chain`].
-    #[serde(default, deserialize_with = "deserialize_optional_application_id")]
-    formats_registry_app_id: Option<ApplicationId>,
-}
-
-/// Deserialize an optional [`ApplicationId`], treating both a missing field and
-/// an empty string as `None`. This lets the Vue UI bind the field directly to a
-/// text input: clearing the input produces `""`, which round-trips back to
-/// `None` instead of a parse error.
-fn deserialize_optional_application_id<'de, D>(de: D) -> Result<Option<ApplicationId>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::IntoDeserializer;
-    let opt = Option::<String>::deserialize(de)?;
-    match opt.as_deref() {
-        None | Some("") => Ok(None),
-        Some(s) => {
-            let de = <&str as IntoDeserializer<D::Error>>::into_deserializer(s);
-            ApplicationId::deserialize(de).map(Some)
-        }
-    }
-}
-
-/// Same shape as [`deserialize_optional_application_id`] but for [`ChainId`].
-fn deserialize_optional_chain_id<'de, D>(de: D) -> Result<Option<ChainId>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::IntoDeserializer;
-    let opt = Option::<String>::deserialize(de)?;
-    match opt.as_deref() {
-        None | Some("") => Ok(None),
-        Some(s) => {
-            let de = <&str as IntoDeserializer<D::Error>>::into_deserializer(s);
-            ChainId::deserialize(de).map(Some)
-        }
-    }
+    /// Hex-encoded chain id where the formats registry application is deployed.
+    /// Must be set together with [`Self::formats_registry_app_id`]. Stored as a
+    /// raw string so the JS-side `v-model` round-trips cleanly through
+    /// `serde_wasm_bindgen`; we validate the format only when actually using
+    /// the value.
+    #[serde(default)]
+    formats_registry_chain: Option<String>,
+    /// Hex-encoded application id of the formats registry. Same string-storage
+    /// rationale as [`Self::formats_registry_chain`].
+    #[serde(default)]
+    formats_registry_app_id: Option<String>,
 }
 
 impl Config {
@@ -969,30 +937,60 @@ async fn fetch_user_app_formats(
             return None;
         }
     };
-    let registry_chain = data.config.formats_registry_chain?;
-    let registry_app_id = data.config.formats_registry_app_id.as_ref()?;
-    let registry_app_id_hex = serde_json::to_value(registry_app_id)
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_owned))?;
+    let Some(registry_chain) = data
+        .config
+        .formats_registry_chain
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    else {
+        log_str(&format!("{op}: no formats_registry_chain set in config"));
+        return None;
+    };
+    let Some(registry_app_id) = data
+        .config
+        .formats_registry_app_id
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    else {
+        log_str(&format!("{op}: no formats_registry_app_id set in config"));
+        return None;
+    };
     let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
+    log_str(&format!(
+        "{op}: looking up module for app {application_id} on active chain {} (node={node})",
+        data.chain
+    ));
     let module_id_hex = match application_module_id(&node, data.chain, application_id).await {
-        Ok(Some(m)) => m,
+        Ok(Some(m)) => {
+            log_str(&format!("{op}: resolved module_id={m}"));
+            m
+        }
         Ok(None) => {
             log_str(&format!(
-                "{op}: application {application_id} not found on chain"
+                "{op}: application {application_id} not found on chain {}",
+                data.chain
             ));
             return None;
         }
         Err(e) => {
-            log_str(&format!("{op}: {e}"));
+            log_str(&format!("{op}: failed to look up module id: {e}"));
             return None;
         }
     };
-    match formats::fetch_formats(&node, registry_chain, &registry_app_id_hex, &module_id_hex).await
-    {
-        Ok(f) => f,
+    log_str(&format!(
+        "{op}: querying registry chain={registry_chain} app={registry_app_id} module={module_id_hex}"
+    ));
+    match formats::fetch_formats(&node, registry_chain, registry_app_id, &module_id_hex).await {
+        Ok(Some(f)) => {
+            log_str(&format!("{op}: registry returned formats"));
+            Some(f)
+        }
+        Ok(None) => {
+            log_str(&format!("{op}: registry has no entry for module {module_id_hex}"));
+            None
+        }
         Err(e) => {
-            log_str(&format!("{op}: {e}"));
+            log_str(&format!("{op}: registry query failed: {e}"));
             None
         }
     }
@@ -1113,7 +1111,28 @@ pub async fn fetch_user_app_formats_js(app: JsValue, application_id: String) -> 
     else {
         return JsValue::NULL;
     };
-    formats.serialize(&SER).unwrap_or(JsValue::NULL)
+    // `Formats` contains maps keyed by enum-variant indices (`u32`), which the
+    // `serde_wasm_bindgen` "maps as objects" path cannot serialize ("Map key is
+    // not a string and cannot be an object key"). Round-trip through a JSON
+    // string instead — `JSON.parse` produces a plain JS object with all keys
+    // coerced to strings, which is what the UI consumes anyway.
+    match serde_json::to_string(&formats) {
+        Ok(s) => match js_sys::JSON::parse(&s) {
+            Ok(v) => v,
+            Err(e) => {
+                log_str(&format!(
+                    "fetch_user_app_formats_js: JSON.parse failed for {application_id}: {e:?}"
+                ));
+                JsValue::NULL
+            }
+        },
+        Err(e) => {
+            log_str(&format!(
+                "fetch_user_app_formats_js: serde_json::to_string failed for {application_id}: {e}"
+            ));
+            JsValue::NULL
+        }
+    }
 }
 
 /// Look up the `module_id` (as a hex string) of a deployed application on the

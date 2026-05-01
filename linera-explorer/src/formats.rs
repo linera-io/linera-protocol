@@ -6,11 +6,10 @@
 //! decode helpers come from `linera_sdk::formats`.
 
 use anyhow::{anyhow, Context as _, Result};
-use linera_base::identifiers::ChainId;
 pub use linera_sdk::formats::Formats;
 use serde_json::Value;
 
-use crate::reqwest_client;
+use crate::{js_utils::log_str, reqwest_client};
 
 /// Issues `query { get(moduleId: "<hex>") }` against the formats-registry
 /// application service and parses the returned bytes as a JSON-encoded
@@ -18,12 +17,14 @@ use crate::reqwest_client;
 /// module.
 pub async fn fetch_formats(
     node: &str,
-    chain_id: ChainId,
+    chain_id_hex: &str,
     registry_app_id: &str,
     module_id_hex: &str,
 ) -> Result<Option<Formats>> {
-    let url = format!("{node}/chains/{chain_id}/applications/{registry_app_id}");
+    let url = format!("{node}/chains/{chain_id_hex}/applications/{registry_app_id}");
     let query = format!(r#"{{"query":"query {{ get(moduleId: \"{module_id_hex}\") }}"}}"#);
+    log_str(&format!("fetch_formats: POST {url}"));
+    log_str(&format!("fetch_formats: body {query}"));
     let response = reqwest_client()
         .post(&url)
         .header("Content-Type", "application/json")
@@ -32,6 +33,7 @@ pub async fn fetch_formats(
         .await?
         .text()
         .await?;
+    log_str(&format!("fetch_formats: response {response}"));
     let response: Value = serde_json::from_str(&response)
         .with_context(|| format!("invalid JSON from formats registry: {response}"))?;
     if let Some(errors) = response.get("errors") {
@@ -39,6 +41,7 @@ pub async fn fetch_formats(
     }
     let get = &response["data"]["get"];
     if get.is_null() {
+        log_str("fetch_formats: registry returned null (no entry for this module)");
         return Ok(None);
     }
     let bytes: Vec<u8> = get

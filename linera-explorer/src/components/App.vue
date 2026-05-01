@@ -12,6 +12,23 @@ import Transfer from './Transfer.vue'
 
 export default {
   data() { return data() },
+  created() {
+    // Fill in formats-registry defaults from Vite env vars when they were not
+    // previously set in localStorage. Lets developers wire up dev-net values in
+    // a `.env.local` once instead of re-typing them after every restart.
+    const envChain = import.meta.env.VITE_FORMATS_REGISTRY_CHAIN as string | undefined
+    const envApp = import.meta.env.VITE_FORMATS_REGISTRY_APP_ID as string | undefined
+    let dirty = false
+    if (envChain && !this.config.formats_registry_chain) {
+      this.config.formats_registry_chain = envChain
+      dirty = true
+    }
+    if (envApp && !this.config.formats_registry_app_id) {
+      this.config.formats_registry_app_id = envApp
+      dirty = true
+    }
+    if (dirty) save_config(this)
+  },
   methods: {
     save_config() { save_config(this) },
     on_formats_registry_change() {

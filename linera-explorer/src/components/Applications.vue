@@ -30,8 +30,10 @@ async function refreshFormats() {
   await Promise.all(props.apps.map(async (a) => {
     try {
       const value = await root.fetch_user_app_formats(a.id)
+      console.log(`Applications.refreshFormats: app=${a.id} value=`, value, 'typeof=', typeof value)
       formatsState.value = { ...formatsState.value, [a.id]: value ?? false }
     } catch (e) {
+      console.log(`Applications.refreshFormats: app=${a.id} threw`, e)
       formatsState.value = { ...formatsState.value, [a.id]: false }
     }
   }))
@@ -101,13 +103,13 @@ watch(() => props.apps.map(a => a.id).join('|'), refreshFormats, { immediate: tr
               <span class="spinner-border spinner-border-sm text-muted"></span>
             </template>
             <template v-else-if="formatsState[a.id] === false">
-              <span class="text-muted" :title="($root.config?.formats_registry_chain && $root.config?.formats_registry_app_id) ? 'No formats registered for this module' : 'Set the formats registry chain and app id in the navbar'">
+              <button class="btn btn-link btn-sm text-muted" disabled :title="($root.config?.formats_registry_chain && $root.config?.formats_registry_app_id) ? 'No formats registered for this module' : 'Set the formats registry chain and app id in the navbar'">
                 <i class="bi bi-x-circle"></i>
-              </span>
+              </button>
             </template>
             <template v-else>
               <button class="btn btn-link btn-sm" data-bs-toggle="modal" :data-bs-target="'#'+a.id+'-formats-modal'" @click="json_load(a.id+'-formats-json', formatsState[a.id])" title="Show registered formats">
-                <i class="bi bi-check2-circle text-success"></i>
+                <i class="bi bi-check-circle text-success"></i>
               </button>
               <div :id="a.id+'-formats-modal'" class="modal fade">
                 <div class="modal-dialog modal-xl">
