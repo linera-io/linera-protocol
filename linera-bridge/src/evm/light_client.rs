@@ -607,12 +607,11 @@ mod tests {
 
         // Extract uncompressed keys in BCS blob order (sorted by compressed bytes).
         // The contract requires `validators` to align positionally with the blob.
-        let uncompressed_keys: Vec<alloy_primitives::Bytes> =
-            crate::evm::client::extract_validator_keys(&committee_bytes)
-                .expect("validator key extraction failed")
-                .into_iter()
-                .map(Into::into)
-                .collect();
+        let uncompressed_keys = crate::evm::client::extract_validator_keys(&committee_bytes)
+            .expect("validator key extraction failed")
+            .into_iter()
+            .map(alloy_primitives::Bytes::from)
+            .collect::<Vec<_>>();
 
         let call = addCommitteeCall {
             data: bcs_bytes.into(),
@@ -679,12 +678,11 @@ mod tests {
 
         // Extract uncompressed keys in BCS blob order (sorted by compressed bytes).
         // The contract requires `validators` to align positionally with the blob.
-        let uncompressed_keys: Vec<alloy_primitives::Bytes> =
-            crate::evm::client::extract_validator_keys(&committee_bytes)
-                .expect("validator key extraction failed")
-                .into_iter()
-                .map(Into::into)
-                .collect();
+        let uncompressed_keys = crate::evm::client::extract_validator_keys(&committee_bytes)
+            .expect("validator key extraction failed")
+            .into_iter()
+            .map(alloy_primitives::Bytes::from)
+            .collect::<Vec<_>>();
 
         addCommitteeCall {
             data: bcs_bytes.into(),
