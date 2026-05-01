@@ -96,6 +96,13 @@ const MAX_BATCH_SIZE: usize = 5000;
 /// The keyspace to use for the ScyllaDB database.
 const KEYSPACE: &str = "kv";
 
+/// Iteration direction selector used by the streaming `find_*_iter` helpers.
+#[derive(Clone, Copy)]
+enum IterDirection {
+    Forward,
+    Reverse,
+}
+
 /// The client for ScyllaDB:
 /// * The session allows to pass queries
 /// * The namespace that is being assigned to the database
@@ -707,30 +714,7 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeysStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            let key_prefix = key_prefix.to_vec();
-            ScyllaDbClient::check_key_size(&key_prefix)?;
-            let _guard = self.acquire().await;
-            let session = &self.store.session;
-            let len = key_prefix.len();
-            let query_unbounded = &self.store.find_keys_by_prefix_unbounded;
-            let query_bounded = &self.store.find_keys_by_prefix_bounded;
-            let rows = match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = (self.root_key.clone(), key_prefix.clone());
-                    Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
-                }
-                Some(upper_bound) => {
-                    let values = (self.root_key.clone(), key_prefix.clone(), upper_bound);
-                    Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
-                }
-            };
-            let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
-            while let Some(row) = rows.next().await {
-                let (key,) = row?;
-                yield Ok(key[len..].to_vec());
-            }
-        })
+        self.find_keys_stream(key_prefix, IterDirection::Forward)
     }
 
     async fn find_key_values_by_prefix(
@@ -747,44 +731,46 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeyValuesStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            let key_prefix = key_prefix.to_vec();
-            ScyllaDbClient::check_key_size(&key_prefix)?;
-            let _guard = self.acquire().await;
-            let session = &self.store.session;
-            let len = key_prefix.len();
-            let query_unbounded = &self.store.find_key_values_by_prefix_unbounded;
-            let query_bounded = &self.store.find_key_values_by_prefix_bounded;
-            let rows = match get_upper_bound_option(&key_prefix) {
-                None => {
-                    let values = (self.root_key.clone(), key_prefix.clone());
-                    Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
-                }
-                Some(upper_bound) => {
-                    let values = (self.root_key.clone(), key_prefix.clone(), upper_bound);
-                    Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
-                }
-            };
-            let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
-            while let Some(row) = rows.next().await {
-                let (key, value) = row?;
-                yield Ok((key[len..].to_vec(), value));
-            }
-        })
+        self.find_key_values_stream(key_prefix, IterDirection::Forward)
     }
 
     fn find_keys_by_prefix_rev_iter<'a>(
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeysStream<'a, Self::Error> {
+        self.find_keys_stream(key_prefix, IterDirection::Reverse)
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        self.find_key_values_stream(key_prefix, IterDirection::Reverse)
+    }
+}
+
+impl ScyllaDbStoreInternal {
+    fn find_keys_stream<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+        direction: IterDirection,
+    ) -> FindKeysStream<'a, ScyllaDbStoreInternalError> {
         Box::pin(async_stream::stream! {
             let key_prefix = key_prefix.to_vec();
             ScyllaDbClient::check_key_size(&key_prefix)?;
             let _guard = self.acquire().await;
             let session = &self.store.session;
             let len = key_prefix.len();
-            let query_unbounded = &self.store.find_keys_by_prefix_rev_unbounded;
-            let query_bounded = &self.store.find_keys_by_prefix_rev_bounded;
+            let (query_unbounded, query_bounded) = match direction {
+                IterDirection::Forward => (
+                    &self.store.find_keys_by_prefix_unbounded,
+                    &self.store.find_keys_by_prefix_bounded,
+                ),
+                IterDirection::Reverse => (
+                    &self.store.find_keys_by_prefix_rev_unbounded,
+                    &self.store.find_keys_by_prefix_rev_bounded,
+                ),
+            };
             let rows = match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = (self.root_key.clone(), key_prefix.clone());
@@ -803,18 +789,27 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         })
     }
 
-    fn find_key_values_by_prefix_rev_iter<'a>(
+    fn find_key_values_stream<'a>(
         &'a self,
         key_prefix: &'a [u8],
-    ) -> FindKeyValuesStream<'a, Self::Error> {
+        direction: IterDirection,
+    ) -> FindKeyValuesStream<'a, ScyllaDbStoreInternalError> {
         Box::pin(async_stream::stream! {
             let key_prefix = key_prefix.to_vec();
             ScyllaDbClient::check_key_size(&key_prefix)?;
             let _guard = self.acquire().await;
             let session = &self.store.session;
             let len = key_prefix.len();
-            let query_unbounded = &self.store.find_key_values_by_prefix_rev_unbounded;
-            let query_bounded = &self.store.find_key_values_by_prefix_rev_bounded;
+            let (query_unbounded, query_bounded) = match direction {
+                IterDirection::Forward => (
+                    &self.store.find_key_values_by_prefix_unbounded,
+                    &self.store.find_key_values_by_prefix_bounded,
+                ),
+                IterDirection::Reverse => (
+                    &self.store.find_key_values_by_prefix_rev_unbounded,
+                    &self.store.find_key_values_by_prefix_rev_bounded,
+                ),
+            };
             let rows = match get_upper_bound_option(&key_prefix) {
                 None => {
                     let values = (self.root_key.clone(), key_prefix.clone());
