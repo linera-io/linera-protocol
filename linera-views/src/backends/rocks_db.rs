@@ -35,9 +35,9 @@ use crate::{
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
 
-/// The size of batches in `find_keys_by_prefix_iter` and
-/// `find_key_values_by_prefix_iter`.
-const FIND_BATCH_SIZE: usize = 256;
+/// Channel buffer for streaming results from the blocking RocksDB iterator
+/// to the async stream consumer.
+const FIND_STREAM_BUFFER: usize = 16;
 
 /// The prefixes being used in the system
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
@@ -221,40 +221,6 @@ impl RocksDbStoreExecutor {
         Ok(keys)
     }
 
-    /// Reads up to `batch_size` keys for the given full prefix, starting at `seek`
-    /// (which must already include `start_key + key_prefix`). Returns the keys
-    /// (with the prefix already stripped) and the full key to seek next, or
-    /// `None` when the iterator is exhausted.
-    fn find_keys_chunk_internal(
-        &self,
-        full_prefix: Vec<u8>,
-        seek: Vec<u8>,
-        batch_size: usize,
-    ) -> (Vec<Vec<u8>>, Option<Vec<u8>>) {
-        let len = full_prefix.len();
-
-        let mut read_opts = rocksdb::ReadOptions::default();
-        read_opts.set_async_io(true);
-        if let Some(upper_bound) = get_upper_bound_option(&full_prefix) {
-            read_opts.set_iterate_upper_bound(upper_bound);
-        }
-        let mut iter = self.db.raw_iterator_opt(read_opts);
-        iter.seek(&seek);
-
-        let mut keys = Vec::with_capacity(batch_size);
-        while keys.len() < batch_size {
-            match iter.key() {
-                Some(key) => {
-                    keys.push(key[len..].to_vec());
-                    iter.next();
-                }
-                None => return (keys, None),
-            }
-        }
-        let next = iter.key().map(|k| k.to_vec());
-        (keys, next)
-    }
-
     #[expect(clippy::type_complexity)]
     fn find_key_values_by_prefix_internal(
         &self,
@@ -273,37 +239,6 @@ impl RocksDbStoreExecutor {
             iter.next();
         }
         Ok(key_values)
-    }
-
-    #[expect(clippy::type_complexity)]
-    fn find_key_values_chunk_internal(
-        &self,
-        full_prefix: Vec<u8>,
-        seek: Vec<u8>,
-        batch_size: usize,
-    ) -> (Vec<(Vec<u8>, Vec<u8>)>, Option<Vec<u8>>) {
-        let len = full_prefix.len();
-
-        let mut read_opts = rocksdb::ReadOptions::default();
-        read_opts.set_async_io(true);
-        if let Some(upper_bound) = get_upper_bound_option(&full_prefix) {
-            read_opts.set_iterate_upper_bound(upper_bound);
-        }
-        let mut iter = self.db.raw_iterator_opt(read_opts);
-        iter.seek(&seek);
-
-        let mut key_values = Vec::with_capacity(batch_size);
-        while key_values.len() < batch_size {
-            match iter.item() {
-                Some((key, value)) => {
-                    key_values.push((key[len..].to_vec(), value.to_vec()));
-                    iter.next();
-                }
-                None => return (key_values, None),
-            }
-        }
-        let next = iter.key().map(|k| k.to_vec());
-        (key_values, next)
     }
 
     fn write_batch_internal(
@@ -595,36 +530,6 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    fn find_keys_by_prefix_iter<'a>(
-        &'a self,
-        key_prefix: &'a [u8],
-    ) -> FindKeysStream<'a, Self::Error> {
-        let key_prefix = key_prefix.to_vec();
-        Box::pin(async_stream::stream! {
-            check_key_size(&key_prefix)?;
-            let mut full_prefix = self.executor.start_key.clone();
-            full_prefix.extend(&key_prefix);
-            let mut next_seek = Some(full_prefix.clone());
-            while let Some(seek) = next_seek.take() {
-                let executor = self.executor.clone();
-                let prefix = full_prefix.clone();
-                let (keys, resume) = self
-                    .spawn_mode
-                    .spawn(
-                        move |(prefix, seek)| {
-                            Ok(executor.find_keys_chunk_internal(prefix, seek, FIND_BATCH_SIZE))
-                        },
-                        (prefix, seek),
-                    )
-                    .await?;
-                for key in keys {
-                    yield Ok(key);
-                }
-                next_seek = resume;
-            }
-        })
-    }
-
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -639,36 +544,79 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    fn find_key_values_by_prefix_iter<'a>(
-        &'a self,
-        key_prefix: &'a [u8],
-    ) -> FindKeyValuesStream<'a, Self::Error> {
+    fn find_keys_by_prefix_iter(
+        &self,
+        key_prefix: &[u8],
+    ) -> FindKeysStream<'_, Self::Error> {
+        let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
         Box::pin(async_stream::stream! {
-            check_key_size(&key_prefix)?;
-            let mut full_prefix = self.executor.start_key.clone();
-            full_prefix.extend(&key_prefix);
-            let mut next_seek = Some(full_prefix.clone());
-            while let Some(seek) = next_seek.take() {
-                let executor = self.executor.clone();
-                let prefix = full_prefix.clone();
-                let (key_values, resume) = self
-                    .spawn_mode
-                    .spawn(
-                        move |(prefix, seek)| {
-                            Ok(executor.find_key_values_chunk_internal(
-                                prefix,
-                                seek,
-                                FIND_BATCH_SIZE,
-                            ))
-                        },
-                        (prefix, seek),
-                    )
-                    .await?;
-                for kv in key_values {
-                    yield Ok(kv);
+            if let Err(error) = check_key_size(&key_prefix) {
+                yield Err(error);
+                return;
+            }
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<
+                Result<Vec<u8>, RocksDbStoreInternalError>,
+            >(FIND_STREAM_BUFFER);
+            let handle = tokio::task::spawn_blocking(move || {
+                let mut prefix = executor.start_key.clone();
+                prefix.extend(&key_prefix);
+                let len = prefix.len();
+                let mut iter = executor.get_find_prefix_iterator(&prefix);
+                while let Some(key) = iter.key() {
+                    if tx.blocking_send(Ok(key[len..].to_vec())).is_err() {
+                        return;
+                    }
+                    iter.next();
                 }
-                next_seek = resume;
+                if let Err(error) = iter.status() {
+                    let _ = tx.blocking_send(Err(error.into()));
+                }
+            });
+            while let Some(item) = rx.recv().await {
+                yield item;
+            }
+            if let Err(error) = handle.await {
+                yield Err(RocksDbStoreInternalError::TokioJoinError(error));
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_iter(
+        &self,
+        key_prefix: &[u8],
+    ) -> FindKeyValuesStream<'_, Self::Error> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        Box::pin(async_stream::stream! {
+            if let Err(error) = check_key_size(&key_prefix) {
+                yield Err(error);
+                return;
+            }
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<
+                Result<(Vec<u8>, Vec<u8>), RocksDbStoreInternalError>,
+            >(FIND_STREAM_BUFFER);
+            let handle = tokio::task::spawn_blocking(move || {
+                let mut prefix = executor.start_key.clone();
+                prefix.extend(&key_prefix);
+                let len = prefix.len();
+                let mut iter = executor.get_find_prefix_iterator(&prefix);
+                while let Some((key, value)) = iter.item() {
+                    let pair = (key[len..].to_vec(), value.to_vec());
+                    if tx.blocking_send(Ok(pair)).is_err() {
+                        return;
+                    }
+                    iter.next();
+                }
+                if let Err(error) = iter.status() {
+                    let _ = tx.blocking_send(Err(error.into()));
+                }
+            });
+            while let Some(item) = rx.recv().await {
+                yield item;
+            }
+            if let Err(error) = handle.await {
+                yield Err(RocksDbStoreInternalError::TokioJoinError(error));
             }
         })
     }
