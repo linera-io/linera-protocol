@@ -327,45 +327,49 @@ where
     ) -> FindKeyValuesStream<'a, Self::Error> {
         Box::pin(async_stream::stream! {
             let mut stream = self.store.find_key_values_by_prefix_rev_iter(key_prefix);
+            // Accumulator: (current_key, top_index, segments_descending).
+            // segments[i] is the segment at index `top_index - i`.
+            // An accumulation that never reaches index 0 is composed of
+            // leftover segments (from a previously deleted big value, since
+            // delete_key only removes the master) and is silently dropped.
+            let mut state: Option<(Vec<u8>, u32, Vec<Vec<u8>>)> = None;
             while let Some(item) = stream.next().await {
                 let (mut big_key, value) =
                     item.map_err(ValueSplittingError::InnerStoreError)?;
-                let last_index = Self::read_index_from_key(&big_key)?;
+                let index = Self::read_index_from_key(&big_key)?;
                 big_key.truncate(big_key.len() - 4);
                 let key = big_key;
-                // Collect segments in reverse order: from last_index down to 0.
-                let mut segments: Vec<(u32, Vec<u8>)> = vec![(last_index, value)];
-                while segments.last().unwrap().0 > 0 {
-                    let expected = segments.last().unwrap().0 - 1;
-                    let next = stream.next().await
-                        .ok_or(ValueSplittingError::MissingSegment)?;
-                    let (big_key2, value2) =
-                        next.map_err(ValueSplittingError::InnerStoreError)?;
-                    if !(Self::read_index_from_key(&big_key2)? == expected
-                        && big_key2.starts_with(&key)
-                        && big_key2.len() == key.len() + 4)
-                    {
+                let continues = match &state {
+                    Some((current_key, top, segs)) => {
+                        let segs_len = segs.len() as u32;
+                        *current_key == key && segs_len <= *top && index == *top - segs_len
+                    }
+                    None => false,
+                };
+                if continues {
+                    state.as_mut().unwrap().2.push(value);
+                } else {
+                    state = Some((key, index, vec![value]));
+                }
+                if index == 0 {
+                    let (key, top, segs) = state.take().unwrap();
+                    let segment_zero_value = segs.last().unwrap();
+                    let count = Self::read_count_from_value(segment_zero_value)?;
+                    if count == 0 || count > top + 1 {
                         yield Err(ValueSplittingError::MissingSegment);
                         return;
                     }
-                    segments.push((expected, value2));
-                }
-                // Segment 0 carries the count; indices >= count are stranded leftovers.
-                let (_, segment_zero_value) = segments.last().unwrap();
-                let count = Self::read_count_from_value(segment_zero_value)?;
-                if count == 0 || count > last_index + 1 {
-                    yield Err(ValueSplittingError::MissingSegment);
-                    return;
-                }
-                let mut big_value = Vec::new();
-                for (idx, val) in segments.iter().rev() {
-                    if *idx == 0 {
-                        big_value.extend_from_slice(&val[4..]);
-                    } else if *idx < count {
-                        big_value.extend_from_slice(val);
+                    let mut big_value = Vec::new();
+                    for (rev_pos, val) in segs.iter().rev().enumerate() {
+                        let idx = rev_pos as u32;
+                        if idx == 0 {
+                            big_value.extend_from_slice(&val[4..]);
+                        } else if idx < count {
+                            big_value.extend_from_slice(val);
+                        }
                     }
+                    yield Ok((key, big_value));
                 }
-                yield Ok((key, big_value));
             }
         })
     }
