@@ -573,10 +573,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
-    fn find_keys_by_prefix_iter(
-        &self,
-        key_prefix: &[u8],
-    ) -> FindKeysStream<'_, Self::Error> {
+    fn find_keys_by_prefix_iter(&self, key_prefix: &[u8]) -> FindKeysStream<'_, Self::Error> {
         self.find_keys_stream(key_prefix, IterDirection::Forward)
     }
 
@@ -587,10 +584,7 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         self.find_key_values_stream(key_prefix, IterDirection::Forward)
     }
 
-    fn find_keys_by_prefix_rev_iter(
-        &self,
-        key_prefix: &[u8],
-    ) -> FindKeysStream<'_, Self::Error> {
+    fn find_keys_by_prefix_rev_iter(&self, key_prefix: &[u8]) -> FindKeysStream<'_, Self::Error> {
         self.find_keys_stream(key_prefix, IterDirection::Reverse)
     }
 

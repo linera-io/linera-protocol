@@ -5,14 +5,13 @@
 
 use std::sync::{Arc, Mutex};
 
+use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 
 #[cfg(with_testing)]
 use crate::memory::MemoryDatabase;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueDatabase;
-use futures::stream::StreamExt;
-
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
