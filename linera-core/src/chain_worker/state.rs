@@ -255,7 +255,7 @@ where
         blob_id: BlobId,
     ) -> Result<Arc<Blob>, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
-            return Ok(Arc::new(blob));
+            return Ok(self.storage.cache_blob(blob));
         }
         self.storage
             .read_blob(blob_id)
@@ -441,10 +441,6 @@ where
         if !uncached_hashes.is_empty() {
             let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
             for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
-                if let Some(block) = &maybe_block {
-                    self.block_values
-                        .insert_arc(&block.inner().hash(), block.clone());
-                }
                 blocks[i] = maybe_block;
             }
         }

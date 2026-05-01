@@ -2039,7 +2039,7 @@ impl<Env: Environment> ChainClient<Env> {
             "process_pending_block_without_prepare completing"
         );
         debug!(round = %certificate.round, "Sending confirmed block to validators");
-        let certificate = Arc::new(certificate);
+        let certificate = self.client.storage_client().cache_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
         // Clear the pending proposal now that the block has been committed.
@@ -2099,7 +2099,7 @@ impl<Env: Environment> ChainClient<Env> {
             .client
             .finalize_block(&committee, certificate.clone())
             .await?;
-        let certificate = Arc::new(certificate);
+        let certificate = self.client.storage_client().cache_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
         Ok(ClientOutcome::Committed(Some(Arc::unwrap_or_clone(
@@ -3208,7 +3208,7 @@ impl<Env: Environment> ChainClient<Env> {
         for certificate in certificates {
             match remote_node
                 .handle_confirmed_certificate(
-                    (*certificate).clone(),
+                    certificate.clone(),
                     CrossChainMessageDelivery::NonBlocking,
                 )
                 .await
@@ -3227,7 +3227,7 @@ impl<Env: Environment> ChainClient<Env> {
                     remote_node.upload_blobs(missing_blobs).await?;
                     remote_node
                         .handle_confirmed_certificate(
-                            Arc::unwrap_or_clone(certificate),
+                            certificate,
                             CrossChainMessageDelivery::NonBlocking,
                         )
                         .await?;

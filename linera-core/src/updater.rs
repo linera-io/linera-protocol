@@ -248,7 +248,7 @@ where
     )]
     async fn send_confirmed_certificate(
         &mut self,
-        certificate: &GenericCertificate<ConfirmedBlock>,
+        certificate: &Arc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self

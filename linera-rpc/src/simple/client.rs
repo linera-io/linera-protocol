@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use futures::{sink::SinkExt, stream::StreamExt};
 use linera_base::{
     crypto::CryptoHash,
@@ -118,12 +120,12 @@ impl ValidatorNode for SimpleClient {
     /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
-        certificate: ConfirmedBlockCertificate,
+        certificate: Arc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
-            certificate,
+            certificate: Arc::unwrap_or_clone(certificate),
             wait_for_outgoing_messages,
         };
         let request = RpcMessage::ConfirmedCertificate(Box::new(request));

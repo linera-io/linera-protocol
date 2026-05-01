@@ -138,6 +138,33 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
+    /// Inserts a certificate into the in-memory dedup cache and returns the
+    /// canonical [`Arc`]. If the cache already holds an `Arc` for this hash,
+    /// the passed-in `certificate` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlockCertificate`] that should
+    /// participate in the "one allocation per content" invariant.
+    fn cache_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Arc<ConfirmedBlockCertificate>;
+
+    /// Inserts a blob into the in-memory dedup cache and returns the canonical
+    /// [`Arc`]. If the cache already holds an `Arc` for this blob ID, the
+    /// passed-in `blob` is dropped and the existing `Arc` is returned. This
+    /// must be used (rather than `Arc::new`) for any freshly-constructed
+    /// [`Blob`] that should participate in the "one allocation per content"
+    /// invariant.
+    fn cache_blob(&self, blob: Blob) -> Arc<Blob>;
+
+    /// Inserts a confirmed block into the in-memory dedup cache and returns
+    /// the canonical [`Arc`]. If the cache already holds an `Arc` for this
+    /// hash, the passed-in `block` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlock`] that should participate in the
+    /// "one allocation per content" invariant.
+    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> Arc<ConfirmedBlock>;
+
     /// Reads the certificate with the given hash.
     async fn read_certificate(
         &self,

@@ -757,8 +757,12 @@ impl<Env: Environment> Client<Env> {
                 Ok((certificates, unresolved, validator_key)) => {
                     for certificate in certificates {
                         let mode = ReceiveCertificateMode::AlreadyChecked;
-                        self.receive_sender_certificate(Arc::new(certificate), mode, None)
-                            .await?;
+                        self.receive_sender_certificate(
+                            self.storage_client().cache_certificate(certificate),
+                            mode,
+                            None,
+                        )
+                        .await?;
                     }
                     validators.retain(|node| node.public_key != validator_key);
                     remaining_event_ids = unresolved;
@@ -1325,7 +1329,11 @@ impl<Env: Environment> Client<Env> {
                 // We checked the certificates right after downloading them.
                 let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
-                    .receive_sender_certificate(Arc::new(certificate), mode, None)
+                    .receive_sender_certificate(
+                        self.storage_client().cache_certificate(certificate),
+                        mode,
+                        None,
+                    )
                     .await
                 {
                     warn!(%error, %hash, "Received invalid certificate");
@@ -1439,7 +1447,7 @@ impl<Env: Environment> Client<Env> {
                         height: current_height,
                     });
                 };
-                Arc::new(certificate)
+                self.storage_client().cache_certificate(certificate)
             };
 
             // Validate the certificate.
@@ -1541,7 +1549,7 @@ impl<Env: Environment> Client<Env> {
                 Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
                     .into_result()?;
 
-                Arc::new(certificate)
+                self.storage_client().cache_certificate(certificate)
             };
 
             let block = certificate.block();
@@ -1909,7 +1917,7 @@ impl<Env: Environment> Client<Env> {
                         .download_certificate_for_blob(&remote_node, blob_id)
                         .await?;
                     self.receive_sender_certificate(
-                        Arc::new(certificate),
+                        self.storage_client().cache_certificate(certificate),
                         ReceiveCertificateMode::NeedsCheck,
                         Some(vec![remote_node.clone()]),
                     )
