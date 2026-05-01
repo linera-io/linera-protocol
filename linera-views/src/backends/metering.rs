@@ -19,7 +19,10 @@ use prometheus::{exponential_buckets, HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        FindKeyValuesStream, FindKeysStream, KeyValueDatabase, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]
@@ -438,6 +441,17 @@ where
         Ok(result)
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        self.counter
+            .find_keys_by_prefix_prefix_size
+            .with_label_values(&[])
+            .observe(key_prefix.len() as f64);
+        self.store.find_keys_by_prefix_iter(key_prefix)
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -464,6 +478,17 @@ where
             .with_label_values(&[])
             .observe(key_values_size as f64);
         Ok(result)
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        self.counter
+            .find_key_values_by_prefix_prefix_size
+            .with_label_values(&[])
+            .observe(key_prefix.len() as f64);
+        self.store.find_key_values_by_prefix_iter(key_prefix)
     }
 }
 

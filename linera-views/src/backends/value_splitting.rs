@@ -3,14 +3,15 @@
 
 //! Adds support for large values to a given store by splitting them between several keys.
 
+use futures::stream::StreamExt;
 use linera_base::ensure;
 use thiserror::Error;
 
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        FindKeyValuesStream, FindKeysStream, KeyValueDatabase, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
@@ -221,6 +222,22 @@ where
         Ok(keys)
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_keys_by_prefix_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let big_key = item.map_err(ValueSplittingError::InnerStoreError)?;
+                let len = big_key.len();
+                if Self::read_index_from_key(&big_key)? == 0 {
+                    yield Ok(big_key[0..len - 4].to_vec());
+                }
+            }
+        })
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -251,6 +268,41 @@ where
             key_values.push((key, big_value));
         }
         Ok(key_values)
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_key_values_by_prefix_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let (mut big_key, value) =
+                    item.map_err(ValueSplittingError::InnerStoreError)?;
+                if Self::read_index_from_key(&big_key)? != 0 {
+                    continue; // Leftover segment from an earlier value.
+                }
+                big_key.truncate(big_key.len() - 4);
+                let key = big_key;
+                let count = Self::read_count_from_value(&value)?;
+                let mut big_value = value[4..].to_vec();
+                for idx in 1..count {
+                    let next = stream.next().await
+                        .ok_or(ValueSplittingError::MissingSegment)?;
+                    let (big_key, value) =
+                        next.map_err(ValueSplittingError::InnerStoreError)?;
+                    if !(Self::read_index_from_key(&big_key)? == idx
+                        && big_key.starts_with(&key)
+                        && big_key.len() == key.len() + 4)
+                    {
+                        yield Err(ValueSplittingError::MissingSegment);
+                        return;
+                    }
+                    big_value.extend(value);
+                }
+                yield Ok((key, big_value));
+            }
+        })
     }
 }
 

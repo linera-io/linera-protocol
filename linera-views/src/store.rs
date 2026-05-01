@@ -3,8 +3,9 @@
 
 //! This provides the trait definitions for the stores.
 
-use std::{fmt::Debug, future::Future};
+use std::{fmt::Debug, future::Future, pin::Pin};
 
+use futures::stream::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 
 #[cfg(with_testing)]
@@ -14,6 +15,24 @@ use crate::{
     common::from_bytes_option,
     ViewError,
 };
+
+/// A boxed stream for iterating over keys returned by `find_keys_by_prefix_iter`.
+#[cfg(not(web))]
+pub type FindKeysStream<'a, E> = Pin<Box<dyn Stream<Item = Result<Vec<u8>, E>> + Send + 'a>>;
+
+/// A boxed stream for iterating over keys returned by `find_keys_by_prefix_iter`.
+#[cfg(web)]
+pub type FindKeysStream<'a, E> = Pin<Box<dyn Stream<Item = Result<Vec<u8>, E>> + 'a>>;
+
+/// A boxed stream for iterating over key/value pairs returned by `find_key_values_by_prefix_iter`.
+#[cfg(not(web))]
+pub type FindKeyValuesStream<'a, E> =
+    Pin<Box<dyn Stream<Item = Result<(Vec<u8>, Vec<u8>), E>> + Send + 'a>>;
+
+/// A boxed stream for iterating over key/value pairs returned by `find_key_values_by_prefix_iter`.
+#[cfg(web)]
+pub type FindKeyValuesStream<'a, E> =
+    Pin<Box<dyn Stream<Item = Result<(Vec<u8>, Vec<u8>), E>> + 'a>>;
 
 /// The error type for the key-value stores.
 pub trait KeyValueStoreError:
@@ -76,11 +95,46 @@ pub trait ReadableKeyValueStore: WithError {
     /// Finds the `key` matching the prefix. The prefix is not included in the returned keys.
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error>;
 
+    /// Returns a boxed stream that yields the keys matching the prefix one by one.
+    /// The prefix is not included in the returned keys. The stream may be dropped
+    /// early to stop the iteration. The default implementation downloads the full
+    /// list eagerly via `find_keys_by_prefix` and yields the entries afterwards;
+    /// backends should override this to stream incrementally whenever possible.
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let keys = self.find_keys_by_prefix(key_prefix).await?;
+            for key in keys {
+                yield Ok(key);
+            }
+        })
+    }
+
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error>;
+
+    /// Returns a boxed stream that yields the `(key, value)` pairs matching the
+    /// prefix one by one. The prefix is not included in the returned keys. The
+    /// stream may be dropped early to stop the iteration. The default
+    /// implementation downloads the full list eagerly via `find_key_values_by_prefix`
+    /// and yields the entries afterwards; backends should override this to stream
+    /// incrementally whenever possible.
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let key_values = self.find_key_values_by_prefix(key_prefix).await?;
+            for key_value in key_values {
+                yield Ok(key_value);
+            }
+        })
+    }
 
     // We can't use `async fn` here in the below implementations due to
     // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed

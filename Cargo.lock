@@ -6357,6 +6357,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-lock",
+ "async-stream",
  "aws-config",
  "aws-sdk-dynamodb",
  "aws-smithy-types",

@@ -47,8 +47,8 @@ use crate::{
     journaling::JournalingKeyValueDatabase,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, FindKeyValuesStream, FindKeysStream, KeyValueDatabase,
+        KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -886,6 +886,32 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .collect()
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            check_key_size(key_prefix)?;
+            let prefix_len = key_prefix.len();
+            let mut start_key_map = None;
+            loop {
+                let response = self
+                    .get_query_output(KEY_ATTRIBUTE, &self.start_key, key_prefix, start_key_map)
+                    .await?;
+                let last_evaluated = response.last_evaluated_key.clone();
+                for item in response.items.iter().flatten() {
+                    yield extract_key(prefix_len, item).map(|k| k.to_vec());
+                }
+                match last_evaluated {
+                    None => break,
+                    Some(value) => {
+                        start_key_map = Some(value);
+                    }
+                }
+            }
+        })
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -897,6 +923,38 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .key_values()
             .map(|entry| entry.map(|(key, value)| (key.to_vec(), value.to_vec())))
             .collect()
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            check_key_size(key_prefix)?;
+            let prefix_len = key_prefix.len();
+            let mut start_key_map = None;
+            loop {
+                let response = self
+                    .get_query_output(
+                        KEY_VALUE_ATTRIBUTE,
+                        &self.start_key,
+                        key_prefix,
+                        start_key_map,
+                    )
+                    .await?;
+                let last_evaluated = response.last_evaluated_key.clone();
+                for item in response.items.iter().flatten() {
+                    yield extract_key_value(prefix_len, item)
+                        .map(|(k, v)| (k.to_vec(), v.to_vec()));
+                }
+                match last_evaluated {
+                    None => break,
+                    Some(value) => {
+                        start_key_map = Some(value);
+                    }
+                }
+            }
+        })
     }
 }
 

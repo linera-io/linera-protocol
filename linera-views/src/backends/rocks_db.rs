@@ -29,11 +29,15 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        FindKeyValuesStream, FindKeysStream, KeyValueDatabase, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
+
+/// The size of batches in `find_keys_by_prefix_iter` and
+/// `find_key_values_by_prefix_iter`.
+const FIND_BATCH_SIZE: usize = 256;
 
 /// The prefixes being used in the system
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
@@ -217,6 +221,40 @@ impl RocksDbStoreExecutor {
         Ok(keys)
     }
 
+    /// Reads up to `batch_size` keys for the given full prefix, starting at `seek`
+    /// (which must already include `start_key + key_prefix`). Returns the keys
+    /// (with the prefix already stripped) and the full key to seek next, or
+    /// `None` when the iterator is exhausted.
+    fn find_keys_chunk_internal(
+        &self,
+        full_prefix: Vec<u8>,
+        seek: Vec<u8>,
+        batch_size: usize,
+    ) -> (Vec<Vec<u8>>, Option<Vec<u8>>) {
+        let len = full_prefix.len();
+
+        let mut read_opts = rocksdb::ReadOptions::default();
+        read_opts.set_async_io(true);
+        if let Some(upper_bound) = get_upper_bound_option(&full_prefix) {
+            read_opts.set_iterate_upper_bound(upper_bound);
+        }
+        let mut iter = self.db.raw_iterator_opt(read_opts);
+        iter.seek(&seek);
+
+        let mut keys = Vec::with_capacity(batch_size);
+        while keys.len() < batch_size {
+            match iter.key() {
+                Some(key) => {
+                    keys.push(key[len..].to_vec());
+                    iter.next();
+                }
+                None => return (keys, None),
+            }
+        }
+        let next = iter.key().map(|k| k.to_vec());
+        (keys, next)
+    }
+
     #[expect(clippy::type_complexity)]
     fn find_key_values_by_prefix_internal(
         &self,
@@ -235,6 +273,37 @@ impl RocksDbStoreExecutor {
             iter.next();
         }
         Ok(key_values)
+    }
+
+    #[expect(clippy::type_complexity)]
+    fn find_key_values_chunk_internal(
+        &self,
+        full_prefix: Vec<u8>,
+        seek: Vec<u8>,
+        batch_size: usize,
+    ) -> (Vec<(Vec<u8>, Vec<u8>)>, Option<Vec<u8>>) {
+        let len = full_prefix.len();
+
+        let mut read_opts = rocksdb::ReadOptions::default();
+        read_opts.set_async_io(true);
+        if let Some(upper_bound) = get_upper_bound_option(&full_prefix) {
+            read_opts.set_iterate_upper_bound(upper_bound);
+        }
+        let mut iter = self.db.raw_iterator_opt(read_opts);
+        iter.seek(&seek);
+
+        let mut key_values = Vec::with_capacity(batch_size);
+        while key_values.len() < batch_size {
+            match iter.item() {
+                Some((key, value)) => {
+                    key_values.push((key[len..].to_vec(), value.to_vec()));
+                    iter.next();
+                }
+                None => return (key_values, None),
+            }
+        }
+        let next = iter.key().map(|k| k.to_vec());
+        (key_values, next)
     }
 
     fn write_batch_internal(
@@ -526,6 +595,36 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
             .await
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        let key_prefix = key_prefix.to_vec();
+        Box::pin(async_stream::stream! {
+            check_key_size(&key_prefix)?;
+            let mut full_prefix = self.executor.start_key.clone();
+            full_prefix.extend(&key_prefix);
+            let mut next_seek = Some(full_prefix.clone());
+            while let Some(seek) = next_seek.take() {
+                let executor = self.executor.clone();
+                let prefix = full_prefix.clone();
+                let (keys, resume) = self
+                    .spawn_mode
+                    .spawn(
+                        move |(prefix, seek)| {
+                            Ok(executor.find_keys_chunk_internal(prefix, seek, FIND_BATCH_SIZE))
+                        },
+                        (prefix, seek),
+                    )
+                    .await?;
+                for key in keys {
+                    yield Ok(key);
+                }
+                next_seek = resume;
+            }
+        })
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -538,6 +637,40 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
                 key_prefix,
             )
             .await
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        let key_prefix = key_prefix.to_vec();
+        Box::pin(async_stream::stream! {
+            check_key_size(&key_prefix)?;
+            let mut full_prefix = self.executor.start_key.clone();
+            full_prefix.extend(&key_prefix);
+            let mut next_seek = Some(full_prefix.clone());
+            while let Some(seek) = next_seek.take() {
+                let executor = self.executor.clone();
+                let prefix = full_prefix.clone();
+                let (key_values, resume) = self
+                    .spawn_mode
+                    .spawn(
+                        move |(prefix, seek)| {
+                            Ok(executor.find_key_values_chunk_internal(
+                                prefix,
+                                seek,
+                                FIND_BATCH_SIZE,
+                            ))
+                        },
+                        (prefix, seek),
+                    )
+                    .await?;
+                for kv in key_values {
+                    yield Ok(kv);
+                }
+                next_seek = resume;
+            }
+        })
     }
 }
 
