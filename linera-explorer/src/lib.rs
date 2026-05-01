@@ -24,11 +24,7 @@ use gql_service::{
 };
 use graphql_client::Response;
 use js_utils::{getf, log_str, parse, setf, stringify, SER};
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::BlockHeight,
-    identifiers::ChainId,
-};
+use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
 use linera_indexer_graphql_client::{
     indexer::{plugins, Plugins},
     operations as gql_operations,
@@ -986,7 +982,9 @@ async fn fetch_user_app_formats(
             Some(f)
         }
         Ok(None) => {
-            log_str(&format!("{op}: registry has no entry for module {module_id_hex}"));
+            log_str(&format!(
+                "{op}: registry has no entry for module {module_id_hex}"
+            ));
             None
         }
         Err(e) => {
@@ -1100,7 +1098,7 @@ pub async fn decode_user_event_value(
     .await
 }
 
-/// Fetch the registered [`Formats`] for a deployed application and return them
+/// Fetch the registered `Formats` for a deployed application and return them
 /// as a JS object, or `JsValue::NULL` if no entry is available (no registry
 /// configured, the app is not on the active chain, or the registry has no
 /// entry for that module).

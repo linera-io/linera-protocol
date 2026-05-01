@@ -1961,9 +1961,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
 #[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
 #[test_log::test(tokio::test)]
-async fn test_publish_bcs_module_registers_formats(
-    config: impl LineraNetConfig,
-) -> Result<()> {
+async fn test_publish_bcs_module_registers_formats(config: impl LineraNetConfig) -> Result<()> {
     use counter::{formats::CounterApplication, CounterAbi};
     use linera_sdk::{
         abis::formats_registry::FormatsRegistryAbi,
@@ -1977,8 +1975,7 @@ async fn test_publish_bcs_module_registers_formats(
     let chain = client.load_wallet()?.default_chain().unwrap();
 
     // Publish-and-create the formats registry application.
-    let (registry_contract, registry_service) =
-        client.build_example("formats-registry").await?;
+    let (registry_contract, registry_service) = client.build_example("formats-registry").await?;
     let registry_app_id = client
         .publish_and_create::<FormatsRegistryAbi, (), ()>(
             registry_contract,

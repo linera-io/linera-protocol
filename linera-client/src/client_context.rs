@@ -967,7 +967,10 @@ impl<Env: Environment> ClientContext<Env> {
         })
         .await?;
 
-        info!("{}", "Module published and formats registered successfully!");
+        info!(
+            "{}",
+            "Module published and formats registered successfully!"
+        );
         info!("Synchronizing client and processing inbox");
         self.process_inbox(chain_client).await?;
         Ok(module_id)
@@ -1026,9 +1029,7 @@ impl<Env: Environment> ClientContext<Env> {
                             .block()
                             .created_blob_ids()
                             .into_iter()
-                            .filter(|blob_id| {
-                                blob_id.blob_type == BlobType::ApplicationDescription
-                            })
+                            .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
                             .collect();
                         if creation.len() != 1 {
                             return Err(chain_client::Error::InternalError(
@@ -1085,10 +1086,7 @@ impl<Env: Environment> ClientContext<Env> {
                 format!("failed to serialize Formats as JSON: {e}"),
             )
         })?;
-        let registry_op = linera_sdk::abis::formats_registry::Operation::Write {
-            module_id,
-            value,
-        };
+        let registry_op = linera_sdk::abis::formats_registry::Operation::Write { module_id, value };
         let registry_op_bytes = bcs::to_bytes(&registry_op)?;
         Ok((blobs, module_id, registry_op_bytes))
     }
@@ -1097,10 +1095,7 @@ impl<Env: Environment> ClientContext<Env> {
 #[cfg(all(feature = "fs", not(web)))]
 fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, Error> {
     let content = fs::read_to_string(path).map_err(|e| {
-        std::io::Error::new(
-            e.kind(),
-            format!("failed to read SNAP file {path:?}: {e}"),
-        )
+        std::io::Error::new(e.kind(), format!("failed to read SNAP file {path:?}: {e}"))
     })?;
     let body = strip_snap_frontmatter(&content).ok_or_else(|| {
         std::io::Error::new(
@@ -1130,25 +1125,19 @@ mod snap_loader_tests {
 
     #[test]
     fn parses_fungible_snap() {
-        let path = std::path::Path::new(
-            "../examples/fungible/tests/snapshots/format__format.snap",
-        );
+        let path = std::path::Path::new("../examples/fungible/tests/snapshots/format__format.snap");
         read_formats_from_snap(path).expect("fungible snap should parse");
     }
 
     #[test]
     fn parses_social_snap() {
-        let path = std::path::Path::new(
-            "../examples/social/tests/snapshots/format__format.snap",
-        );
+        let path = std::path::Path::new("../examples/social/tests/snapshots/format__format.snap");
         read_formats_from_snap(path).expect("social snap should parse");
     }
 
     #[test]
     fn parses_counter_snap() {
-        let path = std::path::Path::new(
-            "../examples/counter/tests/snapshots/format__format.snap",
-        );
+        let path = std::path::Path::new("../examples/counter/tests/snapshots/format__format.snap");
         read_formats_from_snap(path).expect("counter snap should parse");
     }
 }

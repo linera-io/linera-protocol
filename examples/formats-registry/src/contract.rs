@@ -45,12 +45,7 @@ impl Contract for FormatsRegistryContract {
     async fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::Write { module_id, value } => {
-                let existing = self
-                    .state
-                    .formats
-                    .get(&module_id)
-                    .await
-                    .expect("storage");
+                let existing = self.state.formats.get(&module_id).await.expect("storage");
                 assert!(
                     existing.is_none(),
                     "formats are already registered for this module"
