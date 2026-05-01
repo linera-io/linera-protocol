@@ -100,14 +100,14 @@ pub struct Config {
     indexer: String,
     node: String,
     tls: bool,
+    /// Chain id where the formats registry application is deployed. Must be set
+    /// together with [`Self::formats_registry_app_id`] to enable BCS decoding.
+    #[serde(default, deserialize_with = "deserialize_optional_chain_id")]
+    formats_registry_chain: Option<ChainId>,
     /// Application ID of the formats registry, used to decode BCS-encoded user
-    /// operations. `None` means no registry is configured.
-    #[serde(
-        default,
-        deserialize_with = "deserialize_optional_application_id",
-        skip_serializing_if = "Option::is_none"
-    )]
-    formats_registry: Option<ApplicationId>,
+    /// operations. Must be set together with [`Self::formats_registry_chain`].
+    #[serde(default, deserialize_with = "deserialize_optional_application_id")]
+    formats_registry_app_id: Option<ApplicationId>,
 }
 
 /// Deserialize an optional [`ApplicationId`], treating both a missing field and
@@ -129,6 +129,22 @@ where
     }
 }
 
+/// Same shape as [`deserialize_optional_application_id`] but for [`ChainId`].
+fn deserialize_optional_chain_id<'de, D>(de: D) -> Result<Option<ChainId>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::IntoDeserializer;
+    let opt = Option::<String>::deserialize(de)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => {
+            let de = <&str as IntoDeserializer<D::Error>>::into_deserializer(s);
+            ChainId::deserialize(de).map(Some)
+        }
+    }
+}
+
 impl Config {
     /// Loads config from local storage.
     fn load() -> Self {
@@ -136,7 +152,8 @@ impl Config {
             indexer: "localhost:8081".to_string(),
             node: "localhost:8080".to_string(),
             tls: false,
-            formats_registry: None,
+            formats_registry_chain: None,
+            formats_registry_app_id: None,
         };
         // Return default if window doesn't exist (e.g., in test environment).
         let Some(window) = web_sys::window() else {
@@ -952,7 +969,8 @@ async fn fetch_user_app_formats(
             return None;
         }
     };
-    let registry_app_id = data.config.formats_registry.as_ref()?;
+    let registry_chain = data.config.formats_registry_chain?;
+    let registry_app_id = data.config.formats_registry_app_id.as_ref()?;
     let registry_app_id_hex = serde_json::to_value(registry_app_id)
         .ok()
         .and_then(|v| v.as_str().map(str::to_owned))?;
@@ -970,7 +988,8 @@ async fn fetch_user_app_formats(
             return None;
         }
     };
-    match formats::fetch_formats(&node, &registry_app_id_hex, &module_id_hex).await {
+    match formats::fetch_formats(&node, registry_chain, &registry_app_id_hex, &module_id_hex).await
+    {
         Ok(f) => f,
         Err(e) => {
             log_str(&format!("{op}: {e}"));

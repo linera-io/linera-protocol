@@ -6,6 +6,7 @@
 //! decode helpers come from `linera_sdk::formats`.
 
 use anyhow::{anyhow, Context as _, Result};
+use linera_base::identifiers::ChainId;
 pub use linera_sdk::formats::Formats;
 use serde_json::Value;
 
@@ -17,10 +18,11 @@ use crate::reqwest_client;
 /// module.
 pub async fn fetch_formats(
     node: &str,
+    chain_id: ChainId,
     registry_app_id: &str,
     module_id_hex: &str,
 ) -> Result<Option<Formats>> {
-    let url = format!("{node}/applications/{registry_app_id}");
+    let url = format!("{node}/chains/{chain_id}/applications/{registry_app_id}");
     let query = format!(r#"{{"query":"query {{ get(moduleId: \"{module_id_hex}\") }}"}}"#);
     let response = reqwest_client()
         .post(&url)

@@ -18,7 +18,7 @@ const formatsState = ref<Record<string, any | false | null>>({})
 async function refreshFormats() {
   const root: any = getCurrentInstance()?.proxy?.$root
   if (!root || typeof root.fetch_user_app_formats !== 'function') return
-  if (!root.config?.formats_registry) {
+  if (!root.config?.formats_registry_chain || !root.config?.formats_registry_app_id) {
     // Mark all entries as "not available" (formats registry not configured).
     const next: Record<string, any | false | null> = {}
     for (const a of props.apps) next[a.id] = false
@@ -101,7 +101,7 @@ watch(() => props.apps.map(a => a.id).join('|'), refreshFormats, { immediate: tr
               <span class="spinner-border spinner-border-sm text-muted"></span>
             </template>
             <template v-else-if="formatsState[a.id] === false">
-              <span class="text-muted" :title="$root.config?.formats_registry ? 'No formats registered for this module' : 'Set the formats registry app id in the navbar'">
+              <span class="text-muted" :title="($root.config?.formats_registry_chain && $root.config?.formats_registry_app_id) ? 'No formats registered for this module' : 'Set the formats registry chain and app id in the navbar'">
                 <i class="bi bi-x-circle"></i>
               </span>
             </template>

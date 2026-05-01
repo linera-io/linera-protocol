@@ -15,12 +15,12 @@ export default {
   methods: {
     save_config() { save_config(this) },
     on_formats_registry_change() {
-      // Treat an empty/whitespace input as "no registry configured" so the
-      // optional ApplicationId field round-trips to None instead of a parse
-      // error.
-      if (typeof this.config.formats_registry === 'string'
-          && this.config.formats_registry.trim() === '') {
-        this.config.formats_registry = null
+      // Treat empty/whitespace as "unset" so the optional fields round-trip to
+      // None instead of failing to parse.
+      for (const k of ['formats_registry_chain', 'formats_registry_app_id']) {
+        if (typeof this.config[k] === 'string' && this.config[k].trim() === '') {
+          this.config[k] = null
+        }
       }
       save_config(this)
     },
@@ -103,7 +103,8 @@ export default {
             <li class="nav-item mx-2">
               <div class="input-group">
                 <span class="input-group-text">formats registry</span>
-                <input v-model="config.formats_registry" class="form-control font-monospace" placeholder="application id (optional)" @change="on_formats_registry_change" style="width:260px">
+                <input v-model="config.formats_registry_chain" class="form-control font-monospace" placeholder="chain id" @change="on_formats_registry_change" style="width:200px">
+                <input v-model="config.formats_registry_app_id" class="form-control font-monospace" placeholder="application id" @change="on_formats_registry_change" style="width:200px">
               </div>
             </li>
             <li class="nav-item mx-2">

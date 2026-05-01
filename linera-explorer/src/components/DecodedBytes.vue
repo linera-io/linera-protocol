@@ -38,7 +38,7 @@ async function tryDecode() {
   decoded.value = null
   if (!props.applicationId || !props.bytesHex) return
   const root: any = getCurrentInstance()?.proxy?.$root
-  if (!root?.config?.formats_registry) return
+  if (!root?.config?.formats_registry_chain || !root?.config?.formats_registry_app_id) return
   const fn = root[methodName()]
   if (typeof fn !== 'function') return
   decoding.value = true
