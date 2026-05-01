@@ -478,7 +478,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             let (certs, _) = chain_client.process_inbox().await?;
                             Ok(certs)
                         }.await;
-                        let _ = response.send(result);
+                        if response.send(result).is_err() {
+                            tracing::debug!("ProcessInbox response receiver dropped");
+                        }
                     }
                     linera::ChainOperation::ProcessDeposit { proof, response } => {
                         let result = async {
@@ -522,7 +524,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             };
                             Ok(())
                         }.await;
-                        let _ = response.send(result);
+                        if response.send(result).is_err() {
+                            tracing::debug!("ProcessDeposit response receiver dropped");
+                        }
                         update_balance_metrics(&evm_client, &linera_client).await;
                     }
                 }

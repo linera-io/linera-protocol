@@ -540,7 +540,9 @@ fn format_bytes(value: &JsValue) -> JsValue {
             }
         } else {
             let formatted = format_bytes(&child);
-            let _ = js_sys::Reflect::set(&modified_value, &k, &formatted);
+            // Reflect::set only fails on frozen/sealed objects; `modified_value` is a fresh
+            // object we just constructed, so failure is impossible in practice.
+            js_sys::Reflect::set(&modified_value, &k, &formatted).ok();
         }
     }
     modified_value

@@ -42,13 +42,15 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
         {
             let state = monitor.read().await;
             for d in state.deposits_ready_for_retry(max_retries) {
-                let _ = pending_deposit_tx.try_send(PendingDeposit {
+                if let Err(error) = pending_deposit_tx.try_send(PendingDeposit {
                     key: d.value.key.clone(),
                     tx_hash: d.value.tx_hash,
                     depositor: d.value.depositor,
                     amount: d.value.amount,
                     nonce: d.value.nonce,
-                });
+                }) {
+                    tracing::warn!(?error, "Failed to enqueue deposit for retry");
+                }
             }
         }
 
@@ -185,13 +187,15 @@ async fn evm_scan_iteration(
             log_index,
         };
 
-        let _ = pending_tx.try_send(PendingDeposit {
+        if let Err(error) = pending_tx.try_send(PendingDeposit {
             key,
             tx_hash,
             depositor: deposit.depositor,
             amount: deposit.amount,
             nonce: deposit.nonce,
-        });
+        }) {
+            tracing::warn!(?error, %tx_hash, "Failed to enqueue discovered deposit");
+        }
     }
 
     let mut state = monitor.write().await;

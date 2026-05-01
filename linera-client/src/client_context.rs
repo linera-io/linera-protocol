@@ -1019,7 +1019,9 @@ impl<Env: Environment> ClientContext<Env> {
             stream.try_collect::<Vec<_>>().await?;
             // Remove closed chains from wallet (the chain listener may have added them).
             for chain_id in chain_ids {
-                let _ = self.wallet().remove(chain_id).await;
+                if let Err(error) = self.wallet().remove(chain_id).await {
+                    warn!(%chain_id, %error, "Failed to remove closed chain from wallet");
+                }
             }
         } else {
             info!("Processing inbox for all chains...");

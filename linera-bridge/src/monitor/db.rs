@@ -229,7 +229,7 @@ mod tests {
         if use_file {
             let n = FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
             let path = std::path::PathBuf::from(format!("/tmp/bridge_db_test_{n}.sqlite3"));
-            let _ = std::fs::remove_file(&path);
+            std::fs::remove_file(&path).ok(); // Best-effort cleanup; NotFound is the common case.
             BridgeDb::open(&path).await.unwrap()
         } else {
             BridgeDb::open_in_memory().await.unwrap()
@@ -430,7 +430,7 @@ mod tests {
     #[tokio::test]
     async fn test_file_persistence_survives_reopen() {
         let path = std::path::PathBuf::from("/tmp/bridge_db_test_reopen.sqlite3");
-        let _ = std::fs::remove_file(&path);
+        std::fs::remove_file(&path).ok(); // Best-effort pre-cleanup; NotFound is the common case.
 
         {
             let db = BridgeDb::open(&path).await.unwrap();
@@ -450,6 +450,6 @@ mod tests {
             assert_eq!(status, "completed");
         }
 
-        let _ = std::fs::remove_file(&path);
+        std::fs::remove_file(&path).ok(); // Best-effort post-test cleanup.
     }
 }

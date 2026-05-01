@@ -505,7 +505,12 @@ where
                         "validator's clock is behind; waiting and retrying",
                     );
                     // Report the clock skew before sleeping so the caller can aggregate.
-                    let _ = clock_skew_sender.send((self.remote_node.public_key, clock_skew));
+                    if clock_skew_sender
+                        .send((self.remote_node.public_key, clock_skew))
+                        .is_err()
+                    {
+                        tracing::debug!("clock skew receiver dropped; skipping report");
+                    }
                     storage
                         .clock()
                         .sleep_until(invalid_ts.block_timestamp.saturating_add(clock_skew))

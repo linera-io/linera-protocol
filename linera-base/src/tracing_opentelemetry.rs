@@ -218,6 +218,8 @@ where
     W: std::io::Write + Send + 'static,
 {
     let (subscriber, guard) = build_chrome_trace_layer_with_exporter(log_name, writer);
-    let _ = subscriber.try_init();
+    // `try_init` returns Err if a global subscriber is already set, in which case the
+    // doc comment above warns that tracing may not work as expected.
+    subscriber.try_init().ok();
     guard
 }
