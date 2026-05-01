@@ -605,15 +605,14 @@ mod tests {
         );
         let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
 
-        // Extract uncompressed keys in BTreeMap iteration order (which may differ
-        // from BCS blob order). The contract handles arbitrary key ordering.
-        let deserialized: linera_execution::Committee =
-            bcs::from_bytes(&committee_bytes).expect("committee deserialization failed");
-        let uncompressed_keys: Vec<alloy_primitives::Bytes> = deserialized
-            .validators()
-            .keys()
-            .map(|pk| validator_uncompressed_key(pk).into())
-            .collect();
+        // Extract uncompressed keys in BCS blob order (sorted by compressed bytes).
+        // The contract requires `validators` to align positionally with the blob.
+        let uncompressed_keys: Vec<alloy_primitives::Bytes> =
+            crate::evm::client::extract_validator_keys(&committee_bytes)
+                .expect("validator key extraction failed")
+                .into_iter()
+                .map(Into::into)
+                .collect();
 
         let call = addCommitteeCall {
             data: bcs_bytes.into(),
@@ -678,15 +677,14 @@ mod tests {
         let block = create_test_block(chain_id, block_epoch, height, transactions);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
 
-        // Extract uncompressed keys in BTreeMap iteration order (which may differ
-        // from BCS blob order). The contract handles arbitrary key ordering.
-        let committee: linera_execution::Committee =
-            bcs::from_bytes(&committee_bytes).expect("committee deserialization failed");
-        let uncompressed_keys: Vec<alloy_primitives::Bytes> = committee
-            .validators()
-            .keys()
-            .map(|pk| validator_uncompressed_key(pk).into())
-            .collect();
+        // Extract uncompressed keys in BCS blob order (sorted by compressed bytes).
+        // The contract requires `validators` to align positionally with the blob.
+        let uncompressed_keys: Vec<alloy_primitives::Bytes> =
+            crate::evm::client::extract_validator_keys(&committee_bytes)
+                .expect("validator key extraction failed")
+                .into_iter()
+                .map(Into::into)
+                .collect();
 
         addCommitteeCall {
             data: bcs_bytes.into(),
