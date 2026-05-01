@@ -9,6 +9,7 @@ pub mod performance;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use futures::TryStreamExt;
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
@@ -162,6 +163,8 @@ pub fn span_random_reordering_put_delete<R: Rng>(
 /// * `read_value_bytes`
 /// * `read_multi_values_bytes`
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
+/// * `find_keys_by_prefix_iter` / `find_key_values_by_prefix_iter` (streaming
+///   variants, including early termination)
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
@@ -184,7 +187,7 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
         let key_values_by_prefix = store.find_key_values_by_prefix(key_prefix).await.unwrap();
-        for (key, value) in key_values_by_prefix {
+        for (key, value) in key_values_by_prefix.clone() {
             keys_request_deriv.push(key.clone());
             set_key_value1.insert((key, value));
         }
@@ -202,6 +205,19 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             }
         }
         assert_eq!(set_key_value1, set_key_value2);
+        // Streaming variants must agree with the eager methods.
+        let keys_iter: Vec<Vec<u8>> = store
+            .find_keys_by_prefix_iter(key_prefix)
+            .try_collect()
+            .await
+            .unwrap();
+        assert_eq!(keys_iter, keys_request);
+        let key_values_iter: Vec<(Vec<u8>, Vec<u8>)> = store
+            .find_key_values_by_prefix_iter(key_prefix)
+            .try_collect()
+            .await
+            .unwrap();
+        assert_eq!(key_values_iter, key_values_by_prefix);
     }
     // Now checking the read_multi_values_bytes
     let mut rng = make_deterministic_rng();
