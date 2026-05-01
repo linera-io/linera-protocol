@@ -3,7 +3,7 @@
 
 mod state;
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     sync::Arc,
@@ -93,6 +93,8 @@ pub struct Options {
     pub staging_bundles_time_budget: Option<Duration>,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
+    /// Chain IDs whose incoming bundles should be processed first when proposing a block.
+    pub priority_bundle_origins: HashSet<ChainId>,
     /// Whether to block on cross-chain message delivery.
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
@@ -147,6 +149,7 @@ impl Options {
             max_block_limit_errors: 3,
             staging_bundles_time_budget: None,
             message_policy: MessagePolicy::default(),
+            priority_bundle_origins: HashSet::new(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
@@ -565,13 +568,22 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         let skipped = self.skipped_origins.pin();
-        Ok(info
+        let mut bundles = info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
             .filter(|bundle| !skipped.contains(&bundle.origin))
-            .take(self.options.max_pending_message_bundles)
-            .collect())
+            .collect::<Vec<_>>();
+        let priority_origins = &self.options.priority_bundle_origins;
+        bundles.sort_by(|a, b| {
+            let a_priority = priority_origins.contains(&a.origin);
+            let b_priority = priority_origins.contains(&b.origin);
+            b_priority
+                .cmp(&a_priority)
+                .then(a.bundle.timestamp.cmp(&b.bundle.timestamp))
+        });
+        bundles.truncate(self.options.max_pending_message_bundles);
+        Ok(bundles)
     }
 
     /// Returns an `UpdateStreams` operation that updates this client's chain about new events
@@ -2779,6 +2791,15 @@ impl<Env: Environment> ChainClient<Env> {
         }
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
+                if self.options.message_policy.ignores_origin(&origin) {
+                    trace!(
+                        chain_id = %self.chain_id,
+                        %origin,
+                        %height,
+                        "Skipping NewIncomingBundle notification: origin filtered by message_policy"
+                    );
+                    return Ok(());
+                }
                 if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,

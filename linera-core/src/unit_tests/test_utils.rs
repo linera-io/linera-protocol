@@ -340,6 +340,10 @@ where
         self.public_key
     }
 
+    pub fn fault_type(&self) -> FaultType {
+        self.fault_type
+    }
+
     fn set_fault_type(&mut self, fault_type: FaultType) {
         self.fault_type = fault_type;
     }
@@ -965,6 +969,18 @@ where
         self
     }
 
+    /// Returns the [`FaultType`] currently configured for the given validator, or `None`
+    /// if no validator with that key is in the test setup.
+    pub fn fault_type(&self, public_key: &ValidatorPublicKey) -> Option<FaultType> {
+        self.node_provider
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|client| client.public_key == *public_key)
+            .map(|client| client.fault_type())
+    }
+
     pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
         let mut validator_clients = self.node_provider.0.lock().unwrap();
@@ -1124,7 +1140,6 @@ where
             format!("Client node for {chain_id:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
             options,
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,

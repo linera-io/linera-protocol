@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, time::Duration};
+use std::time::Duration;
 
 use linera_base::{
     crypto::InMemorySigner,
@@ -64,7 +64,6 @@ pub async fn new_test_client_context(
             name,
             Some(chain_worker_ttl),
             Some(sender_chain_worker_ttl),
-            HashSet::new(),
             chain_client::Options {
                 cross_chain_message_delivery: CrossChainMessageDelivery::Blocking,
                 ..chain_client::Options::test_default()

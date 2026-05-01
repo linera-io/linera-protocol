@@ -633,15 +633,6 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
 {
-    /// Returns an instance with the specified set of chain IDs whose incoming bundles
-    /// should be processed first.
-    #[cfg(with_testing)]
-    #[instrument(level = "trace", skip(self, origins))]
-    pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
-        self.chain_worker_config.priority_bundle_origins = origins;
-        self
-    }
-
     /// Returns an instance with the specified cross-chain message chunk limit.
     #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self))]
