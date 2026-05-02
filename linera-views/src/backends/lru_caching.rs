@@ -357,13 +357,6 @@ where
                     .inc();
                 return Ok(keys.into_iter().next());
             }
-            if let Some(key_values) = cache.query_find_key_values(key_prefix) {
-                #[cfg(with_metrics)]
-                metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
-                    .with_label_values(&[])
-                    .inc();
-                return Ok(key_values.into_iter().next().map(|(key, _)| key));
-            }
         }
         self.store.find_first_key_by_prefix(key_prefix).await
     }
@@ -380,13 +373,6 @@ where
                     .with_label_values(&[])
                     .inc();
                 return Ok(keys.into_iter().next_back());
-            }
-            if let Some(key_values) = cache.query_find_key_values(key_prefix) {
-                #[cfg(with_metrics)]
-                metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
-                    .with_label_values(&[])
-                    .inc();
-                return Ok(key_values.into_iter().next_back().map(|(key, _)| key));
             }
         }
         self.store.find_last_key_by_prefix(key_prefix).await
