@@ -138,6 +138,33 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
 
+    /// Inserts a certificate into the in-memory dedup cache and returns the
+    /// canonical [`Arc`]. If the cache already holds an `Arc` for this hash,
+    /// the passed-in `certificate` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlockCertificate`] that should
+    /// participate in the "one allocation per content" invariant.
+    fn cache_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Arc<ConfirmedBlockCertificate>;
+
+    /// Inserts a blob into the in-memory dedup cache and returns the canonical
+    /// [`Arc`]. If the cache already holds an `Arc` for this blob ID, the
+    /// passed-in `blob` is dropped and the existing `Arc` is returned. This
+    /// must be used (rather than `Arc::new`) for any freshly-constructed
+    /// [`Blob`] that should participate in the "one allocation per content"
+    /// invariant.
+    fn cache_blob(&self, blob: Blob) -> Arc<Blob>;
+
+    /// Inserts a confirmed block into the in-memory dedup cache and returns
+    /// the canonical [`Arc`]. If the cache already holds an `Arc` for this
+    /// hash, the passed-in `block` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlock`] that should participate in the
+    /// "one allocation per content" invariant.
+    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> Arc<ConfirmedBlock>;
+
     /// Reads the certificate with the given hash.
     async fn read_certificate(
         &self,
@@ -263,10 +290,14 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&contract_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => Arc::unwrap_or_clone(self.read_blob(contract_bytecode_blob_id).await?.ok_or(
-                ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
-            )?)
-            .into_content(),
+            None => self
+                .read_blob(contract_bytecode_blob_id)
+                .await?
+                .ok_or(ExecutionError::BlobsNotFound(vec![
+                    contract_bytecode_blob_id,
+                ]))?
+                .content()
+                .clone(),
         };
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -326,10 +357,14 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&service_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => Arc::unwrap_or_clone(self.read_blob(service_bytecode_blob_id).await?.ok_or(
-                ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
-            )?)
-            .into_content(),
+            None => self
+                .read_blob(service_bytecode_blob_id)
+                .await?
+                .ok_or(ExecutionError::BlobsNotFound(vec![
+                    service_bytecode_blob_id,
+                ]))?
+                .content()
+                .clone(),
         };
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),

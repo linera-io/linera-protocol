@@ -19,7 +19,6 @@ use linera_base::{
         Timestamp,
     },
     doc_scalar,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
 use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
@@ -585,7 +584,7 @@ pub struct WorkerState<StorageClient: Storage> {
     storage: StorageClient,
     /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
-    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_cache: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
@@ -686,16 +685,13 @@ where
         let block = Arc::unwrap_or_clone(block);
 
         match certificate.value.kind {
-            linera_chain::types::CertificateKind::Confirmed => {
-                let value = ConfirmedBlock::from_hashed(block);
-                Ok(Either::Left(
-                    certificate
-                        .with_value(value)
-                        .ok_or(WorkerError::InvalidLiteCertificate)?,
-                ))
-            }
+            linera_chain::types::CertificateKind::Confirmed => Ok(Either::Left(
+                certificate
+                    .with_value(block)
+                    .ok_or(WorkerError::InvalidLiteCertificate)?,
+            )),
             linera_chain::types::CertificateKind::Validated => {
-                let value = ValidatedBlock::from_hashed(block);
+                let value = ValidatedBlock::from_hashed(block.into_inner());
                 Ok(Either::Right(
                     certificate
                         .with_value(value)
@@ -1230,7 +1226,7 @@ where
         &self,
         chain_id: ChainId,
         height: BlockHeight,
-    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let guard = handle::read_lock_initialized(&state).await?;
         guard.read_certificate(height).await
@@ -1428,7 +1424,7 @@ where
         &self,
         chain_id: ChainId,
         blob_id: BlobId,
-    ) -> Result<Blob, WorkerError> {
+    ) -> Result<Arc<Blob>, WorkerError> {
         trace!("{} <-- download_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_read(chain_id, |guard| async move {

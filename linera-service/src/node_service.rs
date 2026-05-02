@@ -807,7 +807,7 @@ where
         &self,
         hash: Option<CryptoHash>,
         chain_id: ChainId,
-    ) -> Result<Option<ConfirmedBlock>, Error> {
+    ) -> Result<Option<Arc<ConfirmedBlock>>, Error> {
         let client = self
             .context
             .lock()
@@ -819,8 +819,7 @@ where
             None => client.chain_info().await?.block_hash,
         };
         if let Some(hash) = hash {
-            let block = client.read_confirmed_block(hash).await?;
-            Ok(Some(block))
+            Ok(Some(client.read_confirmed_block(hash).await?))
         } else {
             Ok(None)
         }
@@ -847,7 +846,7 @@ where
         from: Option<CryptoHash>,
         chain_id: ChainId,
         limit: Option<u32>,
-    ) -> Result<Vec<ConfirmedBlock>, Error> {
+    ) -> Result<Vec<Arc<ConfirmedBlock>>, Error> {
         let client = self
             .context
             .lock()

@@ -154,6 +154,18 @@ impl ConfirmedBlock {
     }
 }
 
+impl From<Hashed<Block>> for ConfirmedBlock {
+    fn from(block: Hashed<Block>) -> Self {
+        Self::from_hashed(block)
+    }
+}
+
+impl From<Hashed<Block>> for ValidatedBlock {
+    fn from(block: Hashed<Block>) -> Self {
+        Self::from_hashed(block)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct Timeout(Hashed<TimeoutInner>);

@@ -475,10 +475,8 @@ where
             }
             DownloadBlob(blob_id) => {
                 let blob = self.storage.read_blob(*blob_id).await?;
-                let blob = blob
-                    .map(Arc::unwrap_or_clone)
-                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
-                let content = blob.into_content();
+                let blob = blob.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let content = blob.content().clone();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
             DownloadConfirmedBlock(hash) => {

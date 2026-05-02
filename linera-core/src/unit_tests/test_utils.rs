@@ -152,11 +152,11 @@ where
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, sender)
+            validator.do_handle_certificate(Arc::unwrap_or_clone(certificate), sender)
         })
         .await
     }
@@ -566,7 +566,7 @@ where
             .download_pending_blob(chain_id, blob_id)
             .await
             .map_err(Into::into);
-        sender.send(result.map(|blob| blob.into_content()))
+        sender.send(result.map(|blob| blob.content().clone()))
     }
 
     async fn do_handle_pending_blob(
@@ -878,7 +878,7 @@ impl<S: Storage + Clone + Send + Sync + 'static> ChainClient<S> {
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> anyhow::Result<Vec<ConfirmedBlock>> {
+    ) -> anyhow::Result<Vec<Arc<ConfirmedBlock>>> {
         let mut hash = Some(from);
         let mut values = Vec::new();
         for _ in 0..limit {
