@@ -663,10 +663,7 @@ where
             let authenticated_owner =
                 authenticated_owner.ok_or(ExecutionError::UnauthenticatedTransferOwner)?;
             ensure!(
-                self.ownership
-                    .get()
-                    .await?
-                    .is_owner(&authenticated_owner),
+                self.ownership.get().await?.is_owner(&authenticated_owner),
                 ExecutionError::UnauthenticatedTransferOwner
             );
         } else {

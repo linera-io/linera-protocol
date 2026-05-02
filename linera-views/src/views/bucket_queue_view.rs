@@ -612,9 +612,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                     .store()
                     .read_value(&key)
                     .await?
-                    .ok_or_else(|| {
-                        ViewError::MissingEntries("BucketQueueView::back".into())
-                    })?;
+                    .ok_or_else(|| ViewError::MissingEntries("BucketQueueView::back".into()))?;
                 let result = data.last().unwrap().clone();
                 self.stored_buckets.back_mut().unwrap().state = State::Loaded { data };
                 Ok(Some(result))
