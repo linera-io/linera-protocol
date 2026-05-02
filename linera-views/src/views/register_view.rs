@@ -221,10 +221,7 @@ where
         self.delete_storage_first = false;
         match &mut self.update {
             Some(value) => value,
-            update => {
-                *update = Some(self.stored_value.clone());
-                update.as_mut().unwrap()
-            }
+            update => update.insert(self.stored_value.clone()),
         }
     }
 
