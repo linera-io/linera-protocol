@@ -77,7 +77,6 @@ where
     }
 
     /// Inserts a pre-wrapped `Arc<V>` into the cache, returning the canonical `Arc`.
-    #[cfg(with_testing)]
     pub fn insert_arc(&self, key: &K, value: Arc<V>) -> Arc<V> {
         self.dedup_insert(key, value)
     }
@@ -204,14 +203,16 @@ where
     }
 }
 
-impl<T: Send + Sync + 'static> ValueCache<CryptoHash, Hashed<T>> {
-    /// Inserts a [`Hashed<T>`] into the cache, returning the canonical `Arc`.
+impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
+    /// Inserts a value constructed from a [`Hashed<T>`] into the cache, keyed
+    /// by its hash, returning the canonical `Arc<V>`.
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it
     /// needs to be inserted in the cache.
-    pub fn insert_hashed(&self, value: Cow<Hashed<T>>) -> Arc<Hashed<T>>
+    pub fn insert_hashed<T>(&self, value: Cow<Hashed<T>>) -> Arc<V>
     where
         T: Clone,
+        V: From<Hashed<T>>,
     {
         let hash = (*value).hash();
         // Fast path: already in bounded cache
@@ -227,14 +228,15 @@ impl<T: Send + Sync + 'static> ValueCache<CryptoHash, Hashed<T>> {
             }
         }
         drop(guard);
-        self.dedup_insert(&hash, Arc::new(value.into_owned()))
+        self.dedup_insert(&hash, Arc::new(value.into_owned().into()))
     }
 
-    /// Inserts multiple [`Hashed<T>`]s into the cache.
+    /// Inserts multiple values constructed from [`Hashed<T>`]s into the cache.
     #[cfg(with_testing)]
-    pub fn insert_all_hashed<'a>(&self, values: impl IntoIterator<Item = Cow<'a, Hashed<T>>>)
+    pub fn insert_all_hashed<'a, T>(&self, values: impl IntoIterator<Item = Cow<'a, Hashed<T>>>)
     where
         T: Clone + 'a,
+        V: From<Hashed<T>>,
     {
         for value in values {
             self.insert_hashed(value);
@@ -284,6 +286,12 @@ mod tests {
 
     impl linera_base::crypto::BcsHashable<'_> for TestValue {}
 
+    impl From<Hashed<TestValue>> for TestValue {
+        fn from(value: Hashed<TestValue>) -> Self {
+            value.into_inner()
+        }
+    }
+
     fn create_test_value(n: u64) -> Hashed<TestValue> {
         Hashed::new(TestValue(n))
     }
@@ -292,7 +300,7 @@ mod tests {
         iter.into_iter().map(create_test_value).collect()
     }
 
-    fn new_hashed_cache(size: usize) -> ValueCache<CryptoHash, Hashed<TestValue>> {
+    fn new_hashed_cache(size: usize) -> ValueCache<CryptoHash, TestValue> {
         ValueCache::new(size, DEFAULT_CLEANUP_INTERVAL_SECS)
     }
 
@@ -317,7 +325,7 @@ mod tests {
 
         cache.insert_hashed(Cow::Borrowed(&value));
         assert!(cache.contains(&hash));
-        assert_eq!(cache.get(&hash).as_deref(), Some(&value));
+        assert_eq!(cache.get(&hash).as_deref(), Some(value.inner()));
     }
 
     #[test]
@@ -331,14 +339,14 @@ mod tests {
 
         for value in &values {
             assert!(cache.contains(&value.hash()));
-            assert_eq!(cache.get(&value.hash()).as_deref(), Some(value));
+            assert_eq!(cache.get(&value.hash()).as_deref(), Some(value.inner()));
         }
 
         // Batch insert
         let cache2 = new_hashed_cache(TEST_CACHE_SIZE);
         cache2.insert_all_hashed(values.iter().map(Cow::Borrowed));
         for value in &values {
-            assert_eq!(cache2.get(&value.hash()).as_deref(), Some(value));
+            assert_eq!(cache2.get(&value.hash()).as_deref(), Some(value.inner()));
         }
     }
 
