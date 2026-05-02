@@ -603,22 +603,23 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         let Some(bucket) = self.stored_buckets.back() else {
             return Ok(None);
         };
-        if !bucket.is_loaded() {
-            let key = self.get_bucket_key(bucket.index)?;
-            let data = self.context.store().read_value(&key).await?;
-            let data = match data {
-                Some(data) => data,
-                None => {
-                    return Err(ViewError::MissingEntries("BucketQueueView::back".into()));
-                }
-            };
-            self.stored_buckets.back_mut().unwrap().state = State::Loaded { data };
+        match &bucket.state {
+            State::Loaded { data } => Ok(Some(data.last().unwrap().clone())),
+            State::NotLoaded { .. } => {
+                let key = self.get_bucket_key(bucket.index)?;
+                let data: Vec<T> = self
+                    .context
+                    .store()
+                    .read_value(&key)
+                    .await?
+                    .ok_or_else(|| {
+                        ViewError::MissingEntries("BucketQueueView::back".into())
+                    })?;
+                let result = data.last().unwrap().clone();
+                self.stored_buckets.back_mut().unwrap().state = State::Loaded { data };
+                Ok(Some(result))
+            }
         }
-        let state = &self.stored_buckets.back_mut().unwrap().state;
-        let State::Loaded { data } = state else {
-            unreachable!("The back bucket should be loaded after the read above");
-        };
-        Ok(Some(data.last().unwrap().clone()))
     }
 
     async fn read_context(
