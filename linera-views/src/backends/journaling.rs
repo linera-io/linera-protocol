@@ -521,9 +521,7 @@ where
                 == S::MAX_BATCH_SIZE - 1
             {
                 (true, true)
-            } else if let Some(next_block_size) =
-                iter.next_batch_size(&block_batch, block_size)?
-            {
+            } else if let Some(next_block_size) = iter.next_batch_size(&block_batch, block_size)? {
                 let next_transaction_size = transaction_size + next_block_size + key_len;
                 let transaction_flush = next_transaction_size > max_transaction_size;
                 let block_flush = transaction_flush
