@@ -360,6 +360,7 @@ pub struct StatusSummary {
 /// pending work from `MonitorState` (the SQLite WAL is the source of truth)
 /// and is woken either by a `Notify` signal from the corresponding scanner or
 /// by a periodic poll for items whose retry backoff has just elapsed.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     proof_client: crate::proof::gen::HttpDepositProofClient,
@@ -701,5 +702,4 @@ mod tests {
         state.complete_burn(height, 0).await;
         assert!(state.next_burn_for_retry(10).is_none());
     }
-
 }
