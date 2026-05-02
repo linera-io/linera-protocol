@@ -633,13 +633,13 @@ where
         amount: Amount,
     ) -> Result<Option<OutgoingMessage>, ExecutionError> {
         if source == AccountOwner::CHAIN {
+            let authenticated_signer =
+                authenticated_signer.ok_or(ExecutionError::UnauthenticatedTransferOwner)?;
             ensure!(
-                authenticated_signer.is_some()
-                    && self
-                        .ownership
-                        .get()
-                        .await?
-                        .verify_owner(&authenticated_signer.unwrap()),
+                self.ownership
+                    .get()
+                    .await?
+                    .verify_owner(&authenticated_signer),
                 ExecutionError::UnauthenticatedTransferOwner
             );
         } else {
