@@ -632,7 +632,7 @@ impl RocksDbStoreInternal {
                     }
                 }
                 if let Err(error) = iter.status() {
-                    let _ = tx.blocking_send(Err(error.into()));
+                    _ = tx.blocking_send(Err(error.into()));
                 }
             });
             while let Some(item) = rx.recv().await {
@@ -681,7 +681,7 @@ impl RocksDbStoreInternal {
                     }
                 }
                 if let Err(error) = iter.status() {
-                    let _ = tx.blocking_send(Err(error.into()));
+                    _ = tx.blocking_send(Err(error.into()));
                 }
             });
             while let Some(item) = rx.recv().await {
