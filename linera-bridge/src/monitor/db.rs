@@ -105,7 +105,63 @@ impl BridgeDb {
             .execute(&self.pool)
             .await?;
 
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS scan_state (
+                key   TEXT PRIMARY KEY,
+                value INTEGER NOT NULL
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
+    }
+
+    async fn get_scan_state(&self, key: &str) -> Result<Option<i64>> {
+        let row: Option<(i64,)> = sqlx::query_as("SELECT value FROM scan_state WHERE key = ?")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|(v,)| v))
+    }
+
+    async fn set_scan_state(&self, key: &str, value: i64) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO scan_state (key, value) VALUES (?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Last admin-chain height already scanned for committee rotations.
+    pub async fn get_last_scanned_admin_height(&self) -> Result<Option<BlockHeight>> {
+        Ok(self
+            .get_scan_state("last_scanned_admin_height")
+            .await?
+            .map(|v| BlockHeight(v as u64)))
+    }
+
+    pub async fn set_last_scanned_admin_height(&self, height: BlockHeight) -> Result<()> {
+        self.set_scan_state("last_scanned_admin_height", height.0 as i64)
+            .await
+    }
+
+    /// LightClient `currentEpoch` observed at the time `last_scanned_admin_height` was written.
+    /// Used to detect EVM rollbacks and force a full rescan.
+    pub async fn get_last_known_evm_epoch(&self) -> Result<Option<u32>> {
+        Ok(self
+            .get_scan_state("last_known_evm_epoch")
+            .await?
+            .map(|v| v as u32))
+    }
+
+    pub async fn set_last_known_evm_epoch(&self, epoch: u32) -> Result<()> {
+        self.set_scan_state("last_known_evm_epoch", epoch as i64)
+            .await
     }
 
     /// Inserts a new deposit. Ignores duplicates (idempotent).
@@ -497,6 +553,34 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(raw, cert_bytes);
+    }
+
+    #[tokio::test]
+    async fn test_scan_state_round_trip() {
+        let db = open_db(false).await;
+
+        assert!(db.get_last_scanned_admin_height().await.unwrap().is_none());
+        assert!(db.get_last_known_evm_epoch().await.unwrap().is_none());
+
+        db.set_last_scanned_admin_height(BlockHeight(42))
+            .await
+            .unwrap();
+        db.set_last_known_evm_epoch(7).await.unwrap();
+
+        assert_eq!(
+            db.get_last_scanned_admin_height().await.unwrap(),
+            Some(BlockHeight(42))
+        );
+        assert_eq!(db.get_last_known_evm_epoch().await.unwrap(), Some(7));
+
+        // Overwrite-on-conflict keeps the latest value.
+        db.set_last_scanned_admin_height(BlockHeight(100))
+            .await
+            .unwrap();
+        assert_eq!(
+            db.get_last_scanned_admin_height().await.unwrap(),
+            Some(BlockHeight(100))
+        );
     }
 
     #[tokio::test]

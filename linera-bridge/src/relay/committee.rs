@@ -15,7 +15,7 @@ use linera_execution::{system::AdminOperation, Operation, SystemOperation};
 use linera_storage::Storage;
 
 use super::evm::EvmClient;
-use crate::evm::client::extract_validator_keys;
+use crate::{evm::client::extract_validator_keys, monitor::db::BridgeDb};
 
 /// Scans a certificate for a `CreateCommittee` operation.
 /// Returns the epoch and blob hash if found.
@@ -57,9 +57,15 @@ pub async fn relay_committee<P: Provider>(
 /// Catches up the LightClient with any committee updates missed while offline.
 /// Scans admin chain blocks and relays committees newer than the LightClient's
 /// current epoch. Must succeed before the relay enters the main serve loop.
+///
+/// Resumes from the height persisted in `db` on previous runs instead of
+/// rescanning the admin chain from height 0. If the LightClient's
+/// `current_epoch` is *lower* than the one observed when we last persisted
+/// (e.g. EVM rolled back), we fall back to a full rescan from 0.
 pub async fn catch_up<S, P>(
     storage: &S,
     evm_client: &EvmClient<P>,
+    db: &BridgeDb,
     admin_chain_id: ChainId,
     admin_chain_height: BlockHeight,
 ) -> Result<()>
@@ -74,19 +80,41 @@ where
             return Ok(());
         }
     };
+
+    let persisted_height = db.get_last_scanned_admin_height().await?;
+    let persisted_epoch = db.get_last_known_evm_epoch().await?;
+    let start_height = match (persisted_height, persisted_epoch) {
+        (Some(h), Some(prev_epoch)) if current_epoch >= prev_epoch => h,
+        (Some(h), Some(prev_epoch)) => {
+            tracing::warn!(
+                current_epoch,
+                prev_epoch,
+                last_scanned = %h,
+                "LightClient epoch regressed since last scan; rescanning admin chain from 0"
+            );
+            BlockHeight(0)
+        }
+        _ => BlockHeight(0),
+    };
+
     tracing::info!(
         current_epoch,
         %admin_chain_id,
         %admin_chain_height,
+        %start_height,
         "Checking for missed committee updates"
     );
 
-    let heights: Vec<BlockHeight> = (0..admin_chain_height.0).map(BlockHeight).collect();
-
-    if heights.is_empty() {
+    if start_height >= admin_chain_height {
         tracing::info!("No admin chain blocks to scan");
+        // Still persist `current_epoch` so a later EVM regression is detectable.
+        db.set_last_known_evm_epoch(current_epoch).await?;
         return Ok(());
     }
+
+    let heights: Vec<BlockHeight> = (start_height.0..admin_chain_height.0)
+        .map(BlockHeight)
+        .collect();
 
     let certs = storage
         .read_certificates_by_heights(admin_chain_id, &heights)
@@ -111,6 +139,9 @@ where
             relayed += 1;
         }
     }
+
+    db.set_last_scanned_admin_height(admin_chain_height).await?;
+    db.set_last_known_evm_epoch(current_epoch).await?;
 
     if relayed > 0 {
         tracing::info!(relayed, "Committee catch-up complete");
