@@ -60,17 +60,7 @@
 
 # Node Operators
 
-- [Devnets](operators/devnets.md)
-  - [Docker Compose](operators/devnets/compose.md)
-  - [kind](operators/devnets/kind.md)
-
-- [Testnets](operators/testnets.md)
-  - [Requirements](operators/testnets/requirements.md)
-  - [One-Click Deploy](operators/testnets/one-click.md)
-  - [Manual Installation](operators/testnets/manual-installation.md)
-  - [Verifying your Installation](operators/testnets/verify-installation.md)
-  - [Monitoring and Logging](operators/testnets/monitoring-logging.md)
-  - [Debugging](operators/testnets/debugging.md)
+- [Validator deployment (moved)](operators.md)
 
 ---
 
