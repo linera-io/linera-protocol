@@ -55,8 +55,9 @@ pub async fn relay_committee<P: Provider>(
 }
 
 /// Catches up the LightClient with any committee updates missed while offline.
-/// Scans admin chain blocks and relays committees newer than the LightClient's
-/// current epoch. Must succeed before the relay enters the main serve loop.
+/// Scans admin chain blocks from height 0 and relays committees newer than the
+/// LightClient's current epoch. Must succeed before the relay enters the main
+/// serve loop.
 pub async fn catch_up<S, P>(
     storage: &S,
     evm_client: &EvmClient<P>,
@@ -68,25 +69,26 @@ where
     P: Provider,
 {
     let current_epoch = match evm_client.get_current_epoch().await {
-        Ok(epoch) => epoch,
+        Ok(epoch) => Epoch(epoch),
         Err(e) => {
             tracing::info!("LightClient not initialized yet, skipping catch-up: {e:#}");
             return Ok(());
         }
     };
+
     tracing::info!(
-        current_epoch,
+        %current_epoch,
         %admin_chain_id,
         %admin_chain_height,
         "Checking for missed committee updates"
     );
 
-    let heights: Vec<BlockHeight> = (0..admin_chain_height.0).map(BlockHeight).collect();
-
-    if heights.is_empty() {
+    if admin_chain_height == BlockHeight(0) {
         tracing::info!("No admin chain blocks to scan");
         return Ok(());
     }
+
+    let heights: Vec<BlockHeight> = (0..admin_chain_height.0).map(BlockHeight).collect();
 
     let certs = storage
         .read_certificates_by_heights(admin_chain_id, &heights)
@@ -95,7 +97,7 @@ where
     let mut relayed = 0u32;
     for cert in certs.into_iter().flatten() {
         if let Some((epoch, blob_hash)) = find_create_committee(&cert) {
-            if epoch.0 <= current_epoch {
+            if epoch <= current_epoch {
                 continue;
             }
             let blob_id = BlobId::new(blob_hash, BlobType::Committee);
