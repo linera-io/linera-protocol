@@ -413,20 +413,21 @@ where
         let mut transaction_batch = S::Batch::default();
         let mut transaction_size = 0;
         while iter.write_next_value(&mut block_batch, &mut block_size)? {
-            let (block_flush, transaction_flush) = {
-                if iter.is_empty() || transaction_batch.len() == S::MAX_BATCH_SIZE - 1 {
-                    (true, true)
-                } else {
-                    let next_block_size = iter
-                        .next_batch_size(&block_batch, block_size)?
-                        .expect("iter is not empty");
-                    let next_transaction_size = transaction_size + next_block_size + key_len;
-                    let transaction_flush = next_transaction_size > max_transaction_size;
-                    let block_flush = transaction_flush
-                        || block_batch.len() == S::MAX_BATCH_SIZE - 2
-                        || next_block_size > max_block_size;
-                    (block_flush, transaction_flush)
-                }
+            let (block_flush, transaction_flush) = if transaction_batch.len()
+                == S::MAX_BATCH_SIZE - 1
+            {
+                (true, true)
+            } else if let Some(next_block_size) =
+                iter.next_batch_size(&block_batch, block_size)?
+            {
+                let next_transaction_size = transaction_size + next_block_size + key_len;
+                let transaction_flush = next_transaction_size > max_transaction_size;
+                let block_flush = transaction_flush
+                    || block_batch.len() == S::MAX_BATCH_SIZE - 2
+                    || next_block_size > max_block_size;
+                (block_flush, transaction_flush)
+            } else {
+                (true, true)
             };
             if block_flush {
                 block_size += block_batch.overhead_size();
