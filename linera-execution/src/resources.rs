@@ -82,10 +82,13 @@ pub const RUNTIME_CRYPTO_HASH_SIZE: u32 = 32;
 /// The runtime size of a `VmRuntime` enum.
 pub const RUNTIME_VM_RUNTIME_SIZE: u32 = 1;
 
-/// The runtime constant part size of an `ApplicationDescription`.
-/// This includes: `ModuleId` (2 hashes + VmRuntime) + `ChainId` + `BlockHeight` + `u32`.
-/// Variable parts (`parameters` and `required_application_ids`) are calculated separately.
-pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId
+/// The runtime constant part size of an `ApplicationDescription` for a module-backed
+/// application: `ApplicationKind::Module` discriminant (1 byte) + `ModuleId` (2 hashes +
+/// VmRuntime) + `ChainId` + `BlockHeight` + `u32`. Variable parts (`parameters` and
+/// `required_application_ids`) are calculated separately. Native applications carry no
+/// `ModuleId`, so this is an upper bound used for fee accounting.
+pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 1                                // ApplicationKind discriminant
+    + 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId
     + RUNTIME_CHAIN_ID_SIZE                                  // creator_chain_id
     + RUNTIME_BLOCK_HEIGHT_SIZE                              // block_height
     + 4; // application_index (u32)
@@ -95,7 +98,7 @@ mod tests {
     use std::mem::size_of;
 
     use linera_base::{
-        data_types::{Amount, ApplicationDescription, BlockHeight, Timestamp},
+        data_types::{Amount, ApplicationDescription, ApplicationKind, BlockHeight, Timestamp},
         identifiers::{ApplicationId, ChainId, ModuleId},
     };
 
@@ -126,7 +129,7 @@ mod tests {
         // Verify using BCS serialization, which is architecture-independent.
         // BCS encodes Vec length as ULEB128, so empty vectors add 1 byte each.
         let description = ApplicationDescription {
-            module_id: ModuleId::default(),
+            kind: ApplicationKind::Module(ModuleId::default()),
             creator_chain_id: ChainId::default(),
             block_height: BlockHeight::default(),
             application_index: 0,

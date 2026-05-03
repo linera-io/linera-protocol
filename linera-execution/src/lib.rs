@@ -8,6 +8,7 @@ pub mod committee;
 pub mod evm;
 mod execution;
 pub mod execution_state_actor;
+pub mod native;
 #[cfg(with_graphql)]
 mod graphql;
 mod policy;
@@ -33,9 +34,9 @@ use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
-        Timestamp,
+        Amount, ApplicationDescription, ApplicationKind, ApplicationPermissions, ArithmeticError,
+        Blob, BlockHeight, Bytecode, DecompressionError, Epoch, NetworkDescription,
+        SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, ensure, hex_debug, http,
     identifiers::{
@@ -1331,6 +1332,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError> {
+        if let ApplicationKind::Native(kind) = description.kind {
+            return Ok(crate::native::user_contract_code(kind));
+        }
         let application_id: ApplicationId = description.into();
         let pinned = self.user_contracts().pin();
         Ok(pinned
@@ -1346,6 +1350,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError> {
+        if let ApplicationKind::Native(kind) = description.kind {
+            return Ok(crate::native::user_service_code(kind));
+        }
         let application_id: ApplicationId = description.into();
         let pinned = self.user_services().pin();
         Ok(pinned

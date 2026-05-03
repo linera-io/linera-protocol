@@ -11,8 +11,8 @@ use std::{collections::BTreeMap, sync::Arc, thread, vec};
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, Blob, BlockHeight, ChainDescription, ChainOrigin, CompressedBytecode, Epoch,
-        InitialChainConfig, OracleResponse, Timestamp,
+        Amount, ApplicationKind, Blob, BlockHeight, ChainDescription, ChainOrigin,
+        CompressedBytecode, Epoch, InitialChainConfig, OracleResponse, Timestamp,
     },
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, ModuleId},
     ownership::ChainOwnership,
@@ -91,7 +91,11 @@ pub fn create_dummy_user_application_description(
     let vm_runtime = VmRuntime::Wasm;
     (
         ApplicationDescription {
-            module_id: ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime),
+            kind: ApplicationKind::Module(ModuleId::new(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                vm_runtime,
+            )),
             creator_chain_id: chain_id,
             block_height: 0.into(),
             application_index: index,

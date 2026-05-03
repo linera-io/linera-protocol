@@ -121,7 +121,7 @@ jobs:
         cargo run --bin linera -- wallet init
         cargo run --bin linera -- wallet request-chain
         echo LINERA_COUNTER_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/counter --json-argument 0) >> "$GITHUB_ENV"
-        echo LINERA_FUNGIBLE_APPLICATION_ID=$(cargo run --bin linera -- project publish-and-create examples/native-fungible --json-parameters '{ "ticker_symbol": "NAT" }' --json-argument '{ "accounts": {} }') >> "$GITHUB_ENV"
+        echo LINERA_FUNGIBLE_APPLICATION_ID=$(cargo run --bin linera -- create-native-application fungible --json-parameters '{ "ticker_symbol": "NAT" }' --json-argument '{ "accounts": {} }') >> "$GITHUB_ENV"
 
     - name: Switch to nightly Rust toolchain
       run: |
@@ -144,8 +144,5 @@ jobs:
         pnpm install --frozen-lockfile
         LINERA_APPLICATION_ID=$LINERA_COUNTER_APPLICATION_ID pnpm test
 
-    - name: Test the `fungible` example
-      run: |
-        cd examples/native-fungible
-        pnpm install --frozen-lockfile
-        LINERA_APPLICATION_ID=$LINERA_FUNGIBLE_APPLICATION_ID pnpm test
+    # The native fungible application no longer ships with its own web frontend;
+    # the deployment above still exercises `create-native-application`.

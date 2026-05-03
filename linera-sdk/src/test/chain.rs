@@ -17,8 +17,8 @@ use futures::future;
 use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{
-        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, ChainDescription,
-        CompressedBytecode, Epoch,
+        Amount, ApplicationDescription, ApplicationKind, Blob, BlockHeight, Bytecode,
+        ChainDescription, CompressedBytecode, Epoch,
     },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, OwnerSpender},
     vm::VmRuntime,
@@ -577,7 +577,7 @@ impl ActiveChain {
         assert_eq!(block.messages().len(), 1);
 
         let description = ApplicationDescription {
-            module_id: module_id.forget_abi(),
+            kind: ApplicationKind::Module(module_id.forget_abi()),
             creator_chain_id: block.header.chain_id,
             block_height: block.header.height,
             application_index: 0,
@@ -620,7 +620,7 @@ impl ActiveChain {
         let block = creation_certificate.inner().block();
 
         let description = ApplicationDescription {
-            module_id: module_id.forget_abi(),
+            kind: ApplicationKind::Module(module_id.forget_abi()),
             creator_chain_id: block.header.chain_id,
             block_height: block.header.height,
             application_index: 0,

@@ -45,12 +45,21 @@ interface base-runtime-api {
     }
 
     record application-description {
-        module-id: module-id,
+        kind: application-kind,
         creator-chain-id: chain-id,
         block-height: block-height,
         application-index: u32,
         parameters: list<u8>,
         required-application-ids: list<application-id>,
+    }
+
+    variant application-kind {
+        module(module-id),
+        native(native-application-kind),
+    }
+
+    enum native-application-kind {
+        fungible,
     }
 
     record application-id {

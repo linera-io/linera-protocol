@@ -159,13 +159,10 @@ build-wasm-counter: ## Build counter WASM binaries
 		cargo build --release --target wasm32-unknown-unknown
 	@printf "$(GREEN)✅ Counter WASM binaries built$(NC)\n"
 
-build-wasm-fungible: ## Build fungible token WASM binaries
-	@printf "$(YELLOW)🔨 Building fungible token WASM binaries...$(NC)\n"
-	@cd $(EXAMPLES_DIR)/native-fungible && \
-		cargo build --release --target wasm32-unknown-unknown
-	@printf "$(GREEN)✅ Fungible token WASM binaries built$(NC)\n"
+build-wasm-fungible: ## Native fungible no longer needs a WASM build (runs natively in linera-execution)
+	@printf "$(YELLOW)ℹ️  Native fungible runs natively in linera-execution; no WASM build required.$(NC)\n"
 
-build-wasm-all: build-wasm-counter build-wasm-fungible ## Build all WASM binaries
+build-wasm-all: build-wasm-counter ## Build all WASM binaries
 
 # ===== Blockchain Deployment (Per App) =====
 deploy-app-counter: build-wasm-counter ## Deploy counter app to blockchain
@@ -203,7 +200,7 @@ deploy-app-counter: build-wasm-counter ## Deploy counter app to blockchain
 		echo "export OWNER=$$OWNER" >> ../../.env.counter
 	@printf "$(GREEN)✅ Counter application deployed$(NC)\n"
 
-deploy-app-fungible: build-wasm-fungible ## Deploy fungible app to blockchain
+deploy-app-fungible: ## Deploy native fungible app to blockchain
 	@if [ ! -f ".env.wallet" ]; then \
 		printf "$(RED)❌ Wallet not initialized. Run 'make init-wallet' first$(NC)\n"; \
 		exit 1; \
@@ -213,31 +210,29 @@ deploy-app-fungible: build-wasm-fungible ## Deploy fungible app to blockchain
 			printf "$(RED)❌ Chain or Owner information missing. Re-run 'make init-wallet'$(NC)\n"; \
 			exit 1; \
 		fi
-	@printf "$(RED)⚠️  WARNING: This will deploy fungible app to the blockchain!$(NC)\n"
+	@printf "$(RED)⚠️  WARNING: This will deploy native fungible app to the blockchain!$(NC)\n"
 	@printf "$(YELLOW)This operation will consume resources and cannot be undone.$(NC)\n"
 	@printf "Type 'YES' (all uppercase) to continue: " && read confirm && [ "$$confirm" = "YES" ] || { printf "$(RED)Deployment cancelled$(NC)\n"; exit 1; }
-	@printf "$(YELLOW)💱 Deploying fungible token application...$(NC)\n"
+	@printf "$(YELLOW)💱 Deploying native fungible application...$(NC)\n"
 	@. ./.env.wallet && \
-		cd $(EXAMPLES_DIR)/native-fungible && \
-		FUNGIBLE_APP_ID=$$(../../$(LINERA_BIN) publish-and-create \
-			../target/wasm32-unknown-unknown/release/native_fungible_{contract,service}.wasm \
-			--json-argument '{ "accounts": {} }' \
-			--json-parameters '{ "ticker_symbol": "NAT" }') && \
+		FUNGIBLE_APP_ID=$$($(LINERA_BIN) create-native-application fungible \
+			--json-parameters '{ "ticker_symbol": "NAT" }' \
+			--json-argument '{ "accounts": {} }') && \
 		if [ -z "$$FUNGIBLE_APP_ID" ]; then \
-			printf "$(RED)❌ Failed to deploy fungible app$(NC)\n"; \
+			printf "$(RED)❌ Failed to deploy native fungible app$(NC)\n"; \
 			exit 1; \
 		fi && \
 		echo "  📋 Fungible App ID: $$FUNGIBLE_APP_ID" && \
-		if [ -f ../../.env.apps ]; then \
-			sed -i '/^FUNGIBLE_APP_ID=/d' ../../.env.apps 2>/dev/null || \
-			sed -i '' '/^FUNGIBLE_APP_ID=/d' ../../.env.apps 2>/dev/null || true; \
+		if [ -f .env.apps ]; then \
+			sed -i '/^FUNGIBLE_APP_ID=/d' .env.apps 2>/dev/null || \
+			sed -i '' '/^FUNGIBLE_APP_ID=/d' .env.apps 2>/dev/null || true; \
 		fi && \
-		echo "FUNGIBLE_APP_ID=$$FUNGIBLE_APP_ID" >> ../../.env.apps && \
-		echo "export LINERA_APPLICATION_ID=$$FUNGIBLE_APP_ID" > ../../.env.fungible && \
-		echo "export LINERA_FAUCET_URL=https://faucet.$(NETWORK_NAME).linera.net" >> ../../.env.fungible && \
-		echo "export CHAIN=$$CHAIN" >> ../../.env.fungible && \
-		echo "export OWNER=$$OWNER" >> ../../.env.fungible
-	@printf "$(GREEN)✅ Fungible token application deployed$(NC)\n"
+		echo "FUNGIBLE_APP_ID=$$FUNGIBLE_APP_ID" >> .env.apps && \
+		echo "export LINERA_APPLICATION_ID=$$FUNGIBLE_APP_ID" > .env.fungible && \
+		echo "export LINERA_FAUCET_URL=https://faucet.$(NETWORK_NAME).linera.net" >> .env.fungible && \
+		echo "export CHAIN=$$CHAIN" >> .env.fungible && \
+		echo "export OWNER=$$OWNER" >> .env.fungible
+	@printf "$(GREEN)✅ Native fungible application deployed$(NC)\n"
 
 deploy-apps-all: deploy-app-counter deploy-app-fungible ## Deploy all apps to blockchain
 
@@ -260,16 +255,7 @@ build-demo-counter: ## Build counter web frontend
 
 build-demo-fungible: ## Build fungible web frontend
 	@printf "$(YELLOW)🎨 Building fungible token web frontend...$(NC)\n"
-	@if [ -f "$(EXAMPLES_DIR)/native-fungible/package.json" ]; then \
-		cd $(EXAMPLES_DIR)/native-fungible && \
-		if [ -f ../../.env.fungible ]; then \
-			. ../../.env.fungible && \
-			echo "LINERA_APPLICATION_ID=$$LINERA_APPLICATION_ID" > .env && \
-			echo "LINERA_FAUCET_URL=$$LINERA_FAUCET_URL" >> .env; \
-		fi && \
-		pnpm install && \
-		pnpm build; \
-	elif [ -f "$(EXAMPLES_DIR)/fungible/package.json" ]; then \
+	@if [ -f "$(EXAMPLES_DIR)/fungible/package.json" ]; then \
 		cd $(EXAMPLES_DIR)/fungible && \
 		if [ -f ../../.env.fungible ]; then \
 			. ../../.env.fungible && \
@@ -383,9 +369,9 @@ deploy-gcs-fungible: check-gcloud-auth build-demo-fungible ## Deploy fungible to
 	@printf "$(YELLOW)Target: $(DEMO_PATH)/fungible/$(NC)\n"
 	@printf "Type 'YES' (all uppercase) to continue: " && read confirm && [ "$$confirm" = "YES" ] || { printf "$(RED)Deployment cancelled$(NC)\n"; exit 1; }
 	@printf "$(YELLOW)☁️  Deploying fungible token demo to GCS...$(NC)\n"
-	@if [ -d "$(EXAMPLES_DIR)/native-fungible/dist" ]; then \
+	@if [ -d "$(EXAMPLES_DIR)/fungible/dist" ]; then \
 		gcloud storage rsync -r --delete-unmatched-destination-objects \
-			$(EXAMPLES_DIR)/native-fungible/dist/ \
+			$(EXAMPLES_DIR)/fungible/dist/ \
 			'$(DEMO_PATH)/fungible/'; \
 	else \
 		printf "$(YELLOW)   No fungible token demo found$(NC)\n"; \
@@ -426,7 +412,6 @@ create-env: ## Create .env files from deployed app IDs
 			LINERA_FAUCET_URL=https://faucet.$(NETWORK_NAME).linera.net/ \
 			LINERA_APPLICATION_ID=$$COUNTER_APP_ID \
 		EOF \
-		cp $(EXAMPLES_DIR)/counter/.env $(EXAMPLES_DIR)/native-fungible/.env 2>/dev/null || true && \
 		if [ -d "$(EXAMPLES_DIR)/counter/metamask" ]; then \
 			cp $(EXAMPLES_DIR)/counter/.env $(EXAMPLES_DIR)/counter/metamask/.env; \
 		fi && \
@@ -461,9 +446,6 @@ clean: ## Clean build artifacts and temporary files
 		rm -rf $(EXAMPLES_DIR)/counter/dist; \
 		rm -rf $(EXAMPLES_DIR)/counter/node_modules; \
 		rm -f $(EXAMPLES_DIR)/counter/.env; \
-		rm -rf $(EXAMPLES_DIR)/native-fungible/dist; \
-		rm -rf $(EXAMPLES_DIR)/native-fungible/node_modules; \
-		rm -f $(EXAMPLES_DIR)/native-fungible/.env; \
 		rm -rf $(EXAMPLES_DIR)/fungible/dist; \
 		rm -rf $(EXAMPLES_DIR)/fungible/node_modules; \
 		rm -f $(EXAMPLES_DIR)/fungible/.env; \
@@ -478,7 +460,6 @@ clean-cargo-all: ## Clean all Cargo build artifacts (main + examples)
 	@printf "$(YELLOW)🧹 Cleaning all Cargo build artifacts...$(NC)\n"
 	@cargo clean
 	@cd $(EXAMPLES_DIR)/counter && cargo clean
-	@cd $(EXAMPLES_DIR)/native-fungible && cargo clean
 	@if [ -d "$(EXAMPLES_DIR)/fungible" ]; then cd $(EXAMPLES_DIR)/fungible && cargo clean; fi
 	@printf "$(GREEN)✅ All Cargo artifacts cleaned$(NC)\n"
 
@@ -494,7 +475,6 @@ clean-cargo-counter: ## Clean counter Cargo build artifacts
 
 clean-cargo-fungible: ## Clean fungible token Cargo build artifacts
 	@printf "$(YELLOW)🧹 Cleaning fungible token Cargo build artifacts...$(NC)\n"
-	@cd $(EXAMPLES_DIR)/native-fungible && cargo clean
 	@if [ -d "$(EXAMPLES_DIR)/fungible" ]; then cd $(EXAMPLES_DIR)/fungible && cargo clean; fi
 	@printf "$(GREEN)✅ Fungible token Cargo artifacts cleaned$(NC)\n"
 

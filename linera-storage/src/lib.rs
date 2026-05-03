@@ -12,8 +12,8 @@ use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode, Epoch,
-        NetworkDescription, Timestamp,
+        ApplicationDescription, ApplicationKind, Blob, BlockHeight, ChainDescription,
+        CompressedBytecode, Epoch, NetworkDescription, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
@@ -287,7 +287,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         application_description: &ApplicationDescription,
         txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError> {
-        let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
+        let module_id = application_description
+            .module_id()
+            .expect("load_contract should only be called for module-based applications");
+        let contract_bytecode_blob_id = module_id.contract_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&contract_bytecode_blob_id) {
             Some(content) => content.clone(),
             None => self
@@ -310,7 +313,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
             })
             .await
             .await??;
-        match application_description.module_id.vm_runtime {
+        match module_id.vm_runtime {
             VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_wasm_runtime)] {
@@ -354,7 +357,10 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         application_description: &ApplicationDescription,
         txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError> {
-        let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
+        let module_id = application_description
+            .module_id()
+            .expect("load_service should only be called for module-based applications");
+        let service_bytecode_blob_id = module_id.service_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&service_bytecode_blob_id) {
             Some(content) => content.clone(),
             None => self
@@ -377,7 +383,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
             })
             .await
             .await??;
-        match application_description.module_id.vm_runtime {
+        match module_id.vm_runtime {
             VmRuntime::Wasm => {
                 cfg_if::cfg_if! {
                     if #[cfg(with_wasm_runtime)] {
@@ -568,7 +574,10 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         if let Some(contract) = pinned.get(&application_id) {
             return Ok(contract.clone());
         }
-        let contract = self.storage.load_contract(description, txn_tracker).await?;
+        let contract = match &description.kind {
+            ApplicationKind::Module(_) => self.storage.load_contract(description, txn_tracker).await?,
+            ApplicationKind::Native(kind) => linera_execution::native::user_contract_code(*kind),
+        };
         pinned.insert(application_id, contract.clone());
         Ok(contract)
     }
@@ -583,7 +592,10 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         if let Some(service) = pinned.get(&application_id) {
             return Ok(service.clone());
         }
-        let service = self.storage.load_service(description, txn_tracker).await?;
+        let service = match &description.kind {
+            ApplicationKind::Module(_) => self.storage.load_service(description, txn_tracker).await?,
+            ApplicationKind::Native(kind) => linera_execution::native::user_service_code(*kind),
+        };
         pinned.insert(application_id, service.clone());
         Ok(service)
     }

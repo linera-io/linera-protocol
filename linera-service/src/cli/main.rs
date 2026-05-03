@@ -1549,6 +1549,60 @@ impl Runnable for Job {
                 println!("{application_id}");
             }
 
+            CreateNativeApplication {
+                kind,
+                creator,
+                json_parameters,
+                json_parameters_path,
+                json_argument,
+                json_argument_path,
+                required_application_ids,
+            } => {
+                let mut context = options
+                    .create_client_context(storage, wallet, keystore)
+                    .await?;
+
+                let start_time = Instant::now();
+                let creator = creator.unwrap_or_else(|| context.default_chain());
+                info!("Creating native application on chain {}", creator);
+                let chain_client = context.make_chain_client(creator).await?;
+                let parameters = read_json(json_parameters, json_parameters_path)?;
+                let argument = read_json(json_argument, json_argument_path)?;
+
+                info!("Synchronizing");
+                context.process_inbox(&chain_client).await?;
+
+                let kind: linera_base::data_types::NativeApplicationKind = kind.into();
+                let (application_id, _) = context
+                    .apply_client_command(&chain_client, move |chain_client| {
+                        let parameters = parameters.clone();
+                        let argument = argument.clone();
+                        let chain_client = chain_client.clone();
+                        let required_application_ids = required_application_ids.clone();
+                        async move {
+                            chain_client
+                                .create_native_application_untyped(
+                                    kind,
+                                    parameters,
+                                    argument,
+                                    required_application_ids.unwrap_or_default(),
+                                )
+                                .await
+                        }
+                    })
+                    .await
+                    .context("Failed to create native application")?;
+                info!(
+                    "{}",
+                    "Native application created successfully!".green().bold()
+                );
+                info!(
+                    "Native application created in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+                println!("{application_id}");
+            }
+
             PublishAndCreate {
                 contract,
                 service,

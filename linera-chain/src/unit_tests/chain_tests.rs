@@ -13,8 +13,8 @@ use axum::{routing::get, Router};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
-        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
+        Amount, ApplicationDescription, ApplicationKind, ApplicationPermissions, Blob, BlockHeight,
+        Bytecode, ChainDescription, ChainOrigin, Epoch, InitialChainConfig, Timestamp,
     },
     http,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId},
@@ -135,7 +135,7 @@ impl TestEnvironment {
         let module_id = ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
         (
             ApplicationDescription {
-                module_id,
+                kind: ApplicationKind::Module(module_id),
                 creator_chain_id: self.admin_chain_id(),
                 block_height: BlockHeight(2),
                 application_index: 0,

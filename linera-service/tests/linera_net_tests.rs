@@ -106,6 +106,12 @@ fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
+#[derive(serde::Deserialize)]
+struct NativeFungibleAccountEntry {
+    key: AccountOwner,
+    value: Amount,
+}
+
 struct NativeFungibleApp(ApplicationWrapper<FungibleTokenAbi>);
 
 impl NativeFungibleApp {
@@ -130,7 +136,7 @@ impl NativeFungibleApp {
         }
     }
 
-    async fn entries(&self) -> Vec<native_fungible::AccountEntry> {
+    async fn entries(&self) -> Vec<NativeFungibleAccountEntry> {
         let query = "accounts { entries { key, value } }";
         let response_body = self.0.query(&query).await.unwrap();
         serde_json::from_value(response_body["accounts"]["entries"].clone()).unwrap()
@@ -2661,6 +2667,7 @@ async fn test_wasm_end_to_end_allowances_fungible(
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let params = if example_name == "native-fungible" {
+        // Native fungible enforces the "NAT" ticker symbol on instantiation.
         Parameters::new("NAT")
     } else {
         Parameters::new("DEL")
@@ -2791,14 +2798,12 @@ async fn publish_and_create_native_fungible(
     state: &fungible::InitialState,
     chain_id: Option<ChainId>,
 ) -> Result<ApplicationId<FungibleTokenAbi>> {
-    let (contract, service) = client.build_example(name).await?;
     use fungible::{InitialState, Parameters};
     if name == "native-fungible" {
+        // Runs natively inside `linera-execution`; no bytecode to publish.
         client
-            .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
-                contract,
-                service,
-                VmRuntime::Wasm,
+            .create_native_application::<FungibleTokenAbi, Parameters, InitialState>(
+                "fungible",
                 params,
                 state,
                 &[],
@@ -2806,6 +2811,7 @@ async fn publish_and_create_native_fungible(
             )
             .await
     } else {
+        let (contract, service) = client.build_example(name).await?;
         let application_id = client
             .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
                 contract,
@@ -2864,7 +2870,7 @@ async fn test_wasm_end_to_end_fungible(
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let params = if example_name == "native-fungible" {
-        // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
+        // Native fungible enforces the "NAT" ticker symbol on instantiation.
         Parameters::new("NAT")
     } else {
         Parameters::new("FUN")
@@ -3017,7 +3023,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
     let state = InitialState { accounts };
     // Setting up the application and verifying
     let params = if example_name == "native-fungible" {
-        // Native Fungible has a fixed NAT ticker symbol, anything else will be rejected
+        // Native fungible enforces the "NAT" ticker symbol on instantiation.
         Parameters::new("NAT")
     } else {
         Parameters::new("FUN")

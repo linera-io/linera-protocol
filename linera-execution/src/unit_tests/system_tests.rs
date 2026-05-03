@@ -44,7 +44,25 @@ fn expected_application_id(
     application_index: u32,
 ) -> ApplicationId {
     let description = ApplicationDescription {
-        module_id: *module_id,
+        kind: ApplicationKind::Module(*module_id),
+        creator_chain_id: context.chain_id,
+        block_height: context.height,
+        application_index,
+        parameters,
+        required_application_ids,
+    };
+    From::from(&description)
+}
+
+fn expected_native_application_id(
+    context: &OperationContext,
+    kind: NativeApplicationKind,
+    parameters: Vec<u8>,
+    required_application_ids: Vec<ApplicationId>,
+    application_index: u32,
+) -> ApplicationId {
+    let description = ApplicationDescription {
+        kind: ApplicationKind::Native(kind),
         creator_chain_id: context.chain_id,
         block_height: context.height,
         application_index,
@@ -109,6 +127,48 @@ async fn open_chain_message_index() {
         txn_tracker.into_outcome().unwrap().blobs[0].id().blob_type,
         BlobType::ChainDescription,
     );
+}
+
+/// `CreateNativeApplication` does not require any bytecode blobs and yields the same
+/// `(application_id, instantiation_argument)` shape as `CreateApplication`, with the id
+/// derived from an `ApplicationKind::Native(...)` description.
+#[tokio::test]
+async fn native_application_message_index() -> anyhow::Result<()> {
+    let (mut view, context) = new_view_and_context().await;
+
+    let parameters = serde_json::to_vec(&serde_json::json!({ "ticker_symbol": "NAT" })).unwrap();
+    let instantiation_argument =
+        serde_json::to_vec(&serde_json::json!({ "accounts": {} })).unwrap();
+    let operation = SystemOperation::CreateNativeApplication {
+        kind: NativeApplicationKind::Fungible,
+        parameters: parameters.clone(),
+        instantiation_argument: instantiation_argument.clone(),
+        required_application_ids: vec![],
+    };
+
+    let mut txn_tracker = TransactionTracker::default();
+    let mut controller = ResourceController::default();
+    let new_application = view
+        .system
+        .execute_operation(context, operation, &mut txn_tracker, &mut controller)
+        .await?;
+
+    let id = expected_native_application_id(
+        &context,
+        NativeApplicationKind::Fungible,
+        parameters,
+        vec![],
+        0,
+    );
+    assert_eq!(new_application, Some((id, instantiation_argument)));
+
+    // The only blob created should be the application description blob — no bytecode
+    // was published or required.
+    let outcome = txn_tracker.into_outcome().unwrap();
+    assert_eq!(outcome.blobs.len(), 1);
+    assert_eq!(outcome.blobs[0].id().blob_type, BlobType::ApplicationDescription);
+
+    Ok(())
 }
 
 /// Tests if an account is removed from storage if it is drained.
