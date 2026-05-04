@@ -633,6 +633,39 @@ impl DynamoDbStoreInternal {
         Ok(response)
     }
 
+    /// Runs a single-row query with `Limit=1`, in the given direction.
+    async fn get_one_query_output(
+        &self,
+        attribute_str: &str,
+        start_key: &[u8],
+        key_prefix: &[u8],
+        scan_index_forward: bool,
+    ) -> Result<QueryOutput, DynamoDbStoreInternalError> {
+        let _guard = self.acquire().await;
+        let start_key = start_key.to_vec();
+        let mut prefixed_key_prefix = vec![1];
+        prefixed_key_prefix.extend(key_prefix);
+        let response = self
+            .client
+            .query()
+            .table_name(&self.namespace)
+            .projection_expression(attribute_str)
+            .key_condition_expression(format!(
+                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
+            ))
+            .expression_attribute_values(":partition", AttributeValue::B(Blob::new(start_key)))
+            .expression_attribute_values(
+                ":prefix",
+                AttributeValue::B(Blob::new(prefixed_key_prefix)),
+            )
+            .scan_index_forward(scan_index_forward)
+            .limit(1)
+            .send()
+            .boxed_sync()
+            .await?;
+        Ok(response)
+    }
+
     async fn read_value_bytes_general(
         &self,
         key_db: HashMap<String, AttributeValue>,
@@ -897,6 +930,68 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .key_values()
             .map(|entry| entry.map(|(key, value)| (key.to_vec(), value.to_vec())))
             .collect()
+    }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
+        check_key_size(key_prefix)?;
+        let response = self
+            .get_one_query_output(KEY_ATTRIBUTE, &self.start_key, key_prefix, true)
+            .await?;
+        match response.items.and_then(|mut items| items.pop()) {
+            None => Ok(None),
+            Some(item) => Ok(Some(extract_key(key_prefix.len(), &item)?.to_vec())),
+        }
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, DynamoDbStoreInternalError> {
+        check_key_size(key_prefix)?;
+        let response = self
+            .get_one_query_output(KEY_ATTRIBUTE, &self.start_key, key_prefix, false)
+            .await?;
+        match response.items.and_then(|mut items| items.pop()) {
+            None => Ok(None),
+            Some(item) => Ok(Some(extract_key(key_prefix.len(), &item)?.to_vec())),
+        }
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, DynamoDbStoreInternalError> {
+        check_key_size(key_prefix)?;
+        let response = self
+            .get_one_query_output(KEY_VALUE_ATTRIBUTE, &self.start_key, key_prefix, true)
+            .await?;
+        match response.items.and_then(|mut items| items.pop()) {
+            None => Ok(None),
+            Some(item) => {
+                let (key, value) = extract_key_value(key_prefix.len(), &item)?;
+                Ok(Some((key.to_vec(), value.to_vec())))
+            }
+        }
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, DynamoDbStoreInternalError> {
+        check_key_size(key_prefix)?;
+        let response = self
+            .get_one_query_output(KEY_VALUE_ATTRIBUTE, &self.start_key, key_prefix, false)
+            .await?;
+        match response.items.and_then(|mut items| items.pop()) {
+            None => Ok(None),
+            Some(item) => {
+                let (key, value) = extract_key_value(key_prefix.len(), &item)?;
+                Ok(Some((key.to_vec(), value.to_vec())))
+            }
+        }
     }
 }
 

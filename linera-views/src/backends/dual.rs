@@ -191,6 +191,70 @@ where
         };
         Ok(result)
     }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        match self {
+            Self::First(store) => store
+                .find_first_key_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::First),
+            Self::Second(store) => store
+                .find_first_key_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::Second),
+        }
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        match self {
+            Self::First(store) => store
+                .find_last_key_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::First),
+            Self::Second(store) => store
+                .find_last_key_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::Second),
+        }
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        match self {
+            Self::First(store) => store
+                .find_first_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::First),
+            Self::Second(store) => store
+                .find_first_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::Second),
+        }
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        match self {
+            Self::First(store) => store
+                .find_last_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::First),
+            Self::Second(store) => store
+                .find_last_key_value_by_prefix(key_prefix)
+                .await
+                .map_err(DualStoreError::Second),
+        }
+    }
 }
 
 impl<S1, S2> WritableKeyValueStore for DualStore<S1, S2>

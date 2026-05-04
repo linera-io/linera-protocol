@@ -20,13 +20,13 @@ use linera_views::{
     key_value_store_view::{KeyValueStoreView, ViewContainer},
     log_view::HashedLogView,
     lru_caching::LruCachingMemoryDatabase,
-    map_view::{ByteMapView, HashedMapView},
+    map_view::{ByteMapView, CustomMapView, HashedMapView, MapView},
     memory::MemoryDatabase,
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
     reentrant_collection_view::HashedReentrantCollectionView,
     register_view::HashedRegisterView,
-    set_view::HashedSetView,
+    set_view::{ByteSetView, CustomSetView, HashedSetView, SetView},
     store::{KeyValueDatabase, TestKeyValueDatabase as _, WritableKeyValueStore as _},
     test_utils::{
         get_random_byte_vector, get_random_key_value_operations, get_random_key_values,
@@ -619,6 +619,31 @@ pub struct ByteMapStateView<C> {
     pub map: ByteMapView<C, u8>,
 }
 
+#[derive(CryptoHashRootView)]
+pub struct MapStateView<C> {
+    pub map: MapView<C, u32, u32>,
+}
+
+#[derive(CryptoHashRootView)]
+pub struct CustomMapStateView<C> {
+    pub map: CustomMapView<C, u128, u32>,
+}
+
+#[derive(CryptoHashRootView)]
+pub struct ByteSetStateView<C> {
+    pub set: ByteSetView<C>,
+}
+
+#[derive(CryptoHashRootView)]
+pub struct SetStateView<C> {
+    pub set: SetView<C, u32>,
+}
+
+#[derive(CryptoHashRootView)]
+pub struct CustomSetStateView<C> {
+    pub set: CustomSetView<C, u128>,
+}
+
 #[tokio::test]
 async fn test_byte_map_view() -> Result<()> {
     let context = MemoryContext::new_for_testing(());
@@ -642,6 +667,191 @@ async fn test_byte_map_view() -> Result<()> {
         view.map.remove_by_prefix(vec![2]);
         let val = view.map.get_mut(&[2, 3]).await?;
         assert_eq!(val, None);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_byte_map_view_first_last_key() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+
+    // Empty view: both first/last return None on the fast path.
+    {
+        let view = ByteMapStateView::load(context.clone()).await?;
+        assert_eq!(view.map.first_key(Vec::new()).await?, None);
+        assert_eq!(view.map.last_key(Vec::new()).await?, None);
+    }
+
+    // Fast path: fresh load with persisted entries, no staged changes.
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.insert(vec![0, 1], 1);
+        view.map.insert(vec![2, 3], 3);
+        view.map.insert(vec![4, 5], 5);
+        view.save().await?;
+    }
+    {
+        let view = ByteMapStateView::load(context.clone()).await?;
+        assert_eq!(view.map.first_key(Vec::new()).await?, Some(vec![0, 1]));
+        assert_eq!(view.map.last_key(Vec::new()).await?, Some(vec![4, 5]));
+        // Prefix is stripped from the returned key.
+        assert_eq!(view.map.first_key(vec![2]).await?, Some(vec![3]));
+        assert_eq!(view.map.last_key(vec![2]).await?, Some(vec![3]));
+        assert_eq!(view.map.first_key(vec![9]).await?, None);
+        assert_eq!(
+            view.map.first_key_value(Vec::new()).await?,
+            Some((vec![0, 1], 1))
+        );
+        assert_eq!(
+            view.map.last_key_value(Vec::new()).await?,
+            Some((vec![4, 5], 5))
+        );
+    }
+
+    // Slow path: staged inserts merged with persisted entries.
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.insert(vec![1, 0], 10); // smaller than persisted [2, 3]
+        view.map.insert(vec![5, 0], 50); // larger than persisted [4, 5]
+        assert_eq!(view.map.first_key(Vec::new()).await?, Some(vec![0, 1]));
+        assert_eq!(view.map.last_key(Vec::new()).await?, Some(vec![5, 0]));
+    }
+
+    // Slow path: staged removal of the smallest persisted key.
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.remove(vec![0, 1]);
+        assert_eq!(view.map.first_key(Vec::new()).await?, Some(vec![2, 3]));
+        assert_eq!(view.map.last_key(Vec::new()).await?, Some(vec![4, 5]));
+    }
+
+    // Slow path: prefix removal wipes some persisted keys.
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.remove_by_prefix(vec![0]);
+        assert_eq!(view.map.first_key(Vec::new()).await?, Some(vec![2, 3]));
+        assert_eq!(view.map.last_key(Vec::new()).await?, Some(vec![4, 5]));
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_map_view_first_last_index() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    {
+        let mut view = MapStateView::load(context.clone()).await?;
+        view.map.insert(&3u32, 30)?;
+        view.map.insert(&7u32, 70)?;
+        view.save().await?;
+    }
+    {
+        let view = MapStateView::load(context.clone()).await?;
+        // BCS encodes u32 little-endian, so byte order matches numeric order only
+        // when heights stay in the same byte; for small values like 3 and 7 that's fine.
+        assert_eq!(view.first_index_etc().await?, (Some(3), Some(7)));
+        assert_eq!(view.map.first_index_value().await?, Some((3u32, 30u32)));
+        assert_eq!(view.map.last_index_value().await?, Some((7u32, 70u32)));
+    }
+    Ok(())
+}
+
+impl<C: linera_views::context::Context + Send + Sync + 'static> MapStateView<C> {
+    async fn first_index_etc(&self) -> Result<(Option<u32>, Option<u32>), anyhow::Error> {
+        Ok((self.map.first_index().await?, self.map.last_index().await?))
+    }
+}
+
+#[tokio::test]
+async fn test_byte_map_view_first_last_byte_boundary() -> Result<()> {
+    // Lexicographic key order for ByteMapView matches numeric value only when keys are
+    // stored bit-aligned. With raw byte keys this is straightforward; the test pins down
+    // that the underlying store's first/last-by-prefix returns lex-min/max correctly.
+    let context = MemoryContext::new_for_testing(());
+    {
+        let mut view = ByteMapStateView::load(context.clone()).await?;
+        view.map.insert(vec![0, 1], 0); // smallest by byte order
+        view.map.insert(vec![1, 0], 1);
+        view.map.insert(vec![255, 255], 99); // largest
+        view.save().await?;
+    }
+    {
+        let view = ByteMapStateView::load(context.clone()).await?;
+        assert_eq!(view.map.first_key(Vec::new()).await?, Some(vec![0, 1]));
+        assert_eq!(view.map.last_key(Vec::new()).await?, Some(vec![255, 255]));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_custom_map_view_first_last_index() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    {
+        let mut view = CustomMapStateView::load(context.clone()).await?;
+        // CustomSerialize for u128 reverses bcs to big-endian, so byte order matches
+        // numeric order — including across byte boundaries (1 vs. 256).
+        view.map.insert(&1u128, 10)?;
+        view.map.insert(&256u128, 256)?;
+        view.map.insert(&7u128, 70)?;
+        view.save().await?;
+    }
+    {
+        let view = CustomMapStateView::load(context.clone()).await?;
+        assert_eq!(view.map.first_index().await?, Some(1u128));
+        assert_eq!(view.map.last_index().await?, Some(256u128));
+        assert_eq!(view.map.first_index_value().await?, Some((1u128, 10u32)));
+        assert_eq!(view.map.last_index_value().await?, Some((256u128, 256u32)));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_set_view_first_last() -> Result<()> {
+    let context = MemoryContext::new_for_testing(());
+    {
+        let mut view = SetStateView::load(context.clone()).await?;
+        assert_eq!(view.set.first_index().await?, None);
+        view.set.insert(&3u32)?;
+        view.set.insert(&7u32)?;
+        view.save().await?;
+    }
+    {
+        let view = SetStateView::load(context.clone()).await?;
+        assert_eq!(view.set.first_index().await?, Some(3));
+        assert_eq!(view.set.last_index().await?, Some(7));
+    }
+
+    // ByteSetView fast/slow paths.
+    let context = MemoryContext::new_for_testing(());
+    {
+        let mut view = ByteSetStateView::load(context.clone()).await?;
+        view.set.insert(vec![5]);
+        view.set.insert(vec![1]);
+        view.save().await?;
+    }
+    {
+        let mut view = ByteSetStateView::load(context.clone()).await?;
+        // Fast path.
+        assert_eq!(view.set.first_key().await?, Some(vec![1]));
+        assert_eq!(view.set.last_key().await?, Some(vec![5]));
+        // Slow path: stage an insert that's the new largest.
+        view.set.insert(vec![9]);
+        assert_eq!(view.set.first_key().await?, Some(vec![1]));
+        assert_eq!(view.set.last_key().await?, Some(vec![9]));
+    }
+
+    // CustomSetView with values straddling a byte boundary.
+    let context = MemoryContext::new_for_testing(());
+    {
+        let mut view = CustomSetStateView::load(context.clone()).await?;
+        view.set.insert(&1u128)?;
+        view.set.insert(&256u128)?;
+        view.save().await?;
+    }
+    {
+        let view = CustomSetStateView::load(context.clone()).await?;
+        assert_eq!(view.set.first_index().await?, Some(1u128));
+        assert_eq!(view.set.last_index().await?, Some(256u128));
     }
     Ok(())
 }

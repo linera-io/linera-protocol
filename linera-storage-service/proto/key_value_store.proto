@@ -90,6 +90,46 @@ message ReplyFindKeyValuesByPrefix {
 }
 
 
+message RequestFindFirstKeyByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindFirstKeyByPrefix {
+  optional bytes key = 1;
+}
+
+
+message RequestFindLastKeyByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindLastKeyByPrefix {
+  optional bytes key = 1;
+}
+
+
+message RequestFindFirstKeyValueByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindFirstKeyValueByPrefix {
+  optional KeyValue key_value = 1;
+  int64 message_index = 2;
+  int32 num_chunks = 3;
+}
+
+
+message RequestFindLastKeyValueByPrefix {
+  bytes key_prefix = 1;
+}
+
+message ReplyFindLastKeyValueByPrefix {
+  optional KeyValue key_value = 1;
+  int64 message_index = 2;
+  int32 num_chunks = 3;
+}
+
+
 message RequestWriteBatchExtended {
   repeated Statement statements = 1;
 }
@@ -145,6 +185,10 @@ service StorageService {
   rpc ProcessReadMultiValues (RequestReadMultiValues) returns (ReplyReadMultiValues) {}
   rpc ProcessFindKeysByPrefix (RequestFindKeysByPrefix) returns (ReplyFindKeysByPrefix) {}
   rpc ProcessFindKeyValuesByPrefix (RequestFindKeyValuesByPrefix) returns (ReplyFindKeyValuesByPrefix) {}
+  rpc ProcessFindFirstKeyByPrefix (RequestFindFirstKeyByPrefix) returns (ReplyFindFirstKeyByPrefix) {}
+  rpc ProcessFindLastKeyByPrefix (RequestFindLastKeyByPrefix) returns (ReplyFindLastKeyByPrefix) {}
+  rpc ProcessFindFirstKeyValueByPrefix (RequestFindFirstKeyValueByPrefix) returns (ReplyFindFirstKeyValueByPrefix) {}
+  rpc ProcessFindLastKeyValueByPrefix (RequestFindLastKeyValueByPrefix) returns (ReplyFindLastKeyValueByPrefix) {}
   rpc ProcessWriteBatchExtended (RequestWriteBatchExtended) returns (google.protobuf.Empty) {}
   rpc ProcessSpecificChunk (RequestSpecificChunk) returns (ReplySpecificChunk) {}
   rpc ProcessCreateNamespace (RequestCreateNamespace) returns (google.protobuf.Empty) {}

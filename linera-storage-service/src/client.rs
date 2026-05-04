@@ -33,12 +33,14 @@ use crate::{
     key_value_store::{
         statement::Operation, storage_service_client::StorageServiceClient, KeyValue,
         KeyValueAppend, ReplyContainsKey, ReplyContainsKeys, ReplyExistsNamespace,
-        ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
-        ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
-        RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
-        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
-        RequestListRootKeys, RequestReadMultiValues, RequestReadValue, RequestSpecificChunk,
-        RequestWriteBatchExtended, Statement,
+        ReplyFindFirstKeyByPrefix, ReplyFindFirstKeyValueByPrefix, ReplyFindKeyValuesByPrefix,
+        ReplyFindKeysByPrefix, ReplyFindLastKeyByPrefix, ReplyFindLastKeyValueByPrefix,
+        ReplyListAll, ReplyListRootKeys, ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk,
+        RequestContainsKey, RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
+        RequestExistsNamespace, RequestFindFirstKeyByPrefix, RequestFindFirstKeyValueByPrefix,
+        RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix, RequestFindLastKeyByPrefix,
+        RequestFindLastKeyValueByPrefix, RequestListRootKeys, RequestReadMultiValues,
+        RequestReadValue, RequestSpecificChunk, RequestWriteBatchExtended, Statement,
     },
 };
 
@@ -275,6 +277,126 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 .map(|x| (x.key, x.value))
                 .collect::<Vec<_>>();
             Ok(key_values)
+        } else {
+            self.read_entries(message_index, num_chunks).await
+        }
+    }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, StorageServiceStoreError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            StorageServiceStoreError::KeyTooLong
+        );
+        let mut full_key_prefix = self.start_key.clone();
+        full_key_prefix.extend(key_prefix);
+        let query = RequestFindFirstKeyByPrefix {
+            key_prefix: full_key_prefix,
+        };
+        let request = tonic::Request::new(query);
+        let channel = self.channel.clone();
+        let mut client = StorageServiceClient::new(channel);
+        let _guard = self.acquire().await;
+        let response = client
+            .process_find_first_key_by_prefix(request)
+            .make_sync()
+            .await?;
+        let response = response.into_inner();
+        let ReplyFindFirstKeyByPrefix { key } = response;
+        Ok(key)
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, StorageServiceStoreError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            StorageServiceStoreError::KeyTooLong
+        );
+        let mut full_key_prefix = self.start_key.clone();
+        full_key_prefix.extend(key_prefix);
+        let query = RequestFindLastKeyByPrefix {
+            key_prefix: full_key_prefix,
+        };
+        let request = tonic::Request::new(query);
+        let channel = self.channel.clone();
+        let mut client = StorageServiceClient::new(channel);
+        let _guard = self.acquire().await;
+        let response = client
+            .process_find_last_key_by_prefix(request)
+            .make_sync()
+            .await?;
+        let response = response.into_inner();
+        let ReplyFindLastKeyByPrefix { key } = response;
+        Ok(key)
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, StorageServiceStoreError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            StorageServiceStoreError::KeyTooLong
+        );
+        let mut full_key_prefix = self.start_key.clone();
+        full_key_prefix.extend(key_prefix);
+        let query = RequestFindFirstKeyValueByPrefix {
+            key_prefix: full_key_prefix,
+        };
+        let request = tonic::Request::new(query);
+        let channel = self.channel.clone();
+        let mut client = StorageServiceClient::new(channel);
+        let _guard = self.acquire().await;
+        let response = client
+            .process_find_first_key_value_by_prefix(request)
+            .make_sync()
+            .await?;
+        let response = response.into_inner();
+        let ReplyFindFirstKeyValueByPrefix {
+            key_value,
+            message_index,
+            num_chunks,
+        } = response;
+        if num_chunks == 0 {
+            Ok(key_value.map(|kv| (kv.key, kv.value)))
+        } else {
+            self.read_entries(message_index, num_chunks).await
+        }
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, StorageServiceStoreError> {
+        ensure!(
+            key_prefix.len() <= MAX_KEY_SIZE,
+            StorageServiceStoreError::KeyTooLong
+        );
+        let mut full_key_prefix = self.start_key.clone();
+        full_key_prefix.extend(key_prefix);
+        let query = RequestFindLastKeyValueByPrefix {
+            key_prefix: full_key_prefix,
+        };
+        let request = tonic::Request::new(query);
+        let channel = self.channel.clone();
+        let mut client = StorageServiceClient::new(channel);
+        let _guard = self.acquire().await;
+        let response = client
+            .process_find_last_key_value_by_prefix(request)
+            .make_sync()
+            .await?;
+        let response = response.into_inner();
+        let ReplyFindLastKeyValueByPrefix {
+            key_value,
+            message_index,
+            num_chunks,
+        } = response;
+        if num_chunks == 0 {
+            Ok(key_value.map(|kv| (kv.key, kv.value)))
         } else {
             self.read_entries(message_index, num_chunks).await
         }

@@ -252,6 +252,120 @@ where
         }
         Ok(key_values)
     }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        // Each user key `K` is stored as `K|0`, `K|1`, ..., `K|n`, where `K|0` is the
+        // head segment. A `DeleteKey` only deletes the head, leaving continuations as
+        // leftover keys with index > 0. If the smallest stored key under the prefix has
+        // index 0, it's a real head key and we strip the trailing 4 bytes. Otherwise we
+        // fall back to a full prefix scan and pick the first head key.
+        if let Some(key) = self.store.find_first_key_by_prefix(key_prefix).await? {
+            if Self::read_index_from_key(&key)? == 0 {
+                let mut key = key;
+                key.truncate(key.len() - 4);
+                return Ok(Some(key));
+            }
+        } else {
+            return Ok(None);
+        }
+        for mut key in self.store.find_keys_by_prefix(key_prefix).await? {
+            if Self::read_index_from_key(&key)? == 0 {
+                key.truncate(key.len() - 4);
+                return Ok(Some(key));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        // The largest stored key is `K|n` for the largest user key `K` and its highest
+        // segment index `n`. If `n == 0`, `K` had a single segment and the head is
+        // present, so we can strip the trailing 4 bytes. Otherwise the last key may be
+        // a continuation of a live `K` or a leftover from a partial delete; we can't
+        // tell, so fall back to a full prefix scan and pick the last head key.
+        if let Some(key) = self.store.find_last_key_by_prefix(key_prefix).await? {
+            if Self::read_index_from_key(&key)? == 0 {
+                let mut key = key;
+                key.truncate(key.len() - 4);
+                return Ok(Some(key));
+            }
+        } else {
+            return Ok(None);
+        }
+        for mut key in self
+            .store
+            .find_keys_by_prefix(key_prefix)
+            .await?
+            .into_iter()
+            .rev()
+        {
+            if Self::read_index_from_key(&key)? == 0 {
+                key.truncate(key.len() - 4);
+                return Ok(Some(key));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        // Fast path: if the first stored key under the prefix is a head segment whose
+        // value advertises a single segment (`count == 1`), the value is fully
+        // contained in this entry and we can return it after stripping the count
+        // prefix and the trailing index bytes from the key. Otherwise fall back to a
+        // full assembly via `find_key_values_by_prefix`.
+        if let Some((key, value)) = self
+            .store
+            .find_first_key_value_by_prefix(key_prefix)
+            .await?
+        {
+            if Self::read_index_from_key(&key)? == 0 && Self::read_count_from_value(&value)? == 1 {
+                let mut key = key;
+                key.truncate(key.len() - 4);
+                return Ok(Some((key, value[4..].to_vec())));
+            }
+        } else {
+            return Ok(None);
+        }
+        Ok(self
+            .find_key_values_by_prefix(key_prefix)
+            .await?
+            .into_iter()
+            .next())
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        // Fast path: see `find_first_key_value_by_prefix`. If the last stored key is
+        // a single-segment head (`index == 0` and `count == 1`), it's a complete
+        // entry. Otherwise the last key may be a continuation of a multi-segment
+        // value or a leftover from a partial delete, so we fall back to a full
+        // prefix scan to find the last assembled head key/value pair.
+        if let Some((key, value)) = self.store.find_last_key_value_by_prefix(key_prefix).await? {
+            if Self::read_index_from_key(&key)? == 0 && Self::read_count_from_value(&value)? == 1 {
+                let mut key = key;
+                key.truncate(key.len() - 4);
+                return Ok(Some((key, value[4..].to_vec())));
+            }
+        } else {
+            return Ok(None);
+        }
+        Ok(self
+            .find_key_values_by_prefix(key_prefix)
+            .await?
+            .into_iter()
+            .next_back())
+    }
 }
 
 impl<K> WritableKeyValueStore for ValueSplittingStore<K>
@@ -467,6 +581,34 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
         self.inner.find_keys_by_prefix(key_prefix).await
+    }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        self.inner.find_first_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        self.inner.find_last_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        self.inner.find_first_key_value_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        self.inner.find_last_key_value_by_prefix(key_prefix).await
     }
 
     async fn find_key_values_by_prefix(
