@@ -219,13 +219,7 @@ where
     /// ```
     pub fn get_mut(&mut self) -> &mut T {
         self.delete_storage_first = false;
-        match &mut self.update {
-            Some(value) => value,
-            update => {
-                *update = Some(self.stored_value.clone());
-                update.as_mut().unwrap()
-            }
-        }
+        self.update.get_or_insert_with(|| self.stored_value.clone())
     }
 
     fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
