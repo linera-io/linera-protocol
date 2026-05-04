@@ -3899,19 +3899,13 @@ async fn test_wasm_end_to_end_matching_engine_benchmark(
     let bench_submit_start = std::time::Instant::now();
     app_matching_a.multiple_orders(&bids).await;
     let bids_elapsed = bench_submit_start.elapsed();
-    eprintln!(
-        "[BENCH] Submitted {} bid orders in {:?}",
-        num_orders, bids_elapsed
-    );
+    eprintln!("[BENCH] Submitted {num_orders} bid orders in {bids_elapsed:?}");
 
     // Submit all asks in one block from chain_b
     let bench_submit_start = std::time::Instant::now();
     app_matching_b.multiple_orders(&asks).await;
     let asks_elapsed = bench_submit_start.elapsed();
-    eprintln!(
-        "[BENCH] Submitted {} ask orders in {:?}",
-        num_orders, asks_elapsed
-    );
+    eprintln!("[BENCH] Submitted {num_orders} ask orders in {asks_elapsed:?}");
 
     // Wait for both bundles to arrive on the admin chain.
     notifications_admin.wait_for_bundle(chain_a, None).await?;
@@ -4145,10 +4139,7 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
         .await;
     }
     let bids_elapsed = bench_submit_start.elapsed();
-    eprintln!(
-        "[BENCH] Submitted {} bid orders from {} chains in {:?}",
-        num_bid_chains, num_bid_chains, bids_elapsed
-    );
+    eprintln!("[BENCH] Submitted {num_bid_chains} bid orders from {num_bid_chains} chains in {bids_elapsed:?}");
 
     // Submit one ask per ask chain (all at price 1, quantity 1).
     let bench_submit_start = std::time::Instant::now();
@@ -4164,10 +4155,7 @@ async fn test_wasm_end_to_end_matching_engine_benchmark_multi_chain(
         .await;
     }
     let asks_elapsed = bench_submit_start.elapsed();
-    eprintln!(
-        "[BENCH] Submitted {} ask orders from {} chains in {:?}",
-        num_ask_chains, num_ask_chains, asks_elapsed
-    );
+    eprintln!("[BENCH] Submitted {num_ask_chains} ask orders from {num_ask_chains} chains in {asks_elapsed:?}");
 
     // Wait for all 100 bundles to arrive on the admin chain.
     for chain in &bid_chains {
