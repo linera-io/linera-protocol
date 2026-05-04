@@ -206,30 +206,30 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         }
         assert_eq!(set_key_value1, set_key_value2);
         // Streaming variants must agree with the eager methods.
-        let keys_iter: Vec<Vec<u8>> = store
+        let keys_iter = store
             .find_keys_by_prefix_iter(key_prefix)
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         assert_eq!(keys_iter, keys_request);
-        let key_values_iter: Vec<(Vec<u8>, Vec<u8>)> = store
+        let key_values_iter = store
             .find_key_values_by_prefix_iter(key_prefix)
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         assert_eq!(key_values_iter, key_values_by_prefix);
         // Reverse streaming variants must yield the eager results in reverse order.
-        let keys_rev_iter: Vec<Vec<u8>> = store
+        let keys_rev_iter = store
             .find_keys_by_prefix_rev_iter(key_prefix)
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         let mut keys_request_rev = keys_request.clone();
         keys_request_rev.reverse();
         assert_eq!(keys_rev_iter, keys_request_rev);
-        let key_values_rev_iter: Vec<(Vec<u8>, Vec<u8>)> = store
+        let key_values_rev_iter = store
             .find_key_values_by_prefix_rev_iter(key_prefix)
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         let mut key_values_by_prefix_rev = key_values_by_prefix.clone();
