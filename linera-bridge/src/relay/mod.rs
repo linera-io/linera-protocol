@@ -34,7 +34,7 @@ use linera_storage::{DbStorage, Storage as _};
 use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
 use linera_views::backends::rocks_db::RocksDbDatabase;
 use linera_wallet_json::PersistentWallet;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Notify, RwLock};
 
 use crate::{
     monitor::{self, MonitorState},
@@ -313,35 +313,38 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         })?;
     tracing::info!(path = %sqlite_path.display(), "Opened bridge relay SQLite database");
     monitor_state.set_db(db);
+    monitor_state
+        .load_from_db()
+        .await
+        .context("failed to recover pending bridge requests from SQLite WAL")?;
     let monitor = Arc::new(RwLock::new(monitor_state));
-    let (pending_deposit_tx, pending_deposit_rx) =
-        tokio::sync::mpsc::channel::<monitor::PendingDeposit>(64);
-    let (pending_burn_tx, pending_burn_rx) = tokio::sync::mpsc::channel::<monitor::PendingBurn>(64);
+    let deposit_notify = Arc::new(Notify::new());
+    let burn_notify = Arc::new(Notify::new());
 
     let mut evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
+        let deposit_notify = Arc::clone(&deposit_notify);
         tokio::spawn(monitor::evm::evm_scan_loop(
             monitor,
             evm_client,
             linera_client,
-            pending_deposit_tx,
+            deposit_notify,
             monitor_scan_interval,
-            max_retries,
         ))
     };
     let mut linera_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
+        let burn_notify = Arc::clone(&burn_notify);
         tokio::spawn(monitor::linera::linera_scan_loop(
             monitor,
             evm_client,
             linera_client,
-            pending_burn_tx,
+            burn_notify,
             monitor_scan_interval,
-            max_retries,
         ))
     };
 
@@ -355,8 +358,10 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             proof_client,
             evm_client,
             linera_client,
-            pending_deposit_rx,
-            pending_burn_rx,
+            deposit_notify,
+            burn_notify,
+            monitor_scan_interval,
+            max_retries,
         ))
     };
 

@@ -9,11 +9,12 @@
 
 use std::path::Path;
 
-use anyhow::Result;
+use alloy::primitives::{Address, B256, U256};
+use anyhow::{Context as _, Result};
 use linera_base::data_types::BlockHeight;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    SqlitePool,
+    Row, SqlitePool,
 };
 
 use super::{PendingBurn, PendingDeposit};
@@ -191,6 +192,77 @@ impl BridgeDb {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    /// Loads every deposit whose status is still `pending`, used at relay
+    /// startup to repopulate the in-memory `MonitorState` so that work
+    /// in flight at the time of the previous shutdown is not lost.
+    pub async fn load_pending_deposits(&self) -> Result<Vec<PendingDeposit>> {
+        let rows = sqlx::query(
+            "SELECT source_chain_id, block_hash, tx_index, log_index, tx_hash, depositor, amount, nonce
+             FROM deposits WHERE status = 'pending'",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            let source_chain_id: i64 = row.get(0);
+            let block_hash: Vec<u8> = row.get(1);
+            let tx_index: i64 = row.get(2);
+            let log_index: i64 = row.get(3);
+            let tx_hash: Vec<u8> = row.get(4);
+            let depositor: Vec<u8> = row.get(5);
+            let amount: String = row.get(6);
+            let nonce: String = row.get(7);
+
+            out.push(PendingDeposit {
+                key: DepositKey {
+                    source_chain_id: source_chain_id as u64,
+                    block_hash: B256::try_from(block_hash.as_slice())
+                        .context("invalid block_hash in deposits row")?,
+                    tx_index: tx_index as u64,
+                    log_index: log_index as u64,
+                },
+                tx_hash: B256::try_from(tx_hash.as_slice())
+                    .context("invalid tx_hash in deposits row")?,
+                depositor: Address::try_from(depositor.as_slice())
+                    .context("invalid depositor in deposits row")?,
+                amount: U256::from_str_radix(&amount, 10)
+                    .context("invalid amount in deposits row")?,
+                nonce: U256::from_str_radix(&nonce, 10).context("invalid nonce in deposits row")?,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Loads every burn whose status is still `pending`, used at relay
+    /// startup to repopulate the in-memory `MonitorState`.
+    pub async fn load_pending_burns(&self) -> Result<Vec<PendingBurn>> {
+        let rows = sqlx::query(
+            "SELECT linera_height, burn_index, evm_recipient, amount
+             FROM burns WHERE status = 'pending'",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            let height: i64 = row.get(0);
+            let burn_index: i64 = row.get(1);
+            let evm_recipient: String = row.get(2);
+            let amount: String = row.get(3);
+
+            out.push(PendingBurn {
+                height: BlockHeight(height as u64),
+                burn_index: burn_index as usize,
+                evm_recipient: evm_recipient
+                    .parse()
+                    .context("invalid evm_recipient in burns row")?,
+                amount: amount.parse().context("invalid amount in burns row")?,
+            });
+        }
+        Ok(out)
     }
 
     /// Stores raw BCS-serialized certificate bytes for a burn.
