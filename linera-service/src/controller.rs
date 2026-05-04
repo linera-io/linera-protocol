@@ -161,7 +161,7 @@ where
                     .expect("bcs bytes");
                     let operation = linera_execution::Operation::User {
                         application_id: self.controller_id,
-                        bytes,
+                        input: linera_execution::OperationInput::Direct(bytes),
                     };
                     if let Err(e) = self
                         .chain_client
@@ -370,7 +370,7 @@ where
             bcs::to_bytes(&Operation::ExecuteWorkerCommand { owner, command }).expect("bcs bytes");
         let operation = linera_execution::Operation::User {
             application_id: self.controller_id,
-            bytes,
+            input: linera_execution::OperationInput::Direct(bytes),
         };
         if let Err(e) = self
             .chain_client

@@ -170,6 +170,12 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
     /// Returns a new TransactionTracker for the current transaction.
     fn new_transaction_tracker(&self) -> Result<TransactionTracker, ChainError> {
+        let previous_operation_results = self
+            .operation_results
+            .iter()
+            .map(|result| result.0.clone())
+            .collect();
+
         Ok(TransactionTracker::new(
             self.local_time,
             self.transaction_index,
@@ -177,6 +183,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.next_chain_index,
             self.oracle_responses()?,
             &self.blobs,
+            previous_operation_results,
         ))
     }
 

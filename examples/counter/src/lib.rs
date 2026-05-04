@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct CounterAbi;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub enum CounterOperation {
     /// Increment the counter by the given value
     Increment { value: u64 },
@@ -17,7 +17,7 @@ pub enum CounterOperation {
 
 impl ContractAbi for CounterAbi {
     type Operation = CounterOperation;
-    type Response = u64;
+    type Response = CounterOperation;
 }
 
 impl ServiceAbi for CounterAbi {

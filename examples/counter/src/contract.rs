@@ -45,11 +45,11 @@ impl Contract for CounterContract {
         self.state.value.set(value);
     }
 
-    async fn execute_operation(&mut self, operation: CounterOperation) -> u64 {
+    async fn execute_operation(&mut self, operation: CounterOperation) -> CounterOperation {
         let CounterOperation::Increment { value } = operation;
         let new_value = self.state.value.get() + value;
         self.state.value.set(new_value);
-        new_value
+        operation
     }
 
     async fn execute_message(&mut self, _message: ()) {
@@ -87,8 +87,8 @@ mod tests {
 
         let expected_value = initial_value + increment;
 
-        assert_eq!(response, expected_value);
-        assert_eq!(*counter.state.value.get(), initial_value + increment);
+        assert_eq!(response, CounterOperation::Increment { value: increment });
+        assert_eq!(*counter.state.value.get(), expected_value);
     }
 
     #[test]
@@ -118,7 +118,7 @@ mod tests {
 
         let expected_value = initial_value + increment;
 
-        assert_eq!(response, expected_value);
+        assert_eq!(response, CounterOperation::Increment { value: increment });
         assert_eq!(*counter.state.value.get(), expected_value);
     }
 

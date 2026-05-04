@@ -18,7 +18,7 @@ use linera_execution::{
         SystemExecutionState,
     },
     ExecutionRuntimeConfig, ExecutionRuntimeContext, ExecutionStateActor, Operation,
-    OperationContext, Query, QueryContext, QueryResponse, ResourceControlPolicy,
+    OperationContext, OperationInput, Query, QueryContext, QueryResponse, ResourceControlPolicy,
     ResourceController, ResourceTracker, TransactionTracker,
 };
 use linera_views::{context::Context as _, views::View};
@@ -122,7 +122,7 @@ async fn test_fuel_for_counter_revm_application() -> anyhow::Result<()> {
         let bytes = operation_to_bytes(&operation)?;
         let operation = Operation::User {
             application_id: app_id,
-            bytes,
+            input: OperationInput::Direct(bytes),
         };
         ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
             .execute_operation(operation_context, operation)
@@ -238,7 +238,7 @@ async fn test_terminate_execute_operation_by_lack_of_fuel() -> anyhow::Result<()
     let bytes = operation_to_bytes(&operation)?;
     let operation = Operation::User {
         application_id: app_id,
-        bytes,
+        input: OperationInput::Direct(bytes),
     };
     let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
         .execute_operation(operation_context, operation)
@@ -415,7 +415,7 @@ async fn test_basic_evm_features() -> anyhow::Result<()> {
     let bytes = operation_to_bytes(&operation)?;
     let operation = Operation::User {
         application_id: app_id,
-        bytes,
+        input: OperationInput::Direct(bytes),
     };
     let result = ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
         .execute_operation(operation_context, operation)

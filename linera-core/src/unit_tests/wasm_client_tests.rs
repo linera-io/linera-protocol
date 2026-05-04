@@ -36,7 +36,7 @@ use linera_base::{
 };
 use linera_chain::{data_types::MessageAction, ChainError, ChainExecutionContext};
 use linera_execution::{
-    wasm_test, ExecutionError, Message, MessageKind, Operation, QueryOutcome,
+    wasm_test, ExecutionError, Message, MessageKind, Operation, OperationInput, QueryOutcome,
     ResourceControlPolicy, SystemMessage, SystemOperation, WasmRuntime,
 };
 use linera_storage::Storage as _;
@@ -170,8 +170,10 @@ where
 
     let increment = 5_u64;
     let counter_operation = counter::CounterOperation::Increment { value: increment };
+    let operation1 = Operation::user(application_id, &counter_operation)?;
+    let operation2 = Operation::user_composed(application_id.forget_abi());
     creator
-        .execute_operation(Operation::user(application_id, &counter_operation)?)
+        .execute_operations(vec![operation1, operation2], vec![])
         .await
         .unwrap();
 
@@ -181,9 +183,10 @@ where
         .await
         .unwrap();
 
+    // We do an increment by 5 and then immediately reiterate it.
     let expected = QueryOutcome {
         response: async_graphql::Response::new(
-            async_graphql::Value::from_json(json!({"value": 15})).unwrap(),
+            async_graphql::Value::from_json(json!({"value": 20})).unwrap(),
         ),
         operations: vec![],
     };
@@ -1723,7 +1726,7 @@ where
     let operation = &operations[0];
     if let Operation::User {
         application_id,
-        bytes,
+        input: OperationInput::Direct(bytes),
     } = operation
     {
         assert_eq!(application_id, &app_id.forget_abi());
