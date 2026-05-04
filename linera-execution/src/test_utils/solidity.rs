@@ -31,6 +31,7 @@ fn write_compilation_json(path: &Path, file_name: &str) -> anyhow::Result<()> {
   }},
   "settings": {{
     "viaIR": true,
+    "evmVersion": "cancun",
     "outputSelection": {{
       "*": {{
         "*": ["evm.bytecode"]

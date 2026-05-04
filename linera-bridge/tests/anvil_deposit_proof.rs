@@ -78,8 +78,6 @@ contract MockERC20 {
 alloy_sol_types::sol! {
     function approve(address spender, uint256 amount) external returns (bool);
 
-    function registerFungibleApplicationId(bytes32 _fungibleApplicationId) external;
-
     function deposit(
         bytes32 target_chain_id,
         bytes32 target_application_id,
@@ -155,13 +153,19 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
     hex::decode(hex_str).unwrap()
 }
 
+// Fixed gas budgets sized well above measured cost. Pinning these skips
+// the per-tx `eth_estimateGas` round-trip, which removes a CI-only race
+// where the simulation runs against a stale `latest` block before the
+// previous tx's state has propagated, surfacing as `extcodesize == 0`
+// reverts (`code: 3, data: 0x`) on typed external calls.
+const DEPLOY_GAS: u64 = 5_000_000;
+const CALL_GAS: u64 = 300_000;
+
 #[tokio::test]
 #[ignore] // Requires `anvil` and `solc`
 async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Spawn Anvil
-    // Use Shanghai hardfork to avoid header field mismatches with older Anvil versions
-    // (Anvil v0.2.0 doesn't return all Cancun header fields via JSON-RPC).
-    let anvil = Anvil::new().arg("--hardfork").arg("shanghai").try_spawn()?;
+    // 1. Spawn Anvil targeting the Cancun EVM (Base's current hardfork).
+    let anvil = Anvil::new().arg("--hardfork").arg("cancun").try_spawn()?;
     let endpoint = anvil.endpoint();
 
     // Default Anvil account 0
@@ -173,17 +177,25 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         .wallet(wallet)
         .connect_http(endpoint.parse()?);
 
+    // Probe readiness and cache chain id so per-tx fillers don't issue
+    // extra round-trips.
+    let chain_id = provider.get_chain_id().await?;
+
     // 2. Compile and deploy MockERC20
     let erc20_bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
     let initial_supply = U256::from(1_000_000_000u64);
     let mut erc20_deploy = erc20_bytecode;
     erc20_deploy.extend_from_slice(&(initial_supply,).abi_encode_params());
 
-    let tx = TransactionRequest::default().with_deploy_code(Bytes::from(erc20_deploy));
+    let tx = TransactionRequest::default()
+        .with_deploy_code(Bytes::from(erc20_deploy))
+        .with_chain_id(chain_id)
+        .with_gas_limit(DEPLOY_GAS);
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
     let token_address = receipt.contract_address.ok_or("missing erc20 address")?;
 
-    // 3. Compile and deploy FungibleBridge
+    // 3. Compile and deploy FungibleBridge with the wrapped-fungible
+    // application ID baked into the constructor (immutable since #6173).
     let target_chain_id = B256::from([0xAA; 32]);
     let target_application_id = B256::from([0xBB; 32]);
 
@@ -203,21 +215,12 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     let mut bridge_deploy = bridge_bytecode;
     bridge_deploy.extend_from_slice(&bridge_constructor);
 
-    let tx = TransactionRequest::default().with_deploy_code(Bytes::from(bridge_deploy));
+    let tx = TransactionRequest::default()
+        .with_deploy_code(Bytes::from(bridge_deploy))
+        .with_chain_id(chain_id)
+        .with_gas_limit(DEPLOY_GAS);
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
     let bridge_address = receipt.contract_address.ok_or("missing bridge address")?;
-
-    // Register the wrapped-fungible application ID on the bridge.
-    // Since #5929 the application ID is set post-deployment via this call
-    // rather than through the constructor.
-    let register_data = registerFungibleApplicationIdCall {
-        _fungibleApplicationId: target_application_id,
-    }
-    .abi_encode();
-    let tx = TransactionRequest::default()
-        .to(bridge_address)
-        .input(register_data.into());
-    provider.send_transaction(tx).await?.get_receipt().await?;
 
     // 4. Approve bridge to spend tokens, then deposit
     let deposit_amount = U256::from(1_000_000u64);
@@ -230,7 +233,9 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     .abi_encode();
     let tx = TransactionRequest::default()
         .to(token_address)
-        .input(approve_data.into());
+        .input(approve_data.into())
+        .with_chain_id(chain_id)
+        .with_gas_limit(CALL_GAS);
     provider.send_transaction(tx).await?.get_receipt().await?;
 
     let deposit_data = depositCall {
@@ -242,7 +247,9 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     .abi_encode();
     let tx = TransactionRequest::default()
         .to(bridge_address)
-        .input(deposit_data.into());
+        .input(deposit_data.into())
+        .with_chain_id(chain_id)
+        .with_gas_limit(CALL_GAS);
     let deposit_receipt = provider.send_transaction(tx).await?.get_receipt().await?;
     let deposit_tx_hash = deposit_receipt.transaction_hash;
 
