@@ -349,10 +349,11 @@ type ChainStateExtendedView {
 	"""
 	pendingProposedBlobs: ReentrantCollectionView_AccountOwner_PendingBlobsView_d58d342d!
 	"""
-	Hashes of all certified blocks for this sender.
-	This ends with `block_hash` and has length `usize::from(next_block_height)`.
+	Hashes of all known blocks in this chain, indexed by their height. A block at
+	`height < next_block_height` is executed; a block at `height >= next_block_height`
+	is preprocessed (verified but not yet executed) and may not be contiguous.
 	"""
-	confirmedLog: LogView_CryptoHash_87fbb60c!
+	blockHashes: CustomMapView_BlockHeight_CryptoHash_1bae6d76!
 	"""
 	Sender chain and height of all certified blocks known as a receiver (local ordering).
 	"""
@@ -384,10 +385,6 @@ type ChainStateExtendedView {
 	"""
 	nonemptyOutboxes: [ChainId!]!
 	"""
-	Blocks that have been verified but not executed yet, and that may not be contiguous.
-	"""
-	preprocessedBlocks: MapView_BlockHeight_CryptoHash_1bae6d76!
-	"""
 	Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
 	"""
 	nonemptyInboxes: [ChainId!]!
@@ -397,6 +394,17 @@ type ChainStateExtendedView {
 	the last reset, the error is returned instead.
 	"""
 	blockZeroExecutedAt: Timestamp!
+	"""
+	The height at which the next block can be preprocessed: one past the highest
+	height in `block_hashes` (executed or preprocessed), or `next_block_height` if
+	`block_hashes` is empty.
+	
+	Maintained as an O(1) shortcut for `next_height_to_preprocess`, since
+	`CustomMapView` does not yet expose a `last_index` lookup. Once
+	`linera-views` gains efficient first/last key support, this field can be
+	removed in favor of `block_hashes.last_index()`.
+	"""
+	nextHeightToPreprocess: BlockHeight!
 }
 
 """
@@ -519,6 +527,12 @@ scalar CryptoHash
 type Cursor {
 	height: BlockHeight!
 	index: Int!
+}
+
+type CustomMapView_BlockHeight_CryptoHash_1bae6d76 {
+	keys(count: Int): [BlockHeight!]!
+	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_74e16b71!
+	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_74e16b71!]!
 }
 
 """
@@ -698,11 +712,6 @@ type LogView_ChainAndHeight_7af83576 {
 	entries(start: Int, end: Int): [ChainAndHeight!]!
 }
 
-type LogView_CryptoHash_87fbb60c {
-	count: Int!
-	entries(start: Int, end: Int): [CryptoHash!]!
-}
-
 input MapFilters_AccountOwner_d6668c53 {
 	keys: [AccountOwner!]
 }
@@ -762,13 +771,6 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	count: Int!
 	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
-}
-
-type MapView_BlockHeight_CryptoHash_1bae6d76 {
-	keys(count: Int): [BlockHeight!]!
-	count: Int!
-	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_74e16b71!
-	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_74e16b71!]!
 }
 
 type MapView_StreamId_Int_3d7f5335 {

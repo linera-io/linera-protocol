@@ -884,3 +884,20 @@ async fn prepare_test_with_dummy_mock_application(
 
     Ok((application, application_id, chain, block, time))
 }
+
+/// The `next_height_to_preprocess` register is read directly by callers rather
+/// than being computed from `block_hashes.indices()`. This pins down that the
+/// register is consulted (no fallback to `indices()` that would mis-sort heights
+/// spanning a byte boundary under BCS little-endian `u64` encoding).
+#[tokio::test]
+async fn test_next_height_to_preprocess_register() {
+    let chain_id = TestEnvironment::new().admin_chain_id();
+    let mut chain = ChainStateView::new(chain_id).await;
+
+    // Empty chain.
+    assert_eq!(*chain.next_height_to_preprocess.get(), BlockHeight(0));
+
+    // Set the register to a height crossing the first byte boundary.
+    chain.next_height_to_preprocess.set(BlockHeight(257));
+    assert_eq!(*chain.next_height_to_preprocess.get(), BlockHeight(257));
+}

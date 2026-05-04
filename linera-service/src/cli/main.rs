@@ -1837,7 +1837,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to load chain")?;
                 let block_hash = chain_state_view
-                    .block_hashes([height])
+                    .block_hashes_for_heights([height])
                     .await
                     .context("Failed to find a block hash for the given height")?[0];
                 let block = context

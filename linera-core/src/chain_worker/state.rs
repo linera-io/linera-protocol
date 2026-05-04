@@ -462,7 +462,10 @@ where
             .flatten()
             .copied()
             .collect::<BTreeSet<_>>();
-        let hashes = self.chain.block_hashes(heights.iter().copied()).await?;
+        let hashes = self
+            .chain
+            .block_hashes_for_heights(heights.iter().copied())
+            .await?;
 
         let blocks = self.read_confirmed_blocks(&hashes).await?;
 
@@ -1155,13 +1158,17 @@ where
         while current_height >= retransmit_from {
             // We arrived at current_height via previous_message_blocks links, starting from the
             // chain state and following the links downwards. So these blocks should all be in
-            // confirmed_log or preprocessed_blocks already.
+            // `block_hashes` already.
             heights_to_re_add.push(current_height);
             // Load the block at current_height to find the previous message block
-            let hash = match &*self.chain.block_hashes([current_height]).await? {
+            let hash = match &*self
+                .chain
+                .block_hashes_for_heights([current_height])
+                .await?
+            {
                 [hash] => *hash,
                 _ => {
-                    return Err(WorkerError::ConfirmedBlockHashNotFound {
+                    return Err(WorkerError::BlockHashNotFound {
                         height: current_height,
                         chain_id: self.chain_id(),
                     })
@@ -1263,8 +1270,7 @@ where
 
         // 1. Collect all sender chain IDs and block hashes before clearing.
         let sender_ids = self.chain.inboxes.indices().await?;
-        let hashes = self.chain.confirmed_log.read(..).await?;
-        let preprocessed = self.chain.preprocessed_blocks.index_values().await?;
+        let block_hashes = self.chain.block_hashes.index_values().await?;
 
         // 2. Snapshot safety-critical manager state so that we cannot be tricked
         //    into double-signing if the reset wipes votes we already cast.
@@ -1287,17 +1293,7 @@ where
         );
 
         // 4. Re-load certificates one at a time by hash and re-process them.
-        for (index, hash) in hashes.into_iter().enumerate() {
-            let height = BlockHeight(index as u64);
-            let cert = self
-                .storage
-                .read_certificate(hash)
-                .await?
-                .map(Arc::unwrap_or_clone)
-                .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
-            Box::pin(self.process_confirmed_block(cert, None)).await?;
-        }
-        for (height, hash) in preprocessed {
+        for (height, hash) in block_hashes {
             let cert = self
                 .storage
                 .read_certificate(hash)
@@ -1373,7 +1369,7 @@ where
         let mut hashes = Vec::new();
         let mut height = start;
         while height < end {
-            match self.chain.preprocessed_blocks.get(&height).await? {
+            match self.chain.block_hashes.get(&height).await? {
                 Some(hash) => hashes.push(hash),
                 None => break,
             }
@@ -1421,7 +1417,7 @@ where
         &self,
         heights: Vec<BlockHeight>,
     ) -> Result<Vec<CryptoHash>, WorkerError> {
-        Ok(self.chain.block_hashes(heights).await?)
+        Ok(self.chain.block_hashes_for_heights(heights).await?)
     }
 
     /// Gets proposed blobs from the manager for specified blob IDs.
@@ -1510,8 +1506,8 @@ where
     }
 
     /// Gets the next height to preprocess.
-    pub(crate) async fn get_next_height_to_preprocess(&self) -> Result<BlockHeight, WorkerError> {
-        Ok(self.chain.next_height_to_preprocess().await?)
+    pub(crate) fn get_next_height_to_preprocess(&self) -> BlockHeight {
+        *self.chain.next_height_to_preprocess.get()
     }
 
     /// Attempts to vote for a leader timeout, if possible.
@@ -1643,7 +1639,7 @@ where
         &self,
         height: BlockHeight,
     ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
-        let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
+        let certificate_hash = match self.chain.block_hashes.get(&height).await? {
             Some(hash) => hash,
             None => return Ok(None),
         };
@@ -2020,7 +2016,7 @@ where
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = chain
-            .block_hashes(query.request_sent_certificate_hashes_by_heights)
+            .block_hashes_for_heights(query.request_sent_certificate_hashes_by_heights)
             .await?;
         info.requested_sent_certificate_hashes = hashes;
         if let Some(start) = query.request_received_log_excluding_first_n {
@@ -2041,18 +2037,18 @@ where
                 .previous_event_blocks
                 .multi_get(&stream_ids)
                 .await?;
-            let mut indices = Vec::new();
             let mut streams_with_heights = Vec::new();
             for (stream_id, height) in stream_ids.into_iter().zip(heights) {
                 if let Some(height) = height {
-                    let index = usize::try_from(height.0).map_err(|_| ArithmeticError::Overflow)?;
-                    indices.push(index);
                     streams_with_heights.push((stream_id, height));
                 }
             }
-            let hashes = chain.confirmed_log.multi_get(indices).await?;
+            let hashes = chain
+                .block_hashes
+                .multi_get(streams_with_heights.iter().map(|(_, height)| height))
+                .await?;
             for (maybe_hash, (stream_id, height)) in hashes.into_iter().zip(streams_with_heights) {
-                let hash = maybe_hash.ok_or_else(|| WorkerError::ConfirmedLogEntryNotFound {
+                let hash = maybe_hash.ok_or_else(|| WorkerError::BlockHashNotFound {
                     height,
                     chain_id: info.chain_id,
                 })?;
