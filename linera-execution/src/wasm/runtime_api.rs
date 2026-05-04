@@ -161,6 +161,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Returns a deterministic pseudo-random u64 value.
+    fn random_number(caller: &mut Caller) -> Result<u64, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .random_number()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Retrieves the current system time, i.e. the timestamp of the block in which this is called.
     fn read_system_timestamp(caller: &mut Caller) -> Result<Timestamp, RuntimeError> {
         caller

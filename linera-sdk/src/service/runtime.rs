@@ -114,6 +114,14 @@ where
         })
     }
 
+    /// Returns a deterministic pseudo-random u64 value.
+    ///
+    /// Each call returns a different value. Suitable for algorithmic purposes
+    /// but not for cryptographic use.
+    pub fn random_number(&self) -> u64 {
+        base_wit::random_number()
+    }
+
     /// Returns the current chain balance.
     pub fn chain_balance(&self) -> Amount {
         Self::fetch_value_through_cache(&self.chain_balance, || {
