@@ -5,14 +5,11 @@
 //! forwards certificates to EVM, checks EVM for completion via ERC-20
 //! Transfer events, and retries unforwarded burns.
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
 use alloy::{primitives::Address, providers::Provider};
 use linera_base::data_types::BlockHeight;
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 
 use super::{MonitorState, PendingBurn};
 use crate::relay::{
@@ -22,18 +19,18 @@ use crate::relay::{
 };
 
 /// Background task that scans Linera block history for BurnEvent stream
-/// events and checks EVM for completion.
+/// events and checks EVM for completion. Newly-discovered burns are written
+/// to `MonitorState` (and SQLite) and the consumer is woken via `notify`.
 pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
-    pending_burn_tx: tokio::sync::mpsc::Sender<PendingBurn>,
+    burn_notify: Arc<Notify>,
     scan_interval: Duration,
-    max_retries: u32,
 ) {
     loop {
         let (scan_result, completion_result) = tokio::join!(
-            linera_scan_iteration(&monitor, &linera_client, &pending_burn_tx),
+            linera_scan_iteration(&monitor, &linera_client, &burn_notify),
             check_burn_completion(&monitor, &evm_client),
         );
 
@@ -42,21 +39,6 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
         }
         if let Err(error) = completion_result {
             tracing::warn!(?error, "Burn completion check failed");
-        }
-
-        // Re-enqueue burns that are eligible for retry.
-        {
-            let state = monitor.read().await;
-            for b in state.burns_ready_for_retry(max_retries) {
-                if let Err(error) = pending_burn_tx.try_send(PendingBurn {
-                    height: b.value.height,
-                    burn_index: b.value.burn_index,
-                    evm_recipient: b.value.evm_recipient,
-                    amount: b.value.amount,
-                }) {
-                    tracing::warn!(?error, "Failed to enqueue burn for retry");
-                }
-            }
         }
 
         let summary = monitor.read().await.status_summary();
@@ -71,34 +53,35 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
     }
 }
 
-/// Receives pending burns, reads the certificate containing the auto-burn,
-/// and forwards it to EVM.
-pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment + 'static>(
+/// Drains `MonitorState.burns` for items ready for retry, processing one at a
+/// time. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
+/// (whichever comes first) when nothing is ready.
+pub(crate) async fn process_pending_burns<E: linera_core::environment::Environment + 'static>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
     linera_client: &LineraClient<E>,
-    mut pending_rx: tokio::sync::mpsc::Receiver<PendingBurn>,
+    notify: &Notify,
+    poll_interval: Duration,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
-    while let Some(pending) = pending_rx.recv().await {
+    loop {
+        let pending = monitor.read().await.next_burn_for_retry(max_retries);
+        let Some(pending) = pending else {
+            tracing::trace!(
+                ?poll_interval,
+                "Linera burns processor sleeping until notified or poll interval elapses"
+            );
+            tokio::select! {
+                _ = notify.notified() => {
+                    tracing::trace!("Linera burns processor notified about new pending item");
+                }
+                _ = tokio::time::sleep(poll_interval) => {}
+            }
+            continue;
+        };
+
         let credit_height = pending.height;
         let burn_index = pending.burn_index;
-        {
-            let mut state = monitor.write().await;
-            if let Some(b) = state.burns.get_mut(&(credit_height, burn_index)) {
-                if b.forwarded {
-                    tracing::trace!(
-                        ?credit_height,
-                        burn_index,
-                        "Burn already completed, skipping"
-                    );
-                    continue;
-                }
-                b.last_retry_at = Some(Instant::now());
-            } else {
-                state.track_burn(pending).await;
-            }
-        }
-
         tracing::info!(?credit_height, burn_index, "Processing burn...");
 
         // Read the certificate at the burn's block height (already contains the auto-burn).
@@ -181,14 +164,12 @@ pub(crate) async fn retry_pending_burns<E: linera_core::environment::Environment
             relay::update_balance_metrics(evm_client, linera_client).await;
         }
     }
-
-    anyhow::bail!("Pending burn channel closed");
 }
 
 async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
-    pending_burn_tx: &tokio::sync::mpsc::Sender<PendingBurn>,
+    notify: &Notify,
 ) -> anyhow::Result<()> {
     let last_height = monitor.read().await.last_scanned_linera_height;
 
@@ -228,26 +209,31 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
         }
     }
 
+    let mut tracked_any = false;
     for (height, burn_index, recipient, amount) in &new_burns {
         tracing::info!(?height, burn_index, %recipient, %amount, "Discovered burn");
-        if let Err(error) = pending_burn_tx.try_send(PendingBurn {
-            height: *height,
-            burn_index: *burn_index,
-            evm_recipient: *recipient,
-            amount: *amount,
-        }) {
-            tracing::warn!(
-                ?error,
-                ?height,
-                burn_index,
-                "Failed to enqueue discovered burn"
-            );
-        }
+        let was_new = monitor
+            .write()
+            .await
+            .track_burn(PendingBurn {
+                height: *height,
+                burn_index: *burn_index,
+                evm_recipient: *recipient,
+                amount: *amount,
+            })
+            .await;
+        tracked_any |= was_new;
     }
 
-    let mut state = monitor.write().await;
-    state.last_scanned_linera_height = current_height;
+    {
+        let mut state = monitor.write().await;
+        state.last_scanned_linera_height = current_height;
+    }
     crate::relay::metrics::set_last_scanned_linera_height(current_height.0);
+
+    if tracked_any {
+        notify.notify_one();
+    }
     Ok(())
 }
 
