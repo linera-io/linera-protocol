@@ -165,3 +165,33 @@ jobs:
         env:
           RUSTFLAGS: ""
         run: cargo test -- --ignored --nocapture
+
+      - name: Install Foundry (provides `anvil`)
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.0
+
+      - name: Ensure Solc Directory Exists
+        run: mkdir -p /home/runner/.solc
+      - name: Cache Solc
+        id: cache-solc
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.solc
+          key: solc-v0.8.33
+          restore-keys: solc-
+      - name: Get Solc
+        if: steps.cache-solc.outputs.cache-hit != 'true'
+        uses: ./.github/actions/get-solc
+        with:
+          version: v0.8.33
+      - name: Add Solc to PATH
+        run: echo "/home/runner/.solc" >> $GITHUB_PATH
+      - name: Create a Solc symbolic link
+        run: ln -sf /home/runner/.solc/v0.8.33/solc-static-linux /home/runner/.solc/solc
+
+      - name: Run anvil deposit-proof test
+        working-directory: linera-bridge
+        env:
+          RUSTFLAGS: ""
+        run: cargo test -p linera-bridge --test anvil_deposit_proof -- --ignored --nocapture
