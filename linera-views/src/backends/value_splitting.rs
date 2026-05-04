@@ -825,4 +825,42 @@ mod tests {
         }
         assert_eq!(got, expected_kv_rev);
     }
+
+    // Overwriting a long value with a shorter one only rewrites the segments up
+    // to the new count — the high-index segments of the original write remain in
+    // the underlying store as leftovers. The reverse iterator collects them all
+    // (it walks indices top..0 to find the master) and then must drop the
+    // ones whose index is >= the new count when reconstructing the value.
+    #[tokio::test]
+    async fn test_value_splitting5_rev_iter_drops_overwrite_leftovers() {
+        let big_store = create_value_splitting_memory_store();
+        let key = vec![0, 0];
+
+        // Write a 250-byte value: with MAX_VALUE_SIZE = 100 this becomes 3
+        // segments (96 bytes at index 0 plus the count, then 100 + 54 bytes
+        // at indices 1 and 2).
+        let mut rng = crate::random::make_deterministic_rng();
+        let long_value: Vec<u8> = (0..250).map(|_| rng.gen::<u8>()).collect();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(key.clone(), long_value);
+        big_store.write_batch(batch).await.unwrap();
+
+        // Overwrite with a single-segment value. Only index 0 is rewritten;
+        // indices 1 and 2 stay in the underlying store as orphan segments.
+        let short_value: Vec<u8> = (0..10).map(|_| rng.gen::<u8>()).collect();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(key.clone(), short_value.clone());
+        big_store.write_batch(batch).await.unwrap();
+
+        // The reverse iterator must accumulate all three segments (it sees them
+        // in order index 2, 1, 0) and then, when reconstructing, skip the two
+        // leftovers because their position in the reversed segs list is >= the
+        // new count of 1.
+        let mut stream = big_store.find_key_values_by_prefix_rev_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, vec![(key, short_value)]);
+    }
 }
