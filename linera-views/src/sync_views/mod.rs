@@ -103,4 +103,15 @@ pub trait SyncRootView: SyncView {
         self.post_save();
         Ok(())
     }
+
+    /// Saves the root view to the database context and then drops it without calling `post_save`.
+    fn save_and_drop(self) -> Result<(), ViewError> {
+        use crate::{context::SyncContext as _, store::SyncWritableKeyValueStore as _};
+        let mut batch = Batch::new();
+        self.pre_save(&mut batch)?;
+        if !batch.is_empty() {
+            self.context().store().write_batch(batch)?;
+        }
+        Ok(())
+    }
 }

@@ -79,8 +79,8 @@ impl Contract for CrowdFundingContract {
         }
     }
 
-    fn store(mut self) {
-        self.state.save().expect("Failed to save state");
+    fn store(self) {
+        self.state.save_and_drop().expect("Failed to save state");
     }
 }
 
