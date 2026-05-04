@@ -278,6 +278,7 @@ impl<Env: Environment> Client<Env> {
         name: impl Into<String>,
         chain_worker_ttl: Option<Duration>,
         sender_chain_worker_ttl: Option<Duration>,
+        cross_chain_batch_size_limit: usize,
         options: chain_client::Options,
         block_cache_size: usize,
         execution_state_cache_size: usize,
@@ -293,6 +294,7 @@ impl<Env: Environment> Client<Env> {
             sender_chain_ttl: sender_chain_worker_ttl,
             block_cache_size,
             execution_state_cache_size,
+            cross_chain_batch_size_limit,
             ..ChainWorkerConfig::default()
         };
         let state = WorkerState::new(

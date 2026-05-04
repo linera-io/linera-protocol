@@ -15,6 +15,7 @@ use linera_base::{
         ArithmeticError, Blob, BlobContent, BlockHeight, NetworkDescription, Round, Timestamp,
     },
     identifiers::{BlobId, ChainId, EventId},
+    task::{MaybeSend, MaybeSync},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -53,10 +54,7 @@ pub enum CrossChainMessageDelivery {
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ValidatorNode {
-    #[cfg(not(web))]
-    type NotificationStream: Stream<Item = Notification> + Unpin + Send;
-    #[cfg(web)]
-    type NotificationStream: Stream<Item = Notification> + Unpin;
+    type NotificationStream: Stream<Item = Notification> + Unpin + MaybeSend;
 
     fn address(&self) -> String;
 
@@ -199,10 +197,7 @@ pub trait ValidatorNode {
 /// Turn an address into a validator node.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ValidatorNodeProvider: 'static {
-    #[cfg(not(web))]
-    type Node: ValidatorNode + Send + Sync + Clone + 'static;
-    #[cfg(web)]
-    type Node: ValidatorNode + Clone + 'static;
+    type Node: ValidatorNode + MaybeSend + MaybeSync + Clone + 'static;
 
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 

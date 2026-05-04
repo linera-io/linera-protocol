@@ -153,6 +153,9 @@ Client implementation and command-line tool for the Linera blockchain
 * `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `1000`
+* `--cross-chain-batch-size-limit <CROSS_CHAIN_BATCH_SIZE_LIMIT>` — Maximum number of cross-chain requests coalesced into a single batch by the per-chain driver. Bounds the worst-case write-lock hold time
+
+  Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
 
   Default value: `1000`

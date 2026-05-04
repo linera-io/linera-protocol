@@ -52,7 +52,7 @@ use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    worker::{NetworkActions, Notification, Reason, WorkerError},
+    worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
 
 /// Type alias for event subscriptions result.
@@ -117,7 +117,7 @@ where
 
 /// The result of processing a cross-chain update.
 pub(crate) enum CrossChainUpdateResult {
-    /// The update was applied and the chain was saved up to the given height.
+    /// The update was applied up to the given height. The caller must save.
     Updated(BlockHeight),
     /// All bundles were already received; nothing to do.
     NothingToDo,
@@ -1085,42 +1085,135 @@ where
             );
             return Ok(CrossChainUpdateResult::NothingToDo);
         }
-        // Save the chain.
-        self.save().await?;
         Ok(CrossChainUpdateResult::Updated(last_updated_height))
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
-        recipient = %recipient,
-        latest_height = %latest_height
+        %recipient,
+        %latest_height
     ))]
     pub(crate) async fn confirm_updated_recipient(
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
-    ) -> Result<NetworkActions, WorkerError> {
-        let fully_delivered = self
+    ) -> Result<bool, WorkerError> {
+        Ok(self
             .chain
             .mark_messages_as_received(&recipient, latest_height)
             .await?
             && self
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)
-                .await?;
+                .await?)
+    }
 
-        // Send the next chunk of cross-chain messages for this recipient, if any.
-        let actions = self
-            .create_cross_chain_actions_for_recipient(recipient)
-            .await?;
+    /// Notifies delivery waiters that all messages up to `height` have been delivered.
+    pub(crate) fn notify_delivery(&self, height: BlockHeight) {
+        self.delivery_notifier.notify(height);
+    }
 
-        self.save().await?;
+    /// Processes a batch of cross-chain requests, performing at most one `save()`.
+    ///
+    /// Both update and confirmation requests are handled together so that a
+    /// single write-lock acquisition covers all pending work for the chain.
+    pub(crate) async fn process_batch(&mut self, requests: Vec<BatchRequest>) {
+        let mut update_results = Vec::new();
+        let mut confirm_results = Vec::new();
+        let mut need_save = false;
+        let mut need_rollback = false;
+        let mut max_delivered_height: Option<BlockHeight> = None;
 
-        if fully_delivered {
-            self.delivery_notifier.notify(latest_height);
+        for request in requests {
+            match request {
+                BatchRequest::Update {
+                    origin,
+                    bundles,
+                    previous_height,
+                    result_sender,
+                } => {
+                    if need_rollback {
+                        send_result(result_sender, Err(WorkerError::BatchRolledBack));
+                        continue;
+                    }
+                    let result = self
+                        .process_cross_chain_update(origin, bundles, previous_height)
+                        .await;
+                    let update_result = match result {
+                        Ok(update_result) => update_result,
+                        Err(error) => {
+                            need_rollback = true;
+                            send_result(result_sender, Err(error));
+                            continue;
+                        }
+                    };
+                    match &update_result {
+                        CrossChainUpdateResult::Updated(_) => need_save = true,
+                        CrossChainUpdateResult::GapDetected { .. }
+                        | CrossChainUpdateResult::NothingToDo => {}
+                    }
+                    update_results.push((result_sender, update_result));
+                }
+                BatchRequest::Confirm {
+                    recipient,
+                    latest_height,
+                    result_sender,
+                } => {
+                    if need_rollback {
+                        send_result(result_sender, Err(WorkerError::BatchRolledBack));
+                        continue;
+                    }
+                    match self
+                        .confirm_updated_recipient(recipient, latest_height)
+                        .await
+                    {
+                        Ok(fully_delivered) => {
+                            need_save = true;
+                            if fully_delivered {
+                                max_delivered_height = Some(
+                                    max_delivered_height
+                                        .map_or(latest_height, |h| h.max(latest_height)),
+                                );
+                            }
+                            confirm_results.push((result_sender, recipient));
+                        }
+                        Err(error) => {
+                            need_rollback = true;
+                            send_result(result_sender, Err(error));
+                        }
+                    }
+                }
+            }
+        }
+        if !need_rollback && need_save {
+            if let Err(error) = self.save().await {
+                tracing::error!(%error, "failed to save batch; rolling back");
+                need_rollback = true;
+            }
+        }
+        if need_rollback {
+            for (result_sender, _) in update_results {
+                send_result(result_sender, Err(WorkerError::BatchRolledBack));
+            }
+            for (result_sender, _) in confirm_results {
+                send_result(result_sender, Err(WorkerError::BatchRolledBack));
+            }
+            return;
         }
 
-        Ok(actions)
+        if let Some(height) = max_delivered_height {
+            self.notify_delivery(height);
+        }
+
+        for (result_sender, update_result) in update_results {
+            send_result(result_sender, Ok(update_result));
+        }
+        for (result_sender, recipient) in confirm_results {
+            let result = self
+                .create_cross_chain_actions_for_recipient(recipient)
+                .await;
+            send_result(result_sender, result);
+        }
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -2124,7 +2217,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
-    async fn save(&mut self) -> Result<(), WorkerError> {
+    pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
             tracing::error!(
                 ?error,
@@ -2172,6 +2265,14 @@ where
                 Err(WorkerError::PoisonedWorker)
             }
         }
+    }
+}
+
+/// Sends a result through a oneshot channel, logging at `debug` level if the
+/// receiver has been dropped.
+pub(crate) fn send_result<T>(sender: oneshot::Sender<T>, value: T) {
+    if sender.send(value).is_err() {
+        tracing::debug!("cannot send cross-chain result; receiver dropped");
     }
 }
 

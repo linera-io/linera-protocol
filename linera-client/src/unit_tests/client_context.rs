@@ -49,6 +49,7 @@ async fn make_context(
         format!("Client node for {:.8}", chain_id),
         Some(Duration::from_secs(30)),
         Some(Duration::from_secs(1)),
+        1000,
         chain_client::Options::test_default(),
         DEFAULT_BLOCK_CACHE_SIZE,
         DEFAULT_EXECUTION_STATE_CACHE_SIZE,

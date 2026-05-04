@@ -327,6 +327,7 @@ where
             name,
             util::non_zero_duration(options.chain_worker_ttl),
             util::non_zero_duration(options.sender_chain_worker_ttl),
+            options.cross_chain_batch_size_limit,
             options.to_chain_client_options(),
             block_cache_size,
             execution_state_cache_size,
