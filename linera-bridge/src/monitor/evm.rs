@@ -7,7 +7,7 @@
 use std::{sync::Arc, time::Duration};
 
 use alloy::providers::Provider;
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 
 use super::{MonitorState, PendingDeposit};
 use crate::{
@@ -16,18 +16,18 @@ use crate::{
 };
 
 /// Background task that polls EVM for `DepositInitiated` events and checks
-/// Linera for completion.
+/// Linera for completion. Newly-discovered deposits are written to
+/// `MonitorState` (and SQLite) and the consumer is woken via `notify`.
 pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
-    pending_deposit_tx: tokio::sync::mpsc::Sender<PendingDeposit>,
+    deposit_notify: Arc<Notify>,
     scan_interval: Duration,
-    max_retries: u32,
 ) {
     loop {
         let (scan_result, completion_result) = tokio::join!(
-            evm_scan_iteration(&monitor, &evm_client, &pending_deposit_tx),
+            evm_scan_iteration(&monitor, &evm_client, &deposit_notify),
             check_deposit_completion(&monitor, &linera_client),
         );
 
@@ -36,22 +36,6 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
         }
         if let Err(error) = completion_result {
             tracing::warn!(error = ?error, "Deposit completion check failed");
-        }
-
-        // Re-enqueue deposits that are eligible for retry.
-        {
-            let state = monitor.read().await;
-            for d in state.deposits_ready_for_retry(max_retries) {
-                if let Err(error) = pending_deposit_tx.try_send(PendingDeposit {
-                    key: d.value.key.clone(),
-                    tx_hash: d.value.tx_hash,
-                    depositor: d.value.depositor,
-                    amount: d.value.amount,
-                    nonce: d.value.nonce,
-                }) {
-                    tracing::warn!(?error, "Failed to enqueue deposit for retry");
-                }
-            }
         }
 
         let summary = monitor.read().await.status_summary();
@@ -66,30 +50,36 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
     }
 }
 
-/// Receives pending deposits from the scanner and retries them.
-pub(crate) async fn retry_pending_deposits<E: linera_core::environment::Environment>(
+/// Drains `MonitorState.deposits` for items ready for retry, processing one at
+/// a time. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
+/// (whichever comes first) when nothing is ready.
+pub(crate) async fn process_pending_deposits<E: linera_core::environment::Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
     proof_client: &crate::proof::gen::HttpDepositProofClient,
-    mut pending_rx: tokio::sync::mpsc::Receiver<PendingDeposit>,
+    notify: &Notify,
+    poll_interval: Duration,
+    max_retries: u32,
 ) -> anyhow::Result<()> {
     use crate::proof::gen::DepositProofClient as _;
 
-    while let Some(pending) = pending_rx.recv().await {
-        let tx_hash = pending.tx_hash;
-        {
-            let mut state = monitor.write().await;
-            if let Some(d) = state.deposits.get_mut(&pending.key) {
-                if d.forwarded {
-                    tracing::trace!(%tx_hash, "Deposit already completed, skipping");
-                    continue;
+    loop {
+        let pending = monitor.read().await.next_deposit_for_retry(max_retries);
+        let Some(pending) = pending else {
+            tracing::trace!(
+                ?poll_interval,
+                "EVM deposits processor sleeping until notified or poll interval elapses"
+            );
+            tokio::select! {
+                _ = notify.notified() => {
+                    tracing::trace!("EVM deposits processor notified about new pending item");
                 }
-                d.last_retry_at = Some(std::time::Instant::now());
-            } else {
-                state.track_deposit(pending.clone()).await;
+                _ = tokio::time::sleep(poll_interval) => {}
             }
-        }
+            continue;
+        };
 
+        let tx_hash = pending.tx_hash;
         tracing::info!(%tx_hash, "Processing pending deposit...");
         match proof_client.generate_deposit_proof(tx_hash).await {
             Ok(proof) => {
@@ -128,14 +118,12 @@ pub(crate) async fn retry_pending_deposits<E: linera_core::environment::Environm
 
         monitor.write().await.mark_deposit_retried(&pending.key);
     }
-
-    anyhow::bail!("Pending deposit channel closed");
 }
 
 async fn evm_scan_iteration(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
-    pending_tx: &tokio::sync::mpsc::Sender<PendingDeposit>,
+    notify: &Notify,
 ) -> anyhow::Result<()> {
     let last_block = monitor.read().await.last_scanned_evm_block;
 
@@ -149,6 +137,7 @@ async fn evm_scan_iteration(
         .await?;
     let bridge_addr = evm_client.bridge_addr();
 
+    let mut tracked_any = false;
     for log in &logs {
         let block_hash = match log.block_hash {
             Some(h) => h,
@@ -187,21 +176,27 @@ async fn evm_scan_iteration(
             log_index,
         };
 
-        if let Err(error) = pending_tx.try_send(PendingDeposit {
-            key,
-            tx_hash,
-            depositor: deposit.depositor,
-            amount: deposit.amount,
-            nonce: deposit.nonce,
-        }) {
-            tracing::warn!(?error, %tx_hash, "Failed to enqueue discovered deposit");
-        }
+        let was_new = monitor
+            .write()
+            .await
+            .track_deposit(PendingDeposit {
+                key,
+                tx_hash,
+                depositor: deposit.depositor,
+                amount: deposit.amount,
+                nonce: deposit.nonce,
+            })
+            .await;
+        tracked_any |= was_new;
     }
 
     let mut state = monitor.write().await;
     state.last_scanned_evm_block = current_block;
     crate::relay::metrics::set_last_scanned_evm_block(current_block);
 
+    if tracked_any {
+        notify.notify_one();
+    }
     Ok(())
 }
 
