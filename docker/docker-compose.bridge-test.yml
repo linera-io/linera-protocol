@@ -2,7 +2,7 @@ services:
   # 0. Anvil - local EVM node for LightClient contract
   anvil:
     image: ghcr.io/foundry-rs/foundry:stable
-    entrypoint: ["anvil", "--host", "0.0.0.0", "--code-size-limit", "300000", "--hardfork", "shanghai", "--slots-in-an-epoch", "1", "--block-time", "1"]
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--code-size-limit", "300000", "--hardfork", "cancun", "--slots-in-an-epoch", "1", "--block-time", "1"]
     ports:
       - "${ANVIL_PORT:-8545}:8545"
     healthcheck:
