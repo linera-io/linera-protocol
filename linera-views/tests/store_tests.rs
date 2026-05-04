@@ -9,8 +9,8 @@ use linera_views::{
     random::make_deterministic_rng,
     store::{ReadableKeyValueStore as _, TestKeyValueDatabase as _, WritableKeyValueStore as _},
     test_utils::{
-        big_read_multi_values, get_random_test_scenarios, run_big_write_read, run_reads,
-        run_writes_from_blank, run_writes_from_state,
+        big_read_multi_values, get_random_byte_vector, get_random_test_scenarios,
+        run_big_write_read, run_reads, run_writes_from_blank, run_writes_from_state,
     },
     value_splitting::create_value_splitting_memory_store,
 };
@@ -54,6 +54,32 @@ async fn test_reads_test_memory() {
         let key_value_store = create_value_splitting_memory_store();
         run_reads(key_value_store, scenario).await;
     }
+}
+
+#[tokio::test]
+async fn test_reads_value_splitting_varying_value_sizes() {
+    use std::collections::HashSet;
+
+    use rand::Rng;
+    let mut rng = make_deterministic_rng();
+    let key_prefix = vec![0];
+    let mut key_values = Vec::new();
+    let mut unique_keys = HashSet::new();
+    let num_entries = 30;
+    let len_key = 4;
+    while key_values.len() < num_entries {
+        let mut key = key_prefix.clone();
+        for _ in 0..len_key {
+            key.push(rng.gen());
+        }
+        if unique_keys.insert(key.clone()) {
+            let len_value = rng.gen_range(0..=500);
+            let value = get_random_byte_vector(&mut rng, &[], len_value);
+            key_values.push((key, value));
+        }
+    }
+    let key_value_store = create_value_splitting_memory_store();
+    run_reads(key_value_store, key_values).await;
 }
 
 #[tokio::test]

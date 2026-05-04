@@ -3,14 +3,15 @@
 
 //! Adds support for large values to a given store by splitting them between several keys.
 
+use futures::stream::StreamExt;
 use linera_base::ensure;
 use thiserror::Error;
 
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        FindKeyValuesStream, FindKeysStream, KeyValueDatabase, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
@@ -218,6 +219,22 @@ where
         Ok(keys)
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_keys_by_prefix_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let big_key = item.map_err(ValueSplittingError::InnerStoreError)?;
+                let len = big_key.len();
+                if Self::read_index_from_key(&big_key)? == 0 {
+                    yield Ok(big_key[0..len - 4].to_vec());
+                }
+            }
+        })
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -248,6 +265,114 @@ where
             key_values.push((key, big_value));
         }
         Ok(key_values)
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_key_values_by_prefix_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let (mut big_key, value) =
+                    item.map_err(ValueSplittingError::InnerStoreError)?;
+                if Self::read_index_from_key(&big_key)? != 0 {
+                    continue; // Leftover segment from an earlier value.
+                }
+                big_key.truncate(big_key.len() - 4);
+                let key = big_key;
+                let count = Self::read_count_from_value(&value)?;
+                let mut big_value = value[4..].to_vec();
+                for idx in 1..count {
+                    let next = stream.next().await
+                        .ok_or(ValueSplittingError::MissingSegment)?;
+                    let (big_key, value) =
+                        next.map_err(ValueSplittingError::InnerStoreError)?;
+                    if !(Self::read_index_from_key(&big_key)? == idx
+                        && big_key.starts_with(&key)
+                        && big_key.len() == key.len() + 4)
+                    {
+                        yield Err(ValueSplittingError::MissingSegment);
+                        return;
+                    }
+                    big_value.extend(value);
+                }
+                yield Ok((key, big_value));
+            }
+        })
+    }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_keys_by_prefix_rev_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let big_key = item.map_err(ValueSplittingError::InnerStoreError)?;
+                let len = big_key.len();
+                if Self::read_index_from_key(&big_key)? == 0 {
+                    yield Ok(big_key[0..len - 4].to_vec());
+                }
+            }
+        })
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(async_stream::stream! {
+            let mut stream = self.store.find_key_values_by_prefix_rev_iter(key_prefix);
+            // Accumulator: (current_key, top_index, segments_descending).
+            // segments[i] is the segment at index `top_index - i`.
+            // An accumulation that never reaches index 0 is composed of
+            // leftover segments (from a previously deleted big value, since
+            // delete_key only removes the master) and is silently dropped.
+            let mut state: Option<(Vec<u8>, u32, Vec<Vec<u8>>)> = None;
+            while let Some(item) = stream.next().await {
+                let (mut big_key, value) =
+                    item.map_err(ValueSplittingError::InnerStoreError)?;
+                let index = Self::read_index_from_key(&big_key)?;
+                big_key.truncate(big_key.len() - 4);
+                let key = big_key;
+                state = match state.take() {
+                    Some((current_key, top, mut segs))
+                        if current_key == key
+                            && (segs.len() as u32) <= top
+                            && index == top - segs.len() as u32 =>
+                    {
+                        segs.push(value);
+                        Some((current_key, top, segs))
+                    }
+                    // Either no prior state, or the prior state belongs to a
+                    // different key / a non-contiguous index — drop it (those
+                    // segments are leftovers from a deleted big value) and
+                    // start a fresh accumulation.
+                    _ => Some((key, index, vec![value])),
+                };
+                if index == 0 {
+                    let (key, top, segs) = state.take().unwrap();
+                    let count = Self::read_count_from_value(segs.last().unwrap())?;
+                    if count == 0 || count > top + 1 {
+                        yield Err(ValueSplittingError::MissingSegment);
+                        return;
+                    }
+                    // `segs` is in push order — descending index with the master
+                    // (index 0) at the end. Take the master's data (skipping its
+                    // count prefix), then the `count - 1` lowest-indexed segments
+                    // in ascending order. Any segments above index `count - 1`
+                    // are leftovers from a previous longer write to this key and
+                    // are silently dropped.
+                    let (master, others) = segs.split_last().unwrap();
+                    let mut big_value = master[4..].to_vec();
+                    for val in others.iter().rev().take(count as usize - 1) {
+                        big_value.extend_from_slice(val);
+                    }
+                    yield Ok((key, big_value));
+                }
+            }
+        })
     }
 }
 
@@ -510,10 +635,13 @@ pub fn create_value_splitting_memory_store() -> ValueSplittingStore<LimitedTestM
 
 #[cfg(test)]
 mod tests {
+    use futures::stream::StreamExt;
     use linera_views::{
         batch::Batch,
         store::{ReadableKeyValueStore, WritableKeyValueStore},
-        value_splitting::{LimitedTestMemoryStore, ValueSplittingStore},
+        value_splitting::{
+            create_value_splitting_memory_store, LimitedTestMemoryStore, ValueSplittingStore,
+        },
     };
     use rand::Rng;
 
@@ -609,5 +737,134 @@ mod tests {
         // Two segments remain
         let keys = store.find_keys_by_prefix(&[0]).await.unwrap();
         assert_eq!(keys, vec![vec![0, 0, 0, 0, 1], vec![0, 0, 0, 0, 2]]);
+    }
+
+    // After deleting some big values via DeleteKey, leftover segments remain in
+    // the underlying store. The four `find_key*_iter` variants must still skip
+    // those leftovers and yield exactly the surviving logical key-value pairs.
+    #[tokio::test]
+    async fn test_value_splitting4_find_key_iters_with_leftovers() {
+        let big_store = create_value_splitting_memory_store();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
+
+        // Prefix-free keys: distinct first byte ⇒ no key is a prefix of another.
+        let keys: Vec<Vec<u8>> = (1u8..=8u8).map(|b| vec![b, 0, 0]).collect();
+
+        // Mix of small (single-segment) and large (multi-segment) values, so both
+        // code paths in the iterators are exercised.
+        let lengths = [
+            10,
+            MAX_LEN + 5,
+            MAX_LEN - 10,
+            2 * MAX_LEN + 7,
+            3 * MAX_LEN - 4,
+            50,
+            2 * MAX_LEN,
+            4 * MAX_LEN + 1,
+        ];
+        let mut rng = crate::random::make_deterministic_rng();
+        let values = lengths
+            .iter()
+            .map(|&len| (0..len).map(|_| rng.gen::<u8>()).collect())
+            .collect::<Vec<Vec<u8>>>();
+
+        // Write all values.
+        let mut batch = Batch::new();
+        for (key, value) in keys.iter().zip(values.iter()) {
+            batch.put_key_value_bytes(key.clone(), value.clone());
+        }
+        big_store.write_batch(batch).await.unwrap();
+
+        // Delete a few via DeleteKey: for the multi-segment ones only the master
+        // segment is removed, so leftover continuation segments remain in the
+        // underlying store and the iterators must skip them.
+        let to_delete = [1usize, 3, 6];
+        let mut batch = Batch::new();
+        for &i in &to_delete {
+            batch.delete_key(keys[i].clone());
+        }
+        big_store.write_batch(batch).await.unwrap();
+
+        // Surviving logical entries, in ascending key order.
+        let expected_kv = (0..keys.len())
+            .filter(|i| !to_delete.contains(i))
+            .map(|i| (keys[i].clone(), values[i].clone()))
+            .collect::<Vec<_>>();
+        let expected_keys = expected_kv
+            .iter()
+            .map(|(k, _)| k.clone())
+            .collect::<Vec<_>>();
+        let expected_kv_rev = expected_kv.iter().rev().cloned().collect::<Vec<_>>();
+        let expected_keys_rev = expected_keys.iter().rev().cloned().collect::<Vec<_>>();
+
+        // 1. find_keys_by_prefix_iter
+        let mut stream = big_store.find_keys_by_prefix_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_keys);
+
+        // 2. find_key_values_by_prefix_iter
+        let mut stream = big_store.find_key_values_by_prefix_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_kv);
+
+        // 3. find_keys_by_prefix_rev_iter
+        let mut stream = big_store.find_keys_by_prefix_rev_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_keys_rev);
+
+        // 4. find_key_values_by_prefix_rev_iter
+        let mut stream = big_store.find_key_values_by_prefix_rev_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_kv_rev);
+    }
+
+    // Overwriting a long value with a shorter one only rewrites the segments up
+    // to the new count — the high-index segments of the original write remain in
+    // the underlying store as leftovers. The reverse iterator collects them all
+    // (it walks indices top..0 to find the master) and then must drop the
+    // ones whose index is >= the new count when reconstructing the value.
+    #[tokio::test]
+    async fn test_value_splitting5_rev_iter_drops_overwrite_leftovers() {
+        let big_store = create_value_splitting_memory_store();
+        let key = vec![0, 0];
+
+        // Write a 250-byte value: with MAX_VALUE_SIZE = 100 this becomes 3
+        // segments (96 bytes at index 0 plus the count, then 100 + 54 bytes
+        // at indices 1 and 2).
+        let mut rng = crate::random::make_deterministic_rng();
+        let long_value = (0..250).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(key.clone(), long_value);
+        big_store.write_batch(batch).await.unwrap();
+
+        // Overwrite with a single-segment value. Only index 0 is rewritten;
+        // indices 1 and 2 stay in the underlying store as orphan segments.
+        let short_value = (0..10).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(key.clone(), short_value.clone());
+        big_store.write_batch(batch).await.unwrap();
+
+        // The reverse iterator must accumulate all three segments (it sees them
+        // in order index 2, 1, 0) and then, when reconstructing, skip the two
+        // leftovers because their position in the reversed segs list is >= the
+        // new count of 1.
+        let mut stream = big_store.find_key_values_by_prefix_rev_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, vec![(key, short_value)]);
     }
 }

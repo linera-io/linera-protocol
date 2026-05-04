@@ -47,8 +47,8 @@ use crate::{
     journaling::JournalingKeyValueDatabase,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, FindKeyValuesStream, FindKeysStream, KeyValueDatabase,
+        KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -608,6 +608,7 @@ impl DynamoDbStoreInternal {
         start_key: &[u8],
         key_prefix: &[u8],
         start_key_map: Option<HashMap<String, AttributeValue>>,
+        forward: bool,
     ) -> Result<QueryOutput, DynamoDbStoreInternalError> {
         let _guard = self.acquire().await;
         let start_key = start_key.to_vec();
@@ -627,6 +628,7 @@ impl DynamoDbStoreInternal {
                 AttributeValue::B(Blob::new(prefixed_key_prefix)),
             )
             .set_exclusive_start_key(start_key_map)
+            .scan_index_forward(forward)
             .send()
             .boxed_sync()
             .await?;
@@ -685,7 +687,7 @@ impl DynamoDbStoreInternal {
         let mut start_key_map = None;
         loop {
             let response = self
-                .get_query_output(attribute, start_key, key_prefix, start_key_map)
+                .get_query_output(attribute, start_key, key_prefix, start_key_map, true)
                 .await?;
             let last_evaluated = response.last_evaluated_key.clone();
             responses.push(response);
@@ -886,6 +888,13 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .collect()
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        self.find_keys_stream(key_prefix, true)
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -897,6 +906,96 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .key_values()
             .map(|entry| entry.map(|(key, value)| (key.to_vec(), value.to_vec())))
             .collect()
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        self.find_key_values_stream(key_prefix, true)
+    }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        self.find_keys_stream(key_prefix, false)
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        self.find_key_values_stream(key_prefix, false)
+    }
+}
+
+impl DynamoDbStoreInternal {
+    fn find_keys_stream<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+        forward: bool,
+    ) -> FindKeysStream<'a, DynamoDbStoreInternalError> {
+        Box::pin(async_stream::stream! {
+            check_key_size(key_prefix)?;
+            let prefix_len = key_prefix.len();
+            let mut start_key_map = None;
+            loop {
+                let response = self
+                    .get_query_output(
+                        KEY_ATTRIBUTE,
+                        &self.start_key,
+                        key_prefix,
+                        start_key_map,
+                        forward,
+                    )
+                    .await?;
+                let last_evaluated = response.last_evaluated_key.clone();
+                for item in response.items.iter().flatten() {
+                    yield extract_key(prefix_len, item).map(|k| k.to_vec());
+                }
+                match last_evaluated {
+                    None => break,
+                    Some(value) => {
+                        start_key_map = Some(value);
+                    }
+                }
+            }
+        })
+    }
+
+    fn find_key_values_stream<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+        forward: bool,
+    ) -> FindKeyValuesStream<'a, DynamoDbStoreInternalError> {
+        Box::pin(async_stream::stream! {
+            check_key_size(key_prefix)?;
+            let prefix_len = key_prefix.len();
+            let mut start_key_map = None;
+            loop {
+                let response = self
+                    .get_query_output(
+                        KEY_VALUE_ATTRIBUTE,
+                        &self.start_key,
+                        key_prefix,
+                        start_key_map,
+                        forward,
+                    )
+                    .await?;
+                let last_evaluated = response.last_evaluated_key.clone();
+                for item in response.items.iter().flatten() {
+                    yield extract_key_value(prefix_len, item)
+                        .map(|(k, v)| (k.to_vec(), v.to_vec()));
+                }
+                match last_evaluated {
+                    None => break,
+                    Some(value) => {
+                        start_key_map = Some(value);
+                    }
+                }
+            }
+        })
     }
 }
 

@@ -9,6 +9,7 @@ pub mod performance;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use futures::{StreamExt, TryStreamExt};
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
@@ -162,6 +163,8 @@ pub fn span_random_reordering_put_delete<R: Rng>(
 /// * `read_value_bytes`
 /// * `read_multi_values_bytes`
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
+/// * `find_keys_by_prefix_iter` / `find_key_values_by_prefix_iter` (streaming
+///   variants, including early termination)
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
     // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
@@ -184,7 +187,7 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
         let key_values_by_prefix = store.find_key_values_by_prefix(key_prefix).await.unwrap();
-        for (key, value) in key_values_by_prefix {
+        for (key, value) in key_values_by_prefix.clone() {
             keys_request_deriv.push(key.clone());
             set_key_value1.insert((key, value));
         }
@@ -202,6 +205,50 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             }
         }
         assert_eq!(set_key_value1, set_key_value2);
+        // Streaming variants must agree with the eager methods. The forward
+        // `find_keys_by_prefix_iter` is drained by interleaving each yielded
+        // key with a `read_value_bytes` call against the same store. Beyond
+        // checking the iter result, this exercises that holding the streaming
+        // iterator does not deadlock other operations on the same store
+        // (e.g. via a semaphore permit held across the stream body).
+        let mut keys_iter = Vec::new();
+        let mut key_values_via_iter = Vec::new();
+        {
+            let mut stream = store.find_keys_by_prefix_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let key = item.unwrap();
+                let mut full_key = key_prefix.to_vec();
+                full_key.extend(&key);
+                let value = store.read_value_bytes(&full_key).await.unwrap().unwrap();
+                keys_iter.push(key.clone());
+                key_values_via_iter.push((key, value));
+            }
+        }
+        assert_eq!(keys_iter, keys_request);
+        assert_eq!(key_values_via_iter, key_values_by_prefix);
+        let key_values_iter = store
+            .find_key_values_by_prefix_iter(key_prefix)
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap();
+        assert_eq!(key_values_iter, key_values_by_prefix);
+        // Reverse streaming variants must yield the eager results in reverse order.
+        let keys_rev_iter = store
+            .find_keys_by_prefix_rev_iter(key_prefix)
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap();
+        let mut keys_request_rev = keys_request.clone();
+        keys_request_rev.reverse();
+        assert_eq!(keys_rev_iter, keys_request_rev);
+        let key_values_rev_iter = store
+            .find_key_values_by_prefix_rev_iter(key_prefix)
+            .try_collect::<Vec<_>>()
+            .await
+            .unwrap();
+        let mut key_values_by_prefix_rev = key_values_by_prefix.clone();
+        key_values_by_prefix_rev.reverse();
+        assert_eq!(key_values_rev_iter, key_values_by_prefix_rev);
     }
     // Now checking the read_multi_values_bytes
     let mut rng = make_deterministic_rng();

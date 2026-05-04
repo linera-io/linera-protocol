@@ -29,8 +29,8 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        FindKeyValuesStream, FindKeysStream, KeyValueDatabase, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -69,6 +69,13 @@ const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
 
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
+
+/// Iteration direction selector used by the streaming `find_*_iter` helpers.
+#[derive(Clone, Copy)]
+enum IterDirection {
+    Forward,
+    Reverse,
+}
 
 /// The choice of the spawning mode.
 /// `SpawnBlocking` always works and is the safest.
@@ -195,6 +202,32 @@ impl RocksDbStoreExecutor {
 
         let mut iter = self.db.raw_iterator_opt(read_opts);
         iter.seek(prefix);
+        iter
+    }
+
+    /// Returns an iterator positioned at the largest key starting with `prefix`,
+    /// iterating in reverse. `total_order_seek` is enabled because the database
+    /// uses a fixed-length prefix extractor; without it, `seek_for_prev` would
+    /// only search within the bloom-prefix scope and could miss keys whose
+    /// extractor-prefix differs from the seek target.
+    fn get_find_prefix_rev_iter(
+        &self,
+        prefix: &[u8],
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
+        let mut read_opts = rocksdb::ReadOptions::default();
+        read_opts.set_async_io(true);
+        read_opts.set_total_order_seek(true);
+        let upper_bound = get_upper_bound_option(prefix);
+        let mut iter = self.db.raw_iterator_opt(read_opts);
+        match upper_bound.as_deref() {
+            Some(ub) => {
+                iter.seek_for_prev(ub);
+                if iter.key().is_some_and(|k| k == ub) {
+                    iter.prev();
+                }
+            }
+            None => iter.seek_to_last(),
+        }
         iter
     }
 
@@ -538,6 +571,120 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
                 key_prefix,
             )
             .await
+    }
+
+    fn find_keys_by_prefix_iter(&self, key_prefix: &[u8]) -> FindKeysStream<'_, Self::Error> {
+        self.find_keys_stream(key_prefix, IterDirection::Forward)
+    }
+
+    fn find_key_values_by_prefix_iter(
+        &self,
+        key_prefix: &[u8],
+    ) -> FindKeyValuesStream<'_, Self::Error> {
+        self.find_key_values_stream(key_prefix, IterDirection::Forward)
+    }
+
+    fn find_keys_by_prefix_rev_iter(&self, key_prefix: &[u8]) -> FindKeysStream<'_, Self::Error> {
+        self.find_keys_stream(key_prefix, IterDirection::Reverse)
+    }
+
+    fn find_key_values_by_prefix_rev_iter(
+        &self,
+        key_prefix: &[u8],
+    ) -> FindKeyValuesStream<'_, Self::Error> {
+        self.find_key_values_stream(key_prefix, IterDirection::Reverse)
+    }
+}
+
+impl RocksDbStoreInternal {
+    fn find_keys_stream(
+        &self,
+        key_prefix: &[u8],
+        direction: IterDirection,
+    ) -> FindKeysStream<'_, RocksDbStoreInternalError> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        Box::pin(async_stream::try_stream! {
+            check_key_size(&key_prefix)?;
+            let (tx, mut rx) =
+                tokio::sync::mpsc::channel::<Result<Vec<u8>, RocksDbStoreInternalError>>(1);
+            let handle = tokio::task::spawn_blocking(move || {
+                let mut prefix = executor.start_key.clone();
+                prefix.extend(&key_prefix);
+                let len = prefix.len();
+                let mut iter = match direction {
+                    IterDirection::Forward => executor.get_find_prefix_iterator(&prefix),
+                    IterDirection::Reverse => executor.get_find_prefix_rev_iter(&prefix),
+                };
+                while let Some(key) = iter.key() {
+                    if !key.starts_with(&prefix) {
+                        break;
+                    }
+                    if tx.blocking_send(Ok(key[len..].to_vec())).is_err() {
+                        return;
+                    }
+                    match direction {
+                        IterDirection::Forward => iter.next(),
+                        IterDirection::Reverse => iter.prev(),
+                    }
+                }
+                if let Err(error) = iter.status() {
+                    _ = tx.blocking_send(Err(error.into()));
+                }
+            });
+            // The blocking task sends 0+ Ok items followed by at most one
+            // terminal Err; `?` short-circuits on that Err. If the stream ends
+            // cleanly we still await the join handle so a panic in the task is
+            // surfaced as a TokioJoinError.
+            while let Some(item) = rx.recv().await {
+                yield item?;
+            }
+            handle.await.map_err(RocksDbStoreInternalError::TokioJoinError)?;
+        })
+    }
+
+    fn find_key_values_stream(
+        &self,
+        key_prefix: &[u8],
+        direction: IterDirection,
+    ) -> FindKeyValuesStream<'_, RocksDbStoreInternalError> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        Box::pin(async_stream::try_stream! {
+            check_key_size(&key_prefix)?;
+            let (tx, mut rx) = tokio::sync::mpsc::channel::<
+                Result<(Vec<u8>, Vec<u8>), RocksDbStoreInternalError>,
+            >(1);
+            let handle = tokio::task::spawn_blocking(move || {
+                let mut prefix = executor.start_key.clone();
+                prefix.extend(&key_prefix);
+                let len = prefix.len();
+                let mut iter = match direction {
+                    IterDirection::Forward => executor.get_find_prefix_iterator(&prefix),
+                    IterDirection::Reverse => executor.get_find_prefix_rev_iter(&prefix),
+                };
+                while let Some((key, value)) = iter.item() {
+                    if !key.starts_with(&prefix) {
+                        break;
+                    }
+                    let pair = (key[len..].to_vec(), value.to_vec());
+                    if tx.blocking_send(Ok(pair)).is_err() {
+                        return;
+                    }
+                    match direction {
+                        IterDirection::Forward => iter.next(),
+                        IterDirection::Reverse => iter.prev(),
+                    }
+                }
+                if let Err(error) = iter.status() {
+                    _ = tx.blocking_send(Err(error.into()));
+                }
+            });
+            while let Some(item) = rx.recv().await {
+                yield item?;
+            }
+            handle.await.map_err(RocksDbStoreInternalError::TokioJoinError)?;
+        })
     }
 }
 
