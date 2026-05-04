@@ -210,7 +210,7 @@ impl RocksDbStoreExecutor {
     /// uses a fixed-length prefix extractor; without it, `seek_for_prev` would
     /// only search within the bloom-prefix scope and could miss keys whose
     /// extractor-prefix differs from the seek target.
-    fn get_find_prefix_reverse_iterator(
+    fn get_find_prefix_rev_iter(
         &self,
         prefix: &[u8],
     ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
@@ -614,7 +614,7 @@ impl RocksDbStoreInternal {
                 let len = prefix.len();
                 let mut iter = match direction {
                     IterDirection::Forward => executor.get_find_prefix_iterator(&prefix),
-                    IterDirection::Reverse => executor.get_find_prefix_reverse_iterator(&prefix),
+                    IterDirection::Reverse => executor.get_find_prefix_rev_iter(&prefix),
                 };
                 while let Some(key) = iter.key() {
                     if !key.starts_with(&prefix) {
@@ -661,7 +661,7 @@ impl RocksDbStoreInternal {
                 let len = prefix.len();
                 let mut iter = match direction {
                     IterDirection::Forward => executor.get_find_prefix_iterator(&prefix),
-                    IterDirection::Reverse => executor.get_find_prefix_reverse_iterator(&prefix),
+                    IterDirection::Reverse => executor.get_find_prefix_rev_iter(&prefix),
                 };
                 while let Some((key, value)) = iter.item() {
                     if !key.starts_with(&prefix) {

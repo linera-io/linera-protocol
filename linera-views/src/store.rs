@@ -5,7 +5,7 @@
 
 use std::{fmt::Debug, future::Future, pin::Pin};
 
-use futures::stream::Stream;
+use futures::stream::{self, Stream, TryStreamExt};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[cfg(with_testing)]
@@ -104,12 +104,11 @@ pub trait ReadableKeyValueStore: WithError {
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeysStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            let keys = self.find_keys_by_prefix(key_prefix).await?;
-            for key in keys {
-                yield Ok(key);
-            }
-        })
+        Box::pin(
+            stream::once(self.find_keys_by_prefix(key_prefix))
+                .map_ok(|keys| stream::iter(keys.into_iter().map(Ok)))
+                .try_flatten(),
+        )
     }
 
     /// Finds the `(key,value)` pairs matching the prefix. The prefix is not included in the returned keys.
@@ -128,12 +127,11 @@ pub trait ReadableKeyValueStore: WithError {
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeyValuesStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            let key_values = self.find_key_values_by_prefix(key_prefix).await?;
-            for key_value in key_values {
-                yield Ok(key_value);
-            }
-        })
+        Box::pin(
+            stream::once(self.find_key_values_by_prefix(key_prefix))
+                .map_ok(|kvs| stream::iter(kvs.into_iter().map(Ok)))
+                .try_flatten(),
+        )
     }
 
     /// Returns a boxed stream that yields the keys matching the prefix in
@@ -146,12 +144,11 @@ pub trait ReadableKeyValueStore: WithError {
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeysStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            let keys = self.find_keys_by_prefix(key_prefix).await?;
-            for key in keys.into_iter().rev() {
-                yield Ok(key);
-            }
-        })
+        Box::pin(
+            stream::once(self.find_keys_by_prefix(key_prefix))
+                .map_ok(|keys| stream::iter(keys.into_iter().rev().map(Ok)))
+                .try_flatten(),
+        )
     }
 
     /// Returns a boxed stream that yields the `(key, value)` pairs matching the
@@ -164,12 +161,11 @@ pub trait ReadableKeyValueStore: WithError {
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeyValuesStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            let key_values = self.find_key_values_by_prefix(key_prefix).await?;
-            for key_value in key_values.into_iter().rev() {
-                yield Ok(key_value);
-            }
-        })
+        Box::pin(
+            stream::once(self.find_key_values_by_prefix(key_prefix))
+                .map_ok(|kvs| stream::iter(kvs.into_iter().rev().map(Ok)))
+                .try_flatten(),
+        )
     }
 
     // We can't use `async fn` here in the below implementations due to
