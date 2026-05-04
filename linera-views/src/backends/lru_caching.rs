@@ -617,6 +617,21 @@ impl<S> LruCachingStore<S> {
 #[cfg(with_testing)]
 pub type LruCachingMemoryDatabase = LruCachingDatabase<MemoryDatabase>;
 
+#[cfg(with_testing)]
+impl<D> TestKeyValueDatabase for LruCachingDatabase<D>
+where
+    D: TestKeyValueDatabase,
+{
+    async fn new_test_config() -> Result<LruCachingConfig<D::Config>, D::Error> {
+        let inner_config = D::new_test_config().await?;
+        let storage_cache_config = DEFAULT_STORAGE_CACHE_CONFIG;
+        Ok(LruCachingConfig {
+            inner_config,
+            storage_cache_config,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // The strategy of every test below: build an `LruCachingStore` over a
@@ -706,20 +721,5 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(rev_kv, vec![(vec![1], vec![11]), (vec![0], vec![10])]);
-    }
-}
-
-#[cfg(with_testing)]
-impl<D> TestKeyValueDatabase for LruCachingDatabase<D>
-where
-    D: TestKeyValueDatabase,
-{
-    async fn new_test_config() -> Result<LruCachingConfig<D::Config>, D::Error> {
-        let inner_config = D::new_test_config().await?;
-        let storage_cache_config = DEFAULT_STORAGE_CACHE_CONFIG;
-        Ok(LruCachingConfig {
-            inner_config,
-            storage_cache_config,
-        })
     }
 }

@@ -789,12 +789,9 @@ mod tests {
             .filter(|i| !to_delete.contains(i))
             .map(|i| (keys[i].clone(), values[i].clone()))
             .collect();
-        let expected_keys: Vec<Vec<u8>> =
-            expected_kv.iter().map(|(k, _)| k.clone()).collect();
-        let expected_kv_rev: Vec<(Vec<u8>, Vec<u8>)> =
-            expected_kv.iter().rev().cloned().collect();
-        let expected_keys_rev: Vec<Vec<u8>> =
-            expected_keys.iter().rev().cloned().collect();
+        let expected_keys: Vec<Vec<u8>> = expected_kv.iter().map(|(k, _)| k.clone()).collect();
+        let expected_kv_rev: Vec<(Vec<u8>, Vec<u8>)> = expected_kv.iter().rev().cloned().collect();
+        let expected_keys_rev: Vec<Vec<u8>> = expected_keys.iter().rev().cloned().collect();
 
         // 1. find_keys_by_prefix_iter
         let mut stream = big_store.find_keys_by_prefix_iter(&[]);
