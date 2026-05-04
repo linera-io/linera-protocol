@@ -177,7 +177,7 @@ fn bench_map_view_remove((_rt, mut view): (Runtime, MapView<MemoryContext<()>, S
 #[bench::pre_save_1000(setup_map_1000())]
 fn bench_map_view_pre_save((_rt, view): (Runtime, MapView<MemoryContext<()>, String, Vec<u8>>)) {
     let mut batch = Batch::new();
-    let _ = view.pre_save(&mut batch);
+    view.pre_save(&mut batch).unwrap();
     black_box(batch);
 }
 
@@ -253,7 +253,7 @@ fn bench_queue_delete_front((_rt, mut view): (Runtime, QueueView<MemoryContext<(
 #[bench::pre_save_1000(setup_queue_1000())]
 fn bench_queue_pre_save((_rt, view): (Runtime, QueueView<MemoryContext<()>, u8>)) {
     let mut batch = Batch::new();
-    let _ = view.pre_save(&mut batch);
+    view.pre_save(&mut batch).unwrap();
     black_box(batch);
 }
 
@@ -326,7 +326,7 @@ fn bench_bucket_queue_pre_save(
     (_rt, view): (Runtime, BucketQueueView<MemoryContext<()>, u8, 100>),
 ) {
     let mut batch = Batch::new();
-    let _ = view.pre_save(&mut batch);
+    view.pre_save(&mut batch).unwrap();
     black_box(batch);
 }
 
@@ -364,7 +364,7 @@ fn bench_register_view_get_set(
 #[bench::pre_save(setup_register_view())]
 fn bench_register_view_pre_save((_rt, view): (Runtime, RegisterView<MemoryContext<()>, String>)) {
     let mut batch = Batch::new();
-    let _ = view.pre_save(&mut batch);
+    view.pre_save(&mut batch).unwrap();
     black_box(batch);
 }
 
@@ -466,7 +466,7 @@ fn bench_coll_view_indices((rt, view): (Runtime, TestCollView)) {
 #[bench::pre_save_100(setup_populated_coll_view())]
 fn bench_coll_view_pre_save((_rt, view): (Runtime, TestCollView)) {
     let mut batch = Batch::new();
-    let _ = view.pre_save(&mut batch);
+    view.pre_save(&mut batch).unwrap();
     black_box(batch);
 }
 
@@ -565,7 +565,7 @@ fn bench_reentrant_coll_indices((rt, view): (Runtime, TestReentrantCollView)) {
 #[bench::pre_save_100(setup_populated_reentrant_coll())]
 fn bench_reentrant_coll_pre_save((_rt, view): (Runtime, TestReentrantCollView)) {
     let mut batch = Batch::new();
-    let _ = view.pre_save(&mut batch);
+    view.pre_save(&mut batch).unwrap();
     black_box(batch);
 }
 
@@ -583,7 +583,7 @@ fn setup_map_1000_in_storage() -> (Runtime, MemoryContext<()>) {
                 .unwrap();
         }
         let mut batch = Batch::new();
-        let _ = view.pre_save(&mut batch);
+        view.pre_save(&mut batch).unwrap();
         context.store().write_batch(batch).await.unwrap();
         view.post_save();
         context

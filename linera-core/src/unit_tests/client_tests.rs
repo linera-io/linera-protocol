@@ -2744,8 +2744,11 @@ where
         }
     }
     // Process any pending block. If pending proposal was already committed via conflict,
-    // this will return None for the certificate.
-    let _ = client1.process_pending_block().await;
+    // this will return None for the certificate, and a remote conflict may surface as an
+    // error here.
+    if let Err(error) = client1.process_pending_block().await {
+        tracing::debug!("process_pending_block returned error after race: {error}");
+    }
 
     // Burning 3 and 4 tokens got finalized; the pending 2 tokens got skipped.
     client0.synchronize_from_validators().await.unwrap();
@@ -2889,6 +2892,150 @@ where
     );
     sender.synchronize_from_validators().await?;
     assert_eq!(sender.process_inbox().await?.0.len(), 1);
+
+    Ok(())
+}
+
+/// Verifies that `process_notification` short-circuits on `NewIncomingBundle`
+/// notifications whose origin is filtered by `MessagePolicy`: the sender's
+/// block must not be downloaded into local storage.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_process_notification_filters_origin<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let mut receiver = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient = Account::chain(receiver.chain_id());
+    let sender_id = sender.chain_id();
+    // `process_notification_from` is point-to-point, so pick an honest validator.
+    let validator = builder
+        .initial_committee
+        .validator_addresses()
+        .find(|(public_key, _)| builder.fault_type(public_key) == Some(FaultType::Honest))
+        .unwrap();
+    let storage = receiver.storage_client().clone();
+
+    // Baseline: with the default (permissive) policy, the sender's block
+    // is downloaded when its `NewIncomingBundle` notification is processed.
+    let cert_baseline = sender
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    receiver
+        .process_notification_from(
+            Notification {
+                chain_id: receiver.chain_id(),
+                reason: Reason::NewIncomingBundle {
+                    origin: sender_id,
+                    height: cert_baseline.block().header.height,
+                },
+            },
+            validator,
+        )
+        .await;
+    assert!(
+        storage.contains_certificate(cert_baseline.hash()).await?,
+        "baseline: sender block should be downloaded with the default policy"
+    );
+
+    // Each of the three filter modes must short-circuit the download.
+    for policy in [
+        // Blanket Ignore.
+        MessagePolicy {
+            blanket: BlanketMessagePolicy::Ignore,
+            ..Default::default()
+        },
+        // Origin in the denylist.
+        MessagePolicy {
+            ignore_chain_ids: [sender_id].into_iter().collect(),
+            ..Default::default()
+        },
+        // Origin not in the allowlist.
+        MessagePolicy {
+            restrict_chain_ids_to: Some([receiver.chain_id()].into_iter().collect()),
+            ..Default::default()
+        },
+    ] {
+        receiver.options_mut().message_policy = policy;
+        let cert = sender
+            .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+            .await
+            .unwrap_ok_committed();
+        assert!(
+            !storage.contains_certificate(cert.hash()).await?,
+            "block must not be in local storage before notification"
+        );
+        receiver
+            .process_notification_from(
+                Notification {
+                    chain_id: receiver.chain_id(),
+                    reason: Reason::NewIncomingBundle {
+                        origin: sender_id,
+                        height: cert.block().header.height,
+                    },
+                },
+                validator,
+            )
+            .await;
+        assert!(
+            !storage.contains_certificate(cert.hash()).await?,
+            "filtered origin: sender block must not be downloaded"
+        );
+    }
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_priority_bundle_origins<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer)
+        .await?
+        .with_policy(ResourceControlPolicy::only_fuel());
+    let sender_a = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let sender_b = builder.add_root_chain(2, Amount::from_tokens(4)).await?;
+    let mut receiver = builder.add_root_chain(3, Amount::ZERO).await?;
+    let recipient = Account::chain(receiver.chain_id());
+
+    // Mark sender_b's bundles as priority for the receiver.
+    receiver.options_mut().priority_bundle_origins = [sender_b.chain_id()].into_iter().collect();
+
+    // Send from sender_a first (would normally come first by timestamp), then sender_b.
+    sender_a
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+    sender_b
+        .transfer(AccountOwner::CHAIN, Amount::ONE, recipient)
+        .await
+        .unwrap_ok_committed();
+
+    receiver.synchronize_from_validators().await?;
+    let cert = receiver.process_inbox().await?.0.pop().unwrap();
+    let bundles: Vec<_> = cert.block().body.incoming_bundles().collect();
+    assert_eq!(bundles.len(), 2);
+    assert_eq!(
+        bundles[0].origin,
+        sender_b.chain_id(),
+        "Priority bundle from sender_b should be first"
+    );
+    assert_eq!(
+        bundles[1].origin,
+        sender_a.chain_id(),
+        "Non-priority bundle from sender_a should be second"
+    );
 
     Ok(())
 }

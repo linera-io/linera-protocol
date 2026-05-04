@@ -46,6 +46,7 @@ fn write_compilation_json(
   }},
   "settings": {{
     "viaIR": true,
+    "evmVersion": "cancun",
     {optimizer_block}"outputSelection": {{
       "*": {{
         "*": ["evm.bytecode"]

@@ -1383,6 +1383,12 @@ impl From<Blob> for BlobContent {
     }
 }
 
+impl From<Arc<Blob>> for BlobContent {
+    fn from(blob: Arc<Blob>) -> BlobContent {
+        blob.content().clone()
+    }
+}
+
 /// A blob of binary data, with its hash.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Allocative)]
 pub struct Blob {
@@ -1590,6 +1596,8 @@ pub struct MessagePolicy {
     /// accepted. `Option::None` means that messages from all chains are accepted. An empty
     /// `HashSet` denotes that messages from no chains are accepted.
     pub restrict_chain_ids_to: Option<HashSet<ChainId>>,
+    /// A collection of chains whose incoming messages should be ignored.
+    pub ignore_chain_ids: HashSet<ChainId>,
     /// A collection of applications: If `Some`, only bundles with at least one message by any
     /// of these applications will be accepted.
     pub reject_message_bundles_without_application_ids: Option<HashSet<GenericApplicationId>>,
@@ -1644,6 +1652,19 @@ impl MessagePolicy {
     #[instrument(level = "trace", skip(self))]
     pub fn is_reject(&self) -> bool {
         matches!(self.blanket, BlanketMessagePolicy::Reject)
+    }
+
+    /// Returns `true` if every message from `origin` would be unconditionally dropped:
+    /// blanket policy is `Ignore`, the origin is in `ignore_chain_ids`, or
+    /// `restrict_chain_ids_to` is `Some` and does not contain the origin.
+    #[instrument(level = "trace", skip(self))]
+    pub fn ignores_origin(&self, origin: &ChainId) -> bool {
+        self.is_ignore()
+            || self.ignore_chain_ids.contains(origin)
+            || self
+                .restrict_chain_ids_to
+                .as_ref()
+                .is_some_and(|set| !set.contains(origin))
     }
 }
 

@@ -176,7 +176,7 @@ where
             pending_services
                 .retain(|_, pending_service| pending_service.start_block_height > height);
             if pending_services.is_empty() {
-                let _ = self.pending_services_notifications.remove(&chain_id);
+                self.pending_services_notifications.remove(&chain_id);
             }
         }
     }

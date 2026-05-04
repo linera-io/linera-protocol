@@ -280,12 +280,12 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
-            certificate,
+            certificate: Arc::unwrap_or_clone(certificate),
             wait_for_outgoing_messages,
         };
         GrpcClient::try_into_chain_info(client_delegate!(

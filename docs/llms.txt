@@ -59,21 +59,9 @@
 - [Machine Learning on Linera](https://linera.dev/developers/experimental/ml.html): Run ML models on the edge using the contract/service split for secure and efficient inference.
 - [Using EVM Smart Contracts on Linera](https://linera.dev/developers/experimental/ethereum.html): Run Ethereum Virtual Machine smart contracts within Linera microchains using Revm integration.
 
-## Operators — Devnets
+## Operators
 
-- [Devnets](https://linera.dev/operators/devnets.html): Set up developer networks for testing, managed by the Linera core team without real assets.
-- [Running Devnets with Docker Compose](https://linera.dev/operators/devnets/compose.html): Set up a local devnet with a single validator using Docker Compose.
-- [Running Devnets with kind](https://linera.dev/operators/devnets/kind.html): Set up a local devnet using Kubernetes in Docker (kind).
-
-## Operators — Testnets
-
-- [Testnets](https://linera.dev/operators/testnets.html): Deploy validator nodes and participate in decentralized Linera Testnets.
-- [Requirements](https://linera.dev/operators/testnets/requirements.html): Toolchain installation, Docker Compose requirements, key management, infrastructure, and ScyllaDB configuration.
-- [One-Click Deploy](https://linera.dev/operators/testnets/one-click.html): Automated validator deployment after downloading the linera-protocol repository.
-- [Manual Installation](https://linera.dev/operators/testnets/manual-installation.html): Step-by-step validator setup including genesis configuration and manual configuration.
-- [Verifying Installation](https://linera.dev/operators/testnets/verify-installation.html): Verify that your validator node is running correctly after deployment.
-- [Monitoring and Logging](https://linera.dev/operators/testnets/monitoring-logging.html): Prometheus metrics, Grafana dashboards, Watchtower for container updates, and log management.
-- [Debugging](https://linera.dev/operators/testnets/debugging.html): Common issues, troubleshooting steps, and support channels for validator operators.
+- [Node Operators (moved)](https://linera.dev/operators.html): Validator deployment docs have moved to <https://docs.infra.linera.net/>; deployment artifacts live at <https://github.com/linera-io/linera-artifacts>.
 
 ## Appendix
 

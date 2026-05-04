@@ -124,8 +124,7 @@ pub fn deploy_microchain(
     let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
         .expect("MicrochainTest.sol not found");
     let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
-    let constructor_args =
-        (light_client, <[u8; 32]>::from(*chain_id.as_bytes())).abi_encode_params();
+    let constructor_args = (light_client, *chain_id.as_bytes()).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -137,37 +136,23 @@ pub fn deploy_fungible_bridge(
     light_client: Address,
     chain_id: CryptoHash,
     token: Address,
+    application_id: CryptoHash,
 ) -> Address {
     let bytecode = compile_contract(
         evm::FUNGIBLE_BRIDGE_SOURCE,
         "FungibleBridge.sol",
         "FungibleBridge",
     );
-    let constructor_args =
-        (light_client, <[u8; 32]>::from(*chain_id.as_bytes()), token).abi_encode_params();
+    let constructor_args = (
+        light_client,
+        *chain_id.as_bytes(),
+        token,
+        *application_id.as_bytes(),
+    )
+        .abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
-}
-
-pub fn register_fungible_application_id(
-    db: &mut CacheDB<EmptyDB>,
-    caller: Address,
-    bridge: Address,
-    application_id: CryptoHash,
-) {
-    use alloy_sol_types::sol;
-    sol! {
-        function registerFungibleApplicationId(bytes32 _applicationId) external;
-    }
-    call_contract(
-        db,
-        caller,
-        bridge,
-        &registerFungibleApplicationIdCall {
-            _applicationId: <[u8; 32]>::from(*application_id.as_bytes()).into(),
-        },
-    );
 }
 
 const MOCK_ERC20_SOL: &str = r#"
@@ -317,7 +302,7 @@ pub fn deploy_light_client(
     epoch: u32,
 ) -> Address {
     let bytecode = compile_contract(evm::light_client::SOURCE, "LightClient.sol", "LightClient");
-    let chain_id_bytes = <[u8; 32]>::from(*admin_chain_id.as_bytes());
+    let chain_id_bytes = *admin_chain_id.as_bytes();
     let constructor_args =
         (validators.to_vec(), weights.to_vec(), chain_id_bytes, epoch).abi_encode_params();
     let mut deploy_data = bytecode;

@@ -226,7 +226,11 @@ pub async fn wait_for_light_client(
 /// Required because enabling the `relay` feature links rustls which
 /// needs an explicit provider before any TLS usage.
 pub fn ensure_rustls_provider() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    // `install_default` returns Err if a provider is already installed, which is the
+    // expected case when multiple tests in the same process call this.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .ok();
 }
 
 /// Starts docker compose stack with pre-cleanup of stale state.
@@ -236,11 +240,14 @@ pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -
         .expect("compose file path should be valid UTF-8");
 
     // Pre-cleanup: remove stale state from a previous (possibly crashed) run.
-    let _ = Command::new("docker")
+    if let Err(error) = Command::new("docker")
         .args(["compose", "-p", project_name, "-f"])
         .arg(compose_file)
         .args(["down", "-v"])
-        .status();
+        .status()
+    {
+        tracing::debug!(?error, "Pre-cleanup `docker compose down` failed");
+    }
 
     tracing::info!("Starting docker compose stack...");
     let mut compose =

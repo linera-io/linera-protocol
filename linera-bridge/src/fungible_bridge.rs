@@ -93,8 +93,8 @@ mod tests {
 
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-            let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token);
-            register_fungible_application_id(&mut db, deployer, bridge, app_id);
+            let bridge =
+                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token, app_id);
 
             // Fund the bridge with the full token supply
             call_contract(
@@ -285,8 +285,8 @@ mod tests {
 
         let chain_id = CryptoHash::new(&TestString::new("test_chain"));
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-        let bridge = deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token);
-        register_fungible_application_id(&mut db, deployer, bridge, app_id);
+        let bridge =
+            deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token, app_id);
 
         // Give depositor tokens (instead of funding the bridge)
         call_contract(
@@ -333,8 +333,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             &bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -364,14 +364,8 @@ mod tests {
 
         // chain id = 1 in revm mainnet context
         assert_eq!(event.data.source_chain_id, alloy_primitives::U256::from(1));
-        assert_eq!(
-            event.data.target_chain_id,
-            alloy_primitives::B256::from(<[u8; 32]>::from(*t.chain_id.as_bytes()))
-        );
-        assert_eq!(
-            event.data.target_application_id,
-            alloy_primitives::B256::from(<[u8; 32]>::from(*t.app_id.as_bytes()))
-        );
+        assert_eq!(event.data.target_chain_id, *t.chain_id.as_bytes());
+        assert_eq!(event.data.target_application_id, *t.app_id.as_bytes());
         assert_eq!(
             event.data.target_account_owner,
             alloy_primitives::B256::from(target_owner_bytes())
@@ -419,8 +413,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             &bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -451,8 +445,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             &bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
             },
@@ -480,7 +474,7 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             &bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
                 target_application_id: [0xFF; 32].into(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(DEPOSIT_AMOUNT),
@@ -516,8 +510,8 @@ mod tests {
             DEPOSITOR,
             t.bridge,
             &bridge::depositCall {
-                target_chain_id: <[u8; 32]>::from(*t.chain_id.as_bytes()).into(),
-                target_application_id: <[u8; 32]>::from(*t.app_id.as_bytes()).into(),
+                target_chain_id: *t.chain_id.as_bytes(),
+                target_application_id: *t.app_id.as_bytes(),
                 target_account_owner: target_owner_bytes().into(),
                 amount: alloy_primitives::U256::from(too_much),
             },
@@ -527,5 +521,48 @@ mod tests {
             result.is_err(),
             "deposit with insufficient balance should revert"
         );
+    }
+
+    #[test]
+    fn constructor_rejects_zero_app_id() {
+        use alloy_sol_types::SolValue;
+
+        let mut db = CacheDB::new(EmptyDB::default());
+        let deployer = Address::ZERO;
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let validator_addr = validator_evm_address(&public);
+        let admin_chain_id = test_admin_chain_id();
+        let light_client = deploy_light_client(
+            &mut db,
+            deployer,
+            &[validator_addr],
+            &[1],
+            admin_chain_id,
+            0,
+        );
+        let token = deploy_mock_erc20(
+            &mut db,
+            deployer,
+            alloy_primitives::U256::from(INITIAL_SUPPLY),
+        );
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+        let chain_id_bytes: [u8; 32] = (*chain_id.as_bytes()).into();
+
+        let bytecode = compile_contract(
+            crate::evm::FUNGIBLE_BRIDGE_SOURCE,
+            "FungibleBridge.sol",
+            "FungibleBridge",
+        );
+        let zero_app_id: [u8; 32] = [0u8; 32];
+        let constructor_args =
+            (light_client, chain_id_bytes, token, zero_app_id).abi_encode_params();
+        let mut deploy_data = bytecode;
+        deploy_data.extend_from_slice(&constructor_args);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            deploy_contract(&mut db, deployer, deploy_data)
+        }));
+        assert!(result.is_err(), "deployment with zero app id must revert");
     }
 }

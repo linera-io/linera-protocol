@@ -73,6 +73,10 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_chain_set)]
     pub prioritize_bundles_from: Option<HashSet<ChainId>>,
 
+    /// Comma-separated list of chain IDs whose incoming bundles should be ignored.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub ignore_bundles_from: Option<HashSet<ChainId>>,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     /// Use 0 to disable expiry.
     #[arg(
@@ -330,6 +334,7 @@ impl Options {
         let message_policy = MessagePolicy {
             blanket: self.blanket_message_policy,
             restrict_chain_ids_to: self.restrict_chain_ids_to.clone(),
+            ignore_chain_ids: self.ignore_bundles_from.clone().unwrap_or_default(),
             reject_message_bundles_without_application_ids: self
                 .reject_message_bundles_without_application_ids
                 .clone(),
@@ -348,6 +353,7 @@ impl Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
             staging_bundles_time_budget: self.staging_bundles_time_budget,
+            priority_bundle_origins: self.prioritize_bundles_from.clone().unwrap_or_default(),
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
