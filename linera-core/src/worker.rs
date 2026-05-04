@@ -19,7 +19,6 @@ use linera_base::{
         Timestamp,
     },
     doc_scalar,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
 use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
@@ -571,7 +570,7 @@ pub struct WorkerState<StorageClient: Storage> {
     storage: StorageClient,
     /// Configuration options for chain workers.
     chain_worker_config: ChainWorkerConfig,
-    block_cache: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_cache: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
@@ -619,15 +618,6 @@ impl<StorageClient> WorkerState<StorageClient>
 where
     StorageClient: Storage,
 {
-    /// Returns an instance with the specified set of chain IDs whose incoming bundles
-    /// should be processed first.
-    #[cfg(with_testing)]
-    #[instrument(level = "trace", skip(self, origins))]
-    pub fn with_priority_bundle_origins(mut self, origins: HashSet<ChainId>) -> Self {
-        self.chain_worker_config.priority_bundle_origins = origins;
-        self
-    }
-
     /// Returns an instance with the specified cross-chain message chunk limit.
     #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self))]
@@ -681,16 +671,13 @@ where
         let block = Arc::unwrap_or_clone(block);
 
         match certificate.value.kind {
-            linera_chain::types::CertificateKind::Confirmed => {
-                let value = ConfirmedBlock::from_hashed(block);
-                Ok(Either::Left(
-                    certificate
-                        .with_value(value)
-                        .ok_or(WorkerError::InvalidLiteCertificate)?,
-                ))
-            }
+            linera_chain::types::CertificateKind::Confirmed => Ok(Either::Left(
+                certificate
+                    .with_value(block)
+                    .ok_or(WorkerError::InvalidLiteCertificate)?,
+            )),
             linera_chain::types::CertificateKind::Validated => {
-                let value = ValidatedBlock::from_hashed(block);
+                let value = ValidatedBlock::from_hashed(block.into_inner());
                 Ok(Either::Right(
                     certificate
                         .with_value(value)
@@ -934,12 +921,15 @@ where
         tracing::warn!(%chain_id, "Evicting poisoned chain worker from cache");
         let pin = self.chain_workers.pin();
         let weak_poisoned = Arc::downgrade(poisoned);
-        let _ = pin.remove_if(&chain_id, |_key, future| {
+        let removed = pin.remove_if(&chain_id, |_key, future| {
             future
                 .peek()
                 .and_then(|r| r.clone().ok())
                 .is_some_and(|weak| weak.ptr_eq(&weak_poisoned))
         });
+        if removed.is_err() {
+            tracing::trace!(%chain_id, "Poisoned worker entry already replaced; skipping eviction");
+        }
     }
 
     /// Gets or creates a chain worker for the given chain.
@@ -1030,7 +1020,10 @@ where
             .or_default()
             .clone();
 
-        let is_tracked = self.chain_modes.as_ref().is_some_and(|chain_modes| {
+        // `chain_modes=None` means "no tracked/sender distinction" (validators) — treat
+        // every chain as tracked so it routes through `config.ttl`, not the unset
+        // `config.sender_chain_ttl` which would skip `spawn_keep_alive` entirely.
+        let is_tracked = self.chain_modes.as_ref().is_none_or(|chain_modes| {
             chain_modes
                 .read()
                 .unwrap()
@@ -1219,7 +1212,7 @@ where
         &self,
         chain_id: ChainId,
         height: BlockHeight,
-    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let guard = handle::read_lock_initialized(&state).await?;
         guard.read_certificate(height).await
@@ -1417,7 +1410,7 @@ where
         &self,
         chain_id: ChainId,
         blob_id: BlobId,
-    ) -> Result<Blob, WorkerError> {
+    ) -> Result<Arc<Blob>, WorkerError> {
         trace!("{} <-- download_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_read(chain_id, |guard| async move {

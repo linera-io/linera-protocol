@@ -102,13 +102,13 @@ impl ValidatorQueryResults {
         reference: Option<&ValidatorQueryResults>,
     ) {
         if let Some(key) = public_key {
-            println!("Public key: {}", key);
+            println!("Public key: {key}");
         }
         if let Some(address) = address {
-            println!("Address: {}", address);
+            println!("Address: {address}");
         }
         if let Some(w) = weight {
-            println!("Weight: {}", w);
+            println!("Weight: {w}");
         }
 
         let ref_version = reference.and_then(|ref_results| ref_results.version_info.as_ref().ok());
@@ -159,7 +159,7 @@ impl ValidatorQueryResults {
             Ok(info) => {
                 if ref_info.is_none_or(|ref_info| info.block_hash != ref_info.block_hash) {
                     if let Some(hash) = info.block_hash {
-                        println!("Block hash: {}", hash);
+                        println!("Block hash: {hash}");
                     } else {
                         println!("Block hash: None");
                     }
@@ -327,7 +327,6 @@ where
             name,
             util::non_zero_duration(options.chain_worker_ttl),
             util::non_zero_duration(options.sender_chain_worker_ttl),
-            options.prioritize_bundles_from.clone().unwrap_or_default(),
             options.to_chain_client_options(),
             block_cache_size,
             execution_state_cache_size,
@@ -430,8 +429,14 @@ impl<Env: Environment> ClientContext<Env> {
             .map_err(error::Inner::wallet)?
             .and_then(|chain| chain.owner);
 
+        // Only persist proposals that were made in the fast round: they need to be
+        // remembered across sessions to make sure there are no conflicting fast proposals.
+        let pending_fast_proposal = client
+            .pending_proposal()
+            .await
+            .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         let new_chain = wallet::Chain {
-            pending_proposal: client.pending_proposal().await,
+            pending_fast_proposal,
             owner: existing_owner,
             ..info.as_ref().into()
         };
@@ -1015,12 +1020,15 @@ impl<Env: Environment> ClientContext<Env> {
             for chain_client in chain_clients {
                 let info = chain_client.chain_info().await?;
                 let client_owner = chain_client.preferred_owner();
-                let pending_proposal = chain_client.pending_proposal().await;
+                let pending_fast_proposal = chain_client
+                    .pending_proposal()
+                    .await
+                    .filter(|p| p.round.is_some_and(|r| r.is_fast()));
                 self.wallet()
                     .insert(
                         info.chain_id,
                         wallet::Chain {
-                            pending_proposal,
+                            pending_fast_proposal,
                             owner: client_owner,
                             ..info.as_ref().into()
                         },

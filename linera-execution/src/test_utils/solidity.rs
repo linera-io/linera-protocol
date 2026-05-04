@@ -46,6 +46,7 @@ fn write_compilation_json(
   }},
   "settings": {{
     "viaIR": true,
+    "evmVersion": "cancun",
     {optimizer_block}"outputSelection": {{
       "*": {{
         "*": ["evm.bytecode"]
@@ -131,7 +132,7 @@ pub fn compile_solidity_contract_with_options(
     for (extra_file_name, extra_source_code) in extra_sources {
         let extra_code_path = path.join(extra_file_name);
         let mut extra_code_file = File::create(&extra_code_path)?;
-        writeln!(extra_code_file, "{}", extra_source_code)?;
+        writeln!(extra_code_file, "{extra_source_code}")?;
     }
     if source_code.contains("Linera.sol") {
         // The source code seems to import Linera.sol, so we import the relevant files.
@@ -141,7 +142,7 @@ pub fn compile_solidity_contract_with_options(
         ] {
             let test_code_path = path.join(file_name);
             let mut test_code_file = File::create(&test_code_path)?;
-            writeln!(test_code_file, "{}", literal_path)?;
+            writeln!(test_code_file, "{literal_path}")?;
         }
     }
     if source_code.contains("@openzeppelin") {
@@ -156,7 +157,7 @@ pub fn compile_solidity_contract_with_options(
     }
     let test_code_path = path.join(file_name);
     let mut test_code_file = File::create(&test_code_path)?;
-    writeln!(test_code_file, "{}", source_code)?;
+    writeln!(test_code_file, "{source_code}")?;
     get_bytecode_path(path, file_name, contract_name, optimizer_runs)
 }
 

@@ -46,22 +46,18 @@ fn test_opentelemetry_filters_skip() {
 
     assert!(
         span_names.contains(&"span_with_export".to_string()),
-        "Regular span should be exported to OpenTelemetry. Found spans: {:?}",
-        span_names
+        "Regular span should be exported to OpenTelemetry. Found spans: {span_names:?}"
     );
     assert!(
         !span_names.contains(&"span_without_export".to_string()),
-        "Span with opentelemetry.skip should NOT be exported to OpenTelemetry. Found spans: {:?}",
-        span_names
+        "Span with opentelemetry.skip should NOT be exported to OpenTelemetry. Found spans: {span_names:?}"
     );
     assert!(
         span_names.contains(&"manual_exported".to_string()),
-        "Manual span without skip should be exported. Found spans: {:?}",
-        span_names
+        "Manual span without skip should be exported. Found spans: {span_names:?}"
     );
     assert!(
         !span_names.contains(&"manual_skipped".to_string()),
-        "Manual span with opentelemetry.skip should NOT be exported. Found spans: {:?}",
-        span_names
+        "Manual span with opentelemetry.skip should NOT be exported. Found spans: {span_names:?}"
     );
 }

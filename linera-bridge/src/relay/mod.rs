@@ -95,7 +95,7 @@ pub async fn run(
     evm_light_client_address: Option<&str>,
     port: u16,
     cache_sizes: linera_storage::StorageCacheConfig,
-    monitor_scan_interval: u64,
+    monitor_scan_interval: Duration,
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path: Option<&Path>,
@@ -254,7 +254,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     evm_private_key: &str,
     evm_light_client_address: Option<&str>,
     port: u16,
-    monitor_scan_interval: u64,
+    monitor_scan_interval: Duration,
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
@@ -318,7 +318,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let admin_notifications = chain_client.subscribe_to(admin_chain_id)?;
     let mut notifications = futures::stream::select(chain_notifications, admin_notifications);
     let (listener, _abort_handle, _) = chain_client.listen().await?;
-    let chain_listener_handle = tokio::spawn(listener);
+    let mut chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan/retry ──
     let mut monitor_state = MonitorState::new(monitor_start_block);
@@ -326,10 +326,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .parent()
         .unwrap_or(storage_dir)
         .join("bridge_relay.sqlite3");
-    let sqlite_path = match sqlite_path_override {
-        Some(p) => p,
-        None => &default_sqlite_path,
-    };
+    let sqlite_path = sqlite_path_override.unwrap_or(&default_sqlite_path);
     let db = monitor::db::BridgeDb::open(sqlite_path)
         .await
         .with_context(|| {
@@ -341,12 +338,11 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     tracing::info!(path = %sqlite_path.display(), "Opened bridge relay SQLite database");
     monitor_state.set_db(db);
     let monitor = Arc::new(RwLock::new(monitor_state));
-    let scan_interval = Duration::from_secs(monitor_scan_interval);
     let (pending_deposit_tx, pending_deposit_rx) =
         tokio::sync::mpsc::channel::<monitor::PendingDeposit>(64);
     let (pending_burn_tx, pending_burn_rx) = tokio::sync::mpsc::channel::<monitor::PendingBurn>(64);
 
-    let evm_scan_handle = {
+    let mut evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
@@ -355,11 +351,11 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             evm_client,
             linera_client,
             pending_deposit_tx,
-            scan_interval,
+            monitor_scan_interval,
             max_retries,
         ))
     };
-    let linera_scan_handle = {
+    let mut linera_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
@@ -368,12 +364,12 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             evm_client,
             linera_client,
             pending_burn_tx,
-            scan_interval,
+            monitor_scan_interval,
             max_retries,
         ))
     };
 
-    let retry_handle = {
+    let mut retry_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
@@ -394,7 +390,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     tracing::info!("HTTP server listening on {bind_addr}");
 
     let tcp_listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    let http_server_handle = tokio::spawn(async move {
+    let mut http_server_handle = tokio::spawn(async move {
         axum::serve(tcp_listener, app)
             .await
             .context("HTTP server error")
@@ -411,11 +407,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
 
     // ── Main loop: process chain operations + notifications ──
     tracing::info!("Listening for chain operations and notifications...");
-    let mut chain_listener_handle = chain_listener_handle;
-    let mut evm_scan_handle = evm_scan_handle;
-    let mut linera_scan_handle = linera_scan_handle;
-    let mut retry_handle = retry_handle;
-    let mut http_server_handle = http_server_handle;
     loop {
         tokio::select! {
             result = &mut chain_listener_handle => {
@@ -511,12 +502,14 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             let (certs, _) = chain_client.process_inbox().await?;
                             Ok(certs)
                         }.await;
-                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        if response.send(result).is_err() {
+                            tracing::debug!("ProcessInbox response receiver dropped");
+                        }
                     }
                     linera::ChainOperation::ProcessDeposit { proof, response } => {
                         let result = async {
                             let operations: Vec<_> = proof.log_indices.iter().map(|&log_index| {
-                                let op = evm::BridgeOperation::ProcessDeposit {
+                                let op = crate::abi::BridgeOperation::ProcessDeposit {
                                     block_header_rlp: proof.block_header_rlp.clone(),
                                     receipt_rlp: proof.receipt_rlp.clone(),
                                     proof_nodes: proof.proof_nodes.clone(),
@@ -555,7 +548,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             };
                             Ok(())
                         }.await;
-                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        if response.send(result).is_err() {
+                            tracing::debug!("ProcessDeposit response receiver dropped");
+                        }
                         update_balance_metrics(&evm_client, &linera_client).await;
                     }
                 }

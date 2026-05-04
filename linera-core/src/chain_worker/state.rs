@@ -18,7 +18,6 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
 use linera_cache::{UniqueValueCache, ValueCache};
@@ -106,7 +105,7 @@ where
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -150,7 +149,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
         execution_state_cache: Option<
             Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
@@ -251,12 +250,16 @@ where
         chain_id = %self.chain_id(),
         blob_id = %blob_id
     ))]
-    pub(crate) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
+    pub(crate) async fn download_pending_blob(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<Arc<Blob>, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
-            return Ok(blob);
+            return Ok(self.storage.cache_blob(blob));
         }
-        let blob = self.storage.read_blob(blob_id).await?;
-        blob.map(Arc::unwrap_or_clone)
+        self.storage
+            .read_blob(blob_id)
+            .await?
             .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
@@ -426,10 +429,8 @@ where
         let mut uncached_hashes = Vec::new();
 
         for (i, hash) in hashes.iter().enumerate() {
-            if let Some(hashed_block) = self.block_values.get(hash) {
-                blocks.push(Some(Arc::new(ConfirmedBlock::from_hashed(
-                    Arc::unwrap_or_clone(hashed_block),
-                ))));
+            if let Some(block) = self.block_values.get(hash) {
+                blocks.push(Some(block));
             } else {
                 blocks.push(None);
                 uncached_indices.push(i);
@@ -440,10 +441,6 @@ where
         if !uncached_hashes.is_empty() {
             let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
             for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
-                if let Some(block) = &maybe_block {
-                    self.block_values
-                        .insert_hashed(Cow::Borrowed(block.inner()));
-                }
                 blocks[i] = maybe_block;
             }
         }
@@ -1641,7 +1638,7 @@ where
     pub(crate) async fn read_certificate(
         &self,
         height: BlockHeight,
-    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
         let certificate_hash = match self.chain.block_hashes.get(&height).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1650,7 +1647,6 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
-            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }
@@ -2017,14 +2013,6 @@ where
                     });
                 }
             }
-            let priority_origins = &self.config.priority_bundle_origins;
-            bundles.sort_by(|a, b| {
-                let a_priority = priority_origins.contains(&a.origin);
-                let b_priority = priority_origins.contains(&b.origin);
-                b_priority
-                    .cmp(&a_priority)
-                    .then(a.bundle.timestamp.cmp(&b.bundle.timestamp))
-            });
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = chain

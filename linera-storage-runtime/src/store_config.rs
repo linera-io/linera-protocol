@@ -238,9 +238,9 @@ impl RunnableWithStore for StorageMigration {
 
     async fn run<D>(
         self,
-        config: D::Config,
-        namespace: String,
-        cache_sizes: StorageCacheConfig,
+        _config: D::Config,
+        _namespace: String,
+        _cache_sizes: StorageCacheConfig,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -248,7 +248,6 @@ impl RunnableWithStore for StorageMigration {
         D::Error: Send + Sync,
     {
         // Storage migration is not yet available on main.
-        let _ = (config, namespace, cache_sizes);
         Ok(())
     }
 }
@@ -261,9 +260,9 @@ impl RunnableWithStore for AssertStorageV1 {
 
     async fn run<D>(
         self,
-        config: D::Config,
-        namespace: String,
-        cache_sizes: StorageCacheConfig,
+        _config: D::Config,
+        _namespace: String,
+        _cache_sizes: StorageCacheConfig,
     ) -> Result<Self::Output, anyhow::Error>
     where
         D: KeyValueDatabase + Clone + Send + Sync + 'static,
@@ -271,7 +270,6 @@ impl RunnableWithStore for AssertStorageV1 {
         D::Error: Send + Sync,
     {
         // Storage migration assertion is not yet available on main.
-        let _ = (config, namespace, cache_sizes);
         Ok(())
     }
 }

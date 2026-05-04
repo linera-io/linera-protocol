@@ -42,13 +42,15 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
         {
             let state = monitor.read().await;
             for d in state.deposits_ready_for_retry(max_retries) {
-                let _ = pending_deposit_tx.try_send(PendingDeposit {
+                if let Err(error) = pending_deposit_tx.try_send(PendingDeposit {
                     key: d.value.key.clone(),
                     tx_hash: d.value.tx_hash,
                     depositor: d.value.depositor,
                     amount: d.value.amount,
                     nonce: d.value.nonce,
-                });
+                }) {
+                    tracing::warn!(?error, "Failed to enqueue deposit for retry");
+                }
             }
         }
 
@@ -94,7 +96,7 @@ pub(crate) async fn retry_pending_deposits<E: linera_core::environment::Environm
                 // Persist raw BCS operation bytes so deposits can be replayed without the relayer.
                 if let Some(db) = monitor.read().await.db() {
                     for &log_index in &proof.log_indices {
-                        let op = crate::relay::evm::BridgeOperation::ProcessDeposit {
+                        let op = crate::abi::BridgeOperation::ProcessDeposit {
                             block_header_rlp: proof.block_header_rlp.clone(),
                             receipt_rlp: proof.receipt_rlp.clone(),
                             proof_nodes: proof.proof_nodes.clone(),
@@ -180,18 +182,20 @@ async fn evm_scan_iteration(
 
         let key = DepositKey {
             source_chain_id: deposit.source_chain_id.to::<u64>(),
-            block_hash: block_hash.0,
+            block_hash,
             tx_index,
             log_index,
         };
 
-        let _ = pending_tx.try_send(PendingDeposit {
+        if let Err(error) = pending_tx.try_send(PendingDeposit {
             key,
             tx_hash,
             depositor: deposit.depositor,
             amount: deposit.amount,
             nonce: deposit.nonce,
-        });
+        }) {
+            tracing::warn!(?error, %tx_hash, "Failed to enqueue discovered deposit");
+        }
     }
 
     let mut state = monitor.write().await;
