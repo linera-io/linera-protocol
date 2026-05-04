@@ -712,29 +712,29 @@ mod tests {
         );
 
         // The streaming variants share the same cache.
-        let iter_keys: Vec<Vec<u8>> = lru
+        let iter_keys = lru
             .find_keys_by_prefix_iter(&[1])
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         assert_eq!(iter_keys, vec![vec![0], vec![1]]);
-        let iter_kv: Vec<(Vec<u8>, Vec<u8>)> = lru
+        let iter_kv = lru
             .find_key_values_by_prefix_iter(&[1])
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         assert_eq!(iter_kv, vec![(vec![0], vec![10]), (vec![1], vec![11])]);
 
         // The reverse streaming variants serve the cached entries in reverse.
-        let rev_keys: Vec<Vec<u8>> = lru
+        let rev_keys = lru
             .find_keys_by_prefix_rev_iter(&[1])
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         assert_eq!(rev_keys, vec![vec![1], vec![0]]);
-        let rev_kv: Vec<(Vec<u8>, Vec<u8>)> = lru
+        let rev_kv = lru
             .find_key_values_by_prefix_rev_iter(&[1])
-            .try_collect()
+            .try_collect::<Vec<_>>()
             .await
             .unwrap();
         assert_eq!(rev_kv, vec![(vec![1], vec![11]), (vec![0], vec![10])]);

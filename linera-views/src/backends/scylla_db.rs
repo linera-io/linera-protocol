@@ -755,7 +755,7 @@ impl ScyllaDbStoreInternal {
         key_prefix: &'a [u8],
         direction: IterDirection,
     ) -> FindKeysStream<'a, ScyllaDbStoreInternalError> {
-        Box::pin(async_stream::stream! {
+        Box::pin(async_stream::try_stream! {
             let key_prefix = key_prefix.to_vec();
             ScyllaDbClient::check_key_size(&key_prefix)?;
             let _guard = self.acquire().await;
@@ -784,7 +784,7 @@ impl ScyllaDbStoreInternal {
             let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
             while let Some(row) = rows.next().await {
                 let (key,) = row?;
-                yield Ok(key[len..].to_vec());
+                yield key[len..].to_vec();
             }
         })
     }
@@ -794,7 +794,7 @@ impl ScyllaDbStoreInternal {
         key_prefix: &'a [u8],
         direction: IterDirection,
     ) -> FindKeyValuesStream<'a, ScyllaDbStoreInternalError> {
-        Box::pin(async_stream::stream! {
+        Box::pin(async_stream::try_stream! {
             let key_prefix = key_prefix.to_vec();
             ScyllaDbClient::check_key_size(&key_prefix)?;
             let _guard = self.acquire().await;
@@ -823,7 +823,7 @@ impl ScyllaDbStoreInternal {
             let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
             while let Some(row) = rows.next().await {
                 let (key, value) = row?;
-                yield Ok((key[len..].to_vec(), value));
+                yield (key[len..].to_vec(), value);
             }
         })
     }

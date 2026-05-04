@@ -604,11 +604,8 @@ impl RocksDbStoreInternal {
     ) -> FindKeysStream<'_, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
-        Box::pin(async_stream::stream! {
-            if let Err(error) = check_key_size(&key_prefix) {
-                yield Err(error);
-                return;
-            }
+        Box::pin(async_stream::try_stream! {
+            check_key_size(&key_prefix)?;
             let (tx, mut rx) =
                 tokio::sync::mpsc::channel::<Result<Vec<u8>, RocksDbStoreInternalError>>(1);
             let handle = tokio::task::spawn_blocking(move || {
@@ -635,12 +632,14 @@ impl RocksDbStoreInternal {
                     _ = tx.blocking_send(Err(error.into()));
                 }
             });
+            // The blocking task sends 0+ Ok items followed by at most one
+            // terminal Err; `?` short-circuits on that Err. If the stream ends
+            // cleanly we still await the join handle so a panic in the task is
+            // surfaced as a TokioJoinError.
             while let Some(item) = rx.recv().await {
-                yield item;
+                yield item?;
             }
-            if let Err(error) = handle.await {
-                yield Err(RocksDbStoreInternalError::TokioJoinError(error));
-            }
+            handle.await.map_err(RocksDbStoreInternalError::TokioJoinError)?;
         })
     }
 
@@ -651,11 +650,8 @@ impl RocksDbStoreInternal {
     ) -> FindKeyValuesStream<'_, RocksDbStoreInternalError> {
         let executor = self.executor.clone();
         let key_prefix = key_prefix.to_vec();
-        Box::pin(async_stream::stream! {
-            if let Err(error) = check_key_size(&key_prefix) {
-                yield Err(error);
-                return;
-            }
+        Box::pin(async_stream::try_stream! {
+            check_key_size(&key_prefix)?;
             let (tx, mut rx) = tokio::sync::mpsc::channel::<
                 Result<(Vec<u8>, Vec<u8>), RocksDbStoreInternalError>,
             >(1);
@@ -685,11 +681,9 @@ impl RocksDbStoreInternal {
                 }
             });
             while let Some(item) = rx.recv().await {
-                yield item;
+                yield item?;
             }
-            if let Err(error) = handle.await {
-                yield Err(RocksDbStoreInternalError::TokioJoinError(error));
-            }
+            handle.await.map_err(RocksDbStoreInternalError::TokioJoinError)?;
         })
     }
 }
