@@ -2,7 +2,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io, mem, net::SocketAddr, pin::pin, sync::Arc};
+use std::{
+    collections::HashMap,
+    io, mem,
+    net::SocketAddr,
+    pin::{pin, Pin},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use futures::{
@@ -10,6 +16,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
+use linera_base::identifiers::BlobId;
 use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -79,6 +86,16 @@ pub trait ConnectionPool: Send {
 #[async_trait]
 pub trait MessageHandler: Clone {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
+
+    /// Handle a batch blob download request by streaming one
+    /// `RpcMessage::DownloadBlobResponse` per requested blob ID.
+    /// Returns `None` if not supported.
+    async fn handle_download_blobs(
+        &mut self,
+        _blob_ids: Vec<BlobId>,
+    ) -> Option<Pin<Box<dyn Stream<Item = RpcMessage> + Send>>> {
+        None
+    }
 }
 
 /// The result of spawning a server is oneshot channel to track completion, and the set of
@@ -455,6 +472,10 @@ where
                     return;
                 }
                 result = self.connection.next() => match result {
+                    Some(Ok(RpcMessage::DownloadBlobs(blob_ids))) => {
+                        self.handle_download_blobs(blob_ids).await;
+                        return;
+                    }
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
                         Self::handle_error(&error);
@@ -471,6 +492,27 @@ where
         if let Some(reply) = self.handler.handle_message(message).await {
             if let Err(error) = self.connection.send(reply).await {
                 error!("Failed to send query response: {error}");
+            }
+        }
+    }
+
+    /// Handles a batch blob download request by streaming one response per blob.
+    async fn handle_download_blobs(&mut self, blob_ids: Vec<BlobId>) {
+        let Some(mut stream) = self.handler.handle_download_blobs(blob_ids).await else {
+            return;
+        };
+        loop {
+            tokio::select! { biased;
+                _ = self.shutdown_signal.cancelled() => break,
+                msg = stream.next() => match msg {
+                    Some(message) => {
+                        if let Err(error) = self.connection.send(message).await {
+                            error!("Failed to send blob response: {error}");
+                            break;
+                        }
+                    }
+                    None => break,
+                }
             }
         }
     }
