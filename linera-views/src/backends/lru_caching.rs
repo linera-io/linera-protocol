@@ -345,20 +345,13 @@ where
             .inc();
         // Forward the inner stream while accumulating; if (and only if) the
         // consumer drains it fully without errors, populate the cache.
-        Box::pin(async_stream::stream! {
+        Box::pin(async_stream::try_stream! {
             let mut accumulated = Vec::new();
             let mut inner = self.store.find_keys_by_prefix_iter(key_prefix);
             while let Some(item) = inner.next().await {
-                match item {
-                    Ok(key) => {
-                        accumulated.push(key.clone());
-                        yield Ok(key);
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
-                }
+                let key = item?;
+                accumulated.push(key.clone());
+                yield key;
             }
             let mut cache = cache.lock().unwrap();
             cache.insert_find_keys(key_prefix.to_vec(), &accumulated);
@@ -414,20 +407,13 @@ where
         metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT
             .with_label_values(&[])
             .inc();
-        Box::pin(async_stream::stream! {
+        Box::pin(async_stream::try_stream! {
             let mut accumulated = Vec::new();
             let mut inner = self.store.find_key_values_by_prefix_iter(key_prefix);
             while let Some(item) = inner.next().await {
-                match item {
-                    Ok(kv) => {
-                        accumulated.push(kv.clone());
-                        yield Ok(kv);
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
-                }
+                let kv = item?;
+                accumulated.push(kv.clone());
+                yield kv;
             }
             let mut cache = cache.lock().unwrap();
             cache.insert_find_key_values(key_prefix.to_vec(), &accumulated);
@@ -456,20 +442,13 @@ where
         metrics::FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT
             .with_label_values(&[])
             .inc();
-        Box::pin(async_stream::stream! {
+        Box::pin(async_stream::try_stream! {
             let mut accumulated = Vec::new();
             let mut inner = self.store.find_keys_by_prefix_rev_iter(key_prefix);
             while let Some(item) = inner.next().await {
-                match item {
-                    Ok(key) => {
-                        accumulated.push(key.clone());
-                        yield Ok(key);
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
-                }
+                let key = item?;
+                accumulated.push(key.clone());
+                yield key;
             }
             // Cache stores keys in ascending order, shared with the forward iter.
             accumulated.reverse();
@@ -500,20 +479,13 @@ where
         metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT
             .with_label_values(&[])
             .inc();
-        Box::pin(async_stream::stream! {
+        Box::pin(async_stream::try_stream! {
             let mut accumulated = Vec::new();
             let mut inner = self.store.find_key_values_by_prefix_rev_iter(key_prefix);
             while let Some(item) = inner.next().await {
-                match item {
-                    Ok(kv) => {
-                        accumulated.push(kv.clone());
-                        yield Ok(kv);
-                    }
-                    Err(e) => {
-                        yield Err(e);
-                        return;
-                    }
-                }
+                let kv = item?;
+                accumulated.push(kv.clone());
+                yield kv;
             }
             accumulated.reverse();
             let mut cache = cache.lock().unwrap();
