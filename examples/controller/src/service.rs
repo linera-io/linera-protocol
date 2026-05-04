@@ -34,7 +34,6 @@ impl Service for ControllerService {
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         let state = ControllerState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         ControllerService {
             state: Arc::new(state),
@@ -80,7 +79,6 @@ impl ControllerState {
         let local_service_ids = self
             .local_services
             .indices()
-            .await
             .expect("storage")
             .into_iter()
             .collect::<Vec<_>>();
@@ -93,7 +91,6 @@ impl ControllerState {
         let local_pending_services = self
             .local_pending_services
             .index_values()
-            .await
             .expect("storage")
             .into_iter()
             .map(|(service_id, pending_service)| {
@@ -113,14 +110,12 @@ impl ControllerState {
         let local_chains = self
             .local_chains
             .indices()
-            .await
             .expect("storage")
             .into_iter()
             .collect();
         let local_message_policy = self
             .local_message_policy
             .index_values()
-            .await
             .expect("storage")
             .into_iter()
             .collect();
@@ -154,7 +149,6 @@ mod tests {
     fn create_service() -> ControllerService {
         let runtime = ServiceRuntime::<ControllerService>::new();
         let state = ControllerState::load(runtime.root_view_storage_context())
-            .blocking_wait()
             .expect("Failed to read from mock key value store");
 
         ControllerService {
@@ -246,7 +240,6 @@ mod tests {
     fn query_local_worker_state_populated() {
         let runtime = ServiceRuntime::<ControllerService>::new();
         let mut state = ControllerState::load(runtime.root_view_storage_context())
-            .blocking_wait()
             .expect("Failed to read from mock key value store");
 
         // Set up a local worker.

@@ -49,7 +49,19 @@ fn get_extended_entry(e: Type) -> Result<TokenStream2, Error> {
     Ok(quote! { #ident :: #arguments })
 }
 
-fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Error> {
+/// Whether to generate an async (`View`) or sync (`SyncView`) implementation.
+#[derive(Clone, Copy)]
+enum ViewMode {
+    Async,
+    Sync,
+}
+
+/// Shared code generation for both `View` and `SyncView` derive macros.
+fn generate_view_code_inner(
+    input: &ItemStruct,
+    root: bool,
+    mode: ViewMode,
+) -> Result<TokenStream2, Error> {
     // Validate that all fields are named
     for field in &input.fields {
         if field.ident.is_none() {
@@ -80,13 +92,26 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
     let struct_name = &input.ident;
     let field_types: Vec<_> = input.fields.iter().map(|field| &field.ty).collect();
 
+    // Choose trait paths based on mode
+    let (view_trait, context_trait, min_view_tag_path) = match mode {
+        ViewMode::Async => (
+            quote! { linera_views::views::View },
+            quote! { linera_views::context::Context },
+            quote! { linera_views::views::MIN_VIEW_TAG },
+        ),
+        ViewMode::Sync => (
+            quote! { linera_views::sync_views::SyncView },
+            quote! { linera_views::context::SyncContext },
+            quote! { linera_views::sync_views::MIN_VIEW_TAG },
+        ),
+    };
+
     let mut name_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut pre_save_quotes = Vec::new();
     let mut delete_view_quotes = Vec::new();
     let mut clear_quotes = Vec::new();
     let mut has_pending_changes_quotes = Vec::new();
-    let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
     let num_fields = input.fields.len();
@@ -99,25 +124,31 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
         pre_save_quotes.push(quote! { let #delete_view_ident = self.#name.pre_save(batch)?; });
         delete_view_quotes.push(quote! { #delete_view_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
-        has_pending_changes_quotes.push(quote! {
-            if self.#name.has_pending_changes().await {
-                return true;
-            }
+        has_pending_changes_quotes.push(match mode {
+            ViewMode::Async => quote! {
+                if self.#name.has_pending_changes().await {
+                    return true;
+                }
+            },
+            ViewMode::Sync => quote! {
+                if self.#name.has_pending_changes() {
+                    return true;
+                }
+            },
         });
-        num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
 
         let derive_key_logic = if num_fields < 256 {
             let idx_u8 = idx as u8;
             quote! {
                 let __linera_reserved_index = #idx_u8;
-                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(#min_view_tag_path, &__linera_reserved_index)?;
             }
         } else {
             assert!(num_fields < 65536);
             let idx_u16 = idx as u16;
             quote! {
                 let __linera_reserved_index = #idx_u16;
-                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(#min_view_tag_path, &__linera_reserved_index)?;
             }
         };
 
@@ -167,38 +198,8 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
         quote! {}
     };
 
-    Ok(quote! {
-        impl #impl_generics linera_views::views::View for #struct_name #type_generics
-        where
-            #context: linera_views::context::Context,
-            #(#input_constraints,)*
-            #(#field_types: linera_views::views::View<Context = #context>,)*
-        {
-            const NUM_INIT_KEYS: usize = #(<#field_types as linera_views::views::View>::NUM_INIT_KEYS)+*;
-
-            type Context = #context;
-
-            fn context(&self) -> #context {
-                use linera_views::{context::Context as _};
-                #trim_key_logic
-                let context = self.#first_name_quote.context();
-                context.clone_with_trimmed_key(__bytes_to_trim)
-            }
-
-            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
-                use linera_views::context::Context as _;
-                let mut keys = Vec::new();
-                #(#pre_load_keys_quotes)*
-                Ok(keys)
-            }
-
-            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::ViewError> {
-                use linera_views::context::Context as _;
-                let mut __linera_reserved_pos = 0;
-                #(#post_load_keys_quotes)*
-                Ok(Self {#(#name_quotes),*})
-            }
-
+    let load_fn = match mode {
+        ViewMode::Async => quote! {
             async fn load(context: #context) -> Result<Self, linera_views::ViewError> {
                 use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
                 #load_metrics
@@ -210,16 +211,76 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
                     Self::post_load(context, &values)
                 }
             }
+        },
+        ViewMode::Sync => quote! {
+            fn load(context: #context) -> Result<Self, linera_views::ViewError> {
+                use linera_views::{context::SyncContext as _, store::SyncReadableKeyValueStore as _};
+                #load_metrics
+                if Self::NUM_INIT_KEYS == 0 {
+                    Self::post_load(context, &[])
+                } else {
+                    let keys = Self::pre_load(&context)?;
+                    let values = context.store().read_multi_values_bytes(&keys)?;
+                    Self::post_load(context, &values)
+                }
+            }
+        },
+    };
 
+    let has_pending_changes_fn = match mode {
+        ViewMode::Async => quote! {
+            async fn has_pending_changes(&self) -> bool {
+                #(#has_pending_changes_quotes)*
+                false
+            }
+        },
+        ViewMode::Sync => quote! {
+            fn has_pending_changes(&self) -> bool {
+                #(#has_pending_changes_quotes)*
+                false
+            }
+        },
+    };
+
+    Ok(quote! {
+        impl #impl_generics #view_trait for #struct_name #type_generics
+        where
+            #context: #context_trait,
+            #(#input_constraints,)*
+            #(#field_types: #view_trait<Context = #context>,)*
+        {
+            const NUM_INIT_KEYS: usize = #(<#field_types as #view_trait>::NUM_INIT_KEYS)+*;
+
+            type Context = #context;
+
+            fn context(&self) -> #context {
+                use #context_trait as _;
+                #trim_key_logic
+                let context = self.#first_name_quote.context();
+                context.clone_with_trimmed_key(__bytes_to_trim)
+            }
+
+            fn pre_load(context: &#context) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
+                use #context_trait as _;
+                let mut keys = Vec::new();
+                #(#pre_load_keys_quotes)*
+                Ok(keys)
+            }
+
+            fn post_load(context: #context, values: &[Option<Vec<u8>>]) -> Result<Self, linera_views::ViewError> {
+                use #context_trait as _;
+                let mut __linera_reserved_pos = 0;
+                #(#post_load_keys_quotes)*
+                Ok(Self {#(#name_quotes),*})
+            }
+
+            #load_fn
 
             fn rollback(&mut self) {
                 #(#rollback_quotes)*
             }
 
-            async fn has_pending_changes(&self) -> bool {
-                #(#has_pending_changes_quotes)*
-                false
-            }
+            #has_pending_changes_fn
 
             fn pre_save(&self, batch: &mut linera_views::batch::Batch) -> Result<bool, linera_views::ViewError> {
                 #(#pre_save_quotes)*
@@ -235,6 +296,14 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
             }
         }
     })
+}
+
+fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Error> {
+    generate_view_code_inner(input, root, ViewMode::Async)
+}
+
+fn generate_sync_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Error> {
+    generate_view_code_inner(input, root, ViewMode::Sync)
 }
 
 fn generate_root_view_code(input: &ItemStruct) -> TokenStream2 {
@@ -305,6 +374,24 @@ fn generate_root_view_code(input: &ItemStruct) -> TokenStream2 {
                 #write_batch_with_metrics
                 Ok(())
             }
+        }
+    }
+}
+
+fn generate_sync_root_view_code(input: &ItemStruct) -> TokenStream2 {
+    let Constraints {
+        input_constraints,
+        impl_generics,
+        type_generics,
+    } = Constraints::get(input);
+    let struct_name = &input.ident;
+
+    quote! {
+        impl #impl_generics linera_views::sync_views::SyncRootView for #struct_name #type_generics
+        where
+            #(#input_constraints,)*
+            Self: linera_views::sync_views::SyncView,
+        {
         }
     }
 }
@@ -462,6 +549,26 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let input = generate_view_code(&input, false);
     to_token_stream(input)
+}
+
+#[proc_macro_derive(SyncView, attributes(view))]
+pub fn derive_sync_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let input = generate_sync_view_code(&input, false);
+    to_token_stream(input)
+}
+
+fn derive_sync_root_view_token_stream2(input: &ItemStruct) -> Result<TokenStream2, Error> {
+    let mut stream = generate_sync_view_code(input, true)?;
+    stream.extend(generate_sync_root_view_code(input));
+    Ok(stream)
+}
+
+#[proc_macro_derive(SyncRootView, attributes(view))]
+pub fn derive_sync_root_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let stream = derive_sync_root_view_token_stream2(&input);
+    to_token_stream(stream)
 }
 
 fn derive_hash_view_token_stream2(input: &ItemStruct) -> Result<TokenStream2, Error> {

@@ -346,7 +346,7 @@ impl Runnable for DestinationsContext {
         S: Storage + Clone + Send + Sync + 'static,
     {
         use linera_exporter::{config::DestinationKind, state::BlockExporterStateView};
-        use linera_sdk::views::{RootView, View};
+        use linera_views::views::{RootView, View};
 
         let context = storage
             .block_exporter_context(self.exporter_id)

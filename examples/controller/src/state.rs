@@ -7,7 +7,8 @@ use async_graphql::scalar;
 use linera_sdk::{
     abis::controller::{ManagedServiceId, PendingService, Worker},
     linera_base_types::{AccountOwner, ChainId, MessagePolicy},
-    views::{linera_views, MapView, RegisterView, RootView, SetView, ViewStorageContext},
+    views::{linera_views, MapView, RegisterView, SetView, ViewStorageContext},
+    RootView,
 };
 use serde::{Deserialize, Serialize};
 

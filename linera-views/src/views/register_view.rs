@@ -38,14 +38,14 @@ mod metrics {
 #[allocative(bound = "C, T: Allocative")]
 pub struct RegisterView<C, T> {
     /// Whether to clear storage before applying updates.
-    delete_storage_first: bool,
+    pub(crate) delete_storage_first: bool,
     /// The view context.
     #[allocative(skip)]
-    context: C,
+    pub(crate) context: C,
     /// The value persisted in storage.
-    stored_value: Box<T>,
+    pub(crate) stored_value: Box<T>,
     /// Pending update not yet persisted to storage.
-    update: Option<Box<T>>,
+    pub(crate) update: Option<Box<T>>,
 }
 
 impl<C, T, C2> ReplaceContext<C2> for RegisterView<C, T>
@@ -83,58 +83,31 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_key().bytes.clone()])
+        Ok(Self::base_pre_load(&context.base_key().bytes))
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let value =
-            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        let stored_value = Box::new(value);
-        Ok(Self {
-            delete_storage_first: false,
-            context,
-            stored_value,
-            update: None,
-        })
+        Self::base_post_load(context, values)
     }
 
     fn rollback(&mut self) {
-        self.delete_storage_first = false;
-        self.update = None;
+        self.base_rollback();
     }
 
     async fn has_pending_changes(&self) -> bool {
-        if self.delete_storage_first {
-            return true;
-        }
-        self.update.is_some()
+        self.base_has_pending_changes()
     }
 
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let mut delete_view = false;
-        if self.delete_storage_first {
-            batch.delete_key(self.context.base_key().bytes.clone());
-            delete_view = true;
-        } else if let Some(value) = &self.update {
-            let key = self.context.base_key().bytes.clone();
-            batch.put_key_value(key, value)?;
-        }
-        Ok(delete_view)
+        self.base_pre_save(batch, self.context.base_key().bytes.clone())
     }
 
     fn post_save(&mut self) {
-        if self.delete_storage_first {
-            *self.stored_value = Default::default();
-        } else if let Some(value) = self.update.take() {
-            self.stored_value = value;
-        }
-        self.delete_storage_first = false;
-        self.update = None;
+        self.base_post_save();
     }
 
     fn clear(&mut self) {
-        self.delete_storage_first = true;
-        self.update = Some(Box::default());
+        self.base_clear();
     }
 }
 
@@ -153,10 +126,7 @@ where
     }
 }
 
-impl<C, T> RegisterView<C, T>
-where
-    C: Context,
-{
+impl<C, T> RegisterView<C, T> {
     /// Access the current value in the register.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -194,6 +164,86 @@ where
         self.update = Some(Box::new(value));
     }
 
+    /// Shared implementation of `rollback`.
+    pub(crate) fn base_rollback(&mut self) {
+        self.delete_storage_first = false;
+        self.update = None;
+    }
+
+    /// Shared implementation of `has_pending_changes`.
+    pub(crate) fn base_has_pending_changes(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        self.update.is_some()
+    }
+}
+
+impl<C, T: Default> RegisterView<C, T> {
+    /// Shared implementation of `clear`.
+    pub(crate) fn base_clear(&mut self) {
+        self.delete_storage_first = true;
+        self.update = Some(Box::default());
+    }
+
+    /// Shared implementation of `post_save`.
+    pub(crate) fn base_post_save(&mut self) {
+        if self.delete_storage_first {
+            *self.stored_value = Default::default();
+        } else if let Some(value) = self.update.take() {
+            self.stored_value = value;
+        }
+        self.delete_storage_first = false;
+        self.update = None;
+    }
+}
+
+impl<C, T: Serialize> RegisterView<C, T> {
+    /// Shared implementation of `pre_save`. Takes `base_key_bytes` to avoid
+    /// requiring a specific context trait.
+    pub(crate) fn base_pre_save(
+        &self,
+        batch: &mut Batch,
+        base_key_bytes: Vec<u8>,
+    ) -> Result<bool, ViewError> {
+        let mut delete_view = false;
+        if self.delete_storage_first {
+            batch.delete_key(base_key_bytes);
+            delete_view = true;
+        } else if let Some(value) = &self.update {
+            batch.put_key_value(base_key_bytes, value)?;
+        }
+        Ok(delete_view)
+    }
+}
+
+impl<C, T: Default + DeserializeOwned> RegisterView<C, T> {
+    /// Shared implementation of `pre_load`.
+    pub(crate) fn base_pre_load(base_key_bytes: &[u8]) -> Vec<Vec<u8>> {
+        vec![base_key_bytes.to_vec()]
+    }
+
+    /// Shared implementation of `post_load`.
+    pub(crate) fn base_post_load(
+        context: C,
+        values: &[Option<Vec<u8>>],
+    ) -> Result<Self, ViewError> {
+        let value =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        let stored_value = Box::new(value);
+        Ok(Self {
+            delete_storage_first: false,
+            context,
+            stored_value,
+            update: None,
+        })
+    }
+}
+
+impl<C, T> RegisterView<C, T>
+where
+    C: Context,
+{
     /// Obtains the extra data.
     pub fn extra(&self) -> &C::Extra {
         self.context.extra()
@@ -202,8 +252,7 @@ where
 
 impl<C, T> RegisterView<C, T>
 where
-    C: Context,
-    T: Clone + Serialize,
+    T: Clone,
 {
     /// Obtains a mutable reference to the value in the register.
     /// ```rust
@@ -221,7 +270,12 @@ where
         self.delete_storage_first = false;
         self.update.get_or_insert_with(|| self.stored_value.clone())
     }
+}
 
+impl<C, T> RegisterView<C, T>
+where
+    T: Clone + Serialize,
+{
     fn compute_hash(&self) -> Result<<sha3::Sha3_256 as Hasher>::Output, ViewError> {
         #[cfg(with_metrics)]
         let _hash_latency = metrics::REGISTER_VIEW_HASH_RUNTIME.measure_latency();

@@ -25,16 +25,16 @@ impl Contract for ContractTransferContract {
     type Parameters = Parameters;
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         ContractTransferContract { runtime }
     }
 
-    async fn instantiate(&mut self, _value: ()) {
+    fn instantiate(&mut self, _value: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Operation) {
+    fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::DirectTransfer {
                 source,
@@ -114,9 +114,9 @@ impl Contract for ContractTransferContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("Contract transfer application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    fn store(self) {}
 }

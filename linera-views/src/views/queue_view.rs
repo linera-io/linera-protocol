@@ -49,22 +49,25 @@ enum KeyTag {
     Index,
 }
 
+/// The `u8` value for the `Index` key tag, exported for use by sync views.
+pub(crate) const KEY_TAG_INDEX: u8 = KeyTag::Index as u8;
+
 /// A view that supports a FIFO queue for values of type `T`.
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
 pub struct QueueView<C, T> {
     /// The view context.
     #[allocative(skip)]
-    context: C,
+    pub(crate) context: C,
     /// The range of indices for entries persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
-    stored_indices: Range<usize>,
+    pub(crate) stored_indices: Range<usize>,
     /// The number of entries to delete from the front.
-    front_delete_count: usize,
+    pub(crate) front_delete_count: usize,
     /// Whether to clear storage before applying updates.
-    delete_storage_first: bool,
+    pub(crate) delete_storage_first: bool,
     /// New values added to the back, not yet persisted to storage.
-    new_back_values: VecDeque<T>,
+    pub(crate) new_back_values: VecDeque<T>,
 }
 
 impl<C, T> View for QueueView<C, T>
@@ -81,94 +84,31 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        Ok(vec![context.base_key().base_tag(KeyTag::Store as u8)])
+        Ok(Self::base_pre_load(context.base_key()))
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let stored_indices =
-            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        Ok(Self {
-            context,
-            stored_indices,
-            front_delete_count: 0,
-            delete_storage_first: false,
-            new_back_values: VecDeque::new(),
-        })
+        Self::base_post_load(context, values)
     }
 
     fn rollback(&mut self) {
-        self.delete_storage_first = false;
-        self.front_delete_count = 0;
-        self.new_back_values.clear();
+        self.base_rollback();
     }
 
     async fn has_pending_changes(&self) -> bool {
-        if self.delete_storage_first {
-            return true;
-        }
-        if self.front_delete_count > 0 {
-            return true;
-        }
-        !self.new_back_values.is_empty()
+        self.base_has_pending_changes()
     }
 
     fn pre_save(&self, batch: &mut Batch) -> Result<bool, ViewError> {
-        let mut delete_view = false;
-        if self.delete_storage_first {
-            batch.delete_key_prefix(self.context.base_key().bytes.clone());
-            delete_view = true;
-        }
-        let mut new_stored_indices = self.stored_indices.clone();
-        if self.stored_count() == 0 {
-            let key_prefix = self.context.base_key().base_tag(KeyTag::Index as u8);
-            batch.delete_key_prefix(key_prefix);
-            new_stored_indices = Range::default();
-        } else if self.front_delete_count > 0 {
-            let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
-            new_stored_indices.start += self.front_delete_count;
-            for index in deletion_range {
-                let key = self
-                    .context
-                    .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &index)?;
-                batch.delete_key(key);
-            }
-        }
-        if !self.new_back_values.is_empty() {
-            delete_view = false;
-            for value in &self.new_back_values {
-                let key = self
-                    .context
-                    .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
-                batch.put_key_value(key, value)?;
-                new_stored_indices.end += 1;
-            }
-        }
-        if !self.delete_storage_first || !new_stored_indices.is_empty() {
-            let key = self.context.base_key().base_tag(KeyTag::Store as u8);
-            batch.put_key_value(key, &new_stored_indices)?;
-        }
-        Ok(delete_view)
+        self.base_pre_save(batch, self.context.base_key())
     }
 
     fn post_save(&mut self) {
-        if self.stored_count() == 0 {
-            self.stored_indices = Range::default();
-        } else if self.front_delete_count > 0 {
-            self.stored_indices.start += self.front_delete_count;
-        }
-        if !self.new_back_values.is_empty() {
-            self.stored_indices.end += self.new_back_values.len();
-            self.new_back_values.clear();
-        }
-        self.front_delete_count = 0;
-        self.delete_storage_first = false;
+        self.base_post_save();
     }
 
     fn clear(&mut self) {
-        self.delete_storage_first = true;
-        self.new_back_values.clear();
+        self.base_clear();
     }
 }
 
@@ -189,12 +129,168 @@ where
 }
 
 impl<C, T> QueueView<C, T> {
-    fn stored_count(&self) -> usize {
+    /// Returns the number of entries still stored (not yet deleted from storage).
+    pub(crate) fn stored_count(&self) -> usize {
         if self.delete_storage_first {
             0
         } else {
             self.stored_indices.len() - self.front_delete_count
         }
+    }
+
+    /// Shared implementation of `rollback`.
+    pub(crate) fn base_rollback(&mut self) {
+        self.delete_storage_first = false;
+        self.front_delete_count = 0;
+        self.new_back_values.clear();
+    }
+
+    /// Shared implementation of `has_pending_changes`.
+    pub(crate) fn base_has_pending_changes(&self) -> bool {
+        if self.delete_storage_first {
+            return true;
+        }
+        if self.front_delete_count > 0 {
+            return true;
+        }
+        !self.new_back_values.is_empty()
+    }
+
+    /// Shared implementation of `clear`.
+    pub(crate) fn base_clear(&mut self) {
+        self.delete_storage_first = true;
+        self.new_back_values.clear();
+    }
+
+    /// Shared implementation of `post_save`.
+    pub(crate) fn base_post_save(&mut self) {
+        if self.stored_count() == 0 {
+            self.stored_indices = Range::default();
+        } else if self.front_delete_count > 0 {
+            self.stored_indices.start += self.front_delete_count;
+        }
+        if !self.new_back_values.is_empty() {
+            self.stored_indices.end += self.new_back_values.len();
+            self.new_back_values.clear();
+        }
+        self.front_delete_count = 0;
+        self.delete_storage_first = false;
+    }
+
+    /// Shared implementation of `pre_load`.
+    pub(crate) fn base_pre_load(base_key: &crate::context::BaseKey) -> Vec<Vec<u8>> {
+        vec![base_key.base_tag(KeyTag::Store as u8)]
+    }
+
+    /// Shared implementation of `post_load`.
+    pub(crate) fn base_post_load(
+        context: C,
+        values: &[Option<Vec<u8>>],
+    ) -> Result<Self, ViewError> {
+        let stored_indices =
+            from_bytes_option_or_default(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
+        Ok(Self {
+            context,
+            stored_indices,
+            front_delete_count: 0,
+            delete_storage_first: false,
+            new_back_values: VecDeque::new(),
+        })
+    }
+
+    /// Deletes the front value, if any.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34 as u128);
+    /// queue.delete_front();
+    /// assert_eq!(queue.elements().await.unwrap(), Vec::<u128>::new());
+    /// # })
+    /// ```
+    pub fn delete_front(&mut self) {
+        if self.stored_count() > 0 {
+            self.front_delete_count += 1;
+        } else {
+            self.new_back_values.pop_front();
+        }
+    }
+
+    /// Pushes a value to the end of the queue.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// queue.push_back(37);
+    /// assert_eq!(queue.elements().await.unwrap(), vec![34, 37]);
+    /// # })
+    /// ```
+    pub fn push_back(&mut self, value: T) {
+        self.new_back_values.push_back(value);
+    }
+
+    /// Reads the size of the queue.
+    /// ```rust
+    /// # tokio_test::block_on(async {
+    /// # use linera_views::context::MemoryContext;
+    /// # use linera_views::queue_view::QueueView;
+    /// # use linera_views::views::View;
+    /// # let context = MemoryContext::new_for_testing(());
+    /// let mut queue = QueueView::load(context).await.unwrap();
+    /// queue.push_back(34);
+    /// assert_eq!(queue.count(), 1);
+    /// # })
+    /// ```
+    pub fn count(&self) -> usize {
+        self.stored_count() + self.new_back_values.len()
+    }
+}
+
+impl<C, T: Serialize> QueueView<C, T> {
+    /// Shared implementation of `pre_save`.
+    pub(crate) fn base_pre_save(
+        &self,
+        batch: &mut Batch,
+        base_key: &crate::context::BaseKey,
+    ) -> Result<bool, ViewError> {
+        let mut delete_view = false;
+        if self.delete_storage_first {
+            batch.delete_key_prefix(base_key.bytes.clone());
+            delete_view = true;
+        }
+        let mut new_stored_indices = self.stored_indices.clone();
+        if self.stored_count() == 0 {
+            let key_prefix = base_key.base_tag(KeyTag::Index as u8);
+            batch.delete_key_prefix(key_prefix);
+            new_stored_indices = Range::default();
+        } else if self.front_delete_count > 0 {
+            let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
+            new_stored_indices.start += self.front_delete_count;
+            for index in deletion_range {
+                let key = base_key.derive_tag_key(KeyTag::Index as u8, &index)?;
+                batch.delete_key(key);
+            }
+        }
+        if !self.new_back_values.is_empty() {
+            delete_view = false;
+            for value in &self.new_back_values {
+                let key = base_key.derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
+                batch.put_key_value(key, value)?;
+                new_stored_indices.end += 1;
+            }
+        }
+        if !self.delete_storage_first || !new_stored_indices.is_empty() {
+            let key = base_key.base_tag(KeyTag::Store as u8);
+            batch.put_key_value(key, &new_stored_indices)?;
+        }
+        Ok(delete_view)
     }
 }
 
@@ -253,60 +349,6 @@ where
             None if self.stored_count() > 0 => self.get(self.stored_indices.end - 1).await?,
             _ => None,
         })
-    }
-
-    /// Deletes the front value, if any.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::queue_view::QueueView;
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut queue = QueueView::load(context).await.unwrap();
-    /// queue.push_back(34 as u128);
-    /// queue.delete_front();
-    /// assert_eq!(queue.elements().await.unwrap(), Vec::<u128>::new());
-    /// # })
-    /// ```
-    pub fn delete_front(&mut self) {
-        if self.stored_count() > 0 {
-            self.front_delete_count += 1;
-        } else {
-            self.new_back_values.pop_front();
-        }
-    }
-
-    /// Pushes a value to the end of the queue.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::queue_view::QueueView;
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut queue = QueueView::load(context).await.unwrap();
-    /// queue.push_back(34);
-    /// queue.push_back(37);
-    /// assert_eq!(queue.elements().await.unwrap(), vec![34, 37]);
-    /// # })
-    /// ```
-    pub fn push_back(&mut self, value: T) {
-        self.new_back_values.push_back(value);
-    }
-
-    /// Reads the size of the queue.
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::queue_view::QueueView;
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut queue = QueueView::load(context).await.unwrap();
-    /// queue.push_back(34);
-    /// assert_eq!(queue.count(), 1);
-    /// # })
-    /// ```
-    pub fn count(&self) -> usize {
-        self.stored_count() + self.new_back_values.len()
     }
 
     /// Obtains the extra data.

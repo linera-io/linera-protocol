@@ -53,6 +53,7 @@ use linera_base::{
     abi::{ContractAbi, ServiceAbi, WithContractAbi, WithServiceAbi},
     data_types::StreamUpdate,
 };
+pub use linera_views_derive::{SyncRootView as RootView, SyncView as View};
 use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json;
 
@@ -74,7 +75,6 @@ pub use self::{
 ///
 /// Below we use the word "transaction" to refer to the current operation or message being
 /// executed.
-#[allow(async_fn_in_trait)]
 pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// The type of message executed by the application.
     ///
@@ -96,19 +96,19 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     type EventValue: Serialize + DeserializeOwned + Debug;
 
     /// Creates an in-memory instance of the contract handler.
-    async fn load(runtime: ContractRuntime<Self>) -> Self;
+    fn load(runtime: ContractRuntime<Self>) -> Self;
 
     /// Instantiates the application on the chain that created it.
     ///
     /// This is only called once when the application is created and only on the microchain that
     /// created the application.
-    async fn instantiate(&mut self, argument: Self::InstantiationArgument);
+    fn instantiate(&mut self, argument: Self::InstantiationArgument);
 
     /// Applies an operation from the current block.
     ///
     /// Operations are created by users and added to blocks, serving as the starting point for an
     /// application's execution.
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response;
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response;
 
     /// Applies a message originating from a cross-chain message.
     ///
@@ -121,13 +121,13 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     ///
     /// For a message to be executed, a user must mark it to be received in a block of the receiver
     /// chain.
-    async fn execute_message(&mut self, message: Self::Message);
+    fn execute_message(&mut self, message: Self::Message);
 
     /// Reacts to new events on streams.
     ///
     /// This is called whenever there is a new event on any stream that this application
     /// subscribes to.
-    async fn process_streams(&mut self, _updates: Vec<StreamUpdate>) {}
+    fn process_streams(&mut self, _updates: Vec<StreamUpdate>) {}
 
     /// Finishes the execution of the current transaction.
     ///
@@ -136,7 +136,7 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// state.
     ///
     /// The application may also cancel the transaction by panicking if there are any pendencies.
-    async fn store(self);
+    fn store(self);
 }
 
 /// The service interface of a Linera application.

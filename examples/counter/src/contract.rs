@@ -31,44 +31,39 @@ impl Contract for CounterContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = CounterState::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
+    fn load(runtime: ContractRuntime<Self>) -> Self {
+        let state =
+            CounterState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         CounterContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, value: u64) {
+    fn instantiate(&mut self, value: u64) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
 
         self.state.value.set(value);
     }
 
-    async fn execute_operation(&mut self, operation: CounterOperation) -> u64 {
+    fn execute_operation(&mut self, operation: CounterOperation) -> u64 {
         let CounterOperation::Increment { value } = operation;
         let new_value = self.state.value.get() + value;
         self.state.value.set(new_value);
         new_value
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("Counter application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(self) {
+        self.state.save_and_drop().expect("Failed to save state");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use counter::CounterOperation;
-    use futures::FutureExt as _;
-    use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
+    use linera_sdk::{views::View, Contract, ContractRuntime};
 
     use super::{CounterContract, CounterState};
 
@@ -80,10 +75,7 @@ mod tests {
         let increment = 42_308_u64;
         let operation = CounterOperation::Increment { value: increment };
 
-        let response = counter
-            .execute_operation(operation)
-            .now_or_never()
-            .expect("Execution of counter operation should not await anything");
+        let response = counter.execute_operation(operation);
 
         let expected_value = initial_value + increment;
 
@@ -97,10 +89,7 @@ mod tests {
         let initial_value = 72_u64;
         let mut counter = create_and_instantiate_counter(initial_value);
 
-        counter
-            .execute_message(())
-            .now_or_never()
-            .expect("Execution of counter operation should not await anything");
+        counter.execute_message(());
     }
 
     #[test]
@@ -111,10 +100,7 @@ mod tests {
         let increment = 8_u64;
         let operation = CounterOperation::Increment { value: increment };
 
-        let response = counter
-            .execute_operation(operation)
-            .now_or_never()
-            .expect("Execution of counter operation should not await anything");
+        let response = counter.execute_operation(operation);
 
         let expected_value = initial_value + increment;
 
@@ -126,15 +112,11 @@ mod tests {
         let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = CounterContract {
             state: CounterState::load(runtime.root_view_storage_context())
-                .blocking_wait()
                 .expect("Failed to read from mock key value store"),
             runtime,
         };
 
-        contract
-            .instantiate(initial_value)
-            .now_or_never()
-            .expect("Initialization of counter state should not await anything");
+        contract.instantiate(initial_value);
 
         assert_eq!(*contract.state.value.get(), initial_value);
 

@@ -27,16 +27,16 @@ impl Contract for PublishReadDataBlobContract {
     type Parameters = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         PublishReadDataBlobContract { runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    fn instantiate(&mut self, _argument: ()) {
         // Validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Operation) {
+    fn execute_operation(&mut self, operation: Operation) {
         match operation {
             Operation::CreateDataBlob(data) => {
                 self.runtime.create_data_blob(data);
@@ -56,9 +56,9 @@ impl Contract for PublishReadDataBlobContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {
+    fn execute_message(&mut self, _message: ()) {
         panic!("Publish-Read Data Blob application doesn't support any cross-chain messages");
     }
 
-    async fn store(self) {}
+    fn store(self) {}
 }
