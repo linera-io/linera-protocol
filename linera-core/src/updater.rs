@@ -770,17 +770,17 @@ where
             return Ok(info);
         }
 
-        let batch_size = self.client.options().certificate_upload_batch_size as usize;
-        for chunk in heights.chunks(batch_size) {
-            let certificates = self
-                .read_certificates_for_heights(chain_id, chunk.to_vec())
-                .await?;
-
-            for certificate in certificates {
-                self.send_confirmed_certificate(&certificate, delivery)
+        // Send any additional missing certificates in order
+        Box::pin(async {
+            let storage = self.client.local_node.storage_client();
+            let mut stream = storage.read_certificates_by_heights_iter(chain_id, heights);
+            while let Some(certificate) = stream.next().await {
+                self.send_confirmed_certificate(&certificate?, delivery)
                     .await?;
             }
-        }
+            Ok::<_, chain_client::Error>(())
+        })
+        .await?;
 
         Ok(info)
     }
@@ -950,22 +950,20 @@ where
                 async move {
                     // Get all block hashes for this chain at the specified heights in one call
                     let heights_vec: Vec<_> = heights.into_iter().collect();
-                    let certificates = updater
-                        .client
-                        .local_node
-                        .storage_client()
-                        .read_certificates_by_heights(chain_id, &heights_vec)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>();
+                    Box::pin(async {
+                        let storage = updater.client.local_node.storage_client();
+                        let mut stream =
+                            storage.read_certificates_by_heights_iter(chain_id, heights_vec);
 
-                    // Send each certificate
-                    for certificate in certificates {
-                        updater
-                            .send_confirmed_certificate(&certificate, delivery)
-                            .await?;
-                    }
+                        // Send each certificate
+                        while let Some(certificate) = stream.next().await {
+                            updater
+                                .send_confirmed_certificate(&certificate?, delivery)
+                                .await?;
+                        }
+                        Ok::<_, chain_client::Error>(())
+                    })
+                    .await?;
 
                     Ok::<_, chain_client::Error>(())
                 }

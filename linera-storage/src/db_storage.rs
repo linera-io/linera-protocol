@@ -8,6 +8,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::stream::StreamExt;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
@@ -43,7 +44,7 @@ use {
     std::cmp::Reverse,
 };
 
-use crate::{ChainRuntimeContext, Clock, Storage};
+use crate::{ChainRuntimeContext, Clock, Storage, StorageStream};
 
 #[cfg(with_metrics)]
 pub mod metrics {
@@ -1112,6 +1113,31 @@ where
             .collect()
     }
 
+    fn read_certificates_iter(
+        &self,
+        hashes: Vec<CryptoHash>,
+    ) -> StorageStream<'_, Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError>> {
+        Box::pin(async_stream::stream! {
+            let block_keys = get_block_keys();
+            for hash in &hashes {
+                let root_key = RootKey::BlockHash(*hash).bytes();
+                let store = self.database.open_shared(&root_key)?;
+                let values = store.read_multi_values_bytes(&block_keys).await?;
+                let result = match (values[0].as_ref(), values[1].as_ref()) {
+                    (Some(lite_cert_bytes), Some(confirmed_block_bytes)) => {
+                        self.deserialize_and_cache_certificate(lite_cert_bytes, confirmed_block_bytes)
+                    }
+                    _ => Ok(None),
+                };
+                yield result;
+            }
+            #[cfg(with_metrics)]
+            metrics::READ_CERTIFICATES_COUNTER
+                .with_label_values(&[])
+                .inc_by(hashes.len() as u64);
+        })
+    }
+
     #[instrument(skip_all)]
     async fn read_certificates_raw(
         &self,
@@ -1275,6 +1301,58 @@ where
                 Some(raw) => self.deserialize_and_cache_certificate(&raw.0, &raw.1),
             })
             .collect()
+    }
+
+    fn read_certificate_hashes_by_heights_iter(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> StorageStream<'_, Result<Option<CryptoHash>, ViewError>> {
+        Box::pin(async_stream::stream! {
+            let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
+            let store = self.database.open_shared(&index_root_key)?;
+            let height_keys: Vec<Vec<u8>> = heights.iter().map(|h| to_height_key(*h)).collect();
+            let mut stream = store.read_multi_values_bytes_iter(height_keys);
+            while let Some(result) = stream.next().await {
+                let opt = result?;
+                let hash = opt
+                    .map(|bytes| bcs::from_bytes::<CryptoHash>(&bytes))
+                    .transpose()?;
+                yield Ok(hash);
+            }
+        })
+    }
+
+    fn read_certificates_by_heights_iter(
+        &self,
+        chain_id: ChainId,
+        heights: Vec<BlockHeight>,
+    ) -> StorageStream<'_, Result<Arc<ConfirmedBlockCertificate>, ViewError>> {
+        Box::pin(async_stream::stream! {
+            let mut hash_stream = self.read_certificate_hashes_by_heights_iter(chain_id, heights);
+            let block_keys = get_block_keys();
+            while let Some(result) = hash_stream.next().await {
+                let Some(hash) = result? else {
+                    continue;
+                };
+                let root_key = RootKey::BlockHash(hash).bytes();
+                let store = self.database.open_shared(&root_key)?;
+                let values = store.read_multi_values_bytes(&block_keys).await?;
+                match (values[0].as_ref(), values[1].as_ref()) {
+                    (Some(lite_cert_bytes), Some(confirmed_block_bytes)) => {
+                        if let Some(arc) = self
+                            .deserialize_and_cache_certificate(lite_cert_bytes, confirmed_block_bytes)?
+                        {
+                            yield Ok(arc);
+                        }
+                    }
+                    _ => {
+                        // Height mapped to a hash but the certificate is missing.
+                        // Skip, consistent with the flatten() in the non-streaming version.
+                    }
+                }
+            }
+        })
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]

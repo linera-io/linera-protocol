@@ -19,7 +19,9 @@ use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
     lru_caching::LruCachingDatabase,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadValueStream, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
@@ -44,6 +46,9 @@ use crate::{
 
 // The maximum key size is set to 1M rather arbitrarily.
 const MAX_KEY_SIZE: usize = 1000000;
+
+// The batch size in `read_multi_values_bytes_iter`.
+const BATCH_SIZE: usize = 50;
 
 // The shared store client.
 // * Interior mutability is required for the client because
@@ -206,6 +211,26 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         } else {
             self.read_entries(message_index, num_chunks).await
         }
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        let store = self.clone();
+
+        Box::pin(async_stream::stream! {
+            let mut current_position = 0;
+            while current_position < keys.len() {
+                // Calculate the end position for this batch
+                let end_position = std::cmp::min(current_position + BATCH_SIZE, keys.len());
+
+                // Extract the next batch of keys
+                let chunk = &keys[current_position..end_position];
+                current_position = end_position;
+                let values = store.read_multi_values_bytes(chunk).await?;
+                for value in values {
+                    yield Ok(value);
+                }
+            }
+        })
     }
 
     async fn find_keys_by_prefix(

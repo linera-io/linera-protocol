@@ -47,8 +47,8 @@ use crate::{
     journaling::JournalingKeyValueDatabase,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadValueStream,
+        ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -811,6 +811,7 @@ impl WithError for DynamoDbStoreInternal {
     type Error = DynamoDbStoreInternalError;
 }
 
+/// Iterator for reading multiple values from DynamoDB.
 impl ReadableKeyValueStore for DynamoDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
@@ -871,6 +872,25 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
             .into_iter()
             .collect::<Result<_, _>>()?;
         Ok(results.into_iter().flatten().collect())
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        // Split keys into batches
+        let chunks = keys
+            .chunks(MAX_BATCH_GET_ITEM_SIZE)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>();
+        let store = self.clone();
+
+        Box::pin(async_stream::stream! {
+            for chunk in chunks {
+                let values = store.read_batch_values_bytes(&chunk).await?;
+
+                for value in values {
+                    yield Ok(value);
+                }
+            }
+        })
     }
 
     async fn find_keys_by_prefix(

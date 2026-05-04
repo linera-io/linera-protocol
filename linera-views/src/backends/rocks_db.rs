@@ -29,7 +29,7 @@ use crate::{
     common::get_upper_bound_option,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyValueDatabase, KeyValueStoreError, ReadValueStream, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
@@ -66,6 +66,9 @@ fn get_available_cpus() -> i32 {
 }
 
 const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
+
+// The size of batches in the `read_multi_values_bytes_iter`.
+const BATCH_SIZE: usize = 50;
 
 /// The RocksDB client that we use.
 type DB = rocksdb::DBWithThreadMode<rocksdb::MultiThreaded>;
@@ -510,6 +513,36 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
                 keys.to_vec(),
             )
             .await
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        let executor = self.executor.clone();
+        let spawn_mode = self.spawn_mode;
+
+        Box::pin(async_stream::stream! {
+            let mut current_position = 0;
+            while current_position < keys.len() {
+                // Calculate the end position for this batch
+                let end_position = std::cmp::min(current_position + BATCH_SIZE, keys.len());
+
+                // Extract the next batch of keys
+                let chunk = keys[current_position..end_position].to_vec();
+                current_position = end_position;
+
+                // Load the batch
+                let executor = executor.clone();
+                let values = spawn_mode
+                    .spawn(
+                        move |x| executor.read_multi_values_bytes_internal(x),
+                        chunk,
+                    )
+                    .await?;
+
+                for value in values {
+                    yield Ok(value);
+                }
+            }
+        })
     }
 
     async fn find_keys_by_prefix(
