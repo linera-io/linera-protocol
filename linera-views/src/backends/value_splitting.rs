@@ -356,20 +356,21 @@ where
                 };
                 if index == 0 {
                     let (key, top, segs) = state.take().unwrap();
-                    let segment_zero_value = segs.last().unwrap();
-                    let count = Self::read_count_from_value(segment_zero_value)?;
+                    let count = Self::read_count_from_value(segs.last().unwrap())?;
                     if count == 0 || count > top + 1 {
                         yield Err(ValueSplittingError::MissingSegment);
                         return;
                     }
-                    let mut big_value = Vec::new();
-                    for (rev_pos, val) in segs.iter().rev().enumerate() {
-                        let idx = rev_pos as u32;
-                        if idx == 0 {
-                            big_value.extend_from_slice(&val[4..]);
-                        } else if idx < count {
-                            big_value.extend_from_slice(val);
-                        }
+                    // `segs` is in push order — descending index with the master
+                    // (index 0) at the end. Take the master's data (skipping its
+                    // count prefix), then the `count - 1` lowest-indexed segments
+                    // in ascending order. Any segments above index `count - 1`
+                    // are leftovers from a previous longer write to this key and
+                    // are silently dropped.
+                    let (master, others) = segs.split_last().unwrap();
+                    let mut big_value = master[4..].to_vec();
+                    for val in others.iter().rev().take(count as usize - 1) {
+                        big_value.extend_from_slice(val);
                     }
                     yield Ok((key, big_value));
                 }
