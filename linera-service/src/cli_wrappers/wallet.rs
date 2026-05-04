@@ -1448,8 +1448,19 @@ impl ClientWrapper {
             .await
     }
 
+    pub async fn build_test_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
+        self.build_application(Self::test_example_path(name)?.as_path(), name, true)
+            .await
+    }
+
     pub fn example_path(name: &str) -> Result<PathBuf> {
         Ok(env::current_dir()?.join("../examples/").join(name))
+    }
+
+    pub fn test_example_path(name: &str) -> Result<PathBuf> {
+        Ok(env::current_dir()?
+            .join("../linera-sdk/tests/fixtures/")
+            .join(name))
     }
 }
 

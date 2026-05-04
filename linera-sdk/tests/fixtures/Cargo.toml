@@ -4,6 +4,8 @@ members = [
     "contract-call",
     "cost-tracking",
     "create-and-call",
+    "event-emitter",
+    "event-subscriber",
     "meta-counter",
     "publish-read-data-blob",
     "time-expiry",
@@ -22,6 +24,7 @@ cost-tracking = { path = "./cost-tracking" }
 counter = { path = "../../../examples/counter" }
 counter-no-graphql = { path = "../../../examples/counter-no-graphql" }
 create-and-call = { path = "./create-and-call" }
+event-emitter = { path = "./event-emitter" }
 meta-counter = { path = "./meta-counter" }
 publish-read-data-blob = { path = "./publish-read-data-blob" }
 time-expiry = { path = "./time-expiry" }

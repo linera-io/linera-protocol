@@ -2620,7 +2620,7 @@ async fn test_wasm_end_to_end_update_stream_splitting(config: impl LineraNetConf
         .open_and_assign(&client, Amount::from_tokens(100))
         .await?;
 
-    let (emitter_contract, emitter_service) = client.build_example("event-emitter").await?;
+    let (emitter_contract, emitter_service) = client.build_test_example("event-emitter").await?;
     let emitter_module_id = client
         .publish_module::<EventEmitterAbi, (), ()>(
             emitter_contract,
@@ -2638,7 +2638,7 @@ async fn test_wasm_end_to_end_update_stream_splitting(config: impl LineraNetConf
         .await?;
 
     let (subscriber_contract, subscriber_service) =
-        client.build_example("event-subscriber").await?;
+        client.build_test_example("event-subscriber").await?;
     let subscriber_module_id = client
         .publish_module::<EventSubscriberAbi, (), ()>(
             subscriber_contract,
