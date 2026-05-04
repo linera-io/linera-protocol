@@ -84,17 +84,32 @@ where
     let persisted_height = db.get_last_scanned_admin_height().await?;
     let persisted_epoch = db.get_last_known_evm_epoch().await?;
     let start_height = match (persisted_height, persisted_epoch) {
-        (Some(h), Some(prev_epoch)) if current_epoch >= prev_epoch => h,
+        (None, None) => BlockHeight(0),
         (Some(h), Some(prev_epoch)) => {
+            if current_epoch < prev_epoch {
+                // Epochs are monotonic by construction (LightClient._setCommittee enforces
+                // `epoch == currentEpoch + 1`). A decrease means the relay is pointing at a
+                // different LightClient than before, or its scan_state DB is stale.
+                anyhow::bail!(
+                    "LightClient currentEpoch ({current_epoch}) is lower than the epoch \
+                     previously observed by this relay ({prev_epoch}); refusing to proceed"
+                );
+            }
+            h
+        }
+        // Only possible if a previous run crashed between the two writes (we don't write
+        // them atomically). Resuming from `persisted_height` without a known epoch is
+        // unsafe — if the EVM was meanwhile rolled back we'd skip committees we still
+        // need to relay. Rescan from 0.
+        (height, epoch) => {
             tracing::warn!(
-                %current_epoch,
-                %prev_epoch,
-                last_scanned = %h,
-                "LightClient epoch regressed since last scan; rescanning admin chain from 0"
+                ?height,
+                ?epoch,
+                "Inconsistent scan_state (only one of admin height / epoch persisted); \
+                 rescanning admin chain from 0"
             );
             BlockHeight(0)
         }
-        _ => BlockHeight(0),
     };
 
     tracing::info!(
@@ -107,7 +122,9 @@ where
 
     if start_height >= admin_chain_height {
         tracing::info!("No admin chain blocks to scan");
-        // Still persist `current_epoch` so a later EVM regression is detectable.
+        // Persist both fields so the (Some, None) / (None, Some) "inconsistent" branch
+        // above can never be reached from a clean run.
+        db.set_last_scanned_admin_height(admin_chain_height).await?;
         db.set_last_known_evm_epoch(current_epoch).await?;
         return Ok(());
     }
