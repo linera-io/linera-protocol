@@ -611,9 +611,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         };
         match &bucket.state {
             State::Loaded { data } => Ok(Some(
-                data.last()
-                    .expect("a stored bucket is never empty")
-                    .clone(),
+                data.last().expect("a stored bucket is never empty").clone(),
             )),
             State::NotLoaded { .. } => {
                 let key = self.get_bucket_key(bucket.index)?;
@@ -623,10 +621,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                     .read_value::<Vec<T>>(&key)
                     .await?
                     .ok_or_else(|| ViewError::MissingEntries("BucketQueueView::back".into()))?;
-                let result = data
-                    .last()
-                    .expect("a stored bucket is never empty")
-                    .clone();
+                let result = data.last().expect("a stored bucket is never empty").clone();
                 self.stored_buckets
                     .back_mut()
                     .expect("stored_buckets is non-empty since we just accessed its back element")
