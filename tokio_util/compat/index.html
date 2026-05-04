@@ -1,0 +1,86 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Compatibility between the `tokio::io` and `futures-io` versions of the `AsyncRead` and `AsyncWrite` traits."><title>tokio_util::compat - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="tokio_util" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../tokio_util/index.html">tokio_<wbr>util</a><span class="version">0.7.16</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module compat</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#bridging-tokio-and-futures-io-with-compat" title="Bridging Tokio and Futures I/O with `compat()`">Bridging Tokio and Futures I/O with <code>compat()</code></a></li><li><a href="#compatibility-overview" title="Compatibility Overview">Compatibility Overview</a></li><li><a href="#feature-flag" title="Feature Flag">Feature Flag</a></li><li><a href="#example-1-tokio---futures-asyncread" title="Example 1: Tokio -&#62; Futures (`AsyncRead`)">Example 1: Tokio -&gt; Futures (<code>AsyncRead</code>)</a></li><li><a href="#example-2-futures---tokio-asyncread" title="Example 2: Futures -&#62; Tokio (`AsyncRead`)">Example 2: Futures -&gt; Tokio (<code>AsyncRead</code>)</a></li><li><a href="#common-use-cases" title="Common Use Cases">Common Use Cases</a></li><li><a href="#see-also" title="See Also">See Also</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate tokio_<wbr>util</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">tokio_util</a></div><h1>Module <span>compat</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/tokio_util/compat.rs.html#1-380">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Compatibility between the <code>tokio::io</code> and <code>futures-io</code> versions of the
+<code>AsyncRead</code> and <code>AsyncWrite</code> traits.</p>
+<h3 id="bridging-tokio-and-futures-io-with-compat"><a class="doc-anchor" href="#bridging-tokio-and-futures-io-with-compat">§</a>Bridging Tokio and Futures I/O with <code>compat()</code></h3>
+<p>The <a href="trait.TokioAsyncReadCompatExt.html#method.compat" title="method tokio_util::compat::TokioAsyncReadCompatExt::compat"><code>compat()</code></a> function provides a compatibility layer that allows types implementing
+<a href="../../tokio/io/async_read/trait.AsyncRead.html" title="trait tokio::io::async_read::AsyncRead"><code>tokio::io::AsyncRead</code></a> or <a href="../../tokio/io/async_write/trait.AsyncWrite.html" title="trait tokio::io::async_write::AsyncWrite"><code>tokio::io::AsyncWrite</code></a> to be used as their
+<a href="https://docs.rs/futures/latest/futures/io/trait.AsyncRead.html"><code>futures::io::AsyncRead</code></a> or <a href="https://docs.rs/futures/latest/futures/io/trait.AsyncWrite.html"><code>futures::io::AsyncWrite</code></a> counterparts — and vice versa.</p>
+<p>This is especially useful when working with libraries that expect I/O types from one ecosystem
+(usually <code>futures</code>) but you are using types from the other (usually <code>tokio</code>).</p>
+<h3 id="compatibility-overview"><a class="doc-anchor" href="#compatibility-overview">§</a>Compatibility Overview</h3><div><table><thead><tr><th>Inner Type Implements…</th><th><code>Compat&lt;T&gt;</code> Implements…</th></tr></thead><tbody>
+<tr><td><a href="../../tokio/io/async_read/trait.AsyncRead.html" title="trait tokio::io::async_read::AsyncRead"><code>tokio::io::AsyncRead</code></a></td><td><a href="https://docs.rs/futures/latest/futures/io/trait.AsyncRead.html"><code>futures::io::AsyncRead</code></a></td></tr>
+<tr><td><a href="https://docs.rs/futures/latest/futures/io/trait.AsyncRead.html"><code>futures::io::AsyncRead</code></a></td><td><a href="../../tokio/io/async_read/trait.AsyncRead.html" title="trait tokio::io::async_read::AsyncRead"><code>tokio::io::AsyncRead</code></a></td></tr>
+<tr><td><a href="../../tokio/io/async_write/trait.AsyncWrite.html" title="trait tokio::io::async_write::AsyncWrite"><code>tokio::io::AsyncWrite</code></a></td><td><a href="https://docs.rs/futures/latest/futures/io/trait.AsyncWrite.html"><code>futures::io::AsyncWrite</code></a></td></tr>
+<tr><td><a href="https://docs.rs/futures/latest/futures/io/trait.AsyncWrite.html"><code>futures::io::AsyncWrite</code></a></td><td><a href="../../tokio/io/async_write/trait.AsyncWrite.html" title="trait tokio::io::async_write::AsyncWrite"><code>tokio::io::AsyncWrite</code></a></td></tr>
+</tbody></table>
+</div><h3 id="feature-flag"><a class="doc-anchor" href="#feature-flag">§</a>Feature Flag</h3>
+<p>This functionality is available through the <code>compat</code> feature flag:</p>
+<div class="example-wrap"><pre class="language-toml"><code>tokio-util = { version = &quot;...&quot;, features = [&quot;compat&quot;] }</code></pre></div><h3 id="example-1-tokio---futures-asyncread"><a class="doc-anchor" href="#example-1-tokio---futures-asyncread">§</a>Example 1: Tokio -&gt; Futures (<code>AsyncRead</code>)</h3>
+<p>This example demonstrates sending data over a <a href="../../tokio/net/tcp/stream/struct.TcpStream.html" title="struct tokio::net::tcp::stream::TcpStream"><code>tokio::net::TcpStream</code></a> and using
+<a href="https://docs.rs/futures/latest/futures/io/trait.AsyncReadExt.html#method.read"><code>futures::io::AsyncReadExt::read</code></a> from the <code>futures</code> crate to read it after adapting the
+stream via <a href="trait.TokioAsyncReadCompatExt.html#method.compat" title="method tokio_util::compat::TokioAsyncReadCompatExt::compat"><code>compat()</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::net::{TcpListener, TcpStream};
+<span class="kw">use </span>tokio::io::AsyncWriteExt;
+<span class="kw">use </span>tokio_util::compat::TokioAsyncReadCompatExt;
+<span class="kw">use </span>futures::io::AsyncReadExt;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; std::io::Result&lt;()&gt; {
+    <span class="kw">let </span>listener = TcpListener::bind(<span class="string">"127.0.0.1:8081"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    tokio::spawn(<span class="kw">async </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>client = TcpStream::connect(<span class="string">"127.0.0.1:8081"</span>).<span class="kw">await</span>.unwrap();
+        client.write_all(<span class="string">b"Hello World"</span>).<span class="kw">await</span>.unwrap();
+    });
+
+    <span class="kw">let </span>(stream, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// Adapt `tokio::TcpStream` to be used with `futures::io::AsyncReadExt`
+    </span><span class="kw">let </span><span class="kw-2">mut </span>compat_stream = stream.compat();
+    <span class="kw">let </span><span class="kw-2">mut </span>buffer = [<span class="number">0</span>; <span class="number">20</span>];
+    <span class="kw">let </span>n = compat_stream.read(<span class="kw-2">&amp;mut </span>buffer).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">println!</span>(<span class="string">"Received: {}"</span>, String::from_utf8_lossy(<span class="kw-2">&amp;</span>buffer[..n]));
+
+    <span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+<h3 id="example-2-futures---tokio-asyncread"><a class="doc-anchor" href="#example-2-futures---tokio-asyncread">§</a>Example 2: Futures -&gt; Tokio (<code>AsyncRead</code>)</h3>
+<p>The reverse is also possible: you can take a <a href="https://docs.rs/futures/latest/futures/io/trait.AsyncRead.html"><code>futures::io::AsyncRead</code></a> (e.g. a cursor) and
+adapt it to be used with <a href="../../tokio/io/util/async_read_ext/trait.AsyncReadExt.html#method.read_to_end" title="method tokio::io::util::async_read_ext::AsyncReadExt::read_to_end"><code>tokio::io::AsyncReadExt::read_to_end</code></a></p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>futures::io::Cursor;
+<span class="kw">use </span>tokio_util::compat::FuturesAsyncReadCompatExt;
+<span class="kw">use </span>tokio::io::AsyncReadExt;
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>future = <span class="kw">async </span>{
+        <span class="kw">let </span>reader = Cursor::new(<span class="string">b"Hello from futures"</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>compat_reader = reader.compat();
+        <span class="kw">let </span><span class="kw-2">mut </span>buf = Vec::new();
+        compat_reader.read_to_end(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await</span>.unwrap();
+        <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>buf, <span class="string">b"Hello from futures"</span>);
+    };
+
+    <span class="comment">// Run the future inside a Tokio runtime
+    </span>tokio::runtime::Runtime::new().unwrap().block_on(future);
+}</code></pre></div>
+<h3 id="common-use-cases"><a class="doc-anchor" href="#common-use-cases">§</a>Common Use Cases</h3>
+<ul>
+<li>Using <code>tokio</code> sockets with <code>async-tungstenite</code>, <code>async-compression</code>, or <code>futures-rs</code>-based
+libraries.</li>
+<li>Bridging I/O interfaces between mixed-ecosystem libraries.</li>
+<li>Avoiding rewrites or duplication of I/O code in async environments.</li>
+</ul>
+<h3 id="see-also"><a class="doc-anchor" href="#see-also">§</a>See Also</h3>
+<ul>
+<li><a href="struct.Compat.html" title="struct tokio_util::compat::Compat"><code>Compat</code></a> type</li>
+<li><a href="trait.TokioAsyncReadCompatExt.html" title="trait tokio_util::compat::TokioAsyncReadCompatExt"><code>TokioAsyncReadCompatExt</code></a></li>
+<li><a href="trait.FuturesAsyncReadCompatExt.html" title="trait tokio_util::compat::FuturesAsyncReadCompatExt"><code>FuturesAsyncReadCompatExt</code></a></li>
+<li><a href="../../tokio/io/index.html" title="mod tokio::io"><code>tokio::io</code></a></li>
+<li><a href="https://docs.rs/futures/latest/futures/io/"><code>futures::io</code></a></li>
+</ul>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Compat.html" title="struct tokio_util::compat::Compat">Compat</a></dt><dd>A compatibility layer that allows conversion between the
+<code>tokio::io</code> and <code>futures-io</code> <code>AsyncRead</code> and <code>AsyncWrite</code> traits.</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.FuturesAsyncReadCompatExt.html" title="trait tokio_util::compat::FuturesAsyncReadCompatExt">Futures<wbr>Async<wbr>Read<wbr>Compat<wbr>Ext</a></dt><dd>Extension trait that allows converting a type implementing
+<code>futures_io::AsyncRead</code> to implement <code>tokio::io::AsyncRead</code>.</dd><dt><a class="trait" href="trait.FuturesAsyncWriteCompatExt.html" title="trait tokio_util::compat::FuturesAsyncWriteCompatExt">Futures<wbr>Async<wbr>Write<wbr>Compat<wbr>Ext</a></dt><dd>Extension trait that allows converting a type implementing
+<code>futures_io::AsyncWrite</code> to implement <code>tokio::io::AsyncWrite</code>.</dd><dt><a class="trait" href="trait.TokioAsyncReadCompatExt.html" title="trait tokio_util::compat::TokioAsyncReadCompatExt">Tokio<wbr>Async<wbr>Read<wbr>Compat<wbr>Ext</a></dt><dd>Extension trait that allows converting a type implementing
+<code>tokio::io::AsyncRead</code> to implement <code>futures_io::AsyncRead</code>.</dd><dt><a class="trait" href="trait.TokioAsyncWriteCompatExt.html" title="trait tokio_util::compat::TokioAsyncWriteCompatExt">Tokio<wbr>Async<wbr>Write<wbr>Compat<wbr>Ext</a></dt><dd>Extension trait that allows converting a type implementing
+<code>tokio::io::AsyncWrite</code> to implement <code>futures_io::AsyncWrite</code>.</dd></dl></section></div></main></body></html>

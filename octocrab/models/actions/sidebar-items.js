@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SelfHostedRunnerLabelType"],"struct":["SelfHostedRunner","SelfHostedRunnerJitConfig","SelfHostedRunnerLabel","SelfHostedRunnerToken"]};

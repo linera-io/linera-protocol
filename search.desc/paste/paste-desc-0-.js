@@ -1,0 +1,1 @@
+searchState.loadedDescShard("paste", 0, "github crates-io docs-rs")

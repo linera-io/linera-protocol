@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Normalization."><title>iri_string::normalize - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="iri_string" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../iri_string/index.html">iri_<wbr>string</a><span class="version">0.7.8</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module normalize</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#iri-normalization-and-resolution-can-fail" title="IRI normalization (and resolution) can fail">IRI normalization (and resolution) can fail</a><ul><li><a href="#examples" title="Examples">Examples</a></li></ul></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate iri_<wbr>string</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">iri_string</a></div><h1>Module <span>normalize</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/iri_string/normalize.rs.html#1-691">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Normalization.</p>
+<h2 id="iri-normalization-and-resolution-can-fail"><a class="doc-anchor" href="#iri-normalization-and-resolution-can-fail">§</a>IRI normalization (and resolution) can fail</h2>
+<p>Though this is not explicitly stated in RFC 3986, IRI normalization can fail.
+For example, <code>foo:.///bar</code>, <code>foo:./..//bar</code>, and <code>foo:/..//bar</code> are all
+normalized to <code>foo://bar</code> as a string. However, IRI without authority (note
+that this is different from “with empty authority”) cannot have a path
+starting with <code>//</code>, since it is ambiguous and can be interpreted as an IRI
+with authority. So, <code>foo://bar</code> is decomposed as scheme <code>foo</code>, authority
+<code>bar</code>, and empty path. The expected result is the combination of scheme
+<code>foo</code>, no authority, and path <code>//bar</code> (though this is not possible to
+serialize), so the algorithm fails as it cannot return the intended result.</p>
+<p>IRI resolution can also fail since it (conditionally) invokes normalization
+during the resolution process. For example, resolving a reference <code>.///bar</code>
+or <code>/..//bar</code> against the base <code>foo:</code> fail.</p>
+<p>Thus, IRI resolution can fail for some abnormal cases.</p>
+<p>Note that this kind of failure can happen only when the base IRI has no
+authority and empty path. This would be rare in the wild, since many people
+would use an IRI with authority part, such as <code>http://</code>.</p>
+<p>If you are handling <code>scheme://</code>-style URIs and IRIs, don’t worry about the
+failure. Currently no cases are known to fail when at least one of the base
+IRI or the relative IRI contains authorities.</p>
+<p>To know what will happen on resolution failure, see the module documentation
+for <a href="../resolve/index.html" title="mod iri_string::resolve"><code>resolve</code></a>.</p>
+<h3 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h3><h4 id="normalization-failure"><a class="doc-anchor" href="#normalization-failure">§</a>Normalization failure</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::normalize::Error;
+<span class="kw">use </span>iri_string::types::{IriAbsoluteStr, IriReferenceStr};
+
+<span class="kw">let </span>base = IriAbsoluteStr::new(<span class="string">"foo:.///bar"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(
+    base.normalize().ensure_rfc3986_normalizable().is_err(),
+    <span class="string">"this normalization should fails without WAHTWG URL Standard serialization"
+</span>);</code></pre></div>
+<h4 id="resolution-failure"><a class="doc-anchor" href="#resolution-failure">§</a>Resolution failure</h4>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>iri_string::types::{IriAbsoluteStr, IriReferenceStr};
+
+<span class="kw">let </span>base = IriAbsoluteStr::new(<span class="string">"scheme:"</span>)<span class="question-mark">?</span>;
+{
+    <span class="kw">let </span>reference = IriReferenceStr::new(<span class="string">".///bar"</span>)<span class="question-mark">?</span>;
+    <span class="kw">let </span>result = reference.resolve_against(base)
+        .ensure_rfc3986_normalizable();
+    <span class="macro">assert!</span>(result.is_err());
+}
+
+{
+    <span class="kw">let </span>reference2 = IriReferenceStr::new(<span class="string">"/..//bar"</span>)<span class="question-mark">?</span>;
+    <span class="comment">// Resulting string will be `scheme://bar`, but `bar` should be a path
+    // segment, not a host. So, the semantically correct target IRI cannot
+    // be represented.
+    </span><span class="kw">let </span>result2 = reference2.resolve_against(base)
+        .ensure_rfc3986_normalizable();
+    <span class="macro">assert!</span>(result2.is_err());
+}</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Error.html" title="struct iri_string::normalize::Error">Error</a></dt><dd>IRI normalization and resolution error.</dd><dt><a class="struct" href="struct.Normalized.html" title="struct iri_string::normalize::Normalized">Normalized</a></dt><dd>Normalized OR resolved IRI.</dd></dl></section></div></main></body></html>

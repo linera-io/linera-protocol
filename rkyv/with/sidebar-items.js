@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AsStringError","LockError","UnixTimestampError"],"struct":["AsBox","AsOwned","AsString","AsVec","Atomic","CopyOptimize","Immutable","Inline","Lock","Map","Niche","Raw","RefAsBox","Skip","UnixTimestamp","Unsafe","With"],"trait":["ArchiveWith","DeserializeWith","SerializeWith"],"type":["Boxed"]};

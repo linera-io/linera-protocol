@@ -1,0 +1,1 @@
+searchState.loadedDescShard("futures_utils_wasm", 0, "futures-utils-wasm\nType alias for a pin-boxed future, with a <code>Send</code> bound on …\nMacro that return an <code>impl Future</code> type, with a <code>Send</code> bound …")

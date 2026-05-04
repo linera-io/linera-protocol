@@ -1,0 +1,170 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Conversions between Rust and Postgres types."><title>sqlx_postgres::types - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sqlx_postgres" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-3a5871a4.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../sqlx_postgres/index.html">sqlx_<wbr>postgres</a><span class="version">0.8.6</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module types</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#types" title="Types">Types</a><ul><li><a href="#bigdecimal" title="`bigdecimal`"><code>bigdecimal</code></a></li><li><a href="#rust_decimal" title="`rust_decimal`"><code>rust_decimal</code></a></li><li><a href="#chrono" title="`chrono`"><code>chrono</code></a></li><li><a href="#time" title="`time`"><code>time</code></a></li><li><a href="#uuid" title="`uuid`"><code>uuid</code></a></li><li><a href="#ipnetwork" title="`ipnetwork`"><code>ipnetwork</code></a></li><li><a href="#ipnet" title="`ipnet`"><code>ipnet</code></a></li><li><a href="#mac_address" title="`mac_address`"><code>mac_address</code></a></li><li><a href="#bit-vec" title="`bit-vec`"><code>bit-vec</code></a></li><li><a href="#json" title="`json`"><code>json</code></a></li></ul></li><li><a href="#composite-types" title="Composite types">Composite types</a></li><li><a href="#arrays" title="Arrays">Arrays</a></li><li><a href="#enumerations" title="Enumerations">Enumerations</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#traits" title="Traits">Traits</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate sqlx_<wbr>postgres</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">sqlx_postgres</a></div><h1>Module <span>types</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/sqlx_postgres/types/mod.rs.html#1-314">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Conversions between Rust and <strong>Postgres</strong> types.</p>
+<h2 id="types"><a class="doc-anchor" href="#types">§</a>Types</h2><div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>bool</code></td><td>BOOL</td></tr>
+<tr><td><code>i8</code></td><td>“CHAR”</td></tr>
+<tr><td><code>i16</code></td><td>SMALLINT, SMALLSERIAL, INT2</td></tr>
+<tr><td><code>i32</code></td><td>INT, SERIAL, INT4</td></tr>
+<tr><td><code>i64</code></td><td>BIGINT, BIGSERIAL, INT8</td></tr>
+<tr><td><code>f32</code></td><td>REAL, FLOAT4</td></tr>
+<tr><td><code>f64</code></td><td>DOUBLE PRECISION, FLOAT8</td></tr>
+<tr><td><code>&amp;str</code>, <a href="https://doc.rust-lang.org/1.86.0/alloc/string/struct.String.html" title="struct alloc::string::String"><code>String</code></a></td><td>VARCHAR, CHAR(N), TEXT, NAME, CITEXT</td></tr>
+<tr><td><code>&amp;[u8]</code>, <code>Vec&lt;u8&gt;</code></td><td>BYTEA</td></tr>
+<tr><td><code>()</code></td><td>VOID</td></tr>
+<tr><td><a href="struct.PgInterval.html" title="struct sqlx_postgres::types::PgInterval"><code>PgInterval</code></a></td><td>INTERVAL</td></tr>
+<tr><td><a href="struct.PgRange.html" title="struct sqlx_postgres::types::PgRange"><code>PgRange&lt;T&gt;</code></a></td><td>INT8RANGE, INT4RANGE, TSRANGE, TSTZRANGE, DATERANGE, NUMRANGE</td></tr>
+<tr><td><a href="struct.PgMoney.html" title="struct sqlx_postgres::types::PgMoney"><code>PgMoney</code></a></td><td>MONEY</td></tr>
+<tr><td><a href="struct.PgLTree.html" title="struct sqlx_postgres::types::PgLTree"><code>PgLTree</code></a></td><td>LTREE</td></tr>
+<tr><td><a href="struct.PgLQuery.html" title="struct sqlx_postgres::types::PgLQuery"><code>PgLQuery</code></a></td><td>LQUERY</td></tr>
+<tr><td><a href="struct.PgCiText.html" title="struct sqlx_postgres::types::PgCiText"><code>PgCiText</code></a></td><td>CITEXT<sup>1</sup></td></tr>
+<tr><td><a href="enum.PgCube.html" title="enum sqlx_postgres::types::PgCube"><code>PgCube</code></a></td><td>CUBE</td></tr>
+<tr><td><a href="struct.PgPoint.html" title="struct sqlx_postgres::types::PgPoint"><code>PgPoint</code></a></td><td>POINT</td></tr>
+<tr><td><a href="struct.PgLine.html" title="struct sqlx_postgres::types::PgLine"><code>PgLine</code></a></td><td>LINE</td></tr>
+<tr><td><a href="struct.PgLSeg.html" title="struct sqlx_postgres::types::PgLSeg"><code>PgLSeg</code></a></td><td>LSEG</td></tr>
+<tr><td><a href="struct.PgBox.html" title="struct sqlx_postgres::types::PgBox"><code>PgBox</code></a></td><td>BOX</td></tr>
+<tr><td><a href="struct.PgPath.html" title="struct sqlx_postgres::types::PgPath"><code>PgPath</code></a></td><td>PATH</td></tr>
+<tr><td><a href="struct.PgPolygon.html" title="struct sqlx_postgres::types::PgPolygon"><code>PgPolygon</code></a></td><td>POLYGON</td></tr>
+<tr><td><a href="struct.PgCircle.html" title="struct sqlx_postgres::types::PgCircle"><code>PgCircle</code></a></td><td>CIRCLE</td></tr>
+<tr><td><a href="struct.PgHstore.html" title="struct sqlx_postgres::types::PgHstore"><code>PgHstore</code></a></td><td>HSTORE</td></tr>
+</tbody></table>
+</div>
+<p><sup>1</sup> SQLx generally considers <code>CITEXT</code> to be compatible with <code>String</code>, <code>&amp;str</code>, etc.,
+but this wrapper type is available for edge cases, such as <code>CITEXT[]</code> which Postgres
+does not consider to be compatible with <code>TEXT[]</code>.</p>
+<h4 id="bigdecimal"><a class="doc-anchor" href="#bigdecimal">§</a><a href="https://crates.io/crates/bigdecimal"><code>bigdecimal</code></a></h4>
+<p>Requires the <code>bigdecimal</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>bigdecimal::BigDecimal</code></td><td>NUMERIC</td></tr>
+</tbody></table>
+</div><h5 id="note-bigdecimal-has-a-larger-range-than-numeric"><a class="doc-anchor" href="#note-bigdecimal-has-a-larger-range-than-numeric">§</a>Note: <code>BigDecimal</code> Has a Larger Range than <code>NUMERIC</code></h5>
+<p><code>BigDecimal</code> can represent values with a far, far greater range than the <code>NUMERIC</code> type in Postgres can.</p>
+<p><code>NUMERIC</code> is limited to 131,072 digits before the decimal point, and 16,384 digits after it.
+See <a href="https://www.postgresql.org/docs/current/datatype-numeric.html">Section 8.1, Numeric Types</a> of the Postgres manual for details.</p>
+<p>Meanwhile, <code>BigDecimal</code> can theoretically represent a value with an arbitrary number of decimal digits, albeit
+with a maximum of 2<sup>63</sup> significant figures.</p>
+<p>Because encoding in the current API design <em>must</em> be infallible,
+when attempting to encode a <code>BigDecimal</code> that cannot fit in the wire representation of <code>NUMERIC</code>,
+SQLx may instead encode a sentinel value that falls outside the allowed range but is still representable.</p>
+<p>This will cause the query to return a <code>DatabaseError</code> with code <code>22P03</code> (<code>invalid_binary_representation</code>)
+and the error message <code>invalid scale in external "numeric" value</code> (though this may be subject to change).</p>
+<p>However, <code>BigDecimal</code> should be able to decode any <code>NUMERIC</code> value except <code>NaN</code>,
+for which it has no representation.</p>
+<h4 id="rust_decimal"><a class="doc-anchor" href="#rust_decimal">§</a><a href="https://crates.io/crates/rust_decimal"><code>rust_decimal</code></a></h4>
+<p>Requires the <code>rust_decimal</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>rust_decimal::Decimal</code></td><td>NUMERIC</td></tr>
+</tbody></table>
+</div><h5 id="note-rust_decimaldecimal-has-a-smaller-range-than-numeric"><a class="doc-anchor" href="#note-rust_decimaldecimal-has-a-smaller-range-than-numeric">§</a>Note: <code>rust_decimal::Decimal</code> Has a Smaller Range than <code>NUMERIC</code></h5>
+<p><code>NUMERIC</code> is can have up to 131,072 digits before the decimal point, and 16,384 digits after it.
+See <a href="https://www.postgresql.org/docs/current/datatype-numeric.html">Section 8.1, Numeric Types</a> of the Postgres manual for details.</p>
+<p>However, <code>rust_decimal::Decimal</code> is limited to a maximum absolute magnitude of 2<sup>96</sup> - 1,
+a number with 67 decimal digits, and a minimum absolute magnitude of 10<sup>-28</sup>, a number with, unsurprisingly,
+28 decimal digits.</p>
+<p>Thus, in contrast with <code>BigDecimal</code>, <code>NUMERIC</code> can actually represent every possible value of <code>rust_decimal::Decimal</code>,
+but not the other way around. This means that encoding should never fail, but decoding can.</p>
+<h4 id="chrono"><a class="doc-anchor" href="#chrono">§</a><a href="https://crates.io/crates/chrono"><code>chrono</code></a></h4>
+<p>Requires the <code>chrono</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>chrono::DateTime&lt;Utc&gt;</code></td><td>TIMESTAMPTZ</td></tr>
+<tr><td><code>chrono::DateTime&lt;Local&gt;</code></td><td>TIMESTAMPTZ</td></tr>
+<tr><td><code>chrono::NaiveDateTime</code></td><td>TIMESTAMP</td></tr>
+<tr><td><code>chrono::NaiveDate</code></td><td>DATE</td></tr>
+<tr><td><code>chrono::NaiveTime</code></td><td>TIME</td></tr>
+<tr><td>[<code>PgTimeTz</code>]</td><td>TIMETZ</td></tr>
+</tbody></table>
+</div><h4 id="time"><a class="doc-anchor" href="#time">§</a><a href="https://crates.io/crates/time"><code>time</code></a></h4>
+<p>Requires the <code>time</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>time::PrimitiveDateTime</code></td><td>TIMESTAMP</td></tr>
+<tr><td><code>time::OffsetDateTime</code></td><td>TIMESTAMPTZ</td></tr>
+<tr><td><code>time::Date</code></td><td>DATE</td></tr>
+<tr><td><code>time::Time</code></td><td>TIME</td></tr>
+<tr><td>[<code>PgTimeTz</code>]</td><td>TIMETZ</td></tr>
+</tbody></table>
+</div><h4 id="uuid"><a class="doc-anchor" href="#uuid">§</a><a href="https://crates.io/crates/uuid"><code>uuid</code></a></h4>
+<p>Requires the <code>uuid</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>uuid::Uuid</code></td><td>UUID</td></tr>
+</tbody></table>
+</div><h4 id="ipnetwork"><a class="doc-anchor" href="#ipnetwork">§</a><a href="https://crates.io/crates/ipnetwork"><code>ipnetwork</code></a></h4>
+<p>Requires the <code>ipnetwork</code> Cargo feature flag (takes precedence over <code>ipnet</code> if both are used).</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>ipnetwork::IpNetwork</code></td><td>INET, CIDR</td></tr>
+<tr><td><code>std::net::IpAddr</code></td><td>INET, CIDR</td></tr>
+</tbody></table>
+</div>
+<p>Note that because <code>IpAddr</code> does not support network prefixes, it is an error to attempt to decode
+an <code>IpAddr</code> from a <code>INET</code> or <code>CIDR</code> value with a network prefix smaller than the address’ full width:
+<code>/32</code> for IPv4 addresses and <code>/128</code> for IPv6 addresses.</p>
+<p><code>IpNetwork</code> does not have this limitation.</p>
+<h4 id="ipnet"><a class="doc-anchor" href="#ipnet">§</a><a href="https://crates.io/crates/ipnet"><code>ipnet</code></a></h4>
+<p>Requires the <code>ipnet</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>ipnet::IpNet</code></td><td>INET, CIDR</td></tr>
+<tr><td><code>std::net::IpAddr</code></td><td>INET, CIDR</td></tr>
+</tbody></table>
+</div>
+<p>The same <code>IpAddr</code> limitation for smaller network prefixes applies as with <code>ipnet</code>.</p>
+<h4 id="mac_address"><a class="doc-anchor" href="#mac_address">§</a><a href="https://crates.io/crates/mac_address"><code>mac_address</code></a></h4>
+<p>Requires the <code>mac_address</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>mac_address::MacAddress</code></td><td>MACADDR</td></tr>
+</tbody></table>
+</div><h4 id="bit-vec"><a class="doc-anchor" href="#bit-vec">§</a><a href="https://crates.io/crates/bit-vec"><code>bit-vec</code></a></h4>
+<p>Requires the <code>bit-vec</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><code>bit_vec::BitVec</code></td><td>BIT, VARBIT</td></tr>
+</tbody></table>
+</div><h4 id="json"><a class="doc-anchor" href="#json">§</a><a href="https://crates.io/crates/serde_json"><code>json</code></a></h4>
+<p>Requires the <code>json</code> Cargo feature flag.</p>
+<div><table><thead><tr><th>Rust type</th><th>Postgres type(s)</th></tr></thead><tbody>
+<tr><td><a href="../../sqlx_core/types/json/struct.Json.html" title="struct sqlx_core::types::json::Json"><code>Json&lt;T&gt;</code></a></td><td>JSON, JSONB</td></tr>
+<tr><td><code>serde_json::Value</code></td><td>JSON, JSONB</td></tr>
+<tr><td><code>&amp;serde_json::value::RawValue</code></td><td>JSON, JSONB</td></tr>
+</tbody></table>
+</div>
+<p><code>Value</code> and <code>RawValue</code> from <code>serde_json</code> can be used for unstructured JSON data with
+Postgres.</p>
+<p><a href="../../sqlx_core/types/json/struct.Json.html" title="struct sqlx_core::types::json::Json"><code>Json&lt;T&gt;</code></a> can be used for structured JSON data with Postgres.</p>
+<h2 id="composite-types"><a class="doc-anchor" href="#composite-types">§</a><a href="https://www.postgresql.org/docs/current/rowtypes.html">Composite types</a></h2>
+<p>User-defined composite types are supported through a derive for <code>Type</code>.</p>
+<div class="example-wrap"><pre class="language-text"><code>CREATE TYPE inventory_item AS (
+    name            text,
+    supplier_id     integer,
+    price           numeric
+);</code></pre></div>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(sqlx::Type)]
+#[sqlx(type_name = <span class="string">"inventory_item"</span>)]
+</span><span class="kw">struct </span>InventoryItem {
+    name: String,
+    supplier_id: i32,
+    price: BigDecimal,
+}</code></pre></div>
+<p>Anonymous composite types are represented as tuples. Note that anonymous composites may only
+be returned and not sent to Postgres (this is a limitation of postgres).</p>
+<h2 id="arrays"><a class="doc-anchor" href="#arrays">§</a>Arrays</h2>
+<p>One-dimensional arrays are supported as <code>Vec&lt;T&gt;</code> or <code>&amp;[T]</code> where <code>T</code> implements <code>Type</code>.</p>
+<h2 id="enumerations"><a class="doc-anchor" href="#enumerations">§</a><a href="https://www.postgresql.org/docs/current/datatype-enum.html">Enumerations</a></h2>
+<p>User-defined enumerations are supported through a derive for <code>Type</code>.</p>
+<div class="example-wrap"><pre class="language-text"><code>CREATE TYPE mood AS ENUM (&#39;sad&#39;, &#39;ok&#39;, &#39;happy&#39;);</code></pre></div>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(sqlx::Type)]
+#[sqlx(type_name = <span class="string">"mood"</span>, rename_all = <span class="string">"lowercase"</span>)]
+</span><span class="kw">enum </span>Mood { Sad, <span class="prelude-val">Ok</span>, Happy }</code></pre></div>
+<p>Rust enumerations may also be defined to be represented as an integer using <code>repr</code>.
+The following type expects a SQL type of <code>INTEGER</code> or <code>INT4</code> and will convert to/from the
+Rust enumeration.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(sqlx::Type)]
+#[repr(i32)]
+</span><span class="kw">enum </span>Mood { Sad = <span class="number">0</span>, <span class="prelude-val">Ok </span>= <span class="number">1</span>, Happy = <span class="number">2 </span>}</code></pre></div>
+<p>Rust enumerations may also be defined to be represented as a string using <code>type_name = "text"</code>.
+The following type expects a SQL type of <code>TEXT</code> and will convert to/from the Rust enumeration.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(sqlx::Type)]
+#[sqlx(type_name = <span class="string">"text"</span>)]
+</span><span class="kw">enum </span>Mood { Sad, <span class="prelude-val">Ok</span>, Happy }</code></pre></div>
+<p>Note that an error can occur if you attempt to decode a value not contained within the enum
+definition.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Oid.html" title="struct sqlx_postgres::types::Oid">Oid</a></dt><dd>The PostgreSQL <a href="https://www.postgresql.org/docs/current/datatype-oid.html"><code>OID</code></a> type stores an object identifier,
+used internally by PostgreSQL as primary keys for various system tables.</dd><dt><a class="struct" href="struct.PgBox.html" title="struct sqlx_postgres::types::PgBox">PgBox</a></dt><dd>Postgres Geometric Box type</dd><dt><a class="struct" href="struct.PgCiText.html" title="struct sqlx_postgres::types::PgCiText">PgCi<wbr>Text</a></dt><dd>Case-insensitive text (<code>citext</code>) support for Postgres.</dd><dt><a class="struct" href="struct.PgCircle.html" title="struct sqlx_postgres::types::PgCircle">PgCircle</a></dt><dd>Postgres Geometric Circle type</dd><dt><a class="struct" href="struct.PgHstore.html" title="struct sqlx_postgres::types::PgHstore">PgHstore</a></dt><dd>Key-value support (<code>hstore</code>) for Postgres.</dd><dt><a class="struct" href="struct.PgInterval.html" title="struct sqlx_postgres::types::PgInterval">PgInterval</a></dt><dt><a class="struct" href="struct.PgLQuery.html" title="struct sqlx_postgres::types::PgLQuery">PgLQuery</a></dt><dd>Container for a Label Tree Query (<code>lquery</code>) in Postgres.</dd><dt><a class="struct" href="struct.PgLQueryVariant.html" title="struct sqlx_postgres::types::PgLQueryVariant">PgLQuery<wbr>Variant</a></dt><dt><a class="struct" href="struct.PgLQueryVariantFlag.html" title="struct sqlx_postgres::types::PgLQueryVariantFlag">PgLQuery<wbr>Variant<wbr>Flag</a></dt><dd>Modifiers that can be set to non-star labels</dd><dt><a class="struct" href="struct.PgLSeg.html" title="struct sqlx_postgres::types::PgLSeg">PgLSeg</a></dt><dd>Postgres Geometric Line Segment type</dd><dt><a class="struct" href="struct.PgLTree.html" title="struct sqlx_postgres::types::PgLTree">PgLTree</a></dt><dd>Container for a Label Tree (<code>ltree</code>) in Postgres.</dd><dt><a class="struct" href="struct.PgLTreeLabel.html" title="struct sqlx_postgres::types::PgLTreeLabel">PgLTree<wbr>Label</a></dt><dt><a class="struct" href="struct.PgLine.html" title="struct sqlx_postgres::types::PgLine">PgLine</a></dt><dd>Postgres Geometric Line type</dd><dt><a class="struct" href="struct.PgMoney.html" title="struct sqlx_postgres::types::PgMoney">PgMoney</a></dt><dd>The PostgreSQL <a href="https://www.postgresql.org/docs/current/datatype-money.html"><code>MONEY</code></a> type stores a currency amount with a fixed fractional
+precision. The fractional precision is determined by the database’s
+<code>lc_monetary</code> setting.</dd><dt><a class="struct" href="struct.PgPath.html" title="struct sqlx_postgres::types::PgPath">PgPath</a></dt><dd>Postgres Geometric Path type</dd><dt><a class="struct" href="struct.PgPoint.html" title="struct sqlx_postgres::types::PgPoint">PgPoint</a></dt><dd>Postgres Geometric Point type</dd><dt><a class="struct" href="struct.PgPolygon.html" title="struct sqlx_postgres::types::PgPolygon">PgPolygon</a></dt><dd>Postgres Geometric Polygon type</dd><dt><a class="struct" href="struct.PgRange.html" title="struct sqlx_postgres::types::PgRange">PgRange</a></dt></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.PgCube.html" title="enum sqlx_postgres::types::PgCube">PgCube</a></dt><dt><a class="enum" href="enum.PgLQueryLevel.html" title="enum sqlx_postgres::types::PgLQueryLevel">PgLQuery<wbr>Level</a></dt><dt><a class="enum" href="enum.PgLTreeParseError.html" title="enum sqlx_postgres::types::PgLTreeParseError">PgLTree<wbr>Parse<wbr>Error</a></dt><dd>Represents ltree specific errors</dd></dl><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><dl class="item-table"><dt><a class="trait" href="trait.PgHasArrayType.html" title="trait sqlx_postgres::types::PgHasArrayType">PgHas<wbr>Array<wbr>Type</a></dt><dd>Provides information necessary to encode and decode Postgres arrays as compatible Rust types.</dd></dl></section></div></main></body></html>

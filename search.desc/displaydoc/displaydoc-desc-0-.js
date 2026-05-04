@@ -1,0 +1,1 @@
+searchState.loadedDescShard("displaydoc", 0, "This library provides a convenient derive macro for the …\nCustom <code>#[derive(...)]</code> macro for implementing <code>fmt::Display</code> …")

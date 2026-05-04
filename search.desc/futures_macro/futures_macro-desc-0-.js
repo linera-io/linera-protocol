@@ -1,0 +1,1 @@
+searchState.loadedDescShard("futures_macro", 0, "The futures-rs procedural macro implementations.\nThe <code>join!</code> macro.\nThe <code>select_biased!</code> macro.\nThe <code>select!</code> macro.\nThe <code>stream_select!</code> macro.\nThe <code>try_join!</code> macro.")

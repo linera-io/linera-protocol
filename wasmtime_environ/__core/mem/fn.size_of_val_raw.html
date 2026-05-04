@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Returns the size of the pointed-to value in bytes."><title>size_of_val_raw in wasmtime_environ::__core::mem - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-6c3ea77c.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="wasmtime_environ" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0 (05f9846f8 2025-03-31)" data-channel="1.86.0" data-search-js="search-581efc7a.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-3a5871a4.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-4d63596a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../wasmtime_environ/index.html">wasmtime_<wbr>environ</a><span class="version">25.0.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">size_<wbr>of_<wbr>val_<wbr>raw</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#safety" title="Safety">Safety</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In wasmtime_<wbr>environ::<wbr>__<wbr>core::<wbr>mem</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">wasmtime_environ</a>::<wbr><a href="../index.html">__core</a>::<wbr><a href="index.html">mem</a></div><h1>Function <span class="fn">size_of_val_raw</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="https://doc.rust-lang.org/1.86.0/src/core/mem/mod.rs.html#393">Source</a> </span></div><pre class="rust item-decl"><code>pub const unsafe fn size_of_val_raw&lt;T&gt;(val: <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.pointer.html">*const T</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.86.0/std/primitive.usize.html">usize</a><div class="where">where
+    T: ?<a class="trait" href="../marker/trait.Sized.html" title="trait wasmtime_environ::__core::marker::Sized">Sized</a>,</div></code></pre><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>layout_for_ptr</code>)</span></div></span><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Returns the size of the pointed-to value in bytes.</p>
+<p>This is usually the same as <a href="fn.size_of.html" title="fn wasmtime_environ::__core::mem::size_of"><code>size_of::&lt;T&gt;()</code></a>. However, when <code>T</code> <em>has</em> no
+statically-known size, e.g., a slice <a href="https://doc.rust-lang.org/1.86.0/std/primitive.slice.html" title="primitive slice"><code>[T]</code></a> or a <a href="../../book/ch17-02-trait-objects.html">trait object</a>,
+then <code>size_of_val_raw</code> can be used to get the dynamically-known size.</p>
+<h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+<p>This function is only safe to call if the following conditions hold:</p>
+<ul>
+<li>If <code>T</code> is <code>Sized</code>, this function is always safe to call.</li>
+<li>If the unsized tail of <code>T</code> is:
+<ul>
+<li>a <a href="https://doc.rust-lang.org/1.86.0/std/primitive.slice.html" title="primitive slice">slice</a>, then the length of the slice tail must be an initialized
+integer, and the size of the <em>entire value</em>
+(dynamic tail length + statically sized prefix) must fit in <code>isize</code>.
+For the special case where the dynamic tail length is 0, this function
+is safe to call.</li>
+<li>a <a href="../../book/ch17-02-trait-objects.html">trait object</a>, then the vtable part of the pointer must point
+to a valid vtable acquired by an unsizing coercion, and the size
+of the <em>entire value</em> (dynamic tail length + statically sized prefix)
+must fit in <code>isize</code>.</li>
+<li>an (unstable) <a href="../../unstable-book/language-features/extern-types.html">extern type</a>, then this function is always safe to
+call, but may panic or otherwise return the wrong value, as the
+extern type’s layout is not known. This is the same behavior as
+<a href="fn.size_of_val.html" title="fn wasmtime_environ::__core::mem::size_of_val"><code>size_of_val</code></a> on a reference to a type with an extern type tail.</li>
+<li>otherwise, it is conservatively not allowed to call this function.</li>
+</ul>
+</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(layout_for_ptr)]
+</span><span class="kw">use </span>std::mem;
+
+<span class="macro">assert_eq!</span>(<span class="number">4</span>, mem::size_of_val(<span class="kw-2">&amp;</span><span class="number">5i32</span>));
+
+<span class="kw">let </span>x: [u8; <span class="number">13</span>] = [<span class="number">0</span>; <span class="number">13</span>];
+<span class="kw">let </span>y: <span class="kw-2">&amp;</span>[u8] = <span class="kw-2">&amp;</span>x;
+<span class="macro">assert_eq!</span>(<span class="number">13</span>, <span class="kw">unsafe </span>{ mem::size_of_val_raw(y) });</code></pre></div>
+</div></details></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AdminOperation","SystemMessage","SystemOperation"],"static":["EPOCH_STREAM_NAME","REMOVED_EPOCH_STREAM_NAME"],"struct":["CreateApplicationResult","EpochEventData","EventSubscriptions","OpenChainConfig","SystemExecutionStateView","SystemQuery","SystemResponse","UserData"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_text_map_propagator","meter","meter_provider","meter_with_scope","set_meter_provider","set_text_map_propagator","set_tracer_provider","tracer","tracer_provider","tracer_with_scope"],"struct":["BoxedSpan","BoxedTracer","GlobalTracerProvider"],"trait":["ObjectSafeSpan","ObjectSafeTracer","ObjectSafeTracerProvider"]};

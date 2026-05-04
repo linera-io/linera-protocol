@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_allowed_subscription","parse_subscription_ttl"],"struct":["QuerySubscriptionManager","RegisteredQuery","SubscriptionKey"]};
