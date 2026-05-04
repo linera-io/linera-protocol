@@ -762,10 +762,10 @@ mod tests {
             4 * MAX_LEN + 1,
         ];
         let mut rng = crate::random::make_deterministic_rng();
-        let values: Vec<Vec<u8>> = lengths
+        let values = lengths
             .iter()
             .map(|&len| (0..len).map(|_| rng.gen::<u8>()).collect())
-            .collect();
+            .collect::<Vec<Vec<u8>>>();
 
         // Write all values.
         let mut batch = Batch::new();
@@ -785,13 +785,13 @@ mod tests {
         big_store.write_batch(batch).await.unwrap();
 
         // Surviving logical entries, in ascending key order.
-        let expected_kv: Vec<(Vec<u8>, Vec<u8>)> = (0..keys.len())
+        let expected_kv = (0..keys.len())
             .filter(|i| !to_delete.contains(i))
             .map(|i| (keys[i].clone(), values[i].clone()))
-            .collect();
-        let expected_keys: Vec<Vec<u8>> = expected_kv.iter().map(|(k, _)| k.clone()).collect();
-        let expected_kv_rev: Vec<(Vec<u8>, Vec<u8>)> = expected_kv.iter().rev().cloned().collect();
-        let expected_keys_rev: Vec<Vec<u8>> = expected_keys.iter().rev().cloned().collect();
+            .collect::<Vec<_>>();
+        let expected_keys = expected_kv.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
+        let expected_kv_rev = expected_kv.iter().rev().cloned().collect::<Vec<_>>();
+        let expected_keys_rev = expected_keys.iter().rev().cloned().collect::<Vec<_>>();
 
         // 1. find_keys_by_prefix_iter
         let mut stream = big_store.find_keys_by_prefix_iter(&[]);
@@ -840,14 +840,14 @@ mod tests {
         // segments (96 bytes at index 0 plus the count, then 100 + 54 bytes
         // at indices 1 and 2).
         let mut rng = crate::random::make_deterministic_rng();
-        let long_value: Vec<u8> = (0..250).map(|_| rng.gen::<u8>()).collect();
+        let long_value = (0..250).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(key.clone(), long_value);
         big_store.write_batch(batch).await.unwrap();
 
         // Overwrite with a single-segment value. Only index 0 is rewritten;
         // indices 1 and 2 stay in the underlying store as orphan segments.
-        let short_value: Vec<u8> = (0..10).map(|_| rng.gen::<u8>()).collect();
+        let short_value = (0..10).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
         let mut batch = Batch::new();
         batch.put_key_value_bytes(key.clone(), short_value.clone());
         big_store.write_batch(batch).await.unwrap();
