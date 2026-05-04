@@ -180,22 +180,18 @@ where
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeysStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            match self {
-                Self::First(store) => {
-                    let mut stream = store.find_keys_by_prefix_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::First);
-                    }
-                }
-                Self::Second(store) => {
-                    let mut stream = store.find_keys_by_prefix_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::Second);
-                    }
-                }
-            }
-        })
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
     }
 
     async fn find_key_values_by_prefix(
@@ -219,66 +215,54 @@ where
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeyValuesStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            match self {
-                Self::First(store) => {
-                    let mut stream = store.find_key_values_by_prefix_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::First);
-                    }
-                }
-                Self::Second(store) => {
-                    let mut stream = store.find_key_values_by_prefix_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::Second);
-                    }
-                }
-            }
-        })
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
     }
 
     fn find_keys_by_prefix_rev_iter<'a>(
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeysStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            match self {
-                Self::First(store) => {
-                    let mut stream = store.find_keys_by_prefix_rev_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::First);
-                    }
-                }
-                Self::Second(store) => {
-                    let mut stream = store.find_keys_by_prefix_rev_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::Second);
-                    }
-                }
-            }
-        })
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
     }
 
     fn find_key_values_by_prefix_rev_iter<'a>(
         &'a self,
         key_prefix: &'a [u8],
     ) -> FindKeyValuesStream<'a, Self::Error> {
-        Box::pin(async_stream::stream! {
-            match self {
-                Self::First(store) => {
-                    let mut stream = store.find_key_values_by_prefix_rev_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::First);
-                    }
-                }
-                Self::Second(store) => {
-                    let mut stream = store.find_key_values_by_prefix_rev_iter(key_prefix);
-                    while let Some(item) = stream.next().await {
-                        yield item.map_err(DualStoreError::Second);
-                    }
-                }
-            }
-        })
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
     }
 }
 
