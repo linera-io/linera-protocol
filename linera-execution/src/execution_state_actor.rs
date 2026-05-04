@@ -667,10 +667,13 @@ where
                     .event_subscriptions
                     .get_mut_or_default(&(chain_id, stream_id.clone()))
                     .await?;
-                let next_index = if subscriptions.applications.insert(subscriber_app_id) {
-                    subscriptions.next_index
-                } else {
-                    0
+                let next_index = match subscriptions.applications.entry(subscriber_app_id) {
+                    std::collections::btree_map::Entry::Vacant(entry) => {
+                        entry.insert(0);
+                        subscriptions.min_next_index = 0;
+                        0
+                    }
+                    std::collections::btree_map::Entry::Occupied(entry) => *entry.get(),
                 };
                 self.txn_tracker.add_stream_to_process(
                     subscriber_app_id,
@@ -698,6 +701,8 @@ where
                 subscriptions.applications.remove(&subscriber_app_id);
                 if subscriptions.applications.is_empty() {
                     self.state.system.event_subscriptions.remove(&key)?;
+                } else {
+                    subscriptions.recalculate_min();
                 }
                 if let crate::GenericApplicationId::User(app_id) = stream_id.application_id {
                     self.txn_tracker

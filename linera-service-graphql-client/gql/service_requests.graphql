@@ -447,7 +447,8 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                 moduleId
               }
               epoch
-              updateStreams {
+              updateStream {
+                applicationId
                 chainId
                 streamId
                 nextIndex
@@ -625,7 +626,8 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                 moduleId
               }
               epoch
-              updateStreams {
+              updateStream {
+                applicationId
                 chainId
                 streamId
                 nextIndex

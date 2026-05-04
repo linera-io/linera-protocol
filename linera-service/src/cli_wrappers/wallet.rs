@@ -51,7 +51,7 @@ use {
 };
 
 use crate::{
-    cli::command::BenchmarkCommand,
+    cli::command::{BenchmarkCommand, ResourceControlPolicyOverrides},
     cli_wrappers::{
         local_net::{PathProvider, ProcessInbox},
         Network,
@@ -1265,6 +1265,150 @@ impl ClientWrapper {
         Ok(())
     }
 
+    pub async fn set_resource_control_policy(
+        &self,
+        overrides: ResourceControlPolicyOverrides,
+    ) -> Result<()> {
+        let mut command = self.command().await?;
+        command.arg("resource-control-policy");
+        let ResourceControlPolicyOverrides {
+            wasm_fuel_unit,
+            evm_fuel_unit,
+            read_operation,
+            write_operation,
+            byte_runtime,
+            byte_read,
+            byte_written,
+            blob_read,
+            blob_published,
+            blob_byte_read,
+            blob_byte_published,
+            byte_stored,
+            operation,
+            operation_byte,
+            message,
+            message_byte,
+            service_as_oracle_query,
+            http_request,
+            maximum_wasm_fuel_per_block,
+            maximum_evm_fuel_per_block,
+            maximum_service_oracle_execution_ms,
+            maximum_block_size,
+            maximum_blob_size,
+            maximum_published_blobs,
+            maximum_bytecode_size,
+            maximum_block_proposal_size,
+            maximum_bytes_read_per_block,
+            maximum_bytes_written_per_block,
+            maximum_oracle_response_bytes,
+            maximum_http_response_bytes,
+            http_request_timeout_ms,
+            http_request_allow_list,
+            free_application_ids,
+        } = overrides;
+        if let Some(value) = wasm_fuel_unit {
+            command.args(["--wasm-fuel-unit", &value.to_string()]);
+        }
+        if let Some(value) = evm_fuel_unit {
+            command.args(["--evm-fuel-unit", &value.to_string()]);
+        }
+        if let Some(value) = read_operation {
+            command.args(["--read-operation", &value.to_string()]);
+        }
+        if let Some(value) = write_operation {
+            command.args(["--write-operation", &value.to_string()]);
+        }
+        if let Some(value) = byte_runtime {
+            command.args(["--byte-runtime", &value.to_string()]);
+        }
+        if let Some(value) = byte_read {
+            command.args(["--byte-read", &value.to_string()]);
+        }
+        if let Some(value) = byte_written {
+            command.args(["--byte-written", &value.to_string()]);
+        }
+        if let Some(value) = blob_read {
+            command.args(["--blob-read", &value.to_string()]);
+        }
+        if let Some(value) = blob_published {
+            command.args(["--blob-published", &value.to_string()]);
+        }
+        if let Some(value) = blob_byte_read {
+            command.args(["--blob-byte-read", &value.to_string()]);
+        }
+        if let Some(value) = blob_byte_published {
+            command.args(["--blob-byte-published", &value.to_string()]);
+        }
+        if let Some(value) = byte_stored {
+            command.args(["--byte-stored", &value.to_string()]);
+        }
+        if let Some(value) = operation {
+            command.args(["--operation", &value.to_string()]);
+        }
+        if let Some(value) = operation_byte {
+            command.args(["--operation-byte", &value.to_string()]);
+        }
+        if let Some(value) = message {
+            command.args(["--message", &value.to_string()]);
+        }
+        if let Some(value) = message_byte {
+            command.args(["--message-byte", &value.to_string()]);
+        }
+        if let Some(value) = service_as_oracle_query {
+            command.args(["--service-as-oracle-query", &value.to_string()]);
+        }
+        if let Some(value) = http_request {
+            command.args(["--http-request", &value.to_string()]);
+        }
+        if let Some(value) = maximum_wasm_fuel_per_block {
+            command.args(["--maximum-wasm-fuel-per-block", &value.to_string()]);
+        }
+        if let Some(value) = maximum_evm_fuel_per_block {
+            command.args(["--maximum-evm-fuel-per-block", &value.to_string()]);
+        }
+        if let Some(value) = maximum_service_oracle_execution_ms {
+            command.args(["--maximum-service-oracle-execution-ms", &value.to_string()]);
+        }
+        if let Some(value) = maximum_block_size {
+            command.args(["--maximum-block-size", &value.to_string()]);
+        }
+        if let Some(value) = maximum_blob_size {
+            command.args(["--maximum-blob-size", &value.to_string()]);
+        }
+        if let Some(value) = maximum_published_blobs {
+            command.args(["--maximum-published-blobs", &value.to_string()]);
+        }
+        if let Some(value) = maximum_bytecode_size {
+            command.args(["--maximum-bytecode-size", &value.to_string()]);
+        }
+        if let Some(value) = maximum_block_proposal_size {
+            command.args(["--maximum-block-proposal-size", &value.to_string()]);
+        }
+        if let Some(value) = maximum_bytes_read_per_block {
+            command.args(["--maximum-bytes-read-per-block", &value.to_string()]);
+        }
+        if let Some(value) = maximum_bytes_written_per_block {
+            command.args(["--maximum-bytes-written-per-block", &value.to_string()]);
+        }
+        if let Some(value) = maximum_oracle_response_bytes {
+            command.args(["--maximum-oracle-response-bytes", &value.to_string()]);
+        }
+        if let Some(value) = maximum_http_response_bytes {
+            command.args(["--maximum-http-response-bytes", &value.to_string()]);
+        }
+        if let Some(value) = http_request_timeout_ms {
+            command.args(["--http-request-timeout-ms", &value.to_string()]);
+        }
+        if let Some(values) = http_request_allow_list {
+            command.args(["--http-request-allow-list", &values.join(",")]);
+        }
+        if let Some(values) = free_application_ids {
+            command.args(["--free-application-ids", &values.join(",")]);
+        }
+        command.spawn_and_wait_for_stdout().await?;
+        Ok(())
+    }
+
     /// Runs `linera keygen`.
     pub async fn keygen(&self) -> Result<AccountOwner> {
         let stdout = self
@@ -1428,8 +1572,19 @@ impl ClientWrapper {
             .await
     }
 
+    pub async fn build_test_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
+        self.build_application(Self::test_example_path(name)?.as_path(), name, true)
+            .await
+    }
+
     pub fn example_path(name: &str) -> Result<PathBuf> {
         Ok(env::current_dir()?.join("../examples/").join(name))
+    }
+
+    pub fn test_example_path(name: &str) -> Result<PathBuf> {
+        Ok(env::current_dir()?
+            .join("../linera-sdk/tests/fixtures/")
+            .join(name))
     }
 }
 

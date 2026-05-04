@@ -1528,9 +1528,9 @@ type SystemOperationMetadata {
 	"""
 	epoch: Int
 	"""
-	`UpdateStreams` operation details
+	`UpdateStream` operation details
 	"""
-	updateStreams: [UpdateStreamMetadata!]
+	updateStream: UpdateStreamMetadata
 }
 
 """
@@ -1592,6 +1592,7 @@ type TransferOperationMetadata {
 Update stream metadata.
 """
 type UpdateStreamMetadata {
+	applicationId: String!
 	chainId: ChainId!
 	streamId: String!
 	nextIndex: Int!

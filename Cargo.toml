@@ -355,6 +355,8 @@ counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
+event-emitter = { path = "./linera-sdk/tests/fixtures/event-emitter" }
+event-subscriber = { path = "./linera-sdk/tests/fixtures/event-subscriber" }
 fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
