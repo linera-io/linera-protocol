@@ -1103,6 +1103,7 @@ where
             Some(Duration::from_secs(1)),
             HashSet::new(),
             HashSet::new(),
+            1000,
             options,
             &crate::client::RequestsSchedulerConfig::default(),
             crate::worker::DEFAULT_BLOCK_CACHE_SIZE,

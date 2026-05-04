@@ -51,6 +51,7 @@ async fn make_context(
         Some(Duration::from_secs(1)),
         HashSet::new(),
         HashSet::new(),
+        1000,
         chain_client::Options::test_default(),
         &linera_core::client::RequestsSchedulerConfig::default(),
         DEFAULT_BLOCK_CACHE_SIZE,

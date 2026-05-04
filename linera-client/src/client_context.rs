@@ -324,6 +324,7 @@ where
             crate::util::non_zero_duration(options.sender_chain_worker_ttl),
             options.prioritize_bundles_from.clone().unwrap_or_default(),
             options.ignore_bundles_from.clone().unwrap_or_default(),
+            options.cross_chain_batch_size_limit,
             options.to_chain_client_options(),
             &options.to_requests_scheduler_config(),
             block_cache_size,
