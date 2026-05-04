@@ -484,11 +484,17 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     pub fn front_mut(&mut self) -> Option<&mut T> {
         match self.cursor {
             Some(Cursor { offset, position }) => {
-                let bucket = self.stored_buckets.get_mut(offset).unwrap();
+                let bucket = self
+                    .stored_buckets
+                    .get_mut(offset)
+                    .expect("cursor.offset must be a valid index into stored_buckets");
                 let State::Loaded { data } = &mut bucket.state else {
                     unreachable!();
                 };
-                Some(data.get_mut(position).unwrap())
+                Some(
+                    data.get_mut(position)
+                        .expect("cursor.position must be a valid index within the front bucket"),
+                )
             }
             None => self.new_back_values.front_mut(),
         }
@@ -603,22 +609,26 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         let Some(bucket) = self.stored_buckets.back() else {
             return Ok(None);
         };
-        if !bucket.is_loaded() {
-            let key = self.get_bucket_key(bucket.index)?;
-            let data = self.context.store().read_value(&key).await?;
-            let data = match data {
-                Some(data) => data,
-                None => {
-                    return Err(ViewError::MissingEntries("BucketQueueView::back".into()));
-                }
-            };
-            self.stored_buckets.back_mut().unwrap().state = State::Loaded { data };
+        match &bucket.state {
+            State::Loaded { data } => Ok(Some(
+                data.last().expect("a stored bucket is never empty").clone(),
+            )),
+            State::NotLoaded { .. } => {
+                let key = self.get_bucket_key(bucket.index)?;
+                let data = self
+                    .context
+                    .store()
+                    .read_value::<Vec<T>>(&key)
+                    .await?
+                    .ok_or_else(|| ViewError::MissingEntries("BucketQueueView::back".into()))?;
+                let result = data.last().expect("a stored bucket is never empty").clone();
+                self.stored_buckets
+                    .back_mut()
+                    .expect("stored_buckets is non-empty since we just accessed its back element")
+                    .state = State::Loaded { data };
+                Ok(Some(result))
+            }
         }
-        let state = &self.stored_buckets.back_mut().unwrap().state;
-        let State::Loaded { data } = state else {
-            unreachable!();
-        };
-        Ok(Some(data.last().unwrap().clone()))
     }
 
     async fn read_context(
