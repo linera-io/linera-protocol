@@ -634,10 +634,13 @@ pub fn create_value_splitting_memory_store() -> ValueSplittingStore<LimitedTestM
 
 #[cfg(test)]
 mod tests {
+    use futures::stream::StreamExt;
     use linera_views::{
         batch::Batch,
         store::{ReadableKeyValueStore, WritableKeyValueStore},
-        value_splitting::{LimitedTestMemoryStore, ValueSplittingStore},
+        value_splitting::{
+            create_value_splitting_memory_store, LimitedTestMemoryStore, ValueSplittingStore,
+        },
     };
     use rand::Rng;
 
@@ -733,5 +736,96 @@ mod tests {
         // Two segments remain
         let keys = store.find_keys_by_prefix(&[0]).await.unwrap();
         assert_eq!(keys, vec![vec![0, 0, 0, 0, 1], vec![0, 0, 0, 0, 2]]);
+    }
+
+    // After deleting some big values via DeleteKey, leftover segments remain in
+    // the underlying store. The four `find_key*_iter` variants must still skip
+    // those leftovers and yield exactly the surviving logical key-value pairs.
+    #[tokio::test]
+    async fn test_value_splitting4_find_key_iters_with_leftovers() {
+        let big_store = create_value_splitting_memory_store();
+        const MAX_LEN: usize = LimitedTestMemoryStore::MAX_VALUE_SIZE;
+
+        // Prefix-free keys: distinct first byte ⇒ no key is a prefix of another.
+        let keys: Vec<Vec<u8>> = (1u8..=8u8).map(|b| vec![b, 0, 0]).collect();
+
+        // Mix of small (single-segment) and large (multi-segment) values, so both
+        // code paths in the iterators are exercised.
+        let lengths = [
+            10,
+            MAX_LEN + 5,
+            MAX_LEN - 10,
+            2 * MAX_LEN + 7,
+            3 * MAX_LEN - 4,
+            50,
+            2 * MAX_LEN,
+            4 * MAX_LEN + 1,
+        ];
+        let mut rng = crate::random::make_deterministic_rng();
+        let values: Vec<Vec<u8>> = lengths
+            .iter()
+            .map(|&len| (0..len).map(|_| rng.gen::<u8>()).collect())
+            .collect();
+
+        // Write all values.
+        let mut batch = Batch::new();
+        for (key, value) in keys.iter().zip(values.iter()) {
+            batch.put_key_value_bytes(key.clone(), value.clone());
+        }
+        big_store.write_batch(batch).await.unwrap();
+
+        // Delete a few via DeleteKey: for the multi-segment ones only the master
+        // segment is removed, so leftover continuation segments remain in the
+        // underlying store and the iterators must skip them.
+        let to_delete = [1usize, 3, 6];
+        let mut batch = Batch::new();
+        for &i in &to_delete {
+            batch.delete_key(keys[i].clone());
+        }
+        big_store.write_batch(batch).await.unwrap();
+
+        // Surviving logical entries, in ascending key order.
+        let expected_kv: Vec<(Vec<u8>, Vec<u8>)> = (0..keys.len())
+            .filter(|i| !to_delete.contains(i))
+            .map(|i| (keys[i].clone(), values[i].clone()))
+            .collect();
+        let expected_keys: Vec<Vec<u8>> =
+            expected_kv.iter().map(|(k, _)| k.clone()).collect();
+        let expected_kv_rev: Vec<(Vec<u8>, Vec<u8>)> =
+            expected_kv.iter().rev().cloned().collect();
+        let expected_keys_rev: Vec<Vec<u8>> =
+            expected_keys.iter().rev().cloned().collect();
+
+        // 1. find_keys_by_prefix_iter
+        let mut stream = big_store.find_keys_by_prefix_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_keys);
+
+        // 2. find_key_values_by_prefix_iter
+        let mut stream = big_store.find_key_values_by_prefix_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_kv);
+
+        // 3. find_keys_by_prefix_rev_iter
+        let mut stream = big_store.find_keys_by_prefix_rev_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_keys_rev);
+
+        // 4. find_key_values_by_prefix_rev_iter
+        let mut stream = big_store.find_key_values_by_prefix_rev_iter(&[]);
+        let mut got = Vec::new();
+        while let Some(item) = stream.next().await {
+            got.push(item.unwrap());
+        }
+        assert_eq!(got, expected_kv_rev);
     }
 }

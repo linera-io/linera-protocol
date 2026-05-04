@@ -617,6 +617,98 @@ impl<S> LruCachingStore<S> {
 #[cfg(with_testing)]
 pub type LruCachingMemoryDatabase = LruCachingDatabase<MemoryDatabase>;
 
+#[cfg(test)]
+mod tests {
+    // The strategy of every test below: build an `LruCachingStore` over a
+    // shared inner `MemoryStore`, populate the cache through reads/writes done
+    // via the LRU layer, then mutate the inner store *directly* (bypassing the
+    // cache). A subsequent read through the LRU layer that still observes the
+    // original value proves the cache actually served the request — if it
+    // hadn't, the read would have hit the inner store and seen the new value.
+
+    use futures::stream::TryStreamExt;
+
+    use crate::{
+        backends::lru_caching::{LruCachingStore, DEFAULT_STORAGE_CACHE_CONFIG},
+        batch::Batch,
+        memory::MemoryStore,
+        store::{ReadableKeyValueStore, WritableKeyValueStore},
+    };
+
+    fn make_lru() -> (MemoryStore, LruCachingStore<MemoryStore>) {
+        let inner = MemoryStore::new_for_testing();
+        let lru = LruCachingStore::new(
+            inner.clone(),
+            DEFAULT_STORAGE_CACHE_CONFIG,
+            /* has_exclusive_access */ true,
+        );
+        (inner, lru)
+    }
+
+    async fn put_direct(inner: &MemoryStore, key: &[u8], value: &[u8]) {
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(key.to_vec(), value.to_vec());
+        inner.write_batch(batch).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_lru_cache_serves_find_by_prefix() {
+        let (inner, lru) = make_lru();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![1, 0], vec![10]);
+        batch.put_key_value_bytes(vec![1, 1], vec![11]);
+        lru.write_batch(batch).await.unwrap();
+
+        // Populate the find-keys / find-key-values caches for prefix [1].
+        let keys = lru.find_keys_by_prefix(&[1]).await.unwrap();
+        assert_eq!(keys, vec![vec![0], vec![1]]);
+        let kv = lru.find_key_values_by_prefix(&[1]).await.unwrap();
+        assert_eq!(kv, vec![(vec![0], vec![10]), (vec![1], vec![11])]);
+
+        // Diverge the inner store: add a new key under the prefix and mutate
+        // an existing one — neither should be visible through the LRU layer.
+        put_direct(&inner, &[1, 2], &[12]).await;
+        put_direct(&inner, &[1, 0], &[99]).await;
+
+        assert_eq!(
+            lru.find_keys_by_prefix(&[1]).await.unwrap(),
+            vec![vec![0], vec![1]]
+        );
+        assert_eq!(
+            lru.find_key_values_by_prefix(&[1]).await.unwrap(),
+            vec![(vec![0], vec![10]), (vec![1], vec![11])]
+        );
+
+        // The streaming variants share the same cache.
+        let iter_keys: Vec<Vec<u8>> = lru
+            .find_keys_by_prefix_iter(&[1])
+            .try_collect()
+            .await
+            .unwrap();
+        assert_eq!(iter_keys, vec![vec![0], vec![1]]);
+        let iter_kv: Vec<(Vec<u8>, Vec<u8>)> = lru
+            .find_key_values_by_prefix_iter(&[1])
+            .try_collect()
+            .await
+            .unwrap();
+        assert_eq!(iter_kv, vec![(vec![0], vec![10]), (vec![1], vec![11])]);
+
+        // The reverse streaming variants serve the cached entries in reverse.
+        let rev_keys: Vec<Vec<u8>> = lru
+            .find_keys_by_prefix_rev_iter(&[1])
+            .try_collect()
+            .await
+            .unwrap();
+        assert_eq!(rev_keys, vec![vec![1], vec![0]]);
+        let rev_kv: Vec<(Vec<u8>, Vec<u8>)> = lru
+            .find_key_values_by_prefix_rev_iter(&[1])
+            .try_collect()
+            .await
+            .unwrap();
+        assert_eq!(rev_kv, vec![(vec![1], vec![11]), (vec![0], vec![10])]);
+    }
+}
+
 #[cfg(with_testing)]
 impl<D> TestKeyValueDatabase for LruCachingDatabase<D>
 where
