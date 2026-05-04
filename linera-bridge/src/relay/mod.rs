@@ -286,10 +286,28 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         light_client_addr,
     ));
 
+    // ── Open the persistent bridge DB before catch-up so we can resume the
+    //    admin-chain scan from where the previous run left off.
+    let default_sqlite_path = storage_dir
+        .parent()
+        .unwrap_or(storage_dir)
+        .join("bridge_relay.sqlite3");
+    let sqlite_path = sqlite_path_override.unwrap_or(&default_sqlite_path);
+    let db = monitor::db::BridgeDb::open(sqlite_path)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to open SQLite database at {}",
+                sqlite_path.display()
+            )
+        })?;
+    tracing::info!(path = %sqlite_path.display(), "Opened bridge relay SQLite database");
+
     // ── Catch up LightClient with any missed committee rotations ──
     committee::catch_up(
         chain_client.storage_client(),
         &evm_client,
+        &db,
         admin_chain_id,
         admin_chain_height,
     )
@@ -322,20 +340,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
 
     // ── Monitor state + scan/retry ──
     let mut monitor_state = MonitorState::new(monitor_start_block);
-    let default_sqlite_path = storage_dir
-        .parent()
-        .unwrap_or(storage_dir)
-        .join("bridge_relay.sqlite3");
-    let sqlite_path = sqlite_path_override.unwrap_or(&default_sqlite_path);
-    let db = monitor::db::BridgeDb::open(sqlite_path)
-        .await
-        .with_context(|| {
-            format!(
-                "failed to open SQLite database at {}",
-                sqlite_path.display()
-            )
-        })?;
-    tracing::info!(path = %sqlite_path.display(), "Opened bridge relay SQLite database");
     monitor_state.set_db(db);
     monitor_state
         .load_from_db()
