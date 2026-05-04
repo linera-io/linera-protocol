@@ -140,7 +140,7 @@ mod tests {
             block_hash: None,
             next_block_height: height.into(),
             timestamp: Timestamp::from(0),
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: None,
         }
     }

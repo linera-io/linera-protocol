@@ -74,6 +74,10 @@ use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
 use anyhow::{anyhow, ensure, Result};
+use linera_base::{
+    crypto::CryptoHash,
+    identifiers::{AccountOwner, ApplicationId, ChainId},
+};
 
 /// A decoded log from an EVM transaction receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,12 +88,16 @@ pub struct ReceiptLog {
 }
 
 /// Parsed `DepositInitiated` event data.
+///
+/// Fields are typed by their natural domain: Linera-side identifiers use the
+/// canonical `linera-base` types, while Ethereum-side values use `alloy`
+/// primitive types (`Address`, `B256`, `U256`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DepositEvent {
     pub source_chain_id: U256,
-    pub target_chain_id: B256,
-    pub target_application_id: B256,
-    pub target_account_owner: B256,
+    pub target_chain_id: ChainId,
+    pub target_application_id: ApplicationId,
+    pub target_account_owner: AccountOwner,
     pub depositor: Address,
     pub token: Address,
     pub amount: U256,
@@ -105,7 +113,7 @@ pub struct DepositEvent {
 )]
 pub struct DepositKey {
     pub source_chain_id: u64,
-    pub block_hash: [u8; 32],
+    pub block_hash: B256,
     pub tx_index: u64,
     pub log_index: u64,
 }
@@ -115,7 +123,7 @@ impl DepositKey {
     pub fn hash(&self) -> [u8; 32] {
         let mut data = [0u8; 56];
         data[0..8].copy_from_slice(&self.source_chain_id.to_le_bytes());
-        data[8..40].copy_from_slice(&self.block_hash);
+        data[8..40].copy_from_slice(self.block_hash.as_slice());
         data[40..48].copy_from_slice(&self.tx_index.to_le_bytes());
         data[48..56].copy_from_slice(&self.log_index.to_le_bytes());
         keccak256(data).0
@@ -438,11 +446,18 @@ pub fn parse_deposit_event(log: &ReceiptLog, expected_emitter: Address) -> Resul
         "invalid ABI encoding: address padding bytes (128..140) must be zero"
     );
 
+    let mut chain_id_bytes = [0u8; 32];
+    chain_id_bytes.copy_from_slice(&d[32..64]);
+    let mut application_id_bytes = [0u8; 32];
+    application_id_bytes.copy_from_slice(&d[64..96]);
+    let mut account_owner_bytes = [0u8; 32];
+    account_owner_bytes.copy_from_slice(&d[96..128]);
+
     Ok(DepositEvent {
         source_chain_id: U256::from_be_slice(&d[0..32]),
-        target_chain_id: B256::from_slice(&d[32..64]),
-        target_application_id: B256::from_slice(&d[64..96]),
-        target_account_owner: B256::from_slice(&d[96..128]),
+        target_chain_id: ChainId(CryptoHash::from(chain_id_bytes)),
+        target_application_id: ApplicationId::new(CryptoHash::from(application_id_bytes)),
+        target_account_owner: AccountOwner::from(account_owner_bytes),
         depositor,
         token: Address::from_slice(&d[140..160]),
         amount: U256::from_be_slice(&d[160..192]),
@@ -709,7 +724,7 @@ mod tests {
             topics: vec![B256::from([0xBB; 32])],
             data: vec![1, 2, 3, 4],
         };
-        let receipt = build_test_receipt(&[log.clone()]);
+        let receipt = build_test_receipt(std::slice::from_ref(&log));
 
         let decoded = decode_receipt_logs(&receipt).unwrap();
         assert_eq!(decoded.len(), 1);
@@ -743,7 +758,7 @@ mod tests {
             topics: vec![],
             data: vec![42],
         };
-        let legacy_receipt = build_test_receipt(&[log.clone()]);
+        let legacy_receipt = build_test_receipt(std::slice::from_ref(&log));
 
         // Prepend type byte 0x02 (EIP-1559)
         let mut typed_receipt = vec![0x02];
@@ -792,9 +807,18 @@ mod tests {
 
         let event = parse_deposit_event(&log, TEST_BRIDGE).unwrap();
         assert_eq!(event.source_chain_id, U256::from(8453));
-        assert_eq!(event.target_chain_id, target_chain_id);
-        assert_eq!(event.target_application_id, target_app_id);
-        assert_eq!(event.target_account_owner, target_owner);
+        assert_eq!(
+            event.target_chain_id,
+            ChainId(CryptoHash::from(target_chain_id.0))
+        );
+        assert_eq!(
+            event.target_application_id,
+            ApplicationId::new(CryptoHash::from(target_app_id.0))
+        );
+        assert_eq!(
+            event.target_account_owner,
+            AccountOwner::from(target_owner.0)
+        );
         assert_eq!(event.depositor, depositor);
         assert_eq!(event.token, token);
         assert_eq!(event.amount, U256::from(1_000_000));
@@ -1055,7 +1079,7 @@ mod tests {
             topics: vec![],
             data: vec![42],
         };
-        let legacy = build_test_receipt(&[log.clone()]);
+        let legacy = build_test_receipt(std::slice::from_ref(&log));
         let mut typed = vec![0x00];
         typed.extend_from_slice(&legacy);
 

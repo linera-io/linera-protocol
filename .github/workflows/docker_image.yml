@@ -7,6 +7,10 @@ on:
 
 permissions:
   contents: read
+  # Required for Workload Identity Federation auth via the composite
+  # action below. Replaces the long-lived SA JSON key that lived in
+  # repo secrets (GCP_SA_ACTIONS_RUNNER_KEY).
+  id-token: write
 
 jobs:
   build-and-push:
@@ -18,16 +22,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Auth service account
-        uses: google-github-actions/auth@v1
+      - uses: ./.github/actions/gcp-auth
         with:
-          credentials_json: ${{ secrets.GCP_SA_ACTIONS_RUNNER_KEY }}
-
-      - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-
-      - name: Configure Docker to push to Artifact Registry
-        run: gcloud auth configure-docker us-docker.pkg.dev --quiet
+          service_account: actions-runner@linera-io-dev.iam.gserviceaccount.com
+          configure_docker_for: us-docker.pkg.dev
 
       # Self-hosted builder occasionally exposes an unhealthy
       # docker socket at job start despite

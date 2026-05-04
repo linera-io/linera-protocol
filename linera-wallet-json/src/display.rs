@@ -22,7 +22,7 @@ struct ChainDetails {
 impl ChainDetails {
     fn new(chain_id: ChainId, data: &Data) -> Self {
         let Some(user_chain) = data.chains.get(chain_id) else {
-            panic!("Chain {} not found.", chain_id);
+            panic!("Chain {chain_id} not found.");
         };
         ChainDetails {
             is_default: Some(chain_id) == *data.default.read().unwrap(),
@@ -84,8 +84,8 @@ impl ChainDetails {
             println!("{:<20}  {hash}", "Latest block hash:");
         }
 
-        if self.user_chain.pending_proposal.is_some() {
-            println!("{:<20}  present", "Pending proposal:");
+        if self.user_chain.pending_fast_proposal.is_some() {
+            println!("{:<20}  present", "Pending fast proposal:");
         }
     }
 }

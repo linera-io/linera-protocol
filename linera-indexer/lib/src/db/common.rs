@@ -83,7 +83,7 @@ pub fn classify_message(message: &Message) -> MessageClassification {
 
 /// Convert MessageKind to string
 pub fn message_kind_to_string(kind: &MessageKind) -> String {
-    format!("{:?}", kind)
+    format!("{kind:?}")
 }
 
 /// Parse MessageKind from string
@@ -93,6 +93,6 @@ pub fn parse_message_kind(kind_str: &str) -> Result<MessageKind, String> {
         "Tracked" => Ok(MessageKind::Tracked),
         "Bouncing" => Ok(MessageKind::Bouncing),
         "Protected" => Ok(MessageKind::Protected),
-        _ => Err(format!("Unknown message kind: {}", kind_str)),
+        _ => Err(format!("Unknown message kind: {kind_str}")),
     }
 }

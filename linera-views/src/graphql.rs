@@ -221,7 +221,7 @@ impl<K: async_graphql::InputType> async_graphql::InputType for MapInput<K> {
 
 pub(crate) fn missing_key_error(key: &impl std::fmt::Debug) -> async_graphql::Error {
     async_graphql::Error {
-        message: format!("The key={:?} is missing in collection", key),
+        message: format!("The key={key:?} is missing in collection"),
         source: None,
         extensions: None,
     }

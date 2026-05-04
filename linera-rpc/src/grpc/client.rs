@@ -199,12 +199,12 @@ impl GrpcClient {
         match inner {
             api::chain_info_result::Inner::ChainInfoResponse(response) => {
                 Ok(response.try_into().map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal response: {}", err),
+                    error: format!("failed to unmarshal response: {err}"),
                 })?)
             }
             api::chain_info_result::Inner::Error(error) => Err(bincode::deserialize(&error)
                 .map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal error message: {}", err),
+                    error: format!("failed to unmarshal error message: {err}"),
                 })?),
         }
     }
@@ -220,12 +220,12 @@ impl TryFrom<api::PendingBlobResult> for BlobContent {
         match inner {
             api::pending_blob_result::Inner::Blob(blob) => {
                 Ok(blob.try_into().map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal response: {}", err),
+                    error: format!("failed to unmarshal response: {err}"),
                 })?)
             }
             api::pending_blob_result::Inner::Error(error) => Err(bincode::deserialize(&error)
                 .map_err(|err| NodeError::GrpcError {
-                    error: format!("failed to unmarshal error message: {}", err),
+                    error: format!("failed to unmarshal error message: {err}"),
                 })?),
         }
     }
@@ -280,12 +280,12 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
-            certificate,
+            certificate: Arc::unwrap_or_clone(certificate),
             wait_for_outgoing_messages,
         };
         GrpcClient::try_into_chain_info(client_delegate!(
@@ -345,8 +345,7 @@ impl ValidatorNode for GrpcClient {
                 if last_failure.elapsed() < max_backoff {
                     return Err(NodeError::SubscriptionFailed {
                         status: format!(
-                            "validator {} on cooldown after recent subscription failure",
-                            address
+                            "validator {address} on cooldown after recent subscription failure"
                         ),
                     });
                 }
@@ -418,7 +417,7 @@ impl ValidatorNode for GrpcClient {
         let notification_stream = endlessly_retrying_notification_stream
             .map(|result| {
                 Option::<Notification>::try_from(result?).map_err(|err| {
-                    let message = format!("Could not deserialize notification: {}", err);
+                    let message = format!("Could not deserialize notification: {err}");
                     tonic::Status::new(Code::Internal, message)
                 })
             })

@@ -3889,7 +3889,6 @@ dependencies = [
  "linera-client",
  "linera-core",
  "linera-execution",
- "linera-persistent",
  "linera-storage",
  "linera-views",
  "linera-wallet-json",

@@ -4,6 +4,7 @@ on:
   push:
     branches: ["devnet_*", "testnet_*"]
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 # This allows a subsequently queued workflow run to interrupt previous runs on pull requests
@@ -30,7 +31,7 @@ permissions:
 jobs:
   compose:
     if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' }}
-    runs-on: linera-io-self-hosted-ci
+    runs-on: linera-io-self-hosted-builder
     timeout-minutes: 40
 
     steps:

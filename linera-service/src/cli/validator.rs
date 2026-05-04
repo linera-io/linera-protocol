@@ -439,7 +439,7 @@ impl Update {
         if !adds.is_empty() {
             println!("Validators to ADD:");
             for (pk, spec) in &adds {
-                println!("  + {}", pk);
+                println!("  + {pk}");
                 println!("    Address:     {}", spec.address);
                 println!("    Account Key: {}", spec.account_key);
                 println!("    Votes:       {}", spec.votes.0.get());
@@ -450,7 +450,7 @@ impl Update {
         if !modifies.is_empty() {
             println!("Validators to MODIFY:");
             for (pk, spec) in &modifies {
-                println!("  * {}", pk);
+                println!("  * {pk}");
                 println!("    New Address:     {}", spec.address);
                 println!("    New Account Key: {}", spec.account_key);
                 println!("    New Votes:       {}", spec.votes.0.get());
@@ -461,7 +461,7 @@ impl Update {
         if !removes.is_empty() {
             println!("Validators to REMOVE:");
             for pk in &removes {
-                println!("  - {}", pk);
+                println!("  - {pk}");
             }
             println!();
         }
@@ -499,7 +499,7 @@ impl Update {
 
             let input = input.trim();
             if input != "YES" {
-                println!("\nOperation cancelled. (Expected 'YES', got '{}')", input);
+                println!("\nOperation cancelled. (Expected 'YES', got '{input}')");
                 return Ok(());
             }
             println!("\nConfirmed. Proceeding with batch update...\n");
@@ -731,7 +731,7 @@ impl QueryBlock {
         match result {
             Ok(certificates) => {
                 let confirmed_block = certificates[0].inner();
-                println!("{:#?}", confirmed_block);
+                println!("{confirmed_block:#?}");
             }
             Err(error) => {
                 tracing::error!("{}", error);

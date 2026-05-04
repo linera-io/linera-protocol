@@ -406,34 +406,9 @@ else
 fi
 echo "  Relay owner (minter): $RELAY_OWNER"
 
-# ── 4. Deploy FungibleBridge on EVM ──
-echo "Deploying FungibleBridge..."
+# FungibleBridge is deployed below (step 7), after the wrapped-fungible app
+# is created so the canonical applicationId can be baked into its constructor.
 CHAIN_BYTES32="0x${BRIDGE_CHAIN_ID}"
-
-BRIDGE_OUTPUT=$(evm_exec \
-    forge create "$CONTRACTS_DIR/FungibleBridge.sol:FungibleBridge" \
-    --root "$CONTRACTS_DIR" \
-    --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
-    "${FORGE_USE_SOLC[@]}" --ignored-error-codes 6321 \
-    --out /tmp/forge-out --cache-path /tmp/forge-cache \
-    --rpc-url "$EVM_RPC_URL" \
-    --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast \
-    --constructor-args \
-    "$LIGHT_CLIENT_ADDR" \
-    "$CHAIN_BYTES32" \
-    "$TOKEN_ADDRESS")
-BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
-wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
-validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
-BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
-echo "  FungibleBridge: $BRIDGE_ADDRESS"
-
-# Write bridge address to shared dir for relay.
-if [[ -n "$COMPOSE_FILE" ]]; then
-    dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_ADDRESS' > /shared/bridge-address"
-fi
-echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 5. Publish and create evm-bridge app ──
 echo "Syncing chain state..."
@@ -442,7 +417,6 @@ linera_exec process-inbox 2>&1
 echo "Publishing and creating evm-bridge app..."
 BRIDGE_PARAMS=$(
     CHAIN_ID="$EVM_CHAIN_ID" \
-    BRIDGE_HEX="$BRIDGE_ADDR_HEX" \
     TOKEN_HEX="$TOKEN_ADDR_HEX" \
     EVM_RPC_URL="$EVM_RPC_URL" \
     python3 -c "
@@ -451,7 +425,6 @@ def hex_to_array(h):
     return [int(h[i:i+2], 16) for i in range(0, len(h), 2)]
 params = {
     'source_chain_id': int(os.environ['CHAIN_ID']),
-    'bridge_contract_address': hex_to_array(os.environ['BRIDGE_HEX']),
     'token_address': hex_to_array(os.environ['TOKEN_HEX']),
     'rpc_endpoint': os.environ.get('EVM_RPC_URL', ''),
 }
@@ -524,9 +497,39 @@ if [[ -n "$COMPOSE_FILE" ]]; then
 fi
 echo "$WRAPPED_APP_ID" > "$SHARED_DIR/wrapped-app-id"
 
-# ── 7. Register app IDs on both sides ──
+APP_ID_BYTES32="0x${WRAPPED_APP_ID:0:64}"
+
+# ── 7. Deploy FungibleBridge with the wrapped-fungible applicationId baked in ──
+echo "Deploying FungibleBridge..."
+BRIDGE_OUTPUT=$(evm_exec \
+    forge create "$CONTRACTS_DIR/FungibleBridge.sol:FungibleBridge" \
+    --root "$CONTRACTS_DIR" \
+    --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
+    "${FORGE_USE_SOLC[@]}" --ignored-error-codes 6321 \
+    --out /tmp/forge-out --cache-path /tmp/forge-cache \
+    --rpc-url "$EVM_RPC_URL" \
+    --private-key "$EVM_PRIVATE_KEY" \
+    --broadcast \
+    --constructor-args \
+    "$LIGHT_CLIENT_ADDR" \
+    "$CHAIN_BYTES32" \
+    "$TOKEN_ADDRESS" \
+    "$APP_ID_BYTES32")
+BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
+wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
+validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
+BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
+echo "  FungibleBridge: $BRIDGE_ADDRESS"
+
+# Write bridge address to shared dir for relay.
+if [[ -n "$COMPOSE_FILE" ]]; then
+    dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_ADDRESS' > /shared/bridge-address"
+fi
+echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
+
+# ── 8. Register app IDs on both sides ──
 echo "Registering fungible app in evm-bridge..."
-# BCS encoding: variant index 0 (RegisterFungibleApp) + 32-byte app ID hash
+# BCS encoding: variant index 0 (RegisterFungibleApp) + 32-byte app ID hash.
 # Must use the relay wallet since it owns the bridge chain.
 REGISTER_HEX="00${WRAPPED_APP_ID}"
 if [[ -n "$COMPOSE_FILE" ]]; then
@@ -542,15 +545,21 @@ else
     linera_exec execute-operation --application-id "$BRIDGE_APP_ID" --operation "$REGISTER_HEX" --chain-id "$BRIDGE_CHAIN_ID" 2>&1
 fi
 
-APP_ID_BYTES32="0x${WRAPPED_APP_ID:0:64}"
-echo "Registering fungibleApplicationId in FungibleBridge..."
-REGISTER_OUTPUT=$(evm_exec \
-    cast send --rpc-url "$EVM_RPC_URL" \
-    --private-key "$EVM_PRIVATE_KEY" \
-    "$BRIDGE_ADDRESS" \
-    'registerFungibleApplicationId(bytes32)' \
-    "$APP_ID_BYTES32")
-wait_for_tx "$(echo "$REGISTER_OUTPUT" | parse_tx_hash)"
+echo "Registering FungibleBridge address in evm-bridge..."
+# BCS encoding: variant index 3 (RegisterFungibleBridge) + 20-byte EVM address.
+REGISTER_BRIDGE_HEX="03${BRIDGE_ADDR_HEX}"
+if [[ -n "$COMPOSE_FILE" ]]; then
+    dc_exec linera-network env \
+        LINERA_WALLET=/shared/relay-wallet/wallet.json \
+        LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
+        LINERA_STORAGE=rocksdb:/shared/relay-wallet/client.db \
+        ./linera execute-operation \
+        --application-id "$BRIDGE_APP_ID" \
+        --operation "$REGISTER_BRIDGE_HEX" \
+        --chain-id "$BRIDGE_CHAIN_ID" 2>&1
+else
+    linera_exec execute-operation --application-id "$BRIDGE_APP_ID" --operation "$REGISTER_BRIDGE_HEX" --chain-id "$BRIDGE_CHAIN_ID" 2>&1
+fi
 echo "  App IDs registered on both sides"
 
 # ── 8. Fund FungibleBridge with ERC20 tokens ──

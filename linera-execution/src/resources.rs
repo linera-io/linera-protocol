@@ -329,9 +329,9 @@ impl fmt::Display for ResourceTracker {
 
         let mut lines_iter = lines.into_iter();
         if let Some(first) = lines_iter.next() {
-            write!(f, "{}", first)?;
+            write!(f, "{first}")?;
             for line in lines_iter {
-                write!(f, "\n  {}", line)?;
+                write!(f, "\n  {line}")?;
             }
         }
 

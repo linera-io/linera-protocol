@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
@@ -70,11 +70,14 @@ impl chain_listener::ClientContext for ClientContext {
     ) -> Result<(), Error> {
         let info = client.chain_info().await?;
         let existing_owner = self.wallet().get(info.chain_id).and_then(|c| c.owner);
-        let pending_proposal = client.pending_proposal().await;
+        let pending_fast_proposal = client
+            .pending_proposal()
+            .await
+            .filter(|p| p.round.is_some_and(|r| r.is_fast()));
         self.wallet().insert(
             info.chain_id,
             wallet::Chain {
-                pending_proposal,
+                pending_fast_proposal,
                 owner: existing_owner,
                 ..info.as_ref().into()
             },
@@ -116,10 +119,9 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             admin_chain_id,
             false,
             [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
+            format!("Client node for {chain_id0:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
             chain_client::Options::test_default(),
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,
@@ -180,7 +182,7 @@ async fn test_chain_listener() -> anyhow::Result<()> {
         }
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
-            panic!("Unexpected local balance: {}", balance);
+            panic!("Unexpected local balance: {balance}");
         }
     }
 
@@ -233,7 +235,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             "Client node with follow-only and owned chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
             chain_client::Options::test_default(),
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,
@@ -249,7 +250,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             block_hash: chain_a_info.block_hash,
             next_block_height: chain_a_info.next_block_height,
             timestamp: clock.current_time(),
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(chain_a_info.epoch),
         },
     );
@@ -262,7 +263,7 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             block_hash: chain_b_info.block_hash,
             next_block_height: chain_b_info.next_block_height,
             timestamp: clock.current_time(),
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(chain_b_info.epoch),
         },
     );
@@ -389,7 +390,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             "Client node with no chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
             chain_client::Options::test_default(),
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,
@@ -465,7 +465,6 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             "Client node with no chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
             chain_client::Options::test_default(),
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,
@@ -580,10 +579,9 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             admin_chain_id,
             false,
             [(chain_id0, ListeningMode::FullChain)],
-            format!("Client node for {:.8}", chain_id0),
+            format!("Client node for {chain_id0:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
             chain_client::Options::test_default(),
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,
@@ -600,7 +598,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             block_hash: chain0_info.block_hash,
             next_block_height: chain0_info.next_block_height,
             timestamp: clock.current_time(),
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(chain0_info.epoch),
         },
     );
@@ -655,7 +653,7 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         }
         clock.add(TimeDelta::from_secs(1));
         if i == 30 {
-            panic!("Listener did not process inbox. Balance: {}", balance);
+            panic!("Listener did not process inbox. Balance: {balance}");
         }
     }
 

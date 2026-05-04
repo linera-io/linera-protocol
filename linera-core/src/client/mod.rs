@@ -19,7 +19,7 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, TimeDelta, Timestamp,
+        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
@@ -278,7 +278,6 @@ impl<Env: Environment> Client<Env> {
         name: impl Into<String>,
         chain_worker_ttl: Option<Duration>,
         sender_chain_worker_ttl: Option<Duration>,
-        priority_bundle_origins: HashSet<ChainId>,
         options: chain_client::Options,
         block_cache_size: usize,
         execution_state_cache_size: usize,
@@ -294,7 +293,6 @@ impl<Env: Environment> Client<Env> {
             sender_chain_ttl: sender_chain_worker_ttl,
             block_cache_size,
             execution_state_cache_size,
-            priority_bundle_origins,
             ..ChainWorkerConfig::default()
         };
         let state = WorkerState::new(
@@ -757,8 +755,12 @@ impl<Env: Environment> Client<Env> {
                 Ok((certificates, unresolved, validator_key)) => {
                     for certificate in certificates {
                         let mode = ReceiveCertificateMode::AlreadyChecked;
-                        self.receive_sender_certificate(certificate, mode, None)
-                            .await?;
+                        self.receive_sender_certificate(
+                            self.storage_client().cache_certificate(certificate),
+                            mode,
+                            None,
+                        )
+                        .await?;
                     }
                     validators.retain(|node| node.public_key != validator_key);
                     remaining_event_ids = unresolved;
@@ -916,7 +918,7 @@ impl<Env: Environment> Client<Env> {
     pub async fn get_chain_description_blob(
         &self,
         chain_id: ChainId,
-    ) -> Result<Blob, chain_client::Error> {
+    ) -> Result<Arc<Blob>, chain_client::Error> {
         let chain_desc_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
         let blob = self
             .local_node
@@ -925,7 +927,7 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(Arc::unwrap_or_clone(blob));
+            return Ok(blob);
         }
         // Recover history from the current validators, according to the admin chain.
         self.synchronize_chain_state(self.admin_chain_id).await?;
@@ -1046,7 +1048,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -1163,7 +1165,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn receive_sender_certificate(
         &self,
-        certificate: ConfirmedBlockCertificate,
+        certificate: Arc<ConfirmedBlockCertificate>,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), chain_client::Error> {
@@ -1178,11 +1180,12 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        if let Err(err) = self.handle_certificate(certificate.clone()).await {
+        if let Err(err) = self.handle_certificate((*certificate).clone()).await {
             match &err {
                 LocalNodeError::BlobsNotFound(blob_ids) => {
                     self.download_blobs(&nodes, blob_ids).await?;
-                    self.handle_certificate(certificate.clone()).await?;
+                    self.handle_certificate(Arc::unwrap_or_clone(certificate))
+                        .await?;
                 }
                 _ => {
                     // The certificate is not as expected. Give up.
@@ -1324,7 +1327,11 @@ impl<Env: Environment> Client<Env> {
                 // We checked the certificates right after downloading them.
                 let mode = ReceiveCertificateMode::AlreadyChecked;
                 if let Err(error) = self
-                    .receive_sender_certificate(certificate, mode, None)
+                    .receive_sender_certificate(
+                        self.storage_client().cache_certificate(certificate),
+                        mode,
+                        None,
+                    )
                     .await
                 {
                     warn!(%error, %hash, "Received invalid certificate");
@@ -1422,7 +1429,7 @@ impl<Env: Environment> Client<Env> {
                 .try_read_local_certificate(sender_chain_id, current_height, current_hash)
                 .await?
             {
-                Arc::unwrap_or_clone(local)
+                local
             } else {
                 let downloaded = self
                     .requests_scheduler
@@ -1438,7 +1445,7 @@ impl<Env: Environment> Client<Env> {
                         height: current_height,
                     });
                 };
-                certificate
+                self.storage_client().cache_certificate(certificate)
             };
 
             // Validate the certificate.
@@ -1521,7 +1528,7 @@ impl<Env: Environment> Client<Env> {
             let certificate = if let Some(certificate) =
                 self.storage_client().read_certificate(current_hash).await?
             {
-                Arc::unwrap_or_clone(certificate)
+                certificate
             } else {
                 let downloaded = self
                     .requests_scheduler
@@ -1540,7 +1547,7 @@ impl<Env: Environment> Client<Env> {
                 Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
                     .into_result()?;
 
-                certificate
+                self.storage_client().cache_certificate(certificate)
             };
 
             let block = certificate.block();
@@ -1895,7 +1902,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         blob_ids: Vec<BlobId>,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
-    ) -> Result<Vec<Blob>, chain_client::Error> {
+    ) -> Result<Vec<Arc<Blob>>, chain_client::Error> {
         let timeout = self.options.blob_download_timeout;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
@@ -1908,7 +1915,7 @@ impl<Env: Environment> Client<Env> {
                         .download_certificate_for_blob(&remote_node, blob_id)
                         .await?;
                     self.receive_sender_certificate(
-                        certificate,
+                        self.storage_client().cache_certificate(certificate),
                         ReceiveCertificateMode::NeedsCheck,
                         Some(vec![remote_node.clone()]),
                     )
@@ -1918,7 +1925,6 @@ impl<Env: Environment> Client<Env> {
                         .storage_client()
                         .read_blob(blob_id)
                         .await?
-                        .map(Arc::unwrap_or_clone)
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, chain_client::Error>::Ok(blob)
                 },
@@ -2061,6 +2067,9 @@ pub struct PendingProposal {
     /// against the committed execution outcome.
     #[serde(default)]
     pub auto_retry_outcome: Option<BlockExecutionOutcome>,
+    /// The round in which this proposal was first submitted, if any.
+    #[serde(default)]
+    pub round: Option<Round>,
 }
 
 enum ReceiveCertificateMode {

@@ -3,7 +3,7 @@
 
 mod state;
 use std::{
-    collections::{hash_map, BTreeMap, BTreeSet, HashMap},
+    collections::{hash_map, BTreeMap, BTreeSet, HashMap, HashSet},
     convert::Infallible,
     iter,
     sync::Arc,
@@ -93,6 +93,8 @@ pub struct Options {
     pub staging_bundles_time_budget: Option<Duration>,
     /// The policy for automatically handling incoming messages.
     pub message_policy: MessagePolicy,
+    /// Chain IDs whose incoming bundles should be processed first when proposing a block.
+    pub priority_bundle_origins: HashSet<ChainId>,
     /// Whether to block on cross-chain message delivery.
     pub cross_chain_message_delivery: CrossChainMessageDelivery,
     /// An additional delay, after reaching a quorum, to wait for additional validator signatures,
@@ -147,6 +149,7 @@ impl Options {
             max_block_limit_errors: 3,
             staging_bundles_time_budget: None,
             message_policy: MessagePolicy::default(),
+            priority_bundle_origins: HashSet::new(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
             blob_download_timeout: Duration::from_secs(1),
@@ -565,13 +568,22 @@ impl<Env: Environment> ChainClient<Env> {
         }
 
         let skipped = self.skipped_origins.pin();
-        Ok(info
+        let mut bundles = info
             .requested_pending_message_bundles
             .into_iter()
             .filter_map(|bundle| bundle.apply_policy(&self.options.message_policy))
             .filter(|bundle| !skipped.contains(&bundle.origin))
-            .take(self.options.max_pending_message_bundles)
-            .collect())
+            .collect::<Vec<_>>();
+        let priority_origins = &self.options.priority_bundle_origins;
+        bundles.sort_by(|a, b| {
+            let a_priority = priority_origins.contains(&a.origin);
+            let b_priority = priority_origins.contains(&b.origin);
+            b_priority
+                .cmp(&a_priority)
+                .then(a.bundle.timestamp.cmp(&b.bundle.timestamp))
+        });
+        bundles.truncate(self.options.max_pending_message_bundles);
+        Ok(bundles)
     }
 
     #[instrument(level = "trace")]
@@ -831,7 +843,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn update_validators(
         &self,
         old_committee: Option<&Committee>,
-        latest_certificate: Option<ConfirmedBlockCertificate>,
+        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
@@ -856,7 +868,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
-        latest_certificate: Option<ConfirmedBlockCertificate>,
+        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let delivery = self.options.cross_chain_message_delivery;
         let height = self.chain_info().await?.next_block_height;
@@ -1522,6 +1534,7 @@ impl<Env: Environment> ChainClient<Env> {
             block: proposed_block,
             blobs,
             auto_retry_outcome: Some(auto_retry_outcome),
+            round: None,
         });
         Ok(block)
     }
@@ -1976,6 +1989,9 @@ impl<Env: Environment> ChainClient<Env> {
             Either::Right(timeout) => return Ok(ClientOutcome::WaitForTimeout(timeout)),
         };
         debug!("Proposing block for round {}", round);
+        if let Some(pending) = proposal_guard.as_mut() {
+            pending.round.get_or_insert(round);
+        }
 
         let already_handled_locally = info
             .manager
@@ -2038,11 +2054,14 @@ impl<Env: Environment> ChainClient<Env> {
             "process_pending_block_without_prepare completing"
         );
         debug!(round = %certificate.round, "Sending confirmed block to validators");
+        let certificate = self.client.storage_client().cache_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
         // Clear the pending proposal now that the block has been committed.
         *proposal_guard = None;
-        Ok(ClientOutcome::Committed(Some(certificate)))
+        Ok(ClientOutcome::Committed(Some(Arc::unwrap_or_clone(
+            certificate,
+        ))))
     }
 
     fn send_timing(&self, start: Instant, timing_type: TimingType) {
@@ -2095,9 +2114,12 @@ impl<Env: Environment> ChainClient<Env> {
             .client
             .finalize_block(&committee, certificate.clone())
             .await?;
+        let certificate = self.client.storage_client().cache_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
-        Ok(ClientOutcome::Committed(Some(certificate)))
+        Ok(ClientOutcome::Committed(Some(Arc::unwrap_or_clone(
+            certificate,
+        ))))
     }
 
     /// Returns the number for the round number oracle to use when staging a block proposal.
@@ -2689,14 +2711,14 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     #[instrument(level = "trace", skip(hash))]
-    pub async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, Error> {
-        let block = self
-            .client
+    pub async fn read_confirmed_block(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Arc<ConfirmedBlock>, Error> {
+        self.client
             .storage_client()
             .read_confirmed_block(hash)
-            .await?;
-        block
-            .map(Arc::unwrap_or_clone)
+            .await?
             .ok_or(Error::MissingConfirmedBlock(hash))
     }
 
@@ -2704,10 +2726,11 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, Error> {
-        let certificate = self.client.storage_client().read_certificate(hash).await?;
-        certificate
-            .map(Arc::unwrap_or_clone)
+    ) -> Result<Arc<ConfirmedBlockCertificate>, Error> {
+        self.client
+            .storage_client()
+            .read_certificate(hash)
+            .await?
             .ok_or(Error::ReadCertificatesError(vec![hash]))
     }
 
@@ -2778,6 +2801,15 @@ impl<Env: Environment> ChainClient<Env> {
         }
         match notification.reason {
             Reason::NewIncomingBundle { origin, height } => {
+                if self.options.message_policy.ignores_origin(&origin) {
+                    trace!(
+                        chain_id = %self.chain_id,
+                        %origin,
+                        %height,
+                        "Skipping NewIncomingBundle notification: origin filtered by message_policy"
+                    );
+                    return Ok(());
+                }
                 if self.local_next_height_to_receive(origin).await? > height {
                     debug!(
                         chain_id = %self.chain_id,
@@ -3195,7 +3227,6 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
             .into_iter()
             .flatten()
-            .map(Arc::unwrap_or_clone)
             .collect::<Vec<_>>();
 
         for certificate in certificates {
@@ -3216,7 +3247,6 @@ impl<Env: Environment> ChainClient<Env> {
                         .await?
                         .into_iter()
                         .flatten()
-                        .map(Arc::unwrap_or_clone)
                         .collect();
                     remote_node.upload_blobs(missing_blobs).await?;
                     remote_node

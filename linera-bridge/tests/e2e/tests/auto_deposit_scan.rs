@@ -30,9 +30,10 @@ use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Amount, Bytecode},
-    identifiers::{AccountOwner, ApplicationId},
+    identifiers::AccountOwner,
     vm::VmRuntime,
 };
+use linera_bridge::abi::{BridgeOperation, BridgeParameters};
 use linera_bridge_e2e::{
     compose_file_path, exec_ok, exec_output, light_client_address, parse_deployed_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
@@ -43,23 +44,7 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-use serde::Serialize;
 use wrapped_fungible::{Account, InitialState, WrappedFungibleOperation, WrappedParameters};
-
-// ── Inline evm-bridge types ──
-
-#[derive(Clone, Debug, serde::Deserialize, Serialize)]
-struct BridgeParameters {
-    source_chain_id: u64,
-    bridge_contract_address: [u8; 20],
-    token_address: [u8; 20],
-    rpc_endpoint: String,
-}
-
-#[derive(Debug, Serialize)]
-enum BridgeOperation {
-    RegisterFungibleApp { app_id: ApplicationId },
-}
 
 sol! {
     #[sol(rpc)]
@@ -174,51 +159,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let erc20_addr = parse_deployed_address(&erc20_output)?;
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
-    // ── Phase 4: Deploy FungibleBridge on EVM (no applicationId needed at construction) ──
+    // ── Phase 4 (deferred): FungibleBridge is deployed after the wrapped-fungible
+    // app is created, so the wrapped applicationId can be baked into the constructor.
     let chain_a_bytes32 = format!("0x{chain_a}");
     let light_client = light_client_address();
-
-    tracing::info!("Deploying FungibleBridge...");
-    let bridge_output = exec_output(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "forge create /contracts/FungibleBridge.sol:FungibleBridge \
-             --root /contracts --via-ir --optimize \
-             --ignored-error-codes 6321 \
-             --evm-version shanghai \
-             --out /tmp/forge-out --cache-path /tmp/forge-cache \
-             --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             --broadcast \
-             --constructor-args \
-             {light_client} \
-             {chain_a_bytes32} \
-             {erc20_addr}"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
-    let bridge_addr = parse_deployed_address(&bridge_output)?;
-    tracing::info!(%bridge_addr, "FungibleBridge deployed");
-
-    tracing::info!("Funding FungibleBridge with ERC20 tokens...");
-    exec_ok(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "cast send --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             {erc20_addr} \
-             'transfer(address,uint256)(bool)' \
-             {bridge_addr} \
-             500000000000000000000"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
 
     // ── Phase 5: Publish and deploy Linera apps ──
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -244,7 +188,6 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             eb_module_id,
             serde_json::to_vec(&BridgeParameters {
                 source_chain_id: 31337,
-                bridge_contract_address: bridge_addr.0 .0,
                 token_address: erc20_addr.0 .0,
                 rpc_endpoint: String::new(),
             })?,
@@ -301,22 +244,63 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .await?
         .expect("register fungible app committed");
 
+    // Deploy FungibleBridge with the wrapped-fungible applicationId baked in.
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
-    tracing::info!("Registering fungibleApplicationId in FungibleBridge...");
-    exec_ok(
+    tracing::info!("Deploying FungibleBridge...");
+    let bridge_output = exec_output(
         &compose,
         "foundry-tools",
         &format!(
-            "cast send --rpc-url http://anvil:8545 \
+            "forge create /contracts/FungibleBridge.sol:FungibleBridge \
+             --root /contracts --via-ir --optimize \
+             --ignored-error-codes 6321 \
+             --evm-version shanghai \
+             --out /tmp/forge-out --cache-path /tmp/forge-cache \
+             --rpc-url http://anvil:8545 \
              --private-key {ANVIL_PRIVATE_KEY} \
-             {bridge_addr} \
-             'registerFungibleApplicationId(bytes32)' \
+             --broadcast \
+             --constructor-args \
+             {light_client} \
+             {chain_a_bytes32} \
+             {erc20_addr} \
              {app_id_bytes32}"
         ),
         project_name,
         &compose_file,
     )
     .await;
+    let bridge_addr = parse_deployed_address(&bridge_output)?;
+    tracing::info!(%bridge_addr, "FungibleBridge deployed");
+
+    tracing::info!("Funding FungibleBridge with ERC20 tokens...");
+    exec_ok(
+        &compose,
+        "foundry-tools",
+        &format!(
+            "cast send --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             {erc20_addr} \
+             'transfer(address,uint256)(bool)' \
+             {bridge_addr} \
+             500000000000000000000"
+        ),
+        project_name,
+        &compose_file,
+    )
+    .await;
+
+    // Register the FungibleBridge contract address in the evm-bridge app.
+    tracing::info!("Registering FungibleBridge address in evm-bridge...");
+    let register_bridge_bytes = bcs::to_bytes(&BridgeOperation::RegisterFungibleBridge {
+        address: bridge_addr.0 .0,
+    })?;
+    let register_bridge_operation = Operation::User {
+        application_id: bridge_app_id,
+        bytes: register_bridge_bytes,
+    };
+    cc_a.execute_operations(vec![register_bridge_operation], vec![])
+        .await?
+        .expect("register bridge contract address committed");
     tracing::info!("All app IDs registered");
 
     // ── Phase 7: Start relay ──
@@ -362,7 +346,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             None,
             relay_port,
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
-            5,  // monitor_scan_interval
+            std::time::Duration::from_secs(5),  // monitor_scan_interval
             0,  // monitor_start_block
             5,  // max_retries
             None,
@@ -437,7 +421,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337,
-        block_hash: deposit_receipt.block_hash.unwrap().0,
+        block_hash: deposit_receipt.block_hash.unwrap(),
         tx_index: 0,
         log_index: 0,
     };

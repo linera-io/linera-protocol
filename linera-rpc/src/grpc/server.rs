@@ -988,7 +988,7 @@ where
         {
             Ok(blob) => {
                 Self::log_request_success("download_pending_blob", traffic_type);
-                Ok(Response::new(blob.into_content().try_into()?))
+                Ok(Response::new(blob.content().clone().try_into()?))
             }
             Err(error) => {
                 Self::log_request_error("download_pending_blob", traffic_type, &error.error_type());

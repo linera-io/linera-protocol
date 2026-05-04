@@ -105,7 +105,7 @@ impl From<Error> for NodeError {
     fn from(error: Error) -> NodeError {
         match error {
             Error::IoError(io_error) => NodeError::ClientIoError {
-                error: format!("{}", io_error),
+                error: format!("{io_error}"),
             },
             err => {
                 tracing::error!("Unexpected decoding error: {err}");

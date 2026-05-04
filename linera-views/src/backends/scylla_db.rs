@@ -122,71 +122,61 @@ impl ScyllaDbClient {
         let namespace = namespace.to_string();
         let read_value = session
             .prepare(format!(
-                "SELECT v FROM {}.\"{}\" WHERE root_key = ? AND k = ?",
-                KEYSPACE, namespace
+                "SELECT v FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k = ?"
             ))
             .await?;
 
         let contains_key = session
             .prepare(format!(
-                "SELECT root_key FROM {}.\"{}\" WHERE root_key = ? AND k = ?",
-                KEYSPACE, namespace
+                "SELECT root_key FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k = ?"
             ))
             .await?;
 
         let write_batch_delete_prefix_unbounded = session
             .prepare(format!(
-                "DELETE FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
-                KEYSPACE, namespace
+                "DELETE FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k >= ?"
             ))
             .await?;
 
         let write_batch_delete_prefix_bounded = session
             .prepare(format!(
-                "DELETE FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
-                KEYSPACE, namespace
+                "DELETE FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k >= ? AND k < ?"
             ))
             .await?;
 
         let write_batch_deletion = session
             .prepare(format!(
-                "DELETE FROM {}.\"{}\" WHERE root_key = ? AND k = ?",
-                KEYSPACE, namespace
+                "DELETE FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k = ?"
             ))
             .await?;
 
         let write_batch_insertion = session
             .prepare(format!(
-                "INSERT INTO {}.\"{}\" (root_key, k, v) VALUES (?, ?, ?)",
-                KEYSPACE, namespace
+                "INSERT INTO {KEYSPACE}.\"{namespace}\" (root_key, k, v) VALUES (?, ?, ?)"
             ))
             .await?;
 
         let find_keys_by_prefix_unbounded = session
             .prepare(format!(
-                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
-                KEYSPACE, namespace
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k >= ?"
             ))
             .await?;
 
         let find_keys_by_prefix_bounded = session
             .prepare(format!(
-                "SELECT k FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
-                KEYSPACE, namespace
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k >= ? AND k < ?"
             ))
             .await?;
 
         let find_key_values_by_prefix_unbounded = session
             .prepare(format!(
-                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ?",
-                KEYSPACE, namespace
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k >= ?"
             ))
             .await?;
 
         let find_key_values_by_prefix_bounded = session
             .prepare(format!(
-                "SELECT k,v FROM {}.\"{}\" WHERE root_key = ? AND k >= ? AND k < ?",
-                KEYSPACE, namespace
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k >= ? AND k < ?"
             ))
             .await?;
 
@@ -774,10 +764,10 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreInternalError> {
         let session = ScyllaDbClient::build_default_session(&config.uri).await?;
         let statement = session
-            .prepare(format!("DESCRIBE KEYSPACE {}", KEYSPACE))
+            .prepare(format!("DESCRIBE KEYSPACE {KEYSPACE}"))
             .await?;
         let result = Box::pin(session.execute_iter(statement, &[])).await;
-        let miss_msg = format!("'{}' not found in keyspaces", KEYSPACE);
+        let miss_msg = format!("'{KEYSPACE}' not found in keyspaces");
         let result = match result {
             Ok(result) => result,
             Err(error) => {
@@ -830,7 +820,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
     async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbStoreInternalError> {
         let session = ScyllaDbClient::build_default_session(&store_config.uri).await?;
         let statement = session
-            .prepare(format!("DROP KEYSPACE IF EXISTS {}", KEYSPACE))
+            .prepare(format!("DROP KEYSPACE IF EXISTS {KEYSPACE}"))
             .await?;
 
         session
@@ -849,16 +839,15 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         // We check the way the test can fail. It can fail in different ways.
         let result = session
             .prepare(format!(
-                "SELECT root_key FROM {}.\"{}\" LIMIT 1 ALLOW FILTERING",
-                KEYSPACE, namespace
+                "SELECT root_key FROM {KEYSPACE}.\"{namespace}\" LIMIT 1 ALLOW FILTERING"
             ))
             .await;
 
         // The missing table translates into a very specific error that we matched
-        let miss_msg1 = format!("unconfigured table {}", namespace);
+        let miss_msg1 = format!("unconfigured table {namespace}");
         let miss_msg1 = miss_msg1.as_str();
         let miss_msg2 = "Undefined name root_key in selection clause";
-        let miss_msg3 = format!("Keyspace {} does not exist", KEYSPACE);
+        let miss_msg3 = format!("Keyspace {KEYSPACE} does not exist");
         let Err(error) = result else {
             // If OK, then the table exists
             return Ok(true);
@@ -909,7 +898,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         // changes easier.
         let statement = session
             .prepare(format!(
-                "CREATE TABLE {}.\"{}\" (\
+                "CREATE TABLE {KEYSPACE}.\"{namespace}\" (\
                     root_key blob, \
                     k blob, \
                     v blob, \
@@ -927,8 +916,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
                     'enabled': 'true' \
                 }} \
                 AND gc_grace_seconds = 0 \
-                AND tombstone_gc = {{'mode': 'immediate'}}",
-                KEYSPACE, namespace
+                AND tombstone_gc = {{'mode': 'immediate'}}"
             ))
             .await?;
         session
@@ -944,10 +932,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         Self::check_namespace(namespace)?;
         let session = ScyllaDbClient::build_default_session(&config.uri).await?;
         let statement = session
-            .prepare(format!(
-                "DROP TABLE IF EXISTS {}.\"{}\";",
-                KEYSPACE, namespace
-            ))
+            .prepare(format!("DROP TABLE IF EXISTS {KEYSPACE}.\"{namespace}\";"))
             .await?;
         session
             .execute_single_page(&statement, &[], PagingState::start())

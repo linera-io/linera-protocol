@@ -74,7 +74,7 @@ impl<R: 'static> Task<R> {
     ) -> Self {
         let (abortable_future, abort_handle) = future::abortable(future);
         let (task, output) = abortable_future.remote_handle();
-        let _ = spawn(task);
+        spawn(task);
         Self {
             abort_handle,
             output,
@@ -106,7 +106,8 @@ impl<R: 'static> Task<R> {
     /// Cancels the task, resolving only when the wrapped future is completely dropped.
     pub async fn cancel(self) {
         self.abort_handle.abort();
-        let _ = self.output.await;
+        // We just want to wait for the task to finish unwinding; an `Aborted` error is the expected outcome.
+        self.output.await.ok();
     }
 
     /// Forgets the task. The task will continue to run to completion in the

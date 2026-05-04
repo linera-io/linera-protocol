@@ -192,7 +192,7 @@ impl Github {
 
         // Always print the summary to stdout, as we'll use it to set the job summary in CI.
         info!("Printing summary to stdout...");
-        println!("{}", body);
+        println!("{body}");
 
         if let Some(existing_comment_id) = existing_comment_id {
             if self.is_local {

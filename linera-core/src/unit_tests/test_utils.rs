@@ -152,11 +152,11 @@ where
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(certificate, sender)
+            validator.do_handle_certificate(Arc::unwrap_or_clone(certificate), sender)
         })
         .await
     }
@@ -338,6 +338,10 @@ where
 
     pub fn name(&self) -> ValidatorPublicKey {
         self.public_key
+    }
+
+    pub fn fault_type(&self) -> FaultType {
+        self.fault_type
     }
 
     fn set_fault_type(&mut self, fault_type: FaultType) {
@@ -562,7 +566,7 @@ where
             .download_pending_blob(chain_id, blob_id)
             .await
             .map_err(Into::into);
-        sender.send(result.map(|blob| blob.into_content()))
+        sender.send(result.map(|blob| blob.content().clone()))
     }
 
     async fn do_handle_pending_blob(
@@ -624,7 +628,7 @@ where
             Ok(certificates) => match ResultReadCertificates::new(certificates, hashes) {
                 ResultReadCertificates::Certificates(certificates) => Ok(certificates),
                 ResultReadCertificates::InvalidHashes(hashes) => {
-                    panic!("Missing certificates: {:?}", hashes)
+                    panic!("Missing certificates: {hashes:?}")
                 }
             },
         };
@@ -874,7 +878,7 @@ impl<S: Storage + Clone + Send + Sync + 'static> ChainClient<S> {
         &self,
         from: CryptoHash,
         limit: u32,
-    ) -> anyhow::Result<Vec<ConfirmedBlock>> {
+    ) -> anyhow::Result<Vec<Arc<ConfirmedBlock>>> {
         let mut hash = Some(from);
         let mut values = Vec::new();
         for _ in 0..limit {
@@ -917,7 +921,7 @@ where
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
             let config = ChainWorkerConfig {
-                nickname: format!("Node {}", i),
+                nickname: format!("Node {i}"),
                 ..ChainWorkerConfig::default()
             }
             .with_key_pair(Some(validator_keypair.secret_key));
@@ -963,6 +967,18 @@ where
         }
         drop(validator_clients);
         self
+    }
+
+    /// Returns the [`FaultType`] currently configured for the given validator, or `None`
+    /// if no validator with that key is in the test setup.
+    pub fn fault_type(&self, public_key: &ValidatorPublicKey) -> Option<FaultType> {
+        self.node_provider
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|client| client.public_key == *public_key)
+            .map(|client| client.fault_type())
     }
 
     pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
@@ -1121,10 +1137,9 @@ where
             self.admin_chain_id(),
             false,
             [(chain_id, mode)],
-            format!("Client node for {:.8}", chain_id),
+            format!("Client node for {chain_id:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
             options,
             DEFAULT_BLOCK_CACHE_SIZE,
             DEFAULT_EXECUTION_STATE_CACHE_SIZE,

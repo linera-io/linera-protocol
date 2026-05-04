@@ -56,6 +56,12 @@ impl From<GenericCertificate<ConfirmedBlock>> for Certificate {
     }
 }
 
+impl From<&GenericCertificate<ConfirmedBlock>> for Certificate {
+    fn from(cert: &GenericCertificate<ConfirmedBlock>) -> Certificate {
+        Certificate::Confirmed(cert.clone())
+    }
+}
+
 impl Serialize for GenericCertificate<ConfirmedBlock> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

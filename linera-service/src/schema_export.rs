@@ -69,7 +69,7 @@ impl ValidatorNode for DummyValidatorNode {
 
     async fn handle_confirmed_certificate(
         &self,
-        _: GenericCertificate<ConfirmedBlock>,
+        _: Arc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)
@@ -266,6 +266,6 @@ async fn main() -> std::io::Result<()> {
         false, // not paused
     );
     let schema = service.schema().sdl();
-    print!("{}", schema);
+    print!("{schema}");
     Ok(())
 }

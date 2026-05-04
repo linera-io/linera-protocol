@@ -33,5 +33,7 @@ metadata:
   name: proxy-backend-config
 spec:
   timeoutSec: 2147483647  # Maximum possible value
+  logging:
+    enable: false  # GKE default sampleRate=1.0 was costing ~$1.6k/mo across our LBs. Re-enable on-demand for debugging via `kubectl patch`.
 
 {{- end }}

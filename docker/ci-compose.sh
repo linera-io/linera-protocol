@@ -36,6 +36,10 @@ cd "$ROOT_DIR"
 
 GIT_COMMIT=$(git rev-parse --short HEAD)
 
+# Dockerfile uses `RUN --mount=type=cache`, which needs BuildKit. Docker 23+
+# enables BuildKit by default; this flag ensures it's on everywhere.
+export DOCKER_BUILDKIT=1
+
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     docker build --build-arg git_commit="$GIT_COMMIT" -f docker/Dockerfile . -t linera || exit 1
 elif [[ "$OSTYPE" == "darwin"* ]]; then

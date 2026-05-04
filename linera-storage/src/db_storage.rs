@@ -1016,6 +1016,23 @@ where
         self.write_batch(batch).await
     }
 
+    fn cache_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Arc<ConfirmedBlockCertificate> {
+        self.caches
+            .certificate
+            .insert(&certificate.hash(), certificate)
+    }
+
+    fn cache_blob(&self, blob: Blob) -> Arc<Blob> {
+        self.caches.blob.insert(&blob.id(), blob)
+    }
+
+    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> Arc<ConfirmedBlock> {
+        self.caches.confirmed_block.insert(&block.hash(), block)
+    }
+
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         if self.caches.certificate.contains(&hash) || self.caches.certificate_raw.contains(&hash) {

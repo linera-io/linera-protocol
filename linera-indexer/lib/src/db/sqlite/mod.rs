@@ -64,16 +64,12 @@ impl SqliteDatabase {
                     tracing::info!(?database_url, "creating new SQLite database");
                     // Create the database file if it doesn't exist
                     std::fs::File::create(database_url).unwrap_or_else(|e| {
-                        panic!(
-                            "failed to create SQLite database file: {}, error: {}",
-                            database_url, e
-                        )
+                        panic!("failed to create SQLite database file: {database_url}, error: {e}")
                     });
                 }
                 Err(e) => {
                     panic!(
-                        "failed to check SQLite database existence. file: {}, error: {}",
-                        database_url, e
+                        "failed to check SQLite database existence. file: {database_url}, error: {e}"
                     )
                 }
             }
@@ -159,9 +155,8 @@ impl SqliteDatabase {
         data: &[u8],
     ) -> Result<(), SqliteError> {
         // Deserialize the block to extract denormalized data
-        let block: Block = bincode::deserialize(data).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to deserialize block: {}", e))
-        })?;
+        let block: Block = bincode::deserialize(data)
+            .map_err(|e| SqliteError::Serialization(format!("Failed to deserialize block: {e}")))?;
 
         // Count aggregated data
         let operation_count = block.body.operations().count();
@@ -296,7 +291,7 @@ impl SqliteDatabase {
         };
 
         let data = bincode::serialize(operation).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to serialize operation: {}", e))
+            SqliteError::Serialization(format!("Failed to serialize operation: {e}"))
         })?;
 
         sqlx::query(
@@ -418,8 +413,7 @@ impl SqliteDatabase {
                 OracleResponse::Http(http_response) => {
                     let serialized = bincode::serialize(http_response).map_err(|e| {
                         SqliteError::Serialization(format!(
-                            "Failed to serialize HTTP response: {}",
-                            e
+                            "Failed to serialize HTTP response: {e}"
                         ))
                     })?;
                     ("Http", None, Some(serialized))
@@ -427,22 +421,19 @@ impl SqliteDatabase {
                 OracleResponse::Assert => ("Assert", None, None),
                 OracleResponse::Round(round) => {
                     let serialized = bincode::serialize(round).map_err(|e| {
-                        SqliteError::Serialization(format!("Failed to serialize round: {}", e))
+                        SqliteError::Serialization(format!("Failed to serialize round: {e}"))
                     })?;
                     ("Round", None, Some(serialized))
                 }
                 OracleResponse::Event(stream_id, index) => {
                     let serialized = bincode::serialize(&(stream_id, index)).map_err(|e| {
-                        SqliteError::Serialization(format!("Failed to serialize event: {}", e))
+                        SqliteError::Serialization(format!("Failed to serialize event: {e}"))
                     })?;
                     ("Event", None, Some(serialized))
                 }
                 OracleResponse::EventExists(event_exists) => {
                     let serialized = bincode::serialize(event_exists).map_err(|e| {
-                        SqliteError::Serialization(format!(
-                            "Failed to serialize event exists: {}",
-                            e
-                        ))
+                        SqliteError::Serialization(format!("Failed to serialize event exists: {e}"))
                     })?;
                     ("EventExists", None, Some(serialized))
                 }
@@ -805,7 +796,7 @@ impl SqliteDatabase {
             let index = row.get::<i64, _>("operation_index") as usize;
             let data: Vec<u8> = row.get("data");
             let operation: Operation = bincode::deserialize(&data).map_err(|e| {
-                SqliteError::Serialization(format!("Failed to deserialize operation: {}", e))
+                SqliteError::Serialization(format!("Failed to deserialize operation: {e}"))
             })?;
             operations.push((index, operation));
         }
@@ -1000,13 +991,12 @@ impl SqliteDatabase {
     /// Serialize a Message with consistent error handling
     fn serialize_message(message: &Message) -> Result<Vec<u8>, SqliteError> {
         bincode::serialize(message)
-            .map_err(|e| SqliteError::Serialization(format!("Failed to serialize message: {}", e)))
+            .map_err(|e| SqliteError::Serialization(format!("Failed to serialize message: {e}")))
     }
 
     fn deserialize_message(data: &[u8]) -> Result<Message, SqliteError> {
-        bincode::deserialize(data).map_err(|e| {
-            SqliteError::Serialization(format!("Failed to deserialize message: {}", e))
-        })
+        bincode::deserialize(data)
+            .map_err(|e| SqliteError::Serialization(format!("Failed to deserialize message: {e}")))
     }
 }
 
