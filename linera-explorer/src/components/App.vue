@@ -1,5 +1,5 @@
 <script lang="ts">
-import { data, save_config, route } from '../../pkg/linera_explorer'
+import { data, save_config, route, decode_user_operation, decode_user_message, decode_user_response, decode_user_event_value, fetch_user_app_formats_js } from '../../pkg/linera_explorer'
 import Block from './Block.vue'
 import Blocks from './Blocks.vue'
 import Chain from './Chain.vue'
@@ -12,9 +12,51 @@ import Transfer from './Transfer.vue'
 
 export default {
   data() { return data() },
+  created() {
+    // Fill in formats-registry defaults from Vite env vars when they were not
+    // previously set in localStorage. Lets developers wire up dev-net values in
+    // a `.env.local` once instead of re-typing them after every restart.
+    const envChain = import.meta.env.VITE_FORMATS_REGISTRY_CHAIN as string | undefined
+    const envApp = import.meta.env.VITE_FORMATS_REGISTRY_APP_ID as string | undefined
+    let dirty = false
+    if (envChain && !this.config.formats_registry_chain) {
+      this.config.formats_registry_chain = envChain
+      dirty = true
+    }
+    if (envApp && !this.config.formats_registry_app_id) {
+      this.config.formats_registry_app_id = envApp
+      dirty = true
+    }
+    if (dirty) save_config(this)
+  },
   methods: {
     save_config() { save_config(this) },
-    route(name?: string, args?: [string, string][]) { route(this, name, args) }
+    on_formats_registry_change() {
+      // Treat empty/whitespace as "unset" so the optional fields round-trip to
+      // None instead of failing to parse.
+      for (const k of ['formats_registry_chain', 'formats_registry_app_id']) {
+        if (typeof this.config[k] === 'string' && this.config[k].trim() === '') {
+          this.config[k] = null
+        }
+      }
+      save_config(this)
+    },
+    route(name?: string, args?: [string, string][]) { route(this, name, args) },
+    decode_user_operation(application_id: string, bytes_hex: string) {
+      return decode_user_operation(this, application_id, bytes_hex)
+    },
+    decode_user_message(application_id: string, bytes_hex: string) {
+      return decode_user_message(this, application_id, bytes_hex)
+    },
+    decode_user_response(application_id: string, bytes_hex: string) {
+      return decode_user_response(this, application_id, bytes_hex)
+    },
+    decode_user_event_value(application_id: string, bytes_hex: string) {
+      return decode_user_event_value(this, application_id, bytes_hex)
+    },
+    fetch_user_app_formats(application_id: string) {
+      return fetch_user_app_formats_js(this, application_id)
+    }
   },
   components: {
     Block,
@@ -73,6 +115,13 @@ export default {
                 <input v-model="config.node" class="form-control" @change="save_config" style="width:190px">
                 <span class="input-group-text">indexer</span>
                 <input v-model="config.indexer" class="form-control" @change="save_config" style="width:190px">
+              </div>
+            </li>
+            <li class="nav-item mx-2">
+              <div class="input-group">
+                <span class="input-group-text">formats registry</span>
+                <input v-model="config.formats_registry_chain" class="form-control font-monospace" placeholder="chain id" @change="on_formats_registry_change" style="width:200px">
+                <input v-model="config.formats_registry_app_id" class="form-control font-monospace" placeholder="application id" @change="on_formats_registry_change" style="width:200px">
               </div>
             </li>
             <li class="nav-item mx-2">

@@ -26,7 +26,9 @@ targets = ["wasm32-unknown-unknown", "x86_64-unknown-linux-gnu"]
 ignored = ["base64ct"]
 
 [features]
+default = ["format-decode"]
 ethereum = ["async-trait", "linera-ethereum"]
+format-decode = ["dep:serde-reflection"]
 wasmer = [
     "linera-core/wasmer",
     "linera-execution/wasmer",
@@ -59,6 +61,7 @@ linera-sdk-derive.workspace = true
 linera-views.workspace = true
 log.workspace = true
 serde.workspace = true
+serde-reflection = { workspace = true, optional = true }
 serde_json.workspace = true
 thiserror.workspace = true
 wit-bindgen.workspace = true
@@ -72,7 +75,6 @@ linera-chain = { workspace = true, features = ["metrics"] }
 linera-core = { workspace = true, features = ["metrics", "wasmer"] }
 linera-execution = { workspace = true, features = ["fs", "metrics", "wasmer"] }
 linera-storage = { workspace = true, features = ["metrics", "wasmer"] }
-serde-reflection.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]

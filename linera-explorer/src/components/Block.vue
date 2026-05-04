@@ -6,12 +6,44 @@ import Json from './Json.vue'
 // Op is now imported by Transaction.vue
 import Transaction from './Transaction.vue'
 import OutgoingMessages from './OutgoingMessages.vue'
+import DecodedBytes from './DecodedBytes.vue'
 
 const props = defineProps<{block: ConfirmedBlock, title: string}>()
 
 const operations = computed(() => getOperations(props.block.block.body.transactionMetadata))
 const incomingBundles = computed(() => getIncomingBundles(props.block.block.body.transactionMetadata))
 const transactions = computed(() => props.block.block.body.transactionMetadata || [])
+
+// Helpers for surfacing event/operation-result decoding alongside their raw bytes.
+function bytesToHex(value: any): string | null {
+  if (Array.isArray(value)) return value.map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  if (typeof value === 'string') return value
+  return null
+}
+
+// `streamId.applicationId` is `GenericApplicationId`, which serializes either as
+// the string `"System"` or as `{ User: "<app-id>" }`. Only user-application
+// events have formats in the registry.
+function eventApplicationId(streamId: any): string | null {
+  if (!streamId) return null
+  const appId = streamId.applicationId
+  if (!appId) return null
+  if (typeof appId === 'object' && typeof appId.User === 'string') return appId.User
+  return null
+}
+
+// Map a flat operation-result index back to the user operation that produced
+// it. `block.body.operationResults` is indexed in the same order as the block's
+// `Operation`s — but transactions interleave `ExecuteOperation` with
+// `ReceiveMessages`, so we compute the application id by scanning operations in
+// order. Returns null when the operation at that index is a system operation
+// (responses for those are not user-decodable).
+function operationApplicationIdAt(opIndex: number): string | null {
+  const op = operations.value[opIndex]
+  if (!op) return null
+  if (op.operationType !== 'User') return null
+  return op.applicationId ?? null
+}
 </script>
 
 <template>
@@ -194,6 +226,9 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
                   <div v-if="evt.value && evt.value.length > 0" class="p-2 small font-monospace" style="word-break:break-all">
                     {{ evt.value.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}
                   </div>
+                  <div v-if="eventApplicationId(evt.streamId) && bytesToHex(evt.value)" class="p-2">
+                    <DecodedBytes :application-id="eventApplicationId(evt.streamId)!" :bytes-hex="bytesToHex(evt.value)!" kind="event_value"/>
+                  </div>
                 </div>
               </li>
             </template>
@@ -255,6 +290,9 @@ const transactions = computed(() => props.block.block.body.transactionMetadata |
                   <span v-if="Array.isArray(m)">{{ m.map((b: number) => b.toString(16).padStart(2, '0')).join('') }}</span>
                   <span v-else-if="typeof m === 'string'">{{ m }}</span>
                   <Json v-else :data="m"/>
+                </div>
+                <div v-if="operationApplicationIdAt(i) && bytesToHex(m)" class="p-2">
+                  <DecodedBytes :application-id="operationApplicationIdAt(i)!" :bytes-hex="bytesToHex(m)!" kind="response"/>
                 </div>
               </div>
             </li>

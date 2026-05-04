@@ -29,6 +29,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera service`↴](#linera-service)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-module`↴](#linera-publish-module)
+* [`linera publish-bcs-module`↴](#linera-publish-bcs-module)
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
@@ -106,6 +107,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
+* `publish-bcs-module` — Publish a module along with the JSON-encoded `Formats` description loaded from an insta SNAP file. The publication and the formats-registry write happen atomically in a single block
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
@@ -836,6 +838,28 @@ Publish module
 
 * `<CONTRACT>` — Path to the Wasm file for the application "contract" bytecode
 * `<SERVICE>` — Path to the Wasm file for the application "service" bytecode
+* `<PUBLISHER>` — An optional chain ID to publish the module. The default chain of the wallet is used otherwise
+
+###### **Options:**
+
+* `--vm-runtime <VM_RUNTIME>` — The virtual machine runtime to use
+
+  Default value: `wasm`
+
+
+
+## `linera publish-bcs-module`
+
+Publish a module along with the JSON-encoded `Formats` description loaded from an insta SNAP file. The publication and the formats-registry write happen atomically in a single block
+
+**Usage:** `linera publish-bcs-module [OPTIONS] <CONTRACT> <SERVICE> <SNAP_PATH> <REGISTRY_APPLICATION_ID> [PUBLISHER]`
+
+###### **Arguments:**
+
+* `<CONTRACT>` — Path to the Wasm file for the application "contract" bytecode
+* `<SERVICE>` — Path to the Wasm file for the application "service" bytecode
+* `<SNAP_PATH>` — Path to the insta SNAP file containing the YAML serialization of the application's `Formats`
+* `<REGISTRY_APPLICATION_ID>` — The application ID of the formats registry that will receive the JSON-encoded formats
 * `<PUBLISHER>` — An optional chain ID to publish the module. The default chain of the wallet is used otherwise
 
 ###### **Options:**

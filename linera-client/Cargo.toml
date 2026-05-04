@@ -65,6 +65,7 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+serde_yaml_08 = { package = "serde_yaml", version = "0.8" }
 thiserror.workspace = true
 thiserror-context.workspace = true
 tokio.workspace = true

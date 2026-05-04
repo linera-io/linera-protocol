@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Json from './Json.vue'
+import DecodedBytes from './DecodedBytes.vue'
 import { copyToClipboard } from './utils'
 
 defineProps<{op: any, id: string, index?: number}>()
@@ -233,6 +234,9 @@ defineProps<{op: any, id: string, index?: number}>()
         <div v-if="op.userBytesHex" class="mb-3">
           <strong>Operation Data (hex):</strong>
           <pre class="mt-2 p-2 bg-light"><code>{{ op.userBytesHex }}</code></pre>
+        </div>
+        <div v-if="op.applicationId && op.userBytesHex" class="mb-3">
+          <DecodedBytes :application-id="op.applicationId" :bytes-hex="op.userBytesHex" kind="operation"/>
         </div>
         <Json :data="op"/>
       </div>
