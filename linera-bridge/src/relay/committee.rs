@@ -74,7 +74,7 @@ where
     P: Provider,
 {
     let current_epoch = match evm_client.get_current_epoch().await {
-        Ok(epoch) => epoch,
+        Ok(epoch) => Epoch(epoch),
         Err(e) => {
             tracing::info!("LightClient not initialized yet, skipping catch-up: {e:#}");
             return Ok(());
@@ -87,8 +87,8 @@ where
         (Some(h), Some(prev_epoch)) if current_epoch >= prev_epoch => h,
         (Some(h), Some(prev_epoch)) => {
             tracing::warn!(
-                current_epoch,
-                prev_epoch,
+                %current_epoch,
+                %prev_epoch,
                 last_scanned = %h,
                 "LightClient epoch regressed since last scan; rescanning admin chain from 0"
             );
@@ -98,7 +98,7 @@ where
     };
 
     tracing::info!(
-        current_epoch,
+        %current_epoch,
         %admin_chain_id,
         %admin_chain_height,
         %start_height,
@@ -123,7 +123,7 @@ where
     let mut relayed = 0u32;
     for cert in certs.into_iter().flatten() {
         if let Some((epoch, blob_hash)) = find_create_committee(&cert) {
-            if epoch.0 <= current_epoch {
+            if epoch <= current_epoch {
                 continue;
             }
             let blob_id = BlobId::new(blob_hash, BlobType::Committee);

@@ -11,7 +11,7 @@ use std::path::Path;
 
 use alloy::primitives::{Address, B256, U256};
 use anyhow::{Context as _, Result};
-use linera_base::data_types::BlockHeight;
+use linera_base::data_types::{BlockHeight, Epoch};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
@@ -151,16 +151,18 @@ impl BridgeDb {
     }
 
     /// LightClient `currentEpoch` observed at the time `last_scanned_admin_height` was written.
-    /// Used to detect EVM rollbacks and force a full rescan.
-    pub async fn get_last_known_evm_epoch(&self) -> Result<Option<u32>> {
+    /// Stored as a Linera [`Epoch`] because the EVM `currentEpoch` is just a mirror of the
+    /// admin-chain epoch most recently forwarded via `addCommittee`. Used to detect EVM
+    /// rollbacks and force a full rescan.
+    pub async fn get_last_known_evm_epoch(&self) -> Result<Option<Epoch>> {
         Ok(self
             .get_scan_state("last_known_evm_epoch")
             .await?
-            .map(|v| v as u32))
+            .map(|v| Epoch(v as u32)))
     }
 
-    pub async fn set_last_known_evm_epoch(&self, epoch: u32) -> Result<()> {
-        self.set_scan_state("last_known_evm_epoch", epoch as i64)
+    pub async fn set_last_known_evm_epoch(&self, epoch: Epoch) -> Result<()> {
+        self.set_scan_state("last_known_evm_epoch", epoch.0 as i64)
             .await
     }
 
@@ -346,7 +348,7 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
     use alloy::primitives::{Address, B256, U256};
-    use linera_base::data_types::Amount;
+    use linera_base::data_types::{Amount, Epoch};
     use test_case::test_case;
 
     use super::*;
@@ -565,13 +567,16 @@ mod tests {
         db.set_last_scanned_admin_height(BlockHeight(42))
             .await
             .unwrap();
-        db.set_last_known_evm_epoch(7).await.unwrap();
+        db.set_last_known_evm_epoch(Epoch(7)).await.unwrap();
 
         assert_eq!(
             db.get_last_scanned_admin_height().await.unwrap(),
             Some(BlockHeight(42))
         );
-        assert_eq!(db.get_last_known_evm_epoch().await.unwrap(), Some(7));
+        assert_eq!(
+            db.get_last_known_evm_epoch().await.unwrap(),
+            Some(Epoch(7))
+        );
 
         // Overwrite-on-conflict keeps the latest value.
         db.set_last_scanned_admin_height(BlockHeight(100))
