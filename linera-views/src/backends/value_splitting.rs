@@ -792,7 +792,10 @@ mod tests {
             .filter(|i| !to_delete.contains(i))
             .map(|i| (keys[i].clone(), values[i].clone()))
             .collect::<Vec<_>>();
-        let expected_keys = expected_kv.iter().map(|(k, _)| k.clone()).collect::<Vec<_>>();
+        let expected_keys = expected_kv
+            .iter()
+            .map(|(k, _)| k.clone())
+            .collect::<Vec<_>>();
         let expected_kv_rev = expected_kv.iter().rev().cloned().collect::<Vec<_>>();
         let expected_keys_rev = expected_keys.iter().rev().cloned().collect::<Vec<_>>();
 
