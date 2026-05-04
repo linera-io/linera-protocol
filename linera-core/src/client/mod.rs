@@ -41,10 +41,7 @@ use linera_chain::{
 };
 use linera_execution::committee::Committee;
 use linera_storage::{Clock as _, Storage as _};
-use rand::{
-    distributions::{Distribution, WeightedIndex},
-    seq::SliceRandom,
-};
+use rand::seq::SliceRandom;
 use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -367,10 +364,6 @@ impl<Env: Environment> Client<Env> {
         self.environment.network()
     }
 
-    pub(crate) fn options(&self) -> &chain_client::Options {
-        &self.options
-    }
-
     /// Handles any pending local cross-chain requests, notifying subscribers.
     pub async fn retry_pending_cross_chain_requests(
         &self,
@@ -576,7 +569,10 @@ impl<Env: Environment> Client<Env> {
                                 break;
                             }
                         }
-                        info = self.handle_certificate(certificate).await?.info;
+                        info = self
+                            .handle_certificate(Arc::unwrap_or_clone(certificate))
+                            .await?
+                            .info;
                     }
                     None => {
                         // Certificate not found in local storage — skip, will be
