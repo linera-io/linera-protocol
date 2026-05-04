@@ -339,18 +339,21 @@ where
                 let index = Self::read_index_from_key(&big_key)?;
                 big_key.truncate(big_key.len() - 4);
                 let key = big_key;
-                let continues = match &state {
-                    Some((current_key, top, segs)) => {
-                        let segs_len = segs.len() as u32;
-                        *current_key == key && segs_len <= *top && index == *top - segs_len
+                state = match state.take() {
+                    Some((current_key, top, mut segs))
+                        if current_key == key
+                            && (segs.len() as u32) <= top
+                            && index == top - segs.len() as u32 =>
+                    {
+                        segs.push(value);
+                        Some((current_key, top, segs))
                     }
-                    None => false,
+                    // Either no prior state, or the prior state belongs to a
+                    // different key / a non-contiguous index — drop it (those
+                    // segments are leftovers from a deleted big value) and
+                    // start a fresh accumulation.
+                    _ => Some((key, index, vec![value])),
                 };
-                if continues {
-                    state.as_mut().unwrap().2.push(value);
-                } else {
-                    state = Some((key, index, vec![value]));
-                }
                 if index == 0 {
                     let (key, top, segs) = state.take().unwrap();
                     let segment_zero_value = segs.last().unwrap();
