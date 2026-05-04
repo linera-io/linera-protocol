@@ -9,7 +9,7 @@ pub mod performance;
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use rand::{seq::SliceRandom, Rng};
 
 use crate::{
@@ -205,13 +205,27 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             }
         }
         assert_eq!(set_key_value1, set_key_value2);
-        // Streaming variants must agree with the eager methods.
-        let keys_iter = store
-            .find_keys_by_prefix_iter(key_prefix)
-            .try_collect::<Vec<_>>()
-            .await
-            .unwrap();
+        // Streaming variants must agree with the eager methods. The forward
+        // `find_keys_by_prefix_iter` is drained by interleaving each yielded
+        // key with a `read_value_bytes` call against the same store. Beyond
+        // checking the iter result, this exercises that holding the streaming
+        // iterator does not deadlock other operations on the same store
+        // (e.g. via a semaphore permit held across the stream body).
+        let mut keys_iter = Vec::new();
+        let mut key_values_via_iter = Vec::new();
+        {
+            let mut stream = store.find_keys_by_prefix_iter(key_prefix);
+            while let Some(item) = stream.next().await {
+                let key = item.unwrap();
+                let mut full_key = key_prefix.to_vec();
+                full_key.extend(&key);
+                let value = store.read_value_bytes(&full_key).await.unwrap().unwrap();
+                keys_iter.push(key.clone());
+                key_values_via_iter.push((key, value));
+            }
+        }
         assert_eq!(keys_iter, keys_request);
+        assert_eq!(key_values_via_iter, key_values_by_prefix);
         let key_values_iter = store
             .find_key_values_by_prefix_iter(key_prefix)
             .try_collect::<Vec<_>>()

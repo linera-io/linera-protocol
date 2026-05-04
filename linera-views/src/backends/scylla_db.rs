@@ -758,7 +758,11 @@ impl ScyllaDbStoreInternal {
         Box::pin(async_stream::try_stream! {
             let key_prefix = key_prefix.to_vec();
             ScyllaDbClient::check_key_size(&key_prefix)?;
-            let _guard = self.acquire().await;
+            // Intentionally no `self.acquire()` here: streaming iterators run
+            // for an unbounded duration and would otherwise hold a semaphore
+            // permit across user-controlled `await` points, leading to
+            // potential deadlocks when callers interleave other store
+            // operations (e.g. `read_value`) with iterator polling.
             let session = &self.store.session;
             let len = key_prefix.len();
             let (query_unbounded, query_bounded) = match direction {
@@ -797,7 +801,7 @@ impl ScyllaDbStoreInternal {
         Box::pin(async_stream::try_stream! {
             let key_prefix = key_prefix.to_vec();
             ScyllaDbClient::check_key_size(&key_prefix)?;
-            let _guard = self.acquire().await;
+            // See `find_keys_stream` for why no semaphore permit is acquired.
             let session = &self.store.session;
             let len = key_prefix.len();
             let (query_unbounded, query_bounded) = match direction {
