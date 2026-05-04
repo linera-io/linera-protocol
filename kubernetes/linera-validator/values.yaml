@@ -113,9 +113,9 @@ executionStateCacheSize: 20000
 # state is freed. Higher values keep chains warm across notification gaps and
 # brief client restarts at the cost of more memory; lower values bound memory
 # at the cost of cold ChainStateView reloads from Scylla on next access.
-# Binary default: 30000 (30 seconds). Recommended for production: 600000 (10 minutes).
-# Set to empty string to use the binary default.
-chainWorkerTtlMs: 600000
+# Binary default: 30000 (30 seconds).
+# Set to a number (e.g. 600000) to override; leave empty to use the binary default.
+chainWorkerTtlMs: ""
 
 # Dual storage mode (RocksDB + ScyllaDB)
 dualStore: false
