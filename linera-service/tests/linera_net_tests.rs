@@ -50,6 +50,7 @@ use linera_service::cli_wrappers::{
 #[cfg(feature = "remote-net")]
 use linera_service::cli_wrappers::{remote_net::RemoteNetTestingConfig, OnClientDrop::*};
 use linera_service::{
+    cli::command::ResourceControlPolicyOverrides,
     cli_wrappers::{
         local_net::{get_node_port, ProcessInbox},
         ApplicationWrapper, ClientWrapper, LineraNet, LineraNetConfig, NotificationsExt,
@@ -2754,9 +2755,12 @@ async fn test_wasm_end_to_end_update_stream_splitting(config: impl LineraNetConf
     node_service.terminate().await?;
 
     client
-        .set_maximum_block_size(500)
+        .set_resource_control_policy(ResourceControlPolicyOverrides {
+            maximum_block_size: Some(500),
+            ..Default::default()
+        })
         .await
-        .context("Failed to set maximum block size")?;
+        .context("Failed to set resource control policy")?;
 
     let mut node_service = client.run_node_service(port, ProcessInbox::Skip).await?;
 
