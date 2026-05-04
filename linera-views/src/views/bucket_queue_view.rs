@@ -607,10 +607,10 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             State::Loaded { data } => Ok(Some(data.last().unwrap().clone())),
             State::NotLoaded { .. } => {
                 let key = self.get_bucket_key(bucket.index)?;
-                let data: Vec<T> = self
+                let data = self
                     .context
                     .store()
-                    .read_value(&key)
+                    .read_value::<Vec<T>>(&key)
                     .await?
                     .ok_or_else(|| ViewError::MissingEntries("BucketQueueView::back".into()))?;
                 let result = data.last().unwrap().clone();
