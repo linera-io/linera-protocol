@@ -60,7 +60,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       # Install dependencies
@@ -84,6 +84,15 @@ jobs:
       uses: pnpm/action-setup@v4
       with:
         version: 10.17
+    - name: Install `wasm-split`
+      uses: jaxxstorm/action-install-gh-release@v3.0.0
+      with:
+          repo: getsentry/symbolicator
+          tag: 26.3.0
+          asset-name: wasm-split
+          extension-matching: disable
+          rename-to: wasm-split
+          chmod: 0755
 
     # Setup fixtures
     - name: Run the storage-service instance

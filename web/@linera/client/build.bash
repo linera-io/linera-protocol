@@ -34,7 +34,13 @@ wasm-bindgen \
     --out-name index \
     --typescript \
     --target web \
+    --keep-debug \
     --split-linked-modules
+
+wasm-split \
+    src/wasm/index_bg.wasm \
+    --strip \
+    --debug-out src/wasm/index_bg.debug.wasm
 
 mkdir -p dist
 cp -r src/wasm dist/
