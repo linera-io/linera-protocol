@@ -10,8 +10,8 @@ use allocative::Allocative;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
-        OracleResponse, Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        Epoch, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
@@ -19,7 +19,8 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_execution::{
-    committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
+    committee::Committee, execution_state_actor::RuntimeCommand, runtime::ContractSyncRuntime,
+    system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView, FinalizeContext,
     Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
     ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
@@ -720,6 +721,53 @@ where
             chain.system.used_blobs.insert(&blob_id)?;
         }
 
+        // Spawn a block-level contract runtime thread so that contract instances
+        // persist across actions within a block. This uses the cooperative thread pool
+        // (`run_send`) which works on both native (real threads) and web (web workers).
+        let (runtime_channels, contract_runtime_task) = {
+            let (command_tx, command_rx) = std::sync::mpsc::channel::<RuntimeCommand>();
+            let (execution_state_sender, execution_state_receiver) =
+                futures::channel::mpsc::unbounded();
+
+            let allow_application_logs = chain
+                .context()
+                .extra()
+                .execution_runtime_config()
+                .allow_application_logs;
+
+            // The runtime's controller uses the same policy as the main controller so
+            // that per-block limits (e.g. maximum_wasm_fuel_per_block) are enforced.
+            // Balance, tracker, and `is_free` are synchronized with each action via the
+            // command channel and therefore do not need meaningful initial values here.
+            let runtime_resource_controller = ResourceController::new(
+                resource_controller.policy().clone(),
+                ResourceTracker::default(),
+                Amount::ZERO,
+            );
+            let rt_chain_id = block.chain_id;
+            let rt_height = block.height;
+            let rt_timestamp = block.timestamp;
+            let task = chain
+                .context()
+                .extra()
+                .thread_pool()
+                .run_send((), move |()| async move {
+                    let runtime = ContractSyncRuntime::new_for_block(
+                        execution_state_sender,
+                        rt_chain_id,
+                        rt_height,
+                        round,
+                        rt_timestamp,
+                        runtime_resource_controller,
+                        allow_application_logs,
+                    );
+                    runtime.run_block_loop(&command_rx)
+                })
+                .await;
+
+            ((command_tx, execution_state_receiver), task)
+        };
+
         let mut block_execution_tracker = BlockExecutionTracker::new(
             &mut resource_controller,
             published_blobs
@@ -729,6 +777,8 @@ where
             local_time,
             replaying_oracle_responses,
             block,
+            runtime_channels.0,
+            runtime_channels.1,
         )?;
 
         // Extract failure-policy parameters from exec_policy.
@@ -763,7 +813,12 @@ where
             }
 
             // Checkpoint before bundle transactions if using auto-retry.
+            // Snapshot Wasm instances (memory + globals) so we can restore them
+            // on failure instead of dropping and recreating.
             let checkpoint = if auto_retry && is_bundle {
+                block_execution_tracker
+                    .snapshot_runtime_instances(chain)
+                    .await?;
                 Some((
                     chain.clone_unchecked()?,
                     block_execution_tracker.create_checkpoint(),
@@ -809,6 +864,11 @@ where
             // Restore checkpoint.
             *chain = saved_chain;
             block_execution_tracker.restore_checkpoint(&saved_tracker);
+            // Restore Wasm instance snapshots so their memory and globals are
+            // back to pre-execution state, matching what the committed path sees.
+            block_execution_tracker
+                .restore_runtime_snapshots(chain)
+                .await?;
 
             let all_messages_never_reject = !never_reject_application_ids.is_empty()
                 && incoming_bundle.messages().all(|posted_msg| {
@@ -919,14 +979,99 @@ where
             previous_event_blocks.insert(stream, (hash, height));
         }
 
+        // Take channels from the tracker before consuming it, so we can release
+        // the mutable borrow on resource_controller.
+        let (command_tx, mut execution_state_receiver) = block_execution_tracker.take_channels();
+
+        let num_transactions = block.transactions.len();
+        let (messages, oracle_responses, events, blobs, operation_results, mut resource_tracker) =
+            block_execution_tracker.finalize(num_transactions);
+
+        // Signal the block-level runtime to finalize all loaded contract instances
+        // (which triggers contract.store() calls) and then shut down.
+        {
+            use futures::StreamExt as _;
+
+            let finalize_context = FinalizeContext {
+                authenticated_owner: block.authenticated_owner,
+                chain_id: block.chain_id,
+                height: block.height,
+                round,
+            };
+
+            // Compute the chain's available balance so finalize fuel costs are
+            // properly deducted (store() fuel should be paid for).
+            let initial_balance = resource_controller
+                .with_state(&mut chain.system)
+                .await
+                .map_err(|error| ChainError::InternalError(error.to_string()))?
+                .balance()
+                .map_err(|error| ChainError::InternalError(error.to_string()))?;
+
+            command_tx
+                .send(RuntimeCommand::FinalizeAll {
+                    context: finalize_context,
+                    tracker: Box::new(resource_tracker),
+                    initial_balance,
+                })
+                .map_err(|_| {
+                    ChainError::InternalError("Runtime thread stopped unexpectedly".to_string())
+                })?;
+
+            // Handle remaining state requests (write_batch from finalize) until channel closes.
+            let mut txn_tracker = TransactionTracker::default();
+            let mut actor = linera_execution::execution_state_actor::ExecutionStateActor::new(
+                chain,
+                &mut txn_tracker,
+                &mut resource_controller,
+            );
+            let handle_result = async {
+                while let Some(request) = execution_state_receiver.next().await {
+                    if let linera_execution::execution_state_actor::ExecutionRequest::ActionComplete {
+                        ..
+                    } = request
+                    {
+                        continue;
+                    }
+                    actor
+                        .handle_request(request)
+                        .await
+                        .map_err(|error| ChainError::InternalError(error.to_string()))?;
+                }
+                Ok::<(), ChainError>(())
+            }
+            .await;
+
+            // Always await the runtime thread to avoid leaking it, even if
+            // handle_request failed above.
+            let runtime_result = contract_runtime_task.await.map_err(|error| {
+                ChainError::InternalError(format!("Runtime thread failed: {error}"))
+            });
+
+            // Propagate the first error encountered.
+            handle_result?;
+
+            // Use the runtime controller's final tracker (which includes fuel consumed
+            // during finalize) as the authoritative resource tracker for the block.
+            let runtime_resource_controller = runtime_result?.map_err(|error| {
+                ChainError::InternalError(format!("Runtime finalization failed: {error}"))
+            })?;
+            resource_tracker = runtime_resource_controller.tracker;
+
+            // Merge the balance delta from finalize back into the chain's balance.
+            resource_controller
+                .with_state(&mut chain.system)
+                .await
+                .map_err(|error| ChainError::InternalError(error.to_string()))?
+                .merge_balance(initial_balance, runtime_resource_controller.account)
+                .map_err(|error| ChainError::InternalError(error.to_string()))?;
+        }
+
         let state_hash = {
             #[cfg(with_metrics)]
             let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency_us();
             chain.crypto_hash_mut().await?
         };
-
-        let (messages, oracle_responses, events, blobs, operation_results, resource_tracker) =
-            block_execution_tracker.finalize(block.transactions.len());
 
         Ok((
             BlockExecutionOutcome {

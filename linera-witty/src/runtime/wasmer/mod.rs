@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
     AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
-    Module, Store, StoreMut, StoreObjects, StoreRef,
+    Module, Mutability, Store, StoreMut, StoreObjects, StoreRef, Value,
 };
 
 pub use self::{parameters::WasmerParameters, results::WasmerResults};
@@ -120,11 +120,76 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
     }
 }
 
+/// Snapshot of a Wasmer instance's mutable state (linear memory and mutable globals).
+pub struct WasmInstanceSnapshot {
+    memory_data: Vec<u8>,
+    globals: Vec<(String, Value)>,
+}
+
+impl WasmInstanceSnapshot {
+    /// Returns the size of the memory snapshot in bytes.
+    pub fn memory_size(&self) -> usize {
+        self.memory_data.len()
+    }
+
+    /// Returns the number of globals in the snapshot.
+    pub fn globals_count(&self) -> usize {
+        self.globals.len()
+    }
+}
+
 impl<UserData> EntrypointInstance<UserData> {
     /// Returns mutable references to the [`Store`] and the [`wasmer::Instance`] stored inside this
     /// [`EntrypointInstance`].
     pub fn as_store_and_instance_mut(&mut self) -> (StoreMut<'_>, &mut wasmer::Instance) {
         (self.store.as_store_mut(), &mut self.instance)
+    }
+
+    /// Creates a snapshot of the Wasm instance's mutable state (memory and globals).
+    pub fn create_snapshot(&mut self) -> WasmInstanceSnapshot {
+        let memory_data = self
+            .instance
+            .exports
+            .iter()
+            .memories()
+            .next()
+            .map(|(_name, memory)| {
+                memory
+                    .view(&self.store)
+                    .copy_to_vec()
+                    .expect("Failed to copy Wasm memory")
+            })
+            .unwrap_or_default();
+
+        let mut globals = Vec::new();
+        for (name, global) in self.instance.exports.iter().globals() {
+            if global.ty(&self.store).mutability == Mutability::Var {
+                globals.push((name.clone(), global.get(&mut self.store)));
+            }
+        }
+
+        WasmInstanceSnapshot {
+            memory_data,
+            globals,
+        }
+    }
+
+    /// Restores the Wasm instance's mutable state from a snapshot.
+    pub fn restore_snapshot(&mut self, snapshot: &WasmInstanceSnapshot) {
+        if let Some((_name, memory)) = self.instance.exports.iter().memories().next() {
+            memory
+                .view(&self.store)
+                .write(0, &snapshot.memory_data)
+                .expect("Failed to restore Wasm memory from snapshot");
+        }
+
+        for (name, value) in &snapshot.globals {
+            if let Some(Extern::Global(global)) = self.instance.exports.get_extern(name) {
+                global
+                    .set(&mut self.store, value.clone())
+                    .expect("Failed to restore Wasm global from snapshot");
+            }
+        }
     }
 }
 

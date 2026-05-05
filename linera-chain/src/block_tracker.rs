@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use custom_debug_derive::Debug;
+use futures::channel::mpsc;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
@@ -12,9 +13,12 @@ use linera_base::{
     identifiers::{AccountOwner, BlobId, ChainId, StreamId},
 };
 use linera_execution::{
-    execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
-    ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    execution_state_actor::{
+        ExecutionRequest, ExecutionStateActor, RuntimeChannels, RuntimeCommand,
+    },
+    ExecutionRuntimeContext, ExecutionStateView, Message, MessageContext, MessageKind,
+    OperationContext, OutgoingMessage, ResourceController, ResourceTracker,
+    SystemExecutionStateView, TransactionOutcome, TransactionTracker,
 };
 use linera_views::context::Context;
 use tracing::instrument;
@@ -58,6 +62,11 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
 
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
+
+    /// Command channel sender to the block-level contract runtime thread.
+    pub(crate) command_tx: std::sync::mpsc::Sender<RuntimeCommand>,
+    /// Receiver for state requests from the block-level contract runtime thread.
+    pub(crate) execution_state_receiver: mpsc::UnboundedReceiver<ExecutionRequest>,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -71,6 +80,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         local_time: Timestamp,
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         proposal: &ProposedBlock,
+        command_tx: std::sync::mpsc::Sender<RuntimeCommand>,
+        execution_state_receiver: mpsc::UnboundedReceiver<ExecutionRequest>,
     ) -> Result<Self, ChainError> {
         resource_controller
             .track_block_size(EMPTY_BLOCK_SIZE)
@@ -93,7 +104,27 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
+            command_tx,
+            execution_state_receiver,
         })
+    }
+
+    /// Takes ownership of the runtime channels, leaving dummy values in the tracker.
+    /// Used before finalization to release the tracker's borrow on `resource_controller`.
+    pub(crate) fn take_channels(
+        &mut self,
+    ) -> (
+        std::sync::mpsc::Sender<RuntimeCommand>,
+        mpsc::UnboundedReceiver<ExecutionRequest>,
+    ) {
+        // Create dummy channels to swap out the real ones. The tracker won't be
+        // used after finalization so these will never be read.
+        let (dummy_tx, _dummy_rx) = std::sync::mpsc::channel();
+        let (_dummy_sender, dummy_receiver) = mpsc::unbounded();
+        let command_tx = std::mem::replace(&mut self.command_tx, dummy_tx);
+        let execution_state_receiver =
+            std::mem::replace(&mut self.execution_state_receiver, dummy_receiver);
+        (command_tx, execution_state_receiver)
     }
 
     /// Executes a transaction in the context of the block.
@@ -147,8 +178,16 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     authenticated_owner: self.authenticated_owner,
                     timestamp: self.timestamp,
                 };
-                let mut actor =
-                    ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
+                let runtime_channels = RuntimeChannels {
+                    command_tx: &self.command_tx,
+                    execution_state_receiver: &mut self.execution_state_receiver,
+                };
+                let mut actor = ExecutionStateActor::with_runtime(
+                    chain,
+                    &mut txn_tracker,
+                    self.resource_controller,
+                    runtime_channels,
+                );
                 Box::pin(actor.execute_operation(context, operation.clone()))
                     .await
                     .with_execution_context(chain_execution_context)?;
@@ -220,8 +259,16 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                 // Once a chain is closed, accepting incoming messages is not allowed.
                 ensure!(!chain.system.closed.get(), ChainError::ClosedChain);
 
-                let mut actor =
-                    ExecutionStateActor::new(chain, txn_tracker, self.resource_controller);
+                let runtime_channels = RuntimeChannels {
+                    command_tx: &self.command_tx,
+                    execution_state_receiver: &mut self.execution_state_receiver,
+                };
+                let mut actor = ExecutionStateActor::with_runtime(
+                    chain,
+                    txn_tracker,
+                    self.resource_controller,
+                    runtime_channels,
+                );
                 Box::pin(actor.execute_message(
                     context,
                     posted_message.message.clone(),
@@ -433,6 +480,70 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         self.blobs.truncate(*blobs_len);
         self.messages.truncate(*messages_len);
         self.operation_results.truncate(*operation_results_len);
+    }
+
+    /// Sends a command to the runtime thread and handles state requests until
+    /// `ActionComplete` is received.
+    async fn send_runtime_command<C>(
+        &mut self,
+        command: RuntimeCommand,
+        chain: &mut ExecutionStateView<C>,
+    ) -> Result<(), ChainError>
+    where
+        C: Context + Clone + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        use futures::StreamExt as _;
+
+        self.command_tx.send(command).map_err(|_| {
+            ChainError::InternalError("Runtime thread stopped unexpectedly".to_string())
+        })?;
+
+        let mut txn_tracker = TransactionTracker::default();
+        let mut actor = ExecutionStateActor::new(chain, &mut txn_tracker, self.resource_controller);
+        while let Some(request) = self.execution_state_receiver.next().await {
+            if let ExecutionRequest::ActionComplete { .. } = request {
+                break;
+            }
+            actor
+                .handle_request(request)
+                .await
+                .map_err(|error| ChainError::InternalError(error.to_string()))?;
+        }
+
+        Ok(())
+    }
+
+    /// Snapshots the Wasm state of all loaded contract instances on the runtime thread.
+    ///
+    /// Captures memory and globals of all loaded Wasm instances so they can be
+    /// restored later with `restore_runtime_snapshots`.
+    pub async fn snapshot_runtime_instances<C>(
+        &mut self,
+        chain: &mut ExecutionStateView<C>,
+    ) -> Result<(), ChainError>
+    where
+        C: Context + Clone + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        self.send_runtime_command(RuntimeCommand::SnapshotAllInstances, chain)
+            .await
+    }
+
+    /// Restores all loaded contract instances from their Wasm snapshots on the runtime thread.
+    ///
+    /// Undoes any Wasm-level state changes (memory, globals) that occurred since
+    /// the last `snapshot_runtime_instances` call.
+    pub async fn restore_runtime_snapshots<C>(
+        &mut self,
+        chain: &mut ExecutionStateView<C>,
+    ) -> Result<(), ChainError>
+    where
+        C: Context + Clone + 'static,
+        C::Extra: ExecutionRuntimeContext,
+    {
+        self.send_runtime_command(RuntimeCommand::RestoreAllInstances, chain)
+            .await
     }
 
     /// Finalizes the execution and returns the collected results.
