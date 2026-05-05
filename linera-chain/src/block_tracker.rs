@@ -211,10 +211,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                             runtime_channels,
                         )
                     }
-                    _ => ExecutionStateActor::new(
+                    _ => ExecutionStateActor::with_block_snapshots(
                         chain,
                         &mut txn_tracker,
                         self.resource_controller,
+                        &mut self.block_snapshots,
                     ),
                 };
                 Box::pin(actor.execute_operation(context, operation.clone()))
@@ -304,7 +305,12 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                             runtime_channels,
                         )
                     }
-                    _ => ExecutionStateActor::new(chain, txn_tracker, self.resource_controller),
+                    _ => ExecutionStateActor::with_block_snapshots(
+                        chain,
+                        txn_tracker,
+                        self.resource_controller,
+                        &mut self.block_snapshots,
+                    ),
                 };
                 Box::pin(actor.execute_message(
                     context,
