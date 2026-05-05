@@ -135,9 +135,11 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     user_context: UserInstance::UserContext,
     /// Whether contract log messages should be output.
     allow_application_logs: bool,
-    /// Wasm instance snapshots for checkpoint/restore, keyed by application ID.
-    wasm_snapshots: HashMap<ApplicationId, Box<dyn std::any::Any + Send>>,
-    /// Snapshot of `applications_to_finalize` taken alongside Wasm snapshots, so that
+    /// Contract-instance snapshots for checkpoint/restore, keyed by application ID.
+    /// Each backend (Wasmer, Wasmtime, REVM, ...) is responsible for producing and
+    /// restoring its own snapshot type via the `UserContract` trait.
+    instance_snapshots: HashMap<ApplicationId, Box<dyn std::any::Any + Send>>,
+    /// Snapshot of `applications_to_finalize` taken alongside instance snapshots, so that
     /// applications loaded only during a failed execution are not finalized.
     applications_to_finalize_snapshot: Option<Vec<ApplicationId>>,
 }
@@ -348,7 +350,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             scheduled_operations: Vec::new(),
             user_context,
             allow_application_logs,
-            wasm_snapshots: HashMap::new(),
+            instance_snapshots: HashMap::new(),
             applications_to_finalize_snapshot: None,
         }
     }
@@ -1278,7 +1280,11 @@ impl ContractSyncRuntimeHandle {
         self.execute(application_id, signer, closure)
     }
 
-    /// Snapshots the Wasm state (memory and globals) of all loaded contract instances.
+    /// Snapshots the mutable state of all loaded contract instances.
+    ///
+    /// The exact contents of each snapshot are defined by the backend running the
+    /// instance (e.g. memory + globals for Wasm; a no-op for backends that don't
+    /// support checkpointing, such as the EVM runtime).
     ///
     /// Also saves the current `applications_to_finalize` list so that applications
     /// loaded only during a failed execution are not finalized after a restore.
@@ -1295,32 +1301,33 @@ impl ContractSyncRuntimeHandle {
             })
             .collect::<Vec<_>>();
         for (app_id, snapshot) in snapshots {
-            runtime.wasm_snapshots.insert(app_id, snapshot);
+            runtime.instance_snapshots.insert(app_id, snapshot);
         }
         runtime.applications_to_finalize_snapshot = Some(runtime.applications_to_finalize.clone());
     }
 
-    /// Restores all loaded contract instances from their Wasm snapshots.
+    /// Restores all loaded contract instances from their previously taken snapshots.
     ///
-    /// This undoes any Wasm-level state changes (memory, globals) that occurred since
-    /// the last `snapshot_all_instances` call. Also restores the `applications_to_finalize`
-    /// list so that applications loaded only during the failed execution are not finalized.
-    /// The snapshots are preserved so that a subsequent restore still works correctly.
+    /// This undoes any backend-level state changes (e.g. memory and globals for Wasm)
+    /// that occurred since the last `snapshot_all_instances` call. Also restores the
+    /// `applications_to_finalize` list so that applications loaded only during the
+    /// failed execution are not finalized. The snapshots are preserved so that a
+    /// subsequent restore still works correctly.
     fn restore_all_snapshots(&self) {
         let mut runtime = self.inner();
-        for (app_id, snapshot) in &runtime.wasm_snapshots {
+        for (app_id, snapshot) in &runtime.instance_snapshots {
             if let Some(loaded) = runtime.loaded_applications.get(app_id) {
                 let mut instance = loaded.instance.try_lock().expect("instance not in use");
                 instance.restore_snapshot(snapshot.as_ref());
             }
         }
         // Remove applications that were loaded during the failed execution (after the
-        // snapshot was taken). They have no Wasm snapshot so their state is stale, and
-        // keeping them in `loaded_applications` would prevent `load_contract_instance`
+        // snapshot was taken). They have no instance snapshot so their state is stale,
+        // and keeping them in `loaded_applications` would prevent `load_contract_instance`
         // from re-loading them (the `Occupied` branch returns early without adding to
         // `applications_to_finalize`).
         let snapshot_keys = runtime
-            .wasm_snapshots
+            .instance_snapshots
             .keys()
             .copied()
             .collect::<HashSet<_>>();

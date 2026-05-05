@@ -54,9 +54,11 @@ pub enum RuntimeCommand {
         /// are deducted from this). This is the chain's balance at finalization time.
         initial_balance: Amount,
     },
-    /// Snapshot the Wasm state (memory + globals) of all loaded contract instances.
+    /// Snapshot the mutable state of all loaded contract instances. The contents of
+    /// each snapshot are defined by the backend running the instance (e.g. memory +
+    /// globals for Wasm; a no-op for backends that don't support checkpointing).
     SnapshotAllInstances,
-    /// Restore all loaded contract instances from their Wasm snapshots.
+    /// Restore all loaded contract instances from their previously taken snapshots.
     RestoreAllInstances,
 }
 
