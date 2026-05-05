@@ -246,14 +246,14 @@ impl<W: View> HistoricallyHashableView<W::Context, W> {
         Ok(hash)
     }
 
-    /// Forces the next save to record `hash` as the new stored hash, ignoring the inner
-    /// view's pending batch in the hash chain. The inner batch is still written to storage;
-    /// only its contribution to the chained hash is suppressed.
+    /// Forces the next save to record `hash` as the new stored hash, suppressing the
+    /// pending inner batch's contribution to the history. The inner batch is still written
+    /// to storage; only its effect on the chained hash is dropped.
     ///
-    /// Intended for bootstrapping a view from an external source — for example, seeding a
-    /// chain's execution state from a checkpoint blob whose resulting hash is already known
-    /// and signed by a quorum. After the next successful save, the hash chain resumes from
-    /// `hash`, so subsequent updates extend it normally.
+    /// Intended for restoring a view from a checkpoint whose hash is already known: the
+    /// caller seeds the inner state through the normal API and then declares the externally
+    /// known hash. After the next successful save, the history resumes from `hash`, so
+    /// subsequent updates extend it normally.
     ///
     /// The override is discarded by [`View::rollback`] and [`View::clear`].
     pub fn set_stored_hash(&mut self, hash: HasherOutput) {
@@ -699,7 +699,7 @@ mod tests {
         let hash_b = view_b.historical_hash().await?;
 
         assert_eq!(hash_a, hash_b);
-        // And both differ from a fresh chain that never had the forced hash.
+        // And both differ from a fresh view whose history never contained the forced hash.
         let context_c = MemoryContext::new_for_testing(());
         let mut view_c =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context_c.clone()).await?;
