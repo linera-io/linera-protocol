@@ -36,9 +36,6 @@ pub struct MemoryStoreConfig {
 #[cfg(with_testing)]
 const TEST_MEMORY_MAX_STREAM_QUERIES: usize = 10;
 
-/// The number of streams for the sync test store
-const SYNC_MEMORY_MAX_STREAM_QUERIES: usize = 10;
-
 /// The values in a partition.
 type MemoryStoreMap = BTreeMap<Vec<u8>, Vec<u8>>;
 
@@ -63,7 +60,6 @@ impl MemoryDatabases {
     fn sync_open(
         &mut self,
         namespace: &str,
-        max_stream_queries: usize,
         root_key: &[u8],
     ) -> Result<SyncMemoryStore, MemoryStoreError> {
         let Some(stores) = self.databases.get_mut(namespace) else {
@@ -77,7 +73,6 @@ impl MemoryDatabases {
         Ok(SyncMemoryStore {
             map,
             root_key: root_key.to_vec(),
-            max_stream_queries,
         })
     }
 
@@ -121,16 +116,21 @@ pub struct SyncMemoryStore {
     map: Arc<RwLock<MemoryStoreMap>>,
     /// The root key.
     root_key: Vec<u8>,
-    /// The maximum number of queries used for a stream.
-    max_stream_queries: usize,
 }
 
 /// A virtual DB client where data are persisted in memory.
 ///
 /// This is a thin wrapper around [`SyncMemoryStore`] whose async trait
-/// implementations delegate to the inner synchronous methods.
+/// implementations delegate to the inner synchronous methods. The
+/// `max_stream_queries` setting lives here because it is only meaningful
+/// for the async stream interface.
 #[derive(Clone)]
-pub struct MemoryStore(pub(crate) SyncMemoryStore);
+pub struct MemoryStore {
+    /// The maximum number of queries used for a stream.
+    max_stream_queries: usize,
+    /// The underlying synchronous store.
+    store: SyncMemoryStore,
+}
 
 impl WithError for MemoryDatabase {
     type Error = MemoryStoreError;
@@ -148,11 +148,10 @@ impl MemoryStore {
     /// Creates a `MemoryStore` that doesn't belong to any registered namespace.
     #[cfg(with_testing)]
     pub fn new_for_testing() -> Self {
-        Self(SyncMemoryStore {
-            map: Arc::default(),
-            root_key: Vec::new(),
+        Self {
             max_stream_queries: TEST_MEMORY_MAX_STREAM_QUERIES,
-        })
+            store: SyncMemoryStore::new_for_testing(),
+        }
     }
 }
 
@@ -160,44 +159,44 @@ impl ReadableKeyValueStore for MemoryStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
 
     fn max_stream_queries(&self) -> usize {
-        self.0.max_stream_queries()
+        self.max_stream_queries
     }
 
     fn root_key(&self) -> Result<Vec<u8>, MemoryStoreError> {
-        self.0.root_key()
+        self.store.root_key()
     }
 
     async fn read_value_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>, MemoryStoreError> {
-        self.0.read_value_bytes(key)
+        self.store.read_value_bytes(key)
     }
 
     async fn contains_key(&self, key: &[u8]) -> Result<bool, MemoryStoreError> {
-        self.0.contains_key(key)
+        self.store.contains_key(key)
     }
 
     async fn contains_keys(&self, keys: &[Vec<u8>]) -> Result<Vec<bool>, MemoryStoreError> {
-        self.0.contains_keys(keys)
+        self.store.contains_keys(keys)
     }
 
     async fn read_multi_values_bytes(
         &self,
         keys: &[Vec<u8>],
     ) -> Result<Vec<Option<Vec<u8>>>, MemoryStoreError> {
-        self.0.read_multi_values_bytes(keys)
+        self.store.read_multi_values_bytes(keys)
     }
 
     async fn find_keys_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
-        self.0.find_keys_by_prefix(key_prefix)
+        self.store.find_keys_by_prefix(key_prefix)
     }
 
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
-        self.0.find_key_values_by_prefix(key_prefix)
+        self.store.find_key_values_by_prefix(key_prefix)
     }
 }
 
@@ -205,26 +204,20 @@ impl WritableKeyValueStore for MemoryStore {
     const MAX_VALUE_SIZE: usize = usize::MAX;
 
     async fn write_batch(&self, batch: Batch) -> Result<(), MemoryStoreError> {
-        self.0.write_batch(batch)
+        self.store.write_batch(batch)
     }
 
     async fn clear_journal(&self) -> Result<(), MemoryStoreError> {
-        self.0.clear_journal()
+        self.store.clear_journal()
     }
 }
 
 impl SyncMemoryStore {
-    /// Returns the maximum number of stream queries.
-    pub fn max_stream_queries(&self) -> usize {
-        self.max_stream_queries
-    }
-
     /// Creates a `SyncMemoryStore` that doesn't belong to any registered namespace.
     pub fn new_for_testing() -> Self {
         Self {
             map: Arc::default(),
             root_key: Vec::new(),
-            max_stream_queries: SYNC_MEMORY_MAX_STREAM_QUERIES,
         }
     }
 }
@@ -355,8 +348,11 @@ impl KeyValueDatabase for MemoryDatabase {
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, MemoryStoreError> {
         let mut databases = MEMORY_DATABASES.lock().unwrap();
-        let sync_store = databases.sync_open(&self.namespace, self.max_stream_queries, root_key)?;
-        Ok(MemoryStore(sync_store))
+        let store = databases.sync_open(&self.namespace, root_key)?;
+        Ok(MemoryStore {
+            max_stream_queries: self.max_stream_queries,
+            store,
+        })
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, MemoryStoreError> {
