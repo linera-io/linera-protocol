@@ -20,9 +20,9 @@ use linera_base::{
 };
 use linera_execution::{
     committee::Committee, execution_state_actor::RuntimeCommand, runtime::ContractSyncRuntime,
-    system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView, FinalizeContext,
-    Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    system::EPOCH_STREAM_NAME, BlockExecutionMode, ExecutionRuntimeContext, ExecutionStateView,
+    FinalizeContext, Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome,
+    ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -721,51 +721,48 @@ where
             chain.system.used_blobs.insert(&blob_id)?;
         }
 
-        // Spawn a block-level contract runtime thread so that contract instances
-        // persist across actions within a block. This uses the cooperative thread pool
-        // (`run_send`) which works on both native (real threads) and web (web workers).
-        let (runtime_channels, contract_runtime_task) = {
-            let (command_tx, command_rx) = std::sync::mpsc::channel::<RuntimeCommand>();
-            let (execution_state_sender, execution_state_receiver) =
-                futures::channel::mpsc::unbounded();
+        // The execution runtime config selects between the threaded shared-memory
+        // path (a long-lived block-level worker driven over an mpsc channel) and
+        // the snapshot-based per-action path (each action spawns a fresh worker
+        // and snapshots cross the boundary by `Post`-able bytes). The default per
+        // target is set in `BlockExecutionMode::default`.
+        let runtime_config = chain.context().extra().execution_runtime_config();
+        let (runtime_channels, contract_runtime_task) = match runtime_config.block_execution_mode {
+            BlockExecutionMode::ThreadedSharedMemory => {
+                let (command_tx, command_rx) = std::sync::mpsc::channel::<RuntimeCommand>();
+                let (execution_state_sender, execution_state_receiver) =
+                    futures::channel::mpsc::unbounded();
 
-            let allow_application_logs = chain
-                .context()
-                .extra()
-                .execution_runtime_config()
-                .allow_application_logs;
+                let runtime_resource_controller = ResourceController::new(
+                    resource_controller.policy().clone(),
+                    ResourceTracker::default(),
+                    Amount::ZERO,
+                );
+                let rt_chain_id = block.chain_id;
+                let rt_height = block.height;
+                let rt_timestamp = block.timestamp;
+                let allow_application_logs = runtime_config.allow_application_logs;
+                let task = chain
+                    .context()
+                    .extra()
+                    .thread_pool()
+                    .run_send((), move |()| async move {
+                        let runtime = ContractSyncRuntime::new_for_block(
+                            execution_state_sender,
+                            rt_chain_id,
+                            rt_height,
+                            round,
+                            rt_timestamp,
+                            runtime_resource_controller,
+                            allow_application_logs,
+                        );
+                        runtime.run_block_loop(&command_rx)
+                    })
+                    .await;
 
-            // The runtime's controller uses the same policy as the main controller so
-            // that per-block limits (e.g. maximum_wasm_fuel_per_block) are enforced.
-            // Balance, tracker, and `is_free` are synchronized with each action via the
-            // command channel and therefore do not need meaningful initial values here.
-            let runtime_resource_controller = ResourceController::new(
-                resource_controller.policy().clone(),
-                ResourceTracker::default(),
-                Amount::ZERO,
-            );
-            let rt_chain_id = block.chain_id;
-            let rt_height = block.height;
-            let rt_timestamp = block.timestamp;
-            let task = chain
-                .context()
-                .extra()
-                .thread_pool()
-                .run_send((), move |()| async move {
-                    let runtime = ContractSyncRuntime::new_for_block(
-                        execution_state_sender,
-                        rt_chain_id,
-                        rt_height,
-                        round,
-                        rt_timestamp,
-                        runtime_resource_controller,
-                        allow_application_logs,
-                    );
-                    runtime.run_block_loop(&command_rx)
-                })
-                .await;
-
-            ((command_tx, execution_state_receiver), task)
+                (Some((command_tx, execution_state_receiver)), Some(task))
+            }
+            BlockExecutionMode::NonThreadedNotSharedMemory => (None, None),
         };
 
         let mut block_execution_tracker = BlockExecutionTracker::new(
@@ -777,8 +774,7 @@ where
             local_time,
             replaying_oracle_responses,
             block,
-            runtime_channels.0,
-            runtime_channels.1,
+            runtime_channels,
         )?;
 
         // Extract failure-policy parameters from exec_policy.
@@ -1028,15 +1024,20 @@ where
         }
 
         // Take channels from the tracker before consuming it, so we can release
-        // the mutable borrow on resource_controller.
-        let (command_tx, mut execution_state_receiver) = block_execution_tracker.take_channels();
+        // the mutable borrow on resource_controller. The channels are absent in
+        // the snapshot-based path.
+        let runtime_channels = block_execution_tracker.take_channels();
 
         let num_transactions = block.transactions.len();
         let (messages, oracle_responses, events, blobs, operation_results, mut resource_tracker) =
             block_execution_tracker.finalize(num_transactions);
 
-        // Signal the block-level runtime to finalize all loaded contract instances
-        // (which triggers contract.store() calls) and then shut down.
+        // In the threaded shared-memory path, signal the long-lived block worker to
+        // finalize all loaded contract instances (which triggers Contract::store calls)
+        // and then shut down. In the snapshot-based path, finalization is driven by
+        // the actor itself when consuming `block_snapshots`, so this branch is skipped.
+        if let (Some((command_tx, mut execution_state_receiver)), Some(contract_runtime_task)) =
+            (runtime_channels, contract_runtime_task)
         {
             use futures::StreamExt as _;
 

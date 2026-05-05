@@ -532,18 +532,51 @@ pub trait UserService {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 }
 
+/// How block execution dispatches actions to the contract runtime.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockExecutionMode {
+    /// Use a long-lived block-level runtime worker; commands flow over an mpsc
+    /// channel that lives in shared memory. Requires a target where Wasm modules
+    /// can cross worker boundaries via shared memory (i.e. native).
+    ThreadedSharedMemory,
+    /// Spawn a fresh runtime worker per action; the contract codes and the
+    /// per-application instance snapshots are `Post`ed at spawn time. The
+    /// worker restores from any provided snapshot, runs the action, and returns
+    /// updated snapshots. Works on every target.
+    NonThreadedNotSharedMemory,
+}
+
+impl Default for BlockExecutionMode {
+    fn default() -> Self {
+        // Native targets share memory natively, so the threaded path is fine; on
+        // web, Wasm modules cannot cross the worker boundary via shared memory
+        // and we have to fall back to the snapshot-based per-action path.
+        #[cfg(not(web))]
+        {
+            Self::ThreadedSharedMemory
+        }
+        #[cfg(web)]
+        {
+            Self::NonThreadedNotSharedMemory
+        }
+    }
+}
+
 /// Configuration options for the execution runtime available to applications.
 #[derive(Clone, Copy)]
 pub struct ExecutionRuntimeConfig {
     /// Whether contract log messages should be output.
     /// This is typically enabled for clients but disabled for validators.
     pub allow_application_logs: bool,
+    /// How block execution dispatches actions to the contract runtime.
+    pub block_execution_mode: BlockExecutionMode,
 }
 
 impl Default for ExecutionRuntimeConfig {
     fn default() -> Self {
         Self {
             allow_application_logs: true,
+            block_execution_mode: BlockExecutionMode::default(),
         }
     }
 }

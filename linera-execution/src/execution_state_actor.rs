@@ -981,11 +981,17 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        self.send_action_to_runtime(application_id, action, refund_grant_to, grant)
-            .await
+        self.run_user_action_threaded_shared_memory(
+            application_id,
+            action,
+            refund_grant_to,
+            grant,
+        )
+        .await
     }
 
-    /// Sends a user action to the block-level shared runtime thread.
+    /// Threaded shared-memory path: dispatches the user action to the long-lived
+    /// block-level runtime worker via the mpsc channel.
     ///
     /// Loads contract code and dependencies, sends the action via the command channel,
     /// then handles state requests until `ActionComplete` is received. The main
@@ -994,7 +1000,7 @@ where
     /// policy-driven limits (e.g. `maximum_wasm_fuel_per_block`) are enforced across
     /// all actions in the block.
     #[instrument(skip_all, fields(application_id = %application_id))]
-    async fn send_action_to_runtime(
+    async fn run_user_action_threaded_shared_memory(
         &mut self,
         application_id: ApplicationId,
         action: UserAction,
