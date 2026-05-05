@@ -186,6 +186,12 @@ where
             self.instance.restore_snapshot(snapshot);
         }
     }
+
+    fn restore_snapshot_from_bytes(&mut self, bytes: &[u8]) -> Result<(), ExecutionError> {
+        let snapshot: linera_witty::wasmtime::WasmInstanceSnapshot = bcs::from_bytes(bytes)?;
+        self.instance.restore_snapshot(&snapshot);
+        Ok(())
+    }
 }
 
 impl<Runtime> crate::UserService for WasmtimeServiceInstance<Runtime>

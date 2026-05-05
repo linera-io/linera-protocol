@@ -200,6 +200,12 @@ where
             self.instance.restore_snapshot(snapshot);
         }
     }
+
+    fn restore_snapshot_from_bytes(&mut self, bytes: &[u8]) -> Result<(), ExecutionError> {
+        let snapshot: linera_witty::wasmer::WasmInstanceSnapshot = bcs::from_bytes(bytes)?;
+        self.instance.restore_snapshot(&snapshot);
+        Ok(())
+    }
 }
 
 impl<Runtime: 'static> crate::UserService for WasmerServiceInstance<Runtime> {

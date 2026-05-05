@@ -1337,6 +1337,11 @@ where
     fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) {
         // Since no snapshot, the restoring is a noop.
     }
+
+    fn restore_snapshot_from_bytes(&mut self, _bytes: &[u8]) -> Result<(), ExecutionError> {
+        // The EVM runtime does not produce snapshots, so there is nothing to restore.
+        Ok(())
+    }
 }
 
 fn process_execution_result(

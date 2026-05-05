@@ -333,6 +333,10 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
     }
 
     fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) {}
+
+    fn restore_snapshot_from_bytes(&mut self, _bytes: &[u8]) -> Result<(), ExecutionError> {
+        Ok(())
+    }
 }
 
 impl UserService for MockApplicationInstance<ServiceSyncRuntimeHandle> {

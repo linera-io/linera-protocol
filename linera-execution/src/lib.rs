@@ -524,6 +524,16 @@ pub trait UserContract {
     /// Restores the contract instance's mutable state from a snapshot previously
     /// produced by `create_snapshot`.
     fn restore_snapshot(&mut self, snapshot: &dyn Snapshot);
+
+    /// Restores the contract instance's mutable state from the BCS-encoded bytes
+    /// of a snapshot previously produced by `create_snapshot().to_bytes()`.
+    ///
+    /// Used by the snapshot-based per-action execution path on web, where a
+    /// snapshot has to cross the worker boundary as plain bytes (the `Box<dyn
+    /// Snapshot>` value can't be `Post`ed directly). Each Wasm backend deserializes
+    /// into its own `WasmInstanceSnapshot` type; backends without snapshots
+    /// (e.g. the EVM runtime) treat this as a no-op.
+    fn restore_snapshot_from_bytes(&mut self, bytes: &[u8]) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
