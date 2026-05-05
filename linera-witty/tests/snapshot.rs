@@ -196,7 +196,7 @@ mod wasmer_tests {
     #[test]
     fn all_numeric_types_roundtrip() {
         let engine = engine();
-        let module = Module::new(&engine, &wat::parse_str(WAT).unwrap()).unwrap();
+        let module = Module::new(&engine, wat::parse_str(WAT).unwrap()).unwrap();
 
         // Mutate every numeric global type and a slice of memory, snapshot, encode.
         let bytes = {
@@ -216,7 +216,7 @@ mod wasmer_tests {
     #[test]
     fn two_snapshots_are_independent() {
         let engine = engine();
-        let module = Module::new(&engine, &wat::parse_str(WAT).unwrap()).unwrap();
+        let module = Module::new(&engine, wat::parse_str(WAT).unwrap()).unwrap();
 
         // Drive one instance through two distinct states, capturing a snapshot at each.
         let (bytes_a, bytes_b) = {
@@ -354,7 +354,7 @@ mod wasmtime_tests {
     #[test]
     fn all_numeric_types_roundtrip() {
         let engine = Engine::default();
-        let module = Module::new(&engine, &wat::parse_str(WAT).unwrap()).unwrap();
+        let module = Module::new(&engine, wat::parse_str(WAT).unwrap()).unwrap();
 
         let bytes = {
             let mut instance = build_instance(&engine, &module);
@@ -372,7 +372,7 @@ mod wasmtime_tests {
     #[test]
     fn two_snapshots_are_independent() {
         let engine = Engine::default();
-        let module = Module::new(&engine, &wat::parse_str(WAT).unwrap()).unwrap();
+        let module = Module::new(&engine, wat::parse_str(WAT).unwrap()).unwrap();
 
         let (bytes_a, bytes_b) = {
             let mut instance = build_instance(&engine, &module);

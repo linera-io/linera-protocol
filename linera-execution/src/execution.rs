@@ -259,7 +259,7 @@ where
             height: context.height,
             round: context.round,
         };
-        self.with_block_runtime(
+        Box::pin(self.with_block_runtime(
             txn_tracker,
             resource_controller,
             context.chain_id,
@@ -268,7 +268,7 @@ where
             context.timestamp,
             finalize_context,
             async move |actor| actor.execute_operation(context, operation).await,
-        )
+        ))
         .await
     }
 
@@ -287,7 +287,7 @@ where
             height: context.height,
             round: context.round,
         };
-        self.with_block_runtime(
+        Box::pin(self.with_block_runtime(
             txn_tracker,
             resource_controller,
             context.chain_id,
@@ -296,7 +296,7 @@ where
             context.timestamp,
             finalize_context,
             async move |actor| actor.execute_message(context, message, grant).await,
-        )
+        ))
         .await
     }
 }
