@@ -149,8 +149,6 @@ where
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
-            min_active_epoch: Epoch::ZERO,
-            max_active_epoch: Epoch::ZERO,
             application_permissions: Default::default(),
         };
         let admin_description = ChainDescription::new(origin, config, Timestamp::from(0));
@@ -277,8 +275,6 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership,
-            min_active_epoch: self.admin_description.config().min_active_epoch,
-            max_active_epoch: self.admin_description.config().max_active_epoch,
             balance,
             application_permissions: Default::default(),
         };
@@ -312,8 +308,6 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
-            min_active_epoch: self.admin_description.config().min_active_epoch,
-            max_active_epoch: self.admin_description.config().max_active_epoch,
             balance,
             application_permissions: Default::default(),
         };
@@ -2858,7 +2852,7 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
+        assert!(user_chain.execution_state.system.committee_hash.get().is_some());
     }
     let proposal3 = make_first_block(user_id)
         .with_incoming_bundle(IncomingBundle {
@@ -2920,7 +2914,10 @@ where
             *user_chain.execution_state.system.admin_chain_id.get(),
             Some(admin_chain_id)
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
+        assert_eq!(
+            *user_chain.execution_state.system.committee_hash.get(),
+            Some(blob_hash)
+        );
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
     }
@@ -3129,7 +3126,6 @@ where
         .await?;
 
     {
-        // The transfer was started..
         let user_chain = env.worker().chain_state_view(user_id).await?;
         assert!(user_chain.is_active().await?);
         assert_eq!(
@@ -3142,13 +3138,14 @@ where
         );
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
-        // .. but the message hasn't gone through.
+        // The bundle from the now-revoked epoch is delivered to the admin chain anyway:
+        // per-chain enforcement of revocation has been removed.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
-        assert!(admin_chain.inboxes.indices().await?.is_empty());
+        assert!(!admin_chain.inboxes.indices().await?.is_empty());
     }
 
-    // Force the admin chain to receive the money nonetheless by anticipation.
+    // Have the admin chain process the bundle in a new-epoch block.
     let proposal2 = make_child_block(&certificate1.clone().into_value())
         .with_epoch(1)
         .with_incoming_bundle(IncomingBundle {
@@ -3183,28 +3180,6 @@ where
         .await?;
 
     {
-        // The admin chain has an anticipated message.
-        let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
-        assert!(admin_chain.is_active().await?);
-        assert!(admin_chain
-            .inboxes
-            .try_load_entry(&user_id)
-            .await?
-            .unwrap()
-            .removed_bundles
-            .front()
-            .await?
-            .is_some());
-    }
-
-    // Try again to execute the transfer from the user chain to the admin chain.
-    // This time, the epoch verification should be overruled.
-    env.worker()
-        .fully_handle_certificate_with_notifications(certificate0.clone(), &())
-        .await?;
-
-    {
-        // The admin chain has no more anticipated messages.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
@@ -3267,9 +3242,6 @@ where
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
     let env = TestEnvironment::new(&mut storage_builder, true, false).await?;
-    // CrossChainUpdateHelper only checks `contains_key` on this map, so a dummy hash
-    // per known epoch is enough.
-    let committees = BTreeMap::from([(Epoch::from(1), CryptoHash::test_hash("epoch 1"))]);
 
     let chain_0 = env.admin_description.clone();
     let chain_1 = dummy_chain_description(1);
@@ -3370,10 +3342,7 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 
     let helper = CrossChainUpdateHelper {
         allow_messages_from_deprecated_epochs: true,
-        current_epoch: Epoch::from(1),
-        committees: &committees,
     };
-    // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
     assert_eq!(
         helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
         without_epochs(&bundles01)
@@ -3403,46 +3372,14 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         Err(WorkerError::InvalidCrossChainRequest)
     );
 
-    let helper = CrossChainUpdateHelper {
-        allow_messages_from_deprecated_epochs: false,
-        current_epoch: Epoch::from(1),
-        committees: &committees,
-    };
-    // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
-    assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
-        vec![]
-    );
-    // A certificate with a recent epoch certifies all the previous blocks.
+    // Mixing several epochs is allowed.
     assert_eq!(
         helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles0123.clone())?,
-        without_epochs(&bundles012)
+        without_epochs(&bundles0123)
     );
-    // Received heights is still removing prefixes.
     assert_eq!(
         helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles012.clone())?,
         without_epochs(bundles1.iter().chain(&bundles2))
-    );
-    // Anticipated messages re-certify blocks up to the given height.
-    assert_eq!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::from(1),
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )?,
-        without_epochs(&bundles1)
-    );
-    assert_eq!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )?,
-        without_epochs(&bundles01)
     );
     Ok(())
 }
@@ -4065,7 +4002,7 @@ where
     // At time 0 we don't vote for fallback mode.
     let query = ChainInfoQuery::new(chain_id)
         .with_fallback()
-        .with_committees();
+        .with_committee_hash();
     let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
@@ -4131,12 +4068,7 @@ where
         .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
-    let committee_hash = *response
-        .info
-        .requested_committees
-        .unwrap()
-        .get(&response.info.epoch)
-        .unwrap();
+    let committee_hash = response.info.requested_committee_hash.unwrap();
     let committee = env
         .executing_worker()
         .storage

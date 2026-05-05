@@ -313,13 +313,9 @@ ChainInfo:
     - requested_owner_balance:
         OPTION:
           TYPENAME: Amount
-    - requested_committees:
+    - requested_committee_hash:
         OPTION:
-          MAP:
-            KEY:
-              TYPENAME: Epoch
-            VALUE:
-              TYPENAME: CryptoHash
+          TYPENAME: CryptoHash
     - requested_pending_message_bundles:
         SEQ:
           TYPENAME: IncomingBundle
@@ -347,7 +343,7 @@ ChainInfoQuery:
           TYPENAME: BlockHeight
     - request_owner_balance:
         TYPENAME: AccountOwner
-    - request_committees: BOOL
+    - request_committee_hash: BOOL
     - request_pending_message_bundles: BOOL
     - request_received_log_excluding_first_n:
         OPTION: U64
@@ -575,10 +571,6 @@ InitialChainConfig:
     - ownership:
         TYPENAME: ChainOwnership
     - epoch:
-        TYPENAME: Epoch
-    - min_active_epoch:
-        TYPENAME: Epoch
-    - max_active_epoch:
         TYPENAME: Epoch
     - balance:
         TYPENAME: Amount
@@ -1308,10 +1300,6 @@ SystemOperation:
         NEWTYPE:
           TYPENAME: Epoch
     12:
-      ProcessRemovedEpoch:
-        NEWTYPE:
-          TYPENAME: Epoch
-    13:
       UpdateStreams:
         NEWTYPE:
           SEQ:

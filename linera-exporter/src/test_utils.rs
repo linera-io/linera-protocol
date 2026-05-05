@@ -222,7 +222,7 @@ impl ValidatorNode for DummyValidator {
             next_block_height: BlockHeight::ZERO,
             state_hash: None,
             requested_owner_balance: None,
-            requested_committees: None,
+            requested_committee_hash: None,
             requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,
@@ -501,8 +501,6 @@ pub(crate) async fn make_simple_state_with_blobs<S: Storage>(
             epoch: Default::default(),
             balance: Default::default(),
             application_permissions: Default::default(),
-            min_active_epoch: Default::default(),
-            max_active_epoch: Default::default(),
         },
         Timestamp::now(),
     );

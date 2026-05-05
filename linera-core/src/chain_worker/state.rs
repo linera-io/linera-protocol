@@ -2061,8 +2061,8 @@ where
         self.initialize_and_save_if_needed().await?;
         let chain = &self.chain;
         let mut info = ChainInfo::from_chain_view(chain).await?;
-        if query.request_committees {
-            info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
+        if query.request_committee_hash {
+            info.requested_committee_hash = *chain.execution_state.system.committee_hash.get();
         }
         if query.request_owner_balance == AccountOwner::CHAIN {
             info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
@@ -2318,22 +2318,18 @@ fn check_block_epoch(
 }
 
 /// Helper type for handling cross-chain updates.
-pub(crate) struct CrossChainUpdateHelper<'a> {
+pub(crate) struct CrossChainUpdateHelper {
     pub(crate) allow_messages_from_deprecated_epochs: bool,
-    pub(crate) current_epoch: Epoch,
-    pub(crate) committees: &'a BTreeMap<Epoch, CryptoHash>,
 }
 
-impl<'a> CrossChainUpdateHelper<'a> {
+impl CrossChainUpdateHelper {
     /// Creates a new [`CrossChainUpdateHelper`].
-    fn new<C>(config: &ChainWorkerConfig, chain: &'a ChainStateView<C>) -> Self
+    fn new<C>(config: &ChainWorkerConfig, _chain: &ChainStateView<C>) -> Self
     where
         C: Context + Clone + 'static,
     {
         CrossChainUpdateHelper {
             allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
-            current_epoch: *chain.execution_state.system.epoch.get(),
-            committees: chain.execution_state.system.committees.get(),
         }
     }
 
@@ -2346,35 +2342,29 @@ impl<'a> CrossChainUpdateHelper<'a> {
     /// * Basic invariants are checked for good measure. We still crucially trust
     ///   the worker of the sending chain to have verified and executed the blocks
     ///   correctly.
-    pub(crate) fn select_message_bundles(
+    pub(crate) fn select_message_bundles<'a>(
         &self,
         origin: &'a ChainId,
         recipient: ChainId,
         next_height_to_receive: BlockHeight,
-        last_anticipated_block_height: Option<BlockHeight>,
+        _last_anticipated_block_height: Option<BlockHeight>,
         mut bundles: Vec<(Epoch, MessageBundle)>,
     ) -> Result<Vec<MessageBundle>, WorkerError> {
+        // TODO: Once the per-chain `committees` map is gone, validators still need to
+        // refuse messages whose epoch was revoked on the admin chain. That check belongs
+        // here and should consult the admin chain's `REMOVED_EPOCH_STREAM`.
+        let _ = self.allow_messages_from_deprecated_epochs;
         let mut latest_height = None;
         let mut skipped_len = 0;
-        let mut trusted_len = 0;
-        for (i, (epoch, bundle)) in bundles.iter().enumerate() {
+        for (i, (_epoch, bundle)) in bundles.iter().enumerate() {
             // Make sure that heights are not decreasing.
             ensure!(
                 latest_height <= Some(bundle.height),
                 WorkerError::InvalidCrossChainRequest
             );
             latest_height = Some(bundle.height);
-            // Check if the block has been received already.
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
-            }
-            // Check if the height is trusted or the epoch is trusted.
-            if self.allow_messages_from_deprecated_epochs
-                || Some(bundle.height) <= last_anticipated_block_height
-                || *epoch >= self.current_epoch
-                || self.committees.contains_key(epoch)
-            {
-                trusted_len = i + 1;
             }
         }
         if skipped_len > 0 {
@@ -2384,22 +2374,10 @@ impl<'a> CrossChainUpdateHelper<'a> {
                 sample_bundle.height,
             );
         }
-        if skipped_len < bundles.len() && trusted_len < bundles.len() {
-            let (sample_epoch, sample_bundle) = &bundles[trusted_len];
-            warn!(
-                "Refusing messages to {recipient:.8} from {origin:} at height {} \
-                 because the epoch {} is not trusted any more",
-                sample_bundle.height, sample_epoch,
-            );
-        }
-        let bundles = if skipped_len < trusted_len {
-            bundles
-                .drain(skipped_len..trusted_len)
-                .map(|(_, bundle)| bundle)
-                .collect()
-        } else {
-            vec![]
-        };
+        let bundles = bundles
+            .drain(skipped_len..)
+            .map(|(_, bundle)| bundle)
+            .collect();
         Ok(bundles)
     }
 }

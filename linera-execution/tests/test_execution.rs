@@ -1,13 +1,13 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, vec};
+use std::vec;
 
 use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin, Epoch,
+        Amount, ApplicationPermissions, Blob, BlockHeight, ChainDescription, ChainOrigin,
         InitialChainConfig, Resources, SendMessageRequest, Timestamp,
     },
     identifiers::{Account, AccountOwner, BlobType},
@@ -1248,10 +1248,8 @@ async fn test_open_chain() -> anyhow::Result<()> {
     assert_eq!(*child_view.system.balance.get(), Amount::ONE);
     assert_eq!(*child_view.system.ownership.get().await?, child_ownership);
     assert_eq!(
-        *child_view.system.committees.get(),
-        [(Epoch::ZERO, committee_blob.id().hash)]
-            .into_iter()
-            .collect::<BTreeMap<_, _>>()
+        *child_view.system.committee_hash.get(),
+        Some(committee_blob.id().hash)
     );
     assert_eq!(
         *child_view.system.application_permissions.get().await?,

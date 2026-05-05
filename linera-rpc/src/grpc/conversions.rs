@@ -631,7 +631,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             .unwrap_or_default();
 
         Ok(Self {
-            request_committees: chain_info_query.request_committees,
+            request_committee_hash: chain_info_query.request_committee_hash,
             request_owner_balance: try_proto_convert(chain_info_query.request_owner_balance)?,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             chain_id: try_proto_convert(chain_info_query.chain_id)?,
@@ -663,7 +663,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
 
         Ok(Self {
             chain_id: Some(chain_info_query.chain_id.into()),
-            request_committees: chain_info_query.request_committees,
+            request_committee_hash: chain_info_query.request_committee_hash,
             request_owner_balance,
             request_pending_message_bundles: chain_info_query.request_pending_message_bundles,
             test_next_block_height: chain_info_query.test_next_block_height.map(Into::into),
@@ -1194,7 +1194,7 @@ pub mod tests {
             timestamp: Timestamp::default(),
             next_block_height: BlockHeight::ZERO,
             state_hash: None,
-            requested_committees: None,
+            requested_committee_hash: None,
             requested_owner_balance: None,
             requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
@@ -1229,7 +1229,7 @@ pub mod tests {
         let chain_info_query_some = ChainInfoQuery {
             chain_id: dummy_chain_id(0),
             test_next_block_height: Some(BlockHeight::from(10)),
-            request_committees: false,
+            request_committee_hash: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
             request_received_log_excluding_first_n: None,

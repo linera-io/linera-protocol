@@ -458,16 +458,6 @@ mod from {
                 })?;
                 Ok(SystemOperation::ProcessNewEpoch(Epoch(epoch_val as u32)))
             }
-            "ProcessRemovedEpoch" => {
-                let epoch_val = system_op.epoch.ok_or_else(|| {
-                    ConversionError::UnexpectedCertificateType(
-                        "Missing epoch for ProcessRemovedEpoch operation".to_string(),
-                    )
-                })?;
-                Ok(SystemOperation::ProcessRemovedEpoch(Epoch(
-                    epoch_val as u32,
-                )))
-            }
             "UpdateStreams" => {
                 let update_streams = system_op.update_streams.ok_or_else(|| {
                     ConversionError::UnexpectedCertificateType(

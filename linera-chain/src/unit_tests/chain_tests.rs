@@ -89,8 +89,6 @@ impl TestEnvironment {
         let config = InitialChainConfig {
             ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
             epoch: Epoch::ZERO,
-            min_active_epoch: Epoch::ZERO,
-            max_active_epoch: Epoch::ZERO,
             balance: Amount::from_tokens(10),
             application_permissions: Default::default(),
         };

@@ -240,8 +240,8 @@ message ChainInfoQuery {
   // Optionally test that the block height is as expected
   optional BlockHeight test_next_block_height = 2;
 
-  // Query the current committees
-  bool request_committees = 3;
+  // Query the current committee hash
+  bool request_committee_hash = 3;
 
   // Query the received messages that are waiting to be picked in the next block.
   bool request_pending_message_bundles = 4;
