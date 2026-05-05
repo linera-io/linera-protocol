@@ -736,8 +736,7 @@ mod tests {
 
         let context_with = MemoryContext::new_for_testing(());
         let mut with_override =
-            HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context_with.clone())
-                .await?;
+            HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context_with.clone()).await?;
         with_override.set(11);
         let mut batch = Batch::new();
         with_override.pre_save(&mut batch)?;
@@ -787,5 +786,4 @@ mod tests {
 
         Ok(())
     }
-
 }
