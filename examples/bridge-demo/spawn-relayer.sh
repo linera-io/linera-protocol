@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Spawn a single linera-bridge relayer container against an already-deployed
-# local stack. No deploys, no app registrations.
+# Spawn a single linera-bridge relayer container against an external network
+# where contracts and Linera apps are already deployed (e.g. Base Sepolia +
+# testnet Conway). No deploys, no app registrations.
+#
+# For full local development (anvil + local validator + frontend) use
+# `make demo` from linera-bridge/ instead — that path uses setup.sh.
 #
 # Usage:
 #   ./spawn-relayer.sh --env-file PATH --data-dir PATH [--env-secret-file PATH]
