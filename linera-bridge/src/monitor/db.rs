@@ -466,6 +466,33 @@ mod tests {
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
+    async fn test_partial_processing_splits_pending_and_finished(use_file: bool) {
+        let db = open_db(use_file).await;
+
+        let mut keys = Vec::new();
+        for log_index in 0..5 {
+            let mut deposit = test_deposit();
+            deposit.key.log_index = log_index;
+            db.insert_deposit(&deposit).await.unwrap();
+            keys.push(deposit.key);
+        }
+        assert_eq!(db.pending_deposits_count().await.unwrap(), 5);
+
+        for key in &keys[..2] {
+            db.update_deposit_status(key, "completed").await.unwrap();
+        }
+
+        assert_eq!(db.pending_deposits_count().await.unwrap(), 3);
+        let (finished_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM finished_deposits")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(finished_count, 2);
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
     async fn test_store_and_retrieve_deposit_raw(use_file: bool) {
         let db = open_db(use_file).await;
         db.insert_deposit(&test_deposit()).await.unwrap();
