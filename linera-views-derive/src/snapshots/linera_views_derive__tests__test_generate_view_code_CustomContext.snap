@@ -1,6 +1,6 @@
 ---
 source: linera-views-derive/src/lib.rs
-expression: "pretty(generate_view_code(input, true).unwrap())"
+expression: "pretty(generate_view_code(&input, true).unwrap())"
 ---
 impl linera_views::views::View for TestView
 where
@@ -113,7 +113,8 @@ where
         Ok(Self { register, collection })
     }
     async fn load(context: CustomContext) -> Result<Self, linera_views::ViewError> {
-        use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
+        use linera_views::context::Context as _;
+        use linera_views::store::ReadableKeyValueStore as _;
         if Self::NUM_INIT_KEYS == 0 {
             Self::post_load(context, &[])
         } else {

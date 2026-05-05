@@ -92,19 +92,26 @@ fn generate_view_code_inner(
     let struct_name = &input.ident;
     let field_types: Vec<_> = input.fields.iter().map(|field| &field.ty).collect();
 
-    // Choose trait paths based on mode
-    let (view_trait, context_trait, min_view_tag_path) = match mode {
-        ViewMode::Async => (
-            quote! { linera_views::views::View },
-            quote! { linera_views::context::Context },
-            quote! { linera_views::views::MIN_VIEW_TAG },
-        ),
-        ViewMode::Sync => (
-            quote! { linera_views::sync_views::SyncView },
-            quote! { linera_views::context::SyncContext },
-            quote! { linera_views::sync_views::MIN_VIEW_TAG },
-        ),
-    };
+    // Choose trait paths and async/await tokens based on mode
+    let (view_trait, context_trait, read_kv_trait, min_view_tag_path, maybe_async, maybe_await) =
+        match mode {
+            ViewMode::Async => (
+                quote! { linera_views::views::View },
+                quote! { linera_views::context::Context },
+                quote! { linera_views::store::ReadableKeyValueStore },
+                quote! { linera_views::views::MIN_VIEW_TAG },
+                quote! { async },
+                quote! { .await },
+            ),
+            ViewMode::Sync => (
+                quote! { linera_views::sync_views::SyncView },
+                quote! { linera_views::context::SyncContext },
+                quote! { linera_views::store::SyncReadableKeyValueStore },
+                quote! { linera_views::sync_views::MIN_VIEW_TAG },
+                quote! {},
+                quote! {},
+            ),
+        };
 
     let mut name_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
@@ -124,17 +131,10 @@ fn generate_view_code_inner(
         pre_save_quotes.push(quote! { let #delete_view_ident = self.#name.pre_save(batch)?; });
         delete_view_quotes.push(quote! { #delete_view_ident });
         clear_quotes.push(quote! { self.#name.clear(); });
-        has_pending_changes_quotes.push(match mode {
-            ViewMode::Async => quote! {
-                if self.#name.has_pending_changes().await {
-                    return true;
-                }
-            },
-            ViewMode::Sync => quote! {
-                if self.#name.has_pending_changes() {
-                    return true;
-                }
-            },
+        has_pending_changes_quotes.push(quote! {
+            if self.#name.has_pending_changes() #maybe_await {
+                return true;
+            }
         });
 
         let derive_key_logic = if num_fields < 256 {
@@ -198,48 +198,26 @@ fn generate_view_code_inner(
         quote! {}
     };
 
-    let load_fn = match mode {
-        ViewMode::Async => quote! {
-            async fn load(context: #context) -> Result<Self, linera_views::ViewError> {
-                use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
-                #load_metrics
-                if Self::NUM_INIT_KEYS == 0 {
-                    Self::post_load(context, &[])
-                } else {
-                    let keys = Self::pre_load(&context)?;
-                    let values = context.store().read_multi_values_bytes(&keys).await?;
-                    Self::post_load(context, &values)
-                }
+    let load_fn = quote! {
+        #maybe_async fn load(context: #context) -> Result<Self, linera_views::ViewError> {
+            use #context_trait as _;
+            use #read_kv_trait as _;
+            #load_metrics
+            if Self::NUM_INIT_KEYS == 0 {
+                Self::post_load(context, &[])
+            } else {
+                let keys = Self::pre_load(&context)?;
+                let values = context.store().read_multi_values_bytes(&keys) #maybe_await ?;
+                Self::post_load(context, &values)
             }
-        },
-        ViewMode::Sync => quote! {
-            fn load(context: #context) -> Result<Self, linera_views::ViewError> {
-                use linera_views::{context::SyncContext as _, store::SyncReadableKeyValueStore as _};
-                #load_metrics
-                if Self::NUM_INIT_KEYS == 0 {
-                    Self::post_load(context, &[])
-                } else {
-                    let keys = Self::pre_load(&context)?;
-                    let values = context.store().read_multi_values_bytes(&keys)?;
-                    Self::post_load(context, &values)
-                }
-            }
-        },
+        }
     };
 
-    let has_pending_changes_fn = match mode {
-        ViewMode::Async => quote! {
-            async fn has_pending_changes(&self) -> bool {
-                #(#has_pending_changes_quotes)*
-                false
-            }
-        },
-        ViewMode::Sync => quote! {
-            fn has_pending_changes(&self) -> bool {
-                #(#has_pending_changes_quotes)*
-                false
-            }
-        },
+    let has_pending_changes_fn = quote! {
+        #maybe_async fn has_pending_changes(&self) -> bool {
+            #(#has_pending_changes_quotes)*
+            false
+        }
     };
 
     Ok(quote! {
