@@ -260,9 +260,6 @@ pub enum ExecutionError {
     },
     #[error("Failed to load bytecode from storage {0:?}")]
     ApplicationBytecodeNotFound(Box<ApplicationDescription>),
-    // TODO(#2927): support dynamic loading of modules on the Web
-    #[error("Unsupported dynamic application load: {0:?}")]
-    UnsupportedDynamicApplicationLoad(Box<ApplicationId>),
 
     #[error("Excessive number of bytes read from storage")]
     ExcessiveRead,
@@ -380,7 +377,6 @@ impl ExecutionError {
             | ExecutionError::CrossApplicationCallInFinalize { .. }
             | ExecutionError::ReentrantCall(_)
             | ExecutionError::ApplicationBytecodeNotFound(_)
-            | ExecutionError::UnsupportedDynamicApplicationLoad(_)
             | ExecutionError::ExcessiveRead
             | ExecutionError::ExcessiveWrite
             | ExecutionError::MaximumFuelExceeded(_)

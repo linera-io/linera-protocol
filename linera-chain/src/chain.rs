@@ -7,7 +7,6 @@ use std::{
 };
 
 use allocative::Allocative;
-#[cfg(not(web))]
 use linera_base::data_types::Amount;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
@@ -26,7 +25,6 @@ use linera_execution::{
     QueryContext, QueryOutcome, ResourceController, ResourceTracker, ServiceRuntimeEndpoint,
     TransactionTracker,
 };
-#[cfg(not(web))]
 use linera_execution::{runtime::ContractSyncRuntime, FinalizeContext};
 use linera_views::{
     context::Context,
@@ -725,13 +723,9 @@ where
             chain.system.used_blobs.insert(&blob_id)?;
         }
 
-        // On native, spawn a block-level contract runtime thread so that contract
-        // instances persist across actions within a block. On web, WASM modules cannot
-        // cross the worker boundary through shared-memory channels — they need the
-        // `web_thread::Post` / `postMessage` mechanism, which only works at thread spawn
-        // time. We therefore fall back to spawning a fresh runtime per action on web
-        // (via `run_user_action_with_runtime` inside `ExecutionStateActor`).
-        #[cfg(not(web))]
+        // Spawn a block-level contract runtime thread so that contract instances
+        // persist across actions within a block. This uses the cooperative thread pool
+        // (`run_send`) which works on both native (real threads) and web (web workers).
         let (runtime_channels, contract_runtime_task) = {
             let (command_tx, command_rx) = std::sync::mpsc::channel::<RuntimeCommand>();
             let (execution_state_sender, execution_state_receiver) =
@@ -773,15 +767,8 @@ where
                 })
                 .await;
 
-            (Some((command_tx, execution_state_receiver)), task)
+            ((command_tx, execution_state_receiver), task)
         };
-        #[cfg(web)]
-        let runtime_channels: Option<(
-            std::sync::mpsc::Sender<RuntimeCommand>,
-            futures::channel::mpsc::UnboundedReceiver<
-                linera_execution::execution_state_actor::ExecutionRequest,
-            >,
-        )> = None;
 
         let mut block_execution_tracker = BlockExecutionTracker::new(
             &mut resource_controller,
@@ -792,7 +779,8 @@ where
             local_time,
             replaying_oracle_responses,
             block,
-            runtime_channels,
+            runtime_channels.0,
+            runtime_channels.1,
         )?;
 
         // Extract failure-policy parameters from exec_policy.
@@ -994,21 +982,17 @@ where
         }
 
         // Take channels from the tracker before consuming it, so we can release
-        // the mutable borrow on resource_controller. On web, there are no channels
-        // because the block-level runtime thread is not spawned.
-        let runtime_channels = block_execution_tracker.take_channels();
+        // the mutable borrow on resource_controller.
+        let (command_tx, mut execution_state_receiver) =
+            block_execution_tracker.take_channels();
 
         let num_transactions = block.transactions.len();
-        #[cfg_attr(web, allow(unused_mut))]
         let (messages, oracle_responses, events, blobs, operation_results, mut resource_tracker) =
             block_execution_tracker.finalize(num_transactions);
 
-        // When a block-level runtime thread is running, signal it to finalize all loaded
-        // contract instances (which triggers contract.store() calls) and then shut down.
-        // On web (no block-level runtime), there is nothing to finalize because each action
-        // already ran in its own short-lived runtime which finalized inline.
-        #[cfg(not(web))]
-        if let Some((command_tx, mut execution_state_receiver)) = runtime_channels {
+        // Signal the block-level runtime to finalize all loaded contract instances
+        // (which triggers contract.store() calls) and then shut down.
+        {
             use futures::StreamExt as _;
 
             let finalize_context = FinalizeContext {
@@ -1085,8 +1069,6 @@ where
                 .merge_balance(initial_balance, runtime_resource_controller.account)
                 .map_err(|error| ChainError::InternalError(error.to_string()))?;
         }
-        #[cfg(web)]
-        drop(runtime_channels);
 
         let state_hash = {
             #[cfg(with_metrics)]

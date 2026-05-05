@@ -27,18 +27,17 @@ use linera_base::{
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
-use tracing::{info_span, instrument, Instrument as _};
+use tracing::instrument;
 
 use crate::{
     execution::UserAction,
-    runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
-    ExecutionStateView, FinalizeContext, JsVec, Message, MessageContext, MessageKind, ModuleId,
-    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
-    QueryOutcome, ResourceController, ResourceTracker, SystemMessage, TransactionTracker,
-    UserContractCode, UserServiceCode,
+    ExecutionStateView, FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation,
+    OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
+    ResourceController, ResourceTracker, SystemMessage, TransactionTracker, UserContractCode,
+    UserServiceCode,
 };
 
 /// Commands sent from the async side to the contract runtime thread.
@@ -221,12 +220,10 @@ where
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
-            #[cfg(not(web))]
             LoadContract { id, callback } => {
                 let (code, description) = self.load_contract(id).await?;
                 callback.respond((code, description))
             }
-            #[cfg(not(web))]
             LoadService { id, callback } => {
                 let (code, description) = self.load_service(id).await?;
                 callback.respond((code, description))
@@ -975,13 +972,8 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        if self.runtime_channels.is_some() {
-            self.send_action_to_runtime(application_id, action, refund_grant_to, grant)
-                .await
-        } else {
-            self.run_user_action_with_runtime(application_id, action, refund_grant_to, grant)
-                .await
-        }
+        self.send_action_to_runtime(application_id, action, refund_grant_to, grant)
+            .await
     }
 
     /// Sends a user action to the block-level shared runtime thread.
@@ -1146,95 +1138,6 @@ where
         descriptions.reverse();
 
         Ok((codes, descriptions))
-    }
-
-    #[instrument(skip_all, fields(application_id = %application_id))]
-    async fn run_user_action_with_runtime(
-        &mut self,
-        application_id: ApplicationId,
-        action: UserAction,
-        refund_grant_to: Option<Account>,
-        grant: Option<&mut Amount>,
-    ) -> Result<(), ExecutionError> {
-        let chain_id = self.state.context().extra().chain_id();
-        let mut cloned_grant = grant.as_ref().map(|x| **x);
-        let initial_balance = self
-            .resource_controller
-            .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
-            .await?
-            .balance()?;
-        let mut controller = ResourceController::new(
-            self.resource_controller.policy().clone(),
-            self.resource_controller.tracker,
-            initial_balance,
-        );
-        let is_free = matches!(
-            &action,
-            UserAction::Message(..) | UserAction::ProcessStreams(..)
-        ) && self
-            .resource_controller
-            .policy()
-            .is_free_app(&application_id);
-        controller.is_free = is_free;
-        self.resource_controller.is_free = is_free;
-        let (execution_state_sender, mut execution_state_receiver) =
-            futures::channel::mpsc::unbounded();
-
-        let (codes, descriptions): (Vec<_>, Vec<_>) =
-            self.contract_and_dependencies(application_id).await?;
-
-        let allow_application_logs = self
-            .state
-            .context()
-            .extra()
-            .execution_runtime_config()
-            .allow_application_logs;
-
-        let contract_runtime_task = self
-            .state
-            .context()
-            .extra()
-            .thread_pool()
-            .run_send(JsVec(codes), move |codes| async move {
-                let runtime = ContractSyncRuntime::new(
-                    execution_state_sender,
-                    chain_id,
-                    refund_grant_to,
-                    controller,
-                    &action,
-                    allow_application_logs,
-                );
-
-                for (code, description) in codes.0.into_iter().zip(descriptions) {
-                    runtime.preload_contract(ApplicationId::from(&description), code, description);
-                }
-
-                runtime.run_action(application_id, chain_id, action)
-            })
-            .await;
-
-        async {
-            while let Some(request) = execution_state_receiver.next().await {
-                self.handle_request(request).await?;
-            }
-            Ok::<(), ExecutionError>(())
-        }
-        .instrument(info_span!("handle_runtime_requests"))
-        .await?;
-
-        let (result, controller) = contract_runtime_task.await??;
-
-        self.resource_controller.is_free = false;
-
-        self.txn_tracker.add_operation_result(result);
-
-        self.resource_controller
-            .with_state_and_grant(&mut self.state.system, grant)
-            .await?
-            .merge_balance(initial_balance, controller.balance()?)?;
-        self.resource_controller.tracker = controller.tracker;
-
-        Ok(())
     }
 
     #[instrument(skip_all, fields(
@@ -1424,14 +1327,12 @@ where
 /// Requests to the execution state.
 #[derive(Debug, strum::AsRefStr)]
 pub enum ExecutionRequest {
-    #[cfg(not(web))]
     LoadContract {
         id: ApplicationId,
         #[debug(skip)]
         callback: Sender<(UserContractCode, ApplicationDescription)>,
     },
 
-    #[cfg(not(web))]
     LoadService {
         id: ApplicationId,
         #[debug(skip)]
