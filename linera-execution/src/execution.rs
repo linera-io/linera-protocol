@@ -143,6 +143,7 @@ where
 {
     /// Spawns a block-level contract runtime, runs `f` against an actor connected to it,
     /// then sends `FinalizeAll` and tears the runtime down. Test-only.
+    #[allow(clippy::too_many_arguments)]
     async fn with_block_runtime<F, R>(
         &mut self,
         txn_tracker: &mut TransactionTracker,
@@ -208,7 +209,9 @@ where
             Err(_) => Amount::ZERO,
         };
         let pre_finalize_tracker = resource_controller.tracker;
-        let _ = command_tx.send(RuntimeCommand::FinalizeAll {
+        // Errors here mean the runtime task already exited; we'll surface that
+        // via `task.await` below.
+        _ = command_tx.send(RuntimeCommand::FinalizeAll {
             context: finalize_context,
             tracker: Box::new(pre_finalize_tracker),
             initial_balance,
