@@ -70,11 +70,17 @@ fn is_proto_identifier(s: &str) -> bool {
     bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }
 
-/// Returns `true` if `s` is a fully-qualified proto Service-Name, i.e. one or more
-/// proto identifiers joined by dots with at least one dot (`package.Service` or
-/// `outer.inner.Service`).
+/// Returns `true` if `s` is a fully-qualified proto Service-Name: two or more
+/// proto identifiers joined by dots, e.g. `package.Service` or `outer.inner.Service`.
 fn is_proto_service_name(s: &str) -> bool {
-    s.contains('.') && s.split('.').all(is_proto_identifier)
+    let mut parts = s.split('.');
+    let Some(first) = parts.next() else {
+        return false;
+    };
+    let Some(second) = parts.next() else {
+        return false;
+    };
+    is_proto_identifier(first) && is_proto_identifier(second) && parts.all(is_proto_identifier)
 }
 
 /// Extracts the gRPC method name from a request URI path.
