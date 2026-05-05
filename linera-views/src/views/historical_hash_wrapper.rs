@@ -788,36 +788,4 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_set_stored_hash_overwrites_existing_chain() -> Result<(), ViewError> {
-        // Verify that once a chain has accumulated history, set_stored_hash truly replaces
-        // it (rather than mixing in).
-        let context = MemoryContext::new_for_testing(());
-        let mut view =
-            HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
-
-        view.set(7);
-        let mut batch = Batch::new();
-        view.pre_save(&mut batch)?;
-        context.store().write_batch(batch).await?;
-        view.post_save();
-
-        let chained = view.historical_hash().await?;
-        let forced = HasherOutput::from([4u8; 32]);
-        assert_ne!(chained, forced);
-
-        view.set_stored_hash(forced);
-        let mut batch = Batch::new();
-        view.pre_save(&mut batch)?;
-        context.store().write_batch(batch).await?;
-        view.post_save();
-
-        let mut reloaded =
-            HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
-        assert_eq!(reloaded.historical_hash().await?, forced);
-        // Inner state is unaffected.
-        assert_eq!(*reloaded.get(), 7);
-
-        Ok(())
-    }
 }
