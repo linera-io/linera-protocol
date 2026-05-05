@@ -82,8 +82,14 @@ pub struct ExecutionStateActor<'a, C> {
     txn_tracker: &'a mut TransactionTracker,
     resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
     /// Channels to the block-level contract runtime thread.
-    /// When `Some`, actions are sent to a shared runtime instead of creating a new one.
+    /// When `Some`, actions take the threaded shared-memory path: each action is
+    /// dispatched to the long-lived block worker over the mpsc channel.
     runtime_channels: Option<RuntimeChannels<'a>>,
+    /// Block-level snapshot map borrowed from the [`BlockExecutionTracker`].
+    /// When `Some`, actions take the snapshot-based per-action path: each action
+    /// spawns a fresh worker, restores from the snapshots in this map, runs, and
+    /// updates the map with the post-action snapshots.
+    block_snapshots: Option<&'a mut BTreeMap<ApplicationId, Vec<u8>>>,
 }
 
 /// Channels for communicating with the block-level contract runtime thread.
@@ -142,10 +148,12 @@ where
             txn_tracker,
             resource_controller,
             runtime_channels: None,
+            block_snapshots: None,
         }
     }
 
     /// Creates a new execution state actor connected to a block-level runtime.
+    /// Selects the threaded shared-memory execution path.
     pub fn with_runtime(
         state: &'a mut ExecutionStateView<C>,
         txn_tracker: &'a mut TransactionTracker,
@@ -157,6 +165,26 @@ where
             txn_tracker,
             resource_controller,
             runtime_channels: Some(runtime_channels),
+            block_snapshots: None,
+        }
+    }
+
+    /// Creates a new execution state actor that takes the snapshot-based per-action
+    /// execution path. The supplied map is borrowed mutably for the actor's lifetime
+    /// and updated in place after every action — input snapshots are consumed during
+    /// instantiation, fresh snapshots are written back for every loaded contract.
+    pub fn with_block_snapshots(
+        state: &'a mut ExecutionStateView<C>,
+        txn_tracker: &'a mut TransactionTracker,
+        resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
+        block_snapshots: &'a mut BTreeMap<ApplicationId, Vec<u8>>,
+    ) -> Self {
+        Self {
+            state,
+            txn_tracker,
+            resource_controller,
+            runtime_channels: None,
+            block_snapshots: Some(block_snapshots),
         }
     }
 
