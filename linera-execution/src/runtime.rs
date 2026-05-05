@@ -1133,6 +1133,33 @@ impl ContractSyncRuntime {
         this.inner().current_snapshots.insert(id, snapshot_bytes);
     }
 
+    /// Captures a fresh snapshot of every currently loaded contract instance and
+    /// returns the map keyed by application ID, with each snapshot serialized to
+    /// bytes via the [`Snapshot::to_bytes`] convention.
+    ///
+    /// Used by the snapshot-based per-action execution path: the worker calls
+    /// this at the end of the action and ships the resulting bytes back to the
+    /// async side; the actor merges them into the block-level snapshot map so
+    /// the next action's worker can restore from them.
+    ///
+    /// Backends that don't support checkpointing (e.g. the EVM runtime, which
+    /// returns `None` from `create_snapshot`) are skipped.
+    pub(crate) fn extract_current_snapshots(&self) -> HashMap<ApplicationId, Vec<u8>> {
+        let this = self
+            .0
+            .as_ref()
+            .expect("snapshots shouldn't be extracted while the runtime is being dropped");
+        let runtime = this.inner();
+        let mut snapshots = HashMap::new();
+        for (app_id, loaded) in &runtime.loaded_applications {
+            let mut instance = loaded.instance.try_lock().expect("instance not in use");
+            if let Some(snapshot) = instance.create_snapshot() {
+                snapshots.insert(*app_id, snapshot.to_bytes());
+            }
+        }
+        snapshots
+    }
+
     /// Runs a block-level loop, receiving commands from the async side.
     ///
     /// The runtime thread stays alive for the entire block, processing actions one at a
