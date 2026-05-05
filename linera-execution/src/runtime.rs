@@ -1301,7 +1301,11 @@ impl ContractSyncRuntimeHandle {
         // keeping them in `loaded_applications` would prevent `load_contract_instance`
         // from re-loading them (the `Occupied` branch returns early without adding to
         // `applications_to_finalize`).
-        let snapshot_keys = runtime.wasm_snapshots.keys().copied().collect::<HashSet<_>>();
+        let snapshot_keys = runtime
+            .wasm_snapshots
+            .keys()
+            .copied()
+            .collect::<HashSet<_>>();
         runtime
             .loaded_applications
             .retain(|app_id, _| snapshot_keys.contains(app_id));
