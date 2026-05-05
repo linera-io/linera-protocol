@@ -143,6 +143,16 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     /// Snapshot of `applications_to_finalize` taken alongside instance snapshots, so that
     /// applications loaded only during a failed execution are not finalized.
     applications_to_finalize_snapshot: Option<Vec<ApplicationId>>,
+    /// Serialized snapshots tracked across actions in the snapshot-based per-action
+    /// execution path on web. Populated at worker-spawn time with the latest
+    /// snapshot captured for each loaded application in the block so far;
+    /// `load_contract_instance` consumes from this map after instantiating each
+    /// contract to restore the captured post-`Contract::load` state. After the
+    /// action runs, the runtime captures fresh snapshots back into this map and
+    /// the actor reads them out to keep the block-level map up to date — hence
+    /// "current" rather than "initial".
+    #[debug(skip_if = HashMap::is_empty)]
+    current_snapshots: HashMap<ApplicationId, Vec<u8>>,
 }
 
 /// The runtime status of an application.
@@ -353,6 +363,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             allow_application_logs,
             instance_snapshots: HashMap::new(),
             applications_to_finalize_snapshot: None,
+            current_snapshots: HashMap::new(),
         }
     }
 
@@ -441,7 +452,14 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     }
                     hash_map::Entry::Occupied(entry) => entry.get().clone(),
                 };
-                let instance = code.instantiate(this)?;
+                let mut instance = code.instantiate(this)?;
+
+                // If the actor preloaded a snapshot for this application, restore it
+                // right after instantiation so the contract observes its post-`load`
+                // state and the SDK's `Contract::load` call is skipped on first use.
+                if let Some(snapshot_bytes) = self.current_snapshots.remove(&id) {
+                    instance.restore_snapshot_from_bytes(&snapshot_bytes)?;
+                }
 
                 self.applications_to_finalize.push(id);
                 Ok(entry
@@ -1099,6 +1117,20 @@ impl ContractSyncRuntime {
         if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
             entry.insert((code, description));
         }
+    }
+
+    /// Preloads the serialized snapshot of a contract into the runtime's memory.
+    ///
+    /// When the runtime later instantiates this contract via `load_contract_instance`
+    /// (lazily, on first use), it consumes the bytes from the map and calls
+    /// `restore_snapshot_from_bytes` immediately after instantiation — so the
+    /// instance starts in the captured post-`load` state.
+    pub(crate) fn preload_snapshot(&self, id: ApplicationId, snapshot_bytes: Vec<u8>) {
+        let this = self
+            .0
+            .as_ref()
+            .expect("snapshots shouldn't be preloaded while the runtime is being dropped");
+        this.inner().current_snapshots.insert(id, snapshot_bytes);
     }
 
     /// Runs a block-level loop, receiving commands from the async side.
