@@ -993,8 +993,7 @@ where
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
         // Load contract code and dependencies.
-        let (codes, descriptions) =
-            self.contract_and_dependencies(application_id).await?;
+        let (codes, descriptions) = self.contract_and_dependencies(application_id).await?;
         let codes = codes.into_iter().zip(descriptions).collect::<Vec<_>>();
 
         // Compute the initial balance available to this action (with grant as a funding

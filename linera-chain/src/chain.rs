@@ -7,12 +7,11 @@ use std::{
 };
 
 use allocative::Allocative;
-use linera_base::data_types::Amount;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
-        OracleResponse, Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        Epoch, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
@@ -20,12 +19,11 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_execution::{
-    committee::Committee, execution_state_actor::RuntimeCommand, system::EPOCH_STREAM_NAME,
-    ExecutionRuntimeContext, ExecutionStateView, Message, Operation, OutgoingMessage, Query,
-    QueryContext, QueryOutcome, ResourceController, ResourceTracker, ServiceRuntimeEndpoint,
-    TransactionTracker,
+    committee::Committee, execution_state_actor::RuntimeCommand, runtime::ContractSyncRuntime,
+    system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView, FinalizeContext,
+    Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
+    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
-use linera_execution::{runtime::ContractSyncRuntime, FinalizeContext};
 use linera_views::{
     context::Context,
     log_view::LogView,
@@ -983,8 +981,7 @@ where
 
         // Take channels from the tracker before consuming it, so we can release
         // the mutable borrow on resource_controller.
-        let (command_tx, mut execution_state_receiver) =
-            block_execution_tracker.take_channels();
+        let (command_tx, mut execution_state_receiver) = block_execution_tracker.take_channels();
 
         let num_transactions = block.transactions.len();
         let (messages, oracle_responses, events, blobs, operation_results, mut resource_tracker) =
