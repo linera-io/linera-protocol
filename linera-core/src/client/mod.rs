@@ -39,7 +39,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, ExecutionError};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use rand::seq::SliceRandom;
 use received_log::ReceivedLogs;
@@ -1580,14 +1580,15 @@ impl<Env: Environment> Client<Env> {
         &self,
         incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
-        let committee = self
-            .storage_client()
-            .committee_for_epoch(incoming_certificate.block().header.epoch)
-            .await
-            .map_err(|error| NodeError::ViewError {
-                error: error.to_string(),
-            })?;
-        let Some(committee) = committee else {
+        let epoch = incoming_certificate.block().header.epoch;
+        let storage = self.storage_client();
+        let view_err = |error: ExecutionError| NodeError::ViewError {
+            error: error.to_string(),
+        };
+        if storage.is_epoch_revoked(epoch).await.map_err(view_err)? {
+            return Ok(CheckCertificateResult::UnknownEpoch);
+        }
+        let Some(committee) = storage.committee_for_epoch(epoch).await.map_err(view_err)? else {
             return Ok(CheckCertificateResult::UnknownEpoch);
         };
         incoming_certificate.check(&committee)?;

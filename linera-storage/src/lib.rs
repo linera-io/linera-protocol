@@ -440,6 +440,21 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         Ok(self.shared_committees().insert(hash, Arc::new(committee)))
     }
 
+    /// Returns whether the given epoch's committee has been revoked, i.e. whether the
+    /// admin chain has written a `REMOVED_EPOCH_STREAM` event for it.
+    async fn is_epoch_revoked(&self, epoch: Epoch) -> Result<bool, ExecutionError> {
+        let net_desc = self
+            .read_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+        let event_id = EventId {
+            chain_id: net_desc.admin_chain_id,
+            stream_id: StreamId::system(linera_execution::system::REMOVED_EPOCH_STREAM_NAME),
+            index: epoch.0,
+        };
+        Ok(self.contains_event(event_id).await?)
+    }
+
     /// Returns the committee that signs blocks in the given epoch, looking up its blob
     /// hash via the admin chain's epoch event stream (or the genesis committee for
     /// epoch 0). Returns `Ok(None)` if the corresponding event has not been written
