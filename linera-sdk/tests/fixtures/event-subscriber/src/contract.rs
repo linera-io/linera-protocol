@@ -94,8 +94,6 @@ impl Contract for EventSubscriberContract {
     }
 
     fn store(self) {
-        self.state
-            .save_and_drop()
-            .expect("Failed to save state");
+        self.state.save_and_drop().expect("Failed to save state");
     }
 }

@@ -64,8 +64,6 @@ impl Contract for EventEmitterContract {
     fn execute_message(&mut self, _message: ()) {}
 
     fn store(self) {
-        self.state
-            .save_and_drop()
-            .expect("Failed to save state");
+        self.state.save_and_drop().expect("Failed to save state");
     }
 }
