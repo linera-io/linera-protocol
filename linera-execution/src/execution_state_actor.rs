@@ -220,10 +220,12 @@ where
     ) -> Result<(), ExecutionError> {
         use ExecutionRequest::*;
         match request {
+            #[cfg(not(web))]
             LoadContract { id, callback } => {
                 let (code, description) = self.load_contract(id).await?;
                 callback.respond((code, description))
             }
+            #[cfg(not(web))]
             LoadService { id, callback } => {
                 let (code, description) = self.load_service(id).await?;
                 callback.respond((code, description))
@@ -1331,12 +1333,14 @@ where
 /// Requests to the execution state.
 #[derive(Debug, strum::AsRefStr)]
 pub enum ExecutionRequest {
+    #[cfg(not(web))]
     LoadContract {
         id: ApplicationId,
         #[debug(skip)]
         callback: Sender<(UserContractCode, ApplicationDescription)>,
     },
 
+    #[cfg(not(web))]
     LoadService {
         id: ApplicationId,
         #[debug(skip)]

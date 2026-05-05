@@ -417,6 +417,15 @@ impl SyncRuntimeInternal<UserContractInstance> {
                 // First time actually using the application. Let's see if the code was
                 // pre-loaded.
                 let (code, description) = match self.preloaded_applications.entry(id) {
+                    // TODO(#2927): support dynamic loading of modules on the Web
+                    #[cfg(web)]
+                    hash_map::Entry::Vacant(_) => {
+                        drop(this);
+                        return Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
+                            id,
+                        )));
+                    }
+                    #[cfg(not(web))]
                     hash_map::Entry::Vacant(entry) => {
                         let (code, description) = self
                             .execution_state_sender
@@ -528,6 +537,15 @@ impl SyncRuntimeInternal<UserServiceInstance> {
                 // First time actually using the application. Let's see if the code was
                 // pre-loaded.
                 let (code, description) = match self.preloaded_applications.entry(id) {
+                    // TODO(#2927): support dynamic loading of modules on the Web
+                    #[cfg(web)]
+                    hash_map::Entry::Vacant(_) => {
+                        drop(this);
+                        return Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
+                            id,
+                        )));
+                    }
+                    #[cfg(not(web))]
                     hash_map::Entry::Vacant(entry) => {
                         let (code, description) = self
                             .execution_state_sender
