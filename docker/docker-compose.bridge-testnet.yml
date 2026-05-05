@@ -1,9 +1,17 @@
-# Long-running linera-bridge relayer for testnet deployments.
+# Long-running linera-bridge relayer.
 #
-# Prerequisites (operator must do once on the VM):
+# Defaults match the testnet host layout (env at /etc/linera-bridge,
+# data at /var/lib/linera-bridge). Override RELAYER_ENV_FILE,
+# RELAYER_ENV_SECRET, RELAYER_DATA_DIR to reuse this compose file
+# from a developer machine.
+#
+# Prerequisites (testnet operator does this once on the VM):
 #   1. Create /var/lib/linera-bridge (data) and /etc/linera-bridge (env)
-#   2. Run examples/bridge-demo/setup.sh in direct mode with
-#      --relayer-env /etc/linera-bridge/.env to populate both directories
+#   2. Populate /etc/linera-bridge/.env with the keys consumed by
+#      bridge-entrypoint.sh (RPC_URL, FAUCET_URL, EVM_BRIDGE_ADDRESS,
+#      LINERA_BRIDGE_APP, LINERA_FUNGIBLE_APP, LINERA_BRIDGE_CHAIN_ID,
+#      LINERA_BRIDGE_CHAIN_OWNER, LINERA_WALLET, LINERA_KEYSTORE,
+#      LINERA_STORAGE, MONITOR_*, MAX_RETRIES, PORT)
 #   3. Drop the EVM signing key in /etc/linera-bridge/.env.secret
 #      (mode 0600, root:root): EVM_PRIVATE_KEY=0x...
 #
@@ -13,14 +21,14 @@ services:
     image: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-bridge:testnet_conway_internal
     restart: unless-stopped
     env_file:
-      - /etc/linera-bridge/.env
-      - /etc/linera-bridge/.env.secret
+      - ${RELAYER_ENV_FILE:-/etc/linera-bridge/.env}
+      - ${RELAYER_ENV_SECRET:-/etc/linera-bridge/.env.secret}
     ports:
       # Loopback only — /metrics and /health are not public-facing.
       # Scrape via SSH tunnel or VPN from the ops network.
       - "127.0.0.1:3001:3001"
     volumes:
-      - /var/lib/linera-bridge:/data
+      - ${RELAYER_DATA_DIR:-/var/lib/linera-bridge}:/data
     healthcheck:
       # The runtime image only ships netcat (no wget/curl). A bare TCP probe
       # is enough — the /health route exists for any axum-based liveness
