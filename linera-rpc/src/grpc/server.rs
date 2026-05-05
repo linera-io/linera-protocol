@@ -1006,7 +1006,7 @@ where
         err,
         fields(
             nickname = self.state.nickname(),
-            chain_id = ?request.get_ref().chain_id
+            chain_id = ?request.get_ref().chain_id()
         )
     )]
     async fn handle_pending_blob(
@@ -1037,7 +1037,7 @@ where
         err,
         fields(
             nickname = self.state.nickname(),
-            chain_id = ?request.get_ref().chain_id
+            chain_id = ?request.get_ref().chain_id()
         )
     )]
     async fn previous_event_blocks(
