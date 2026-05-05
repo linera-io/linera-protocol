@@ -188,13 +188,14 @@ where
         Ok(())
     }
 
-    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>> {
+    fn create_snapshot(&mut self) -> Option<Box<dyn crate::Snapshot>> {
         Some(Box::new(self.instance.create_snapshot()))
     }
 
-    fn restore_snapshot(&mut self, snapshot: &(dyn std::any::Any + Send)) {
-        if let Some(snapshot) =
-            snapshot.downcast_ref::<linera_witty::wasmer::WasmInstanceSnapshot>()
+    fn restore_snapshot(&mut self, snapshot: &dyn crate::Snapshot) {
+        if let Some(snapshot) = snapshot
+            .as_any()
+            .downcast_ref::<linera_witty::wasmer::WasmInstanceSnapshot>()
         {
             self.instance.restore_snapshot(snapshot);
         }

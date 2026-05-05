@@ -6,6 +6,7 @@
 mod borrowed_instance;
 mod error;
 mod memory;
+mod snapshot;
 #[cfg(with_testing)]
 mod test;
 mod traits;
@@ -19,5 +20,6 @@ pub use self::test::{MockExportedFunction, MockInstance, MockResults, MockRuntim
 pub use self::{
     error::RuntimeError,
     memory::{GuestPointer, Memory, RuntimeMemory},
+    snapshot::NumericVal,
     traits::{Instance, InstanceWithFunction, InstanceWithMemory, Runtime},
 };

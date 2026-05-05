@@ -328,11 +328,11 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>> {
+    fn create_snapshot(&mut self) -> Option<Box<dyn crate::Snapshot>> {
         None
     }
 
-    fn restore_snapshot(&mut self, _snapshot: &(dyn std::any::Any + Send)) {}
+    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) {}
 }
 
 impl UserService for MockApplicationInstance<ServiceSyncRuntimeHandle> {

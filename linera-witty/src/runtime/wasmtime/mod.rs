@@ -10,13 +10,15 @@ mod parameters;
 mod results;
 
 pub use anyhow;
+use serde::{Deserialize, Serialize};
 use wasmtime::{
-    AsContext, AsContextMut, Extern, Memory, Mutability, Store, StoreContext, StoreContextMut, Val,
+    AsContext, AsContextMut, Extern, Memory, Mutability, Store, StoreContext, StoreContextMut,
+    V128, Val,
 };
 pub use wasmtime::{Caller, Linker};
 
 pub use self::{parameters::WasmtimeParameters, results::WasmtimeResults};
-use super::traits::{Instance, Runtime};
+use super::{snapshot::NumericVal, traits::{Instance, Runtime}};
 
 /// Representation of the [Wasmtime](https://wasmtime.dev) runtime.
 pub struct Wasmtime;
@@ -33,9 +35,33 @@ pub struct EntrypointInstance<UserData> {
 }
 
 /// Snapshot of a Wasmtime instance's mutable state (linear memory and mutable globals).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmInstanceSnapshot {
     memory_data: Vec<u8>,
-    globals: Vec<(String, Val)>,
+    globals: Vec<(String, NumericVal)>,
+}
+
+fn wasmtime_val_to_numeric(val: &Val) -> NumericVal {
+    match val {
+        Val::I32(v) => NumericVal::I32(*v),
+        Val::I64(v) => NumericVal::I64(*v),
+        Val::F32(bits) => NumericVal::F32(*bits),
+        Val::F64(bits) => NumericVal::F64(*bits),
+        Val::V128(v) => NumericVal::V128(v.as_u128()),
+        Val::FuncRef(_) | Val::ExternRef(_) | Val::AnyRef(_) => {
+            panic!("Reference-typed mutable globals cannot be snapshotted")
+        }
+    }
+}
+
+fn numeric_to_wasmtime_val(val: &NumericVal) -> Val {
+    match val {
+        NumericVal::I32(v) => Val::I32(*v),
+        NumericVal::I64(v) => Val::I64(*v),
+        NumericVal::F32(bits) => Val::F32(*bits),
+        NumericVal::F64(bits) => Val::F64(*bits),
+        NumericVal::V128(v) => Val::V128(V128::from(*v)),
+    }
 }
 
 impl<UserData> EntrypointInstance<UserData> {
@@ -43,6 +69,14 @@ impl<UserData> EntrypointInstance<UserData> {
     /// [`Instance`][`wasmtime::Instance`] and [`Store`].
     pub fn new(instance: wasmtime::Instance, store: Store<UserData>) -> Self {
         EntrypointInstance { instance, store }
+    }
+
+    /// Returns mutable references to the [`Store`] and the [`wasmtime::Instance`] stored
+    /// inside this [`EntrypointInstance`].
+    pub fn as_store_and_instance_mut(
+        &mut self,
+    ) -> (StoreContextMut<'_, UserData>, &mut wasmtime::Instance) {
+        (self.store.as_context_mut(), &mut self.instance)
     }
 
     /// Creates a snapshot of the Wasm instance's mutable state (memory and globals).
@@ -65,7 +99,7 @@ impl<UserData> EntrypointInstance<UserData> {
                 }
                 Extern::Global(global) => {
                     if global.ty(&self.store).mutability() == Mutability::Var {
-                        globals.push((name, global.get(&mut self.store)));
+                        globals.push((name, wasmtime_val_to_numeric(&global.get(&mut self.store))));
                     }
                 }
                 _ => {}
@@ -97,7 +131,7 @@ impl<UserData> EntrypointInstance<UserData> {
                 Extern::Global(global) => {
                     if let Some((_, val)) = snapshot.globals.iter().find(|(n, _)| n == &name) {
                         global
-                            .set(&mut self.store, *val)
+                            .set(&mut self.store, numeric_to_wasmtime_val(val))
                             .expect("Failed to restore Wasm global from snapshot");
                     }
                 }

@@ -138,7 +138,8 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     /// Contract-instance snapshots for checkpoint/restore, keyed by application ID.
     /// Each backend (Wasmer, Wasmtime, REVM, ...) is responsible for producing and
     /// restoring its own snapshot type via the `UserContract` trait.
-    instance_snapshots: HashMap<ApplicationId, Box<dyn std::any::Any + Send>>,
+    #[debug(skip)]
+    instance_snapshots: HashMap<ApplicationId, Box<dyn crate::Snapshot>>,
     /// Snapshot of `applications_to_finalize` taken alongside instance snapshots, so that
     /// applications loaded only during a failed execution are not finalized.
     applications_to_finalize_snapshot: Option<Vec<ApplicationId>>,

@@ -6635,6 +6635,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "bcs",
  "cfg_aliases",
  "either",
  "frunk",
@@ -6643,10 +6644,12 @@ dependencies = [
  "linera-witty",
  "linera-witty-macros",
  "log",
+ "serde",
  "test-case",
  "thiserror 1.0.69",
  "tracing",
  "wasmtime",
+ "wat",
 ]
 
 [[package]]

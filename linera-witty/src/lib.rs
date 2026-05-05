@@ -42,8 +42,8 @@ pub use self::{
     imported_function_interface::ImportedFunctionInterface,
     memory_layout::{JoinFlatLayouts, Layout},
     runtime::{
-        GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Memory, Runtime,
-        RuntimeError, RuntimeMemory,
+        GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Memory, NumericVal,
+        Runtime, RuntimeError, RuntimeMemory,
     },
     type_traits::{RegisterWitTypes, WitLoad, WitStore, WitType},
     util::{Merge, Split},

@@ -472,6 +472,31 @@ impl ExecutionError {
     }
 }
 
+/// A backend-agnostic snapshot of a contract instance's mutable state.
+///
+/// Any type that is `Any + Send + Serialize + 'static` automatically implements this
+/// trait via the blanket `impl` below. Restoring requires knowing the concrete type,
+/// so backends downcast through [`Snapshot::as_any`].
+pub trait Snapshot: Send + 'static {
+    /// Serializes the snapshot to a self-describing byte buffer using BCS.
+    fn to_bytes(&self) -> Vec<u8>;
+    /// Borrows the snapshot as a `dyn Any` for backend-specific downcasting.
+    fn as_any(&self) -> &(dyn Any + Send);
+}
+
+impl<T> Snapshot for T
+where
+    T: Any + Send + serde::Serialize + 'static,
+{
+    fn to_bytes(&self) -> Vec<u8> {
+        bcs::to_bytes(self).expect("snapshot serialization should not fail")
+    }
+
+    fn as_any(&self) -> &(dyn Any + Send) {
+        self
+    }
+}
+
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.
@@ -494,11 +519,11 @@ pub trait UserContract {
     /// What constitutes the mutable state depends on the backend: for Wasm runtimes
     /// it is the linear memory and globals; backends that do not support
     /// checkpointing (such as the EVM runtime) return `None`.
-    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>>;
+    fn create_snapshot(&mut self) -> Option<Box<dyn Snapshot>>;
 
     /// Restores the contract instance's mutable state from a snapshot previously
     /// produced by `create_snapshot`.
-    fn restore_snapshot(&mut self, snapshot: &(dyn std::any::Any + Send));
+    fn restore_snapshot(&mut self, snapshot: &dyn Snapshot);
 }
 
 /// The public entry points provided by the service part of an application.

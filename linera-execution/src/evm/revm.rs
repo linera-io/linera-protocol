@@ -1329,12 +1329,12 @@ where
         Ok(())
     }
 
-    fn create_snapshot(&mut self) -> Option<Box<dyn std::any::Any + Send>> {
+    fn create_snapshot(&mut self) -> Option<Box<dyn crate::Snapshot>> {
         // We do not have snapshots with the REVM blockchain.
         None
     }
 
-    fn restore_snapshot(&mut self, _snapshot: &(dyn std::any::Any + Send)) {
+    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) {
         // Since no snapshot, the restoring is a noop.
     }
 }

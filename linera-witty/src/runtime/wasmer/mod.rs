@@ -11,6 +11,7 @@ mod results;
 
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
+use serde::{Deserialize, Serialize};
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
     AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
@@ -18,7 +19,30 @@ use wasmer::{
 };
 
 pub use self::{parameters::WasmerParameters, results::WasmerResults};
-use super::traits::{Instance, Runtime};
+use super::{snapshot::NumericVal, traits::{Instance, Runtime}};
+
+fn wasmer_value_to_numeric(value: &Value) -> NumericVal {
+    match value {
+        Value::I32(v) => NumericVal::I32(*v),
+        Value::I64(v) => NumericVal::I64(*v),
+        Value::F32(v) => NumericVal::F32(v.to_bits()),
+        Value::F64(v) => NumericVal::F64(v.to_bits()),
+        Value::V128(v) => NumericVal::V128(*v),
+        Value::FuncRef(_) | Value::ExternRef(_) => {
+            panic!("Reference-typed mutable globals cannot be snapshotted")
+        }
+    }
+}
+
+fn numeric_to_wasmer_value(val: &NumericVal) -> Value {
+    match val {
+        NumericVal::I32(v) => Value::I32(*v),
+        NumericVal::I64(v) => Value::I64(*v),
+        NumericVal::F32(bits) => Value::F32(f32::from_bits(*bits)),
+        NumericVal::F64(bits) => Value::F64(f64::from_bits(*bits)),
+        NumericVal::V128(v) => Value::V128(*v),
+    }
+}
 
 /// Representation of the [Wasmer](https://wasmer.io) runtime.
 pub struct Wasmer;
@@ -121,9 +145,10 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
 }
 
 /// Snapshot of a Wasmer instance's mutable state (linear memory and mutable globals).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmInstanceSnapshot {
     memory_data: Vec<u8>,
-    globals: Vec<(String, Value)>,
+    globals: Vec<(String, NumericVal)>,
 }
 
 impl WasmInstanceSnapshot {
@@ -164,7 +189,7 @@ impl<UserData> EntrypointInstance<UserData> {
         let mut globals = Vec::new();
         for (name, global) in self.instance.exports.iter().globals() {
             if global.ty(&self.store).mutability == Mutability::Var {
-                globals.push((name.clone(), global.get(&mut self.store)));
+                globals.push((name.clone(), wasmer_value_to_numeric(&global.get(&mut self.store))));
             }
         }
 
@@ -186,7 +211,7 @@ impl<UserData> EntrypointInstance<UserData> {
         for (name, value) in &snapshot.globals {
             if let Some(Extern::Global(global)) = self.instance.exports.get_extern(name) {
                 global
-                    .set(&mut self.store, value.clone())
+                    .set(&mut self.store, numeric_to_wasmer_value(value))
                     .expect("Failed to restore Wasm global from snapshot");
             }
         }
