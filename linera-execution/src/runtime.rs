@@ -417,15 +417,6 @@ impl SyncRuntimeInternal<UserContractInstance> {
                 // First time actually using the application. Let's see if the code was
                 // pre-loaded.
                 let (code, description) = match self.preloaded_applications.entry(id) {
-                    // TODO(#2927): support dynamic loading of modules on the Web
-                    #[cfg(web)]
-                    hash_map::Entry::Vacant(_) => {
-                        drop(this);
-                        return Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
-                            id,
-                        )));
-                    }
-                    #[cfg(not(web))]
                     hash_map::Entry::Vacant(entry) => {
                         let (code, description) = self
                             .execution_state_sender
@@ -537,15 +528,6 @@ impl SyncRuntimeInternal<UserServiceInstance> {
                 // First time actually using the application. Let's see if the code was
                 // pre-loaded.
                 let (code, description) = match self.preloaded_applications.entry(id) {
-                    // TODO(#2927): support dynamic loading of modules on the Web
-                    #[cfg(web)]
-                    hash_map::Entry::Vacant(_) => {
-                        drop(this);
-                        return Err(ExecutionError::UnsupportedDynamicApplicationLoad(Box::new(
-                            id,
-                        )));
-                    }
-                    #[cfg(not(web))]
                     hash_map::Entry::Vacant(entry) => {
                         let (code, description) = self
                             .execution_state_sender
@@ -1051,34 +1033,6 @@ impl<UserInstance: WithContext> Clone for SyncRuntimeHandle<UserInstance> {
 }
 
 impl ContractSyncRuntime {
-    pub(crate) fn new(
-        execution_state_sender: ExecutionStateSender,
-        chain_id: ChainId,
-        refund_grant_to: Option<Account>,
-        resource_controller: ResourceController,
-        action: &UserAction,
-        allow_application_logs: bool,
-    ) -> Self {
-        SyncRuntime(Some(ContractSyncRuntimeHandle::from(
-            SyncRuntimeInternal::new(
-                chain_id,
-                action.height(),
-                action.round(),
-                if let UserAction::Message(context, _) = action {
-                    Some(context.into())
-                } else {
-                    None
-                },
-                execution_state_sender,
-                None,
-                refund_grant_to,
-                resource_controller,
-                action.timestamp(),
-                allow_application_logs,
-            ),
-        )))
-    }
-
     /// Creates a new `ContractSyncRuntime` for block-level execution.
     ///
     /// Unlike `new`, this does not take a specific action — the runtime will receive
@@ -1124,23 +1078,6 @@ impl ContractSyncRuntime {
         if let hash_map::Entry::Vacant(entry) = this_guard.preloaded_applications.entry(id) {
             entry.insert((code, description));
         }
-    }
-
-    /// Main entry point to start executing a user action.
-    pub(crate) fn run_action(
-        mut self,
-        application_id: ApplicationId,
-        chain_id: ChainId,
-        action: UserAction,
-    ) -> Result<(Option<Vec<u8>>, ResourceController), ExecutionError> {
-        let result = self
-            .deref_mut()
-            .run_action(application_id, chain_id, action)?;
-        let runtime = self
-            .into_inner()
-            .expect("Runtime clones should have been freed by now");
-
-        Ok((result, runtime.resource_controller))
     }
 
     /// Runs a block-level loop, receiving commands from the async side.
@@ -1268,45 +1205,6 @@ impl ContractSyncRuntime {
 }
 
 impl ContractSyncRuntimeHandle {
-    #[instrument(skip_all, fields(application_id = %application_id))]
-    fn run_action(
-        &self,
-        application_id: ApplicationId,
-        chain_id: ChainId,
-        action: UserAction,
-    ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        let finalize_context = FinalizeContext {
-            authenticated_owner: action.signer(),
-            chain_id,
-            height: action.height(),
-            round: action.round(),
-        };
-
-        {
-            let runtime = self.inner();
-            assert_eq!(runtime.chain_id, chain_id);
-            assert_eq!(runtime.height, action.height());
-        }
-
-        let signer = action.signer();
-        let closure = move |code: &mut UserContractInstance| match action {
-            UserAction::Instantiate(_context, argument) => {
-                code.instantiate(argument).map(|()| None)
-            }
-            UserAction::Operation(_context, operation) => {
-                code.execute_operation(operation).map(Option::Some)
-            }
-            UserAction::Message(_context, message) => code.execute_message(message).map(|()| None),
-            UserAction::ProcessStreams(_context, updates) => {
-                code.process_streams(updates).map(|()| None)
-            }
-        };
-
-        let result = self.execute(application_id, signer, closure)?;
-        self.finalize(finalize_context)?;
-        Ok(result)
-    }
-
     /// Executes a single user action without finalizing.
     ///
     /// Updates the runtime's `executing_message` and `refund_grant_to` context

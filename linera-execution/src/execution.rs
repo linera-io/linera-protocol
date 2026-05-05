@@ -40,7 +40,7 @@ use crate::{
     execution_state_actor::ExecutionStateActor, resources::ResourceController,
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
     ExecutionRuntimeContext, JsVec, MessageContext, OperationContext, ProcessStreamsContext, Query,
-    QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp, TransactionTracker,
+    QueryContext, QueryOutcome, ServiceSyncRuntime, TransactionTracker,
 };
 
 /// An inner view accessing the execution state of a chain, for hashing purposes.
@@ -216,33 +216,6 @@ impl UserAction {
             UserAction::Operation(context, _) => context.authenticated_owner,
             UserAction::ProcessStreams(_, _) => None,
             UserAction::Message(context, _) => context.authenticated_owner,
-        }
-    }
-
-    pub(crate) fn height(&self) -> BlockHeight {
-        match self {
-            UserAction::Instantiate(context, _) => context.height,
-            UserAction::Operation(context, _) => context.height,
-            UserAction::ProcessStreams(context, _) => context.height,
-            UserAction::Message(context, _) => context.height,
-        }
-    }
-
-    pub(crate) fn round(&self) -> Option<u32> {
-        match self {
-            UserAction::Instantiate(context, _) => context.round,
-            UserAction::Operation(context, _) => context.round,
-            UserAction::ProcessStreams(context, _) => context.round,
-            UserAction::Message(context, _) => context.round,
-        }
-    }
-
-    pub(crate) fn timestamp(&self) -> Timestamp {
-        match self {
-            UserAction::Instantiate(context, _) => context.timestamp,
-            UserAction::Operation(context, _) => context.timestamp,
-            UserAction::ProcessStreams(context, _) => context.timestamp,
-            UserAction::Message(context, _) => context.timestamp,
         }
     }
 }
