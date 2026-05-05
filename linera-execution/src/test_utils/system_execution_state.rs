@@ -121,7 +121,7 @@ impl SystemExecutionState {
                 .insert(id, mock_application.into());
         }
 
-        let mut current_committee_hash = None;
+        let mut committee_hashes = BTreeMap::new();
         for (committee_epoch, committee) in committees {
             let blob = Blob::new_committee(bcs::to_bytes(&committee).expect("BCS should succeed"));
             let hash = blob.id().hash;
@@ -129,9 +129,7 @@ impl SystemExecutionState {
                 .add_blobs([blob])
                 .await
                 .expect("Adding committee blobs should not fail");
-            if committee_epoch == epoch {
-                current_committee_hash = Some(hash);
-            }
+            committee_hashes.insert(committee_epoch, hash);
         }
 
         let context = MemoryContext::new_for_testing(extra);
@@ -141,7 +139,9 @@ impl SystemExecutionState {
         view.system.description.set(description);
         view.system.epoch.set(epoch);
         view.system.admin_chain_id.set(admin_chain_id);
-        view.system.committee_hash.set(current_committee_hash);
+        view.system
+            .committee_hash
+            .set(committee_hashes.get(&epoch).copied());
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
         for (account_owner, balance) in balances {

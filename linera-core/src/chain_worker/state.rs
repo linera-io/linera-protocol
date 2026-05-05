@@ -2061,9 +2061,6 @@ where
         self.initialize_and_save_if_needed().await?;
         let chain = &self.chain;
         let mut info = ChainInfo::from_chain_view(chain).await?;
-        if query.request_committee_hash {
-            info.requested_committee_hash = *chain.execution_state.system.committee_hash.get();
-        }
         if query.request_owner_balance == AccountOwner::CHAIN {
             info.requested_owner_balance = Some(*chain.execution_state.system.balance.get());
         } else {

@@ -523,9 +523,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id)
-            .with_manager_values()
-            .with_committee_hash();
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self
             .client
             .local_node
@@ -643,21 +641,14 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(Some(SystemOperation::UpdateStreams(updates).into()))
     }
 
-    #[instrument(level = "trace")]
-    async fn chain_info_with_committee_hash(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        self.client
-            .chain_info_with_committee_hash(self.chain_id)
-            .await
-    }
-
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
-        let info = match self.chain_info_with_committee_hash().await {
+        let info = match self.client.local_node.chain_info(self.chain_id).await {
             Ok(info) => info,
             Err(LocalNodeError::BlobsNotFound(_)) => {
                 self.synchronize_chain_state(self.chain_id).await?;
-                self.chain_info_with_committee_hash().await?
+                self.client.local_node.chain_info(self.chain_id).await?
             }
             Err(LocalNodeError::EventsNotFound(event_ids))
                 if event_ids
@@ -668,12 +659,12 @@ impl<Env: Environment> ChainClient<Env> {
                 // the admin chain's epoch events aren't synced yet.
                 self.synchronize_chain_state(self.client.admin_chain_id)
                     .await?;
-                self.chain_info_with_committee_hash().await?
+                self.client.local_node.chain_info(self.chain_id).await?
             }
             Err(err) => return Err(err.into()),
         };
         let hash = info
-            .requested_committee_hash
+            .committee_hash
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         Ok(self
             .storage_client()
@@ -1479,7 +1470,7 @@ impl<Env: Environment> ChainClient<Env> {
                 use the `linera retry-pending-block` command to commit that first"
             )
         );
-        let info = self.chain_info_with_committee_hash().await?;
+        let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(&transactions, info.timestamp);
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
@@ -2580,8 +2571,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Returns operations to process all pending new epochs, in order. Revocations no longer
-    /// require a per-chain operation.
+    /// Returns operations to process all pending new epochs, in order.
     async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, Error> {
         let mut next_epoch = self.chain_info().await?.epoch.try_add_one()?;
         let mut epoch_change_ops = Vec::new();

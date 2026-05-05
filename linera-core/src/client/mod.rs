@@ -845,20 +845,12 @@ impl<Env: Environment> Client<Env> {
             .await
     }
 
-    async fn chain_info_with_committee_hash(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_committee_hash();
-        let info = self.local_node.handle_chain_info_query(query).await?.info;
-        Ok(info)
-    }
 
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
-        let info = self.chain_info_with_committee_hash(self.admin_chain_id).await?;
+        let info = self.local_node.chain_info(self.admin_chain_id).await?;
         let hash = info
-            .requested_committee_hash
+            .committee_hash
             .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
         let committee = self
             .storage_client()
@@ -1610,61 +1602,18 @@ impl<Env: Environment> Client<Env> {
         if block.header.epoch > highest_known_epoch {
             return Ok(CheckCertificateResult::FutureEpoch);
         }
-        let Some(committee) = self.committee_for_epoch(block.header.epoch).await? else {
-            return Ok(CheckCertificateResult::OldEpoch);
-        };
-        incoming_certificate.check(&committee)?;
-        Ok(CheckCertificateResult::New)
-    }
-
-    /// Returns the committee that signed blocks in the given epoch, looking it up via
-    /// the admin chain's epoch event stream. Returns `Ok(None)` if the epoch's
-    /// `EPOCH_STREAM` event is not present in local storage.
-    async fn committee_for_epoch(
-        &self,
-        epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, NodeError> {
-        let storage = self.storage_client();
-        let blob_hash = if epoch == Epoch::ZERO {
-            let net_desc = storage
-                .read_network_description()
-                .await
-                .map_err(|error| NodeError::ViewError {
-                    error: error.to_string(),
-                })?
-                .ok_or_else(|| NodeError::ClientIoError {
-                    error: "missing network description".to_string(),
-                })?;
-            net_desc.genesis_committee_blob_hash
-        } else {
-            let event_id = EventId {
-                chain_id: self.admin_chain_id,
-                stream_id: StreamId::system(linera_execution::system::EPOCH_STREAM_NAME),
-                index: epoch.0,
-            };
-            let Some(bytes) =
-                storage
-                    .read_event(event_id)
-                    .await
-                    .map_err(|error| NodeError::ViewError {
-                        error: error.to_string(),
-                    })?
-            else {
-                return Ok(None);
-            };
-            let event_data: linera_execution::system::EpochEventData = bcs::from_bytes(&bytes)
-                .map_err(|error| NodeError::ViewError {
-                    error: error.to_string(),
-                })?;
-            event_data.blob_hash
-        };
-        let committee = storage
-            .get_or_load_committee_by_hash(blob_hash)
+        let committee = self
+            .storage_client()
+            .committee_for_epoch(block.header.epoch)
             .await
             .map_err(|error| NodeError::ViewError {
                 error: error.to_string(),
             })?;
-        Ok(Some(committee))
+        let Some(committee) = committee else {
+            return Ok(CheckCertificateResult::OldEpoch);
+        };
+        incoming_certificate.check(&committee)?;
+        Ok(CheckCertificateResult::New)
     }
 
     /// Downloads and processes any certificates we are missing for the given chain.

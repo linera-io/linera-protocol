@@ -4000,9 +4000,7 @@ where
     let chain_id = chain_desc.id();
 
     // At time 0 we don't vote for fallback mode.
-    let query = ChainInfoQuery::new(chain_id)
-        .with_fallback()
-        .with_committee_hash();
+    let query = ChainInfoQuery::new(chain_id).with_fallback();
     let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
@@ -4068,7 +4066,7 @@ where
         .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
-    let committee_hash = response.info.requested_committee_hash.unwrap();
+    let committee_hash = response.info.committee_hash.unwrap();
     let committee = env
         .executing_worker()
         .storage

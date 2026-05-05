@@ -7,7 +7,7 @@
 mod tests;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     sync::Arc,
 };
 
@@ -833,17 +833,13 @@ where
         self.description.set(Some(description));
         self.epoch.set(epoch);
 
-        let committee_hash = self
+        let committee_hash = *self
             .context()
             .extra()
             .get_committee_hashes(epoch..=epoch)
             .await?
-            .remove(&epoch)
-            .ok_or(ExecutionError::EventsNotFound(vec![EventId {
-                chain_id: self.context().extra().chain_id(),
-                stream_id: StreamId::system(EPOCH_STREAM_NAME),
-                index: epoch.0,
-            }]))?;
+            .get(&epoch)
+            .expect("get_committee_hashes returns the requested epoch on success");
         let admin_chain_id = self
             .context()
             .extra()
