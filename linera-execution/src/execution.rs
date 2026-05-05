@@ -28,9 +28,15 @@ use serde::{Deserialize, Serialize};
 #[cfg(with_testing)]
 use {
     crate::{
-        ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
+        execution_state_actor::{RuntimeChannels, RuntimeCommand},
+        runtime::ContractSyncRuntime,
+        FinalizeContext, Message, Operation, ResourceControlPolicy, ResourceTracker,
+        TestExecutionRuntimeContext, UserContractCode,
     },
-    linera_base::data_types::Blob,
+    linera_base::{
+        data_types::{Amount, Blob, Timestamp},
+        identifiers::Account,
+    },
     linera_views::context::MemoryContext,
     std::sync::Arc,
 };
@@ -130,6 +136,169 @@ pub struct ServiceRuntimeEndpoint {
 }
 
 #[cfg(with_testing)]
+impl<C> ExecutionStateView<C>
+where
+    C: Context + Clone + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    /// Spawns a block-level contract runtime, runs `f` against an actor connected to it,
+    /// then sends `FinalizeAll` and tears the runtime down. Test-only.
+    async fn with_block_runtime<F, R>(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+        chain_id: ChainId,
+        height: BlockHeight,
+        round: Option<u32>,
+        timestamp: Timestamp,
+        finalize_context: FinalizeContext,
+        f: F,
+    ) -> Result<R, ExecutionError>
+    where
+        F: AsyncFnOnce(&mut ExecutionStateActor<'_, C>) -> Result<R, ExecutionError>,
+    {
+        let (command_tx, command_rx) = std::sync::mpsc::channel::<RuntimeCommand>();
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+
+        let allow_application_logs = self
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_application_logs;
+        let runtime_resource_controller = ResourceController::new(
+            resource_controller.policy().clone(),
+            ResourceTracker::default(),
+            Amount::ZERO,
+        );
+        let task = self
+            .context()
+            .extra()
+            .thread_pool()
+            .run_send((), move |()| async move {
+                let runtime = ContractSyncRuntime::new_for_block(
+                    execution_state_sender,
+                    chain_id,
+                    height,
+                    round,
+                    timestamp,
+                    runtime_resource_controller,
+                    allow_application_logs,
+                );
+                runtime.run_block_loop(&command_rx)
+            })
+            .await;
+
+        let action_result = {
+            let mut actor = ExecutionStateActor::with_runtime(
+                self,
+                txn_tracker,
+                resource_controller,
+                RuntimeChannels {
+                    command_tx: &command_tx,
+                    execution_state_receiver: &mut execution_state_receiver,
+                },
+            );
+            f(&mut actor).await
+        };
+
+        // Always send `FinalizeAll` so the runtime task terminates, even if `f` failed.
+        let initial_balance = match resource_controller.with_state(&mut self.system).await {
+            Ok(guard) => guard.balance().unwrap_or(Amount::ZERO),
+            Err(_) => Amount::ZERO,
+        };
+        let pre_finalize_tracker = resource_controller.tracker;
+        let _ = command_tx.send(RuntimeCommand::FinalizeAll {
+            context: finalize_context,
+            tracker: Box::new(pre_finalize_tracker),
+            initial_balance,
+        });
+
+        let drain_result = async {
+            let mut drain_actor = ExecutionStateActor::new(self, txn_tracker, resource_controller);
+            while let Some(request) = execution_state_receiver.next().await {
+                if matches!(request, ExecutionRequest::ActionComplete { .. }) {
+                    continue;
+                }
+                drain_actor.handle_request(request).await?;
+            }
+            Ok::<(), ExecutionError>(())
+        }
+        .await;
+
+        let runtime_result = task.await;
+
+        let action_value = action_result?;
+        drain_result?;
+        let runtime_controller =
+            runtime_result.map_err(|_| ExecutionError::MissingRuntimeResponse)??;
+
+        resource_controller.tracker = runtime_controller.tracker;
+        resource_controller
+            .with_state(&mut self.system)
+            .await?
+            .merge_balance(initial_balance, runtime_controller.account)?;
+
+        Ok(action_value)
+    }
+
+    /// Executes an operation through a freshly spawned block-level runtime. Test-only.
+    pub async fn execute_operation(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+        context: OperationContext,
+        operation: Operation,
+    ) -> Result<(), ExecutionError> {
+        let finalize_context = FinalizeContext {
+            authenticated_owner: context.authenticated_owner,
+            chain_id: context.chain_id,
+            height: context.height,
+            round: context.round,
+        };
+        self.with_block_runtime(
+            txn_tracker,
+            resource_controller,
+            context.chain_id,
+            context.height,
+            context.round,
+            context.timestamp,
+            finalize_context,
+            async move |actor| actor.execute_operation(context, operation).await,
+        )
+        .await
+    }
+
+    /// Executes a message through a freshly spawned block-level runtime. Test-only.
+    pub async fn execute_message(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+        context: MessageContext,
+        message: Message,
+        grant: Option<&mut Amount>,
+    ) -> Result<(), ExecutionError> {
+        let finalize_context = FinalizeContext {
+            authenticated_owner: context.authenticated_owner,
+            chain_id: context.chain_id,
+            height: context.height,
+            round: context.round,
+        };
+        self.with_block_runtime(
+            txn_tracker,
+            resource_controller,
+            context.chain_id,
+            context.height,
+            context.round,
+            context.timestamp,
+            finalize_context,
+            async move |actor| actor.execute_message(context, message, grant).await,
+        )
+        .await
+    }
+}
+
+#[cfg(with_testing)]
 impl ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>
 where
     MemoryContext<TestExecutionRuntimeContext>: Context + Clone + 'static,
@@ -192,10 +361,30 @@ where
             &[],
         );
         txn_tracker.add_created_blob(blob);
-        Box::pin(
-            ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller)
-                .run_user_action(application_id, action, context.refund_grant_to(), None),
-        )
+        let finalize_context = FinalizeContext {
+            authenticated_owner: context.authenticated_owner,
+            chain_id: context.chain_id,
+            height: context.height,
+            round: context.round,
+        };
+        let refund_grant_to = context.authenticated_owner.map(|owner| Account {
+            chain_id: context.chain_id,
+            owner,
+        });
+        Box::pin(self.with_block_runtime(
+            &mut txn_tracker,
+            &mut resource_controller,
+            context.chain_id,
+            context.height,
+            context.round,
+            context.timestamp,
+            finalize_context,
+            async move |actor| {
+                actor
+                    .run_user_action(application_id, action, refund_grant_to, None)
+                    .await
+            },
+        ))
         .await?;
 
         Ok(())
