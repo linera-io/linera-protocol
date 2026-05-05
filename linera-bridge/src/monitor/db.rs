@@ -346,6 +346,22 @@ impl BridgeDb {
         Ok(out)
     }
 
+    /// Returns the number of rows currently in `pending_deposits`.
+    pub async fn pending_deposits_count(&self) -> Result<i64> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_deposits")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count)
+    }
+
+    /// Returns the number of rows currently in `pending_burns`.
+    pub async fn pending_burns_count(&self) -> Result<i64> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_burns")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count)
+    }
+
     /// Stores raw BCS-serialized certificate bytes on the pending burn row.
     pub async fn store_burn_raw(
         &self,
@@ -444,11 +460,7 @@ mod tests {
         db.insert_deposit(&test_deposit()).await.unwrap();
         db.insert_deposit(&test_deposit()).await.unwrap();
 
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_deposits")
-            .fetch_one(&db.pool)
-            .await
-            .unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(db.pending_deposits_count().await.unwrap(), 1);
     }
 
     #[test_case(false; "in_memory")]
@@ -498,11 +510,7 @@ mod tests {
         db.insert_burn(&test_burn()).await.unwrap();
         db.insert_burn(&test_burn()).await.unwrap();
 
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_burns")
-            .fetch_one(&db.pool)
-            .await
-            .unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(db.pending_burns_count().await.unwrap(), 1);
     }
 
     #[test_case(false; "in_memory")]
@@ -535,12 +543,11 @@ mod tests {
             .await
             .unwrap();
 
-        let (pending_count,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM pending_deposits WHERE source_chain_id = 8453")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(pending_count, 0, "row should be removed from pending");
+        assert_eq!(
+            db.pending_deposits_count().await.unwrap(),
+            0,
+            "row should be removed from pending"
+        );
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
@@ -560,12 +567,7 @@ mod tests {
             .await
             .unwrap();
 
-        let (pending_count,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM pending_deposits WHERE source_chain_id = 8453")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(pending_count, 0);
+        assert_eq!(db.pending_deposits_count().await.unwrap(), 0);
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
@@ -585,12 +587,7 @@ mod tests {
             .await
             .unwrap();
 
-        let (pending_count,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM pending_burns WHERE linera_height = 100")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(pending_count, 0);
+        assert_eq!(db.pending_burns_count().await.unwrap(), 0);
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
@@ -610,12 +607,7 @@ mod tests {
             .await
             .unwrap();
 
-        let (pending_count,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM pending_burns WHERE linera_height = 100")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(pending_count, 0);
+        assert_eq!(db.pending_burns_count().await.unwrap(), 0);
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
@@ -650,12 +642,11 @@ mod tests {
             status, "completed",
             "original terminal status must be preserved on replay"
         );
-        let (pending_count,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM pending_deposits WHERE source_chain_id = 8453")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(pending_count, 0, "replayed pending row must be cleared");
+        assert_eq!(
+            db.pending_deposits_count().await.unwrap(),
+            0,
+            "replayed pending row must be cleared"
+        );
     }
 
     #[test_case(false; "in_memory")]
@@ -679,12 +670,7 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(status, "completed");
-        let (pending_count,): (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM pending_burns WHERE linera_height = 100")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(pending_count, 0);
+        assert_eq!(db.pending_burns_count().await.unwrap(), 0);
     }
 
     #[test_case(false; "in_memory")]
