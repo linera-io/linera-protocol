@@ -13,12 +13,14 @@ pub use anyhow;
 use serde::{Deserialize, Serialize};
 use wasmtime::{
     AsContext, AsContextMut, Extern, Memory, Mutability, Store, StoreContext, StoreContextMut,
-    V128, Val,
 };
 pub use wasmtime::{Caller, Linker};
 
 pub use self::{parameters::WasmtimeParameters, results::WasmtimeResults};
-use super::{snapshot::NumericVal, traits::{Instance, Runtime}};
+use super::{
+    snapshot::NumericVal,
+    traits::{Instance, Runtime},
+};
 
 /// Representation of the [Wasmtime](https://wasmtime.dev) runtime.
 pub struct Wasmtime;
@@ -41,26 +43,28 @@ pub struct WasmInstanceSnapshot {
     globals: Vec<(String, NumericVal)>,
 }
 
-fn wasmtime_val_to_numeric(val: &Val) -> NumericVal {
+fn wasmtime_val_to_numeric(val: &wasmtime::Val) -> NumericVal {
     match val {
-        Val::I32(v) => NumericVal::I32(*v),
-        Val::I64(v) => NumericVal::I64(*v),
-        Val::F32(bits) => NumericVal::F32(*bits),
-        Val::F64(bits) => NumericVal::F64(*bits),
-        Val::V128(v) => NumericVal::V128(v.as_u128()),
-        Val::FuncRef(_) | Val::ExternRef(_) | Val::AnyRef(_) => {
+        wasmtime::Val::I32(v) => NumericVal::I32(*v),
+        wasmtime::Val::I64(v) => NumericVal::I64(*v),
+        wasmtime::Val::F32(bits) => NumericVal::F32(*bits),
+        wasmtime::Val::F64(bits) => NumericVal::F64(*bits),
+        wasmtime::Val::V128(v) => NumericVal::V128(v.as_u128()),
+        wasmtime::Val::FuncRef(_)
+        | wasmtime::Val::ExternRef(_)
+        | wasmtime::Val::AnyRef(_) => {
             panic!("Reference-typed mutable globals cannot be snapshotted")
         }
     }
 }
 
-fn numeric_to_wasmtime_val(val: &NumericVal) -> Val {
+fn numeric_to_wasmtime_val(val: &NumericVal) -> wasmtime::Val {
     match val {
-        NumericVal::I32(v) => Val::I32(*v),
-        NumericVal::I64(v) => Val::I64(*v),
-        NumericVal::F32(bits) => Val::F32(*bits),
-        NumericVal::F64(bits) => Val::F64(*bits),
-        NumericVal::V128(v) => Val::V128(V128::from(*v)),
+        NumericVal::I32(v) => wasmtime::Val::I32(*v),
+        NumericVal::I64(v) => wasmtime::Val::I64(*v),
+        NumericVal::F32(bits) => wasmtime::Val::F32(*bits),
+        NumericVal::F64(bits) => wasmtime::Val::F64(*bits),
+        NumericVal::V128(v) => wasmtime::Val::V128(wasmtime::V128::from(*v)),
     }
 }
 

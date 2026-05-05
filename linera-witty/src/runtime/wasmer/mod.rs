@@ -15,32 +15,35 @@ use serde::{Deserialize, Serialize};
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
     AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
-    Module, Mutability, Store, StoreMut, StoreObjects, StoreRef, Value,
+    Module, Mutability, Store, StoreMut, StoreObjects, StoreRef,
 };
 
 pub use self::{parameters::WasmerParameters, results::WasmerResults};
-use super::{snapshot::NumericVal, traits::{Instance, Runtime}};
+use super::{
+    snapshot::NumericVal,
+    traits::{Instance, Runtime},
+};
 
-fn wasmer_value_to_numeric(value: &Value) -> NumericVal {
+fn wasmer_value_to_numeric(value: &wasmer::Value) -> NumericVal {
     match value {
-        Value::I32(v) => NumericVal::I32(*v),
-        Value::I64(v) => NumericVal::I64(*v),
-        Value::F32(v) => NumericVal::F32(v.to_bits()),
-        Value::F64(v) => NumericVal::F64(v.to_bits()),
-        Value::V128(v) => NumericVal::V128(*v),
-        Value::FuncRef(_) | Value::ExternRef(_) => {
+        wasmer::Value::I32(v) => NumericVal::I32(*v),
+        wasmer::Value::I64(v) => NumericVal::I64(*v),
+        wasmer::Value::F32(v) => NumericVal::F32(v.to_bits()),
+        wasmer::Value::F64(v) => NumericVal::F64(v.to_bits()),
+        wasmer::Value::V128(v) => NumericVal::V128(*v),
+        wasmer::Value::FuncRef(_) | wasmer::Value::ExternRef(_) => {
             panic!("Reference-typed mutable globals cannot be snapshotted")
         }
     }
 }
 
-fn numeric_to_wasmer_value(val: &NumericVal) -> Value {
+fn numeric_to_wasmer_value(val: &NumericVal) -> wasmer::Value {
     match val {
-        NumericVal::I32(v) => Value::I32(*v),
-        NumericVal::I64(v) => Value::I64(*v),
-        NumericVal::F32(bits) => Value::F32(f32::from_bits(*bits)),
-        NumericVal::F64(bits) => Value::F64(f64::from_bits(*bits)),
-        NumericVal::V128(v) => Value::V128(*v),
+        NumericVal::I32(v) => wasmer::Value::I32(*v),
+        NumericVal::I64(v) => wasmer::Value::I64(*v),
+        NumericVal::F32(bits) => wasmer::Value::F32(f32::from_bits(*bits)),
+        NumericVal::F64(bits) => wasmer::Value::F64(f64::from_bits(*bits)),
+        NumericVal::V128(v) => wasmer::Value::V128(*v),
     }
 }
 
