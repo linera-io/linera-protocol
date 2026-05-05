@@ -1304,6 +1304,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "event-emitter"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "event-listener"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1322,6 +1332,17 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
+]
+
+[[package]]
+name = "event-subscriber"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "event-emitter",
+ "linera-sdk",
+ "serde",
+ "tokio",
 ]
 
 [[package]]
