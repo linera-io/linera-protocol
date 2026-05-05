@@ -30,16 +30,15 @@ impl Contract for EventEmitterContract {
     type Parameters = ();
     type EventValue = String;
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = EventEmitterState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         EventEmitterContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {}
+    fn instantiate(&mut self, _argument: ()) {}
 
-    async fn execute_operation(&mut self, operation: Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Operation) -> Self::Response {
         match operation {
             Operation::Emit { stream_name, value } => {
                 self.state.emitted_events.push(value.clone());
@@ -62,12 +61,11 @@ impl Contract for EventEmitterContract {
         }
     }
 
-    async fn execute_message(&mut self, _message: ()) {}
+    fn execute_message(&mut self, _message: ()) {}
 
-    async fn store(self) {
+    fn store(self) {
         self.state
             .save_and_drop()
-            .await
             .expect("Failed to save state");
     }
 }
