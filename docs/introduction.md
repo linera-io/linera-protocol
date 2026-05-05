@@ -14,12 +14,10 @@ This documentation is split into two main parts:
    [developers](developers/getting_started.md) building applications using the
    Linera Rust SDK.
 
-Validator-operator documentation has moved to a dedicated site at
-<https://docs.infra.linera.net/>. The matching deployment artifacts
-(Helm charts, docker-compose stack, deploy scripts) live at
-<https://github.com/linera-io/linera-artifacts>. The
-[Node Operators](operators.md) page in this manual now just redirects
-there.
+If you operate a Linera validator, the [Node Operators](operators.md)
+section points to a dedicated site at <https://docs.infra.linera.net/>,
+with deployment artifacts (Helm charts, Docker Compose stack, deploy
+scripts) at <https://github.com/linera-io/linera-artifacts>.
 
 > **NEW: Publish and test your Web3 application on the Linera Testnet!**
 >
