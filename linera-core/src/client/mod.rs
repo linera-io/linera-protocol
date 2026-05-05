@@ -1580,26 +1580,15 @@ impl<Env: Environment> Client<Env> {
         &self,
         incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
-        let block = incoming_certificate.block();
-        let highest_known_epoch = self
-            .admin_committee()
-            .await
-            .map_err(|error| NodeError::ViewError {
-                error: error.to_string(),
-            })?
-            .0;
-        if block.header.epoch > highest_known_epoch {
-            return Ok(CheckCertificateResult::FutureEpoch);
-        }
         let committee = self
             .storage_client()
-            .committee_for_epoch(block.header.epoch)
+            .committee_for_epoch(incoming_certificate.block().header.epoch)
             .await
             .map_err(|error| NodeError::ViewError {
                 error: error.to_string(),
             })?;
         let Some(committee) = committee else {
-            return Ok(CheckCertificateResult::OldEpoch);
+            return Ok(CheckCertificateResult::UnknownEpoch);
         };
         incoming_certificate.check(&committee)?;
         Ok(CheckCertificateResult::New)
@@ -2037,17 +2026,19 @@ enum ReceiveCertificateMode {
 }
 
 enum CheckCertificateResult {
-    OldEpoch,
+    /// We have no committee for this certificate's epoch. Either the epoch was
+    /// retired and the committee has been pruned, or our local view of the admin
+    /// chain is behind and we have not yet seen the corresponding `EPOCH_STREAM`
+    /// event.
+    UnknownEpoch,
     New,
-    FutureEpoch,
 }
 
 impl CheckCertificateResult {
     fn into_result(self) -> Result<(), chain_client::Error> {
         match self {
-            Self::OldEpoch => Err(chain_client::Error::CommitteeDeprecationError),
+            Self::UnknownEpoch => Err(chain_client::Error::UnknownCommittee),
             Self::New => Ok(()),
-            Self::FutureEpoch => Err(chain_client::Error::CommitteeSynchronizationError),
         }
     }
 }

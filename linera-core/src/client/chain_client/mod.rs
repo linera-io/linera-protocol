@@ -256,22 +256,17 @@ pub enum Error {
     InternalError(&'static str),
 
     #[error(
-        "Cannot accept a certificate from an unknown committee in the future. \
-         Please synchronize the local view of the admin chain"
+        "Cannot accept a certificate from a committee we cannot find locally. \
+         Either synchronize the local view of the admin chain, or try a newer \
+         certificate from the same origin"
     )]
-    CommitteeSynchronizationError,
+    UnknownCommittee,
 
     #[error("The local node is behind the trusted state in wallet and needs synchronization with validators")]
     WalletSynchronizationError,
 
     #[error("The state of the client is incompatible with the proposed block: {0}")]
     BlockProposalError(&'static str),
-
-    #[error(
-        "Cannot accept a certificate from a committee that was retired. \
-         Try a newer certificate from the same origin"
-    )]
-    CommitteeDeprecationError,
 
     #[error("Protocol error within chain client: {0}")]
     ProtocolError(&'static str),
