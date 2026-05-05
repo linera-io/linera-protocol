@@ -144,15 +144,14 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     /// applications loaded only during a failed execution are not finalized.
     applications_to_finalize_snapshot: Option<Vec<ApplicationId>>,
     /// Serialized snapshots tracked across actions in the snapshot-based per-action
-    /// execution path on web. Populated at worker-spawn time with the latest
-    /// snapshot captured for each loaded application in the block so far;
-    /// `load_contract_instance` consumes from this map after instantiating each
-    /// contract to restore the captured post-`Contract::load` state. After the
-    /// action runs, the runtime captures fresh snapshots back into this map and
-    /// the actor reads them out to keep the block-level map up to date — hence
-    /// "current" rather than "initial".
-    #[debug(skip_if = HashMap::is_empty)]
-    current_snapshots: HashMap<ApplicationId, Vec<u8>>,
+    /// execution path on web. Populated at the start of `execute_action_with_snapshots`
+    /// from the actor's block-level map; `load_contract_instance` consumes from this
+    /// map after instantiating each contract to restore the captured
+    /// post-`Contract::load` state. After the action runs, the runtime captures fresh
+    /// snapshots back into this map and the caller pulls it out to keep the block-level
+    /// map up to date — hence "current" rather than "initial".
+    #[debug(skip_if = BTreeMap::is_empty)]
+    current_snapshots: BTreeMap<ApplicationId, Vec<u8>>,
 }
 
 /// The runtime status of an application.
@@ -363,7 +362,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             allow_application_logs,
             instance_snapshots: HashMap::new(),
             applications_to_finalize_snapshot: None,
-            current_snapshots: HashMap::new(),
+            current_snapshots: BTreeMap::new(),
         }
     }
 
@@ -1119,45 +1118,59 @@ impl ContractSyncRuntime {
         }
     }
 
-    /// Preloads the serialized snapshot of a contract into the runtime's memory.
+    /// Per-action entry point used by the snapshot-based execution path on web.
     ///
-    /// When the runtime later instantiates this contract via `load_contract_instance`
-    /// (lazily, on first use), it consumes the bytes from the map and calls
-    /// `restore_snapshot_from_bytes` immediately after instantiation — so the
-    /// instance starts in the captured post-`load` state.
-    pub(crate) fn preload_snapshot(&self, id: ApplicationId, snapshot_bytes: Vec<u8>) {
-        let this = self
-            .0
-            .as_ref()
-            .expect("snapshots shouldn't be preloaded while the runtime is being dropped");
-        this.inner().current_snapshots.insert(id, snapshot_bytes);
-    }
-
-    /// Captures a fresh snapshot of every currently loaded contract instance and
-    /// returns the map keyed by application ID, with each snapshot serialized to
-    /// bytes via the [`Snapshot::to_bytes`] convention.
+    /// Takes the actor's block-level snapshot map by value, runs the action
+    /// (without finalizing — no `Contract::store` is called), and returns the
+    /// same map with fresh entries for every contract that was loaded during
+    /// this action. Apps that were already in the input map but weren't loaded
+    /// during this action keep their original bytes and pass through.
     ///
-    /// Used by the snapshot-based per-action execution path: the worker calls
-    /// this at the end of the action and ships the resulting bytes back to the
-    /// async side; the actor merges them into the block-level snapshot map so
-    /// the next action's worker can restore from them.
-    ///
-    /// Backends that don't support checkpointing (e.g. the EVM runtime, which
-    /// returns `None` from `create_snapshot`) are skipped.
-    pub(crate) fn extract_current_snapshots(&self) -> HashMap<ApplicationId, Vec<u8>> {
-        let this = self
-            .0
-            .as_ref()
-            .expect("snapshots shouldn't be extracted while the runtime is being dropped");
-        let runtime = this.inner();
-        let mut snapshots = HashMap::new();
-        for (app_id, loaded) in &runtime.loaded_applications {
-            let mut instance = loaded.instance.try_lock().expect("instance not in use");
-            if let Some(snapshot) = instance.create_snapshot() {
-                snapshots.insert(*app_id, snapshot.to_bytes());
-            }
+    /// During the action, `load_contract_instance` consumes entries from the
+    /// map on first instantiation of each contract and calls
+    /// `restore_snapshot_from_bytes`, so the instance starts in its captured
+    /// post-`Contract::load` state — the SDK skips re-running `Contract::load`
+    /// because the contract's static `Option<Contract>` global is already
+    /// `Some(...)` after restore.
+    pub(crate) fn execute_action_with_snapshots(
+        mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        snapshots: BTreeMap<ApplicationId, Vec<u8>>,
+    ) -> Result<
+        (
+            Option<Vec<u8>>,
+            ResourceController,
+            BTreeMap<ApplicationId, Vec<u8>>,
+        ),
+        ExecutionError,
+    > {
+        // Move the input snapshots into the runtime; `load_contract_instance`
+        // consumes (`.remove()`) from this map on first use of each contract.
+        self.inner().current_snapshots = snapshots;
+        let result = self
+            .deref_mut()
+            .execute_action(application_id, action, refund_grant_to)?;
+        // Capture a fresh snapshot for every loaded contract and merge into the
+        // map. Apps not loaded this action keep their original bytes (untouched
+        // by the action's execution).
+        let captured: Vec<(ApplicationId, Vec<u8>)> = self
+            .inner()
+            .loaded_applications
+            .iter()
+            .filter_map(|(app_id, loaded)| {
+                let mut instance = loaded.instance.try_lock().expect("instance not in use");
+                instance.create_snapshot().map(|s| (*app_id, s.to_bytes()))
+            })
+            .collect();
+        for (app_id, bytes) in captured {
+            self.inner().current_snapshots.insert(app_id, bytes);
         }
-        snapshots
+        let runtime = self
+            .into_inner()
+            .expect("Runtime clones should have been freed by now");
+        Ok((result, runtime.resource_controller, runtime.current_snapshots))
     }
 
     /// Runs a block-level loop, receiving commands from the async side.

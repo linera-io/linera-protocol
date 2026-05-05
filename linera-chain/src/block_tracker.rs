@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use custom_debug_derive::Debug;
 use futures::channel::mpsc;
@@ -74,8 +74,8 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     /// the block. Empty when the threaded path is in use; populated by the
     /// snapshot-based per-action path. Absence of a key means the contract has not
     /// been loaded yet in this block (next worker for it will call `Contract::load`).
-    #[debug(skip_if = HashMap::is_empty)]
-    pub(crate) block_snapshots: HashMap<ApplicationId, Vec<u8>>,
+    #[debug(skip_if = BTreeMap::is_empty)]
+    pub(crate) block_snapshots: BTreeMap<ApplicationId, Vec<u8>>,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -126,7 +126,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             published_blobs,
             command_tx,
             execution_state_receiver,
-            block_snapshots: HashMap::new(),
+            block_snapshots: BTreeMap::new(),
         })
     }
 
