@@ -34,3 +34,11 @@ services:
       driver: journald
       options:
         tag: linera-bridge
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M

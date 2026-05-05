@@ -3,9 +3,6 @@
 This describes how to provision and operate a `linera-bridge` relayer
 on a single VM, bridging Base Sepolia (EVM) and Testnet Conway (Linera).
 
-For the full design rationale, see [`SPEC-linera-bridge-testnet-deployment.md`](../SPEC-linera-bridge-testnet-deployment.md)
-in the repo root.
-
 ## Prerequisites
 
 - A Linux VM with Docker + docker-compose
