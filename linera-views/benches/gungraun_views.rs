@@ -624,7 +624,12 @@ library_benchmark_group!(
         bench_queue_push_back,
         bench_queue_front,
         bench_queue_delete_front,
-        bench_queue_pre_save,
+        bench_queue_pre_save
+);
+
+library_benchmark_group!(
+    name = bucket_queue_view_group;
+    benchmarks =
         bench_bucket_queue_push_back,
         bench_bucket_queue_front,
         bench_bucket_queue_delete_front,
@@ -673,6 +678,7 @@ main!(
     library_benchmark_groups =
         map_view_group,
         queue_view_group,
+        bucket_queue_view_group,
         register_view_group,
         collection_view_group,
         reentrant_collection_view_group,

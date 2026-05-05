@@ -73,7 +73,8 @@ fmt_cell() {
 group_label() {
   case "$1" in
     map_view_group)                    echo "MapView" ;;
-    queue_view_group)                  echo "QueueView / BucketQueueView" ;;
+    queue_view_group)                  echo "QueueView" ;;
+    bucket_queue_view_group)           echo "BucketQueueView" ;;
     register_view_group)               echo "RegisterView" ;;
     collection_view_group)             echo "CollectionView" ;;
     reentrant_collection_view_group)   echo "ReentrantCollectionView" ;;
