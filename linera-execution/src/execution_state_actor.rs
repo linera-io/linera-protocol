@@ -31,13 +31,14 @@ use tracing::instrument;
 
 use crate::{
     execution::UserAction,
+    runtime::ContractSyncRuntime,
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
-    ExecutionStateView, FinalizeContext, Message, MessageContext, MessageKind, ModuleId, Operation,
-    OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
-    ResourceController, ResourceTracker, SystemMessage, TransactionTracker, UserContractCode,
-    UserServiceCode,
+    ExecutionStateView, FinalizeContext, JsVec, Message, MessageContext, MessageKind, ModuleId,
+    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
+    QueryOutcome, ResourceController, ResourceTracker, SystemMessage, TransactionTracker,
+    UserContractCode, UserServiceCode,
 };
 
 /// Commands sent from the async side to the contract runtime thread.
@@ -1009,13 +1010,142 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        self.run_user_action_threaded_shared_memory(
-            application_id,
-            action,
-            refund_grant_to,
-            grant,
-        )
-        .await
+        if self.runtime_channels.is_some() {
+            self.run_user_action_threaded_shared_memory(
+                application_id,
+                action,
+                refund_grant_to,
+                grant,
+            )
+            .await
+        } else {
+            self.run_user_action_non_threaded_not_shared_memory(
+                application_id,
+                action,
+                refund_grant_to,
+                grant,
+            )
+            .await
+        }
+    }
+
+    /// Snapshot-based per-action execution path. Spawns a fresh worker for the
+    /// action; the contract codes and the current per-application snapshots are
+    /// `Post`ed at spawn time. The worker compiles + instantiates the contracts,
+    /// restores any provided snapshot (so `Contract::load` is skipped via the
+    /// SDK's `Option<Contract>` global), runs the action, captures fresh
+    /// snapshots for every loaded application, and returns them. The actor
+    /// merges the returned map back into the block-level snapshot map borrowed
+    /// from the [`BlockExecutionTracker`].
+    #[instrument(skip_all, fields(application_id = %application_id))]
+    async fn run_user_action_non_threaded_not_shared_memory(
+        &mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
+    ) -> Result<(), ExecutionError> {
+        let chain_id = self.state.context().extra().chain_id();
+        let mut cloned_grant = grant.as_ref().map(|x| **x);
+        let initial_balance = self
+            .resource_controller
+            .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
+            .await?
+            .balance()?;
+        let mut runtime_controller = ResourceController::new(
+            self.resource_controller.policy().clone(),
+            self.resource_controller.tracker,
+            initial_balance,
+        );
+        let is_free = matches!(
+            &action,
+            UserAction::Message(..) | UserAction::ProcessStreams(..)
+        ) && self
+            .resource_controller
+            .policy()
+            .is_free_app(&application_id);
+        runtime_controller.is_free = is_free;
+        self.resource_controller.is_free = is_free;
+
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+
+        let (codes, descriptions): (Vec<_>, Vec<_>) =
+            self.contract_and_dependencies(application_id).await?;
+
+        let allow_application_logs = self
+            .state
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_application_logs;
+
+        // Move the block-level snapshot map out of the borrowed reference; we'll
+        // put it back updated after the worker returns.
+        let snapshots_in: BTreeMap<ApplicationId, Vec<u8>> = std::mem::take(
+            *self
+                .block_snapshots
+                .as_mut()
+                .expect("block_snapshots must be set on the snapshot-based execution path"),
+        );
+
+        let height = action.height();
+        let round = action.round();
+        let timestamp = action.timestamp();
+
+        let contract_runtime_task = self
+            .state
+            .context()
+            .extra()
+            .thread_pool()
+            .run_send(JsVec(codes), move |codes| async move {
+                let runtime = ContractSyncRuntime::new_for_block(
+                    execution_state_sender,
+                    chain_id,
+                    height,
+                    round,
+                    timestamp,
+                    runtime_controller,
+                    allow_application_logs,
+                );
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_contract(
+                        ApplicationId::from(&description),
+                        code,
+                        description,
+                    );
+                }
+                runtime.execute_action_with_snapshots(
+                    application_id,
+                    action,
+                    refund_grant_to,
+                    snapshots_in,
+                )
+            })
+            .await;
+
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request).await?;
+        }
+
+        let (result, controller, snapshots_out) = contract_runtime_task.await??;
+
+        // Put the updated snapshots back into the actor's borrowed map.
+        **self
+            .block_snapshots
+            .as_mut()
+            .expect("block_snapshots must still be set") = snapshots_out;
+
+        self.resource_controller.is_free = false;
+        self.txn_tracker.add_operation_result(result);
+
+        self.resource_controller
+            .with_state_and_grant(&mut self.state.system, grant)
+            .await?
+            .merge_balance(initial_balance, controller.balance()?)?;
+        self.resource_controller.tracker = controller.tracker;
+
+        Ok(())
     }
 
     /// Threaded shared-memory path: dispatches the user action to the long-lived

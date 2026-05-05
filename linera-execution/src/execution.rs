@@ -410,6 +410,33 @@ impl UserAction {
             UserAction::Message(context, _) => context.authenticated_owner,
         }
     }
+
+    pub(crate) fn height(&self) -> BlockHeight {
+        match self {
+            UserAction::Instantiate(context, _) => context.height,
+            UserAction::Operation(context, _) => context.height,
+            UserAction::ProcessStreams(context, _) => context.height,
+            UserAction::Message(context, _) => context.height,
+        }
+    }
+
+    pub(crate) fn round(&self) -> Option<u32> {
+        match self {
+            UserAction::Instantiate(context, _) => context.round,
+            UserAction::Operation(context, _) => context.round,
+            UserAction::ProcessStreams(context, _) => context.round,
+            UserAction::Message(context, _) => context.round,
+        }
+    }
+
+    pub(crate) fn timestamp(&self) -> linera_base::data_types::Timestamp {
+        match self {
+            UserAction::Instantiate(context, _) => context.timestamp,
+            UserAction::Operation(context, _) => context.timestamp,
+            UserAction::ProcessStreams(context, _) => context.timestamp,
+            UserAction::Message(context, _) => context.timestamp,
+        }
+    }
 }
 
 impl<C> ExecutionStateView<C>
