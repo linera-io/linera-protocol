@@ -394,14 +394,14 @@ mod tests {
 
     static FILE_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-    async fn open_db(use_file: bool) -> BridgeDb {
+    async fn open_db(use_file: bool) -> Result<BridgeDb> {
         if use_file {
             let n = FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
             let path = std::path::PathBuf::from(format!("/tmp/bridge_db_test_{n}.sqlite3"));
             std::fs::remove_file(&path).ok(); // Best-effort cleanup; NotFound is the common case.
-            BridgeDb::open(&path).await.unwrap()
+            BridgeDb::open(&path).await
         } else {
-            BridgeDb::open_in_memory().await.unwrap()
+            BridgeDb::open_in_memory().await
         }
     }
 
@@ -438,140 +438,138 @@ mod tests {
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_insert_and_query_deposit(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_insert_and_query_deposit(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
 
         let row: (String, Vec<u8>) = sqlx::query_as(
             "SELECT amount, depositor FROM pending_deposits WHERE source_chain_id = 8453",
         )
         .fetch_one(&db.pool)
-        .await
-        .unwrap();
+        .await?;
         assert_eq!(row.0, "1000000");
         assert_eq!(row.1, Address::from([0xCC; 20]).as_slice());
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_insert_deposit_idempotent(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_insert_deposit_idempotent(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
+        db.insert_deposit(&test_deposit()).await?;
 
-        assert_eq!(db.pending_deposits_count().await.unwrap(), 1);
+        assert_eq!(db.pending_deposits_count().await?, 1);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_partial_processing_splits_pending_and_finished(use_file: bool) {
-        let db = open_db(use_file).await;
+    async fn test_partial_processing_splits_pending_and_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
 
         let mut keys = Vec::new();
         for log_index in 0..5 {
             let mut deposit = test_deposit();
             deposit.key.log_index = log_index;
-            db.insert_deposit(&deposit).await.unwrap();
+            db.insert_deposit(&deposit).await?;
             keys.push(deposit.key);
         }
-        assert_eq!(db.pending_deposits_count().await.unwrap(), 5);
+        assert_eq!(db.pending_deposits_count().await?, 5);
 
         for key in &keys[..2] {
-            db.update_deposit_status(key, "completed").await.unwrap();
+            db.update_deposit_status(key, "completed").await?;
         }
 
-        assert_eq!(db.pending_deposits_count().await.unwrap(), 3);
+        assert_eq!(db.pending_deposits_count().await?, 3);
         let (finished_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM finished_deposits")
             .fetch_one(&db.pool)
-            .await
-            .unwrap();
+            .await?;
         assert_eq!(finished_count, 2);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_store_and_retrieve_deposit_raw(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_store_and_retrieve_deposit_raw(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
 
         let raw_bytes = vec![1, 2, 3, 4, 5];
         db.store_deposit_raw(&test_deposit_key(), &raw_bytes)
-            .await
-            .unwrap();
+            .await?;
 
         let (raw,): (Vec<u8>,) = sqlx::query_as(
             "SELECT raw_operation FROM pending_deposits WHERE source_chain_id = 8453",
         )
         .fetch_one(&db.pool)
-        .await
-        .unwrap();
+        .await?;
         assert_eq!(raw, raw_bytes);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_insert_and_query_burn(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
+    async fn test_insert_and_query_burn(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
 
         let burn = test_burn();
         let row: (String, String) = sqlx::query_as(
             "SELECT evm_recipient, amount FROM pending_burns WHERE linera_height = 100",
         )
         .fetch_one(&db.pool)
-        .await
-        .unwrap();
+        .await?;
         assert_eq!(row.0, format!("{:#x}", burn.evm_recipient));
         assert_eq!(row.1, burn.amount.to_string());
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_insert_burn_idempotent(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
-        db.insert_burn(&test_burn()).await.unwrap();
+    async fn test_insert_burn_idempotent(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
+        db.insert_burn(&test_burn()).await?;
 
-        assert_eq!(db.pending_burns_count().await.unwrap(), 1);
+        assert_eq!(db.pending_burns_count().await?, 1);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_store_and_retrieve_burn_raw(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
+    async fn test_store_and_retrieve_burn_raw(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
 
         let cert_bytes = vec![10, 20, 30, 40, 50];
-        db.store_burn_raw(BlockHeight(100), 0, &cert_bytes)
-            .await
-            .unwrap();
+        db.store_burn_raw(BlockHeight(100), 0, &cert_bytes).await?;
 
         let (raw,): (Vec<u8>,) =
             sqlx::query_as("SELECT raw_cert FROM pending_burns WHERE linera_height = 100")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(raw, cert_bytes);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_complete_deposit_moves_to_finished(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_complete_deposit_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
         db.update_deposit_status(&test_deposit_key(), "completed")
-            .await
-            .unwrap();
+            .await?;
 
         assert_eq!(
-            db.pending_deposits_count().await.unwrap(),
+            db.pending_deposits_count().await?,
             0,
             "row should be removed from pending"
         );
@@ -579,187 +577,176 @@ mod tests {
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(status, "completed");
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_fail_deposit_moves_to_finished(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_fail_deposit_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
         db.update_deposit_status(&test_deposit_key(), "failed")
-            .await
-            .unwrap();
+            .await?;
 
-        assert_eq!(db.pending_deposits_count().await.unwrap(), 0);
+        assert_eq!(db.pending_deposits_count().await?, 0);
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(status, "failed");
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_complete_burn_moves_to_finished(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
+    async fn test_complete_burn_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
         db.update_burn_status(BlockHeight(100), 0, "completed")
-            .await
-            .unwrap();
+            .await?;
 
-        assert_eq!(db.pending_burns_count().await.unwrap(), 0);
+        assert_eq!(db.pending_burns_count().await?, 0);
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(status, "completed");
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_fail_burn_moves_to_finished(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
-        db.update_burn_status(BlockHeight(100), 0, "failed")
-            .await
-            .unwrap();
+    async fn test_fail_burn_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
+        db.update_burn_status(BlockHeight(100), 0, "failed").await?;
 
-        assert_eq!(db.pending_burns_count().await.unwrap(), 0);
+        assert_eq!(db.pending_burns_count().await?, 0);
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(status, "failed");
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_replay_preserves_original_finished_deposit(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_replay_preserves_original_finished_deposit(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
         db.update_deposit_status(&test_deposit_key(), "completed")
-            .await
-            .unwrap();
+            .await?;
 
         // Replay: re-insert the same deposit and try to mark it failed.
-        db.insert_deposit(&test_deposit()).await.unwrap();
+        db.insert_deposit(&test_deposit()).await?;
         db.update_deposit_status(&test_deposit_key(), "failed")
-            .await
-            .unwrap();
+            .await?;
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(
             status, "completed",
             "original terminal status must be preserved on replay"
         );
         assert_eq!(
-            db.pending_deposits_count().await.unwrap(),
+            db.pending_deposits_count().await?,
             0,
             "replayed pending row must be cleared"
         );
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_replay_preserves_original_finished_burn(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
+    async fn test_replay_preserves_original_finished_burn(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
         db.update_burn_status(BlockHeight(100), 0, "completed")
-            .await
-            .unwrap();
+            .await?;
 
-        db.insert_burn(&test_burn()).await.unwrap();
-        db.update_burn_status(BlockHeight(100), 0, "failed")
-            .await
-            .unwrap();
+        db.insert_burn(&test_burn()).await?;
+        db.update_burn_status(BlockHeight(100), 0, "failed").await?;
 
         let (status,): (String,) =
             sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(status, "completed");
-        assert_eq!(db.pending_burns_count().await.unwrap(), 0);
+        assert_eq!(db.pending_burns_count().await?, 0);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_load_pending_excludes_finished_deposits(use_file: bool) {
-        let db = open_db(use_file).await;
+    async fn test_load_pending_excludes_finished_deposits(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
         let first = test_deposit();
         let mut second = test_deposit();
         second.key.log_index = 1;
-        db.insert_deposit(&first).await.unwrap();
-        db.insert_deposit(&second).await.unwrap();
-        db.update_deposit_status(&first.key, "completed")
-            .await
-            .unwrap();
+        db.insert_deposit(&first).await?;
+        db.insert_deposit(&second).await?;
+        db.update_deposit_status(&first.key, "completed").await?;
 
-        let pending = db.load_pending_deposits().await.unwrap();
+        let pending = db.load_pending_deposits().await?;
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].key.log_index, 1);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_load_pending_excludes_finished_burns(use_file: bool) {
-        let db = open_db(use_file).await;
+    async fn test_load_pending_excludes_finished_burns(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
         let mut second = test_burn();
         second.burn_index = 1;
-        db.insert_burn(&test_burn()).await.unwrap();
-        db.insert_burn(&second).await.unwrap();
+        db.insert_burn(&test_burn()).await?;
+        db.insert_burn(&second).await?;
         db.update_burn_status(BlockHeight(100), 0, "completed")
-            .await
-            .unwrap();
+            .await?;
 
-        let pending = db.load_pending_burns().await.unwrap();
+        let pending = db.load_pending_burns().await?;
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].burn_index, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_file_persistence_survives_reopen() {
+    async fn test_file_persistence_survives_reopen() -> Result<()> {
         let path = std::path::PathBuf::from("/tmp/bridge_db_test_reopen.sqlite3");
         std::fs::remove_file(&path).ok(); // Best-effort pre-cleanup; NotFound is the common case.
 
         {
-            let db = BridgeDb::open(&path).await.unwrap();
-            db.insert_deposit(&test_deposit()).await.unwrap();
+            let db = BridgeDb::open(&path).await?;
+            db.insert_deposit(&test_deposit()).await?;
             db.update_deposit_status(&test_deposit_key(), "completed")
-                .await
-                .unwrap();
+                .await?;
         }
 
         {
-            let db = BridgeDb::open(&path).await.unwrap();
+            let db = BridgeDb::open(&path).await?;
             let (status,): (String,) =
                 sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
                     .fetch_one(&db.pool)
-                    .await
-                    .unwrap();
+                    .await?;
             assert_eq!(status, "completed");
         }
 
         std::fs::remove_file(&path).ok(); // Best-effort post-test cleanup.
+        Ok(())
     }
 }
