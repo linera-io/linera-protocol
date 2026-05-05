@@ -24,7 +24,7 @@ use crate::{
 #[allocative(bound = "C")]
 pub struct SyncByteSetView<C>(
     /// The inner async byte set view whose state and logic we reuse.
-    pub(crate) ByteSetView<C>,
+    ByteSetView<C>,
 );
 
 impl<C: SyncContext> SyncView for SyncByteSetView<C> {

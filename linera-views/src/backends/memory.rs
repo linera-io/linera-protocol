@@ -108,7 +108,7 @@ static MEMORY_DATABASES: LazyLock<Mutex<MemoryDatabases>> =
 /// A synchronous in-memory store.
 ///
 /// This is the primary type holding the actual fields and sync trait
-/// implementations, since the underlying storage (BTreeMap behind
+/// implementations, since the underlying storage (B-tree map behind
 /// `std::sync::RwLock`) is fundamentally synchronous.
 #[derive(Clone)]
 pub struct SyncMemoryStore {

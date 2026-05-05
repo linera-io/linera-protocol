@@ -22,7 +22,7 @@ use crate::{
 #[allocative(bound = "C, T: Allocative")]
 pub struct SyncLogView<C, T>(
     /// The inner async log view whose state and logic we reuse.
-    pub(crate) LogView<C, T>,
+    LogView<C, T>,
 );
 
 impl<C, T> SyncView for SyncLogView<C, T>

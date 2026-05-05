@@ -17,7 +17,7 @@ use crate::{
 #[allocative(bound = "C, T: Allocative")]
 pub struct SyncRegisterView<C, T>(
     /// The inner async register view whose state and logic we reuse.
-    pub(crate) RegisterView<C, T>,
+    RegisterView<C, T>,
 );
 
 impl<C, T> SyncView for SyncRegisterView<C, T>

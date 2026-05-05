@@ -66,7 +66,7 @@ where
 #[allocative(bound = "C, V: Allocative")]
 pub struct SyncByteMapView<C, V>(
     /// The inner async byte map view whose state and logic we reuse.
-    pub(crate) ByteMapView<C, V>,
+    ByteMapView<C, V>,
 );
 
 impl<C, V> SyncView for SyncByteMapView<C, V>

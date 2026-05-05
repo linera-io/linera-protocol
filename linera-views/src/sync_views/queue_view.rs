@@ -23,7 +23,7 @@ use crate::{
 #[allocative(bound = "C, T: Allocative")]
 pub struct SyncQueueView<C, T>(
     /// The inner async queue view whose state and logic we reuse.
-    pub(crate) QueueView<C, T>,
+    QueueView<C, T>,
 );
 
 impl<C, T> SyncView for SyncQueueView<C, T>
