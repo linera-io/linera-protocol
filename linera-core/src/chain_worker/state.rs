@@ -1011,10 +1011,6 @@ where
         // Only process certificates with relevant heights and epochs.
         let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
         let next_height_to_receive = inbox.next_block_height_to_receive()?;
-        let last_anticipated_block_height = match inbox.removed_bundles.back().await? {
-            Some(bundle) => Some(bundle.height),
-            None => None,
-        };
 
         // Proactive gap detection: if the sender declares a predecessor height that
         // we haven't received yet, the inbox has a gap.
@@ -1043,15 +1039,8 @@ where
             }
         }
 
-        let helper = CrossChainUpdateHelper::new(&self.config, &self.chain);
         let recipient = self.chain_id();
-        let bundles = helper.select_message_bundles(
-            &origin,
-            recipient,
-            next_height_to_receive,
-            last_anticipated_block_height,
-            bundles,
-        )?;
+        let bundles = select_message_bundles(&origin, recipient, next_height_to_receive, bundles)?;
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };
@@ -2314,67 +2303,39 @@ fn check_block_epoch(
     Ok(())
 }
 
-/// Helper type for handling cross-chain updates.
-pub(crate) struct CrossChainUpdateHelper {
-    pub(crate) allow_messages_from_deprecated_epochs: bool,
-}
-
-impl CrossChainUpdateHelper {
-    /// Creates a new [`CrossChainUpdateHelper`].
-    fn new<C>(config: &ChainWorkerConfig, _chain: &ChainStateView<C>) -> Self
-    where
-        C: Context + Clone + 'static,
-    {
-        CrossChainUpdateHelper {
-            allow_messages_from_deprecated_epochs: config.allow_messages_from_deprecated_epochs,
+/// Filters the bundles to drop ones already received and to enforce monotonically
+/// non-decreasing heights.
+//
+// TODO: Validators should also refuse bundles whose epoch was revoked on the admin
+// chain. The check belongs here and should consult the admin chain's
+// `REMOVED_EPOCH_STREAM`.
+pub(crate) fn select_message_bundles<'a>(
+    origin: &'a ChainId,
+    recipient: ChainId,
+    next_height_to_receive: BlockHeight,
+    mut bundles: Vec<(Epoch, MessageBundle)>,
+) -> Result<Vec<MessageBundle>, WorkerError> {
+    let mut latest_height = None;
+    let mut skipped_len = 0;
+    for (i, (_epoch, bundle)) in bundles.iter().enumerate() {
+        ensure!(
+            latest_height <= Some(bundle.height),
+            WorkerError::InvalidCrossChainRequest
+        );
+        latest_height = Some(bundle.height);
+        if bundle.height < next_height_to_receive {
+            skipped_len = i + 1;
         }
     }
-
-    /// Checks basic invariants and deals with repeated heights and deprecated epochs.
-    /// * Returns a range of message bundles that are both new to us and not relying on
-    ///   an untrusted set of validators.
-    /// * In the case of validators, if the epoch(s) of the highest bundles are not
-    ///   trusted, we only accept bundles that contain messages that were already
-    ///   executed by anticipation (i.e. received in certified blocks).
-    /// * Basic invariants are checked for good measure. We still crucially trust
-    ///   the worker of the sending chain to have verified and executed the blocks
-    ///   correctly.
-    pub(crate) fn select_message_bundles<'a>(
-        &self,
-        origin: &'a ChainId,
-        recipient: ChainId,
-        next_height_to_receive: BlockHeight,
-        _last_anticipated_block_height: Option<BlockHeight>,
-        mut bundles: Vec<(Epoch, MessageBundle)>,
-    ) -> Result<Vec<MessageBundle>, WorkerError> {
-        // TODO: Once the per-chain `committees` map is gone, validators still need to
-        // refuse messages whose epoch was revoked on the admin chain. That check belongs
-        // here and should consult the admin chain's `REMOVED_EPOCH_STREAM`.
-        let _ = self.allow_messages_from_deprecated_epochs;
-        let mut latest_height = None;
-        let mut skipped_len = 0;
-        for (i, (_epoch, bundle)) in bundles.iter().enumerate() {
-            // Make sure that heights are not decreasing.
-            ensure!(
-                latest_height <= Some(bundle.height),
-                WorkerError::InvalidCrossChainRequest
-            );
-            latest_height = Some(bundle.height);
-            if bundle.height < next_height_to_receive {
-                skipped_len = i + 1;
-            }
-        }
-        if skipped_len > 0 {
-            let (_, sample_bundle) = &bundles[skipped_len - 1];
-            debug!(
-                "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
-                sample_bundle.height,
-            );
-        }
-        let bundles = bundles
-            .drain(skipped_len..)
-            .map(|(_, bundle)| bundle)
-            .collect();
-        Ok(bundles)
+    if skipped_len > 0 {
+        let (_, sample_bundle) = &bundles[skipped_len - 1];
+        debug!(
+            "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
+            sample_bundle.height,
+        );
     }
+    Ok(bundles
+        .drain(skipped_len..)
+        .map(|(_, bundle)| bundle)
+        .collect())
 }

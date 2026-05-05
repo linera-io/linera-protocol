@@ -142,8 +142,7 @@ pub struct ChainInfo {
     #[debug(skip_if = Option::is_none)]
     pub requested_owner_balance: Option<Amount>,
     /// The blob hash of the committee that signs the next block on this chain.
-    #[debug(skip_if = Option::is_none)]
-    pub committee_hash: Option<CryptoHash>,
+    pub committee_hash: CryptoHash,
     /// The received messages that are waiting be picked in the next block (if requested).
     #[debug(skip_if = Vec::is_empty)]
     pub requested_pending_message_bundles: Vec<IncomingBundle>,

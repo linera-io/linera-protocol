@@ -81,7 +81,7 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
     }
 
     #[graphql(derived(name = "committee_hash"))]
-    async fn _committee_hash(&self) -> &Option<CryptoHash> {
+    async fn _committee_hash(&self) -> &CryptoHash {
         self.committee_hash.get()
     }
 

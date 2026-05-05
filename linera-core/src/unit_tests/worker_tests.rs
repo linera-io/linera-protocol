@@ -85,7 +85,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::{ChainWorkerConfig, CrossChainUpdateHelper},
+    chain_worker::{state::select_message_bundles, ChainWorkerConfig},
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -181,7 +181,6 @@ where
             let config = ChainWorkerConfig {
                 nickname: "Single validator node".to_string(),
                 allow_inactive_chains: is_client,
-                allow_messages_from_deprecated_epochs: is_client,
                 long_lived_services: has_long_lived_services,
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
                 sender_chain_ttl: None,
@@ -2852,7 +2851,10 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert!(user_chain.execution_state.system.committee_hash.get().is_some());
+        assert_ne!(
+            *user_chain.execution_state.system.committee_hash.get(),
+            CryptoHash::default()
+        );
     }
     let proposal3 = make_first_block(user_id)
         .with_incoming_bundle(IncomingBundle {
@@ -2916,7 +2918,7 @@ where
         );
         assert_eq!(
             *user_chain.execution_state.system.committee_hash.get(),
-            Some(blob_hash)
+            blob_hash
         );
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
@@ -3340,29 +3342,25 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             .collect()
     }
 
-    let helper = CrossChainUpdateHelper {
-        allow_messages_from_deprecated_epochs: true,
-    };
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
+        select_message_bundles(&id0, id1, BlockHeight::ZERO, bundles01.clone())?,
         without_epochs(&bundles01)
     );
     // Received heights is removing prefixes.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles01.clone())?,
+        select_message_bundles(&id0, id1, BlockHeight::from(1), bundles01.clone())?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(2), None, bundles01.clone())?,
+        select_message_bundles(&id0, id1, BlockHeight::from(2), bundles01.clone())?,
         vec![]
     );
     // Order of certificates is checked.
     assert_matches!(
-        helper.select_message_bundles(
+        select_message_bundles(
             &id0,
             id1,
             BlockHeight::ZERO,
-            None,
             bundles1
                 .iter()
                 .cloned()
@@ -3374,11 +3372,11 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 
     // Mixing several epochs is allowed.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles0123.clone())?,
+        select_message_bundles(&id0, id1, BlockHeight::ZERO, bundles0123.clone())?,
         without_epochs(&bundles0123)
     );
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles012.clone())?,
+        select_message_bundles(&id0, id1, BlockHeight::from(1), bundles012.clone())?,
         without_epochs(bundles1.iter().chain(&bundles2))
     );
     Ok(())
@@ -4066,7 +4064,7 @@ where
         .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
-    let committee_hash = response.info.committee_hash.unwrap();
+    let committee_hash = response.info.committee_hash;
     let committee = env
         .executing_worker()
         .storage
@@ -4728,7 +4726,6 @@ where
             ChainWorkerConfig {
                 nickname: "No-recovery worker".to_string(),
                 allow_inactive_chains: true,
-                allow_messages_from_deprecated_epochs: true,
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
                 ..ChainWorkerConfig::default()
             }
@@ -4754,7 +4751,6 @@ where
             ChainWorkerConfig {
                 nickname: "Whitelist-excludes worker".to_string(),
                 allow_inactive_chains: true,
-                allow_messages_from_deprecated_epochs: true,
                 reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
                 recovery_whitelist: Some(HashSet::from([target_id])),
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
@@ -4790,7 +4786,6 @@ where
         ChainWorkerConfig {
             nickname: "Recovery worker".to_string(),
             allow_inactive_chains: true,
-            allow_messages_from_deprecated_epochs: true,
             reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
             recovery_whitelist: Some(HashSet::from([chain_id])),
             block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),

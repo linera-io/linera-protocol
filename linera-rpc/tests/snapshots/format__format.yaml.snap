@@ -314,8 +314,7 @@ ChainInfo:
         OPTION:
           TYPENAME: Amount
     - committee_hash:
-        OPTION:
-          TYPENAME: CryptoHash
+        TYPENAME: CryptoHash
     - requested_pending_message_bundles:
         SEQ:
           TYPENAME: IncomingBundle

@@ -139,9 +139,9 @@ impl SystemExecutionState {
         view.system.description.set(description);
         view.system.epoch.set(epoch);
         view.system.admin_chain_id.set(admin_chain_id);
-        view.system
-            .committee_hash
-            .set(committee_hashes.get(&epoch).copied());
+        if let Some(hash) = committee_hashes.get(&epoch) {
+            view.system.committee_hash.set(*hash);
+        }
         view.system.ownership.set(ownership);
         view.system.balance.set(balance);
         for (account_owner, balance) in balances {

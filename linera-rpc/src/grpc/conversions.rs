@@ -1192,7 +1192,7 @@ pub mod tests {
             timestamp: Timestamp::default(),
             next_block_height: BlockHeight::ZERO,
             state_hash: None,
-            committee_hash: None,
+            committee_hash: CryptoHash::default(),
             requested_owner_balance: None,
             requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
