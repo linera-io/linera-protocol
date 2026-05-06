@@ -118,9 +118,10 @@ impl NativeFungibleContract {
 impl UserContract for NativeFungibleContract {
     fn instantiate(&mut self, argument: Vec<u8>) -> Result<(), ExecutionError> {
         let parameters_bytes = self.runtime.application_parameters()?;
-        let parameters: Parameters = serde_json::from_slice(&parameters_bytes).map_err(|error| {
-            ExecutionError::UserError(format!("Invalid native fungible parameters: {error}"))
-        })?;
+        let parameters: Parameters =
+            serde_json::from_slice(&parameters_bytes).map_err(|error| {
+                ExecutionError::UserError(format!("Invalid native fungible parameters: {error}"))
+            })?;
         if parameters.ticker_symbol != TICKER_SYMBOL {
             return Err(ExecutionError::UserError(format!(
                 "Only {TICKER_SYMBOL} is accepted as ticker symbol"
@@ -134,7 +135,8 @@ impl UserContract for NativeFungibleContract {
         let chain_id = self.runtime.chain_id()?;
         for (owner, amount) in state.accounts {
             let account = Account { chain_id, owner };
-            self.runtime.transfer(AccountOwner::CHAIN, account, amount)?;
+            self.runtime
+                .transfer(AccountOwner::CHAIN, account, amount)?;
         }
         Ok(())
     }

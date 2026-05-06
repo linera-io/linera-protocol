@@ -575,7 +575,9 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
             return Ok(contract.clone());
         }
         let contract = match &description.kind {
-            ApplicationKind::Module(_) => self.storage.load_contract(description, txn_tracker).await?,
+            ApplicationKind::Module(_) => {
+                self.storage.load_contract(description, txn_tracker).await?
+            }
             ApplicationKind::Native(kind) => linera_execution::native::user_contract_code(*kind),
         };
         pinned.insert(application_id, contract.clone());
@@ -593,7 +595,9 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
             return Ok(service.clone());
         }
         let service = match &description.kind {
-            ApplicationKind::Module(_) => self.storage.load_service(description, txn_tracker).await?,
+            ApplicationKind::Module(_) => {
+                self.storage.load_service(description, txn_tracker).await?
+            }
             ApplicationKind::Native(kind) => linera_execution::native::user_service_code(*kind),
         };
         pinned.insert(application_id, service.clone());

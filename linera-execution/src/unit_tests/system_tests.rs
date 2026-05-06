@@ -166,7 +166,10 @@ async fn native_application_message_index() -> anyhow::Result<()> {
     // was published or required.
     let outcome = txn_tracker.into_outcome().unwrap();
     assert_eq!(outcome.blobs.len(), 1);
-    assert_eq!(outcome.blobs[0].id().blob_type, BlobType::ApplicationDescription);
+    assert_eq!(
+        outcome.blobs[0].id().blob_type,
+        BlobType::ApplicationDescription
+    );
 
     Ok(())
 }

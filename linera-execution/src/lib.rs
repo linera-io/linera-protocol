@@ -8,9 +8,9 @@ pub mod committee;
 pub mod evm;
 mod execution;
 pub mod execution_state_actor;
-pub mod native;
 #[cfg(with_graphql)]
 mod graphql;
+pub mod native;
 mod policy;
 mod resources;
 mod runtime;
