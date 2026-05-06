@@ -96,54 +96,11 @@ async fn threaded_and_snapshot_paths_match_for_simple_operation() -> anyhow::Res
     let outcome_snapshot = tracker_snapshot.into_outcome()?;
 
     assert_eq!(
-        outcome_threaded.oracle_responses,
-        outcome_snapshot.oracle_responses,
-        "oracle responses must agree across paths"
+        outcome_threaded, outcome_snapshot,
+        "transaction outcomes must agree across paths"
     );
     assert_eq!(
-        outcome_threaded.outgoing_messages,
-        outcome_snapshot.outgoing_messages,
-        "outgoing messages must agree across paths"
-    );
-    assert_eq!(
-        outcome_threaded.events,
-        outcome_snapshot.events,
-        "emitted events must agree across paths"
-    );
-    assert_eq!(
-        outcome_threaded.blobs,
-        outcome_snapshot.blobs,
-        "created blobs must agree across paths"
-    );
-    assert_eq!(
-        outcome_threaded.operation_result,
-        outcome_snapshot.operation_result,
-        "operation result must agree across paths"
-    );
-    assert_eq!(
-        outcome_threaded.blobs_published,
-        outcome_snapshot.blobs_published,
-        "published blob IDs must agree across paths"
-    );
-    assert_eq!(
-        outcome_threaded.free_blob_ids,
-        outcome_snapshot.free_blob_ids,
-        "free blob IDs must agree across paths"
-    );
-    assert_eq!(
-        outcome_threaded.next_application_index,
-        outcome_snapshot.next_application_index,
-        "next application index must agree across paths"
-    );
-    assert_eq!(
-        outcome_threaded.next_chain_index,
-        outcome_snapshot.next_chain_index,
-        "next chain index must agree across paths"
-    );
-    // `ResourceTracker` doesn't impl `PartialEq`, so compare via the Debug repr.
-    assert_eq!(
-        format!("{:?}", controller_threaded.tracker),
-        format!("{:?}", controller_snapshot.tracker),
+        controller_threaded.tracker, controller_snapshot.tracker,
         "resource trackers must agree across paths"
     );
 
