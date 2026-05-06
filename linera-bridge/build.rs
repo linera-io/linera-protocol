@@ -8,7 +8,7 @@ fn main() {
 
 #[cfg(feature = "codegen")]
 mod codegen {
-    use std::{collections::BTreeMap, path::PathBuf};
+    use std::{collections::BTreeMap, path::PathBuf, process::Command};
 
     use serde_generate::{solidity, CodeGeneratorConfig, SourceInstaller};
     use serde_reflection::Registry;
@@ -16,6 +16,32 @@ mod codegen {
     pub fn generate() {
         generate_bridge_types();
         generate_fungible_types();
+        forge_fmt(&PathBuf::from("src/solidity/BridgeTypes.sol"));
+        forge_fmt(&PathBuf::from("src/solidity/WrappedFungibleTypes.sol"));
+    }
+
+    /// Reformats a freshly generated Solidity file with `forge fmt` so the
+    /// generator's output matches the rest of the codebase. Falls back to
+    /// a warning (non-fatal) if `forge` is not on PATH — codegen is a
+    /// best-effort developer convenience and shouldn't break a build that
+    /// otherwise wouldn't have run forge.
+    fn forge_fmt(path: &PathBuf) {
+        if !path.exists() {
+            return;
+        }
+        let status = Command::new("forge").arg("fmt").arg(path).status();
+        match status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                println!("cargo:warning=forge fmt {} exited with {s}", path.display());
+            }
+            Err(e) => {
+                println!(
+                    "cargo:warning=forge fmt {} could not be invoked: {e}",
+                    path.display()
+                );
+            }
+        }
     }
 
     /// Generates BridgeTypes.sol from the bridge snapshot.
