@@ -773,7 +773,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_reset_with_stored_hash_clone_unchecked_preserves_override() -> Result<(), ViewError> {
+    async fn test_reset_with_stored_hash_clone_unchecked_preserves_override(
+    ) -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut view =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
