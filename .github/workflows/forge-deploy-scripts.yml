@@ -29,6 +29,10 @@ jobs:
         with:
           version: v1.7.0
 
+      - name: forge fmt --check
+        working-directory: linera-bridge/src/solidity
+        run: forge fmt --check
+
       - name: Run forge tests for deploy scripts
         working-directory: linera-bridge/src/solidity
         run: forge test --match-path 'test/Deploy*' -vvv
