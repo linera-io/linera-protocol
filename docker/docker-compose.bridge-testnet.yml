@@ -10,7 +10,7 @@
 # See docker/README.testnet.md for the full procedure.
 services:
   relayer:
-    image: linera-bridge:${BRIDGE_TAG:-testnet_conway}
+    image: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-bridge:testnet_conway_internal
     restart: unless-stopped
     env_file:
       - /etc/linera-bridge/.env
