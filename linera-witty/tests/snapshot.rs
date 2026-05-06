@@ -43,8 +43,16 @@ const WAT: &str = r#"
     i32.store8)
   (func (export "read_byte") (param i32) (result i32)
     local.get 0
-    i32.load8_u))
+    i32.load8_u)
+  (func (export "grow_pages") (param i32) (result i32)
+    local.get 0
+    memory.grow))
 "#;
+
+/// A byte offset that lives in the second page of linear memory: the snapshot
+/// captures it, but a freshly built instance has only one initial page, so
+/// restoring must grow the live memory before copying.
+const SECOND_PAGE_OFFSET: i32 = 70_000;
 
 /// A reference state used by both backends. Matching values land on instances of
 /// every numeric global plus a small varied byte pattern in linear memory.
@@ -236,6 +244,52 @@ mod wasmer_tests {
         instance_b.restore_snapshot(&snap_b);
         assert_state(&mut instance_b, &STATE_B);
     }
+
+    #[test]
+    fn restore_grows_memory_when_snapshot_is_larger() {
+        let engine = engine();
+        let module = Module::new(&engine, wat::parse_str(super::WAT).unwrap()).unwrap();
+
+        let bytes = {
+            let mut instance = build_instance(engine.clone(), &module);
+            let (mut store, wasmer_instance) = instance.as_store_and_instance_mut();
+            wasmer_instance
+                .exports
+                .get_function("grow_pages")
+                .unwrap()
+                .call(&mut store, &[wasmer::Value::I32(1)])
+                .unwrap();
+            wasmer_instance
+                .exports
+                .get_function("write_byte")
+                .unwrap()
+                .call(
+                    &mut store,
+                    &[
+                        wasmer::Value::I32(super::SECOND_PAGE_OFFSET),
+                        wasmer::Value::I32(0xa5),
+                    ],
+                )
+                .unwrap();
+            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+        };
+
+        let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
+        let mut instance = build_instance(engine, &module);
+        instance.restore_snapshot(&snapshot);
+
+        let (mut store, wasmer_instance) = instance.as_store_and_instance_mut();
+        let read = wasmer_instance
+            .exports
+            .get_function("read_byte")
+            .unwrap()
+            .call(
+                &mut store,
+                &[wasmer::Value::I32(super::SECOND_PAGE_OFFSET)],
+            )
+            .unwrap();
+        assert_eq!(read[0].i32(), Some(0xa5));
+    }
 }
 
 #[cfg(with_wasmtime)]
@@ -389,5 +443,52 @@ mod wasmtime_tests {
         let mut instance_b = build_instance(&engine, &module);
         instance_b.restore_snapshot(&snap_b);
         assert_state(&mut instance_b, &STATE_B);
+    }
+
+    #[test]
+    fn restore_grows_memory_when_snapshot_is_larger() {
+        let engine = Engine::default();
+        let module = Module::new(&engine, wat::parse_str(super::WAT).unwrap()).unwrap();
+
+        let bytes = {
+            let mut instance = build_instance(&engine, &module);
+            let (mut store, wasmtime_instance) = instance.as_store_and_instance_mut();
+            let mut grow_out = [wasmtime::Val::I32(0)];
+            wasmtime_instance
+                .get_func(&mut store, "grow_pages")
+                .unwrap()
+                .call(&mut store, &[wasmtime::Val::I32(1)], &mut grow_out)
+                .unwrap();
+            wasmtime_instance
+                .get_func(&mut store, "write_byte")
+                .unwrap()
+                .call(
+                    &mut store,
+                    &[
+                        wasmtime::Val::I32(super::SECOND_PAGE_OFFSET),
+                        wasmtime::Val::I32(0xa5),
+                    ],
+                    &mut [],
+                )
+                .unwrap();
+            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+        };
+
+        let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
+        let mut instance = build_instance(&engine, &module);
+        instance.restore_snapshot(&snapshot);
+
+        let (mut store, wasmtime_instance) = instance.as_store_and_instance_mut();
+        let mut out = [wasmtime::Val::I32(0)];
+        wasmtime_instance
+            .get_func(&mut store, "read_byte")
+            .unwrap()
+            .call(
+                &mut store,
+                &[wasmtime::Val::I32(super::SECOND_PAGE_OFFSET)],
+                &mut out,
+            )
+            .unwrap();
+        assert_eq!(out[0].i32(), Some(0xa5));
     }
 }

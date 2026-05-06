@@ -126,8 +126,17 @@ impl<UserData> EntrypointInstance<UserData> {
         for (name, ext) in exports {
             match ext {
                 Extern::Memory(mem) if !memory_restored => {
-                    mem.data_mut(&mut self.store)[..snapshot.memory_data.len()]
-                        .copy_from_slice(&snapshot.memory_data);
+                    // Grow the live memory to fit the snapshot if the snapshot
+                    // was captured after a `memory.grow`.
+                    let needed = snapshot.memory_data.len();
+                    let current = mem.data_size(&self.store);
+                    if needed > current {
+                        let page_size = mem.page_size(&self.store) as usize;
+                        let extra_pages = needed.div_ceil(page_size) - current / page_size;
+                        mem.grow(&mut self.store, extra_pages as u64)
+                            .expect("Failed to grow Wasm memory to match snapshot");
+                    }
+                    mem.data_mut(&mut self.store)[..needed].copy_from_slice(&snapshot.memory_data);
                     memory_restored = true;
                 }
                 Extern::Global(global) => {

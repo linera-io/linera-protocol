@@ -207,7 +207,25 @@ impl<UserData> EntrypointInstance<UserData> {
 
     /// Restores the Wasm instance's mutable state from a snapshot.
     pub fn restore_snapshot(&mut self, snapshot: &WasmInstanceSnapshot) {
-        if let Some((_name, memory)) = self.instance.exports.iter().memories().next() {
+        if let Some((_name, memory)) = self
+            .instance
+            .exports
+            .iter()
+            .memories()
+            .next()
+            .map(|(n, m)| (n.clone(), m.clone()))
+        {
+            // Grow the live memory to fit the snapshot if the snapshot
+            // was captured after a `memory.grow`.
+            let needed = snapshot.memory_data.len() as u64;
+            let current = memory.view(&self.store).data_size();
+            if needed > current {
+                let page_size = wasmer::WASM_PAGE_SIZE as u64;
+                let extra_pages = needed.div_ceil(page_size) - current / page_size;
+                memory
+                    .grow(&mut self.store, extra_pages as u32)
+                    .expect("Failed to grow Wasm memory to match snapshot");
+            }
             memory
                 .view(&self.store)
                 .write(0, &snapshot.memory_data)
