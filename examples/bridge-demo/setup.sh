@@ -122,28 +122,6 @@ linera_exec() {
         ./linera "$@"
 }
 
-# Parse "Deployed to: 0x..." from forge create output.
-parse_address() {
-    grep 'Deployed to:' | sed 's/.*Deployed to: //' | tr -d '[:space:]'
-}
-
-# Parse "Transaction hash: 0x..." from forge create output.
-parse_tx_hash() {
-    grep 'Transaction hash:' | sed 's/.*Transaction hash: //' | tr -d '[:space:]'
-}
-
-# Wait for a transaction to be mined. Needed on public testnets where forge
-# create returns before the tx is confirmed, causing nonce races.
-wait_for_tx() {
-    local tx_hash="$1"
-    if [[ -z "$tx_hash" || "$tx_hash" == "0x" ]]; then
-        return 0
-    fi
-    echo "  Waiting for tx $tx_hash..."
-    evm_exec cast receipt --confirmations 1 \
-        --rpc-url "$EVM_RPC_URL" "$tx_hash" >/dev/null
-}
-
 # ── Defaults ──
 echo "Compose file: $COMPOSE_FILE"
 EVM_RPC_URL="${EVM_RPC_URL:-http://anvil:8545}"
