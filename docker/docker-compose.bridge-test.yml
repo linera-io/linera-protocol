@@ -21,7 +21,7 @@ services:
     entrypoint: ["sleep", "infinity"]
     volumes:
       - bridge-shared:/shared
-      - ../linera-bridge/src/solidity:/contracts:ro
+      - ../linera-bridge/src/solidity:/contracts
     depends_on:
       anvil:
         condition: service_healthy
