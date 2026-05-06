@@ -56,7 +56,7 @@ pub const ERROR_TYPE_LABEL: &str = "error_type";
 /// input being recorded verbatim as a Prometheus label value.
 const MAX_PROTO_IDENT_LEN: usize = 128;
 
-/// Returns `true` if `s` is a valid protobuf identifier (`[A-Za-z_][A-Za-z0-9_]*`)
+/// Returns `true` if `s` is a valid protobuf identifier (`[A-Za-z][A-Za-z0-9_]*`)
 /// within the length cap.
 fn is_proto_identifier(s: &str) -> bool {
     if s.is_empty() || s.len() > MAX_PROTO_IDENT_LEN {
@@ -64,10 +64,7 @@ fn is_proto_identifier(s: &str) -> bool {
     }
     let mut bytes = s.bytes();
     let first = bytes.next().expect("non-empty checked above");
-    if !first.is_ascii_alphabetic() && first != b'_' {
-        return false;
-    }
-    bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    first.is_ascii_alphabetic() && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 /// Returns `true` if `s` is a fully-qualified proto Service-Name: two or more
@@ -179,6 +176,16 @@ mod method_name_tests {
         assert_eq!(extract_grpc_method_name("/foo.bar/Method-x"), "non_grpc");
         assert_eq!(extract_grpc_method_name("/foo.bar/Method?x"), "non_grpc");
         assert_eq!(extract_grpc_method_name("/foo.bar/.Method"), "non_grpc");
+    }
+
+    #[test]
+    fn identifier_starting_with_underscore_is_rejected() {
+        assert_eq!(extract_grpc_method_name("/foo.bar/_Method"), "non_grpc");
+        assert_eq!(extract_grpc_method_name("/_foo.bar/Method"), "non_grpc");
+        assert_eq!(
+            extract_grpc_method_name("/foo.bar/________________"),
+            "non_grpc"
+        );
     }
 
     #[test]
