@@ -517,13 +517,13 @@ pub trait UserContract {
     /// Creates a snapshot of the contract instance's mutable state.
     ///
     /// What constitutes the mutable state depends on the backend: for Wasm runtimes
-    /// it is the linear memory and globals; backends that do not support
-    /// checkpointing (such as the EVM runtime) return `None`.
-    fn create_snapshot(&mut self) -> Option<Box<dyn Snapshot>>;
+    /// it is the linear memory, mutable globals and table sizes; backends that do
+    /// not support checkpointing (such as the EVM runtime) return `Ok(None)`.
+    fn create_snapshot(&mut self) -> Result<Option<Box<dyn Snapshot>>, ExecutionError>;
 
     /// Restores the contract instance's mutable state from a snapshot previously
     /// produced by `create_snapshot`.
-    fn restore_snapshot(&mut self, snapshot: &dyn Snapshot);
+    fn restore_snapshot(&mut self, snapshot: &dyn Snapshot) -> Result<(), ExecutionError>;
 
     /// Restores the contract instance's mutable state from the BCS-encoded bytes
     /// of a snapshot previously produced by `create_snapshot().to_bytes()`.

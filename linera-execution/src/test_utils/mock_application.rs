@@ -328,11 +328,13 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
         }
     }
 
-    fn create_snapshot(&mut self) -> Option<Box<dyn crate::Snapshot>> {
-        None
+    fn create_snapshot(&mut self) -> Result<Option<Box<dyn crate::Snapshot>>, ExecutionError> {
+        Ok(None)
     }
 
-    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) {}
+    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) -> Result<(), ExecutionError> {
+        Ok(())
+    }
 
     fn restore_snapshot_from_bytes(&mut self, _bytes: &[u8]) -> Result<(), ExecutionError> {
         Ok(())

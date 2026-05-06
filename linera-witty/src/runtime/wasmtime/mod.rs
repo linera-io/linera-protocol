@@ -18,7 +18,7 @@ pub use wasmtime::{Caller, Linker};
 
 pub use self::{parameters::WasmtimeParameters, results::WasmtimeResults};
 use super::{
-    snapshot::NumericVal,
+    snapshot::{NumericVal, SnapshotError},
     traits::{Instance, Runtime},
 };
 
@@ -61,16 +61,14 @@ pub struct WasmInstanceSnapshot {
     table_sizes: Vec<(String, u64)>,
 }
 
-fn wasmtime_val_to_numeric(val: &wasmtime::Val) -> NumericVal {
+fn wasmtime_val_to_numeric(val: &wasmtime::Val) -> Option<NumericVal> {
     match val {
-        wasmtime::Val::I32(v) => NumericVal::I32(*v),
-        wasmtime::Val::I64(v) => NumericVal::I64(*v),
-        wasmtime::Val::F32(bits) => NumericVal::F32(*bits),
-        wasmtime::Val::F64(bits) => NumericVal::F64(*bits),
-        wasmtime::Val::V128(v) => NumericVal::V128(v.as_u128()),
-        wasmtime::Val::FuncRef(_) | wasmtime::Val::ExternRef(_) | wasmtime::Val::AnyRef(_) => {
-            panic!("Reference-typed mutable globals cannot be snapshotted")
-        }
+        wasmtime::Val::I32(v) => Some(NumericVal::I32(*v)),
+        wasmtime::Val::I64(v) => Some(NumericVal::I64(*v)),
+        wasmtime::Val::F32(bits) => Some(NumericVal::F32(*bits)),
+        wasmtime::Val::F64(bits) => Some(NumericVal::F64(*bits)),
+        wasmtime::Val::V128(v) => Some(NumericVal::V128(v.as_u128())),
+        wasmtime::Val::FuncRef(_) | wasmtime::Val::ExternRef(_) | wasmtime::Val::AnyRef(_) => None,
     }
 }
 
@@ -101,7 +99,7 @@ impl<UserData> EntrypointInstance<UserData> {
 
     /// Creates a snapshot of the Wasm instance's mutable state (memories, globals,
     /// table sizes).
-    pub fn create_snapshot(&mut self) -> WasmInstanceSnapshot {
+    pub fn create_snapshot(&mut self) -> Result<WasmInstanceSnapshot, SnapshotError> {
         let mut memories = Vec::new();
         let mut globals = Vec::new();
         let mut table_sizes = Vec::new();
@@ -120,29 +118,36 @@ impl<UserData> EntrypointInstance<UserData> {
                 Extern::Global(global) => {
                     // Const globals are part of the module and need no snapshot.
                     if global.ty(&self.store).mutability() == Mutability::Var {
-                        globals.push((name, wasmtime_val_to_numeric(&global.get(&mut self.store))));
+                        let val = wasmtime_val_to_numeric(&global.get(&mut self.store))
+                            .ok_or_else(|| SnapshotError::ReferenceTypedGlobal {
+                                name: name.clone(),
+                            })?;
+                        globals.push((name, val));
                     }
                 }
                 Extern::Table(table) => {
                     table_sizes.push((name, u64::from(table.size(&self.store))));
                 }
                 Extern::SharedMemory(_) => {
-                    panic!("Wasm shared memories are not supported by snapshotting");
+                    return Err(SnapshotError::SharedMemoryUnsupported { name });
                 }
                 // Functions are immutable code references; nothing to snapshot.
                 Extern::Func(_) => {}
             }
         }
 
-        WasmInstanceSnapshot {
+        Ok(WasmInstanceSnapshot {
             memories,
             globals,
             table_sizes,
-        }
+        })
     }
 
     /// Restores the Wasm instance's mutable state from a snapshot.
-    pub fn restore_snapshot(&mut self, snapshot: &WasmInstanceSnapshot) {
+    pub fn restore_snapshot(
+        &mut self,
+        snapshot: &WasmInstanceSnapshot,
+    ) -> Result<(), SnapshotError> {
         let exports = self
             .instance
             .exports(&mut self.store)
@@ -162,8 +167,12 @@ impl<UserData> EntrypointInstance<UserData> {
                         if needed > current {
                             let page_size = mem.page_size(&self.store) as usize;
                             let extra_pages = needed.div_ceil(page_size) - current / page_size;
-                            mem.grow(&mut self.store, extra_pages as u64)
-                                .expect("Failed to grow Wasm memory to match snapshot");
+                            mem.grow(&mut self.store, extra_pages as u64).map_err(|e| {
+                                SnapshotError::MemoryGrow {
+                                    name: name.clone(),
+                                    message: e.to_string(),
+                                }
+                            })?;
                         }
                         mem.data_mut(&mut self.store)[..needed].copy_from_slice(bytes);
                     }
@@ -172,28 +181,33 @@ impl<UserData> EntrypointInstance<UserData> {
                     if let Some((_, val)) = snapshot.globals.iter().find(|(n, _)| n == &name) {
                         global
                             .set(&mut self.store, numeric_to_wasmtime_val(val))
-                            .expect("Failed to restore Wasm global from snapshot");
+                            .map_err(|e| SnapshotError::GlobalSet {
+                                name: name.clone(),
+                                message: e.to_string(),
+                            })?;
                     }
                 }
                 Extern::Table(table) => {
                     if let Some((_, size)) = snapshot.table_sizes.iter().find(|(n, _)| n == &name)
                     {
                         let current = u64::from(table.size(&self.store));
-                        assert_eq!(
-                            current, *size,
-                            "Wasm table `{name}` size changed: snapshot has {size}, fresh \
-                             instance has {current}; Linera contracts must not mutate tables \
-                             after instantiation",
-                        );
+                        if current != *size {
+                            return Err(SnapshotError::TableSizeMismatch {
+                                name,
+                                snapshot: *size,
+                                current,
+                            });
+                        }
                     }
                 }
                 Extern::SharedMemory(_) => {
-                    panic!("Wasm shared memories are not supported by snapshotting");
+                    return Err(SnapshotError::SharedMemoryUnsupported { name });
                 }
                 // Functions are immutable code references; nothing to restore.
                 Extern::Func(_) => {}
             }
         }
+        Ok(())
     }
 }
 

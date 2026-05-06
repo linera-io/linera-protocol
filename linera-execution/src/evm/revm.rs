@@ -1329,13 +1329,14 @@ where
         Ok(())
     }
 
-    fn create_snapshot(&mut self) -> Option<Box<dyn crate::Snapshot>> {
+    fn create_snapshot(&mut self) -> Result<Option<Box<dyn crate::Snapshot>>, ExecutionError> {
         // We do not have snapshots with the REVM blockchain.
-        None
+        Ok(None)
     }
 
-    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) {
+    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) -> Result<(), ExecutionError> {
         // Since no snapshot, the restoring is a noop.
+        Ok(())
     }
 
     fn restore_snapshot_from_bytes(&mut self, _bytes: &[u8]) -> Result<(), ExecutionError> {

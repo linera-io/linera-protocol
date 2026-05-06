@@ -1171,17 +1171,23 @@ impl ContractSyncRuntime {
             .execute_action(application_id, action, refund_grant_to)?;
         // Capture a fresh snapshot for every loaded contract — *before*
         // finalize, so `CONTRACT` is still `Some(...)` in the captured memory.
-        let captured: Vec<(ApplicationId, Vec<u8>)> = self
-            .inner()
-            .loaded_applications
-            .iter()
-            .filter_map(|(app_id, loaded)| {
+        let app_ids: Vec<ApplicationId> =
+            self.inner().loaded_applications.keys().copied().collect();
+        for app_id in app_ids {
+            let snapshot = {
+                let inner = self.inner();
+                let loaded = inner
+                    .loaded_applications
+                    .get(&app_id)
+                    .expect("application present");
                 let mut instance = loaded.instance.try_lock().expect("instance not in use");
-                instance.create_snapshot().map(|s| (*app_id, s.to_bytes()))
-            })
-            .collect();
-        for (app_id, bytes) in captured {
-            self.inner().current_snapshots.insert(app_id, bytes);
+                instance.create_snapshot()?
+            };
+            if let Some(snapshot) = snapshot {
+                self.inner()
+                    .current_snapshots
+                    .insert(app_id, snapshot.to_bytes());
+            }
         }
         // Finalize: each loaded contract's `Contract::store` runs, writing its
         // Wasm-side state to the chain view. The threaded path does this once
@@ -1294,22 +1300,22 @@ impl ContractSyncRuntime {
                 }
 
                 RuntimeCommand::SnapshotAllInstances => {
-                    handle.snapshot_all_instances();
+                    let result = handle.snapshot_all_instances().map(|()| None);
 
                     let sender = handle.inner().execution_state_sender.clone();
                     _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
-                        result: Ok(None),
+                        result,
                         final_balance: Amount::ZERO,
                         tracker: ResourceTracker::default(),
                     });
                 }
 
                 RuntimeCommand::RestoreAllInstances => {
-                    handle.restore_all_snapshots();
+                    let result = handle.restore_all_snapshots().map(|()| None);
 
                     let sender = handle.inner().execution_state_sender.clone();
                     _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
-                        result: Ok(None),
+                        result,
                         final_balance: Amount::ZERO,
                         tracker: ResourceTracker::default(),
                     });
@@ -1392,20 +1398,20 @@ impl ContractSyncRuntimeHandle {
     /// loaded only during a failed execution are not finalized after a restore.
     ///
     /// The snapshots are stored internally and can be restored with `restore_all_snapshots`.
-    fn snapshot_all_instances(&self) {
+    fn snapshot_all_instances(&self) -> Result<(), ExecutionError> {
         let mut runtime = self.inner();
-        let snapshots = runtime
-            .loaded_applications
-            .iter()
-            .filter_map(|(app_id, loaded)| {
-                let mut instance = loaded.instance.try_lock().expect("instance not in use");
-                instance.create_snapshot().map(|s| (*app_id, s))
-            })
-            .collect::<Vec<_>>();
+        let mut snapshots = Vec::new();
+        for (app_id, loaded) in runtime.loaded_applications.iter() {
+            let mut instance = loaded.instance.try_lock().expect("instance not in use");
+            if let Some(snapshot) = instance.create_snapshot()? {
+                snapshots.push((*app_id, snapshot));
+            }
+        }
         for (app_id, snapshot) in snapshots {
             runtime.instance_snapshots.insert(app_id, snapshot);
         }
         runtime.applications_to_finalize_snapshot = Some(runtime.applications_to_finalize.clone());
+        Ok(())
     }
 
     /// Restores all loaded contract instances from their previously taken snapshots.
@@ -1415,12 +1421,12 @@ impl ContractSyncRuntimeHandle {
     /// `applications_to_finalize` list so that applications loaded only during the
     /// failed execution are not finalized. The snapshots are preserved so that a
     /// subsequent restore still works correctly.
-    fn restore_all_snapshots(&self) {
+    fn restore_all_snapshots(&self) -> Result<(), ExecutionError> {
         let mut runtime = self.inner();
         for (app_id, snapshot) in &runtime.instance_snapshots {
             if let Some(loaded) = runtime.loaded_applications.get(app_id) {
                 let mut instance = loaded.instance.try_lock().expect("instance not in use");
-                instance.restore_snapshot(snapshot.as_ref());
+                instance.restore_snapshot(snapshot.as_ref())?;
             }
         }
         // Remove applications that were loaded during the failed execution (after the
@@ -1439,6 +1445,7 @@ impl ContractSyncRuntimeHandle {
         if let Some(saved) = &runtime.applications_to_finalize_snapshot {
             runtime.applications_to_finalize = saved.clone();
         }
+        Ok(())
     }
 
     /// Notifies all loaded applications that execution is finalizing.

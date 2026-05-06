@@ -20,6 +20,6 @@ pub use self::test::{MockExportedFunction, MockInstance, MockResults, MockRuntim
 pub use self::{
     error::RuntimeError,
     memory::{GuestPointer, Memory, RuntimeMemory},
-    snapshot::NumericVal,
+    snapshot::{NumericVal, SnapshotError},
     traits::{Instance, InstanceWithFunction, InstanceWithMemory, Runtime},
 };

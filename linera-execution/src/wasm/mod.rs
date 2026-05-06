@@ -338,6 +338,8 @@ pub enum WasmExecutionError {
     UnknownPromise,
     #[error("Attempt to call incorrect `wait` function for a promise")]
     IncorrectPromise,
+    #[error(transparent)]
+    Snapshot(#[from] linera_witty::SnapshotError),
 }
 
 #[cfg(with_wasmer)]

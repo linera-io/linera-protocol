@@ -20,20 +20,18 @@ use wasmer::{
 
 pub use self::{parameters::WasmerParameters, results::WasmerResults};
 use super::{
-    snapshot::NumericVal,
+    snapshot::{NumericVal, SnapshotError},
     traits::{Instance, Runtime},
 };
 
-fn wasmer_value_to_numeric(value: &wasmer::Value) -> NumericVal {
+fn wasmer_value_to_numeric(value: &wasmer::Value) -> Option<NumericVal> {
     match value {
-        wasmer::Value::I32(v) => NumericVal::I32(*v),
-        wasmer::Value::I64(v) => NumericVal::I64(*v),
-        wasmer::Value::F32(v) => NumericVal::F32(v.to_bits()),
-        wasmer::Value::F64(v) => NumericVal::F64(v.to_bits()),
-        wasmer::Value::V128(v) => NumericVal::V128(*v),
-        wasmer::Value::FuncRef(_) | wasmer::Value::ExternRef(_) => {
-            panic!("Reference-typed mutable globals cannot be snapshotted")
-        }
+        wasmer::Value::I32(v) => Some(NumericVal::I32(*v)),
+        wasmer::Value::I64(v) => Some(NumericVal::I64(*v)),
+        wasmer::Value::F32(v) => Some(NumericVal::F32(v.to_bits())),
+        wasmer::Value::F64(v) => Some(NumericVal::F64(v.to_bits())),
+        wasmer::Value::V128(v) => Some(NumericVal::V128(*v)),
+        wasmer::Value::FuncRef(_) | wasmer::Value::ExternRef(_) => None,
     }
 }
 
@@ -179,7 +177,7 @@ impl<UserData> EntrypointInstance<UserData> {
 
     /// Creates a snapshot of the Wasm instance's mutable state (memories, globals,
     /// table sizes).
-    pub fn create_snapshot(&mut self) -> WasmInstanceSnapshot {
+    pub fn create_snapshot(&mut self) -> Result<WasmInstanceSnapshot, SnapshotError> {
         let mut memories = Vec::new();
         let mut globals = Vec::new();
         let mut table_sizes = Vec::new();
@@ -194,19 +192,22 @@ impl<UserData> EntrypointInstance<UserData> {
         for (name, ext) in exports {
             match ext {
                 Extern::Memory(memory) => {
-                    let bytes = memory
-                        .view(&self.store)
-                        .copy_to_vec()
-                        .expect("Failed to copy Wasm memory");
+                    let bytes = memory.view(&self.store).copy_to_vec().map_err(|e| {
+                        SnapshotError::MemoryCopy {
+                            name: name.clone(),
+                            message: e.to_string(),
+                        }
+                    })?;
                     memories.push((name, bytes));
                 }
                 Extern::Global(global) => {
                     // Const globals are part of the module and need no snapshot.
                     if global.ty(&self.store).mutability == Mutability::Var {
-                        globals.push((
-                            name,
-                            wasmer_value_to_numeric(&global.get(&mut self.store)),
-                        ));
+                        let val = wasmer_value_to_numeric(&global.get(&mut self.store))
+                            .ok_or_else(|| SnapshotError::ReferenceTypedGlobal {
+                                name: name.clone(),
+                            })?;
+                        globals.push((name, val));
                     }
                 }
                 Extern::Table(table) => {
@@ -217,15 +218,18 @@ impl<UserData> EntrypointInstance<UserData> {
             }
         }
 
-        WasmInstanceSnapshot {
+        Ok(WasmInstanceSnapshot {
             memories,
             globals,
             table_sizes,
-        }
+        })
     }
 
     /// Restores the Wasm instance's mutable state from a snapshot.
-    pub fn restore_snapshot(&mut self, snapshot: &WasmInstanceSnapshot) {
+    pub fn restore_snapshot(
+        &mut self,
+        snapshot: &WasmInstanceSnapshot,
+    ) -> Result<(), SnapshotError> {
         let exports: Vec<(String, Extern)> = self
             .instance
             .exports
@@ -248,12 +252,17 @@ impl<UserData> EntrypointInstance<UserData> {
                             let extra_pages = needed.div_ceil(page_size) - current / page_size;
                             memory
                                 .grow(&mut self.store, extra_pages as u32)
-                                .expect("Failed to grow Wasm memory to match snapshot");
+                                .map_err(|e| SnapshotError::MemoryGrow {
+                                    name: name.clone(),
+                                    message: e.to_string(),
+                                })?;
                         }
-                        memory
-                            .view(&self.store)
-                            .write(0, bytes)
-                            .expect("Failed to restore Wasm memory from snapshot");
+                        memory.view(&self.store).write(0, bytes).map_err(|e| {
+                            SnapshotError::MemoryWrite {
+                                name: name.clone(),
+                                message: e.to_string(),
+                            }
+                        })?;
                     }
                 }
                 Extern::Global(global) => {
@@ -262,25 +271,30 @@ impl<UserData> EntrypointInstance<UserData> {
                     {
                         global
                             .set(&mut self.store, numeric_to_wasmer_value(value))
-                            .expect("Failed to restore Wasm global from snapshot");
+                            .map_err(|e| SnapshotError::GlobalSet {
+                                name: name.clone(),
+                                message: e.to_string(),
+                            })?;
                     }
                 }
                 Extern::Table(table) => {
                     if let Some((_, size)) = snapshot.table_sizes.iter().find(|(n, _)| n == &name)
                     {
                         let current = u64::from(table.size(&self.store));
-                        assert_eq!(
-                            current, *size,
-                            "Wasm table `{name}` size changed: snapshot has {size}, fresh \
-                             instance has {current}; Linera contracts must not mutate tables \
-                             after instantiation",
-                        );
+                        if current != *size {
+                            return Err(SnapshotError::TableSizeMismatch {
+                                name,
+                                snapshot: *size,
+                                current,
+                            });
+                        }
                     }
                 }
                 // Functions are immutable code references; nothing to restore.
                 Extern::Function(_) => {}
             }
         }
+        Ok(())
     }
 }
 

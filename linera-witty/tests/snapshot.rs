@@ -212,14 +212,14 @@ mod wasmer_tests {
         let bytes = {
             let mut instance = build_instance(engine.clone(), &module);
             write_state(&mut instance, &STATE_A);
-            let snapshot = instance.create_snapshot();
+            let snapshot = instance.create_snapshot().expect("create_snapshot");
             bcs::to_bytes(&snapshot).expect("serialize")
         };
 
         // Decode and restore on a fresh instance; observe every value.
         let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
         let mut instance = build_instance(engine, &module);
-        instance.restore_snapshot(&snapshot);
+        instance.restore_snapshot(&snapshot).expect("restore_snapshot");
         assert_state(&mut instance, &STATE_A);
     }
 
@@ -232,21 +232,21 @@ mod wasmer_tests {
         let (bytes_a, bytes_b) = {
             let mut instance = build_instance(engine.clone(), &module);
             write_state(&mut instance, &STATE_A);
-            let snap_a = bcs::to_bytes(&instance.create_snapshot()).expect("serialize a");
+            let snap_a = bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize a");
             write_state(&mut instance, &STATE_B);
-            let snap_b = bcs::to_bytes(&instance.create_snapshot()).expect("serialize b");
+            let snap_b = bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize b");
             (snap_a, snap_b)
         };
 
         // Each snapshot, restored onto its own fresh instance, must recover its own state.
         let snap_a: WasmInstanceSnapshot = bcs::from_bytes(&bytes_a).expect("deserialize a");
         let mut instance_a = build_instance(engine.clone(), &module);
-        instance_a.restore_snapshot(&snap_a);
+        instance_a.restore_snapshot(&snap_a).expect("restore_snapshot");
         assert_state(&mut instance_a, &STATE_A);
 
         let snap_b: WasmInstanceSnapshot = bcs::from_bytes(&bytes_b).expect("deserialize b");
         let mut instance_b = build_instance(engine, &module);
-        instance_b.restore_snapshot(&snap_b);
+        instance_b.restore_snapshot(&snap_b).expect("restore_snapshot");
         assert_state(&mut instance_b, &STATE_B);
     }
 
@@ -276,12 +276,12 @@ mod wasmer_tests {
                     ],
                 )
                 .unwrap();
-            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+            bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize")
         };
 
         let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
         let mut instance = build_instance(engine, &module);
-        instance.restore_snapshot(&snapshot);
+        instance.restore_snapshot(&snapshot).expect("restore_snapshot");
 
         let (mut store, wasmer_instance) = instance.as_store_and_instance_mut();
         let read = wasmer_instance
@@ -297,8 +297,9 @@ mod wasmer_tests {
     }
 
     #[test]
-    #[should_panic(expected = "size changed")]
-    fn restore_panics_when_table_size_changed() {
+    fn restore_errors_when_table_size_changed() {
+        use linera_witty::SnapshotError;
+
         let engine = engine();
         let module = Module::new(&engine, wat::parse_str(super::WAT).unwrap()).unwrap();
 
@@ -312,13 +313,17 @@ mod wasmer_tests {
                 .unwrap()
                 .call(&mut store, &[wasmer::Value::I32(3)])
                 .unwrap();
-            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+            bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize")
         };
 
-        // Restore on a fresh instance: table size differs, must panic.
+        // Restore on a fresh instance: table size differs, must return an error.
         let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
         let mut instance = build_instance(engine, &module);
-        instance.restore_snapshot(&snapshot);
+        let err = instance.restore_snapshot(&snapshot).expect_err("expected error");
+        assert!(
+            matches!(err, SnapshotError::TableSizeMismatch { .. }),
+            "unexpected error: {err}",
+        );
     }
 }
 
@@ -440,13 +445,13 @@ mod wasmtime_tests {
         let bytes = {
             let mut instance = build_instance(&engine, &module);
             write_state(&mut instance, &STATE_A);
-            let snapshot = instance.create_snapshot();
+            let snapshot = instance.create_snapshot().expect("create_snapshot");
             bcs::to_bytes(&snapshot).expect("serialize")
         };
 
         let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
         let mut instance = build_instance(&engine, &module);
-        instance.restore_snapshot(&snapshot);
+        instance.restore_snapshot(&snapshot).expect("restore_snapshot");
         assert_state(&mut instance, &STATE_A);
     }
 
@@ -458,20 +463,20 @@ mod wasmtime_tests {
         let (bytes_a, bytes_b) = {
             let mut instance = build_instance(&engine, &module);
             write_state(&mut instance, &STATE_A);
-            let snap_a = bcs::to_bytes(&instance.create_snapshot()).expect("serialize a");
+            let snap_a = bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize a");
             write_state(&mut instance, &STATE_B);
-            let snap_b = bcs::to_bytes(&instance.create_snapshot()).expect("serialize b");
+            let snap_b = bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize b");
             (snap_a, snap_b)
         };
 
         let snap_a: WasmInstanceSnapshot = bcs::from_bytes(&bytes_a).expect("deserialize a");
         let mut instance_a = build_instance(&engine, &module);
-        instance_a.restore_snapshot(&snap_a);
+        instance_a.restore_snapshot(&snap_a).expect("restore_snapshot");
         assert_state(&mut instance_a, &STATE_A);
 
         let snap_b: WasmInstanceSnapshot = bcs::from_bytes(&bytes_b).expect("deserialize b");
         let mut instance_b = build_instance(&engine, &module);
-        instance_b.restore_snapshot(&snap_b);
+        instance_b.restore_snapshot(&snap_b).expect("restore_snapshot");
         assert_state(&mut instance_b, &STATE_B);
     }
 
@@ -501,12 +506,12 @@ mod wasmtime_tests {
                     &mut [],
                 )
                 .unwrap();
-            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+            bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize")
         };
 
         let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
         let mut instance = build_instance(&engine, &module);
-        instance.restore_snapshot(&snapshot);
+        instance.restore_snapshot(&snapshot).expect("restore_snapshot");
 
         let (mut store, wasmtime_instance) = instance.as_store_and_instance_mut();
         let mut out = [wasmtime::Val::I32(0)];
@@ -523,8 +528,9 @@ mod wasmtime_tests {
     }
 
     #[test]
-    #[should_panic(expected = "size changed")]
-    fn restore_panics_when_table_size_changed() {
+    fn restore_errors_when_table_size_changed() {
+        use linera_witty::SnapshotError;
+
         let engine = Engine::default();
         let module = Module::new(&engine, wat::parse_str(super::WAT).unwrap()).unwrap();
 
@@ -542,12 +548,16 @@ mod wasmtime_tests {
                     &mut grow_out,
                 )
                 .unwrap();
-            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+            bcs::to_bytes(&instance.create_snapshot().expect("create_snapshot")).expect("serialize")
         };
 
-        // Restore on a fresh instance: table size differs, must panic.
+        // Restore on a fresh instance: table size differs, must return an error.
         let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
         let mut instance = build_instance(&engine, &module);
-        instance.restore_snapshot(&snapshot);
+        let err = instance.restore_snapshot(&snapshot).expect_err("expected error");
+        assert!(
+            matches!(err, SnapshotError::TableSizeMismatch { .. }),
+            "unexpected error: {err}",
+        );
     }
 }

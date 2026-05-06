@@ -43,7 +43,7 @@ pub use self::{
     memory_layout::{JoinFlatLayouts, Layout},
     runtime::{
         GuestPointer, Instance, InstanceWithFunction, InstanceWithMemory, Memory, NumericVal,
-        Runtime, RuntimeError, RuntimeMemory,
+        Runtime, RuntimeError, RuntimeMemory, SnapshotError,
     },
     type_traits::{RegisterWitTypes, WitLoad, WitStore, WitType},
     util::{Merge, Split},
