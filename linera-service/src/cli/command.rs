@@ -205,6 +205,143 @@ use crate::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
 
+/// Optional overrides for fields in the active resource control policy.
+#[derive(Clone, Default, clap::Args)]
+pub struct ResourceControlPolicyOverrides {
+    /// Set the price per unit of Wasm fuel.
+    #[arg(long)]
+    pub wasm_fuel_unit: Option<Amount>,
+
+    /// Set the price per unit of EVM fuel.
+    #[arg(long)]
+    pub evm_fuel_unit: Option<Amount>,
+
+    /// Set the price per read operation.
+    #[arg(long)]
+    pub read_operation: Option<Amount>,
+
+    /// Set the price per write operation.
+    #[arg(long)]
+    pub write_operation: Option<Amount>,
+
+    /// Set the price per byte read from runtime.
+    #[arg(long)]
+    pub byte_runtime: Option<Amount>,
+
+    /// Set the price per byte read.
+    #[arg(long)]
+    pub byte_read: Option<Amount>,
+
+    /// Set the price per byte written.
+    #[arg(long)]
+    pub byte_written: Option<Amount>,
+
+    /// Set the base price to read a blob.
+    #[arg(long)]
+    pub blob_read: Option<Amount>,
+
+    /// Set the base price to publish a blob.
+    #[arg(long)]
+    pub blob_published: Option<Amount>,
+
+    /// Set the price to read a blob, per byte.
+    #[arg(long)]
+    pub blob_byte_read: Option<Amount>,
+
+    /// The price to publish a blob, per byte.
+    #[arg(long)]
+    pub blob_byte_published: Option<Amount>,
+
+    /// Set the price per byte stored.
+    #[arg(long)]
+    pub byte_stored: Option<Amount>,
+
+    /// Set the base price of sending an operation from a block..
+    #[arg(long)]
+    pub operation: Option<Amount>,
+
+    /// Set the additional price for each byte in the argument of a user operation.
+    #[arg(long)]
+    pub operation_byte: Option<Amount>,
+
+    /// Set the base price of sending a message from a block..
+    #[arg(long)]
+    pub message: Option<Amount>,
+
+    /// Set the additional price for each byte in the argument of a user message.
+    #[arg(long)]
+    pub message_byte: Option<Amount>,
+
+    /// Set the price per query to a service as an oracle.
+    #[arg(long)]
+    pub service_as_oracle_query: Option<Amount>,
+
+    /// Set the price for performing an HTTP request.
+    #[arg(long)]
+    pub http_request: Option<Amount>,
+
+    /// Set the maximum amount of Wasm fuel per block.
+    #[arg(long)]
+    pub maximum_wasm_fuel_per_block: Option<u64>,
+
+    /// Set the maximum amount of EVM fuel per block.
+    #[arg(long)]
+    pub maximum_evm_fuel_per_block: Option<u64>,
+
+    /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
+    #[arg(long)]
+    pub maximum_service_oracle_execution_ms: Option<u64>,
+
+    /// Set the maximum size of a block, in bytes.
+    #[arg(long)]
+    pub maximum_block_size: Option<u64>,
+
+    /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
+    /// in bytes.
+    #[arg(long)]
+    pub maximum_blob_size: Option<u64>,
+
+    /// Set the maximum number of published blobs per block.
+    #[arg(long)]
+    pub maximum_published_blobs: Option<u64>,
+
+    /// Set the maximum size of decompressed contract or service bytecode, in bytes.
+    #[arg(long)]
+    pub maximum_bytecode_size: Option<u64>,
+
+    /// Set the maximum size of a block proposal, in bytes.
+    #[arg(long)]
+    pub maximum_block_proposal_size: Option<u64>,
+
+    /// Set the maximum read data per block.
+    #[arg(long)]
+    pub maximum_bytes_read_per_block: Option<u64>,
+
+    /// Set the maximum write data per block.
+    #[arg(long)]
+    pub maximum_bytes_written_per_block: Option<u64>,
+
+    /// Set the maximum size of oracle responses.
+    #[arg(long)]
+    pub maximum_oracle_response_bytes: Option<u64>,
+
+    /// Set the maximum size in bytes of a received HTTP response.
+    #[arg(long)]
+    pub maximum_http_response_bytes: Option<u64>,
+
+    /// Set the maximum amount of time allowed to wait for an HTTP response.
+    #[arg(long)]
+    pub http_request_timeout_ms: Option<u64>,
+
+    /// Set the list of hosts that contracts and services can send HTTP requests to.
+    #[arg(long, value_delimiter = ',')]
+    pub http_request_allow_list: Option<Vec<String>>,
+
+    /// Set the list of application IDs for which message- and event-related fees are waived.
+    #[arg(long, value_delimiter = ',')]
+    pub free_application_ids: Option<Vec<String>>,
+}
+
 #[derive(Clone, clap::Subcommand)]
 pub enum ClientCommand {
     /// Transfer funds
@@ -387,138 +524,8 @@ pub enum ClientCommand {
 
     /// View or update the resource control policy
     ResourceControlPolicy {
-        /// Set the price per unit of Wasm fuel.
-        #[arg(long)]
-        wasm_fuel_unit: Option<Amount>,
-
-        /// Set the price per unit of EVM fuel.
-        #[arg(long)]
-        evm_fuel_unit: Option<Amount>,
-
-        /// Set the price per read operation.
-        #[arg(long)]
-        read_operation: Option<Amount>,
-
-        /// Set the price per write operation.
-        #[arg(long)]
-        write_operation: Option<Amount>,
-
-        /// Set the price per byte read from runtime.
-        #[arg(long)]
-        byte_runtime: Option<Amount>,
-
-        /// Set the price per byte read.
-        #[arg(long)]
-        byte_read: Option<Amount>,
-
-        /// Set the price per byte written.
-        #[arg(long)]
-        byte_written: Option<Amount>,
-
-        /// Set the base price to read a blob.
-        #[arg(long)]
-        blob_read: Option<Amount>,
-
-        /// Set the base price to publish a blob.
-        #[arg(long)]
-        blob_published: Option<Amount>,
-
-        /// Set the price to read a blob, per byte.
-        #[arg(long)]
-        blob_byte_read: Option<Amount>,
-
-        /// The price to publish a blob, per byte.
-        #[arg(long)]
-        blob_byte_published: Option<Amount>,
-
-        /// Set the price per byte stored.
-        #[arg(long)]
-        byte_stored: Option<Amount>,
-
-        /// Set the base price of sending an operation from a block..
-        #[arg(long)]
-        operation: Option<Amount>,
-
-        /// Set the additional price for each byte in the argument of a user operation.
-        #[arg(long)]
-        operation_byte: Option<Amount>,
-
-        /// Set the base price of sending a message from a block..
-        #[arg(long)]
-        message: Option<Amount>,
-
-        /// Set the additional price for each byte in the argument of a user message.
-        #[arg(long)]
-        message_byte: Option<Amount>,
-
-        /// Set the price per query to a service as an oracle.
-        #[arg(long)]
-        service_as_oracle_query: Option<Amount>,
-
-        /// Set the price for performing an HTTP request.
-        #[arg(long)]
-        http_request: Option<Amount>,
-
-        /// Set the maximum amount of Wasm fuel per block.
-        #[arg(long)]
-        maximum_wasm_fuel_per_block: Option<u64>,
-
-        /// Set the maximum amount of EVM fuel per block.
-        #[arg(long)]
-        maximum_evm_fuel_per_block: Option<u64>,
-
-        /// Set the maximum time in milliseconds that a block can spend executing services as oracles.
-        #[arg(long)]
-        maximum_service_oracle_execution_ms: Option<u64>,
-
-        /// Set the maximum size of a block, in bytes.
-        #[arg(long)]
-        maximum_block_size: Option<u64>,
-
-        /// Set the maximum size of data blobs, compressed bytecode and other binary blobs,
-        /// in bytes.
-        #[arg(long)]
-        maximum_blob_size: Option<u64>,
-
-        /// Set the maximum number of published blobs per block.
-        #[arg(long)]
-        maximum_published_blobs: Option<u64>,
-
-        /// Set the maximum size of decompressed contract or service bytecode, in bytes.
-        #[arg(long)]
-        maximum_bytecode_size: Option<u64>,
-
-        /// Set the maximum size of a block proposal, in bytes.
-        #[arg(long)]
-        maximum_block_proposal_size: Option<u64>,
-
-        /// Set the maximum read data per block.
-        #[arg(long)]
-        maximum_bytes_read_per_block: Option<u64>,
-
-        /// Set the maximum write data per block.
-        #[arg(long)]
-        maximum_bytes_written_per_block: Option<u64>,
-
-        /// Set the maximum size of oracle responses.
-        #[arg(long)]
-        maximum_oracle_response_bytes: Option<u64>,
-
-        /// Set the maximum size in bytes of a received HTTP response.
-        #[arg(long)]
-        maximum_http_response_bytes: Option<u64>,
-
-        /// Set the maximum amount of time allowed to wait for an HTTP response.
-        #[arg(long)]
-        http_request_timeout_ms: Option<u64>,
-
-        /// Set the list of hosts that contracts and services can send HTTP requests to.
-        #[arg(long, value_delimiter = ',')]
-        http_request_allow_list: Option<Vec<String>>,
-
-        /// Set the list of application IDs for which message- and event-related fees are waived.
-        #[arg(long, value_delimiter = ',')]
-        free_application_ids: Option<Vec<String>>,
+        #[command(flatten)]
+        overrides: ResourceControlPolicyOverrides,
     },
 
     /// Run benchmarks to test network performance.

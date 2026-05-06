@@ -160,6 +160,13 @@ impl Transaction {
             _ => None,
         }
     }
+
+    pub fn is_update_stream(&self) -> bool {
+        matches!(
+            self,
+            Transaction::ExecuteOperation(op) if op.is_update_stream()
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]

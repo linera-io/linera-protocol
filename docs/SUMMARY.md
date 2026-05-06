@@ -60,7 +60,7 @@
 
 # Node Operators
 
-- [Validator deployment (moved)](operators.md)
+- [Node Operators](operators.md)
 
 ---
 

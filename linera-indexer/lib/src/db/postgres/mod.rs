@@ -278,7 +278,7 @@ impl PostgresDatabase {
                     SystemOperation::PublishDataBlob { .. } => "PublishDataBlob",
                     SystemOperation::Admin(_) => "Admin",
                     SystemOperation::ProcessNewEpoch(_) => "ProcessNewEpoch",
-                    SystemOperation::UpdateStreams(_) => "UpdateStreams",
+                    SystemOperation::UpdateStream { .. } => "UpdateStream",
                     SystemOperation::ChangeOwnership { .. } => "ChangeOwnership",
                     SystemOperation::VerifyBlob { .. } => "VerifyBlob",
                 };
