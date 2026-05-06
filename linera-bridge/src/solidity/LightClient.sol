@@ -268,7 +268,7 @@ contract LightClient {
     function _readU64LE(bytes memory data, uint256 pos) internal pure returns (uint64) {
         uint64 result = 0;
         for (uint256 i = 0; i < 8; i++) {
-            result |= uint64(uint8(data[pos + i])) << uint64(i * 8);
+            result |= uint64(uint8(data[pos + i])) << (i * 8);
         }
         return result;
     }
