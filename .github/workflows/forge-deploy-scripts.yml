@@ -1,0 +1,47 @@
+name: Forge Deploy Scripts
+
+on:
+  merge_group:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'linera-bridge/src/solidity/**'
+      - '.github/workflows/forge-deploy-scripts.yml'
+  push:
+    branches: [ 'testnet_*', 'main', 'bridge-main' ]
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+jobs:
+  forge-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.0
+
+      - name: Run forge tests for deploy scripts
+        working-directory: linera-bridge/src/solidity
+        run: forge test --match-path 'test/Deploy*' -vvv
+
+      # The Makefile target enumerates the hand-written contracts and
+      # converts forge lint's exit-0-on-warning behaviour into a hard
+      # failure on any high/med-severity finding.
+      - name: forge lint
+        working-directory: linera-bridge
+        run: make lint-solidity
+
+      # forge taint output is informational only for now; exit semantics
+      # are not yet stable enough to gate CI on.
+      - name: forge taint
+        working-directory: linera-bridge/src/solidity
+        run: forge taint || true
