@@ -100,6 +100,15 @@ done
 COMPOSE_FILE="${COMPOSE_FILE:-${BRIDGE_COMPOSE_FILE:-}}"
 [[ -n "$COMPOSE_FILE" ]] || die "--compose-file is required; see --help"
 
+# When EXPLORER_API_KEY and VERIFIER_URL are both set in the environment,
+# every forge script call below appends --verify so the deployed contracts
+# are published to the explorer atomically with the deploy. Local-dev
+# (anvil) leaves them unset; --verify is omitted.
+FORGE_VERIFY_ARGS=()
+if [[ -n "${EXPLORER_API_KEY:-}" && -n "${VERIFIER_URL:-}" ]]; then
+    FORGE_VERIFY_ARGS=(--verify --etherscan-api-key "$EXPLORER_API_KEY" --verifier-url "$VERIFIER_URL")
+fi
+
 # ── Docker helpers ──
 dc() {
     docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" "$@"
@@ -193,7 +202,8 @@ dc_exec foundry-tools env \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast >/tmp/mock-erc20-deploy.log 2>&1 || {
+    --broadcast \
+    "${FORGE_VERIFY_ARGS[@]}" >/tmp/mock-erc20-deploy.log 2>&1 || {
     cat /tmp/mock-erc20-deploy.log >&2
     die "MockERC20 deploy failed"
 }
@@ -318,7 +328,8 @@ dc_exec foundry-tools env \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast >/tmp/bridge-deploy.log 2>&1 || {
+    --broadcast \
+    "${FORGE_VERIFY_ARGS[@]}" >/tmp/bridge-deploy.log 2>&1 || {
     cat /tmp/bridge-deploy.log >&2
     die "FungibleBridge deploy failed"
 }
