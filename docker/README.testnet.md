@@ -36,47 +36,45 @@ sudo chmod 600 /etc/linera-bridge/.env.secret
 sudo chown root:root /etc/linera-bridge/.env.secret
 ```
 
-### 3. Provision contracts and Linera apps
+### 3. Provision contracts, Linera apps, wallet, env file
 
-Run setup.sh as the `linera-bridge` user so the wallet/keystore/storage
-files are owned by the same uid that the container runs as. The
-`--relayer-env` output goes to `/etc/linera-bridge/.env` which is root-
-writable, so allow that one path to the linera-bridge user via sudo or
-write the env file to a temporary location and `sudo cp` it into place.
-The simplest path:
+Production provisioning tooling is out of scope of this runbook —
+`examples/bridge-demo/setup.sh` is for local development only and is not
+reused here. The operator must end up with:
 
-```bash
-# Make /etc/linera-bridge writable by linera-bridge for this one provision
-sudo chown linera-bridge:linera-bridge /etc/linera-bridge
-sudo -u linera-bridge bash <<'EOF'
-cd examples/bridge-demo
-./setup.sh \
-  --evm-rpc-url https://sepolia.base.org \
-  --evm-chain-id 84532 \
-  --evm-private-key "$EVM_PRIVATE_KEY" \
-  --faucet-url https://faucet.testnet-conway.linera.net \
-  --linera-wallet /var/lib/linera-bridge/wallet.json \
-  --linera-keystore /var/lib/linera-bridge/keystore.json \
-  --linera-storage rocksdb:/var/lib/linera-bridge/client.db \
-  --shared-dir /var/lib/linera-bridge/shared \
-  --relayer-env /etc/linera-bridge/.env
-EOF
-# Restore tighter ownership on /etc/linera-bridge
-sudo chown root:root /etc/linera-bridge
+- `/var/lib/linera-bridge/wallet.json`, `keystore.json`, `client.db`:
+  Linera wallet that owns the bridge chain (the relay container reads
+  these via the bind-mount at `/data`).
+- `/etc/linera-bridge/.env`: env file with the keys consumed by
+  `bridge-entrypoint.sh`. Use `/data/...` paths inside (the host bind-mount
+  exposes `/var/lib/linera-bridge` at `/data` in the container).
+
+```
+# /etc/linera-bridge/.env
+RPC_URL=https://sepolia.base.org
+FAUCET_URL=https://faucet.testnet-conway.linera.net
+EVM_BRIDGE_ADDRESS=0x...
+LINERA_BRIDGE_APP=...                 # evm-bridge app ID (64 hex)
+LINERA_FUNGIBLE_APP=...               # wrapped-fungible app ID (64 hex)
+LINERA_BRIDGE_CHAIN_ID=...            # 64 hex
+LINERA_BRIDGE_CHAIN_OWNER=0x...       # AccountOwner that owns bridge chain
+LINERA_WALLET=/data/wallet.json
+LINERA_KEYSTORE=/data/keystore.json
+LINERA_STORAGE=rocksdb:/data/client.db
+MONITOR_SCAN_INTERVAL=30
+MONITOR_START_BLOCK=...               # FungibleBridge deploy block
+MAX_RETRIES=10
+PORT=3001
 ```
 
-This deploys `LightClient`, `MockERC20`, `FungibleBridge` on Base
-Sepolia, claims a Linera bridge chain on Conway, publishes the
-`evm-bridge` and `wrapped-fungible` apps, cross-registers their IDs,
-and writes `/etc/linera-bridge/.env` plus the wallet/keystore/storage
-under `/var/lib/linera-bridge/`. Provisioning artifacts (LightClient
-constructor args, intermediate addresses) land in
-`/var/lib/linera-bridge/shared/` for inspection.
+Production EVM contracts (`LightClient`, `FungibleBridge`,
+`MockERC20`-or-real-ERC20), the bridge chain, and the two Linera apps
+(`evm-bridge`, `wrapped-fungible`) are deployed/registered out-of-band by
+the team's deployment tooling. The output artifacts populate the env file
+above.
 
-`setup.sh` will run `linera wallet init --faucet` and `linera wallet
-request-chain --faucet` automatically when the wallet doesn't yet
-exist at `--linera-wallet`, so you do NOT need to pre-procure
-`--linera-bridge-chain-id` or `--relay-owner`.
+The `linera-bridge` container will read `/etc/linera-bridge/.env` and
+`/etc/linera-bridge/.env.secret` at startup.
 
 ### 4. Start the relayer
 
