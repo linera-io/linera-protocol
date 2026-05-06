@@ -57,6 +57,9 @@ jobs:
             BRANCH_NAME="${REF_NAME}"
           fi
 
+          # Docker tags forbid '/'; replace with '-' for use as a tag.
+          BRANCH_TAG="${BRANCH_NAME//\//-}"
+
           echo "GIT_COMMIT_SHORT=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
           echo "GIT_COMMIT_LONG=${GITHUB_SHA}" >> "$GITHUB_ENV"
           echo "BRANCH_NAME=${BRANCH_NAME}" >> "$GITHUB_ENV"
@@ -67,7 +70,7 @@ jobs:
           for IMAGE_VAR in LINERA:linera INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter; do
             VAR="${IMAGE_VAR%%:*}"
             NAME="${IMAGE_VAR##*:}"
-            echo "${VAR}_IMAGE_BRANCH=${REGISTRY_BASE}/${NAME}:${BRANCH_NAME}" >> "$GITHUB_ENV"
+            echo "${VAR}_IMAGE_BRANCH=${REGISTRY_BASE}/${NAME}:${BRANCH_TAG}" >> "$GITHUB_ENV"
             echo "${VAR}_IMAGE_SHORT=${REGISTRY_BASE}/${NAME}:${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
             echo "${VAR}_IMAGE_LONG=${REGISTRY_BASE}/${NAME}:${GITHUB_SHA}" >> "$GITHUB_ENV"
           done
