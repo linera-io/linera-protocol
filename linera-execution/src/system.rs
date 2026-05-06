@@ -456,22 +456,29 @@ where
                             blob_hash,
                             timestamp: context.timestamp,
                         };
-                        txn_tracker.add_event(
-                            StreamId::system(EPOCH_STREAM_NAME),
-                            epoch.0,
-                            bcs::to_bytes(&event_data)?,
-                        );
+                        let stream_id = StreamId::system(EPOCH_STREAM_NAME);
+                        let next_index = epoch.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                        self.stream_event_counts
+                            .insert(&stream_id, next_index)?;
+                        txn_tracker.add_event(stream_id, epoch.0, bcs::to_bytes(&event_data)?);
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
+                        let stream_id = StreamId::system(REMOVED_EPOCH_STREAM_NAME);
+                        let count = self
+                            .stream_event_counts
+                            .get(&stream_id)
+                            .await?
+                            .unwrap_or(0);
+                        // Revocations must happen in increasing epoch order, so the stream's
+                        // indices stay sequential.
                         ensure!(
-                            epoch < *self.epoch.get(),
+                            count == epoch.0 && epoch < *self.epoch.get(),
                             ExecutionError::InvalidCommitteeRemoval
                         );
-                        txn_tracker.add_event(
-                            StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                            epoch.0,
-                            vec![],
-                        );
+                        let next_index = epoch.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                        self.stream_event_counts
+                            .insert(&stream_id, next_index)?;
+                        txn_tracker.add_event(stream_id, epoch.0, vec![]);
                     }
                 }
             }
