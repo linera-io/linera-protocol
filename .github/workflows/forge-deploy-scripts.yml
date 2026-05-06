@@ -8,7 +8,7 @@ on:
       - 'linera-bridge/src/solidity/**'
       - '.github/workflows/forge-deploy-scripts.yml'
   push:
-    branches: [ 'testnet_*', 'main', 'bridge-main' ]
+    branches: [ 'testnet_*', 'main' ]
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
