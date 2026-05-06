@@ -18,7 +18,7 @@ use linera_base::{
     crypto::{AccountPublicKey, AccountSecretKey},
     data_types::{
         Amount, ApplicationDescription, ApplicationKind, Blob, BlockHeight, Bytecode,
-        ChainDescription, CompressedBytecode, Epoch,
+        ChainDescription, CompressedBytecode, Epoch, NativeApplicationKind,
     },
     identifiers::{AccountOwner, ApplicationId, ChainId, ModuleId, OwnerSpender},
     vm::VmRuntime,
@@ -629,6 +629,49 @@ impl ActiveChain {
         };
 
         Ok(ApplicationId::<()>::from(&description).with_abi())
+    }
+
+    /// Creates a runtime-native application of the given `kind` on this microchain.
+    ///
+    /// Returns the [`ApplicationId`] of the created application. No bytecode publishing is
+    /// required: the application is implemented directly by the runtime.
+    pub async fn create_native_application<Abi, Parameters, InstantiationArgument>(
+        &mut self,
+        kind: NativeApplicationKind,
+        parameters: Parameters,
+        instantiation_argument: InstantiationArgument,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> ApplicationId<Abi>
+    where
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    {
+        let parameters = serde_json::to_vec(&parameters).unwrap();
+        let instantiation_argument = serde_json::to_vec(&instantiation_argument).unwrap();
+
+        let (creation_certificate, _) = Box::pin(self.add_block(|block| {
+            block.with_system_operation(SystemOperation::CreateNativeApplication {
+                kind,
+                parameters: parameters.clone(),
+                instantiation_argument,
+                required_application_ids: required_application_ids.clone(),
+            });
+        }))
+        .await;
+
+        let block = creation_certificate.inner().block();
+
+        let description = ApplicationDescription {
+            kind: ApplicationKind::Native(kind),
+            creator_chain_id: block.header.chain_id,
+            block_height: block.header.height,
+            application_index: 0,
+            parameters,
+            required_application_ids,
+        };
+
+        ApplicationId::<()>::from(&description).with_abi()
     }
 
     /// Returns whether this chain has been closed.
