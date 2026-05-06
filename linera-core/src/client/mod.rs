@@ -843,7 +843,6 @@ impl<Env: Environment> Client<Env> {
             .await
     }
 
-
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         let info = self.local_node.chain_info(self.admin_chain_id).await?;
@@ -1402,9 +1401,7 @@ impl<Env: Environment> Client<Env> {
             };
 
             // Validate the certificate.
-            self.check_certificate(&certificate)
-                .await?
-                .into_result()?;
+            self.check_certificate(&certificate).await?.into_result()?;
 
             // Check if there's a previous message block to our chain.
             let block = certificate.block();
@@ -1497,9 +1494,7 @@ impl<Env: Environment> Client<Env> {
                     continue;
                 };
 
-                self.check_certificate(&certificate)
-                    .await?
-                    .into_result()?;
+                self.check_certificate(&certificate).await?.into_result()?;
 
                 self.storage_client().cache_certificate(certificate)
             };

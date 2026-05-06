@@ -2851,7 +2851,12 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert!(user_chain.execution_state.system.committee_hash.get().is_some());
+        assert!(user_chain
+            .execution_state
+            .system
+            .committee_hash
+            .get()
+            .is_some());
     }
     let proposal3 = make_first_block(user_id)
         .with_incoming_bundle(IncomingBundle {
@@ -3377,8 +3382,15 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 
     // Bundles from a revoked epoch are rejected.
     assert_eq!(
-        select_message_bundles(&storage, &id0, id1, BlockHeight::ZERO, None, bundles01.clone())
-            .await?,
+        select_message_bundles(
+            &storage,
+            &id0,
+            id1,
+            BlockHeight::ZERO,
+            None,
+            bundles01.clone()
+        )
+        .await?,
         vec![]
     );
     // Already-received bundles are skipped, regardless of epoch.

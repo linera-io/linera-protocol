@@ -6,10 +6,7 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::{
-    collections::BTreeSet,
-    sync::Arc,
-};
+use std::{collections::BTreeSet, sync::Arc};
 
 use allocative::Allocative;
 use custom_debug_derive::Debug;
