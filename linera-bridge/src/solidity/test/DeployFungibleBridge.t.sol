@@ -11,10 +11,7 @@ import {MockERC20} from "../MockERC20.sol";
 
 contract DeployFungibleBridgeTest is Test {
     function setUp() public {
-        vm.setEnv(
-            "LIGHT_CLIENT_ARGS_JSON",
-            "test/fixtures/light-client-args.json"
-        );
+        vm.setEnv("LIGHT_CLIENT_ARGS_JSON_FILE", "test/fixtures/light-client-args.json");
         vm.setEnv("TOKEN_NAME", "TestToken");
         vm.setEnv("TOKEN_SYMBOL", "TT");
         vm.setEnv("TOKEN_SUPPLY", "1000000000000000000000");
