@@ -330,23 +330,24 @@ echo "$WRAPPED_APP_ID" > "$SHARED_DIR/wrapped-app-id"
 APP_ID_BYTES32="0x${WRAPPED_APP_ID:0:64}"
 
 # ── 7. Deploy FungibleBridge with the wrapped-fungible applicationId baked in ──
-echo "Deploying FungibleBridge..."
-BRIDGE_OUTPUT=$(evm_exec \
-    forge create "$CONTRACTS_DIR/FungibleBridge.sol:FungibleBridge" \
-    --root "$CONTRACTS_DIR" \
-    --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
-    "${FORGE_USE_SOLC[@]}" --ignored-error-codes 6321 \
-    --out /tmp/forge-out --cache-path /tmp/forge-cache \
+echo "Deploying FungibleBridge via forge script..."
+dc_exec foundry-tools env \
+    LIGHT_CLIENT="$LIGHT_CLIENT_ADDR" \
+    BRIDGE_CHAIN_ID="$CHAIN_BYTES32" \
+    TOKEN_ADDRESS="$TOKEN_ADDRESS" \
+    FUNGIBLE_APP_ID="$APP_ID_BYTES32" \
+    forge script /contracts/script/DeployFungibleBridge.s.sol \
+    --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast \
-    --constructor-args \
-    "$LIGHT_CLIENT_ADDR" \
-    "$CHAIN_BYTES32" \
-    "$TOKEN_ADDRESS" \
-    "$APP_ID_BYTES32")
-BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
-wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
+    --broadcast >/tmp/bridge-deploy.log 2>&1 || {
+    cat /tmp/bridge-deploy.log >&2
+    die "FungibleBridge deploy failed"
+}
+BRIDGE_ADDRESS=$(dc_exec foundry-tools \
+    jq -r '.transactions[0].contractAddress' \
+    "/contracts/broadcast/DeployFungibleBridge.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
+    | tr -d '[:space:]')
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
 BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
 echo "  FungibleBridge: $BRIDGE_ADDRESS"
