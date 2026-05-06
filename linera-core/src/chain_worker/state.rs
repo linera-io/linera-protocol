@@ -214,12 +214,16 @@ where
             if bundle.height < next_height_to_receive {
                 skipped_len = i + 1;
             }
-            let is_revoked = self.storage.is_epoch_revoked(*epoch).await.map_err(|error| {
-                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                    Box::new(error),
-                    ChainExecutionContext::Block,
-                )))
-            })?;
+            let is_revoked = self
+                .storage
+                .is_epoch_revoked(*epoch)
+                .await
+                .map_err(|error| {
+                    WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                        Box::new(error),
+                        ChainExecutionContext::Block,
+                    )))
+                })?;
             if !is_revoked || Some(bundle.height) <= last_anticipated_block_height {
                 trusted_len = i + 1;
             }
@@ -2375,4 +2379,3 @@ fn check_block_epoch(
     );
     Ok(())
 }
-
