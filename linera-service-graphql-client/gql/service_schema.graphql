@@ -328,10 +328,6 @@ type ChainStateExtendedView {
 	"""
 	executionState: ExecutionStateView!
 	"""
-	Hash of the execution state.
-	"""
-	executionStateHash: CryptoHash
-	"""
 	Block-chaining state.
 	"""
 	tipState: ChainTipState!

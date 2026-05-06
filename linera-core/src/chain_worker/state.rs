@@ -1866,7 +1866,7 @@ where
             Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
 
         // No need to sign: only used internally.
-        let info = ChainInfo::from_chain_view(&self.chain).await?;
+        let info = ChainInfo::from_chain_view(&mut self.chain).await?;
         let mut response = ChainInfoResponse::new(info, None);
         if let Some(owner) = executed_block.header.authenticated_owner {
             response.info.requested_owner_balance = self
@@ -2059,8 +2059,8 @@ where
         query: ChainInfoQuery,
     ) -> Result<ChainInfoResponse, WorkerError> {
         self.initialize_and_save_if_needed().await?;
+        let mut info = ChainInfo::from_chain_view(&mut self.chain).await?;
         let chain = &self.chain;
-        let mut info = ChainInfo::from_chain_view(chain).await?;
         if query.request_committees {
             info.requested_committees = Some(chain.execution_state.system.committees.get().clone());
         }
@@ -2206,8 +2206,8 @@ where
         Ok(())
     }
 
-    pub(crate) async fn chain_info_response(&self) -> Result<ChainInfoResponse, WorkerError> {
-        let info = ChainInfo::from_chain_view(&self.chain).await?;
+    pub(crate) async fn chain_info_response(&mut self) -> Result<ChainInfoResponse, WorkerError> {
+        let info = ChainInfo::from_chain_view(&mut self.chain).await?;
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
 
