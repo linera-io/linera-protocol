@@ -297,10 +297,7 @@ impl<W: View> HistoricallyHashableView<W::Context, W> {
     ///
     /// **The inner view's in-memory state is undefined after this returns.** Callers
     /// should drop the view and reload before using it further.
-    pub async fn restore_from_content(
-        &mut self,
-        bytes: &[u8],
-    ) -> Result<HasherOutput, ViewError> {
+    pub async fn restore_from_content(&mut self, bytes: &[u8]) -> Result<HasherOutput, ViewError> {
         let entries = decode_key_values(bytes)?;
         let hash = hash_bytes(bytes);
 
@@ -309,7 +306,9 @@ impl<W: View> HistoricallyHashableView<W::Context, W> {
         let mut wrapper_hash_key = inner_base.clone();
         // The inner context's base key is `<wrapper_base><Inner tag>`; flipping the last
         // byte to `Hash` gives the wrapper's hash key.
-        *wrapper_hash_key.last_mut().expect("inner base key is non-empty") = KeyTag::Hash as u8;
+        *wrapper_hash_key
+            .last_mut()
+            .expect("inner base key is non-empty") = KeyTag::Hash as u8;
 
         let mut batch = Batch::new();
         // Wipe whatever is currently under the inner prefix.
