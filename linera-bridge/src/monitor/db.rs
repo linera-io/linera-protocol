@@ -6,6 +6,12 @@
 //! This is a write-through layer alongside the in-memory `MonitorState`.
 //! It persists request metadata and raw operation bytes so they can be
 //! queried and replayed without the relayer running.
+//!
+//! Pending and finished requests live in separate tables (`pending_deposits`/
+//! `finished_deposits`, `pending_burns`/`finished_burns`) so that the hot
+//! `load_pending_*` queries scan only live work and stay fast as historical
+//! volume grows. Completion or failure moves a row from the pending table to
+//! the finished table atomically.
 
 use std::path::Path;
 
@@ -54,7 +60,7 @@ impl BridgeDb {
 
     async fn create_tables(&self) -> Result<()> {
         sqlx::query(
-            "CREATE TABLE IF NOT EXISTS deposits (
+            "CREATE TABLE IF NOT EXISTS pending_deposits (
                 source_chain_id   INTEGER NOT NULL,
                 block_hash        BLOB NOT NULL,
                 tx_index          INTEGER NOT NULL,
@@ -63,55 +69,71 @@ impl BridgeDb {
                 depositor         BLOB NOT NULL,
                 amount            TEXT NOT NULL,
                 nonce             TEXT NOT NULL,
-                status            TEXT NOT NULL DEFAULT 'pending',
                 raw_operation     BLOB,
                 created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 PRIMARY KEY (source_chain_id, block_hash, tx_index, log_index)
             )",
         )
         .execute(&self.pool)
         .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_deposits_status ON deposits(status)")
-            .execute(&self.pool)
-            .await?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_deposits_depositor ON deposits(depositor)")
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS finished_deposits (
+                source_chain_id   INTEGER NOT NULL,
+                block_hash        BLOB NOT NULL,
+                tx_index          INTEGER NOT NULL,
+                log_index         INTEGER NOT NULL,
+                tx_hash           BLOB NOT NULL,
+                depositor         BLOB NOT NULL,
+                amount            TEXT NOT NULL,
+                nonce             TEXT NOT NULL,
+                raw_operation     BLOB,
+                status            TEXT NOT NULL,
+                created_at        TEXT NOT NULL,
+                finished_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                PRIMARY KEY (source_chain_id, block_hash, tx_index, log_index)
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
 
         sqlx::query(
-            "CREATE TABLE IF NOT EXISTS burns (
+            "CREATE TABLE IF NOT EXISTS pending_burns (
                 linera_height     INTEGER NOT NULL,
                 burn_index        INTEGER NOT NULL,
                 evm_recipient     TEXT NOT NULL,
                 amount            TEXT NOT NULL,
-                status            TEXT NOT NULL DEFAULT 'pending',
                 raw_cert          BLOB,
                 created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 PRIMARY KEY (linera_height, burn_index)
             )",
         )
         .execute(&self.pool)
         .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_burns_status ON burns(status)")
-            .execute(&self.pool)
-            .await?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_burns_evm_recipient ON burns(evm_recipient)")
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS finished_burns (
+                linera_height     INTEGER NOT NULL,
+                burn_index        INTEGER NOT NULL,
+                evm_recipient     TEXT NOT NULL,
+                amount            TEXT NOT NULL,
+                raw_cert          BLOB,
+                status            TEXT NOT NULL,
+                created_at        TEXT NOT NULL,
+                finished_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                PRIMARY KEY (linera_height, burn_index)
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
 
-    /// Inserts a new deposit. Ignores duplicates (idempotent).
+    /// Inserts a new pending deposit. Ignores duplicates (idempotent).
     pub async fn insert_deposit(&self, deposit: &PendingDeposit) -> Result<()> {
         sqlx::query(
-            "INSERT OR IGNORE INTO deposits
+            "INSERT OR IGNORE INTO pending_deposits
                 (source_chain_id, block_hash, tx_index, log_index, tx_hash, depositor, amount, nonce)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
@@ -128,10 +150,23 @@ impl BridgeDb {
         Ok(())
     }
 
-    /// Updates a deposit's status and timestamp.
+    /// Atomically moves a deposit from `pending_deposits` to `finished_deposits`
+    /// with the given terminal `status` (`"completed"` or `"failed"`).
+    ///
+    /// If `finished_deposits` already has a row for this key (replay scenario),
+    /// the existing record is preserved and a warning is logged. The matching
+    /// pending row is still deleted so the deposit does not stay queued.
     pub async fn update_deposit_status(&self, key: &DepositKey, status: &str) -> Result<()> {
-        sqlx::query(
-            "UPDATE deposits SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        let mut tx = self.pool.begin().await?;
+        let inserted = sqlx::query(
+            "INSERT OR IGNORE INTO finished_deposits
+                (source_chain_id, block_hash, tx_index, log_index,
+                 tx_hash, depositor, amount, nonce, raw_operation,
+                 status, created_at)
+             SELECT source_chain_id, block_hash, tx_index, log_index,
+                    tx_hash, depositor, amount, nonce, raw_operation,
+                    ?, created_at
+             FROM pending_deposits
              WHERE source_chain_id = ? AND block_hash = ? AND tx_index = ? AND log_index = ?",
         )
         .bind(status)
@@ -139,15 +174,34 @@ impl BridgeDb {
         .bind(key.block_hash.as_slice())
         .bind(key.tx_index as i64)
         .bind(key.log_index as i64)
-        .execute(&self.pool)
-        .await?;
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        let deleted = sqlx::query(
+            "DELETE FROM pending_deposits
+             WHERE source_chain_id = ? AND block_hash = ? AND tx_index = ? AND log_index = ?",
+        )
+        .bind(key.source_chain_id as i64)
+        .bind(key.block_hash.as_slice())
+        .bind(key.tx_index as i64)
+        .bind(key.log_index as i64)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        tx.commit().await?;
+        if deleted > 0 && inserted == 0 {
+            tracing::warn!(
+                ?key,
+                "Replay detected: deposit already in finished_deposits, original record kept"
+            );
+        }
         Ok(())
     }
 
-    /// Stores raw BCS-serialized operation bytes for a deposit.
+    /// Stores raw BCS-serialized operation bytes on the pending deposit row.
     pub async fn store_deposit_raw(&self, key: &DepositKey, raw: &[u8]) -> Result<()> {
         sqlx::query(
-            "UPDATE deposits SET raw_operation = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            "UPDATE pending_deposits SET raw_operation = ?
              WHERE source_chain_id = ? AND block_hash = ? AND tx_index = ? AND log_index = ?",
         )
         .bind(raw)
@@ -160,10 +214,10 @@ impl BridgeDb {
         Ok(())
     }
 
-    /// Inserts a new burn. Ignores duplicates (idempotent).
+    /// Inserts a new pending burn. Ignores duplicates (idempotent).
     pub async fn insert_burn(&self, burn: &PendingBurn) -> Result<()> {
         sqlx::query(
-            "INSERT OR IGNORE INTO burns (linera_height, burn_index, evm_recipient, amount)
+            "INSERT OR IGNORE INTO pending_burns (linera_height, burn_index, evm_recipient, amount)
              VALUES (?, ?, ?, ?)",
         )
         .bind(burn.height.0 as i64)
@@ -175,32 +229,59 @@ impl BridgeDb {
         Ok(())
     }
 
-    /// Updates a burn's status and timestamp.
+    /// Atomically moves a burn from `pending_burns` to `finished_burns` with
+    /// the given terminal `status` (`"completed"` or `"failed"`).
+    ///
+    /// If `finished_burns` already has a row for this key (replay scenario),
+    /// the existing record is preserved and a warning is logged. The matching
+    /// pending row is still deleted so the burn does not stay queued.
     pub async fn update_burn_status(
         &self,
         height: BlockHeight,
         index: usize,
         status: &str,
     ) -> Result<()> {
-        sqlx::query(
-            "UPDATE burns SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        let mut tx = self.pool.begin().await?;
+        let inserted = sqlx::query(
+            "INSERT OR IGNORE INTO finished_burns
+                (linera_height, burn_index, evm_recipient, amount, raw_cert,
+                 status, created_at)
+             SELECT linera_height, burn_index, evm_recipient, amount, raw_cert,
+                    ?, created_at
+             FROM pending_burns
              WHERE linera_height = ? AND burn_index = ?",
         )
         .bind(status)
         .bind(height.0 as i64)
         .bind(index as i64)
-        .execute(&self.pool)
-        .await?;
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        let deleted =
+            sqlx::query("DELETE FROM pending_burns WHERE linera_height = ? AND burn_index = ?")
+                .bind(height.0 as i64)
+                .bind(index as i64)
+                .execute(&mut *tx)
+                .await?
+                .rows_affected();
+        tx.commit().await?;
+        if deleted > 0 && inserted == 0 {
+            tracing::warn!(
+                ?height,
+                burn_index = index,
+                "Replay detected: burn already in finished_burns, original record kept"
+            );
+        }
         Ok(())
     }
 
-    /// Loads every deposit whose status is still `pending`, used at relay
-    /// startup to repopulate the in-memory `MonitorState` so that work
-    /// in flight at the time of the previous shutdown is not lost.
+    /// Loads every pending deposit, used at relay startup to repopulate the
+    /// in-memory `MonitorState` so that work in flight at the time of the
+    /// previous shutdown is not lost.
     pub async fn load_pending_deposits(&self) -> Result<Vec<PendingDeposit>> {
         let rows = sqlx::query(
             "SELECT source_chain_id, block_hash, tx_index, log_index, tx_hash, depositor, amount, nonce
-             FROM deposits WHERE status = 'pending'",
+             FROM pending_deposits",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -236,12 +317,12 @@ impl BridgeDb {
         Ok(out)
     }
 
-    /// Loads every burn whose status is still `pending`, used at relay
-    /// startup to repopulate the in-memory `MonitorState`.
+    /// Loads every pending burn, used at relay startup to repopulate the
+    /// in-memory `MonitorState`.
     pub async fn load_pending_burns(&self) -> Result<Vec<PendingBurn>> {
         let rows = sqlx::query(
             "SELECT linera_height, burn_index, evm_recipient, amount
-             FROM burns WHERE status = 'pending'",
+             FROM pending_burns",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -265,7 +346,23 @@ impl BridgeDb {
         Ok(out)
     }
 
-    /// Stores raw BCS-serialized certificate bytes for a burn.
+    /// Returns the number of rows currently in `pending_deposits`.
+    pub async fn pending_deposits_count(&self) -> Result<i64> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_deposits")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count)
+    }
+
+    /// Returns the number of rows currently in `pending_burns`.
+    pub async fn pending_burns_count(&self) -> Result<i64> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_burns")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count)
+    }
+
+    /// Stores raw BCS-serialized certificate bytes on the pending burn row.
     pub async fn store_burn_raw(
         &self,
         height: BlockHeight,
@@ -273,7 +370,7 @@ impl BridgeDb {
         raw: &[u8],
     ) -> Result<()> {
         sqlx::query(
-            "UPDATE burns SET raw_cert = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            "UPDATE pending_burns SET raw_cert = ?
              WHERE linera_height = ? AND burn_index = ?",
         )
         .bind(raw)
@@ -297,14 +394,14 @@ mod tests {
 
     static FILE_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-    async fn open_db(use_file: bool) -> BridgeDb {
+    async fn open_db(use_file: bool) -> Result<BridgeDb> {
         if use_file {
             let n = FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
             let path = std::path::PathBuf::from(format!("/tmp/bridge_db_test_{n}.sqlite3"));
             std::fs::remove_file(&path).ok(); // Best-effort cleanup; NotFound is the common case.
-            BridgeDb::open(&path).await.unwrap()
+            BridgeDb::open(&path).await
         } else {
-            BridgeDb::open_in_memory().await.unwrap()
+            BridgeDb::open_in_memory().await
         }
     }
 
@@ -341,187 +438,315 @@ mod tests {
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_insert_and_query_deposit(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_insert_and_query_deposit(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
 
-        let row: (String, Vec<u8>, String) = sqlx::query_as(
-            "SELECT amount, depositor, status FROM deposits WHERE source_chain_id = 8453",
+        let row: (String, Vec<u8>) = sqlx::query_as(
+            "SELECT amount, depositor FROM pending_deposits WHERE source_chain_id = 8453",
         )
         .fetch_one(&db.pool)
-        .await
-        .unwrap();
+        .await?;
         assert_eq!(row.0, "1000000");
         assert_eq!(row.1, Address::from([0xCC; 20]).as_slice());
-        assert_eq!(row.2, "pending");
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_complete_deposit(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
-        db.update_deposit_status(&test_deposit_key(), "completed")
-            .await
-            .unwrap();
+    async fn test_insert_deposit_idempotent(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
+        db.insert_deposit(&test_deposit()).await?;
 
-        let (status,): (String,) =
-            sqlx::query_as("SELECT status FROM deposits WHERE source_chain_id = 8453")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(status, "completed");
+        assert_eq!(db.pending_deposits_count().await?, 1);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_fail_deposit(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
-        db.update_deposit_status(&test_deposit_key(), "failed")
-            .await
-            .unwrap();
+    async fn test_partial_processing_splits_pending_and_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
 
-        let (status,): (String,) =
-            sqlx::query_as("SELECT status FROM deposits WHERE source_chain_id = 8453")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(status, "failed");
-    }
+        let mut keys = Vec::new();
+        for log_index in 0..5 {
+            let mut deposit = test_deposit();
+            deposit.key.log_index = log_index;
+            db.insert_deposit(&deposit).await?;
+            keys.push(deposit.key);
+        }
+        assert_eq!(db.pending_deposits_count().await?, 5);
 
-    #[test_case(false; "in_memory")]
-    #[test_case(true; "file_backed")]
-    #[tokio::test]
-    async fn test_insert_deposit_idempotent(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
-        db.insert_deposit(&test_deposit()).await.unwrap();
+        for key in &keys[..2] {
+            db.update_deposit_status(key, "completed").await?;
+        }
 
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM deposits")
+        assert_eq!(db.pending_deposits_count().await?, 3);
+        let (finished_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM finished_deposits")
             .fetch_one(&db.pool)
-            .await
-            .unwrap();
-        assert_eq!(count, 1);
+            .await?;
+        assert_eq!(finished_count, 2);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_store_and_retrieve_deposit_raw(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_deposit(&test_deposit()).await.unwrap();
+    async fn test_store_and_retrieve_deposit_raw(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
 
         let raw_bytes = vec![1, 2, 3, 4, 5];
         db.store_deposit_raw(&test_deposit_key(), &raw_bytes)
-            .await
-            .unwrap();
+            .await?;
 
-        let (raw,): (Vec<u8>,) =
-            sqlx::query_as("SELECT raw_operation FROM deposits WHERE source_chain_id = 8453")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(raw, raw_bytes);
-    }
-
-    #[test_case(false; "in_memory")]
-    #[test_case(true; "file_backed")]
-    #[tokio::test]
-    async fn test_insert_and_query_burn(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
-
-        let burn = test_burn();
-        let row: (String, String, String) = sqlx::query_as(
-            "SELECT evm_recipient, amount, status FROM burns WHERE linera_height = 100",
+        let (raw,): (Vec<u8>,) = sqlx::query_as(
+            "SELECT raw_operation FROM pending_deposits WHERE source_chain_id = 8453",
         )
         .fetch_one(&db.pool)
-        .await
-        .unwrap();
+        .await?;
+        assert_eq!(raw, raw_bytes);
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_insert_and_query_burn(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
+
+        let burn = test_burn();
+        let row: (String, String) = sqlx::query_as(
+            "SELECT evm_recipient, amount FROM pending_burns WHERE linera_height = 100",
+        )
+        .fetch_one(&db.pool)
+        .await?;
         assert_eq!(row.0, format!("{:#x}", burn.evm_recipient));
         assert_eq!(row.1, burn.amount.to_string());
-        assert_eq!(row.2, "pending");
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_complete_burn(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
-        db.update_burn_status(BlockHeight(100), 0, "completed")
-            .await
-            .unwrap();
+    async fn test_insert_burn_idempotent(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
+        db.insert_burn(&test_burn()).await?;
 
-        let (status,): (String,) =
-            sqlx::query_as("SELECT status FROM burns WHERE linera_height = 100")
-                .fetch_one(&db.pool)
-                .await
-                .unwrap();
-        assert_eq!(status, "completed");
+        assert_eq!(db.pending_burns_count().await?, 1);
+        Ok(())
     }
 
     #[test_case(false; "in_memory")]
     #[test_case(true; "file_backed")]
     #[tokio::test]
-    async fn test_insert_burn_idempotent(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
-        db.insert_burn(&test_burn()).await.unwrap();
-
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM burns")
-            .fetch_one(&db.pool)
-            .await
-            .unwrap();
-        assert_eq!(count, 1);
-    }
-
-    #[test_case(false; "in_memory")]
-    #[test_case(true; "file_backed")]
-    #[tokio::test]
-    async fn test_store_and_retrieve_burn_raw(use_file: bool) {
-        let db = open_db(use_file).await;
-        db.insert_burn(&test_burn()).await.unwrap();
+    async fn test_store_and_retrieve_burn_raw(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
 
         let cert_bytes = vec![10, 20, 30, 40, 50];
-        db.store_burn_raw(BlockHeight(100), 0, &cert_bytes)
-            .await
-            .unwrap();
+        db.store_burn_raw(BlockHeight(100), 0, &cert_bytes).await?;
 
         let (raw,): (Vec<u8>,) =
-            sqlx::query_as("SELECT raw_cert FROM burns WHERE linera_height = 100")
+            sqlx::query_as("SELECT raw_cert FROM pending_burns WHERE linera_height = 100")
                 .fetch_one(&db.pool)
-                .await
-                .unwrap();
+                .await?;
         assert_eq!(raw, cert_bytes);
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_complete_deposit_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
+        db.update_deposit_status(&test_deposit_key(), "completed")
+            .await?;
+
+        assert_eq!(
+            db.pending_deposits_count().await?,
+            0,
+            "row should be removed from pending"
+        );
+
+        let (status,): (String,) =
+            sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
+                .fetch_one(&db.pool)
+                .await?;
+        assert_eq!(status, "completed");
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_fail_deposit_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
+        db.update_deposit_status(&test_deposit_key(), "failed")
+            .await?;
+
+        assert_eq!(db.pending_deposits_count().await?, 0);
+
+        let (status,): (String,) =
+            sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
+                .fetch_one(&db.pool)
+                .await?;
+        assert_eq!(status, "failed");
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_complete_burn_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
+        db.update_burn_status(BlockHeight(100), 0, "completed")
+            .await?;
+
+        assert_eq!(db.pending_burns_count().await?, 0);
+
+        let (status,): (String,) =
+            sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
+                .fetch_one(&db.pool)
+                .await?;
+        assert_eq!(status, "completed");
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_fail_burn_moves_to_finished(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
+        db.update_burn_status(BlockHeight(100), 0, "failed").await?;
+
+        assert_eq!(db.pending_burns_count().await?, 0);
+
+        let (status,): (String,) =
+            sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
+                .fetch_one(&db.pool)
+                .await?;
+        assert_eq!(status, "failed");
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_replay_preserves_original_finished_deposit(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_deposit(&test_deposit()).await?;
+        db.update_deposit_status(&test_deposit_key(), "completed")
+            .await?;
+
+        // Replay: re-insert the same deposit and try to mark it failed.
+        db.insert_deposit(&test_deposit()).await?;
+        db.update_deposit_status(&test_deposit_key(), "failed")
+            .await?;
+
+        let (status,): (String,) =
+            sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
+                .fetch_one(&db.pool)
+                .await?;
+        assert_eq!(
+            status, "completed",
+            "original terminal status must be preserved on replay"
+        );
+        assert_eq!(
+            db.pending_deposits_count().await?,
+            0,
+            "replayed pending row must be cleared"
+        );
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_replay_preserves_original_finished_burn(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        db.insert_burn(&test_burn()).await?;
+        db.update_burn_status(BlockHeight(100), 0, "completed")
+            .await?;
+
+        db.insert_burn(&test_burn()).await?;
+        db.update_burn_status(BlockHeight(100), 0, "failed").await?;
+
+        let (status,): (String,) =
+            sqlx::query_as("SELECT status FROM finished_burns WHERE linera_height = 100")
+                .fetch_one(&db.pool)
+                .await?;
+        assert_eq!(status, "completed");
+        assert_eq!(db.pending_burns_count().await?, 0);
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_load_pending_excludes_finished_deposits(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        let first = test_deposit();
+        let mut second = test_deposit();
+        second.key.log_index = 1;
+        db.insert_deposit(&first).await?;
+        db.insert_deposit(&second).await?;
+        db.update_deposit_status(&first.key, "completed").await?;
+
+        let pending = db.load_pending_deposits().await?;
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].key.log_index, 1);
+        Ok(())
+    }
+
+    #[test_case(false; "in_memory")]
+    #[test_case(true; "file_backed")]
+    #[tokio::test]
+    async fn test_load_pending_excludes_finished_burns(use_file: bool) -> Result<()> {
+        let db = open_db(use_file).await?;
+        let mut second = test_burn();
+        second.burn_index = 1;
+        db.insert_burn(&test_burn()).await?;
+        db.insert_burn(&second).await?;
+        db.update_burn_status(BlockHeight(100), 0, "completed")
+            .await?;
+
+        let pending = db.load_pending_burns().await?;
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].burn_index, 1);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_file_persistence_survives_reopen() {
+    async fn test_file_persistence_survives_reopen() -> Result<()> {
         let path = std::path::PathBuf::from("/tmp/bridge_db_test_reopen.sqlite3");
         std::fs::remove_file(&path).ok(); // Best-effort pre-cleanup; NotFound is the common case.
 
         {
-            let db = BridgeDb::open(&path).await.unwrap();
-            db.insert_deposit(&test_deposit()).await.unwrap();
+            let db = BridgeDb::open(&path).await?;
+            db.insert_deposit(&test_deposit()).await?;
             db.update_deposit_status(&test_deposit_key(), "completed")
-                .await
-                .unwrap();
+                .await?;
         }
 
         {
-            let db = BridgeDb::open(&path).await.unwrap();
+            let db = BridgeDb::open(&path).await?;
             let (status,): (String,) =
-                sqlx::query_as("SELECT status FROM deposits WHERE source_chain_id = 8453")
+                sqlx::query_as("SELECT status FROM finished_deposits WHERE source_chain_id = 8453")
                     .fetch_one(&db.pool)
-                    .await
-                    .unwrap();
+                    .await?;
             assert_eq!(status, "completed");
         }
 
         std::fs::remove_file(&path).ok(); // Best-effort post-test cleanup.
+        Ok(())
     }
 }
