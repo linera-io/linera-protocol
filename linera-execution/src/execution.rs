@@ -272,6 +272,31 @@ where
         .await
     }
 
+    /// Executes an operation through the snapshot-based per-action path. Test-only.
+    ///
+    /// Mirror of [`Self::execute_operation`] that drives the actor's
+    /// `run_user_action_non_threaded_not_shared_memory` path: a fresh worker is
+    /// spawned per action by the actor itself, with the supplied snapshot map
+    /// passed in and returned (mutated) by the runtime. This lets equivalence
+    /// tests exercise the snapshot path on native, side-by-side with the
+    /// threaded one.
+    pub async fn execute_operation_with_snapshots(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+        resource_controller: &mut ResourceController<Option<AccountOwner>>,
+        block_snapshots: &mut BTreeMap<ApplicationId, Vec<u8>>,
+        context: OperationContext,
+        operation: Operation,
+    ) -> Result<(), ExecutionError> {
+        let mut actor = ExecutionStateActor::with_block_snapshots(
+            self,
+            txn_tracker,
+            resource_controller,
+            block_snapshots,
+        );
+        Box::pin(actor.execute_operation(context, operation)).await
+    }
+
     /// Executes a message through a freshly spawned block-level runtime. Test-only.
     pub async fn execute_message(
         &mut self,

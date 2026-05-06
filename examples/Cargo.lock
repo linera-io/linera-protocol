@@ -4302,12 +4302,14 @@ name = "linera-witty"
 version = "0.16.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "cfg_aliases",
  "either",
  "frunk",
  "linera-wasmer",
  "linera-witty-macros",
  "log",
+ "serde",
  "thiserror 1.0.65",
 ]
 

@@ -1167,6 +1167,10 @@ impl ContractSyncRuntime {
         for (app_id, bytes) in captured {
             self.inner().current_snapshots.insert(app_id, bytes);
         }
+        // Clear `loaded_applications` to release the `SyncRuntimeHandle` clones
+        // held inside each contract instance — otherwise `Arc::into_inner` below
+        // returns `None` because those clones keep the handle's `Arc` alive.
+        self.inner().loaded_applications.clear();
         let runtime = self
             .into_inner()
             .expect("Runtime clones should have been freed by now");
