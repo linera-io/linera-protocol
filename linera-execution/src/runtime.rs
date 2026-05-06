@@ -1120,18 +1120,20 @@ impl ContractSyncRuntime {
 
     /// Per-action entry point used by the snapshot-based execution path on web.
     ///
-    /// Takes the actor's block-level snapshot map by value, runs the action
-    /// (without finalizing — no `Contract::store` is called), and returns the
-    /// same map with fresh entries for every contract that was loaded during
-    /// this action. Apps that were already in the input map but weren't loaded
+    /// Takes the actor's block-level snapshot map by value, runs the action,
+    /// captures fresh snapshots for every contract that was loaded during this
+    /// action, then finalizes (so `Contract::store` runs and chain views are
+    /// updated). Apps that were already in the input map but weren't loaded
     /// during this action keep their original bytes and pass through.
     ///
-    /// During the action, `load_contract_instance` consumes entries from the
-    /// map on first instantiation of each contract and calls
-    /// `restore_snapshot_from_bytes`, so the instance starts in its captured
-    /// post-`Contract::load` state — the SDK skips re-running `Contract::load`
-    /// because the contract's static `Option<Contract>` global is already
-    /// `Some(...)` after restore.
+    /// The snapshot is captured **before** finalize, so each entry holds the
+    /// post-action / pre-`Contract::store` Wasm state. That means the next
+    /// action's worker, when it restores, gets `CONTRACT = Some(...)` and the
+    /// SDK's `Contract::load` is skipped — preserving the "load once per
+    /// block per app" invariant. Finalize is then called per action: each
+    /// `Contract::store` is idempotent (writes the current Wasm memory to the
+    /// view), so calling it multiple times produces the same final state as
+    /// calling it once at end of block.
     pub(crate) fn execute_action_with_snapshots(
         mut self,
         application_id: ApplicationId,
@@ -1146,15 +1148,22 @@ impl ContractSyncRuntime {
         ),
         ExecutionError,
     > {
+        // Build the per-action `FinalizeContext` from the action's context
+        // before consuming `action`.
+        let finalize_context = FinalizeContext {
+            authenticated_owner: action.signer(),
+            chain_id: self.inner().chain_id,
+            height: action.height(),
+            round: action.round(),
+        };
         // Move the input snapshots into the runtime; `load_contract_instance`
         // consumes (`.remove()`) from this map on first use of each contract.
         self.inner().current_snapshots = snapshots;
         let result = self
             .deref_mut()
             .execute_action(application_id, action, refund_grant_to)?;
-        // Capture a fresh snapshot for every loaded contract and merge into the
-        // map. Apps not loaded this action keep their original bytes (untouched
-        // by the action's execution).
+        // Capture a fresh snapshot for every loaded contract — *before*
+        // finalize, so `CONTRACT` is still `Some(...)` in the captured memory.
         let captured: Vec<(ApplicationId, Vec<u8>)> = self
             .inner()
             .loaded_applications
@@ -1167,6 +1176,11 @@ impl ContractSyncRuntime {
         for (app_id, bytes) in captured {
             self.inner().current_snapshots.insert(app_id, bytes);
         }
+        // Finalize: each loaded contract's `Contract::store` runs, writing its
+        // Wasm-side state to the chain view. The threaded path does this once
+        // at end of block; doing it here per action gives the same final
+        // chain-view state because `store` is idempotent.
+        self.deref().finalize(finalize_context)?;
         // Clear `loaded_applications` to release the `SyncRuntimeHandle` clones
         // held inside each contract instance — otherwise `Arc::into_inner` below
         // returns `None` because those clones keep the handle's `Arc` alive.
