@@ -194,10 +194,11 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         assert!(!service.process_inbox(&chain_2).await?.is_empty());
         client.revoke_epochs(Epoch(1)).await?;
         notifications.wait_for_events(None).await?;
-        assert!(!service.process_inbox(&chain_2).await.unwrap().is_empty());
-        let committees = service.query_committees(&chain_2).await?;
-        let epochs = committees.into_keys().collect::<Vec<_>>();
-        assert_eq!(&epochs, &[Epoch(2)]);
+        // Revocation no longer requires per-chain processing, so process_inbox on
+        // chain_2 may have nothing to do — but the chain's current epoch remains the
+        // last one it advanced to via `ProcessNewEpoch`.
+        let _ = service.process_inbox(&chain_2).await?;
+        assert_eq!(service.query_chain_epoch(&chain_2).await?, Epoch(2));
     } else {
         client_2.process_inbox(chain_2).await?;
         client.revoke_epochs(Epoch(1)).await?;
@@ -217,10 +218,8 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         assert!(!service.process_inbox(&chain_2).await.unwrap().is_empty());
         client.revoke_epochs(Epoch(2)).await?;
         notifications.wait_for_events(None).await?;
-        assert!(!service.process_inbox(&chain_2).await?.is_empty());
-        let committees = service.query_committees(&chain_2).await?;
-        let epochs = committees.into_keys().collect::<Vec<_>>();
-        assert_eq!(&epochs, &[Epoch(3)]);
+        let _ = service.process_inbox(&chain_2).await?;
+        assert_eq!(service.query_chain_epoch(&chain_2).await?, Epoch(3));
     } else {
         client_2.process_inbox(chain_2).await?;
         client.revoke_epochs(Epoch(2)).await?;
@@ -252,9 +251,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         assert!(!service.process_inbox(&chain_2).await?.is_empty());
         let balance = service.balance(&account_recipient).await?;
         assert_eq!(balance, Amount::from_tokens(5));
-        let committees = service.query_committees(&chain_2).await?;
-        let epochs = committees.into_keys().collect::<Vec<_>>();
-        assert_eq!(&epochs, &[Epoch(3)]);
+        assert_eq!(service.query_chain_epoch(&chain_2).await?, Epoch(3));
 
         service.ensure_is_running()?;
     } else {

@@ -1797,18 +1797,26 @@ impl NodeService {
         Ok(module_id.with_abi())
     }
 
-    pub async fn query_committees(
-        &self,
-        chain_id: &ChainId,
-    ) -> Result<BTreeMap<Epoch, CryptoHash>> {
+    pub async fn query_committee_hash(&self, chain_id: &ChainId) -> Result<Option<CryptoHash>> {
         let query = format!(
             "query {{ chain(chainId:\"{chain_id}\") {{
-                executionState {{ system {{ committees }} }}
+                executionState {{ system {{ committeeHash }} }}
             }} }}"
         );
         let mut response = self.query_node(query).await?;
-        let committees = response["chain"]["executionState"]["system"]["committees"].take();
-        Ok(serde_json::from_value(committees)?)
+        let hash = response["chain"]["executionState"]["system"]["committeeHash"].take();
+        Ok(serde_json::from_value(hash)?)
+    }
+
+    pub async fn query_chain_epoch(&self, chain_id: &ChainId) -> Result<Epoch> {
+        let query = format!(
+            "query {{ chain(chainId:\"{chain_id}\") {{
+                executionState {{ system {{ epoch }} }}
+            }} }}"
+        );
+        let mut response = self.query_node(query).await?;
+        let epoch = response["chain"]["executionState"]["system"]["epoch"].take();
+        Ok(serde_json::from_value(epoch)?)
     }
 
     pub async fn events_from_index(
