@@ -9,7 +9,10 @@ mod memory;
 mod parameters;
 mod results;
 
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
+};
 
 use serde::{Deserialize, Serialize};
 pub use wasmer::FunctionEnvMut;
@@ -163,9 +166,9 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
 /// - [`Extern::Function`] holds an immutable reference to compiled code.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmInstanceSnapshot {
-    memories: Vec<(String, Vec<u8>)>,
-    globals: Vec<(String, NumericVal)>,
-    table_sizes: Vec<(String, u64)>,
+    memories: BTreeMap<String, Vec<u8>>,
+    globals: BTreeMap<String, NumericVal>,
+    table_sizes: BTreeMap<String, u64>,
 }
 
 impl<UserData> EntrypointInstance<UserData> {
@@ -178,9 +181,9 @@ impl<UserData> EntrypointInstance<UserData> {
     /// Creates a snapshot of the Wasm instance's mutable state (memories, globals,
     /// table sizes).
     pub fn create_snapshot(&mut self) -> Result<WasmInstanceSnapshot, SnapshotError> {
-        let mut memories = Vec::new();
-        let mut globals = Vec::new();
-        let mut table_sizes = Vec::new();
+        let mut memories = BTreeMap::new();
+        let mut globals = BTreeMap::new();
+        let mut table_sizes = BTreeMap::new();
 
         let exports: Vec<(String, Extern)> = self
             .instance
@@ -198,7 +201,7 @@ impl<UserData> EntrypointInstance<UserData> {
                             message: e.to_string(),
                         }
                     })?;
-                    memories.push((name, bytes));
+                    memories.insert(name, bytes);
                 }
                 Extern::Global(global) => {
                     // Const globals are part of the module and need no snapshot.
@@ -207,11 +210,11 @@ impl<UserData> EntrypointInstance<UserData> {
                             .ok_or_else(|| SnapshotError::ReferenceTypedGlobal {
                                 name: name.clone(),
                             })?;
-                        globals.push((name, val));
+                        globals.insert(name, val);
                     }
                 }
                 Extern::Table(table) => {
-                    table_sizes.push((name, u64::from(table.size(&self.store))));
+                    table_sizes.insert(name, u64::from(table.size(&self.store)));
                 }
                 // Functions are immutable code references; nothing to snapshot.
                 Extern::Function(_) => {}
@@ -240,9 +243,7 @@ impl<UserData> EntrypointInstance<UserData> {
         for (name, ext) in exports {
             match ext {
                 Extern::Memory(memory) => {
-                    if let Some((_, bytes)) =
-                        snapshot.memories.iter().find(|(n, _)| n == &name)
-                    {
+                    if let Some(bytes) = snapshot.memories.get(&name) {
                         // Grow the live memory to fit the snapshot if the snapshot
                         // was captured after a `memory.grow`.
                         let needed = bytes.len() as u64;
@@ -266,9 +267,7 @@ impl<UserData> EntrypointInstance<UserData> {
                     }
                 }
                 Extern::Global(global) => {
-                    if let Some((_, value)) =
-                        snapshot.globals.iter().find(|(n, _)| n == &name)
-                    {
+                    if let Some(value) = snapshot.globals.get(&name) {
                         global
                             .set(&mut self.store, numeric_to_wasmer_value(value))
                             .map_err(|e| SnapshotError::GlobalSet {
@@ -278,8 +277,7 @@ impl<UserData> EntrypointInstance<UserData> {
                     }
                 }
                 Extern::Table(table) => {
-                    if let Some((_, size)) = snapshot.table_sizes.iter().find(|(n, _)| n == &name)
-                    {
+                    if let Some(size) = snapshot.table_sizes.get(&name) {
                         let current = u64::from(table.size(&self.store));
                         if current != *size {
                             return Err(SnapshotError::TableSizeMismatch {

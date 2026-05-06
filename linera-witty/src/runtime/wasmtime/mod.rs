@@ -9,6 +9,8 @@ mod memory;
 mod parameters;
 mod results;
 
+use std::collections::BTreeMap;
+
 pub use anyhow;
 use serde::{Deserialize, Serialize};
 use wasmtime::{
@@ -56,9 +58,9 @@ pub struct EntrypointInstance<UserData> {
 ///   threading proposal); attempting to snapshot or restore one panics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmInstanceSnapshot {
-    memories: Vec<(String, Vec<u8>)>,
-    globals: Vec<(String, NumericVal)>,
-    table_sizes: Vec<(String, u64)>,
+    memories: BTreeMap<String, Vec<u8>>,
+    globals: BTreeMap<String, NumericVal>,
+    table_sizes: BTreeMap<String, u64>,
 }
 
 fn wasmtime_val_to_numeric(val: &wasmtime::Val) -> Option<NumericVal> {
@@ -100,9 +102,9 @@ impl<UserData> EntrypointInstance<UserData> {
     /// Creates a snapshot of the Wasm instance's mutable state (memories, globals,
     /// table sizes).
     pub fn create_snapshot(&mut self) -> Result<WasmInstanceSnapshot, SnapshotError> {
-        let mut memories = Vec::new();
-        let mut globals = Vec::new();
-        let mut table_sizes = Vec::new();
+        let mut memories = BTreeMap::new();
+        let mut globals = BTreeMap::new();
+        let mut table_sizes = BTreeMap::new();
 
         let exports = self
             .instance
@@ -113,7 +115,7 @@ impl<UserData> EntrypointInstance<UserData> {
         for (name, ext) in exports {
             match ext {
                 Extern::Memory(mem) => {
-                    memories.push((name, mem.data(&self.store).to_vec()));
+                    memories.insert(name, mem.data(&self.store).to_vec());
                 }
                 Extern::Global(global) => {
                     // Const globals are part of the module and need no snapshot.
@@ -122,11 +124,11 @@ impl<UserData> EntrypointInstance<UserData> {
                             .ok_or_else(|| SnapshotError::ReferenceTypedGlobal {
                                 name: name.clone(),
                             })?;
-                        globals.push((name, val));
+                        globals.insert(name, val);
                     }
                 }
                 Extern::Table(table) => {
-                    table_sizes.push((name, u64::from(table.size(&self.store))));
+                    table_sizes.insert(name, u64::from(table.size(&self.store)));
                 }
                 Extern::SharedMemory(_) => {
                     return Err(SnapshotError::SharedMemoryUnsupported { name });
@@ -157,9 +159,7 @@ impl<UserData> EntrypointInstance<UserData> {
         for (name, ext) in exports {
             match ext {
                 Extern::Memory(mem) => {
-                    if let Some((_, bytes)) =
-                        snapshot.memories.iter().find(|(n, _)| n == &name)
-                    {
+                    if let Some(bytes) = snapshot.memories.get(&name) {
                         // Grow the live memory to fit the snapshot if the snapshot
                         // was captured after a `memory.grow`.
                         let needed = bytes.len();
@@ -178,7 +178,7 @@ impl<UserData> EntrypointInstance<UserData> {
                     }
                 }
                 Extern::Global(global) => {
-                    if let Some((_, val)) = snapshot.globals.iter().find(|(n, _)| n == &name) {
+                    if let Some(val) = snapshot.globals.get(&name) {
                         global
                             .set(&mut self.store, numeric_to_wasmtime_val(val))
                             .map_err(|e| SnapshotError::GlobalSet {
@@ -188,8 +188,7 @@ impl<UserData> EntrypointInstance<UserData> {
                     }
                 }
                 Extern::Table(table) => {
-                    if let Some((_, size)) = snapshot.table_sizes.iter().find(|(n, _)| n == &name)
-                    {
+                    if let Some(size) = snapshot.table_sizes.get(&name) {
                         let current = u64::from(table.size(&self.store));
                         if current != *size {
                             return Err(SnapshotError::TableSizeMismatch {
