@@ -139,10 +139,7 @@ mod wasmer_tests {
         }
     }
 
-    fn assert_state(
-        instance: &mut linera_witty::wasmer::EntrypointInstance<()>,
-        expected: &State,
-    ) {
+    fn assert_state(instance: &mut linera_witty::wasmer::EntrypointInstance<()>, expected: &State) {
         let (mut store, wasmer_instance) = instance.as_store_and_instance_mut();
         let i32_val = wasmer_instance
             .exports
@@ -251,9 +248,7 @@ mod wasmtime_tests {
     fn build_instance(engine: &Engine, module: &Module) -> EntrypointInstance<()> {
         let linker: Linker<()> = Linker::new(engine);
         let mut store = Store::new(engine, ());
-        let instance = linker
-            .instantiate(&mut store, module)
-            .expect("instantiate");
+        let instance = linker.instantiate(&mut store, module).expect("instantiate");
         EntrypointInstance::new(instance, store)
     }
 
@@ -327,7 +322,10 @@ mod wasmtime_tests {
             .unwrap()
             .call(&mut store, &[], &mut out)
             .unwrap();
-        assert_eq!(out[0].f32().map(f32::to_bits), Some(expected.f32_val.to_bits()));
+        assert_eq!(
+            out[0].f32().map(f32::to_bits),
+            Some(expected.f32_val.to_bits())
+        );
 
         let mut out = [wasmtime::Val::F64(0)];
         instance
@@ -335,17 +333,16 @@ mod wasmtime_tests {
             .unwrap()
             .call(&mut store, &[], &mut out)
             .unwrap();
-        assert_eq!(out[0].f64().map(f64::to_bits), Some(expected.f64_val.to_bits()));
+        assert_eq!(
+            out[0].f64().map(f64::to_bits),
+            Some(expected.f64_val.to_bits())
+        );
 
         let read_byte = instance.get_func(&mut store, "read_byte").unwrap();
         let mut out = [wasmtime::Val::I32(0)];
         for (offset, byte) in expected.bytes.iter().enumerate() {
             read_byte
-                .call(
-                    &mut store,
-                    &[wasmtime::Val::I32(offset as i32)],
-                    &mut out,
-                )
+                .call(&mut store, &[wasmtime::Val::I32(offset as i32)], &mut out)
                 .unwrap();
             assert_eq!(out[0].i32(), Some(i32::from(*byte)));
         }

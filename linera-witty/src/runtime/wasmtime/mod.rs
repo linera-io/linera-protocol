@@ -50,9 +50,7 @@ fn wasmtime_val_to_numeric(val: &wasmtime::Val) -> NumericVal {
         wasmtime::Val::F32(bits) => NumericVal::F32(*bits),
         wasmtime::Val::F64(bits) => NumericVal::F64(*bits),
         wasmtime::Val::V128(v) => NumericVal::V128(v.as_u128()),
-        wasmtime::Val::FuncRef(_)
-        | wasmtime::Val::ExternRef(_)
-        | wasmtime::Val::AnyRef(_) => {
+        wasmtime::Val::FuncRef(_) | wasmtime::Val::ExternRef(_) | wasmtime::Val::AnyRef(_) => {
             panic!("Reference-typed mutable globals cannot be snapshotted")
         }
     }

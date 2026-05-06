@@ -1188,7 +1188,11 @@ impl ContractSyncRuntime {
         let runtime = self
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        Ok((result, runtime.resource_controller, runtime.current_snapshots))
+        Ok((
+            result,
+            runtime.resource_controller,
+            runtime.current_snapshots,
+        ))
     }
 
     /// Runs a block-level loop, receiving commands from the async side.

@@ -192,7 +192,10 @@ impl<UserData> EntrypointInstance<UserData> {
         let mut globals = Vec::new();
         for (name, global) in self.instance.exports.iter().globals() {
             if global.ty(&self.store).mutability == Mutability::Var {
-                globals.push((name.clone(), wasmer_value_to_numeric(&global.get(&mut self.store))));
+                globals.push((
+                    name.clone(),
+                    wasmer_value_to_numeric(&global.get(&mut self.store)),
+                ));
             }
         }
 

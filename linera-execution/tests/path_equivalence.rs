@@ -66,8 +66,7 @@ async fn threaded_and_snapshot_paths_match_for_simple_operation() -> anyhow::Res
     // Threaded shared-memory path.
     let mut tracker_threaded =
         TransactionTracker::new_replaying_blobs(blobs_threaded.iter().copied());
-    let mut controller_threaded =
-        ResourceController::<Option<AccountOwner>>::default();
+    let mut controller_threaded = ResourceController::<Option<AccountOwner>>::default();
     view_threaded
         .execute_operation(
             &mut tracker_threaded,
@@ -81,8 +80,7 @@ async fn threaded_and_snapshot_paths_match_for_simple_operation() -> anyhow::Res
     // Snapshot-based per-action path.
     let mut tracker_snapshot =
         TransactionTracker::new_replaying_blobs(blobs_snapshot.iter().copied());
-    let mut controller_snapshot =
-        ResourceController::<Option<AccountOwner>>::default();
+    let mut controller_snapshot = ResourceController::<Option<AccountOwner>>::default();
     let mut block_snapshots: BTreeMap<_, Vec<u8>> = BTreeMap::new();
     view_snapshot
         .execute_operation_with_snapshots(

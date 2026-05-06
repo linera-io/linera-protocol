@@ -1109,11 +1109,7 @@ where
                     allow_application_logs,
                 );
                 for (code, description) in codes.0.into_iter().zip(descriptions) {
-                    runtime.preload_contract(
-                        ApplicationId::from(&description),
-                        code,
-                        description,
-                    );
+                    runtime.preload_contract(ApplicationId::from(&description), code, description);
                 }
                 runtime.execute_action_with_snapshots(
                     application_id,
