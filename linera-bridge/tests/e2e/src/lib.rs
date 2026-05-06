@@ -175,6 +175,65 @@ pub async fn parse_broadcast_address(
     Ok(output.trim().parse()?)
 }
 
+/// Deploys MockERC20 via the `DeployMockERC20.s.sol` forge script and
+/// returns the deployed contract address. Constructor args are hardcoded
+/// to the local-dev defaults (TestToken / TT / 1e21 supply).
+pub async fn deploy_mock_erc20(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+) -> anyhow::Result<Address> {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "env TOKEN_NAME=TestToken TOKEN_SYMBOL=TT TOKEN_SUPPLY=1000000000000000000000 \
+             forge script /contracts/script/DeployMockERC20.s.sol \
+             --root /contracts \
+             --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             --broadcast"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    parse_broadcast_address(compose, project_name, compose_file, "DeployMockERC20.s.sol").await
+}
+
+/// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge
+/// script and returns the deployed contract address.
+pub async fn deploy_fungible_bridge(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    light_client: Address,
+    chain_id_bytes32: &str,
+    token: Address,
+    fungible_app_id_bytes32: &str,
+) -> anyhow::Result<Address> {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "env LIGHT_CLIENT={light_client} \
+                 BRIDGE_CHAIN_ID={chain_id_bytes32} \
+                 TOKEN_ADDRESS={token} \
+                 FUNGIBLE_APP_ID={fungible_app_id_bytes32} \
+             forge script /contracts/script/DeployFungibleBridge.s.sol \
+             --root /contracts \
+             --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             --broadcast"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    parse_broadcast_address(compose, project_name, compose_file, "DeployFungibleBridge.s.sol")
+        .await
+}
+
 /// Queries the evm-bridge app to check whether a deposit has been processed.
 /// Mirrors `linera_bridge::monitor::query_deposit_processed` for use in tests
 /// without enabling the `relay` feature.
