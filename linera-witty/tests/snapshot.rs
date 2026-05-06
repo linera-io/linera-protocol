@@ -22,6 +22,7 @@
 const WAT: &str = r#"
 (module
   (memory (export "memory") 1)
+  (table $t (export "indirect") 2 funcref)
   (global $g_i32 (export "g_i32") (mut i32) (i32.const 0))
   (global $g_i64 (export "g_i64") (mut i64) (i64.const 0))
   (global $g_f32 (export "g_f32") (mut f32) (f32.const 0))
@@ -46,7 +47,11 @@ const WAT: &str = r#"
     i32.load8_u)
   (func (export "grow_pages") (param i32) (result i32)
     local.get 0
-    memory.grow))
+    memory.grow)
+  (func (export "grow_table") (param i32) (result i32)
+    ref.null func
+    local.get 0
+    table.grow $t))
 "#;
 
 /// A byte offset that lives in the second page of linear memory: the snapshot
@@ -290,6 +295,31 @@ mod wasmer_tests {
             .unwrap();
         assert_eq!(read[0].i32(), Some(0xa5));
     }
+
+    #[test]
+    #[should_panic(expected = "size changed")]
+    fn restore_panics_when_table_size_changed() {
+        let engine = engine();
+        let module = Module::new(&engine, wat::parse_str(super::WAT).unwrap()).unwrap();
+
+        // Source instance grows the table, then snapshots.
+        let bytes = {
+            let mut instance = build_instance(engine.clone(), &module);
+            let (mut store, wasmer_instance) = instance.as_store_and_instance_mut();
+            wasmer_instance
+                .exports
+                .get_function("grow_table")
+                .unwrap()
+                .call(&mut store, &[wasmer::Value::I32(3)])
+                .unwrap();
+            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+        };
+
+        // Restore on a fresh instance: table size differs, must panic.
+        let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
+        let mut instance = build_instance(engine, &module);
+        instance.restore_snapshot(&snapshot);
+    }
 }
 
 #[cfg(with_wasmtime)]
@@ -490,5 +520,34 @@ mod wasmtime_tests {
             )
             .unwrap();
         assert_eq!(out[0].i32(), Some(0xa5));
+    }
+
+    #[test]
+    #[should_panic(expected = "size changed")]
+    fn restore_panics_when_table_size_changed() {
+        let engine = Engine::default();
+        let module = Module::new(&engine, wat::parse_str(super::WAT).unwrap()).unwrap();
+
+        // Source instance grows the table, then snapshots.
+        let bytes = {
+            let mut instance = build_instance(&engine, &module);
+            let (mut store, wasmtime_instance) = instance.as_store_and_instance_mut();
+            let mut grow_out = [wasmtime::Val::I32(0)];
+            wasmtime_instance
+                .get_func(&mut store, "grow_table")
+                .unwrap()
+                .call(
+                    &mut store,
+                    &[wasmtime::Val::I32(3)],
+                    &mut grow_out,
+                )
+                .unwrap();
+            bcs::to_bytes(&instance.create_snapshot()).expect("serialize")
+        };
+
+        // Restore on a fresh instance: table size differs, must panic.
+        let snapshot: WasmInstanceSnapshot = bcs::from_bytes(&bytes).expect("deserialize");
+        let mut instance = build_instance(&engine, &module);
+        instance.restore_snapshot(&snapshot);
     }
 }

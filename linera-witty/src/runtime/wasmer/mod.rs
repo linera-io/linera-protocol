@@ -147,23 +147,27 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
     }
 }
 
-/// Snapshot of a Wasmer instance's mutable state (linear memory and mutable globals).
+/// Snapshot of a Wasmer instance's mutable state.
+///
+/// Captures the data that can change at runtime for each kind of [`Extern`]:
+///
+/// - [`Extern::Memory`]: the bytes of every exported linear memory, by
+///   export name. Standard Linera modules export a single memory, but the
+///   data type permits the Wasm `multi-memory` proposal.
+/// - [`Extern::Global`]: the value of every exported mutable global.
+/// - [`Extern::Table`]: the element count of every exported table. Tables
+///   are initialised from the module's `elem` section and Linera contracts
+///   do not mutate them after instantiation, so only the size is tracked
+///   and the same size is required of the instance at restore time.
+///
+/// The remaining variant carries no snapshottable state:
+///
+/// - [`Extern::Function`] holds an immutable reference to compiled code.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmInstanceSnapshot {
-    memory_data: Vec<u8>,
+    memories: Vec<(String, Vec<u8>)>,
     globals: Vec<(String, NumericVal)>,
-}
-
-impl WasmInstanceSnapshot {
-    /// Returns the size of the memory snapshot in bytes.
-    pub fn memory_size(&self) -> usize {
-        self.memory_data.len()
-    }
-
-    /// Returns the number of globals in the snapshot.
-    pub fn globals_count(&self) -> usize {
-        self.globals.len()
-    }
+    table_sizes: Vec<(String, u64)>,
 }
 
 impl<UserData> EntrypointInstance<UserData> {
@@ -173,70 +177,108 @@ impl<UserData> EntrypointInstance<UserData> {
         (self.store.as_store_mut(), &mut self.instance)
     }
 
-    /// Creates a snapshot of the Wasm instance's mutable state (memory and globals).
+    /// Creates a snapshot of the Wasm instance's mutable state (memories, globals,
+    /// table sizes).
     pub fn create_snapshot(&mut self) -> WasmInstanceSnapshot {
-        let memory_data = self
+        let mut memories = Vec::new();
+        let mut globals = Vec::new();
+        let mut table_sizes = Vec::new();
+
+        let exports: Vec<(String, Extern)> = self
             .instance
             .exports
             .iter()
-            .memories()
-            .next()
-            .map(|(_name, memory)| {
-                memory
-                    .view(&self.store)
-                    .copy_to_vec()
-                    .expect("Failed to copy Wasm memory")
-            })
-            .unwrap_or_default();
+            .map(|(name, ext)| (name.clone(), ext.clone()))
+            .collect();
 
-        let mut globals = Vec::new();
-        for (name, global) in self.instance.exports.iter().globals() {
-            if global.ty(&self.store).mutability == Mutability::Var {
-                globals.push((
-                    name.clone(),
-                    wasmer_value_to_numeric(&global.get(&mut self.store)),
-                ));
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(memory) => {
+                    let bytes = memory
+                        .view(&self.store)
+                        .copy_to_vec()
+                        .expect("Failed to copy Wasm memory");
+                    memories.push((name, bytes));
+                }
+                Extern::Global(global) => {
+                    // Const globals are part of the module and need no snapshot.
+                    if global.ty(&self.store).mutability == Mutability::Var {
+                        globals.push((
+                            name,
+                            wasmer_value_to_numeric(&global.get(&mut self.store)),
+                        ));
+                    }
+                }
+                Extern::Table(table) => {
+                    table_sizes.push((name, u64::from(table.size(&self.store))));
+                }
+                // Functions are immutable code references; nothing to snapshot.
+                Extern::Function(_) => {}
             }
         }
 
         WasmInstanceSnapshot {
-            memory_data,
+            memories,
             globals,
+            table_sizes,
         }
     }
 
     /// Restores the Wasm instance's mutable state from a snapshot.
     pub fn restore_snapshot(&mut self, snapshot: &WasmInstanceSnapshot) {
-        if let Some((_name, memory)) = self
+        let exports: Vec<(String, Extern)> = self
             .instance
             .exports
             .iter()
-            .memories()
-            .next()
-            .map(|(n, m)| (n.clone(), m.clone()))
-        {
-            // Grow the live memory to fit the snapshot if the snapshot
-            // was captured after a `memory.grow`.
-            let needed = snapshot.memory_data.len() as u64;
-            let current = memory.view(&self.store).data_size();
-            if needed > current {
-                let page_size = wasmer::WASM_PAGE_SIZE as u64;
-                let extra_pages = needed.div_ceil(page_size) - current / page_size;
-                memory
-                    .grow(&mut self.store, extra_pages as u32)
-                    .expect("Failed to grow Wasm memory to match snapshot");
-            }
-            memory
-                .view(&self.store)
-                .write(0, &snapshot.memory_data)
-                .expect("Failed to restore Wasm memory from snapshot");
-        }
+            .map(|(name, ext)| (name.clone(), ext.clone()))
+            .collect();
 
-        for (name, value) in &snapshot.globals {
-            if let Some(Extern::Global(global)) = self.instance.exports.get_extern(name) {
-                global
-                    .set(&mut self.store, numeric_to_wasmer_value(value))
-                    .expect("Failed to restore Wasm global from snapshot");
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(memory) => {
+                    if let Some((_, bytes)) =
+                        snapshot.memories.iter().find(|(n, _)| n == &name)
+                    {
+                        // Grow the live memory to fit the snapshot if the snapshot
+                        // was captured after a `memory.grow`.
+                        let needed = bytes.len() as u64;
+                        let current = memory.view(&self.store).data_size();
+                        if needed > current {
+                            let page_size = wasmer::WASM_PAGE_SIZE as u64;
+                            let extra_pages = needed.div_ceil(page_size) - current / page_size;
+                            memory
+                                .grow(&mut self.store, extra_pages as u32)
+                                .expect("Failed to grow Wasm memory to match snapshot");
+                        }
+                        memory
+                            .view(&self.store)
+                            .write(0, bytes)
+                            .expect("Failed to restore Wasm memory from snapshot");
+                    }
+                }
+                Extern::Global(global) => {
+                    if let Some((_, value)) =
+                        snapshot.globals.iter().find(|(n, _)| n == &name)
+                    {
+                        global
+                            .set(&mut self.store, numeric_to_wasmer_value(value))
+                            .expect("Failed to restore Wasm global from snapshot");
+                    }
+                }
+                Extern::Table(table) => {
+                    if let Some((_, size)) = snapshot.table_sizes.iter().find(|(n, _)| n == &name)
+                    {
+                        let current = u64::from(table.size(&self.store));
+                        assert_eq!(
+                            current, *size,
+                            "Wasm table `{name}` size changed: snapshot has {size}, fresh \
+                             instance has {current}; Linera contracts must not mutate tables \
+                             after instantiation",
+                        );
+                    }
+                }
+                // Functions are immutable code references; nothing to restore.
+                Extern::Function(_) => {}
             }
         }
     }
