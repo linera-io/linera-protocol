@@ -205,19 +205,24 @@ dc_exec linera-network sh -c "\
     cp -r $WALLET_DIR/client_0.db $WALLET_DIR/client_${EXTRA_WALLET_ID}.db"
 
 # ── 3. Deploy MockERC20 ──
-echo "Deploying MockERC20..."
-ERC20_OUTPUT=$(evm_exec \
-    forge create "$CONTRACTS_DIR/MockERC20.sol:MockERC20" \
-    --root "$CONTRACTS_DIR" \
-    --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
-    "${FORGE_USE_SOLC[@]}" \
-    --out /tmp/forge-out --cache-path /tmp/forge-cache \
+echo "Deploying MockERC20 via forge script..."
+EVM_CHAIN_ID_DECIMAL=$(dc_exec foundry-tools cast chain-id --rpc-url "$EVM_RPC_URL")
+dc_exec foundry-tools env \
+    TOKEN_NAME="TestToken" \
+    TOKEN_SYMBOL="TT" \
+    TOKEN_SUPPLY="1000000000000000000000" \
+    forge script /contracts/script/DeployMockERC20.s.sol \
+    --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast \
-    --constructor-args "TestToken" "TT" 1000000000000000000000)
-TOKEN_ADDRESS=$(echo "$ERC20_OUTPUT" | parse_address)
-wait_for_tx "$(echo "$ERC20_OUTPUT" | parse_tx_hash)"
+    --broadcast >/tmp/mock-erc20-deploy.log 2>&1 || {
+    cat /tmp/mock-erc20-deploy.log >&2
+    die "MockERC20 deploy failed"
+}
+TOKEN_ADDRESS=$(dc_exec foundry-tools \
+    jq -r '.transactions[0].contractAddress' \
+    "/contracts/broadcast/DeployMockERC20.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
+    | tr -d '[:space:]')
 echo "  MockERC20: $TOKEN_ADDRESS"
 validate_eth_address "Token address" "$TOKEN_ADDRESS"
 TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
