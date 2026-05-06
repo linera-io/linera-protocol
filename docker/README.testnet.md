@@ -76,6 +76,25 @@ above.
 The `linera-bridge` container will read `/etc/linera-bridge/.env` and
 `/etc/linera-bridge/.env.secret` at startup.
 
+#### Optional: explorer verification on contract deploys
+
+When the bridge contracts are deployed via the project's `forge script`
+tooling (either via `examples/bridge-demo/setup.sh` for local-dev or
+the `bridge-init` container in `docker-compose.bridge-test.yml`),
+setting `EXPLORER_API_KEY` and `VERIFIER_URL` in the operator shell
+before invocation appends `--verify` and publishes the verified
+contract source to a block explorer atomically with the deploy.
+
+Example for Base Sepolia:
+
+```bash
+export EXPLORER_API_KEY="..."
+export VERIFIER_URL="https://api-sepolia.basescan.org/api"
+```
+
+Both must be set for verification to be appended; either one alone is
+ignored.
+
 ### 4. Start the relayer
 
 ```bash
