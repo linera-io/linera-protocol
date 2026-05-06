@@ -9,3 +9,4 @@ optimizer = true
 optimizer_runs = 1
 via_ir = true
 evm_version = "shanghai"
+fs_permissions = [{ access = "read", path = "./test/fixtures" }, { access = "read", path = "./broadcast" }]
