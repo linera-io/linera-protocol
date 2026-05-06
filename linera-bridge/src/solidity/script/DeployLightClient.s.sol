@@ -26,11 +26,7 @@ contract DeployLightClient is Script {
         require(lc.adminChainId() == adminChainId, "post-deploy admin chain mismatch");
     }
 
-    function _readUint64Array(string memory json, string memory key)
-        internal
-        pure
-        returns (uint64[] memory out)
-    {
+    function _readUint64Array(string memory json, string memory key) internal pure returns (uint64[] memory out) {
         uint256[] memory raw = json.readUintArray(key);
         out = new uint64[](raw.length);
         for (uint256 i = 0; i < raw.length; i++) {

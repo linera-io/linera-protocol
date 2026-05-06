@@ -13,9 +13,6 @@ contract DeployLightClientTest is Test {
     function test_run_deploys_with_admin_chain_id_from_json() public {
         DeployLightClient script = new DeployLightClient();
         LightClient lc = script.run();
-        assertEq(
-            lc.adminChainId(),
-            0xc175bb0579c7a182de91397710c39a3b27b241a163e2347fb458f297d1f583de
-        );
+        assertEq(lc.adminChainId(), 0xc175bb0579c7a182de91397710c39a3b27b241a163e2347fb458f297d1f583de);
     }
 }

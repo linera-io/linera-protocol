@@ -14,9 +14,6 @@ contract DeployFungibleBridge is Script {
         vm.broadcast();
         bridge = new FungibleBridge(lightClient, chainId, token, fungibleAppId);
 
-        require(
-            address(bridge.lightClient()) == lightClient,
-            "post-deploy lightClient mismatch"
-        );
+        require(address(bridge.lightClient()) == lightClient, "post-deploy lightClient mismatch");
     }
 }
