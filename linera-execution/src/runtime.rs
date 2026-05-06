@@ -1070,6 +1070,20 @@ impl<UserInstance: WithContext> Clone for SyncRuntimeHandle<UserInstance> {
     }
 }
 
+/// Outcome of a per-action run on the snapshot-based execution path.
+///
+/// Returned by [`ContractSyncRuntime::execute_action_with_snapshots`] when the
+/// per-action worker on web finishes one action: the action's result (operation
+/// output bytes, if any), the runtime-side [`ResourceController`] (so the actor
+/// can merge balance/tracker back into the main controller), and the updated
+/// per-application snapshot map (so the actor can keep the block-level
+/// `block_snapshots` in sync).
+pub(crate) struct ActionWithSnapshotsOutcome {
+    pub result: Option<Vec<u8>>,
+    pub controller: ResourceController,
+    pub snapshots: BTreeMap<ApplicationId, Vec<u8>>,
+}
+
 impl ContractSyncRuntime {
     /// Creates a new `ContractSyncRuntime` for block-level execution.
     ///
@@ -1140,14 +1154,7 @@ impl ContractSyncRuntime {
         action: UserAction,
         refund_grant_to: Option<Account>,
         snapshots: BTreeMap<ApplicationId, Vec<u8>>,
-    ) -> Result<
-        (
-            Option<Vec<u8>>,
-            ResourceController,
-            BTreeMap<ApplicationId, Vec<u8>>,
-        ),
-        ExecutionError,
-    > {
+    ) -> Result<ActionWithSnapshotsOutcome, ExecutionError> {
         // Build the per-action `FinalizeContext` from the action's context
         // before consuming `action`.
         let finalize_context = FinalizeContext {
@@ -1188,11 +1195,11 @@ impl ContractSyncRuntime {
         let runtime = self
             .into_inner()
             .expect("Runtime clones should have been freed by now");
-        Ok((
+        Ok(ActionWithSnapshotsOutcome {
             result,
-            runtime.resource_controller,
-            runtime.current_snapshots,
-        ))
+            controller: runtime.resource_controller,
+            snapshots: runtime.current_snapshots,
+        })
     }
 
     /// Runs a block-level loop, receiving commands from the async side.

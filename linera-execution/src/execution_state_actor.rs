@@ -1124,22 +1124,22 @@ where
             self.handle_request(request).await?;
         }
 
-        let (result, controller, snapshots_out) = contract_runtime_task.await??;
+        let outcome = contract_runtime_task.await??;
 
         // Put the updated snapshots back into the actor's borrowed map.
         **self
             .block_snapshots
             .as_mut()
-            .expect("block_snapshots must still be set") = snapshots_out;
+            .expect("block_snapshots must still be set") = outcome.snapshots;
 
         self.resource_controller.is_free = false;
-        self.txn_tracker.add_operation_result(result);
+        self.txn_tracker.add_operation_result(outcome.result);
 
         self.resource_controller
             .with_state_and_grant(&mut self.state.system, grant)
             .await?
-            .merge_balance(initial_balance, controller.balance()?)?;
-        self.resource_controller.tracker = controller.tracker;
+            .merge_balance(initial_balance, outcome.controller.balance()?)?;
+        self.resource_controller.tracker = outcome.controller.tracker;
 
         Ok(())
     }
