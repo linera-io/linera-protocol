@@ -222,7 +222,7 @@ impl ValidatorNode for DummyValidator {
             next_block_height: BlockHeight::ZERO,
             state_hash: None,
             requested_owner_balance: None,
-            committee_hash: CryptoHash::default(),
+            committee_hash: None,
             requested_pending_message_bundles: vec![],
             requested_sent_certificate_hashes: vec![],
             count_received_log: 0,

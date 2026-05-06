@@ -1450,7 +1450,7 @@ type SystemExecutionStateView {
 	description: ChainDescription
 	epoch: Epoch!
 	adminChainId: ChainId
-	committeeHash: CryptoHash!
+	committeeHash: CryptoHash
 	ownership: ChainOwnership!
 	balance: Amount!
 	balances: MapView_AccountOwner_Amount_11ef1379!

@@ -1249,7 +1249,7 @@ async fn test_open_chain() -> anyhow::Result<()> {
     assert_eq!(*child_view.system.ownership.get().await?, child_ownership);
     assert_eq!(
         *child_view.system.committee_hash.get(),
-        committee_blob.id().hash
+        Some(committee_blob.id().hash)
     );
     assert_eq!(
         *child_view.system.application_permissions.get().await?,

@@ -847,9 +847,12 @@ impl<Env: Environment> Client<Env> {
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
         let info = self.local_node.chain_info(self.admin_chain_id).await?;
+        let hash = info
+            .committee_hash
+            .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
         let committee = self
             .storage_client()
-            .get_or_load_committee_by_hash(info.committee_hash)
+            .get_or_load_committee_by_hash(hash)
             .await?;
         Ok((info.epoch, committee))
     }

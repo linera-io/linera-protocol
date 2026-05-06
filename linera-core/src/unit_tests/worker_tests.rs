@@ -2851,10 +2851,7 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert_ne!(
-            *user_chain.execution_state.system.committee_hash.get(),
-            CryptoHash::default()
-        );
+        assert!(user_chain.execution_state.system.committee_hash.get().is_some());
     }
     let proposal3 = make_first_block(user_id)
         .with_incoming_bundle(IncomingBundle {
@@ -2918,7 +2915,7 @@ where
         );
         assert_eq!(
             *user_chain.execution_state.system.committee_hash.get(),
-            blob_hash
+            Some(blob_hash)
         );
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
@@ -4154,7 +4151,7 @@ where
         .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
-    let committee_hash = response.info.committee_hash;
+    let committee_hash = response.info.committee_hash.unwrap();
     let committee = env
         .executing_worker()
         .storage

@@ -658,9 +658,12 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Err(err) => return Err(err.into()),
         };
+        let hash = info
+            .committee_hash
+            .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         Ok(self
             .storage_client()
-            .get_or_load_committee_by_hash(info.committee_hash)
+            .get_or_load_committee_by_hash(hash)
             .await
             .map_err(LocalNodeError::from)?)
     }

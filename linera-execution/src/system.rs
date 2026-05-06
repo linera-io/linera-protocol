@@ -86,8 +86,8 @@ pub struct SystemExecutionStateView<C> {
     /// The admin of the chain.
     pub admin_chain_id: RegisterView<C, Option<ChainId>>,
     /// The blob hash of the committee that is allowed to sign the next block on this chain.
-    /// Has the default `CryptoHash` value before the chain is initialized.
-    pub committee_hash: RegisterView<C, CryptoHash>,
+    /// `None` until the chain is initialized.
+    pub committee_hash: RegisterView<C, Option<CryptoHash>>,
     /// Ownership of the chain.
     pub ownership: LazyRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
@@ -312,14 +312,14 @@ where
     pub async fn current_committee(
         &self,
     ) -> Result<Option<(Epoch, Arc<Committee>)>, ExecutionError> {
-        if self.description.get().await?.is_none() {
+        let Some(hash) = *self.committee_hash.get() else {
             return Ok(None);
-        }
+        };
         let epoch = *self.epoch.get();
         let committee = self
             .context()
             .extra()
-            .get_or_load_committee_by_hash(*self.committee_hash.get())
+            .get_or_load_committee_by_hash(hash)
             .await?;
         Ok(Some((epoch, committee)))
     }
@@ -426,7 +426,7 @@ where
                             .get_or_load_committee_by_hash(blob_hash)
                             .await?;
                         self.blob_used(txn_tracker, blob_id).await?;
-                        self.committee_hash.set(blob_hash);
+                        self.committee_hash.set(Some(blob_hash));
                         self.epoch.set(epoch);
                         let event_data = EpochEventData {
                             blob_hash,
@@ -514,7 +514,7 @@ where
                     .get_or_load_committee_by_hash(event_data.blob_hash)
                     .await?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committee_hash.set(event_data.blob_hash);
+                self.committee_hash.set(Some(event_data.blob_hash));
                 self.epoch.set(epoch);
             }
             UpdateStreams(streams) => {
@@ -847,7 +847,7 @@ where
             .ok_or(ExecutionError::NoNetworkDescriptionFound)?
             .admin_chain_id;
 
-        self.committee_hash.set(committee_hash);
+        self.committee_hash.set(Some(committee_hash));
         self.admin_chain_id.set(Some(admin_chain_id));
         self.ownership.set(ownership);
         self.balance.set(balance);

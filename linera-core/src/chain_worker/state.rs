@@ -2323,9 +2323,9 @@ fn check_block_epoch(
 /// anticipation (`bundle.height <= last_anticipated_block_height`), or (b) a later
 /// bundle in the same batch is in a still-trusted epoch — that bundle's certificate
 /// transitively re-certifies all preceding ones via prev-hash chaining.
-pub(crate) async fn select_message_bundles<'a, S: Storage>(
+pub(crate) async fn select_message_bundles<S: Storage>(
     storage: &S,
-    origin: &'a ChainId,
+    origin: &'_ ChainId,
     recipient: ChainId,
     next_height_to_receive: BlockHeight,
     last_anticipated_block_height: Option<BlockHeight>,
