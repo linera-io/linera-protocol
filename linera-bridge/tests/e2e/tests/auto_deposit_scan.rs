@@ -35,7 +35,7 @@ use linera_base::{
 };
 use linera_bridge::abi::{BridgeOperation, BridgeParameters};
 use linera_bridge_e2e::{
-    compose_file_path, exec_ok, light_client_address, parse_broadcast_address,
+    compose_file_path, deploy_fungible_bridge, deploy_mock_erc20, exec_ok, light_client_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
@@ -139,28 +139,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     // ── Phase 3: Deploy MockERC20 ──
     tracing::info!("Deploying MockERC20 via forge script...");
-    exec_ok(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "env TOKEN_NAME=TestToken TOKEN_SYMBOL=TT TOKEN_SUPPLY=1000000000000000000000 \
-             forge script /contracts/script/DeployMockERC20.s.sol \
-             --root /contracts \
-             --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             --broadcast"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
-    let erc20_addr = parse_broadcast_address(
-        &compose,
-        project_name,
-        &compose_file,
-        "DeployMockERC20.s.sol",
-    )
-    .await?;
+    let erc20_addr = deploy_mock_erc20(&compose, project_name, &compose_file).await?;
     tracing::info!(%erc20_addr, "MockERC20 deployed");
 
     // ── Phase 4 (deferred): FungibleBridge is deployed after the wrapped-fungible
@@ -249,29 +228,14 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     // Deploy FungibleBridge with the wrapped-fungible applicationId baked in.
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     tracing::info!("Deploying FungibleBridge via forge script...");
-    exec_ok(
-        &compose,
-        "foundry-tools",
-        &format!(
-            "env LIGHT_CLIENT={light_client} \
-                 BRIDGE_CHAIN_ID={chain_a_bytes32} \
-                 TOKEN_ADDRESS={erc20_addr} \
-                 FUNGIBLE_APP_ID={app_id_bytes32} \
-             forge script /contracts/script/DeployFungibleBridge.s.sol \
-             --root /contracts \
-             --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             --broadcast"
-        ),
-        project_name,
-        &compose_file,
-    )
-    .await;
-    let bridge_addr = parse_broadcast_address(
+    let bridge_addr = deploy_fungible_bridge(
         &compose,
         project_name,
         &compose_file,
-        "DeployFungibleBridge.s.sol",
+        light_client,
+        &chain_a_bytes32,
+        erc20_addr,
+        &app_id_bytes32,
     )
     .await?;
     tracing::info!(%bridge_addr, "FungibleBridge deployed");
