@@ -13,9 +13,13 @@ function safeStringify(obj: any): string {
 
 // `serde_reflection` encodes a newtype struct like `Address32(pub [u8; 32])`
 // or `CryptoHash([u8; 32])` as `{ "Address32": [b0, b1, ...] }`. Rendering 32
-// numbered rows is unreadable; collapse such single-key wrappers around a
-// fixed-size byte array into a `0x..` hex string.
+// numbered rows is unreadable; collapse such single-key wrappers (and bare
+// fixed-byte arrays like a `chain_id` field) into a hex string. We only add a
+// `0x` prefix for Ethereum-style addresses; Linera's own `Display` impls for
+// `ChainId`/`CryptoHash` print bare hex (see `linera-base/src/crypto/hash.rs`),
+// so we match that for everything else.
 const HEX_BYTE_LENGTHS = new Set([20, 32, 64])
+const HEX_PREFIXED_WRAPPERS = new Set(['Address20', 'Address32'])
 // Bytes may arrive as numbers, BigInts, or numeric strings (the latter when
 // the wasm serializer emitted BigInts that `safeStringify` then stringified).
 function asByte(e: any): number | null {
@@ -37,20 +41,21 @@ function asByteArray(v: any): number[] | null {
   }
   return bytes
 }
-function bytesToHex(bytes: number[]): string {
-  return '0x' + bytes.map(b => b.toString(16).padStart(2, '0')).join('')
+function bytesToHex(bytes: number[], prefix: boolean): string {
+  const hex = bytes.map(b => b.toString(16).padStart(2, '0')).join('')
+  return prefix ? '0x' + hex : hex
 }
 function prettify(value: any): any {
   if (Array.isArray(value)) {
     const bytes = asByteArray(value)
-    if (bytes !== null) return bytesToHex(bytes)
+    if (bytes !== null) return bytesToHex(bytes, false)
     return value.map(prettify)
   }
   if (value && typeof value === 'object') {
     const keys = Object.keys(value)
     if (keys.length === 1) {
       const bytes = asByteArray(value[keys[0]])
-      if (bytes !== null) return bytesToHex(bytes)
+      if (bytes !== null) return bytesToHex(bytes, HEX_PREFIXED_WRAPPERS.has(keys[0]))
     }
     const out: Record<string, any> = {}
     for (const k of keys) out[k] = prettify(value[k])
