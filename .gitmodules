@@ -1,0 +1,3 @@
+[submodule "linera-bridge/src/solidity/lib/forge-std"]
+	path = linera-bridge/src/solidity/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

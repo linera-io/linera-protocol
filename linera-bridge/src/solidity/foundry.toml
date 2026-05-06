@@ -1,0 +1,11 @@
+[profile.default]
+src = "."
+out = "out"
+libs = ["lib"]
+script = "script"
+test = "test"
+solc_version = "0.8.30"
+optimizer = true
+optimizer_runs = 1
+via_ir = true
+evm_version = "shanghai"
