@@ -197,7 +197,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         // Revocation no longer requires per-chain processing, so process_inbox on
         // chain_2 may have nothing to do — but the chain's current epoch remains the
         // last one it advanced to via `ProcessNewEpoch`.
-        let _ = service.process_inbox(&chain_2).await?;
+        service.process_inbox(&chain_2).await?;
         assert_eq!(service.query_chain_epoch(&chain_2).await?, Epoch(2));
     } else {
         client_2.process_inbox(chain_2).await?;
@@ -218,7 +218,7 @@ async fn test_end_to_end_reconfiguration(config: LocalNetConfig) -> Result<()> {
         assert!(!service.process_inbox(&chain_2).await.unwrap().is_empty());
         client.revoke_epochs(Epoch(2)).await?;
         notifications.wait_for_events(None).await?;
-        let _ = service.process_inbox(&chain_2).await?;
+        service.process_inbox(&chain_2).await?;
         assert_eq!(service.query_chain_epoch(&chain_2).await?, Epoch(3));
     } else {
         client_2.process_inbox(chain_2).await?;
