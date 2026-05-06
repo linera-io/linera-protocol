@@ -18,6 +18,7 @@ services:
   foundry-tools:
     image: "${FOUNDRY_IMAGE:-foundry-jq}"
     pull_policy: if_not_present
+    user: root
     entrypoint: ["sleep", "infinity"]
     volumes:
       - bridge-shared:/shared
