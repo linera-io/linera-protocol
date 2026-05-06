@@ -133,14 +133,25 @@ docker compose -f docker/docker-compose.bridge-testnet.yml logs -f
 
 ### Inspect pending bridge requests
 
+The relay splits live work and history into separate tables: `pending_*`
+holds work the relay is currently chasing; `finished_*` holds completed
+or permanently-failed entries with a `status` column.
+
 ```bash
+# live work queue
 sudo sqlite3 /var/lib/linera-bridge/bridge_relay.sqlite3 \
-  'SELECT * FROM deposits WHERE status != "completed";'
+  'SELECT * FROM pending_deposits;'
 sudo sqlite3 /var/lib/linera-bridge/bridge_relay.sqlite3 \
-  'SELECT * FROM burns WHERE status != "completed";'
+  'SELECT * FROM pending_burns;'
+
+# permanent failures (status = 'failed' or 'completed')
+sudo sqlite3 /var/lib/linera-bridge/bridge_relay.sqlite3 \
+  "SELECT * FROM finished_deposits WHERE status = 'failed';"
+sudo sqlite3 /var/lib/linera-bridge/bridge_relay.sqlite3 \
+  "SELECT * FROM finished_burns WHERE status = 'failed';"
 ```
 
-(Schema names are illustrative; check actual schema with `.schema`.)
+(Check the actual schema with `.schema` if column lists differ.)
 
 ## Backup
 
@@ -172,14 +183,16 @@ Key metrics for testnet operations:
 
 All metrics are namespaced `linera_bridge_*`:
 
-| Metric                                                     | Type        | Use                                          |
-|------------------------------------------------------------|-------------|----------------------------------------------|
-| `linera_bridge_evm_balance_wei`                            | Gauge       | Alert when low (e.g., `< 1e16` = 0.01 ETH)   |
-| `linera_bridge_linera_balance_atto`                        | Gauge       | Alert when low (e.g., `< 1e18`)              |
-| `linera_bridge_deposits_pending`, `linera_bridge_burns_pending` | IntGauge | Should drain; if growing, check logs        |
-| `linera_bridge_deposits_failed`, `linera_bridge_burns_failed`   | IntGauge | Any > 0 → investigate via SQLite            |
-| `linera_bridge_last_scanned_evm_block`                     | IntGauge    | Should track Base Sepolia head               |
-| `linera_bridge_last_scanned_linera_height`                 | IntGauge    | Should track Linera bridge chain head        |
+| Metric                                                          | Type     | Use                                                   |
+|-----------------------------------------------------------------|----------|-------------------------------------------------------|
+| `linera_bridge_evm_balance_wei`                                 | Gauge    | Alert when low (e.g., `< 1e16` = 0.01 ETH)            |
+| `linera_bridge_linera_balance_atto`                             | Gauge    | Alert when low (e.g., `< 1e18`)                       |
+| `linera_bridge_deposits_pending`, `linera_bridge_burns_pending` | IntGauge | Should drain; if growing, check logs                  |
+| `linera_bridge_deposits_failed`, `linera_bridge_burns_failed`   | IntGauge | Any > 0 → investigate via SQLite                      |
+| `linera_bridge_deposits_detected`, `linera_bridge_burns_detected`     | Counter | Total seen by scanners (cumulative)             |
+| `linera_bridge_deposits_completed`, `linera_bridge_burns_completed`   | Counter | Total successfully processed (cumulative)       |
+| `linera_bridge_last_scanned_evm_block`                          | IntGauge | Should track Base Sepolia head                        |
+| `linera_bridge_last_scanned_linera_height`                      | IntGauge | Should track Linera bridge chain head                 |
 
 Suggested alert rules (apply on the external Prometheus):
 
@@ -196,8 +209,20 @@ Suggested alert rules (apply on the external Prometheus):
   expr: up{job="linera-bridge"} == 0
   for: 2m
 
-- alert: LineraBridgePendingStuck
+# Permanent failure: relay marked items as terminally failed.
+- alert: LineraBridgePermanentFailure
   expr: linera_bridge_deposits_failed > 0 or linera_bridge_burns_failed > 0
+  for: 15m
+
+# Throughput stall: pending work exists but nothing is being completed.
+# Catches a stuck relay even when no item has been marked permanently failed yet.
+- alert: LineraBridgePendingStuck
+  expr: |
+    (linera_bridge_deposits_pending > 0
+     and rate(linera_bridge_deposits_completed[15m]) == 0)
+    or
+    (linera_bridge_burns_pending > 0
+     and rate(linera_bridge_burns_completed[15m]) == 0)
   for: 15m
 ```
 
