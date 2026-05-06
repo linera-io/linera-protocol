@@ -151,14 +151,28 @@ pub async fn create_extra_wallet(
     .await;
 }
 
-/// Parse a "Deployed to: 0x..." address from `forge create` output.
-pub fn parse_deployed_address(output: &str) -> anyhow::Result<Address> {
-    for line in output.lines() {
-        if let Some(addr) = line.strip_prefix("Deployed to: ") {
-            return Ok(addr.trim().parse()?);
-        }
-    }
-    anyhow::bail!("Could not find 'Deployed to:' in forge output:\n{output}");
+/// Reads the deployed contract address from a `forge script` broadcast
+/// artifact. The script is assumed to deploy a single contract via
+/// `vm.broadcast()`, so `transactions[0].contractAddress` is what we want.
+pub async fn parse_broadcast_address(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    script_name: &str,
+) -> anyhow::Result<Address> {
+    let output = exec_output(
+        compose,
+        "foundry-tools",
+        &format!(
+            "CHAIN_ID=$(cast chain-id --rpc-url http://anvil:8545); \
+             jq -r '.transactions[0].contractAddress' \
+             /contracts/broadcast/{script_name}/$CHAIN_ID/run-latest.json"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    Ok(output.trim().parse()?)
 }
 
 /// Queries the evm-bridge app to check whether a deposit has been processed.
