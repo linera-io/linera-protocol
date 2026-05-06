@@ -51,8 +51,9 @@ pub struct HistoricallyHashableView<C, W> {
     /// Memoized hash, if any.
     #[allocative(visit = visit_allocative_simple)]
     hash: Mutex<Option<HasherOutput>>,
-    /// An override hash set via [`Self::set_stored_hash`]. While this is `Some`, the next save
-    /// records this value as the new stored hash without mixing in the pending inner batch.
+    /// An override hash set via [`Self::reset_with_stored_hash`]. While this is `Some`, the
+    /// next save records this value as the new stored hash without mixing in the pending
+    /// inner batch.
     #[allocative(visit = visit_allocative_simple)]
     force_stored_hash: Option<HasherOutput>,
     /// Track context type.
@@ -246,20 +247,19 @@ impl<W: View> HistoricallyHashableView<W::Context, W> {
         Ok(hash)
     }
 
-    /// Forces the next save to record `hash` as the new stored hash, suppressing the
-    /// pending inner batch's contribution to the history. The inner batch is still written
-    /// to storage; only its effect on the chained hash is dropped.
+    /// Resets the inner view and arranges for the next save to record `hash` as the new
+    /// stored hash. Use this to restore a view from a checkpoint whose hash is already
+    /// known: call this method first, then write the seed state through the normal API,
+    /// then save. After the save, the history resumes from `hash`, so subsequent updates
+    /// extend it normally.
     ///
-    /// Intended for restoring a view from a checkpoint whose hash is already known: the
-    /// caller seeds the inner state through the normal API and then declares the externally
-    /// known hash. After the next successful save, the history resumes from `hash`, so
-    /// subsequent updates extend it normally.
-    ///
-    /// The override is discarded by [`View::rollback`] and [`View::clear`].
-    pub fn set_stored_hash(&mut self, hash: HasherOutput) {
-        self.force_stored_hash = Some(hash);
-        // Clear any memoized hash so callers see the override on the next read.
+    /// Internally, the inner view is cleared so any pending or persisted state is dropped.
+    /// Both the inner clear and the hash override are reverted by [`View::rollback`]; a
+    /// subsequent [`View::clear`] keeps the inner clear but discards the hash override.
+    pub fn reset_with_stored_hash(&mut self, hash: HasherOutput) {
+        self.inner.clear();
         *self.hash.get_mut().unwrap() = None;
+        self.force_stored_hash = Some(hash);
     }
 }
 
@@ -610,13 +610,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_stored_hash_on_empty_view() -> Result<(), ViewError> {
+    async fn test_reset_with_stored_hash_on_empty_view() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut view =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         let forced = HasherOutput::from([7u8; 32]);
-        view.set_stored_hash(forced);
+        view.reset_with_stored_hash(forced);
         assert!(view.has_pending_changes().await);
         assert_eq!(view.historical_hash().await?, forced);
 
@@ -637,15 +637,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_stored_hash_with_inner_changes() -> Result<(), ViewError> {
+    async fn test_reset_with_stored_hash_seeds_inner_state() -> Result<(), ViewError> {
+        // The bootstrap workflow: reset, write the seed state, save in one transaction.
         let context = MemoryContext::new_for_testing(());
         let mut view =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
-        // Inner state is written *and* the hash is overridden in the same save.
-        view.set(42);
         let forced = HasherOutput::from([9u8; 32]);
-        view.set_stored_hash(forced);
+        view.reset_with_stored_hash(forced);
+        view.set(42);
         assert_eq!(view.historical_hash().await?, forced);
 
         let mut batch = Batch::new();
@@ -653,7 +653,7 @@ mod tests {
         context.store().write_batch(batch).await?;
         view.post_save();
 
-        // Reload: the inner value persisted and the stored hash matches the override.
+        // Reload: the seeded value persisted and the stored hash matches the override.
         let mut reloaded =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
         assert_eq!(*reloaded.get(), 42);
@@ -663,16 +663,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_stored_hash_resumes_chain() -> Result<(), ViewError> {
+    async fn test_reset_with_stored_hash_resumes_chain() -> Result<(), ViewError> {
         // After a forced hash is saved, subsequent updates extend the chain from it.
         // Two views that arrive at the same `(stored_hash, next_value)` must agree.
         let forced = HasherOutput::from([3u8; 32]);
 
-        // Path A: bootstrap via set_stored_hash, then write `99`.
+        // Path A: bootstrap via reset_with_stored_hash, then write `99`.
         let context_a = MemoryContext::new_for_testing(());
         let mut view_a =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context_a.clone()).await?;
-        view_a.set_stored_hash(forced);
+        view_a.reset_with_stored_hash(forced);
         let mut batch = Batch::new();
         view_a.pre_save(&mut batch)?;
         context_a.store().write_batch(batch).await?;
@@ -687,7 +687,7 @@ mod tests {
             let mut seed =
                 HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context_b.clone())
                     .await?;
-            seed.set_stored_hash(forced);
+            seed.reset_with_stored_hash(forced);
             let mut batch = Batch::new();
             seed.pre_save(&mut batch)?;
             context_b.store().write_batch(batch).await?;
@@ -710,15 +710,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_stored_hash_rollback_discards_override() -> Result<(), ViewError> {
+    async fn test_reset_with_stored_hash_rollback_discards_override() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut view =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         let hash_initial = view.historical_hash().await?;
 
+        view.reset_with_stored_hash(HasherOutput::from([1u8; 32]));
         view.set(42);
-        view.set_stored_hash(HasherOutput::from([1u8; 32]));
         assert!(view.has_pending_changes().await);
 
         view.rollback();
@@ -729,9 +729,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_stored_hash_clear_discards_override() -> Result<(), ViewError> {
-        // Two parallel flows: one with a `set_stored_hash` immediately discarded by
-        // `clear`, one without. They must end up with the same hash.
+    async fn test_reset_with_stored_hash_clear_discards_override() -> Result<(), ViewError> {
+        // Two parallel flows: one with a `reset_with_stored_hash` immediately discarded
+        // by `clear`, one without. They must end up with the same hash.
         let forced = HasherOutput::from([5u8; 32]);
 
         let context_with = MemoryContext::new_for_testing(());
@@ -742,7 +742,7 @@ mod tests {
         with_override.pre_save(&mut batch)?;
         context_with.store().write_batch(batch).await?;
         with_override.post_save();
-        with_override.set_stored_hash(forced);
+        with_override.reset_with_stored_hash(forced);
         with_override.clear();
         let mut batch = Batch::new();
         with_override.pre_save(&mut batch)?;
@@ -773,13 +773,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_set_stored_hash_clone_unchecked_preserves_override() -> Result<(), ViewError> {
+    async fn test_reset_with_stored_hash_clone_unchecked_preserves_override() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut view =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
 
         let forced = HasherOutput::from([2u8; 32]);
-        view.set_stored_hash(forced);
+        view.reset_with_stored_hash(forced);
 
         let mut clone = view.clone_unchecked()?;
         assert_eq!(clone.historical_hash().await?, forced);
