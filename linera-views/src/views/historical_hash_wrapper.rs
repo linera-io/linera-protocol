@@ -252,11 +252,10 @@ impl<W: View> HistoricallyHashableView<W::Context, W> {
     /// and arranges for the next save to record the hash of those bytes as the new
     /// stored hash. Subsequent updates extend the history from that hash normally.
     ///
-    /// The byte format is the concatenation, in sorted lexicographic key order, of
-    /// `(u64-LE key length, key, u64-LE value length, value)` records over every entry
-    /// stored under the inner view's prefix. Two views with identical persisted content
-    /// produce identical bytes by construction; the hash is therefore reproducible by
-    /// any party holding the bytes.
+    /// The bytes are the BCS encoding of `Vec<(Vec<u8>, Vec<u8>)>` — every entry stored
+    /// under the inner view's prefix, in sorted lexicographic key order. Two views with
+    /// identical persisted content produce identical bytes by construction; the hash is
+    /// therefore reproducible by any party holding the bytes.
     ///
     /// Errors with [`ViewError::HasPendingChanges`] if the inner view has unflushed
     /// changes — the dump reads from the underlying KV store and would silently miss
@@ -279,7 +278,7 @@ impl<W: View> HistoricallyHashableView<W::Context, W> {
                 error: Box::new(err),
                 must_reload_view: false,
             })?;
-        let bytes = encode_key_values(&key_values);
+        let bytes = bcs::to_bytes(&key_values)?;
         let hash = hash_bytes(&bytes);
         // Schedule the hash for the next save without forcing a save here, so the
         // checkpoint write coalesces with the rest of the block's batch.
@@ -344,57 +343,26 @@ impl<W: View> HistoricallyHashableView<W::Context, W> {
     }
 }
 
-/// Encodes `(key, value)` pairs into the canonical byte representation used by
-/// [`HistoricallyHashableView::dump_content`].
+/// Decodes a canonical content byte string (a BCS-encoded `Vec<(Vec<u8>, Vec<u8>)>`)
+/// and validates that keys are in strictly increasing lexicographic order. Returns
+/// [`ViewError::MalformedContent`] if the ordering invariant is violated; BCS framing
+/// errors surface as [`ViewError::BcsError`].
 ///
-/// The caller must pass entries in the same order the underlying store iterates them
-/// (sorted lexicographically by key). All current backends — Memory, RocksDB, DynamoDB
-/// (`query` ASC sort key), ScyllaDB (clustering ASC), IndexedDB (cursor default) — do.
-fn encode_key_values(entries: &[(Vec<u8>, Vec<u8>)]) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    for (key, value) in entries {
-        bytes.extend_from_slice(&(key.len() as u64).to_le_bytes());
-        bytes.extend_from_slice(key);
-        bytes.extend_from_slice(&(value.len() as u64).to_le_bytes());
-        bytes.extend_from_slice(value);
-    }
-    bytes
-}
-
-/// Decodes the canonical byte representation produced by [`encode_key_values`]. Returns
-/// [`ViewError::MalformedContent`] if keys are not in strictly increasing lexicographic
-/// order (the canonical format is sorted; out-of-order or duplicate keys signal a
-/// malformed or hand-crafted input).
+/// The order check is at this layer rather than relying on BCS, because BCS does not
+/// constrain element ordering — only the bytes representation given a value. Two
+/// callers building entries in different orders would produce different bytes and
+/// different hashes; canonical content must always be sorted.
 #[expect(clippy::type_complexity)]
-fn decode_key_values(mut bytes: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
-    let mut entries: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
-    while !bytes.is_empty() {
-        let key = read_chunk(&mut bytes)?;
-        let value = read_chunk(&mut bytes)?;
-        if let Some((previous_key, _)) = entries.last() {
-            if key.as_slice() <= previous_key.as_slice() {
-                return Err(ViewError::MalformedContent(
-                    "keys must be in strictly increasing order",
-                ));
-            }
+fn decode_key_values(bytes: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError> {
+    let entries: Vec<(Vec<u8>, Vec<u8>)> = bcs::from_bytes(bytes)?;
+    for window in entries.windows(2) {
+        if window[1].0 <= window[0].0 {
+            return Err(ViewError::MalformedContent(
+                "keys must be in strictly increasing order",
+            ));
         }
-        entries.push((key, value));
     }
     Ok(entries)
-}
-
-fn read_chunk(bytes: &mut &[u8]) -> Result<Vec<u8>, ViewError> {
-    if bytes.len() < 8 {
-        return Err(ViewError::MalformedContent("truncated length prefix"));
-    }
-    let (len_bytes, rest) = bytes.split_at(8);
-    let len = u64::from_le_bytes(len_bytes.try_into().expect("8 bytes")) as usize;
-    if rest.len() < len {
-        return Err(ViewError::MalformedContent("truncated chunk body"));
-    }
-    let (chunk, rest) = rest.split_at(len);
-    *bytes = rest;
-    Ok(chunk.to_vec())
 }
 
 fn hash_bytes(bytes: &[u8]) -> HasherOutput {
@@ -866,14 +834,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_decode_rejects_unsorted_keys() -> Result<(), ViewError> {
-        // Hand-craft bytes with keys in non-increasing order; restore should reject them.
-        let mut bytes = Vec::new();
-        for (k, v) in [&b"b"[..], b"a"].iter().zip([&b"v1"[..], b"v2"]) {
-            bytes.extend_from_slice(&(k.len() as u64).to_le_bytes());
-            bytes.extend_from_slice(k);
-            bytes.extend_from_slice(&(v.len() as u64).to_le_bytes());
-            bytes.extend_from_slice(v);
-        }
+        // BCS-encode entries in non-increasing key order; restore should reject them.
+        let entries: Vec<(Vec<u8>, Vec<u8>)> = vec![
+            (b"b".to_vec(), b"v1".to_vec()),
+            (b"a".to_vec(), b"v2".to_vec()),
+        ];
+        let bytes = bcs::to_bytes(&entries).expect("encoding cannot fail");
         let context = MemoryContext::new_for_testing(());
         let mut view =
             HistoricallyHashableView::<_, RegisterView<_, u32>>::load(context.clone()).await?;
