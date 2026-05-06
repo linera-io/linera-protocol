@@ -9,4 +9,10 @@ optimizer = true
 optimizer_runs = 1
 via_ir = true
 evm_version = "shanghai"
-fs_permissions = [{ access = "read", path = "./test/fixtures" }, { access = "read", path = "./broadcast" }]
+fs_permissions = [
+    { access = "read", path = "./test/fixtures" },
+    { access = "read", path = "./broadcast" },
+    # Runtime path used by the docker bridge-init container; the host
+    # bind-mounts the shared volume under this path inside the container.
+    { access = "read", path = "/shared" },
+]
