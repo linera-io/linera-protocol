@@ -521,10 +521,6 @@ SystemOperation:
         NEWTYPE:
           TYPENAME: Epoch
     12:
-      ProcessRemovedEpoch:
-        NEWTYPE:
-          TYPENAME: Epoch
-    13:
       UpdateStream:
         STRUCT:
           - application_id:
