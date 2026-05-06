@@ -9,7 +9,7 @@ contract DeployLightClient is Script {
     using stdJson for string;
 
     function run() external returns (LightClient lc) {
-        string memory path = vm.envString("LIGHT_CLIENT_ARGS_JSON");
+        string memory path = vm.envString("LIGHT_CLIENT_ARGS_JSON_FILE");
         string memory json = vm.readFile(path);
 
         address[] memory validators = json.readAddressArray(".validators");

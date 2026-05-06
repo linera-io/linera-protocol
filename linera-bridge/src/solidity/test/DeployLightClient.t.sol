@@ -7,10 +7,7 @@ import {LightClient} from "../LightClient.sol";
 
 contract DeployLightClientTest is Test {
     function setUp() public {
-        vm.setEnv(
-            "LIGHT_CLIENT_ARGS_JSON",
-            "test/fixtures/light-client-args.json"
-        );
+        vm.setEnv("LIGHT_CLIENT_ARGS_JSON_FILE", "test/fixtures/light-client-args.json");
     }
 
     function test_run_deploys_with_admin_chain_id_from_json() public {

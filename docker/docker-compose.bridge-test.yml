@@ -150,7 +150,7 @@ services:
         if [ -n "$$EXPLORER_API_KEY" ] && [ -n "$$VERIFIER_URL" ]; then
             VERIFY_ARGS="--verify --etherscan-api-key $$EXPLORER_API_KEY --verifier-url $$VERIFIER_URL"
         fi
-        LIGHT_CLIENT_ARGS_JSON=/shared/light-client-args.json \
+        LIGHT_CLIENT_ARGS_JSON_FILE=/shared/light-client-args.json \
           forge script /contracts/script/DeployLightClient.s.sol \
           --root /contracts \
           --rpc-url http://anvil:8545 \
