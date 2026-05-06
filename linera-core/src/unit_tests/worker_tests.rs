@@ -85,7 +85,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::{state::select_message_bundles, ChainWorkerConfig},
+    chain_worker::ChainWorkerConfig,
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -3268,11 +3268,14 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
-    let env = TestEnvironment::new(&mut storage_builder, true, false).await?;
-    let storage = env.worker().storage_client().clone();
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    let chain_1 = env
+        .add_root_chain(1, AccountOwner::CHAIN, Amount::ZERO)
+        .await;
     // Mark epoch 0 as revoked so the helper rejects bundles signed by it,
     // unless they're re-certified by a later trusted-epoch bundle.
-    storage
+    env.worker()
+        .storage_client()
         .write_events([(
             EventId {
                 chain_id: env.admin_chain_id(),
@@ -3284,8 +3287,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
         .await?;
 
     let chain_0 = env.admin_description.clone();
-    let chain_1 = dummy_chain_description(1);
-
     let key_pair0 = AccountSecretKey::generate();
     let id0 = chain_0.id();
     let id1 = chain_1.id();
@@ -3380,47 +3381,36 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             .collect()
     }
 
+    let worker = env.worker();
     // Bundles from a revoked epoch are rejected.
     assert_eq!(
-        select_message_bundles(
-            &storage,
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            None,
-            bundles01.clone()
-        )
-        .await?,
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles01.clone())
+            .await?,
         vec![]
     );
     // Already-received bundles are skipped, regardless of epoch.
     assert_eq!(
-        select_message_bundles(
-            &storage,
-            &id0,
-            id1,
-            BlockHeight::from(2),
-            None,
-            bundles01.clone()
-        )
-        .await?,
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::from(2), None, bundles01.clone())
+            .await?,
         vec![]
     );
     // Order of certificates is checked.
     assert_matches!(
-        select_message_bundles(
-            &storage,
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            None,
-            bundles1
-                .iter()
-                .cloned()
-                .chain(bundles0.iter().cloned())
-                .collect::<Vec<_>>()
-        )
-        .await,
+        worker
+            .select_message_bundles(
+                id1,
+                &id0,
+                BlockHeight::ZERO,
+                None,
+                bundles1
+                    .iter()
+                    .cloned()
+                    .chain(bundles0.iter().cloned())
+                    .collect::<Vec<_>>()
+            )
+            .await,
         Err(WorkerError::InvalidCrossChainRequest)
     );
 
@@ -3428,54 +3418,42 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
     // bundles via prev-hash chaining, but a trailing revoked-epoch bundle (heights 3+)
     // beyond the trusted one is dropped.
     assert_eq!(
-        select_message_bundles(
-            &storage,
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            None,
-            bundles0123.clone()
-        )
-        .await?,
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles0123.clone())
+            .await?,
         without_epochs(&bundles012)
     );
     // Skipping bundle 0 still works with re-certification across epochs.
     assert_eq!(
-        select_message_bundles(
-            &storage,
-            &id0,
-            id1,
-            BlockHeight::from(1),
-            None,
-            bundles012.clone()
-        )
-        .await?,
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::from(1), None, bundles012.clone())
+            .await?,
         without_epochs(bundles1.iter().chain(&bundles2))
     );
     // Anticipation: bundles up to `last_anticipated_block_height` are accepted even
     // from a revoked epoch.
     assert_eq!(
-        select_message_bundles(
-            &storage,
-            &id0,
-            id1,
-            BlockHeight::from(1),
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )
-        .await?,
+        worker
+            .select_message_bundles(
+                id1,
+                &id0,
+                BlockHeight::from(1),
+                Some(BlockHeight::from(1)),
+                bundles01.clone()
+            )
+            .await?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        select_message_bundles(
-            &storage,
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )
-        .await?,
+        worker
+            .select_message_bundles(
+                id1,
+                &id0,
+                BlockHeight::ZERO,
+                Some(BlockHeight::from(1)),
+                bundles01.clone()
+            )
+            .await?,
         without_epochs(&bundles01)
     );
     Ok(())

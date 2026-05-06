@@ -187,6 +187,68 @@ where
         &self.chain
     }
 
+    /// Filters bundles destined for this chain to drop ones already received and to refuse
+    /// ones whose epoch has been revoked on the admin chain.
+    ///
+    /// A revoked-epoch bundle is still accepted if (a) it has already been executed by
+    /// anticipation (`bundle.height <= last_anticipated_block_height`), or (b) a later
+    /// bundle in the same batch is in a still-trusted epoch — that bundle's certificate
+    /// transitively re-certifies all preceding ones via prev-hash chaining.
+    pub(crate) async fn select_message_bundles(
+        &self,
+        origin: &ChainId,
+        next_height_to_receive: BlockHeight,
+        last_anticipated_block_height: Option<BlockHeight>,
+        mut bundles: Vec<(Epoch, MessageBundle)>,
+    ) -> Result<Vec<MessageBundle>, WorkerError> {
+        let recipient = self.chain_id();
+        let mut latest_height = None;
+        let mut skipped_len = 0;
+        let mut trusted_len = 0;
+        for (i, (epoch, bundle)) in bundles.iter().enumerate() {
+            ensure!(
+                latest_height <= Some(bundle.height),
+                WorkerError::InvalidCrossChainRequest
+            );
+            latest_height = Some(bundle.height);
+            if bundle.height < next_height_to_receive {
+                skipped_len = i + 1;
+            }
+            let is_revoked = self.storage.is_epoch_revoked(*epoch).await.map_err(|error| {
+                WorkerError::ChainError(Box::new(ChainError::ExecutionError(
+                    Box::new(error),
+                    ChainExecutionContext::Block,
+                )))
+            })?;
+            if !is_revoked || Some(bundle.height) <= last_anticipated_block_height {
+                trusted_len = i + 1;
+            }
+        }
+        if skipped_len > 0 {
+            let (_, sample_bundle) = &bundles[skipped_len - 1];
+            debug!(
+                "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
+                sample_bundle.height,
+            );
+        }
+        if skipped_len < bundles.len() && trusted_len < bundles.len() {
+            let (sample_epoch, sample_bundle) = &bundles[trusted_len];
+            warn!(
+                "Refusing messages to {recipient:.8} from {origin:} at height {} \
+                 because the epoch {} is not trusted any more",
+                sample_bundle.height, sample_epoch,
+            );
+        }
+        Ok(if skipped_len < trusted_len {
+            bundles
+                .drain(skipped_len..trusted_len)
+                .map(|(_, bundle)| bundle)
+                .collect()
+        } else {
+            vec![]
+        })
+    }
+
     /// Returns whether this chain is known to be active (initialized).
     pub(crate) fn knows_chain_is_active(&self) -> bool {
         self.knows_chain_is_active
@@ -1044,16 +1106,14 @@ where
             }
         }
 
-        let recipient = self.chain_id();
-        let bundles = select_message_bundles(
-            &self.storage,
-            &origin,
-            recipient,
-            next_height_to_receive,
-            last_anticipated_block_height,
-            bundles,
-        )
-        .await?;
+        let bundles = self
+            .select_message_bundles(
+                &origin,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+            )
+            .await?;
         let Some(last_updated_height) = bundles.last().map(|bundle| bundle.height) else {
             return Ok(CrossChainUpdateResult::NothingToDo);
         };
@@ -2316,64 +2376,3 @@ fn check_block_epoch(
     Ok(())
 }
 
-/// Filters the bundles to drop ones already received and to refuse ones whose epoch
-/// has been revoked on the admin chain.
-///
-/// A revoked-epoch bundle is still accepted if (a) it has already been executed by
-/// anticipation (`bundle.height <= last_anticipated_block_height`), or (b) a later
-/// bundle in the same batch is in a still-trusted epoch — that bundle's certificate
-/// transitively re-certifies all preceding ones via prev-hash chaining.
-pub(crate) async fn select_message_bundles<S: Storage>(
-    storage: &S,
-    origin: &'_ ChainId,
-    recipient: ChainId,
-    next_height_to_receive: BlockHeight,
-    last_anticipated_block_height: Option<BlockHeight>,
-    mut bundles: Vec<(Epoch, MessageBundle)>,
-) -> Result<Vec<MessageBundle>, WorkerError> {
-    let mut latest_height = None;
-    let mut skipped_len = 0;
-    let mut trusted_len = 0;
-    for (i, (epoch, bundle)) in bundles.iter().enumerate() {
-        ensure!(
-            latest_height <= Some(bundle.height),
-            WorkerError::InvalidCrossChainRequest
-        );
-        latest_height = Some(bundle.height);
-        if bundle.height < next_height_to_receive {
-            skipped_len = i + 1;
-        }
-        let is_revoked = storage.is_epoch_revoked(*epoch).await.map_err(|error| {
-            WorkerError::ChainError(Box::new(ChainError::ExecutionError(
-                Box::new(error),
-                ChainExecutionContext::Block,
-            )))
-        })?;
-        if !is_revoked || Some(bundle.height) <= last_anticipated_block_height {
-            trusted_len = i + 1;
-        }
-    }
-    if skipped_len > 0 {
-        let (_, sample_bundle) = &bundles[skipped_len - 1];
-        debug!(
-            "Ignoring repeated messages to {recipient:.8} from {origin:} at height {}",
-            sample_bundle.height,
-        );
-    }
-    if skipped_len < bundles.len() && trusted_len < bundles.len() {
-        let (sample_epoch, sample_bundle) = &bundles[trusted_len];
-        warn!(
-            "Refusing messages to {recipient:.8} from {origin:} at height {} \
-             because the epoch {} is not trusted any more",
-            sample_bundle.height, sample_epoch,
-        );
-    }
-    Ok(if skipped_len < trusted_len {
-        bundles
-            .drain(skipped_len..trusted_len)
-            .map(|(_, bundle)| bundle)
-            .collect()
-    } else {
-        vec![]
-    })
-}
