@@ -42,6 +42,11 @@ pub struct ChainWorkerConfig {
     /// cross-chain message. When exceeded, the bundles are split into multiple requests.
     /// Defaults to `usize::MAX` (no chunking).
     pub cross_chain_message_chunk_limit: usize,
+    /// Maximum number of cross-chain requests coalesced into a single batch by the
+    /// per-chain driver. Smaller values bound the worst-case write-lock hold time at
+    /// the cost of more lock acquisitions; larger values amortize lock and storage
+    /// overhead better.
+    pub cross_chain_batch_size_limit: usize,
     /// Whether to attempt recovery via `RevertConfirm` when an inbox gap is detected.
     pub allow_revert_confirm: bool,
     /// If set, reset the chain state and re-execute all blocks when the chain
@@ -92,6 +97,7 @@ impl Default for ChainWorkerConfig {
             block_cache_size: crate::worker::DEFAULT_BLOCK_CACHE_SIZE,
             execution_state_cache_size: crate::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
             cross_chain_message_chunk_limit: usize::MAX,
+            cross_chain_batch_size_limit: 1000,
             allow_revert_confirm: false,
             reset_on_corrupted_chain_state: None,
             recovery_whitelist: None,

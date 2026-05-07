@@ -1117,6 +1117,7 @@ where
             format!("Client node for {chain_id:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
+            1000,
             options,
             &crate::client::RequestsSchedulerConfig::default(),
             crate::worker::DEFAULT_BLOCK_CACHE_SIZE,

@@ -69,6 +69,7 @@ struct ServerContext {
     cross_chain_message_chunk_limit: usize,
     block_cache_size: usize,
     execution_state_cache_size: usize,
+    cross_chain_batch_size_limit: usize,
     allow_revert_confirm: bool,
     reset_on_corrupted_chain_state_mins: Option<u64>,
     recovery_whitelist: Option<HashSet<ChainId>>,
@@ -100,6 +101,7 @@ impl ServerContext {
             block_time_grace_period: self.block_time_grace_period,
             ttl: util::non_zero_duration(self.chain_worker_ttl),
             chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,
+            cross_chain_batch_size_limit: self.cross_chain_batch_size_limit,
             block_cache_size: self.block_cache_size,
             execution_state_cache_size: self.execution_state_cache_size,
             allow_revert_confirm: self.allow_revert_confirm,
@@ -409,6 +411,7 @@ fn make_server_config<R: CryptoRng>(
 }
 
 #[derive(clap::Parser)]
+#[allow(clippy::large_enum_variant)]
 enum ServerCommand {
     /// Runs a service for each shard of the Linera validator")
     #[command(name = "run")]
@@ -471,6 +474,11 @@ enum ServerCommand {
             default_value_t = grpc::GRPC_CHUNKED_MESSAGE_FILL_LIMIT,
         )]
         cross_chain_message_chunk_limit: usize,
+
+        /// Maximum number of cross-chain requests coalesced into a single batch by
+        /// the per-chain driver. Bounds the worst-case write-lock hold time.
+        #[arg(long, default_value_t = 1000)]
+        cross_chain_batch_size_limit: usize,
 
         /// Enable the RevertConfirm recovery mechanism for inbox gaps caused by
         /// lost persisted state.
@@ -623,6 +631,7 @@ async fn run(options: ServerOptions) {
             chain_worker_ttl,
             chain_info_max_received_log_entries,
             cross_chain_message_chunk_limit,
+            cross_chain_batch_size_limit,
             allow_revert_confirm,
             reset_on_corrupted_chain_state_mins,
             recovery_whitelist,
@@ -644,6 +653,7 @@ async fn run(options: ServerOptions) {
                 cross_chain_message_chunk_limit,
                 block_cache_size: common_storage_options.block_cache_size,
                 execution_state_cache_size: common_storage_options.execution_state_cache_size,
+                cross_chain_batch_size_limit,
                 allow_revert_confirm,
                 reset_on_corrupted_chain_state_mins,
                 recovery_whitelist: recovery_whitelist.map(HashSet::from_iter),
