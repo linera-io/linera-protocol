@@ -70,9 +70,14 @@ impl Contract for FlashLoanContract {
         let total_repaid = *self.state.total_repaid.get();
         if total_borrowed > Amount::ZERO {
             let params = self.runtime.application_parameters();
-            let interest_millionths = params.interest_millionths as u128;
-            let borrowed_attos = u128::from(total_borrowed);
-            let min_interest = Amount::from_attos(borrowed_attos * interest_millionths / 1_000_000);
+            let interest_millionths = u128::from(params.interest_millionths);
+            // `total_borrowed * interest_millionths` can exceed `u128::MAX` for
+            // large pools or large interest rates, so saturate. On saturation
+            // the repayment check below will reject the block, instead of the
+            // silent wraparound that plain `*` would give in release builds.
+            let min_interest = total_borrowed
+                .saturating_mul(interest_millionths)
+                .saturating_div(1_000_000);
             let min_repayment = total_borrowed.saturating_add(min_interest);
             assert!(
                 total_repaid >= min_repayment,
