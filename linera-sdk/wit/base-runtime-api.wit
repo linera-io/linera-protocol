@@ -53,17 +53,13 @@ interface base-runtime-api {
         required-application-ids: list<application-id>,
     }
 
+    record application-id {
+        application-description-hash: crypto-hash,
+    }
+
     variant application-kind {
         module(module-id),
         native(native-application-kind),
-    }
-
-    enum native-application-kind {
-        fungible,
-    }
-
-    record application-id {
-        application-description-hash: crypto-hash,
     }
 
     record application-permissions {
@@ -150,6 +146,10 @@ interface base-runtime-api {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
         vm-runtime: vm-runtime,
+    }
+
+    enum native-application-kind {
+        fungible,
     }
 
     record time-delta {

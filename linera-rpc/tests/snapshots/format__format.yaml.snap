@@ -660,6 +660,10 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+NativeApplicationKind:
+  ENUM:
+    0:
+      Fungible: UNIT
 NetworkDescription:
   STRUCT:
     - name: STR
@@ -1291,10 +1295,20 @@ SystemOperation:
               SEQ:
                 TYPENAME: ApplicationId
     10:
+      CreateNativeApplication:
+        STRUCT:
+          - kind:
+              TYPENAME: NativeApplicationKind
+          - parameters: BYTES
+          - instantiation_argument: BYTES
+          - required_application_ids:
+              SEQ:
+                TYPENAME: ApplicationId
+    11:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
-    11:
+    12:
       ProcessNewEpoch:
         NEWTYPE:
           TYPENAME: Epoch
