@@ -254,18 +254,6 @@ pub enum SystemOperation {
         #[debug(skip_if = Vec::is_empty)]
         required_application_ids: Vec<ApplicationId>,
     },
-    /// Creates a new runtime-native application (no bytecode).
-    CreateNativeApplication {
-        kind: NativeApplicationKind,
-        #[serde(with = "serde_bytes")]
-        #[debug(with = "hex_debug")]
-        parameters: Vec<u8>,
-        #[serde(with = "serde_bytes")]
-        #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
-        instantiation_argument: Vec<u8>,
-        #[debug(skip_if = Vec::is_empty)]
-        required_application_ids: Vec<ApplicationId>,
-    },
     /// Operations that are only allowed on the admin chain.
     Admin(AdminOperation),
     /// Processes an event about a new epoch and committee.
@@ -276,6 +264,20 @@ pub enum SystemOperation {
         chain_id: ChainId,
         stream_id: StreamId,
         next_index: u32,
+    },
+    /// Creates a new runtime-native application (no bytecode). Kept at the end of the
+    /// enum so the BCS variant indices of the older variants are preserved — the EVM
+    /// bridge contract relies on the indices of `Admin` and friends being stable.
+    CreateNativeApplication {
+        kind: NativeApplicationKind,
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        parameters: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
+        instantiation_argument: Vec<u8>,
+        #[debug(skip_if = Vec::is_empty)]
+        required_application_ids: Vec<ApplicationId>,
     },
 }
 

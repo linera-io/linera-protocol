@@ -1295,20 +1295,10 @@ SystemOperation:
               SEQ:
                 TYPENAME: ApplicationId
     10:
-      CreateNativeApplication:
-        STRUCT:
-          - kind:
-              TYPENAME: NativeApplicationKind
-          - parameters: BYTES
-          - instantiation_argument: BYTES
-          - required_application_ids:
-              SEQ:
-                TYPENAME: ApplicationId
-    11:
       Admin:
         NEWTYPE:
           TYPENAME: AdminOperation
-    12:
+    11:
       ProcessNewEpoch:
         NEWTYPE:
           TYPENAME: Epoch
@@ -1322,6 +1312,16 @@ SystemOperation:
           - stream_id:
               TYPENAME: StreamId
           - next_index: U32
+    13:
+      CreateNativeApplication:
+        STRUCT:
+          - kind:
+              TYPENAME: NativeApplicationKind
+          - parameters: BYTES
+          - instantiation_argument: BYTES
+          - required_application_ids:
+              SEQ:
+                TYPENAME: ApplicationId
 TimeDelta:
   NEWTYPESTRUCT: U64
 Timeout:
