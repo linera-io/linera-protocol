@@ -1028,7 +1028,7 @@ Show the contents of the wallet
 * `export-genesis` — Export the genesis configuration to a JSON file
 * `follow-chain` — Add a new followed chain (i.e. a chain without keypair) to the wallet
 * `forget-keys` — Forgets the specified chain's keys. The chain will still be followed by the wallet
-* `forget-chain` — Forgets the specified chain, including the associated key pair
+* `forget-chain` — Forgets the specified chain, including the associated key pair. The default chain cannot be forgotten; switch to another chain with `set-default` first
 
 
 
@@ -1138,7 +1138,7 @@ Forgets the specified chain's keys. The chain will still be followed by the wall
 
 ## `linera wallet forget-chain`
 
-Forgets the specified chain, including the associated key pair
+Forgets the specified chain, including the associated key pair. The default chain cannot be forgotten; switch to another chain with `set-default` first
 
 **Usage:** `linera wallet forget-chain <CHAIN_ID>`
 

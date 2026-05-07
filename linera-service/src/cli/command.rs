@@ -1362,7 +1362,8 @@ pub enum WalletCommand {
     /// wallet.
     ForgetKeys { chain_id: ChainId },
 
-    /// Forgets the specified chain, including the associated key pair.
+    /// Forgets the specified chain, including the associated key pair. The default
+    /// chain cannot be forgotten; switch to another chain with `set-default` first.
     ForgetChain { chain_id: ChainId },
 }
 
