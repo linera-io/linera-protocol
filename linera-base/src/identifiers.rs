@@ -271,6 +271,9 @@ pub enum BlobType {
     Committee,
     /// A blob containing a chain description.
     ChainDescription,
+    /// A blob containing the canonical content of a chain's execution state at a
+    /// checkpoint, used to bootstrap a node without replaying the chain's history.
+    CheckpointContent,
 }
 
 impl BlobType {
@@ -282,7 +285,8 @@ impl BlobType {
             | BlobType::ServiceBytecode
             | BlobType::EvmBytecode
             | BlobType::ApplicationDescription
-            | BlobType::ChainDescription => false,
+            | BlobType::ChainDescription
+            | BlobType::CheckpointContent => false,
             BlobType::Committee => true,
         }
     }

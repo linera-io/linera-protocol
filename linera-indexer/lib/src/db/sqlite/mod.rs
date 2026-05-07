@@ -281,6 +281,7 @@ impl SqliteDatabase {
                     SystemOperation::UpdateStream { .. } => "UpdateStream",
                     SystemOperation::ChangeOwnership { .. } => "ChangeOwnership",
                     SystemOperation::VerifyBlob { .. } => "VerifyBlob",
+                    SystemOperation::Checkpoint => "Checkpoint",
                 };
                 ("System", None, Some(sys_op_type))
             }
@@ -435,6 +436,9 @@ impl SqliteDatabase {
                         SqliteError::Serialization(format!("Failed to serialize event exists: {e}"))
                     })?;
                     ("EventExists", None, Some(serialized))
+                }
+                OracleResponse::Checkpoint(blob_id) => {
+                    ("Checkpoint", Some(blob_id.hash.to_string()), None)
                 }
             };
 

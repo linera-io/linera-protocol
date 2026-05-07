@@ -21,7 +21,7 @@ use linera_base::{
 use linera_execution::{
     committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
     Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    ResourceTracker, ServiceRuntimeEndpoint, SystemOperation, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -41,7 +41,7 @@ use crate::{
         BlockExecutionOutcome, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight,
         IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
-    inbox::{InboxError, InboxStateView},
+    inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
@@ -1088,6 +1088,13 @@ where
             &block,
         )?;
 
+        if block
+            .operations()
+            .any(|op| matches!(op, Operation::System(sys) if matches!(**sys, SystemOperation::Checkpoint)))
+        {
+            self.check_checkpoint_preconditions(&block).await?;
+        }
+
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.block_hashes,
@@ -1207,6 +1214,57 @@ where
             mandatory.is_empty(),
             ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
+        Ok(())
+    }
+
+    /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
+    ///   * the block contains the Checkpoint operation as its only transaction;
+    ///   * no inbox has consumed any incoming bundle (every `next_cursor_to_remove` is
+    ///     at default);
+    ///   * no outbox has pending outgoing messages;
+    ///   * no event stream tracker is set.
+    ///
+    /// Sender-side conditions (no events ever published, no cross-chain messages ever
+    /// sent) are validated inside `ExecutionStateView::execute_checkpoint`.
+    async fn check_checkpoint_preconditions(
+        &self,
+        block: &ProposedBlock,
+    ) -> Result<(), ChainError> {
+        ensure!(
+            block.transactions.len() == 1,
+            ChainError::CheckpointPreconditionFailed(
+                "Checkpoint must be the only transaction in its block",
+            )
+        );
+
+        let origins = self.inboxes.indices().await?;
+        for origin in &origins {
+            let Some(inbox) = self.inboxes.try_load_entry(origin).await? else {
+                continue;
+            };
+            ensure!(
+                *inbox.next_cursor_to_remove.get() == Cursor::default(),
+                ChainError::CheckpointPreconditionFailed("chain has consumed incoming messages")
+            );
+        }
+
+        ensure!(
+            self.nonempty_outboxes.get().is_empty(),
+            ChainError::CheckpointPreconditionFailed("chain has pending outgoing messages")
+        );
+
+        let mut had_event_tracker = false;
+        self.next_expected_events
+            .for_each_index_while(|_| {
+                had_event_tracker = true;
+                Ok(false)
+            })
+            .await?;
+        ensure!(
+            !had_event_tracker,
+            ChainError::CheckpointPreconditionFailed("chain has consumed events")
+        );
+
         Ok(())
     }
 

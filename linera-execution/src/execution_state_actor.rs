@@ -37,7 +37,8 @@ use crate::{
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
     ExecutionStateView, JsVec, Message, MessageContext, MessageKind, ModuleId, Operation,
     OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
-    ResourceController, SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
+    ResourceController, SystemMessage, SystemOperation, TransactionTracker, UserContractCode,
+    UserServiceCode,
 };
 
 /// Actor for handling requests to the execution state.
@@ -1066,23 +1067,28 @@ where
     ) -> Result<(), ExecutionError> {
         assert_eq!(context.chain_id, self.state.context().extra().chain_id());
         match operation {
-            Operation::System(op) => {
-                let new_application = self
-                    .state
-                    .system
-                    .execute_operation(context, *op, self.txn_tracker, self.resource_controller)
-                    .await?;
-                if let Some((application_id, argument)) = new_application {
-                    let user_action = UserAction::Instantiate(context, argument);
-                    self.run_user_action(
-                        application_id,
-                        user_action,
-                        context.refund_grant_to(),
-                        None,
-                    )
-                    .await?;
+            Operation::System(op) => match *op {
+                SystemOperation::Checkpoint => {
+                    self.state.execute_checkpoint(self.txn_tracker).await?;
                 }
-            }
+                op => {
+                    let new_application = self
+                        .state
+                        .system
+                        .execute_operation(context, op, self.txn_tracker, self.resource_controller)
+                        .await?;
+                    if let Some((application_id, argument)) = new_application {
+                        let user_action = UserAction::Instantiate(context, argument);
+                        self.run_user_action(
+                            application_id,
+                            user_action,
+                            context.refund_grant_to(),
+                            None,
+                        )
+                        .await?;
+                    }
+                }
+            },
             Operation::User {
                 application_id,
                 bytes,

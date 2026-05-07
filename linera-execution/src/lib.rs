@@ -367,6 +367,8 @@ pub enum ExecutionError {
     OutdatedUpdateStream,
     #[error("UpdateStream references an application that is not subscribed")]
     UnsubscribedUpdateStream,
+    #[error("Checkpoint precondition failed: {0}")]
+    CheckpointPreconditionFailed(&'static str),
 }
 
 impl ExecutionError {
@@ -422,6 +424,7 @@ impl ExecutionError {
             | ExecutionError::UnprocessedStreams
             | ExecutionError::OutdatedUpdateStream
             | ExecutionError::UnsubscribedUpdateStream
+            | ExecutionError::CheckpointPreconditionFailed(_)
             | ExecutionError::ViewError(ViewError::NotFound(_)) => false,
             #[cfg(with_wasm_runtime)]
             ExecutionError::WasmError(_) => false,

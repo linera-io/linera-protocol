@@ -11,8 +11,9 @@ use allocative::Allocative;
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{BlobContent, BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
+    data_types::{Blob, BlobContent, BlockHeight, OracleResponse, StreamUpdate},
+    ensure,
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
     time::Instant,
 };
 use linera_views::{
@@ -30,7 +31,6 @@ use {
     crate::{
         ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
     },
-    linera_base::data_types::Blob,
     linera_views::context::MemoryContext,
     std::sync::Arc,
 };
@@ -105,6 +105,53 @@ where
         impl BcsHashable<'_> for ExecutionStateViewHash {}
         let hash = self.inner.historical_hash().await?;
         Ok(CryptoHash::new(&ExecutionStateViewHash(hash.into())))
+    }
+
+    /// Executes a `SystemOperation::Checkpoint`: validates execution-state-level
+    /// preconditions, dumps the inner view's persisted content as a blob, and records
+    /// the resulting blob ID as an [`OracleResponse::Checkpoint`].
+    ///
+    /// The dump captures the chain's pre-block state. Subsequent fees and other state
+    /// changes within this same block mutate the inner view normally; on save, the
+    /// `force_stored_hash` override scheduled by `dump_content` causes the persisted
+    /// state hash to be the hash of the dumped bytes. A bootstrapping node can then
+    /// install the dumped state via `restore_from_content` and replay the checkpoint
+    /// block to converge to the same post-block state.
+    pub async fn execute_checkpoint(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
+        let mut had_event_block = false;
+        self.previous_event_blocks
+            .for_each_index_while(|_| {
+                had_event_block = true;
+                Ok(false)
+            })
+            .await?;
+        ensure!(
+            !had_event_block,
+            ExecutionError::CheckpointPreconditionFailed("chain has published events")
+        );
+
+        let mut had_message_block = false;
+        self.previous_message_blocks
+            .for_each_index_while(|_| {
+                had_message_block = true;
+                Ok(false)
+            })
+            .await?;
+        ensure!(
+            !had_message_block,
+            ExecutionError::CheckpointPreconditionFailed("chain has sent cross-chain messages")
+        );
+
+        let (bytes, _content_hash) = self.inner.dump_content().await?;
+        let blob = Blob::new(BlobContent::new(BlobType::CheckpointContent, bytes));
+        let blob_id = blob.id();
+        txn_tracker.add_created_blob(blob);
+        txn_tracker.add_published_blob(blob_id);
+        txn_tracker.replay_oracle_response(OracleResponse::Checkpoint(blob_id))?;
+        Ok(())
     }
 }
 

@@ -264,6 +264,11 @@ pub enum SystemOperation {
         stream_id: StreamId,
         next_index: u32,
     },
+    /// Publishes a canonical snapshot of the chain's execution state as a blob,
+    /// resetting the execution-state hash to the hash of that content. This allows
+    /// future nodes to bootstrap from the snapshot instead of replaying the chain's
+    /// history. Subject to a strict set of preconditions on the chain's state.
+    Checkpoint,
 }
 
 /// Operations that are only allowed on the admin chain.
@@ -594,6 +599,11 @@ where
                     missing_events.is_empty(),
                     ExecutionError::EventsNotFound(missing_events)
                 );
+            }
+            Checkpoint => {
+                return Err(ExecutionError::InternalError(
+                    "SystemOperation::Checkpoint must be dispatched at ExecutionStateView level",
+                ));
             }
         }
 
