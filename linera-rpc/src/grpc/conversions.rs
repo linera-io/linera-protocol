@@ -642,6 +642,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_fallback: chain_info_query.request_fallback,
             request_sent_certificate_hashes_by_heights,
             request_previous_event_blocks,
+            request_latest_checkpoint_height: chain_info_query.request_latest_checkpoint_height,
         })
     }
 }
@@ -674,6 +675,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_previous_event_blocks: Some(request_previous_event_blocks),
+            request_latest_checkpoint_height: chain_info_query.request_latest_checkpoint_height,
         })
     }
 }

@@ -15,7 +15,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse, Round,
+        Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
@@ -2212,7 +2213,38 @@ where
                     .insert(stream_id, (height, hash));
             }
         }
+        if query.request_latest_checkpoint_height {
+            info.requested_latest_checkpoint_height = self.find_latest_checkpoint_height().await?;
+        }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
+    }
+
+    /// Scans the chain's executed blocks from the latest height backwards, returning the
+    /// height of the most recent block whose certificate records an
+    /// [`OracleResponse::Checkpoint`], or `None` if no such block exists.
+    async fn find_latest_checkpoint_height(&self) -> Result<Option<BlockHeight>, WorkerError> {
+        let next_height = self.chain.tip_state.get().next_block_height;
+        let Some(top) = next_height.0.checked_sub(1) else {
+            return Ok(None);
+        };
+        for height_n in (0..=top).rev() {
+            let height = BlockHeight(height_n);
+            let Some(certificate_hash) = self.chain.block_hashes.get(&height).await? else {
+                continue;
+            };
+            let certificate = self
+                .storage
+                .read_certificate(certificate_hash)
+                .await?
+                .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
+            let body = &certificate.value().block().body;
+            for response in body.oracle_responses.iter().flatten() {
+                if matches!(response, OracleResponse::Checkpoint(_)) {
+                    return Ok(Some(height));
+                }
+            }
+        }
+        Ok(None)
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
