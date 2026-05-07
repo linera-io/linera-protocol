@@ -68,7 +68,7 @@ PORT=3001
 ```
 
 Production EVM contracts (`LightClient`, `FungibleBridge`,
-`MockERC20`-or-real-ERC20), the bridge chain, and the two Linera apps
+`LineraToken`-or-real-ERC20), the bridge chain, and the two Linera apps
 (`evm-bridge`, `wrapped-fungible`) are deployed/registered out-of-band by
 the team's deployment tooling. The output artifacts populate the env file
 above.
