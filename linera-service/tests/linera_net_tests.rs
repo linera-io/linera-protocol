@@ -1935,6 +1935,19 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     Ok(())
 }
 
+/// Round configuration for the receiver chain in the checkpoint/rollback consensus test.
+#[derive(Clone, Copy, Debug)]
+enum ReceiverRoundMode {
+    /// Multi-owner chain with `0` multi-leader rounds: blocks proceed via single-leader
+    /// rounds, so the proposer's outcome is compared against an independent validator
+    /// re-execution under full BFT consensus.
+    MultiOwnerSingleLeader,
+    /// Single-owner chain owned by client2: round 0 is a fast round, so the block can
+    /// be confirmed from a single proposal — but validators still re-execute to verify
+    /// the state hash, so a proposer/validator divergence is still caught.
+    SingleOwnerFastRound,
+}
+
 /// Tests that checkpoint/rollback with rejected bundles produces the same execution
 /// on proposer and validators. This is a regression test for a potential consensus bug
 /// where the proposer drops all Wasm instances after a rollback (causing a reload from
@@ -1948,18 +1961,15 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
 ///
 /// If there's a divergence, validators will produce a different state hash and the
 /// block won't get enough votes to form a certificate.
-#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
-#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
-#[test_log::test(tokio::test)]
-async fn test_wasm_end_to_end_checkpoint_rollback_consensus(
+async fn run_checkpoint_rollback_consensus_test(
     config: impl LineraNetConfig,
+    mode: ReceiverRoundMode,
 ) -> Result<()> {
     use counter::CounterAbi;
     use meta_counter::MetaCounterAbi;
 
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
-    tracing::info!("Starting test {}", test_name!());
+    tracing::info!("Starting test {} ({mode:?})", test_name!());
 
     let (mut net, client1) = config.instantiate().await?;
 
@@ -1968,21 +1978,29 @@ async fn test_wasm_end_to_end_checkpoint_rollback_consensus(
 
     let chain_creator = client1.load_wallet()?.default_chain().unwrap();
 
-    // Generate keys for both clients and open a multi-owner receiver chain.
-    // Multi-owner avoids fast rounds, so the proposer's outcome is actually
-    // compared against the validator's re-execution.
-    let owner1 = client1.keygen().await?;
     let owner2 = client2.keygen().await?;
-    let chain_receiver = client1
-        .open_multi_owner_chain(
-            chain_creator,
-            vec![(owner1, 100), (owner2, 100)].into_iter().collect(),
-            0, // no multi-leader rounds: forces single-leader rounds (no fast round)
-            Amount::from_tokens(10),
-            10_000,
-        )
-        .await?;
-    client1.assign(owner1, chain_receiver).await?;
+    let chain_receiver = match mode {
+        ReceiverRoundMode::MultiOwnerSingleLeader => {
+            let owner1 = client1.keygen().await?;
+            let chain = client1
+                .open_multi_owner_chain(
+                    chain_creator,
+                    vec![(owner1, 100), (owner2, 100)].into_iter().collect(),
+                    0, // no multi-leader rounds: forces single-leader rounds (no fast round)
+                    Amount::from_tokens(10),
+                    10_000,
+                )
+                .await?;
+            client1.assign(owner1, chain).await?;
+            chain
+        }
+        ReceiverRoundMode::SingleOwnerFastRound => {
+            let (chain, _) = client1
+                .open_chain(chain_creator, Some(owner2), Amount::from_tokens(10))
+                .await?;
+            chain
+        }
+    };
     client2.assign(owner2, chain_receiver).await?;
     client2.sync(chain_receiver).await?;
 
@@ -2072,6 +2090,26 @@ async fn test_wasm_end_to_end_checkpoint_rollback_consensus(
     net.terminate().await?;
 
     Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_checkpoint_rollback_consensus(
+    config: impl LineraNetConfig,
+) -> Result<()> {
+    run_checkpoint_rollback_consensus_test(config, ReceiverRoundMode::MultiOwnerSingleLeader).await
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_checkpoint_rollback_consensus_fast_rounds(
+    config: impl LineraNetConfig,
+) -> Result<()> {
+    run_checkpoint_rollback_consensus_test(config, ReceiverRoundMode::SingleOwnerFastRound).await
 }
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
