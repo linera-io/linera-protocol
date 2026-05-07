@@ -198,8 +198,6 @@ where
 {
     /// Execution state, including system and user applications.
     pub execution_state: ExecutionStateView<C>,
-    /// Hash of the execution state.
-    pub execution_state_hash: RegisterView<C, Option<CryptoHash>>,
 
     /// Block-chaining state.
     pub tip_state: RegisterView<C, ChainTipState>,
@@ -457,9 +455,6 @@ where
             // The chain was already initialized.
             return Ok(());
         }
-        // Recompute the state hash.
-        let hash = self.execution_state.crypto_hash_mut().await?;
-        self.execution_state_hash.set(Some(hash));
         let maybe_committee = self
             .execution_state
             .system
@@ -1113,7 +1108,6 @@ where
         if block.header.height == BlockHeight::ZERO {
             self.block_zero_executed_at.set(local_time);
         }
-        self.execution_state_hash.set(Some(block.header.state_hash));
         let updated_streams = self.process_emitted_events(block).await?;
         self.process_outgoing_messages(block).await?;
 

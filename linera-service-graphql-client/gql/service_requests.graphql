@@ -138,7 +138,6 @@ query Chain(
         timestamp
       }
     }
-    executionStateHash
     tipState {
       blockHash
       nextBlockHeight

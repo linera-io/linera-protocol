@@ -256,7 +256,7 @@ impl CrossChainRequest {
 }
 
 impl ChainInfo {
-    pub async fn from_chain_view<C, S>(view: &ChainStateView<C>) -> Result<Self, ViewError>
+    pub async fn from_chain_view<C, S>(view: &mut ChainStateView<C>) -> Result<Self, ViewError>
     where
         C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
         ChainRuntimeContext<S>: ExecutionRuntimeContext,
@@ -272,7 +272,7 @@ impl ChainInfo {
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,
             timestamp: *view.execution_state.system.timestamp.get(),
-            state_hash: *view.execution_state_hash.get(),
+            state_hash: Some(view.execution_state.crypto_hash_mut().await?),
             requested_committees: None,
             requested_owner_balance: None,
             requested_pending_message_bundles: Vec::new(),
