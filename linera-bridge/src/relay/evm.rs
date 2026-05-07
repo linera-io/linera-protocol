@@ -11,7 +11,7 @@ use alloy::{
 };
 use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
-use linera_base::data_types::Epoch;
+use linera_base::data_types::{BlockHeight, Epoch};
 
 use crate::proof::deposit_event_signature;
 
@@ -20,6 +20,7 @@ sol! {
     interface IFungibleBridge {
         function addBlock(bytes calldata data) external;
         function lightClient() external view returns (address);
+        function isBurnProcessed(uint64 height, uint256 burnIndex) external view returns (bool);
     }
 }
 
@@ -96,14 +97,21 @@ impl<P: Provider> EvmClient<P> {
         Ok(all_logs)
     }
 
-    /// Queries ERC-20 Transfer events from the bridge to a recipient.
-    pub async fn get_transfer_logs(&self, recipient: Address) -> Result<Vec<Log>> {
-        let transfer_sig = alloy::primitives::keccak256("Transfer(address,address,uint256)");
-        let filter = Filter::new()
-            .address(self.bridge_addr)
-            .event_signature(transfer_sig)
-            .topic2(B256::left_padding_from(recipient.as_slice()));
-        Ok(self.provider.get_logs(&filter).await?)
+    /// Returns whether the FungibleBridge has already released the burn
+    /// at `(height, burn_index)` — i.e. whether the corresponding
+    /// `_onBlock` loop iteration ran to completion in some prior `addBlock`
+    /// transaction. The answer is intrinsic to the burn rather than inferred
+    /// from block-level state or token transfer events.
+    pub async fn is_burn_processed(
+        &self,
+        height: BlockHeight,
+        burn_index: usize,
+    ) -> Result<bool> {
+        let bridge_contract = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        Ok(bridge_contract
+            .isBurnProcessed(height.0, U256::from(burn_index))
+            .call()
+            .await?)
     }
 
     /// BCS-serialize and forward a certified block to FungibleBridge on EVM.

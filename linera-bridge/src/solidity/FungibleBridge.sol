@@ -36,6 +36,12 @@ contract FungibleBridge is Microchain {
     IERC20 public immutable token;
     uint256 public depositNonce;
 
+    /// Per-burn dedup mapping. Set inside `_onBlock` after each burn's
+    /// `token.transfer` succeeds. Internal: callers should use
+    /// `isBurnProcessed(height, burnIndex)` so the key encoding stays a
+    /// contract-private detail.
+    mapping(bytes32 => bool) internal processedBurns;
+
     constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId)
         Microchain(_lightClient, _chainId)
     {
@@ -76,10 +82,22 @@ contract FungibleBridge is Microchain {
         );
     }
 
+    /// Returns whether the burn at (height, burnIndex) has already been
+    /// released by a prior `addBlock` call. `burnIndex` is the 0-based
+    /// position of the burn in the flat sequence of matched burn events
+    /// across the block — the same counter the off-chain relayer uses.
+    function isBurnProcessed(uint64 height, uint256 burnIndex) external view returns (bool) {
+        return processedBurns[keccak256(abi.encode(height, burnIndex))];
+    }
+
     /// Processes a Linera block and releases ERC-20 tokens for any BurnEvent
     /// events on the "burns" stream from the wrapped-fungible application.
+    /// Records each released burn in `processedBurns` so the off-chain
+    /// relayer can confirm completion per burn (not just per block).
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
         bytes32 burnsHash = keccak256("burns");
+        uint64 height = blockValue.header.height.value;
+        uint256 burnIndex = 0;
         for (uint256 i = 0; i < blockValue.body.events.length; i++) {
             BridgeTypes.Event[] memory txEvents = blockValue.body.events[i];
             for (uint256 j = 0; j < txEvents.length; j++) {
@@ -99,6 +117,8 @@ contract FungibleBridge is Microchain {
 
                 address target = address(burnEvt.target);
                 require(token.transfer(target, burnEvt.amount.value), "token transfer failed");
+                processedBurns[keccak256(abi.encode(height, burnIndex))] = true;
+                burnIndex++;
             }
         }
     }

@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Linera-side monitoring: scans for BurnEvent stream events (auto-burns),
-//! forwards certificates to EVM, checks EVM for completion via ERC-20
-//! Transfer events, and retries unforwarded burns.
+//! forwards certificates to EVM, checks EVM for already-processed burns via
+//! `FungibleBridge.processedBurns`, and retries unforwarded burns.
 
 use std::{sync::Arc, time::Duration};
 
 use alloy::{primitives::Address, providers::Provider};
-use linera_base::data_types::BlockHeight;
 use tokio::sync::{Notify, RwLock};
 
 use super::{MonitorState, PendingBurn};
@@ -237,16 +236,23 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     Ok(())
 }
 
+/// Detects burns that were already released on EVM (by a prior `addBlock`
+/// from us before a crash, or by another relayer). Queries the per-burn
+/// `processedBurns` mapping on FungibleBridge so the answer is intrinsic to
+/// the burn and survives any future change to the contract's per-block
+/// processing semantics. Marks each such burn complete *without* sending an
+/// EVM transaction, so `process_pending_burns` doesn't waste gas re-submitting
+/// blocks that would just revert with "block already verified".
 async fn check_burn_completion(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
 ) -> anyhow::Result<()> {
-    let pending: Vec<(BlockHeight, usize, Address)> = {
+    let pending: Vec<(linera_base::data_types::BlockHeight, usize)> = {
         let state = monitor.read().await;
         state
             .pending_burns()
             .into_iter()
-            .map(|b| (b.value.height, b.value.burn_index, b.value.evm_recipient))
+            .map(|b| (b.value.height, b.value.burn_index))
             .collect()
     };
 
@@ -254,16 +260,151 @@ async fn check_burn_completion(
         return Ok(());
     }
 
-    for (height, burn_index, recipient) in pending {
-        let logs = evm_client.get_transfer_logs(recipient).await?;
-        if !logs.is_empty() {
-            monitor
-                .write()
-                .await
-                .complete_burn(height, burn_index)
-                .await;
+    for (height, burn_index) in pending {
+        match evm_client.is_burn_processed(height, burn_index).await {
+            Ok(true) => {
+                monitor
+                    .write()
+                    .await
+                    .complete_burn(height, burn_index)
+                    .await;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(
+                    ?height,
+                    burn_index,
+                    "Failed to query processedBurns for completion check: {e:#}"
+                );
+            }
         }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::primitives::U256;
+    use alloy_sol_types::sol;
+    use linera_base::{
+        crypto::{CryptoHash, TestString, ValidatorSecretKey},
+        data_types::{Amount, BlockHeight},
+    };
+    use revm::{database::CacheDB, primitives::Address};
+
+    use crate::{evm::microchain::addBlockCall, test_helpers::*};
+
+    sol! {
+        function isBurnProcessed(uint64 height, uint256 burnIndex) external view returns (bool);
+        function transfer(address to, uint256 amount) external returns (bool);
+    }
+
+    /// End-to-end check that `_onBlock` records each released burn under a
+    /// key that `isBurnProcessed(height, burnIndex)` can find. Submits a
+    /// cert with two burn events in one transaction — the multi-burn-in-
+    /// one-block case that block-level dedup couldn't distinguish — and
+    /// verifies both `(height, 0)` and `(height, 1)` flip to true.
+    #[test]
+    fn is_burn_processed_returns_true_after_release() {
+        let mut db = CacheDB::default();
+        let deployer = Address::ZERO;
+        let secret = ValidatorSecretKey::generate();
+        let public = secret.public();
+        let validator_addr = validator_evm_address(&public);
+        let admin_chain_id = test_admin_chain_id();
+        let light_client = deploy_light_client(
+            &mut db,
+            deployer,
+            &[validator_addr],
+            &[1],
+            admin_chain_id,
+            0,
+        );
+
+        // Fund the bridge so `token.transfer` inside `_onBlock` succeeds —
+        // a failed transfer reverts the whole `addBlock` and `processedBurns`
+        // would never be written, masking the property under test.
+        let initial_supply = U256::from(1_000_000_000_000_000_000_000_000u128);
+        let token = deploy_mock_erc20(&mut db, deployer, initial_supply);
+
+        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
+        let app_id = CryptoHash::new(&TestString::new("fungible_app"));
+        let bridge =
+            deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token, app_id);
+        call_contract(
+            &mut db,
+            deployer,
+            token,
+            &transferCall {
+                to: bridge,
+                amount: initial_supply,
+            },
+        );
+
+        let height = BlockHeight(1);
+        let events = vec![vec![
+            burn_event(app_id, [0xAA; 20], Amount::from_attos(100), 0),
+            burn_event(app_id, [0xBB; 20], Amount::from_attos(200), 1),
+        ]];
+
+        // Both burns are unset before the block is processed.
+        for burn_index in [0u64, 1] {
+            let (set, _, _) = call_contract(
+                &mut db,
+                deployer,
+                bridge,
+                &isBurnProcessedCall {
+                    height: height.0,
+                    burnIndex: U256::from(burn_index),
+                },
+            );
+            assert!(
+                !set,
+                "isBurnProcessed(height, {burn_index}) should be false before addBlock"
+            );
+        }
+
+        let cert = create_certificate_with_events(&secret, &public, chain_id, height, events);
+        call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            &addBlockCall {
+                data: bcs::to_bytes(&cert).unwrap().into(),
+            },
+        );
+
+        // Both burns now report processed.
+        for burn_index in [0u64, 1] {
+            let (set, _, _) = call_contract(
+                &mut db,
+                deployer,
+                bridge,
+                &isBurnProcessedCall {
+                    height: height.0,
+                    burnIndex: U256::from(burn_index),
+                },
+            );
+            assert!(
+                set,
+                "isBurnProcessed(height, {burn_index}) must be true after addBlock"
+            );
+        }
+
+        // A burn at a height that wasn't processed must remain unset.
+        let (other, _, _) = call_contract(
+            &mut db,
+            deployer,
+            bridge,
+            &isBurnProcessedCall {
+                height: 2,
+                burnIndex: U256::ZERO,
+            },
+        );
+        assert!(
+            !other,
+            "isBurnProcessed for an unrelated (height, burnIndex) must be false"
+        );
+    }
 }
