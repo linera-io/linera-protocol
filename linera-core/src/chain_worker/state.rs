@@ -2237,11 +2237,16 @@ where
                 .read_certificate(certificate_hash)
                 .await?
                 .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
+            // The Checkpoint operation is constrained to be the only transaction in its
+            // block and `execute_checkpoint` records a single
+            // `OracleResponse::Checkpoint` as its first oracle response, so we only
+            // need to inspect that one slot.
             let body = &certificate.value().block().body;
-            for response in body.oracle_responses.iter().flatten() {
-                if matches!(response, OracleResponse::Checkpoint(_)) {
-                    return Ok(Some(height));
-                }
+            if matches!(
+                body.oracle_responses.first().and_then(|t| t.first()),
+                Some(OracleResponse::Checkpoint(_)),
+            ) {
+                return Ok(Some(height));
             }
         }
         Ok(None)
