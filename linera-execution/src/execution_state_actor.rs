@@ -1007,6 +1007,8 @@ where
             .execution_runtime_config()
             .allow_application_logs;
 
+        let transaction_index = self.txn_tracker.transaction_index();
+
         let contract_runtime_task = self
             .state
             .context()
@@ -1016,6 +1018,7 @@ where
                 let runtime = ContractSyncRuntime::new(
                     execution_state_sender,
                     chain_id,
+                    transaction_index,
                     refund_grant_to,
                     controller,
                     &action,

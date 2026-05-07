@@ -89,6 +89,8 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     /// The height of the next block that will be added to this chain. During operations
     /// and messages, this is the current block height.
     height: BlockHeight,
+    /// The index of the current transaction within its block.
+    transaction_index: u32,
     /// The current consensus round. Only available during block validation in multi-leader rounds.
     round: Option<u32>,
     /// The current message being executed, if there is one.
@@ -313,6 +315,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
     fn new(
         chain_id: ChainId,
         height: BlockHeight,
+        transaction_index: u32,
         round: Option<u32>,
         executing_message: Option<ExecutingMessage>,
         execution_state_sender: ExecutionStateSender,
@@ -325,6 +328,7 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
         Self {
             chain_id,
             height,
+            transaction_index,
             round,
             executing_message,
             execution_state_sender,
@@ -1045,6 +1049,7 @@ impl ContractSyncRuntime {
     pub(crate) fn new(
         execution_state_sender: ExecutionStateSender,
         chain_id: ChainId,
+        transaction_index: u32,
         refund_grant_to: Option<Account>,
         resource_controller: ResourceController,
         action: &UserAction,
@@ -1054,6 +1059,7 @@ impl ContractSyncRuntime {
             SyncRuntimeInternal::new(
                 chain_id,
                 action.height(),
+                transaction_index,
                 action.round(),
                 if let UserAction::Message(context, _) = action {
                     Some(context.into())
@@ -1212,6 +1218,10 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
     fn authenticated_owner(&mut self) -> Result<Option<AccountOwner>, ExecutionError> {
         let this = self.inner();
         Ok(this.current_application().signer)
+    }
+
+    fn transaction_index(&mut self) -> Result<u32, ExecutionError> {
+        Ok(self.inner().transaction_index)
     }
 
     fn message_is_bouncing(&mut self) -> Result<Option<bool>, ExecutionError> {
@@ -1747,6 +1757,7 @@ impl ServiceSyncRuntime {
             SyncRuntimeInternal::new(
                 context.chain_id,
                 context.next_block_height,
+                0,
                 None,
                 None,
                 execution_state_sender,

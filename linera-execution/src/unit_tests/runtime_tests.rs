@@ -178,6 +178,7 @@ where
     let runtime = SyncRuntimeInternal::new(
         chain_id,
         BlockHeight(0),
+        0,
         Some(0),
         None,
         execution_state_sender,
