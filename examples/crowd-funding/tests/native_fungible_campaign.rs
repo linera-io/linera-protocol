@@ -164,3 +164,129 @@ async fn collect_pledges_native_fungible() {
         );
     }
 }
+
+/// Tests a pledge issued from the campaign chain itself, exercising
+/// [`execute_pledge_with_account`] (the same-chain branch of the `Pledge` handler) instead
+/// of [`execute_pledge_with_transfer`]. This complements `collect_pledges_native_fungible`
+/// which only covers the cross-chain branch.
+#[tokio::test(flavor = "multi_thread")]
+async fn collect_pledges_same_chain_native_fungible() {
+    let initial_amount = Amount::from_tokens(10);
+    let target_amount = Amount::from_tokens(4);
+    let pledge_amount = Amount::from_tokens(5);
+
+    let (validator, crowd_funding_module_id) = TestValidator::with_current_module::<
+        CrowdFundingAbi,
+        ApplicationId<FungibleTokenAbi>,
+        InstantiationArgument,
+    >()
+    .await;
+
+    let mut campaign_chain = validator.new_chain().await;
+    let campaign_account = AccountOwner::from(campaign_chain.public_key());
+
+    // Native-fungible application is created with the campaign owner pre-funded on the
+    // *campaign* chain itself, so the pledge will not need to move tokens between chains.
+    let native_fungible_initial_state = fungible::InitialStateBuilder::default()
+        .with_account(campaign_account, initial_amount)
+        .build();
+    let native_fungible_id = campaign_chain
+        .create_native_application::<FungibleTokenAbi, Parameters, InitialState>(
+            NativeApplicationKind::Fungible,
+            Parameters::new("NAT"),
+            native_fungible_initial_state,
+            vec![],
+        )
+        .await;
+
+    let campaign_state = InstantiationArgument {
+        owner: campaign_account,
+        deadline: Timestamp::from(u64::MAX),
+        target: target_amount,
+    };
+    let campaign_id = campaign_chain
+        .create_application(
+            crowd_funding_module_id,
+            native_fungible_id,
+            campaign_state,
+            vec![native_fungible_id.forget_abi()],
+        )
+        .await;
+
+    // Pledge from the campaign chain itself — same-chain branch.
+    campaign_chain
+        .add_block(|block| {
+            block.with_operation(
+                campaign_id,
+                Operation::Pledge {
+                    owner: campaign_account,
+                    amount: pledge_amount,
+                },
+            );
+        })
+        .await;
+
+    // The crowd-funding app's account on the campaign chain holds the pledge.
+    let crowd_funding_owner: AccountOwner = campaign_id.forget_abi().into();
+    assert_eq!(
+        campaign_chain.owner_balance(&crowd_funding_owner).await,
+        Some(pledge_amount),
+    );
+    assert_eq!(
+        campaign_chain.owner_balance(&campaign_account).await,
+        Some(initial_amount.saturating_sub(pledge_amount)),
+    );
+
+    // Collect — same `transfer_auth_depth(.., 1)` path as the cross-chain test.
+    campaign_chain
+        .add_block(|block| {
+            block.with_operation(campaign_id, Operation::Collect);
+        })
+        .await;
+
+    assert_eq!(
+        campaign_chain.owner_balance(&campaign_account).await,
+        Some(initial_amount),
+    );
+    // Once drained, the crowd-funding app account is removed from the chain state.
+    assert_eq!(
+        campaign_chain.owner_balance(&crowd_funding_owner).await,
+        None,
+    );
+}
+
+/// Standalone test for [`ActiveChain::create_native_application`].
+///
+/// Creates a native fungible application with two initial accounts and verifies that the
+/// helper instantiates the app without publishing any bytecode and that the initial state
+/// is reflected in the chain balances.
+#[tokio::test(flavor = "multi_thread")]
+async fn create_native_application_helper_seeds_initial_balances() {
+    let validator = TestValidator::new().await;
+    let mut chain = validator.new_chain().await;
+
+    let owner_a = AccountOwner::from(chain.public_key());
+    let owner_b = AccountOwner::from(linera_sdk::linera_base_types::CryptoHash::test_hash(
+        "owner_b",
+    ));
+    let amount_a = Amount::from_tokens(7);
+    let amount_b = Amount::from_tokens(3);
+
+    let initial_state = fungible::InitialStateBuilder::default()
+        .with_account(owner_a, amount_a)
+        .with_account(owner_b, amount_b)
+        .build();
+    let params = Parameters::new("NAT");
+
+    let _app_id = chain
+        .create_native_application::<FungibleTokenAbi, Parameters, InitialState>(
+            NativeApplicationKind::Fungible,
+            params,
+            initial_state,
+            vec![],
+        )
+        .await;
+
+    assert_eq!(chain.owner_balance(&owner_a).await, Some(amount_a));
+    assert_eq!(chain.owner_balance(&owner_b).await, Some(amount_b));
+}

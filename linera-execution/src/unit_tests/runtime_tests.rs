@@ -11,15 +11,19 @@ use std::{
 };
 
 use futures::{channel::mpsc, StreamExt};
-use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ApplicationId};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{Amount, BlockHeight},
+    identifiers::{Account, AccountOwner, ApplicationId},
+};
 use linera_views::batch::Batch;
 
 use super::{ApplicationStatus, SyncRuntimeHandle, SyncRuntimeInternal, WithContext};
 use crate::{
     execution_state_actor::ExecutionRequest,
-    runtime::{LoadedApplication, ResourceController, SyncRuntime},
+    runtime::{ContractSyncRuntimeHandle, LoadedApplication, ResourceController, SyncRuntime},
     test_utils::{create_dummy_user_application_description, dummy_chain_description},
-    ContractRuntime, UserContractInstance,
+    ContractRuntime, ExecutionError, UserContractInstance,
 };
 
 /// Test if dropping [`SyncRuntime`] does not leak memory.
@@ -193,7 +197,13 @@ where
 
 /// Creates an [`ApplicationStatus`] for a dummy application.
 fn create_dummy_application() -> ApplicationStatus {
-    let (description, _, _) = create_dummy_user_application_description(0);
+    create_dummy_application_with_index(0)
+}
+
+/// Creates an [`ApplicationStatus`] for a dummy application identified by `index`. Each
+/// distinct `index` yields a distinct [`ApplicationId`].
+fn create_dummy_application_with_index(index: u32) -> ApplicationStatus {
+    let (description, _, _) = create_dummy_user_application_description(index);
     let id = From::from(&description);
     ApplicationStatus {
         caller_id: None,
@@ -206,6 +216,213 @@ fn create_dummy_application() -> ApplicationStatus {
 /// Creates a dummy [`ApplicationId`].
 fn create_dummy_application_id() -> ApplicationId {
     ApplicationId::new(CryptoHash::test_hash("application description"))
+}
+
+/// Creates a [`ContractSyncRuntimeHandle`] with a single dummy application on the call stack.
+fn create_handle_with_single_application() -> (
+    ContractSyncRuntimeHandle,
+    mpsc::UnboundedReceiver<ExecutionRequest>,
+    ApplicationId,
+) {
+    let (runtime, receiver) = create_contract_runtime();
+    let application_id = runtime.current_application().id;
+    (SyncRuntimeHandle::from(runtime), receiver, application_id)
+}
+
+/// Creates a [`ContractSyncRuntimeHandle`] with two distinct applications on the call stack:
+/// `caller` is at depth 1, `callee` is the current (depth 0) application.
+fn create_handle_with_caller_and_callee() -> (
+    ContractSyncRuntimeHandle,
+    mpsc::UnboundedReceiver<ExecutionRequest>,
+    ApplicationId, // caller (depth 1)
+    ApplicationId, // callee (depth 0)
+) {
+    let (mut runtime, receiver) = create_runtime();
+    let caller = create_dummy_application_with_index(0);
+    let callee = create_dummy_application_with_index(1);
+    let caller_id = caller.id;
+    let callee_id = callee.id;
+    runtime.push_application(caller);
+    runtime.push_application(callee);
+    (SyncRuntimeHandle::from(runtime), receiver, caller_id, callee_id)
+}
+
+/// Helper that returns a dummy `(source_owner, destination_account, amount)` triple.
+fn dummy_transfer_args() -> (AccountOwner, Account, Amount) {
+    let source = AccountOwner::CHAIN;
+    let destination = Account::new(
+        dummy_chain_description(0).id(),
+        AccountOwner::CHAIN,
+    );
+    let amount = Amount::from_tokens(1);
+    (source, destination, amount)
+}
+
+/// `transfer_auth_depth(.., 0)` is equivalent to `transfer(..)`: both stamp the request with
+/// the current application's id.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn transfer_auth_depth_zero_uses_current_application() {
+    let (mut handle, mut receiver, current_id) = create_handle_with_single_application();
+    let (source, destination, amount) = dummy_transfer_args();
+
+    tokio::spawn(async move {
+        let request = receiver.next().await.expect("missing Transfer request");
+        let ExecutionRequest::Transfer {
+            application_id,
+            callback,
+            ..
+        } = request
+        else {
+            panic!("Expected ExecutionRequest::Transfer, got {request:?}");
+        };
+        assert_eq!(application_id, current_id);
+        callback.send(()).expect("Failed to ack Transfer");
+    });
+
+    handle
+        .transfer_auth_depth(source, destination, amount, 0)
+        .expect("transfer_auth_depth(0) should succeed");
+}
+
+/// `transfer_auth_depth(.., 1)` stamps the request with the caller's id, not the current
+/// application's id.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn transfer_auth_depth_one_uses_caller() {
+    let (mut handle, mut receiver, caller_id, callee_id) =
+        create_handle_with_caller_and_callee();
+    assert_ne!(caller_id, callee_id);
+    let (source, destination, amount) = dummy_transfer_args();
+
+    tokio::spawn(async move {
+        let request = receiver.next().await.expect("missing Transfer request");
+        let ExecutionRequest::Transfer {
+            application_id,
+            callback,
+            ..
+        } = request
+        else {
+            panic!("Expected ExecutionRequest::Transfer, got {request:?}");
+        };
+        assert_eq!(application_id, caller_id);
+        callback.send(()).expect("Failed to ack Transfer");
+    });
+
+    handle
+        .transfer_auth_depth(source, destination, amount, 1)
+        .expect("transfer_auth_depth(1) should succeed");
+}
+
+/// `transfer_auth_depth(.., depth)` returns `AuthDepthOutOfRange` when `depth` exceeds the
+/// current call stack.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn transfer_auth_depth_out_of_range() {
+    let (mut handle, _receiver, _) = create_handle_with_single_application();
+    let (source, destination, amount) = dummy_transfer_args();
+
+    let error = handle
+        .transfer_auth_depth(source, destination, amount, 1)
+        .expect_err("depth 1 with a single-frame stack must fail");
+    match error {
+        ExecutionError::AuthDepthOutOfRange { depth } => assert_eq!(depth, 1),
+        other => panic!("Expected AuthDepthOutOfRange, got {other:?}"),
+    }
+}
+
+/// `claim_auth_depth(.., 1)` stamps the request with the caller's id.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn claim_auth_depth_one_uses_caller() {
+    let (mut handle, mut receiver, caller_id, _callee_id) =
+        create_handle_with_caller_and_callee();
+    let chain = dummy_chain_description(0).id();
+    let source = Account::new(chain, AccountOwner::CHAIN);
+    let destination = Account::new(chain, AccountOwner::CHAIN);
+    let amount = Amount::from_tokens(1);
+
+    tokio::spawn(async move {
+        let request = receiver.next().await.expect("missing Claim request");
+        let ExecutionRequest::Claim {
+            application_id,
+            callback,
+            ..
+        } = request
+        else {
+            panic!("Expected ExecutionRequest::Claim, got {request:?}");
+        };
+        assert_eq!(application_id, caller_id);
+        callback.send(()).expect("Failed to ack Claim");
+    });
+
+    handle
+        .claim_auth_depth(source, destination, amount, 1)
+        .expect("claim_auth_depth(1) should succeed");
+}
+
+/// `claim_auth_depth(.., depth)` errors out when `depth` exceeds the call stack.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn claim_auth_depth_out_of_range() {
+    let (mut handle, _receiver, _) = create_handle_with_single_application();
+    let chain = dummy_chain_description(0).id();
+    let source = Account::new(chain, AccountOwner::CHAIN);
+    let destination = Account::new(chain, AccountOwner::CHAIN);
+    let amount = Amount::from_tokens(1);
+
+    let error = handle
+        .claim_auth_depth(source, destination, amount, 5)
+        .expect_err("depth 5 with a single-frame stack must fail");
+    match error {
+        ExecutionError::AuthDepthOutOfRange { depth } => assert_eq!(depth, 5),
+        other => panic!("Expected AuthDepthOutOfRange, got {other:?}"),
+    }
+}
+
+/// `transfer_from_auth_depth(.., 1)` stamps the request with the caller's id.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn transfer_from_auth_depth_one_uses_caller() {
+    let (mut handle, mut receiver, caller_id, _callee_id) =
+        create_handle_with_caller_and_callee();
+    let owner = AccountOwner::CHAIN;
+    let spender = AccountOwner::CHAIN;
+    let destination = Account::new(dummy_chain_description(0).id(), AccountOwner::CHAIN);
+    let amount = Amount::from_tokens(1);
+
+    tokio::spawn(async move {
+        let request = receiver.next().await.expect("missing TransferFrom request");
+        let ExecutionRequest::TransferFrom {
+            application_id,
+            callback,
+            ..
+        } = request
+        else {
+            panic!("Expected ExecutionRequest::TransferFrom, got {request:?}");
+        };
+        assert_eq!(application_id, caller_id);
+        callback.send(()).expect("Failed to ack TransferFrom");
+    });
+
+    handle
+        .transfer_from_auth_depth(owner, spender, destination, amount, 1)
+        .expect("transfer_from_auth_depth(1) should succeed");
+}
+
+/// `transfer_from_auth_depth(.., depth)` errors out when `depth` exceeds the call stack.
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn transfer_from_auth_depth_out_of_range() {
+    let (mut handle, _receiver, _) = create_handle_with_single_application();
+    let destination = Account::new(dummy_chain_description(0).id(), AccountOwner::CHAIN);
+
+    let error = handle
+        .transfer_from_auth_depth(
+            AccountOwner::CHAIN,
+            AccountOwner::CHAIN,
+            destination,
+            Amount::from_tokens(1),
+            2,
+        )
+        .expect_err("depth 2 with a single-frame stack must fail");
+    match error {
+        ExecutionError::AuthDepthOutOfRange { depth } => assert_eq!(depth, 2),
+        other => panic!("Expected AuthDepthOutOfRange, got {other:?}"),
+    }
 }
 
 /// Creates a fake application instance that's just a reference to the `runtime`.
