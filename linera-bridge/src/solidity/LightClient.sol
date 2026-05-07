@@ -22,11 +22,7 @@ contract LightClient {
         adminChainId = _adminChainId;
     }
 
-    function addCommittee(
-        bytes calldata data,
-        bytes calldata committeeBlob,
-        bytes[] calldata validators
-    ) external {
+    function addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators) external {
         (BridgeTypes.Block memory blockValue,) = verifyCertificate(data);
 
         // The block must be from the admin chain and the current epoch
@@ -59,14 +55,10 @@ contract LightClient {
         require(found, "no CreateCommittee operation found");
 
         // Verify committeeBlob hash matches the blob_hash from CreateCommittee
-        BridgeTypes.BlobContent memory blobContent = BridgeTypes.BlobContent(
-            BridgeTypes.BlobType.Committee,
-            committeeBlob
-        );
-        bytes32 computedHash = keccak256(abi.encodePacked(
-            "BlobContent::",
-            BridgeTypes.bcs_serialize_BlobContent(blobContent)
-        ));
+        BridgeTypes.BlobContent memory blobContent =
+            BridgeTypes.BlobContent(BridgeTypes.BlobType.Committee, committeeBlob);
+        bytes32 computedHash =
+            keccak256(abi.encodePacked("BlobContent::", BridgeTypes.bcs_serialize_BlobContent(blobContent)));
         require(computedHash == expectedBlobHash, "committee blob hash mismatch");
 
         // Parse blob to extract addresses and weights, verified against caller's keys
@@ -98,20 +90,15 @@ contract LightClient {
         BridgeTypes.Round memory round;
         (pos, round) = BridgeTypes.bcs_deserialize_offset_Round(valueEndPos, mdata);
         BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
-        (pos, signatures) = BridgeTypes.bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(pos, mdata);
+        (pos, signatures) =
+            BridgeTypes.bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(pos, mdata);
         require(pos == mdata.length, "incomplete deserialization");
 
         // Step 4: Construct VoteValue BCS and hash with type name prefix
         // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
-        BridgeTypes.VoteValue memory voteValue = BridgeTypes.VoteValue(
-            BridgeTypes.CryptoHash(valueHash),
-            round,
-            BridgeTypes.CertificateKind.Confirmed
-        );
-        bytes32 signedHash = keccak256(abi.encodePacked(
-            "VoteValue::",
-            BridgeTypes.bcs_serialize_VoteValue(voteValue)
-        ));
+        BridgeTypes.VoteValue memory voteValue =
+            BridgeTypes.VoteValue(BridgeTypes.CryptoHash(valueHash), round, BridgeTypes.CertificateKind.Confirmed);
+        bytes32 signedHash = keccak256(abi.encodePacked("VoteValue::", BridgeTypes.bcs_serialize_VoteValue(voteValue)));
 
         // Step 5: Verify signatures against the block's epoch committee
         uint32 epoch = blockValue.header.epoch.value;
@@ -159,7 +146,10 @@ contract LightClient {
     }
 
     function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights) internal {
-        require(epoch == currentEpoch + 1 || (committees[currentEpoch].totalWeight == 0 && currentEpoch == 0), "epoch must be sequential");
+        require(
+            epoch == currentEpoch + 1 || (committees[currentEpoch].totalWeight == 0 && currentEpoch == 0),
+            "epoch must be sequential"
+        );
         require(validators.length == weights.length, "length mismatch");
         EpochCommittee storage committee = committees[epoch];
         uint64 total = 0;
@@ -179,10 +169,11 @@ contract LightClient {
     /// The caller must provide `uncompressedKeys` in the same order as the blob's
     /// compressed keys (BCS canonical map order, i.e. sorted by serialized key bytes).
     /// Returns (addresses, weights) extracted from the blob.
-    function _parseCommitteeBlob(
-        bytes memory blob,
-        bytes[] calldata uncompressedKeys
-    ) internal pure returns (address[] memory, uint64[] memory) {
+    function _parseCommitteeBlob(bytes memory blob, bytes[] calldata uncompressedKeys)
+        internal
+        pure
+        returns (address[] memory, uint64[] memory)
+    {
         uint256 pos;
         uint256 count;
         (pos, count) = BridgeTypes.bcs_deserialize_offset_len(0, blob);
@@ -227,17 +218,11 @@ contract LightClient {
     /// Verifies that a caller-provided 64-byte uncompressed key matches
     /// the 33-byte compressed key in the blob at the given position.
     // secp256k1 field prime
-    uint256 private constant SECP256K1_P =
-        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
+    uint256 private constant SECP256K1_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
     // secp256k1 curve order
-    uint256 private constant SECP256K1_N =
-        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+    uint256 private constant SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
 
-    function _verifyKeyCompression(
-        bytes calldata uncompressed,
-        bytes memory blob,
-        uint256 keyPos
-    ) internal pure {
+    function _verifyKeyCompression(bytes calldata uncompressed, bytes memory blob, uint256 keyPos) internal pure {
         // Compressed key format: prefix (0x02 if y is even, 0x03 if odd) + 32-byte x
         // Uncompressed key: 32-byte x + 32-byte y (no 0x04 prefix)
 

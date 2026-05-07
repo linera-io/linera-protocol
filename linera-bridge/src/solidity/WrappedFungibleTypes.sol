@@ -3,17 +3,12 @@ pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
 library WrappedFungibleTypes {
-
     struct BurnEvent {
         bytes20 target;
         BridgeTypes.Amount amount;
     }
 
-    function bcs_serialize_BurnEvent(BurnEvent memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function bcs_serialize_BurnEvent(BurnEvent memory input) internal pure returns (bytes memory) {
         bytes memory result = bcs_serialize_bytes20(input.target);
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
     }
@@ -31,11 +26,7 @@ library WrappedFungibleTypes {
         return (new_pos, BurnEvent(target, amount));
     }
 
-    function bcs_deserialize_BurnEvent(bytes memory input)
-        internal
-        pure
-        returns (BurnEvent memory)
-    {
+    function bcs_deserialize_BurnEvent(bytes memory input) internal pure returns (BurnEvent memory) {
         uint256 new_pos;
         BurnEvent memory value;
         (new_pos, value) = bcs_deserialize_offset_BurnEvent(0, input);
@@ -51,29 +42,17 @@ library WrappedFungibleTypes {
         Message_Withdraw withdraw;
     }
 
-    function Message_case_credit(Message_Credit memory credit)
-        internal
-        pure
-        returns (Message memory)
-    {
+    function Message_case_credit(Message_Credit memory credit) internal pure returns (Message memory) {
         Message_Withdraw memory withdraw;
         return Message(uint8(0), credit, withdraw);
     }
 
-    function Message_case_withdraw(Message_Withdraw memory withdraw)
-        internal
-        pure
-        returns (Message memory)
-    {
+    function Message_case_withdraw(Message_Withdraw memory withdraw) internal pure returns (Message memory) {
         Message_Credit memory credit;
         return Message(uint8(1), credit, withdraw);
     }
 
-    function bcs_serialize_Message(Message memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function bcs_serialize_Message(Message memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
             return abi.encodePacked(input.choice, bcs_serialize_Message_Credit(input.credit));
         }
@@ -103,11 +82,7 @@ library WrappedFungibleTypes {
         return (new_pos, Message(choice, credit, withdraw));
     }
 
-    function bcs_deserialize_Message(bytes memory input)
-        internal
-        pure
-        returns (Message memory)
-    {
+    function bcs_deserialize_Message(bytes memory input) internal pure returns (Message memory) {
         uint256 new_pos;
         Message memory value;
         (new_pos, value) = bcs_deserialize_offset_Message(0, input);
@@ -121,11 +96,7 @@ library WrappedFungibleTypes {
         BridgeTypes.AccountOwner source;
     }
 
-    function bcs_serialize_Message_Credit(Message_Credit memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function bcs_serialize_Message_Credit(Message_Credit memory input) internal pure returns (bytes memory) {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.target);
         result = abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.source));
@@ -146,11 +117,7 @@ library WrappedFungibleTypes {
         return (new_pos, Message_Credit(target, amount, source));
     }
 
-    function bcs_deserialize_Message_Credit(bytes memory input)
-        internal
-        pure
-        returns (Message_Credit memory)
-    {
+    function bcs_deserialize_Message_Credit(bytes memory input) internal pure returns (Message_Credit memory) {
         uint256 new_pos;
         Message_Credit memory value;
         (new_pos, value) = bcs_deserialize_offset_Message_Credit(0, input);
@@ -164,11 +131,7 @@ library WrappedFungibleTypes {
         BridgeTypes.Account target_account;
     }
 
-    function bcs_serialize_Message_Withdraw(Message_Withdraw memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function bcs_serialize_Message_Withdraw(Message_Withdraw memory input) internal pure returns (bytes memory) {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
         result = abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
@@ -189,11 +152,7 @@ library WrappedFungibleTypes {
         return (new_pos, Message_Withdraw(owner, amount, target_account));
     }
 
-    function bcs_deserialize_Message_Withdraw(bytes memory input)
-        internal
-        pure
-        returns (Message_Withdraw memory)
-    {
+    function bcs_deserialize_Message_Withdraw(bytes memory input) internal pure returns (Message_Withdraw memory) {
         uint256 new_pos;
         Message_Withdraw memory value;
         (new_pos, value) = bcs_deserialize_offset_Message_Withdraw(0, input);
@@ -234,11 +193,7 @@ library WrappedFungibleTypes {
         return WrappedFungibleOperation(uint8(0), balance_, approve, transfer_, transfer_from, claim, mint, burn);
     }
 
-    function WrappedFungibleOperation_case_ticker_symbol()
-        internal
-        pure
-        returns (WrappedFungibleOperation memory)
-    {
+    function WrappedFungibleOperation_case_ticker_symbol() internal pure returns (WrappedFungibleOperation memory) {
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_Transfer memory transfer_;
@@ -348,7 +303,8 @@ library WrappedFungibleTypes {
             return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_Transfer(input.transfer_));
         }
         if (input.choice == 4) {
-            return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from));
+            return
+                abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from));
         }
         if (input.choice == 5) {
             return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_Claim(input.claim));
@@ -399,7 +355,8 @@ library WrappedFungibleTypes {
             (new_pos, burn) = bcs_deserialize_offset_WrappedFungibleOperation_Burn(new_pos, input);
         }
         require(choice < 8);
-        return (new_pos, WrappedFungibleOperation(choice, balance_, approve, transfer_, transfer_from, claim, mint, burn));
+        return
+            (new_pos, WrappedFungibleOperation(choice, balance_, approve, transfer_, transfer_from, claim, mint, burn));
     }
 
     function bcs_deserialize_WrappedFungibleOperation(bytes memory input)
@@ -703,19 +660,11 @@ library WrappedFungibleTypes {
         return value;
     }
 
-    function bcs_serialize_bytes20(bytes20 input)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function bcs_serialize_bytes20(bytes20 input) internal pure returns (bytes memory) {
         return abi.encodePacked(input);
     }
 
-    function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, bytes20)
-    {
+    function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input) internal pure returns (uint256, bytes20) {
         bytes20 dest;
         assembly {
             dest := mload(add(add(input, 0x20), pos))
@@ -723,33 +672,20 @@ library WrappedFungibleTypes {
         return (pos + 20, dest);
     }
 
-    function bcs_serialize_uint8(uint8 input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-      return abi.encodePacked(input);
+    function bcs_serialize_uint8(uint8 input) internal pure returns (bytes memory) {
+        return abi.encodePacked(input);
     }
 
-    function bcs_deserialize_offset_uint8(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, uint8)
-    {
+    function bcs_deserialize_offset_uint8(uint256 pos, bytes memory input) internal pure returns (uint256, uint8) {
         uint8 value = uint8(input[pos]);
         return (pos + 1, value);
     }
 
-    function bcs_deserialize_uint8(bytes memory input)
-        internal
-        pure
-        returns (uint8)
-    {
+    function bcs_deserialize_uint8(bytes memory input) internal pure returns (uint8) {
         uint256 new_pos;
         uint8 value;
         (new_pos, value) = bcs_deserialize_offset_uint8(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
-
 } // end of library WrappedFungibleTypes
