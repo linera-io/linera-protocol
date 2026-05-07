@@ -86,6 +86,74 @@ pub trait ReadableKeyValueStore: WithError {
     // https://github.com/rust-lang/impl-trait-utils/issues/17, but once that bug is fixed
     // we can revert them to `async fn` syntax, which is neater.
 
+    /// Returns the lexicographically smallest key matching the prefix, if any.
+    /// The prefix is not included in the returned key.
+    ///
+    /// Backends may override the default implementation, which loads every matching
+    /// key, with a more efficient single-key lookup.
+    fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
+        async {
+            Ok(self
+                .find_keys_by_prefix(key_prefix)
+                .await?
+                .into_iter()
+                .next())
+        }
+    }
+
+    /// Returns the lexicographically largest key matching the prefix, if any.
+    /// The prefix is not included in the returned key.
+    ///
+    /// Backends may override the default implementation, which loads every matching
+    /// key, with a more efficient single-key lookup.
+    fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Error>> {
+        async {
+            Ok(self
+                .find_keys_by_prefix(key_prefix)
+                .await?
+                .into_iter()
+                .next_back())
+        }
+    }
+
+    /// Returns the `(key, value)` pair with the lexicographically smallest key matching
+    /// the prefix, if any. The prefix is not included in the returned key.
+    #[expect(clippy::type_complexity)]
+    fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> impl Future<Output = Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error>> {
+        async {
+            Ok(self
+                .find_key_values_by_prefix(key_prefix)
+                .await?
+                .into_iter()
+                .next())
+        }
+    }
+
+    /// Returns the `(key, value)` pair with the lexicographically largest key matching
+    /// the prefix, if any. The prefix is not included in the returned key.
+    #[expect(clippy::type_complexity)]
+    fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> impl Future<Output = Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error>> {
+        async {
+            Ok(self
+                .find_key_values_by_prefix(key_prefix)
+                .await?
+                .into_iter()
+                .next_back())
+        }
+    }
+
     /// Reads a single `key` and deserializes the result if present.
     fn read_value<V: DeserializeOwned>(
         &self,

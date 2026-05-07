@@ -184,9 +184,9 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         let mut set_key_value1 = HashSet::new();
         let mut keys_request_deriv = Vec::new();
         let key_values_by_prefix = store.find_key_values_by_prefix(key_prefix).await.unwrap();
-        for (key, value) in key_values_by_prefix {
+        for (key, value) in key_values_by_prefix.iter() {
             keys_request_deriv.push(key.clone());
-            set_key_value1.insert((key, value));
+            set_key_value1.insert((key.clone(), value.clone()));
         }
         // Check find_keys / find_key_values
         assert_eq!(keys_request, keys_request_deriv);
@@ -194,6 +194,21 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         for i in 1..keys_request.len() {
             assert!(keys_request[i - 1] < keys_request[i]);
         }
+        // Check find_{first,last}_key[_value]_by_prefix against the full lists.
+        let first_key = store.find_first_key_by_prefix(key_prefix).await.unwrap();
+        let last_key = store.find_last_key_by_prefix(key_prefix).await.unwrap();
+        let first_kv = store
+            .find_first_key_value_by_prefix(key_prefix)
+            .await
+            .unwrap();
+        let last_kv = store
+            .find_last_key_value_by_prefix(key_prefix)
+            .await
+            .unwrap();
+        assert_eq!(first_key, keys_request.first().cloned());
+        assert_eq!(last_key, keys_request.last().cloned());
+        assert_eq!(first_kv, key_values_by_prefix.first().cloned());
+        assert_eq!(last_kv, key_values_by_prefix.last().cloned());
         // Check the obtained values
         let mut set_key_value2 = HashSet::new();
         for (key, value) in &key_values {

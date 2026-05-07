@@ -7,13 +7,14 @@ use anyhow::Result;
 use linera_views::{
     bucket_queue_view::HashedBucketQueueView,
     collection_view::{CollectionView, HashedCollectionView},
-    context::{Context, MemoryContext},
+    context::{Context, MemoryContext, ViewContext},
     key_value_store_view::{KeyValueStoreView, SizeData},
     map_view::{HashedByteMapView, MapView},
     queue_view::HashedQueueView,
     random::make_deterministic_rng,
     reentrant_collection_view::{HashedReentrantCollectionView, ReentrantCollectionView},
     register_view::RegisterView,
+    value_splitting::{LimitedTestMemoryStore, ValueSplittingStore},
     views::{CryptoHashRootView, CryptoHashView, HashableView as _, RootView, View},
 };
 use rand::{distributions::Uniform, Rng, RngCore};
@@ -250,11 +251,21 @@ async fn key_value_store_view_mutability() -> Result<()> {
 
 #[derive(CryptoHashRootView)]
 pub struct ByteMapStateView<C> {
-    pub map: HashedByteMapView<C, u8>,
+    pub map: HashedByteMapView<C, Vec<u8>>,
+}
+
+fn random_value<R: RngCore>(rng: &mut R) -> Vec<u8> {
+    let len = rng.gen_range(0..500);
+    let mut buf = vec![0u8; len];
+    rng.fill_bytes(&mut buf);
+    buf
 }
 
 async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> {
-    let context = MemoryContext::new_for_testing(());
+    // Use a `ValueSplittingStore` over a `LimitedTestMemoryStore` (MAX_VALUE_SIZE = 100)
+    // so values longer than ~100 bytes exercise the value-splitting code path.
+    let store = ValueSplittingStore::new(LimitedTestMemoryStore::new());
+    let context: ViewContext<(), _> = ViewContext::new_unchecked(store, Vec::new(), ());
     let mut state_map = BTreeMap::new();
     let mut all_keys = BTreeSet::new();
     let n = 10;
@@ -276,15 +287,18 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                 // inserting random stuff
                 let n_ins = rng.gen_range(0..10);
                 for _ in 0..n_ins {
-                    let len = rng.gen_range(1..6);
+                    // Keys must be prefix-free: `ValueSplittingStore` appends a 4-byte
+                    // segment index without a separator, so if one user key is a prefix
+                    // of another the segments interleave in lex order. Constant-size
+                    // keys are the simplest way to keep the set prefix-free.
                     let key = rng
                         .clone()
                         .sample_iter(Uniform::from(0..4))
-                        .take(len)
+                        .take(5)
                         .collect::<Vec<_>>();
                     all_keys.insert(key.clone());
-                    let value = rng.gen::<u8>();
-                    view.map.insert(key.clone(), value);
+                    let value = random_value(rng);
+                    view.map.insert(key.clone(), value.clone());
                     new_state_map.insert(key, value);
                 }
             }
@@ -321,8 +335,8 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                 let vec = new_state_vec[pos].clone();
                 let key = vec.0;
                 let result = view.map.get_mut(&key).await?.unwrap();
-                let new_value = rng.gen::<u8>();
-                *result = new_value;
+                let new_value = random_value(rng);
+                *result = new_value.clone();
                 new_state_map.insert(key, new_value);
             }
             if choice == 6 && count > 0 {
@@ -334,20 +348,18 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                         let vec = new_state_vec[pos].clone();
                         vec.0
                     }
-                    _ => {
-                        let len = rng.gen_range(1..6);
-                        rng.clone()
-                            .sample_iter(Uniform::from(0..4))
-                            .take(len)
-                            .collect::<Vec<_>>()
-                    }
+                    _ => rng
+                        .clone()
+                        .sample_iter(Uniform::from(0..4))
+                        .take(5)
+                        .collect::<Vec<_>>(),
                 };
                 let test_view = view.map.contains_key(&key).await?;
                 let test_map = new_state_map.contains_key(&key);
                 assert_eq!(test_view, test_map);
                 let result = view.map.get_mut_or_default(&key).await?;
-                let new_value = rng.gen::<u8>();
-                *result = new_value;
+                let new_value = random_value(rng);
+                *result = new_value.clone();
                 new_state_map.insert(key, new_value);
             }
             new_state_vec = new_state_map.clone().into_iter().collect();
@@ -360,6 +372,19 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
             }
             let new_key_values = view.map.key_values().await?;
             assert_eq!(new_state_vec, new_key_values);
+            // Global first/last over the whole map (empty prefix returns full keys).
+            let global_first = new_state_vec.first().cloned();
+            let global_last = new_state_vec.last().cloned();
+            assert_eq!(
+                view.map.first_key(Vec::new()).await?,
+                global_first.as_ref().map(|(k, _)| k.clone())
+            );
+            assert_eq!(
+                view.map.last_key(Vec::new()).await?,
+                global_last.as_ref().map(|(k, _)| k.clone())
+            );
+            assert_eq!(view.map.first_key_value(Vec::new()).await?, global_first);
+            assert_eq!(view.map.last_key_value(Vec::new()).await?, global_last);
             for u in 0..4 {
                 let part_state_vec = new_state_vec
                     .iter()
@@ -368,6 +393,23 @@ async fn run_map_view_mutability<R: RngCore + Clone>(rng: &mut R) -> Result<()> 
                     .collect::<Vec<_>>();
                 let part_key_values = view.map.key_values_by_prefix(vec![u]).await?;
                 assert_eq!(part_state_vec, part_key_values);
+                // first/last_{key,key_value} return keys with the prefix stripped.
+                let stripped = part_state_vec
+                    .iter()
+                    .map(|(k, v)| (k[1..].to_vec(), v.clone()))
+                    .collect::<Vec<_>>();
+                let expected_first = stripped.first().cloned();
+                let expected_last = stripped.last().cloned();
+                assert_eq!(
+                    view.map.first_key(vec![u]).await?,
+                    expected_first.as_ref().map(|(k, _)| k.clone())
+                );
+                assert_eq!(
+                    view.map.last_key(vec![u]).await?,
+                    expected_last.as_ref().map(|(k, _)| k.clone())
+                );
+                assert_eq!(view.map.first_key_value(vec![u]).await?, expected_first);
+                assert_eq!(view.map.last_key_value(vec![u]).await?, expected_last);
             }
             let keys_vec = all_keys.iter().cloned().collect::<Vec<_>>();
             let values = view.map.multi_get(keys_vec.clone()).await?;

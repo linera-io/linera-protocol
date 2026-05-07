@@ -236,6 +236,36 @@ impl<C: Context> ByteSetView<C> {
         Ok(keys)
     }
 
+    /// Returns the lexicographically smallest key in the set, if any.
+    pub async fn first_key(&self) -> Result<Option<Vec<u8>>, ViewError> {
+        if self.updates.is_empty() && !self.delete_storage_first {
+            let base = &self.context.base_key().bytes;
+            return Ok(self.context.store().find_first_key_by_prefix(base).await?);
+        }
+        let mut result = None;
+        self.for_each_key_while(|key| {
+            result = Some(key.to_vec());
+            Ok(false)
+        })
+        .await?;
+        Ok(result)
+    }
+
+    /// Returns the lexicographically largest key in the set, if any.
+    pub async fn last_key(&self) -> Result<Option<Vec<u8>>, ViewError> {
+        if self.updates.is_empty() && !self.delete_storage_first {
+            let base = &self.context.base_key().bytes;
+            return Ok(self.context.store().find_last_key_by_prefix(base).await?);
+        }
+        let mut result = None;
+        self.for_each_key(|key| {
+            result = Some(key.to_vec());
+            Ok(())
+        })
+        .await?;
+        Ok(result)
+    }
+
     /// Returns the number of entries in the set.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -245,7 +275,7 @@ impl<C: Context> ByteSetView<C> {
     /// let mut set = ByteSetView::load(context).await.unwrap();
     /// set.insert(vec![0, 1]);
     /// set.insert(vec![0, 2]);
-    /// assert_eq!(set.keys().await.unwrap(), vec![vec![0, 1], vec![0, 2]]);
+    /// assert_eq!(set.iterative_count().await.unwrap(), 2);
     /// # })
     /// ```
     pub async fn iterative_count(&self) -> Result<usize, ViewError> {
@@ -569,6 +599,22 @@ impl<C: Context, I: Serialize + DeserializeOwned + Send> SetView<C, I> {
         self.set.iterative_count().await
     }
 
+    /// Returns the smallest index in the set, if any. The order is determined by serialization.
+    pub async fn first_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.set.first_key().await? else {
+            return Ok(None);
+        };
+        Ok(Some(BaseKey::deserialize_value(&short_key)?))
+    }
+
+    /// Returns the largest index in the set, if any. The order is determined by serialization.
+    pub async fn last_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.set.last_key().await? else {
+            return Ok(None);
+        };
+        Ok(Some(BaseKey::deserialize_value(&short_key)?))
+    }
+
     /// Applies a function f on each index. Indices are visited in an order
     /// determined by the serialization. If the function returns false, then the
     /// loop ends prematurely.
@@ -851,6 +897,22 @@ where
     /// ```
     pub async fn iterative_count(&self) -> Result<usize, ViewError> {
         self.set.iterative_count().await
+    }
+
+    /// Returns the smallest index in the set (per the custom serialization order), if any.
+    pub async fn first_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.set.first_key().await? else {
+            return Ok(None);
+        };
+        Ok(Some(I::from_custom_bytes(&short_key)?))
+    }
+
+    /// Returns the largest index in the set (per the custom serialization order), if any.
+    pub async fn last_index(&self) -> Result<Option<I>, ViewError> {
+        let Some(short_key) = self.set.last_key().await? else {
+            return Ok(None);
+        };
+        Ok(Some(I::from_custom_bytes(&short_key)?))
     }
 
     /// Applies a function f on each index. Indices are visited in an order

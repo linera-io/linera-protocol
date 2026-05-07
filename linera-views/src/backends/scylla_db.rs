@@ -113,6 +113,14 @@ struct ScyllaDbClient {
     find_keys_by_prefix_bounded: PreparedStatement,
     find_key_values_by_prefix_unbounded: PreparedStatement,
     find_key_values_by_prefix_bounded: PreparedStatement,
+    find_first_key_by_prefix_unbounded: PreparedStatement,
+    find_first_key_by_prefix_bounded: PreparedStatement,
+    find_last_key_by_prefix_unbounded: PreparedStatement,
+    find_last_key_by_prefix_bounded: PreparedStatement,
+    find_first_key_value_by_prefix_unbounded: PreparedStatement,
+    find_first_key_value_by_prefix_bounded: PreparedStatement,
+    find_last_key_value_by_prefix_unbounded: PreparedStatement,
+    find_last_key_value_by_prefix_bounded: PreparedStatement,
     multi_key_values: papaya::HashMap<usize, PreparedStatement>,
     multi_keys: papaya::HashMap<usize, PreparedStatement>,
 }
@@ -180,6 +188,62 @@ impl ScyllaDbClient {
             ))
             .await?;
 
+        let find_first_key_by_prefix_unbounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k ASC LIMIT 1"
+            ))
+            .await?;
+
+        let find_first_key_by_prefix_bounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k ASC LIMIT 1"
+            ))
+            .await?;
+
+        let find_last_key_by_prefix_unbounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k DESC LIMIT 1"
+            ))
+            .await?;
+
+        let find_last_key_by_prefix_bounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k DESC LIMIT 1"
+            ))
+            .await?;
+
+        let find_first_key_value_by_prefix_unbounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k ASC LIMIT 1"
+            ))
+            .await?;
+
+        let find_first_key_value_by_prefix_bounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k ASC LIMIT 1"
+            ))
+            .await?;
+
+        let find_last_key_value_by_prefix_unbounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k DESC LIMIT 1"
+            ))
+            .await?;
+
+        let find_last_key_value_by_prefix_bounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k DESC LIMIT 1"
+            ))
+            .await?;
+
         Ok(Self {
             session,
             namespace,
@@ -193,6 +257,14 @@ impl ScyllaDbClient {
             find_keys_by_prefix_bounded,
             find_key_values_by_prefix_unbounded,
             find_key_values_by_prefix_bounded,
+            find_first_key_by_prefix_unbounded,
+            find_first_key_by_prefix_bounded,
+            find_last_key_by_prefix_unbounded,
+            find_last_key_by_prefix_bounded,
+            find_first_key_value_by_prefix_unbounded,
+            find_first_key_value_by_prefix_bounded,
+            find_last_key_value_by_prefix_unbounded,
+            find_last_key_value_by_prefix_bounded,
             multi_key_values: papaya::HashMap::new(),
             multi_keys: papaya::HashMap::new(),
         })
@@ -503,6 +575,64 @@ impl ScyllaDbClient {
         }
         Ok(key_values)
     }
+
+    async fn find_one_key_by_prefix_internal(
+        &self,
+        root_key: &[u8],
+        key_prefix: Vec<u8>,
+        unbounded: &PreparedStatement,
+        bounded: &PreparedStatement,
+    ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
+        Self::check_key_size(&key_prefix)?;
+        let session = &self.session;
+        let len = key_prefix.len();
+        let rows = match get_upper_bound_option(&key_prefix) {
+            None => {
+                let values = (root_key.to_vec(), key_prefix.clone());
+                Box::pin(session.execute_iter(unbounded.clone(), values)).await?
+            }
+            Some(upper_bound) => {
+                let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
+                Box::pin(session.execute_iter(bounded.clone(), values)).await?
+            }
+        };
+        let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
+        if let Some(row) = rows.next().await {
+            let (key,) = row?;
+            Ok(Some(key[len..].to_vec()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn find_one_key_value_by_prefix_internal(
+        &self,
+        root_key: &[u8],
+        key_prefix: Vec<u8>,
+        unbounded: &PreparedStatement,
+        bounded: &PreparedStatement,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
+        Self::check_key_size(&key_prefix)?;
+        let session = &self.session;
+        let len = key_prefix.len();
+        let rows = match get_upper_bound_option(&key_prefix) {
+            None => {
+                let values = (root_key.to_vec(), key_prefix.clone());
+                Box::pin(session.execute_iter(unbounded.clone(), values)).await?
+            }
+            Some(upper_bound) => {
+                let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
+                Box::pin(session.execute_iter(bounded.clone(), values)).await?
+            }
+        };
+        let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
+        if let Some(row) = rows.next().await {
+            let (key, value) = row?;
+            Ok(Some((key[len..].to_vec(), value)))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 /// The client itself and the keeping of the count of active connections.
@@ -675,6 +805,66 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         Box::pin(store.find_key_values_by_prefix_internal(&self.root_key, key_prefix.to_vec()))
             .await
+    }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
+        let store = self.store.deref();
+        let _guard = self.acquire().await;
+        Box::pin(store.find_one_key_by_prefix_internal(
+            &self.root_key,
+            key_prefix.to_vec(),
+            &store.find_first_key_by_prefix_unbounded,
+            &store.find_first_key_by_prefix_bounded,
+        ))
+        .await
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
+        let store = self.store.deref();
+        let _guard = self.acquire().await;
+        Box::pin(store.find_one_key_by_prefix_internal(
+            &self.root_key,
+            key_prefix.to_vec(),
+            &store.find_last_key_by_prefix_unbounded,
+            &store.find_last_key_by_prefix_bounded,
+        ))
+        .await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
+        let store = self.store.deref();
+        let _guard = self.acquire().await;
+        Box::pin(store.find_one_key_value_by_prefix_internal(
+            &self.root_key,
+            key_prefix.to_vec(),
+            &store.find_first_key_value_by_prefix_unbounded,
+            &store.find_first_key_value_by_prefix_bounded,
+        ))
+        .await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
+        let store = self.store.deref();
+        let _guard = self.acquire().await;
+        Box::pin(store.find_one_key_value_by_prefix_internal(
+            &self.root_key,
+            key_prefix.to_vec(),
+            &store.find_last_key_value_by_prefix_unbounded,
+            &store.find_last_key_value_by_prefix_bounded,
+        ))
+        .await
     }
 }
 

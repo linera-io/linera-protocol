@@ -237,6 +237,93 @@ impl RocksDbStoreExecutor {
         Ok(key_values)
     }
 
+    /// Returns an iterator positioned at the largest key with the given prefix, if any.
+    /// `total_order_seek` is enabled because the database uses a fixed-length prefix
+    /// extractor; without it, `seek_for_prev` only searches within the bloom-prefix
+    /// scope and misses keys whose extractor-prefix differs from the seek target.
+    fn get_find_prefix_reverse_iterator(
+        &self,
+        prefix: &[u8],
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'_, DB> {
+        let mut read_opts = rocksdb::ReadOptions::default();
+        read_opts.set_async_io(true);
+        read_opts.set_total_order_seek(true);
+        let upper_bound = get_upper_bound_option(prefix);
+        let mut iter = self.db.raw_iterator_opt(read_opts);
+        match upper_bound.as_deref() {
+            Some(ub) => {
+                iter.seek_for_prev(ub);
+                if iter.key().is_some_and(|k| k == ub) {
+                    iter.prev();
+                }
+            }
+            None => iter.seek_to_last(),
+        }
+        iter
+    }
+
+    fn find_first_key_by_prefix_internal(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
+        check_key_size(&key_prefix)?;
+        let mut prefix = self.start_key.clone();
+        prefix.extend(key_prefix);
+        let len = prefix.len();
+
+        let iter = self.get_find_prefix_iterator(&prefix);
+        Ok(iter.key().map(|key| key[len..].to_vec()))
+    }
+
+    fn find_last_key_by_prefix_internal(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
+        check_key_size(&key_prefix)?;
+        let mut prefix = self.start_key.clone();
+        prefix.extend(key_prefix);
+        let len = prefix.len();
+
+        let iter = self.get_find_prefix_reverse_iterator(&prefix);
+        Ok(iter
+            .key()
+            .filter(|k| k.starts_with(&prefix))
+            .map(|key| key[len..].to_vec()))
+    }
+
+    #[expect(clippy::type_complexity)]
+    fn find_first_key_value_by_prefix_internal(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
+        check_key_size(&key_prefix)?;
+        let mut prefix = self.start_key.clone();
+        prefix.extend(key_prefix);
+        let len = prefix.len();
+
+        let iter = self.get_find_prefix_iterator(&prefix);
+        Ok(iter
+            .item()
+            .map(|(key, value)| (key[len..].to_vec(), value.to_vec())))
+    }
+
+    #[expect(clippy::type_complexity)]
+    fn find_last_key_value_by_prefix_internal(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
+        check_key_size(&key_prefix)?;
+        let mut prefix = self.start_key.clone();
+        prefix.extend(key_prefix);
+        let len = prefix.len();
+
+        let iter = self.get_find_prefix_reverse_iterator(&prefix);
+        Ok(iter
+            .item()
+            .filter(|(k, _)| k.starts_with(&prefix))
+            .map(|(key, value)| (key[len..].to_vec(), value.to_vec())))
+    }
+
     fn write_batch_internal(
         &self,
         batch: Batch,
@@ -535,6 +622,62 @@ impl ReadableKeyValueStore for RocksDbStoreInternal {
         self.spawn_mode
             .spawn(
                 move |x| executor.find_key_values_by_prefix_internal(x),
+                key_prefix,
+            )
+            .await
+    }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        self.spawn_mode
+            .spawn(
+                move |x| executor.find_first_key_by_prefix_internal(x),
+                key_prefix,
+            )
+            .await
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, RocksDbStoreInternalError> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        self.spawn_mode
+            .spawn(
+                move |x| executor.find_last_key_by_prefix_internal(x),
+                key_prefix,
+            )
+            .await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        self.spawn_mode
+            .spawn(
+                move |x| executor.find_first_key_value_by_prefix_internal(x),
+                key_prefix,
+            )
+            .await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, RocksDbStoreInternalError> {
+        let executor = self.executor.clone();
+        let key_prefix = key_prefix.to_vec();
+        self.spawn_mode
+            .spawn(
+                move |x| executor.find_last_key_value_by_prefix_internal(x),
                 key_prefix,
             )
             .await

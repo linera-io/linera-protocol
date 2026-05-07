@@ -191,6 +191,85 @@ impl ReadableKeyValueStore for IndexedDbStore {
         })
         .await?
     }
+
+    async fn find_first_key_by_prefix(&self, key_prefix: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.find_one_key_by_prefix(key_prefix, indexed_db::CursorDirection::Next)
+            .await
+    }
+
+    async fn find_last_key_by_prefix(&self, key_prefix: &[u8]) -> Result<Option<Vec<u8>>> {
+        self.find_one_key_by_prefix(key_prefix, indexed_db::CursorDirection::Prev)
+            .await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+        self.find_one_key_value_by_prefix(key_prefix, indexed_db::CursorDirection::Next)
+            .await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+        self.find_one_key_value_by_prefix(key_prefix, indexed_db::CursorDirection::Prev)
+            .await
+    }
+}
+
+impl IndexedDbStore {
+    async fn find_one_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+        direction: indexed_db::CursorDirection,
+    ) -> Result<Option<Vec<u8>>> {
+        let key_prefix = self.full_key(key_prefix);
+        let range = prefix_to_range(&key_prefix);
+        self.with_object_store(|object_store| async move {
+            let cursor = object_store
+                .cursor()
+                .range(range)?
+                .direction(direction)
+                .open_key()
+                .await?;
+            Ok(cursor.primary_key().map(|key| {
+                let key = js_sys::Uint8Array::new(&key);
+                key.subarray(key_prefix.len() as u32, key.length()).to_vec()
+            }))
+        })
+        .await?
+    }
+
+    async fn find_one_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+        direction: indexed_db::CursorDirection,
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+        let key_prefix = self.full_key(key_prefix);
+        let range = prefix_to_range(&key_prefix);
+        self.with_object_store(|object_store| async move {
+            let cursor = object_store
+                .cursor()
+                .range(range)?
+                .direction(direction)
+                .open()
+                .await?;
+            Ok(cursor.primary_key().map(|key| {
+                let key = js_sys::Uint8Array::new(&key);
+                let key = key.subarray(key_prefix.len() as u32, key.length()).to_vec();
+                let value = js_sys::Uint8Array::new(
+                    &cursor
+                        .value()
+                        .expect("we should have a value because we have a key"),
+                )
+                .to_vec();
+                (key, value)
+            }))
+        })
+        .await?
+    }
 }
 
 impl WritableKeyValueStore for IndexedDbStore {

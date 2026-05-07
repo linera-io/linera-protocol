@@ -31,6 +31,10 @@ pub struct KeyValueStoreMetrics {
     read_multi_values_bytes_latency: HistogramVec,
     find_keys_by_prefix_latency: HistogramVec,
     find_key_values_by_prefix_latency: HistogramVec,
+    find_first_key_by_prefix_latency: HistogramVec,
+    find_last_key_by_prefix_latency: HistogramVec,
+    find_first_key_value_by_prefix_latency: HistogramVec,
+    find_last_key_value_by_prefix_latency: HistogramVec,
     write_batch_latency: HistogramVec,
     clear_journal_latency: HistogramVec,
     connect_latency: HistogramVec,
@@ -131,6 +135,26 @@ impl KeyValueStoreMetrics {
         let entry1 = format!("{var_name}_find_key_values_by_prefix_latency");
         let entry2 = format!("{title_name} find key values by prefix latency");
         let find_key_values_by_prefix_latency =
+            register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
+
+        let entry1 = format!("{var_name}_find_first_key_by_prefix_latency");
+        let entry2 = format!("{title_name} find first key by prefix latency");
+        let find_first_key_by_prefix_latency =
+            register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
+
+        let entry1 = format!("{var_name}_find_last_key_by_prefix_latency");
+        let entry2 = format!("{title_name} find last key by prefix latency");
+        let find_last_key_by_prefix_latency =
+            register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
+
+        let entry1 = format!("{var_name}_find_first_key_value_by_prefix_latency");
+        let entry2 = format!("{title_name} find first key value by prefix latency");
+        let find_first_key_value_by_prefix_latency =
+            register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
+
+        let entry1 = format!("{var_name}_find_last_key_value_by_prefix_latency");
+        let entry2 = format!("{title_name} find last key value by prefix latency");
+        let find_last_key_value_by_prefix_latency =
             register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
 
         let entry1 = format!("{var_name}_write_batch_latency");
@@ -273,6 +297,10 @@ impl KeyValueStoreMetrics {
             read_multi_values_bytes_latency,
             find_keys_by_prefix_latency,
             find_key_values_by_prefix_latency,
+            find_first_key_by_prefix_latency,
+            find_last_key_by_prefix_latency,
+            find_first_key_value_by_prefix_latency,
+            find_last_key_value_by_prefix_latency,
             write_batch_latency,
             clear_journal_latency,
             connect_latency,
@@ -464,6 +492,50 @@ where
             .with_label_values(&[])
             .observe(key_values_size as f64);
         Ok(result)
+    }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        let _latency = self
+            .counter
+            .find_first_key_by_prefix_latency
+            .measure_latency();
+        self.store.find_first_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        let _latency = self
+            .counter
+            .find_last_key_by_prefix_latency
+            .measure_latency();
+        self.store.find_last_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        let _latency = self
+            .counter
+            .find_first_key_value_by_prefix_latency
+            .measure_latency();
+        self.store.find_first_key_value_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        let _latency = self
+            .counter
+            .find_last_key_value_by_prefix_latency
+            .measure_latency();
+        self.store.find_last_key_value_by_prefix(key_prefix).await
     }
 }
 

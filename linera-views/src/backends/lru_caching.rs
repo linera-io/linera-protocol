@@ -343,6 +343,74 @@ where
         cache.insert_find_key_values(key_prefix.to_vec(), &key_values);
         Ok(key_values)
     }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        if let Some(cache) = self.get_exclusive_cache() {
+            let mut cache = cache.lock().unwrap();
+            if let Some(keys) = cache.query_find_keys(key_prefix) {
+                #[cfg(with_metrics)]
+                metrics::FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
+                return Ok(keys.into_iter().next());
+            }
+        }
+        self.store.find_first_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        if let Some(cache) = self.get_exclusive_cache() {
+            let mut cache = cache.lock().unwrap();
+            if let Some(keys) = cache.query_find_keys(key_prefix) {
+                #[cfg(with_metrics)]
+                metrics::FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
+                return Ok(keys.into_iter().next_back());
+            }
+        }
+        self.store.find_last_key_by_prefix(key_prefix).await
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        if let Some(cache) = self.get_exclusive_cache() {
+            let mut cache = cache.lock().unwrap();
+            if let Some(key_values) = cache.query_find_key_values(key_prefix) {
+                #[cfg(with_metrics)]
+                metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
+                return Ok(key_values.into_iter().next());
+            }
+        }
+        self.store.find_first_key_value_by_prefix(key_prefix).await
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        if let Some(cache) = self.get_exclusive_cache() {
+            let mut cache = cache.lock().unwrap();
+            if let Some(key_values) = cache.query_find_key_values(key_prefix) {
+                #[cfg(with_metrics)]
+                metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
+                    .with_label_values(&[])
+                    .inc();
+                return Ok(key_values.into_iter().next_back());
+            }
+        }
+        self.store.find_last_key_value_by_prefix(key_prefix).await
+    }
 }
 
 impl<K> WritableKeyValueStore for LruCachingStore<K>

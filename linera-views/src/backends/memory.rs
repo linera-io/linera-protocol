@@ -211,6 +211,66 @@ impl ReadableKeyValueStore for MemoryStore {
         }
         Ok(key_values)
     }
+
+    async fn find_first_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        let map = self
+            .map
+            .read()
+            .expect("MemoryStore lock should not be poisoned");
+        let len = key_prefix.len();
+        Ok(map
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
+            .next()
+            .map(|(key, _)| key[len..].to_vec()))
+    }
+
+    async fn find_last_key_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<Vec<u8>>, MemoryStoreError> {
+        let map = self
+            .map
+            .read()
+            .expect("MemoryStore lock should not be poisoned");
+        let len = key_prefix.len();
+        Ok(map
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
+            .next_back()
+            .map(|(key, _)| key[len..].to_vec()))
+    }
+
+    async fn find_first_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        let map = self
+            .map
+            .read()
+            .expect("MemoryStore lock should not be poisoned");
+        let len = key_prefix.len();
+        Ok(map
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
+            .next()
+            .map(|(key, value)| (key[len..].to_vec(), value.to_vec())))
+    }
+
+    async fn find_last_key_value_by_prefix(
+        &self,
+        key_prefix: &[u8],
+    ) -> Result<Option<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        let map = self
+            .map
+            .read()
+            .expect("MemoryStore lock should not be poisoned");
+        let len = key_prefix.len();
+        Ok(map
+            .range(get_key_range_for_prefix(key_prefix.to_vec()))
+            .next_back()
+            .map(|(key, value)| (key[len..].to_vec(), value.to_vec())))
+    }
 }
 
 impl WritableKeyValueStore for MemoryStore {
