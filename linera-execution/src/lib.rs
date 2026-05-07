@@ -34,9 +34,9 @@ use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
     data_types::{
-        Amount, ApplicationDescription, ApplicationKind, ApplicationPermissions, ArithmeticError,
-        Blob, BlockHeight, Bytecode, DecompressionError, Epoch, NetworkDescription,
-        SendMessageRequest, StreamUpdate, Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
+        Timestamp,
     },
     doc_scalar, ensure, hex_debug, http,
     identifiers::{
@@ -52,6 +52,9 @@ use system::AdminOperation;
 use thiserror::Error;
 pub use web_thread_pool::Pool as ThreadPool;
 use web_thread_select as web_thread;
+
+#[cfg(with_testing)]
+use linera_base::data_types::ApplicationKind;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;

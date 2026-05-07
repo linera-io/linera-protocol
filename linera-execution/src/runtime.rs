@@ -1743,7 +1743,7 @@ impl ContractSyncRuntimeHandle {
     /// current application. Depth 0 is equivalent to [`transfer`][`ContractRuntime::transfer`];
     /// depth 1 uses the immediate caller. Returns an error if `auth_depth` exceeds the call
     /// stack depth.
-    pub fn transfer_auth_depth(
+    pub(crate) fn transfer_auth_depth(
         &mut self,
         source: AccountOwner,
         destination: Account,
@@ -1775,7 +1775,7 @@ impl ContractSyncRuntimeHandle {
     /// application at `auth_depth` levels above the current call frame, instead of the
     /// current application. See [`transfer_auth_depth`][`Self::transfer_auth_depth`] for
     /// the depth semantics.
-    pub fn claim_auth_depth(
+    pub(crate) fn claim_auth_depth(
         &mut self,
         source: Account,
         destination: Account,
