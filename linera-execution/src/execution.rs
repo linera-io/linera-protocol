@@ -153,6 +153,14 @@ where
         txn_tracker.replay_oracle_response(OracleResponse::Checkpoint(blob_id))?;
         Ok(())
     }
+
+    /// Replaces the persisted execution state with the content of a checkpoint blob,
+    /// recording the hash of the bytes as the new stored hash. The caller is
+    /// contractually obliged to reload the view after this returns.
+    pub async fn restore_from_content(&mut self, bytes: &[u8]) -> Result<(), ViewError> {
+        self.inner.restore_from_content(bytes).await?;
+        Ok(())
+    }
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
