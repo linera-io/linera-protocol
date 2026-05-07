@@ -230,7 +230,8 @@ where
                 })
                 .await?;
             let mut last_big_key = None;
-            for big_key in big_keys {
+            let n_big_keys = big_keys.len();
+            for (i, big_key) in big_keys.into_iter().enumerate() {
                 let len = big_key.len();
                 last_big_key = Some(big_key.clone());
                 if Self::read_index_from_key(&big_key)? != 0 {
@@ -246,7 +247,11 @@ where
                 }
                 keys.push(key);
                 if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
-                    return Ok((keys, false));
+                    // Precise `is_finished`: if we just consumed the last
+                    // big-key of the batch and the inner store reports it is
+                    // exhausted, no more matches are possible.
+                    let is_finished = i + 1 == n_big_keys && is_big_finished;
+                    return Ok((keys, is_finished));
                 }
             }
             if is_big_finished {
@@ -344,7 +349,14 @@ where
                 }
             }
             if limit_reached {
-                return Ok((key_values, false));
+                // Precise `is_finished`: if the batch iterator has no more
+                // items (the tail segments of the current user key were all
+                // consumed in the inner while-loop, so the next item would
+                // be segment 0 of a fresh user key) and the inner store is
+                // exhausted, no more matches are possible.
+                let batch_exhausted = iter.next().is_none();
+                let is_finished = batch_exhausted && is_big_finished;
+                return Ok((key_values, is_finished));
             }
             if is_big_finished {
                 return Ok((key_values, true));

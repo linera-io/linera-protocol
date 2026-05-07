@@ -273,14 +273,23 @@ impl RocksDbStoreExecutor {
         let len = self.start_key.len();
         let mut iter = self.get_interval_iterator(&start, &end);
         let mut keys = Vec::new();
+        let mut hit_limit = false;
         while let Some(key) = iter.key() {
             keys.push(key[len..].to_vec());
             if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                hit_limit = true;
                 break;
             }
             iter.next();
         }
-        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        // Precise `is_finished`: when we stopped at the limit, advance the
+        // iterator once more and check whether anything remains.
+        let is_finished = if hit_limit {
+            iter.next();
+            iter.key().is_none()
+        } else {
+            true
+        };
         Ok((keys, is_finished))
     }
 
@@ -293,20 +302,24 @@ impl RocksDbStoreExecutor {
         let len = self.start_key.len();
         let mut iter = self.get_interval_iterator(&start, &end);
         let mut key_values = Vec::new();
+        let mut hit_limit = false;
         while let Some((key, value)) = iter.item() {
-            let key_value = (key[len..].to_vec(), value.to_vec());
-            key_values.push(key_value);
+            key_values.push((key[len..].to_vec(), value.to_vec()));
             if key_interval
                 .limit
                 .is_some_and(|limit| key_values.len() >= limit)
             {
+                hit_limit = true;
                 break;
             }
             iter.next();
         }
-        let is_finished = key_interval
-            .limit
-            .is_none_or(|limit| key_values.len() < limit);
+        let is_finished = if hit_limit {
+            iter.next();
+            iter.item().is_none()
+        } else {
+            true
+        };
         Ok((key_values, is_finished))
     }
 

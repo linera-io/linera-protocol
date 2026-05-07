@@ -192,10 +192,14 @@ impl ReadableKeyValueStore for IndexedDbStore {
         key_interval: KeyInterval,
     ) -> Result<(Vec<Vec<u8>>, bool)> {
         let range = interval_to_range(&self.start_key, &key_interval);
-        let keys = self
-            .with_object_store(move |o| {
-                o.get_all_keys_in(range, key_interval.limit.map(|limit| limit as u32))
-            })
+        // Ask for one extra key past the user limit so we can decide
+        // `is_finished` precisely without an extra round-trip.
+        let user_limit = key_interval.limit;
+        let fetch_limit = user_limit.map(|limit| {
+            u32::try_from(limit.saturating_add(1).min(u32::MAX as usize)).unwrap_or(u32::MAX)
+        });
+        let mut keys = self
+            .with_object_store(move |o| o.get_all_keys_in(range, fetch_limit))
             .await??
             .into_iter()
             .map(|key| {
@@ -204,7 +208,17 @@ impl ReadableKeyValueStore for IndexedDbStore {
                     .to_vec()
             })
             .collect::<Vec<_>>();
-        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        let is_finished = match user_limit {
+            Some(limit) => {
+                if keys.len() > limit {
+                    keys.truncate(limit);
+                    false
+                } else {
+                    true
+                }
+            }
+            None => true,
+        };
         Ok((keys, is_finished))
     }
 
@@ -214,7 +228,12 @@ impl ReadableKeyValueStore for IndexedDbStore {
     ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)> {
         let range = interval_to_range(&self.start_key, &key_interval);
         let prefix_len = self.start_key.len() as u32;
-        let key_values = self
+        let user_limit = key_interval.limit;
+        // Walk one cursor step past the user limit so we know whether the
+        // database has more matches — the cursor advance is the only extra
+        // cost.
+        let fetch_target = user_limit.map(|limit| limit.saturating_add(1));
+        let mut key_values = self
             .with_object_store(move |object_store| async move {
                 let mut key_values = vec![];
                 let mut cursor = object_store.cursor().range(range)?.open().await?;
@@ -230,10 +249,7 @@ impl ReadableKeyValueStore for IndexedDbStore {
                         )
                         .to_vec(),
                     ));
-                    if key_interval
-                        .limit
-                        .is_some_and(|limit| key_values.len() >= limit)
-                    {
+                    if fetch_target.is_some_and(|target| key_values.len() >= target) {
                         break;
                     }
                     cursor.advance(1).await?;
@@ -242,9 +258,17 @@ impl ReadableKeyValueStore for IndexedDbStore {
                 Ok::<_, IndexedDbStoreError>(key_values)
             })
             .await??;
-        let is_finished = key_interval
-            .limit
-            .is_none_or(|limit| key_values.len() < limit);
+        let is_finished = match user_limit {
+            Some(limit) => {
+                if key_values.len() > limit {
+                    key_values.truncate(limit);
+                    false
+                } else {
+                    true
+                }
+            }
+            None => true,
+        };
         Ok((key_values, is_finished))
     }
 }

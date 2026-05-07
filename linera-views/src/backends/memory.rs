@@ -190,17 +190,26 @@ impl ReadableKeyValueStore for MemoryStore {
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
+        let mut iter = map.range(get_interval_range(key_interval.start, key_interval.end));
         let mut values = Vec::new();
-        for (key, _value) in map.range(get_interval_range(key_interval.start, key_interval.end)) {
+        let mut hit_limit = false;
+        while let Some((key, _value)) = iter.next() {
             values.push(key.to_vec());
             if key_interval
                 .limit
                 .is_some_and(|limit| values.len() >= limit)
             {
+                hit_limit = true;
                 break;
             }
         }
-        let is_finished = key_interval.limit.is_none_or(|limit| values.len() < limit);
+        // Precise `is_finished`: when we stopped at the limit, peek one
+        // BTreeMap step ahead — `next()` is the only extra cost.
+        let is_finished = if hit_limit {
+            iter.next().is_none()
+        } else {
+            true
+        };
         Ok((values, is_finished))
     }
 
@@ -215,20 +224,24 @@ impl ReadableKeyValueStore for MemoryStore {
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
+        let mut iter = map.range(get_interval_range(key_interval.start, key_interval.end));
         let mut key_values = Vec::new();
-        for (key, value) in map.range(get_interval_range(key_interval.start, key_interval.end)) {
-            let key_value = (key.to_vec(), value.to_vec());
-            key_values.push(key_value);
+        let mut hit_limit = false;
+        while let Some((key, value)) = iter.next() {
+            key_values.push((key.to_vec(), value.to_vec()));
             if key_interval
                 .limit
                 .is_some_and(|limit| key_values.len() >= limit)
             {
+                hit_limit = true;
                 break;
             }
         }
-        let is_finished = key_interval
-            .limit
-            .is_none_or(|limit| key_values.len() < limit);
+        let is_finished = if hit_limit {
+            iter.next().is_none()
+        } else {
+            true
+        };
         Ok((key_values, is_finished))
     }
 }

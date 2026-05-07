@@ -599,9 +599,10 @@ impl ScyllaDbClient {
         key_interval: KeyInterval,
     ) -> Result<(Vec<Vec<u8>>, bool), ScyllaDbStoreInternalError> {
         let session = &self.session;
-        let limit = key_interval
-            .limit
-            .map(|limit| limit.min(i32::MAX as usize) as i32);
+        // Ask for one row past the user-requested limit so we can tell
+        // whether the database has more matches without an extra round-trip.
+        let user_limit = key_interval.limit;
+        let limit = user_limit.map(|limit| limit.saturating_add(1).min(i32::MAX as usize) as i32);
         let rows = match (key_interval.start, key_interval.end) {
             (KeyIntervalStart::Included(start), Included(end)) => {
                 Self::check_key_size(&start)?;
@@ -740,7 +741,19 @@ impl ScyllaDbClient {
             let (key,) = row?;
             keys.push(key);
         }
-        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
+        // We asked for one extra row above. If we got it, drop it and report
+        // unfinished; otherwise the scan is exhausted within the user limit.
+        let is_finished = match user_limit {
+            Some(limit) => {
+                if keys.len() > limit {
+                    keys.truncate(limit);
+                    false
+                } else {
+                    true
+                }
+            }
+            None => true,
+        };
         Ok((keys, is_finished))
     }
 
@@ -750,9 +763,8 @@ impl ScyllaDbClient {
         key_interval: KeyInterval,
     ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ScyllaDbStoreInternalError> {
         let session = &self.session;
-        let limit = key_interval
-            .limit
-            .map(|limit| limit.min(i32::MAX as usize) as i32);
+        let user_limit = key_interval.limit;
+        let limit = user_limit.map(|limit| limit.saturating_add(1).min(i32::MAX as usize) as i32);
         let rows = match (key_interval.start, key_interval.end) {
             (KeyIntervalStart::Included(start), Included(end)) => {
                 Self::check_key_size(&start)?;
@@ -909,9 +921,17 @@ impl ScyllaDbClient {
             let (key, value) = row?;
             key_values.push((key, value));
         }
-        let is_finished = key_interval
-            .limit
-            .is_none_or(|limit| key_values.len() < limit);
+        let is_finished = match user_limit {
+            Some(limit) => {
+                if key_values.len() > limit {
+                    key_values.truncate(limit);
+                    false
+                } else {
+                    true
+                }
+            }
+            None => true,
+        };
         Ok((key_values, is_finished))
     }
 }

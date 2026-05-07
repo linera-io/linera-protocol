@@ -692,14 +692,20 @@ impl DynamoDbStoreInternal {
                 )),
             };
             if let Some(limit) = user_limit {
+                // Ask DynamoDB for one row past the user's remaining quota
+                // so we can tell whether more matches exist without an extra
+                // round-trip. `last_evaluated_key` alone is unreliable —
+                // DynamoDB can set it even when the scan range is exhausted.
                 let remaining = limit - items.len();
-                query = query.limit(i32::try_from(remaining).unwrap_or(i32::MAX));
+                let request_limit = remaining.saturating_add(1);
+                query = query.limit(i32::try_from(request_limit).unwrap_or(i32::MAX));
             }
 
             let response = query.send().boxed_sync().await?;
             let last_evaluated_key = response.last_evaluated_key;
             let response_items = response.items.unwrap_or_default();
 
+            let mut hit_extra = false;
             for item in response_items {
                 if drop_upper {
                     if let Some(upper_bytes) = &upper {
@@ -714,10 +720,17 @@ impl DynamoDbStoreInternal {
                         }
                     }
                 }
-                items.push(item);
                 if user_limit.is_some_and(|limit| items.len() >= limit) {
-                    return Ok((items, false));
+                    // We already have the user-requested count; this is the
+                    // extra item, which proves more matches exist.
+                    hit_extra = true;
+                    break;
                 }
+                items.push(item);
+            }
+
+            if hit_extra {
+                return Ok((items, false));
             }
 
             match last_evaluated_key {

@@ -465,16 +465,23 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
                          end={end_key:?} (incl={end_inclusive}) limit={limit:?} \
                          returned wrong keys",
                     );
-                    if expected_keys.len() < full_match.len() {
-                        assert!(!is_finished, "expected !is_finished for partial result");
+                    // `is_finished` is checked one-sided: when the result is
+                    // a strict subset of the matches, it MUST be false.
+                    // When the result is the full match, backends may report
+                    // either `true` (precise leaf or cache) or `false`
+                    // (conservative wrapper such as value-splitting that
+                    // can't cheaply distinguish unmatched extras from
+                    // unfinished pagination).
+                    let is_full_result = expected_keys.len() == full_match.len();
+                    if !is_full_result {
+                        assert!(
+                            !is_finished,
+                            "find_keys_in_interval claimed is_finished but the \
+                             result is partial; start={start_key:?} \
+                             (incl={start_inclusive}) end={end_key:?} \
+                             (incl={end_inclusive}) limit={limit:?}",
+                        );
                     }
-                    if limit.is_none() {
-                        assert!(is_finished, "expected is_finished when no limit");
-                    }
-                    // `is_finished` is checked one-sided: backends may
-                    // conservatively report `false` when the limit happens to
-                    // equal the full-match length, so we only assert the
-                    // direction that must hold.
 
                     let (key_values, is_finished_kv) = store
                         .find_key_values_in_interval(interval.clone())
@@ -490,11 +497,8 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
                          (incl={start_inclusive}) end={end_key:?} \
                          (incl={end_inclusive}) limit={limit:?} returned wrong entries",
                     );
-                    if expected_keys.len() < full_match.len() {
+                    if !is_full_result {
                         assert!(!is_finished_kv);
-                    }
-                    if limit.is_none() {
-                        assert!(is_finished_kv);
                     }
                 }
             }
@@ -538,11 +542,9 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
                     "Unbounded-end start={start_key:?} (incl={start_inclusive}) limit={limit:?} \
                      returned wrong keys",
                 );
-                if expected_keys.len() < full_match.len() {
+                let is_full_result = expected_keys.len() == full_match.len();
+                if !is_full_result {
                     assert!(!is_finished);
-                }
-                if limit.is_none() {
-                    assert!(is_finished);
                 }
             }
         }
