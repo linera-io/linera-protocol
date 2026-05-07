@@ -103,12 +103,12 @@ impl<V, I> MapViewMultiGet<V, I> {
             None => Ok(None),
             Some(SlotState::Cached(value)) => Ok(Some(value)),
             Some(SlotState::NeedsFetch) => {
-                let value_bytes = self.store_iter.next().await.transpose()?;
-                let value = match value_bytes {
-                    Some(bytes) => from_bytes_option(&bytes)?,
-                    None => None,
-                };
-                Ok(Some(value))
+                let value_bytes = self.store_iter.next().await.transpose()?.ok_or_else(|| {
+                    ViewError::MissingEntries(
+                        "store stream ended before all values were read".to_string(),
+                    )
+                })?;
+                Ok(Some(from_bytes_option(&value_bytes)?))
             }
         }
     }
