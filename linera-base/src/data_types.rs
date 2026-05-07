@@ -337,8 +337,6 @@ pub struct Resources {
     /// The size of the messages to be sent.
     // TODO(#1531): Account for the type of message to be sent.
     pub message_size: u32,
-    /// An increase in the amount of storage space.
-    pub storage_size_delta: u32,
     /// A number of service-as-oracle requests to be performed.
     pub service_as_oracle_queries: u32,
     /// A number of HTTP requests to be performed.

@@ -988,14 +988,12 @@ where
 
     fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError> {
         let this = self.inner();
-        let (key_size, value_size) = this
-            .execution_state_sender
-            .send_request(move |callback| ExecutionRequest::TotalStorageSize {
+        this.execution_state_sender
+            .send_request(move |callback| ExecutionRequest::HasEmptyStorage {
                 application,
                 callback,
             })?
-            .recv_response()?;
-        Ok(key_size + value_size == 0)
+            .recv_response()
     }
 
     fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError> {
