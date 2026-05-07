@@ -19,7 +19,9 @@ use prometheus::{exponential_buckets, HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyInterval, KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]
@@ -29,8 +31,8 @@ pub struct KeyValueStoreMetrics {
     contains_key_latency: HistogramVec,
     contains_keys_latency: HistogramVec,
     read_multi_values_bytes_latency: HistogramVec,
-    find_keys_by_prefix_latency: HistogramVec,
-    find_key_values_by_prefix_latency: HistogramVec,
+    find_keys_in_interval_latency: HistogramVec,
+    find_key_values_in_interval_latency: HistogramVec,
     write_batch_latency: HistogramVec,
     clear_journal_latency: HistogramVec,
     connect_latency: HistogramVec,
@@ -50,12 +52,12 @@ pub struct KeyValueStoreMetrics {
     contains_keys_num_entries: HistogramVec,
     contains_keys_key_sizes: HistogramVec,
     contains_key_key_size: HistogramVec,
-    find_keys_by_prefix_prefix_size: HistogramVec,
-    find_keys_by_prefix_num_keys: HistogramVec,
-    find_keys_by_prefix_keys_size: HistogramVec,
-    find_key_values_by_prefix_prefix_size: HistogramVec,
-    find_key_values_by_prefix_num_keys: HistogramVec,
-    find_key_values_by_prefix_key_values_size: HistogramVec,
+    find_keys_in_interval_start_size: HistogramVec,
+    find_keys_in_interval_num_keys: HistogramVec,
+    find_keys_in_interval_keys_size: HistogramVec,
+    find_key_values_in_interval_start_size: HistogramVec,
+    find_key_values_in_interval_num_keys: HistogramVec,
+    find_key_values_in_interval_key_values_size: HistogramVec,
     write_batch_size: HistogramVec,
     list_all_sizes: HistogramVec,
     exists_true_cases: IntCounterVec,
@@ -123,14 +125,14 @@ impl KeyValueStoreMetrics {
         let read_multi_values_bytes_latency =
             register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_keys_by_prefix_latency");
-        let entry2 = format!("{title_name} find keys by prefix latency");
-        let find_keys_by_prefix_latency =
+        let entry1 = format!("{var_name}_find_keys_in_interval_latency");
+        let entry2 = format!("{title_name} find keys in interval latency");
+        let find_keys_in_interval_latency =
             register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_key_values_by_prefix_latency");
-        let entry2 = format!("{title_name} find key values by prefix latency");
-        let find_key_values_by_prefix_latency =
+        let entry1 = format!("{var_name}_find_key_values_in_interval_latency");
+        let entry2 = format!("{title_name} find key values in interval latency");
+        let find_key_values_in_interval_latency =
             register_histogram_vec(&entry1, &entry2, &[], latency_buckets.clone());
 
         let entry1 = format!("{var_name}_write_batch_latency");
@@ -224,34 +226,34 @@ impl KeyValueStoreMetrics {
         let contains_key_key_size =
             register_histogram_vec(&entry1, &entry2, &[], size_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_keys_by_prefix_prefix_size");
-        let entry2 = format!("{title_name} find keys by prefix prefix size");
-        let find_keys_by_prefix_prefix_size =
+        let entry1 = format!("{var_name}_find_keys_in_interval_start_size");
+        let entry2 = format!("{title_name} find keys in interval start size");
+        let find_keys_in_interval_start_size =
             register_histogram_vec(&entry1, &entry2, &[], size_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_keys_by_prefix_num_keys");
-        let entry2 = format!("{title_name} find keys by prefix num keys");
-        let find_keys_by_prefix_num_keys =
+        let entry1 = format!("{var_name}_find_keys_in_interval_num_keys");
+        let entry2 = format!("{title_name} find keys in interval num keys");
+        let find_keys_in_interval_num_keys =
             register_histogram_vec(&entry1, &entry2, &[], count_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_keys_by_prefix_keys_size");
-        let entry2 = format!("{title_name} find keys by prefix keys size");
-        let find_keys_by_prefix_keys_size =
+        let entry1 = format!("{var_name}_find_keys_in_interval_keys_size");
+        let entry2 = format!("{title_name} find keys in interval keys size");
+        let find_keys_in_interval_keys_size =
             register_histogram_vec(&entry1, &entry2, &[], size_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_key_values_by_prefix_prefix_size");
-        let entry2 = format!("{title_name} find key values by prefix prefix size");
-        let find_key_values_by_prefix_prefix_size =
+        let entry1 = format!("{var_name}_find_key_values_in_interval_start_size");
+        let entry2 = format!("{title_name} find key values in interval start size");
+        let find_key_values_in_interval_start_size =
             register_histogram_vec(&entry1, &entry2, &[], size_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_key_values_by_prefix_num_keys");
-        let entry2 = format!("{title_name} find key values by prefix num keys");
-        let find_key_values_by_prefix_num_keys =
+        let entry1 = format!("{var_name}_find_key_values_in_interval_num_keys");
+        let entry2 = format!("{title_name} find key values in interval num keys");
+        let find_key_values_in_interval_num_keys =
             register_histogram_vec(&entry1, &entry2, &[], count_buckets.clone());
 
-        let entry1 = format!("{var_name}_find_key_values_by_prefix_key_values_size");
-        let entry2 = format!("{title_name} find key values by prefix key values size");
-        let find_key_values_by_prefix_key_values_size =
+        let entry1 = format!("{var_name}_find_key_values_in_interval_key_values_size");
+        let entry2 = format!("{title_name} find key values in interval key values size");
+        let find_key_values_in_interval_key_values_size =
             register_histogram_vec(&entry1, &entry2, &[], size_buckets.clone());
 
         let entry1 = format!("{var_name}_write_batch_size");
@@ -271,8 +273,8 @@ impl KeyValueStoreMetrics {
             contains_key_latency,
             contains_keys_latency,
             read_multi_values_bytes_latency,
-            find_keys_by_prefix_latency,
-            find_key_values_by_prefix_latency,
+            find_keys_in_interval_latency,
+            find_key_values_in_interval_latency,
             write_batch_latency,
             clear_journal_latency,
             connect_latency,
@@ -292,12 +294,12 @@ impl KeyValueStoreMetrics {
             contains_keys_num_entries,
             contains_keys_key_sizes,
             contains_key_key_size,
-            find_keys_by_prefix_prefix_size,
-            find_keys_by_prefix_num_keys,
-            find_keys_by_prefix_keys_size,
-            find_key_values_by_prefix_prefix_size,
-            find_key_values_by_prefix_num_keys,
-            find_key_values_by_prefix_key_values_size,
+            find_keys_in_interval_start_size,
+            find_keys_in_interval_num_keys,
+            find_keys_in_interval_keys_size,
+            find_key_values_in_interval_start_size,
+            find_key_values_in_interval_num_keys,
+            find_key_values_in_interval_key_values_size,
             write_batch_size,
             list_all_sizes,
             exists_true_cases,
@@ -416,54 +418,66 @@ where
         self.store.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let _latency = self.counter.find_keys_by_prefix_latency.measure_latency();
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
+        let _latency = self.counter.find_keys_in_interval_latency.measure_latency();
+        let prefix_size = match key_interval.start_bound() {
+            std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => key.len(),
+            std::ops::Bound::Unbounded => unreachable!("KeyInterval start is always bounded"),
+        };
         self.counter
-            .find_keys_by_prefix_prefix_size
+            .find_keys_in_interval_start_size
             .with_label_values(&[])
-            .observe(key_prefix.len() as f64);
-        let result = self.store.find_keys_by_prefix(key_prefix).await?;
-        let (num_keys, keys_size) = result
+            .observe(prefix_size as f64);
+        let (keys, is_finished) = self.store.find_keys_in_interval(key_interval).await?;
+        let (num_keys, keys_size) = keys
             .iter()
             .map(|key| key.len())
             .fold((0, 0), |(count, size), len| (count + 1, size + len));
         self.counter
-            .find_keys_by_prefix_num_keys
+            .find_keys_in_interval_num_keys
             .with_label_values(&[])
             .observe(num_keys as f64);
         self.counter
-            .find_keys_by_prefix_keys_size
+            .find_keys_in_interval_keys_size
             .with_label_values(&[])
             .observe(keys_size as f64);
-        Ok(result)
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
         let _latency = self
             .counter
-            .find_key_values_by_prefix_latency
+            .find_key_values_in_interval_latency
             .measure_latency();
+        let prefix_size = match key_interval.start_bound() {
+            std::ops::Bound::Included(key) | std::ops::Bound::Excluded(key) => key.len(),
+            std::ops::Bound::Unbounded => unreachable!("KeyInterval start is always bounded"),
+        };
         self.counter
-            .find_key_values_by_prefix_prefix_size
+            .find_key_values_in_interval_start_size
             .with_label_values(&[])
-            .observe(key_prefix.len() as f64);
-        let result = self.store.find_key_values_by_prefix(key_prefix).await?;
-        let (num_keys, key_values_size) = result
+            .observe(prefix_size as f64);
+        let (key_values, is_finished) =
+            self.store.find_key_values_in_interval(key_interval).await?;
+        let (num_keys, key_values_size) = key_values
             .iter()
             .map(|(key, value)| key.len() + value.len())
             .fold((0, 0), |(count, size), len| (count + 1, size + len));
         self.counter
-            .find_key_values_by_prefix_num_keys
+            .find_key_values_in_interval_num_keys
             .with_label_values(&[])
             .observe(num_keys as f64);
         self.counter
-            .find_key_values_by_prefix_key_values_size
+            .find_key_values_in_interval_key_values_size
             .with_label_values(&[])
             .observe(key_values_size as f64);
-        Ok(result)
+        Ok((key_values, is_finished))
     }
 }
 

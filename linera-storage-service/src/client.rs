@@ -3,6 +3,7 @@
 
 use std::{
     mem,
+    ops::Bound::{Excluded, Included, Unbounded},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -18,8 +19,12 @@ use linera_views::metering::MeteredDatabase;
 use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
+    common::get_upper_bound_option,
     lru_caching::LruCachingDatabase,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
+    },
 };
 use serde::de::DeserializeOwned;
 use tonic::transport::{Channel, Endpoint};
@@ -36,7 +41,7 @@ use crate::{
         ReplyFindKeyValuesByPrefix, ReplyFindKeysByPrefix, ReplyListAll, ReplyListRootKeys,
         ReplyReadMultiValues, ReplyReadValue, ReplySpecificChunk, RequestContainsKey,
         RequestContainsKeys, RequestCreateNamespace, RequestDeleteNamespace,
-        RequestExistsNamespace, RequestFindKeyValuesByPrefix, RequestFindKeysByPrefix,
+        RequestExistsNamespace, RequestFindKeyValuesInInterval, RequestFindKeysInInterval,
         RequestListRootKeys, RequestReadMultiValues, RequestReadValue, RequestSpecificChunk,
         RequestWriteBatchExtended, Statement,
     },
@@ -208,25 +213,48 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
         }
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, StorageServiceStoreError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            StorageServiceStoreError::KeyTooLong
-        );
-        let mut full_key_prefix = self.start_key.clone();
-        full_key_prefix.extend(key_prefix);
-        let query = RequestFindKeysByPrefix {
-            key_prefix: full_key_prefix,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), StorageServiceStoreError> {
+        let start = match &key_interval.start {
+            KeyIntervalStart::Included(key) | KeyIntervalStart::Excluded(key) => {
+                ensure!(
+                    key.len() <= MAX_KEY_SIZE,
+                    StorageServiceStoreError::KeyTooLong
+                );
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                Some(full_key)
+            }
+        };
+        let (end, end_inclusive) = match &key_interval.end {
+            Included(key) | Excluded(key) => {
+                ensure!(
+                    key.len() <= MAX_KEY_SIZE,
+                    StorageServiceStoreError::KeyTooLong
+                );
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                (Some(full_key), matches!(&key_interval.end, Included(_)))
+            }
+            Unbounded => (get_upper_bound_option(&self.start_key), false),
+        };
+        let query = RequestFindKeysInInterval {
+            start,
+            start_inclusive: matches!(&key_interval.start, KeyIntervalStart::Included(_)),
+            end,
+            end_inclusive,
+            limit: key_interval
+                .limit
+                .map(|limit| u32::try_from(limit).unwrap_or(u32::MAX)),
         };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
         let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client
-            .process_find_keys_by_prefix(request)
+            .process_find_keys_in_interval(request)
             .make_sync()
             .await?;
         let response = response.into_inner();
@@ -234,33 +262,69 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             keys,
             message_index,
             num_chunks,
+            is_finished,
         } = response;
-        if num_chunks == 0 {
-            Ok(keys)
+        let prefix_len = self.start_key.len();
+        let keys = if num_chunks == 0 {
+            keys
         } else {
-            self.read_entries(message_index, num_chunks).await
-        }
+            self.read_entries(message_index, num_chunks).await?
+        };
+        let keys = keys
+            .into_iter()
+            .map(|key| {
+                ensure!(
+                    key.starts_with(&self.start_key),
+                    StorageServiceStoreError::KeyOutsidePartition
+                );
+                Ok::<_, StorageServiceStoreError>(key[prefix_len..].to_vec())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, StorageServiceStoreError> {
-        ensure!(
-            key_prefix.len() <= MAX_KEY_SIZE,
-            StorageServiceStoreError::KeyTooLong
-        );
-        let mut full_key_prefix = self.start_key.clone();
-        full_key_prefix.extend(key_prefix);
-        let query = RequestFindKeyValuesByPrefix {
-            key_prefix: full_key_prefix,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), StorageServiceStoreError> {
+        let start = match &key_interval.start {
+            KeyIntervalStart::Included(key) | KeyIntervalStart::Excluded(key) => {
+                ensure!(
+                    key.len() <= MAX_KEY_SIZE,
+                    StorageServiceStoreError::KeyTooLong
+                );
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                Some(full_key)
+            }
+        };
+        let (end, end_inclusive) = match &key_interval.end {
+            Included(key) | Excluded(key) => {
+                ensure!(
+                    key.len() <= MAX_KEY_SIZE,
+                    StorageServiceStoreError::KeyTooLong
+                );
+                let mut full_key = self.start_key.clone();
+                full_key.extend(key);
+                (Some(full_key), matches!(&key_interval.end, Included(_)))
+            }
+            Unbounded => (get_upper_bound_option(&self.start_key), false),
+        };
+        let query = RequestFindKeyValuesInInterval {
+            start,
+            start_inclusive: matches!(&key_interval.start, KeyIntervalStart::Included(_)),
+            end,
+            end_inclusive,
+            limit: key_interval
+                .limit
+                .map(|limit| u32::try_from(limit).unwrap_or(u32::MAX)),
         };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
         let mut client = StorageServiceClient::new(channel);
         let _guard = self.acquire().await;
         let response = client
-            .process_find_key_values_by_prefix(request)
+            .process_find_key_values_in_interval(request)
             .make_sync()
             .await?;
         let response = response.into_inner();
@@ -268,16 +332,25 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             key_values,
             message_index,
             num_chunks,
+            is_finished,
         } = response;
-        if num_chunks == 0 {
-            let key_values = key_values
-                .into_iter()
-                .map(|x| (x.key, x.value))
-                .collect::<Vec<_>>();
-            Ok(key_values)
+        let prefix_len = self.start_key.len();
+        let key_values: Vec<(Vec<u8>, Vec<u8>)> = if num_chunks == 0 {
+            key_values.into_iter().map(|x| (x.key, x.value)).collect()
         } else {
-            self.read_entries(message_index, num_chunks).await
-        }
+            self.read_entries(message_index, num_chunks).await?
+        };
+        let key_values = key_values
+            .into_iter()
+            .map(|(key, value)| {
+                ensure!(
+                    key.starts_with(&self.start_key),
+                    StorageServiceStoreError::KeyOutsidePartition
+                );
+                Ok::<_, StorageServiceStoreError>((key[prefix_len..].to_vec(), value))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((key_values, is_finished))
     }
 }
 

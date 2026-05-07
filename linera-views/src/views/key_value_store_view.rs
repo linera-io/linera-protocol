@@ -31,7 +31,7 @@ use crate::{
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
     map_view::ByteMapView,
-    store::ReadableKeyValueStore,
+    store::{KeyInterval, ReadableKeyValueStore},
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
 
@@ -1007,6 +1007,67 @@ impl<C: Context> KeyValueStoreView<C> {
         self.write_batch(batch).await
     }
 
+    /// Iterates over all keys matching the given interval.
+    pub async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), ViewError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
+        // Any key in the interval starts with the longest common prefix of
+        // its bounds, so the prefix-scan path (which already merges in-memory
+        // updates with the underlying store and respects the deletion set)
+        // is a sufficient superset. We then trim it to the interval and limit.
+        let prefix = key_interval.common_prefix();
+        let prefix_keys = self.find_keys_by_prefix(&prefix).await?;
+        let mut keys = Vec::new();
+        let mut more_after_limit = false;
+        for stripped in prefix_keys {
+            let mut full = prefix.clone();
+            full.extend(&stripped);
+            if !key_interval.contains(&full) {
+                continue;
+            }
+            if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                more_after_limit = true;
+                break;
+            }
+            keys.push(full);
+        }
+        Ok((keys, !more_after_limit))
+    }
+
+    /// Iterates over all key-value pairs matching the given interval.
+    pub async fn find_key_values_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ViewError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
+        let prefix = key_interval.common_prefix();
+        let prefix_entries = self.find_key_values_by_prefix(&prefix).await?;
+        let mut key_values = Vec::new();
+        let mut more_after_limit = false;
+        for (stripped, value) in prefix_entries {
+            let mut full = prefix.clone();
+            full.extend(&stripped);
+            if !key_interval.contains(&full) {
+                continue;
+            }
+            if key_interval
+                .limit
+                .is_some_and(|limit| key_values.len() >= limit)
+            {
+                more_after_limit = true;
+                break;
+            }
+            key_values.push((full, value));
+        }
+        Ok((key_values, !more_after_limit))
+    }
+
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
     /// ```rust
     /// # tokio_test::block_on(async {
@@ -1283,20 +1344,61 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
         Ok(view.multi_get(keys).await?)
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, ViewContainerError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), ViewContainerError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let view = self.view.read().await;
-        Ok(view.find_keys_by_prefix(key_prefix).await?)
+        let prefix = key_interval.common_prefix();
+        let prefix_keys = view.find_keys_by_prefix(&prefix).await?;
+        let mut keys = Vec::new();
+        let mut more_after_limit = false;
+        for stripped in prefix_keys {
+            let mut full = prefix.clone();
+            full.extend(&stripped);
+            if !key_interval.contains(&full) {
+                continue;
+            }
+            if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                more_after_limit = true;
+                break;
+            }
+            keys.push(full);
+        }
+        Ok((keys, !more_after_limit))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewContainerError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ViewContainerError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let view = self.view.read().await;
-        Ok(view.find_key_values_by_prefix(key_prefix).await?)
+        let prefix = key_interval.common_prefix();
+        let prefix_entries = view.find_key_values_by_prefix(&prefix).await?;
+        let mut key_values = Vec::new();
+        let mut more_after_limit = false;
+        for (stripped, value) in prefix_entries {
+            let mut full = prefix.clone();
+            full.extend(&stripped);
+            if !key_interval.contains(&full) {
+                continue;
+            }
+            if key_interval
+                .limit
+                .is_some_and(|limit| key_values.len() >= limit)
+            {
+                more_after_limit = true;
+                break;
+            }
+            key_values.push((full, value));
+        }
+        Ok((key_values, !more_after_limit))
     }
 }
 

@@ -14,8 +14,8 @@ use crate::{
     batch::{Batch, WriteOperation},
     common::get_upper_bound_option,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
 };
 
@@ -97,6 +97,44 @@ fn prefix_to_range(prefix: &[u8]) -> (Bound<JsValue>, Bound<JsValue>) {
     (lower, upper)
 }
 
+fn interval_to_range(
+    start_key: &[u8],
+    key_interval: &KeyInterval,
+) -> (Bound<JsValue>, Bound<JsValue>) {
+    let lower = match &key_interval.start {
+        KeyIntervalStart::Included(key) => {
+            let key = [start_key, key.as_slice()].concat();
+            Bound::Included(js_sys::Uint8Array::from(key.as_slice()).into())
+        }
+        KeyIntervalStart::Excluded(key) => {
+            let key = [start_key, key.as_slice()].concat();
+            Bound::Excluded(js_sys::Uint8Array::from(key.as_slice()).into())
+        }
+    };
+    let upper = match &key_interval.end {
+        Bound::Included(key) => {
+            // The cursor's upper bound is exclusive. The smallest key strictly
+            // greater than `start_key + key` is obtained by appending `0`,
+            // which correctly excludes any key that lex-extends `key`.
+            let mut full_key = [start_key, key.as_slice()].concat();
+            full_key.push(0);
+            Bound::Excluded(js_sys::Uint8Array::from(full_key.as_slice()).into())
+        }
+        Bound::Excluded(key) => {
+            let key = [start_key, key.as_slice()].concat();
+            Bound::Excluded(js_sys::Uint8Array::from(key.as_slice()).into())
+        }
+        Bound::Unbounded => {
+            if let Some(upper) = get_upper_bound_option(start_key) {
+                Bound::Excluded(js_sys::Uint8Array::from(upper.as_slice()).into())
+            } else {
+                Bound::Unbounded
+            }
+        }
+    };
+    (lower, upper)
+}
+
 impl WithError for IndexedDbStore {
     type Error = IndexedDbStoreError;
 }
@@ -149,47 +187,95 @@ impl ReadableKeyValueStore for IndexedDbStore {
         .await
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>> {
-        let key_prefix = self.full_key(key_prefix);
-        let range = prefix_to_range(&key_prefix);
-        Ok(self
-            .with_object_store(|o| o.get_all_keys_in(range, None))
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool)> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
+        let range = interval_to_range(&self.start_key, &key_interval);
+        // Ask for one extra key past the user limit so we can decide
+        // `is_finished` precisely without an extra round-trip.
+        let user_limit = key_interval.limit;
+        let fetch_limit = user_limit.map(|limit| {
+            u32::try_from(limit.saturating_add(1).min(u32::MAX as usize)).unwrap_or(u32::MAX)
+        });
+        let mut keys = self
+            .with_object_store(move |o| o.get_all_keys_in(range, fetch_limit))
             .await??
             .into_iter()
             .map(|key| {
                 let key = js_sys::Uint8Array::new(&key);
-                key.subarray(key_prefix.len() as u32, key.length()).to_vec()
+                key.subarray(self.start_key.len() as u32, key.length())
+                    .to_vec()
             })
-            .collect())
+            .collect::<Vec<_>>();
+        let is_finished = match user_limit {
+            Some(limit) => {
+                if keys.len() > limit {
+                    keys.truncate(limit);
+                    false
+                } else {
+                    true
+                }
+            }
+            None => true,
+        };
+        Ok((keys, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-        let key_prefix = self.full_key(key_prefix);
-        let range = prefix_to_range(&key_prefix);
-        self.with_object_store(|object_store| async move {
-            let mut key_values = vec![];
-            let mut cursor = object_store.cursor().range(range)?.open().await?;
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
+        let range = interval_to_range(&self.start_key, &key_interval);
+        let prefix_len = self.start_key.len() as u32;
+        let user_limit = key_interval.limit;
+        // Walk one cursor step past the user limit so we know whether the
+        // database has more matches — the cursor advance is the only extra
+        // cost.
+        let fetch_target = user_limit.map(|limit| limit.saturating_add(1));
+        let mut key_values = self
+            .with_object_store(move |object_store| async move {
+                let mut key_values = vec![];
+                let mut cursor = object_store.cursor().range(range)?.open().await?;
 
-            while let Some(key) = cursor.primary_key() {
-                let key = js_sys::Uint8Array::new(&key);
-                key_values.push((
-                    key.subarray(key_prefix.len() as u32, key.length()).to_vec(),
-                    js_sys::Uint8Array::new(
-                        &cursor
-                            .value()
-                            .expect("we should have a value because we have a key"),
-                    )
-                    .to_vec(),
-                ));
-                cursor.advance(1).await?;
+                while let Some(key) = cursor.primary_key() {
+                    let key = js_sys::Uint8Array::new(&key);
+                    key_values.push((
+                        key.subarray(prefix_len, key.length()).to_vec(),
+                        js_sys::Uint8Array::new(
+                            &cursor
+                                .value()
+                                .expect("we should have a value because we have a key"),
+                        )
+                        .to_vec(),
+                    ));
+                    if fetch_target.is_some_and(|target| key_values.len() >= target) {
+                        break;
+                    }
+                    cursor.advance(1).await?;
+                }
+
+                Ok::<_, IndexedDbStoreError>(key_values)
+            })
+            .await??;
+        let is_finished = match user_limit {
+            Some(limit) => {
+                if key_values.len() > limit {
+                    key_values.truncate(limit);
+                    false
+                } else {
+                    true
+                }
             }
-
-            Ok(key_values)
-        })
-        .await?
+            None => true,
+        };
+        Ok((key_values, is_finished))
     }
 }
 

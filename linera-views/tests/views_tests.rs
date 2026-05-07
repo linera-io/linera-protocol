@@ -742,7 +742,7 @@ async fn test_views_in_scylla_db_param(config: &TestConfig) -> Result<()> {
 #[tokio::test]
 async fn test_views_in_scylla_db() -> Result<()> {
     for config in TestConfig::samples() {
-        test_views_in_scylla_db_param(&config).await?;
+        Box::pin(test_views_in_scylla_db_param(&config)).await?;
     }
     Ok(())
 }

@@ -45,7 +45,10 @@ async fn test_read_multi_values_dynamo_db() {
 async fn test_read_multi_values_scylla_db() {
     use linera_views::scylla_db::ScyllaDbDatabase;
     let config = ScyllaDbDatabase::new_test_config().await.unwrap();
-    big_read_multi_values::<ScyllaDbDatabase>(config, 22200000, 200).await;
+    Box::pin(big_read_multi_values::<ScyllaDbDatabase>(
+        config, 22200000, 200,
+    ))
+    .await;
 }
 
 #[tokio::test]
@@ -84,6 +87,24 @@ async fn test_reads_dynamo_db() {
         let database = linera_views::dynamo_db::DynamoDbDatabase::connect_test_namespace()
             .await
             .unwrap();
+        let store = database.open_exclusive(&[]).unwrap();
+        run_reads(store, scenario).await;
+    }
+}
+
+#[cfg(with_dynamodb)]
+#[tokio::test]
+async fn test_reads_dynamo_db_internal() {
+    use linera_views::{
+        dynamo_db::DynamoDbDatabaseInternal, journaling::JournalingKeyValueDatabase,
+        store::KeyValueDatabase as _,
+    };
+
+    for scenario in get_random_test_scenarios() {
+        let database =
+            JournalingKeyValueDatabase::<DynamoDbDatabaseInternal>::connect_test_namespace()
+                .await
+                .unwrap();
         let store = database.open_exclusive(&[]).unwrap();
         run_reads(store, scenario).await;
     }
@@ -342,7 +363,7 @@ async fn test_scylla_db_writes_from_state() {
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylladb_access() {
-    access_admin_test::<linera_views::scylla_db::ScyllaDbDatabase>().await
+    Box::pin(access_admin_test::<linera_views::scylla_db::ScyllaDbDatabase>()).await
 }
 
 #[cfg(with_dynamodb)]

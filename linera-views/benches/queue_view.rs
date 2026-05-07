@@ -125,7 +125,7 @@ fn bench_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_queue_view::<ScyllaDbDatabase>(iterations).await
+                Box::pin(performance_queue_view::<ScyllaDbDatabase>(iterations)).await
             })
     });
 }
@@ -207,7 +207,10 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
         bencher
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
-                performance_bucket_queue_view::<ScyllaDbDatabase>(iterations).await
+                Box::pin(performance_bucket_queue_view::<ScyllaDbDatabase>(
+                    iterations,
+                ))
+                .await
             })
     });
 }

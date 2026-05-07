@@ -9,8 +9,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, WriteOperation},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
+        WithError, WritableKeyValueStore,
     },
 };
 #[cfg(with_testing)]
@@ -206,48 +206,165 @@ where
         Ok(big_values)
     }
 
-    async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
-        let mut keys = Vec::new();
-        for big_key in self.store.find_keys_by_prefix(key_prefix).await? {
-            let len = big_key.len();
-            if Self::read_index_from_key(&big_key)? == 0 {
-                let key = big_key[0..len - 4].to_vec();
-                keys.push(key);
-            }
+    async fn find_keys_in_interval(
+        &self,
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
         }
-        Ok(keys)
+        let big_interval = Self::get_big_key_interval(&key_interval);
+        let mut keys = Vec::new();
+        let mut next_start = big_interval.start;
+        loop {
+            let remaining_limit = key_interval.limit.map(|limit| limit - keys.len());
+            if remaining_limit == Some(0) {
+                return Ok((keys, false));
+            }
+            let (big_keys, is_big_finished) = self
+                .store
+                .find_keys_in_interval(KeyInterval {
+                    start: next_start.clone(),
+                    end: big_interval.end.clone(),
+                    limit: remaining_limit,
+                })
+                .await?;
+            let mut last_big_key = None;
+            let n_big_keys = big_keys.len();
+            for (i, big_key) in big_keys.into_iter().enumerate() {
+                let len = big_key.len();
+                last_big_key = Some(big_key.clone());
+                if Self::read_index_from_key(&big_key)? != 0 {
+                    continue;
+                }
+                let key = big_key[0..len - 4].to_vec();
+                // The big-key interval is a loose superset of the user
+                // interval (variable-length user keys cause prefix-extending
+                // user keys to land between `K || [0;4]` and `K || [255;4]`),
+                // so we re-check each reconstructed user key.
+                if !key_interval.contains(&key) {
+                    continue;
+                }
+                keys.push(key);
+                if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
+                    // Precise `is_finished`: if we just consumed the last
+                    // big-key of the batch and the inner store reports it is
+                    // exhausted, no more matches are possible.
+                    let is_finished = i + 1 == n_big_keys && is_big_finished;
+                    return Ok((keys, is_finished));
+                }
+            }
+            if is_big_finished {
+                return Ok((keys, true));
+            }
+            let Some(last_big_key) = last_big_key else {
+                return Ok((keys, false));
+            };
+            next_start = KeyIntervalStart::Excluded(last_big_key);
+        }
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
-        let small_key_values = self.store.find_key_values_by_prefix(key_prefix).await?;
-        let mut small_kv_iterator = small_key_values.into_iter();
-        let mut key_values = Vec::new();
-        while let Some((mut big_key, value)) = small_kv_iterator.next() {
-            if Self::read_index_from_key(&big_key)? != 0 {
-                continue; // Leftover segment from an earlier value.
-            }
-            big_key.truncate(big_key.len() - 4);
-            let key = big_key;
-            let count = Self::read_count_from_value(&value)?;
-            let mut big_value = value[4..].to_vec();
-            for idx in 1..count {
-                let (big_key, value) = small_kv_iterator
-                    .next()
-                    .ok_or(ValueSplittingError::MissingSegment)?;
-                ensure!(
-                    Self::read_index_from_key(&big_key)? == idx
-                        && big_key.starts_with(&key)
-                        && big_key.len() == key.len() + 4,
-                    ValueSplittingError::MissingSegment
-                );
-                big_value.extend(value);
-            }
-            key_values.push((key, big_value));
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
         }
-        Ok(key_values)
+        let big_interval = Self::get_big_key_interval(&key_interval);
+        let mut key_values: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+        let mut next_start = big_interval.start;
+        loop {
+            let remaining_limit = key_interval.limit.map(|limit| limit - key_values.len());
+            if remaining_limit == Some(0) {
+                return Ok((key_values, false));
+            }
+            let (small_kvs, is_big_finished) = self
+                .store
+                .find_key_values_in_interval(KeyInterval {
+                    start: next_start.clone(),
+                    end: big_interval.end.clone(),
+                    limit: remaining_limit,
+                })
+                .await?;
+            if small_kvs.is_empty() {
+                return Ok((key_values, is_big_finished));
+            }
+            let mut iter = small_kvs.into_iter();
+            let mut last_big_key: Option<Vec<u8>> = None;
+            let mut limit_reached = false;
+            while let Some((big_key, value)) = iter.next() {
+                last_big_key = Some(big_key.clone());
+                if Self::read_index_from_key(&big_key)? != 0 {
+                    // Tail segment of an earlier user key (only possible at
+                    // the start of a batch when an `Excluded(start)` lands
+                    // inside a segmented value).
+                    continue;
+                }
+                let mut user_key = big_key;
+                user_key.truncate(user_key.len() - 4);
+                let count = Self::read_count_from_value(&value)?;
+                let mut full_value = value[4..].to_vec();
+                let mut consumed_idx = 0u32;
+                while consumed_idx + 1 < count {
+                    let Some((seg_key, seg_value)) = iter.next() else {
+                        break;
+                    };
+                    ensure!(
+                        Self::read_index_from_key(&seg_key)? == consumed_idx + 1
+                            && seg_key.starts_with(&user_key)
+                            && seg_key.len() == user_key.len() + 4,
+                        ValueSplittingError::MissingSegment
+                    );
+                    last_big_key = Some(seg_key);
+                    full_value.extend(seg_value);
+                    consumed_idx += 1;
+                }
+                if consumed_idx + 1 < count {
+                    // The current batch ran out before we could read all
+                    // segments of this value. Fall back to point reads for
+                    // the remaining ones rather than refetching the whole
+                    // tail by scan (which would risk the same truncation).
+                    let missing_keys: Vec<Vec<u8>> = (consumed_idx + 1..count)
+                        .map(|i| Self::get_segment_key(&user_key, i))
+                        .collect::<Result<_, _>>()?;
+                    let missing_values = self.store.read_multi_values_bytes(&missing_keys).await?;
+                    for (i, value_opt) in missing_values.into_iter().enumerate() {
+                        let value = value_opt.ok_or(ValueSplittingError::MissingSegment)?;
+                        full_value.extend(value);
+                        last_big_key = Some(missing_keys[i].clone());
+                    }
+                }
+                if !key_interval.contains(&user_key) {
+                    continue;
+                }
+                key_values.push((user_key, full_value));
+                if key_interval
+                    .limit
+                    .is_some_and(|limit| key_values.len() >= limit)
+                {
+                    limit_reached = true;
+                    break;
+                }
+            }
+            if limit_reached {
+                // Precise `is_finished`: if the batch iterator has no more
+                // items (the tail segments of the current user key were all
+                // consumed in the inner while-loop, so the next item would
+                // be segment 0 of a fresh user key) and the inner store is
+                // exhausted, no more matches are possible.
+                let batch_exhausted = iter.next().is_none();
+                let is_finished = batch_exhausted && is_big_finished;
+                return Ok((key_values, is_finished));
+            }
+            if is_big_finished {
+                return Ok((key_values, true));
+            }
+            let Some(last) = last_big_key else {
+                return Ok((key_values, false));
+            };
+            next_start = KeyIntervalStart::Excluded(last);
+        }
     }
 }
 
@@ -293,6 +410,36 @@ where
 
     async fn clear_journal(&self) -> Result<(), Self::Error> {
         Ok(self.store.clear_journal().await?)
+    }
+}
+
+impl<S> ValueSplittingStore<S>
+where
+    S: ReadableKeyValueStore,
+{
+    fn get_big_key_interval(key_interval: &KeyInterval) -> KeyInterval {
+        let start = match &key_interval.start {
+            KeyIntervalStart::Included(key) => {
+                KeyIntervalStart::Included([key.as_slice(), &[0, 0, 0, 0]].concat())
+            }
+            KeyIntervalStart::Excluded(key) => {
+                KeyIntervalStart::Excluded([key.as_slice(), &[0, 0, 0, 0]].concat())
+            }
+        };
+        let end = match &key_interval.end {
+            std::ops::Bound::Included(key) => {
+                std::ops::Bound::Included([key.as_slice(), &[u8::MAX; 4]].concat())
+            }
+            std::ops::Bound::Excluded(key) => {
+                std::ops::Bound::Excluded([key.as_slice(), &[0, 0, 0, 0]].concat())
+            }
+            std::ops::Bound::Unbounded => std::ops::Bound::Unbounded,
+        };
+        KeyInterval {
+            start,
+            end,
+            limit: key_interval.limit,
+        }
     }
 }
 
@@ -459,18 +606,18 @@ impl ReadableKeyValueStore for LimitedTestMemoryStore {
         self.inner.read_multi_values_bytes(keys).await
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
-        self.inner.find_keys_by_prefix(key_prefix).await
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), MemoryStoreError> {
+        self.inner.find_keys_in_interval(key_interval).await
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
-        self.inner.find_key_values_by_prefix(key_prefix).await
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), MemoryStoreError> {
+        self.inner.find_key_values_in_interval(key_interval).await
     }
 }
 

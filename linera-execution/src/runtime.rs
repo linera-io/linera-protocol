@@ -22,7 +22,7 @@ use linera_base::{
     time::Instant,
     vm::VmRuntime,
 };
-use linera_views::batch::Batch;
+use linera_views::{batch::Batch, store::KeyInterval};
 use oneshot::Receiver;
 use tracing::instrument;
 
@@ -251,6 +251,8 @@ impl<T> QueryManager<T> {
 type Keys = Vec<Vec<u8>>;
 type Value = Vec<u8>;
 type KeyValues = Vec<(Vec<u8>, Vec<u8>)>;
+type IntervalKeys = (Vec<Vec<u8>>, bool);
+type IntervalKeyValues = (Vec<(Vec<u8>, Vec<u8>)>, bool);
 
 #[derive(Debug, Default)]
 struct ViewUserState {
@@ -266,6 +268,10 @@ struct ViewUserState {
     find_keys_queries: QueryManager<Keys>,
     /// The find-key-values queries in progress.
     find_key_values_queries: QueryManager<KeyValues>,
+    /// The find-keys-in-interval queries in progress.
+    find_keys_in_interval_queries: QueryManager<IntervalKeys>,
+    /// The find-key-values-in-interval queries in progress.
+    find_key_values_in_interval_queries: QueryManager<IntervalKeyValues>,
 }
 
 impl ViewUserState {
@@ -276,6 +282,8 @@ impl ViewUserState {
         self.read_multi_values_queries.force_all()?;
         self.find_keys_queries.force_all()?;
         self.find_key_values_queries.force_all()?;
+        self.find_keys_in_interval_queries.force_all()?;
+        self.find_key_values_in_interval_queries.force_all()?;
         Ok(())
     }
 }
@@ -599,6 +607,8 @@ where
     type ReadMultiValuesBytes = u32;
     type FindKeysByPrefix = u32;
     type FindKeyValuesByPrefix = u32;
+    type FindKeysInInterval = u32;
+    type FindKeyValuesInInterval = u32;
 
     fn chain_id(&mut self) -> Result<ChainId, ExecutionError> {
         let mut this = self.inner();
@@ -928,6 +938,77 @@ where
         this.resource_controller
             .track_bytes_read(read_size as u64)?;
         Ok(key_values)
+    }
+
+    fn find_keys_in_interval_new(
+        &mut self,
+        key_interval: KeyInterval,
+    ) -> Result<Self::FindKeysInInterval, ExecutionError> {
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operation()?;
+        let receiver = this.execution_state_sender.send_request(move |callback| {
+            ExecutionRequest::FindKeysInInterval {
+                id,
+                key_interval,
+                callback,
+            }
+        })?;
+        let state = this.view_user_states.entry(id).or_default();
+        state.find_keys_in_interval_queries.register(receiver)
+    }
+
+    fn find_keys_in_interval_wait(
+        &mut self,
+        promise: &Self::FindKeysInInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), ExecutionError> {
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        let (keys, is_finished) = {
+            let state = this.view_user_states.entry(id).or_default();
+            state.find_keys_in_interval_queries.wait(*promise)?
+        };
+        let read_size = keys.iter().map(Vec::len).sum::<usize>();
+        this.resource_controller
+            .track_bytes_read(read_size as u64)?;
+        Ok((keys, is_finished))
+    }
+
+    fn find_key_values_in_interval_new(
+        &mut self,
+        key_interval: KeyInterval,
+    ) -> Result<Self::FindKeyValuesInInterval, ExecutionError> {
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        this.resource_controller.track_read_operation()?;
+        let receiver = this.execution_state_sender.send_request(move |callback| {
+            ExecutionRequest::FindKeyValuesInInterval {
+                id,
+                key_interval,
+                callback,
+            }
+        })?;
+        let state = this.view_user_states.entry(id).or_default();
+        state.find_key_values_in_interval_queries.register(receiver)
+    }
+
+    fn find_key_values_in_interval_wait(
+        &mut self,
+        promise: &Self::FindKeyValuesInInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), ExecutionError> {
+        let mut this = self.inner();
+        let id = this.current_application().id;
+        let (key_values, is_finished) = {
+            let state = this.view_user_states.entry(id).or_default();
+            state.find_key_values_in_interval_queries.wait(*promise)?
+        };
+        let read_size = key_values
+            .iter()
+            .map(|(key, value)| key.len() + value.len())
+            .sum::<usize>();
+        this.resource_controller
+            .track_bytes_read(read_size as u64)?;
+        Ok((key_values, is_finished))
     }
 
     fn perform_http_request(

@@ -15,9 +15,9 @@ use thiserror::Error;
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
-    common::get_key_range_for_prefix,
+    common::{get_interval_range, get_key_range_for_prefix},
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
+        KeyInterval, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
         WritableKeyValueStore,
     },
 };
@@ -179,37 +179,70 @@ impl ReadableKeyValueStore for MemoryStore {
         Ok(result)
     }
 
-    async fn find_keys_by_prefix(
+    async fn find_keys_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<Vec<u8>>, MemoryStoreError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<Vec<u8>>, bool), MemoryStoreError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let map = self
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
+        let mut iter = map.range(get_interval_range(key_interval.start, key_interval.end));
         let mut values = Vec::new();
-        let len = key_prefix.len();
-        for (key, _value) in map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
-            values.push(key[len..].to_vec())
+        let mut hit_limit = false;
+        for (key, _value) in iter.by_ref() {
+            values.push(key.to_vec());
+            if key_interval
+                .limit
+                .is_some_and(|limit| values.len() >= limit)
+            {
+                hit_limit = true;
+                break;
+            }
         }
-        Ok(values)
+        // Precise `is_finished`: when we stopped at the limit, peek one
+        // BTreeMap step ahead — `next()` is the only extra cost.
+        let is_finished = if hit_limit {
+            iter.next().is_none()
+        } else {
+            true
+        };
+        Ok((values, is_finished))
     }
 
-    async fn find_key_values_by_prefix(
+    async fn find_key_values_in_interval(
         &self,
-        key_prefix: &[u8],
-    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, MemoryStoreError> {
+        key_interval: KeyInterval,
+    ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), MemoryStoreError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let map = self
             .map
             .read()
             .expect("MemoryStore lock should not be poisoned");
+        let mut iter = map.range(get_interval_range(key_interval.start, key_interval.end));
         let mut key_values = Vec::new();
-        let len = key_prefix.len();
-        for (key, value) in map.range(get_key_range_for_prefix(key_prefix.to_vec())) {
-            let key_value = (key[len..].to_vec(), value.to_vec());
-            key_values.push(key_value);
+        let mut hit_limit = false;
+        for (key, value) in iter.by_ref() {
+            key_values.push((key.to_vec(), value.to_vec()));
+            if key_interval
+                .limit
+                .is_some_and(|limit| key_values.len() >= limit)
+            {
+                hit_limit = true;
+                break;
+            }
         }
-        Ok(key_values)
+        let is_finished = if hit_limit {
+            iter.next().is_none()
+        } else {
+            true
+        };
+        Ok((key_values, is_finished))
     }
 }
 

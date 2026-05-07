@@ -51,6 +51,13 @@ pub enum StorageServiceStoreError {
     #[error("The key size must be at most 1 MB")]
     KeyTooLong,
 
+    /// The server returned a key that does not lie within the requesting
+    /// client's partition. This indicates either a malformed request (e.g. an
+    /// `Unbounded` end with an all-`0xFF` `start_key`, which leaves the
+    /// underlying scan unbounded) or a server-side bug.
+    #[error("server returned a key outside this client's partition")]
+    KeyOutsidePartition,
+
     /// Transport error
     #[error(transparent)]
     TransportError(#[from] tonic::transport::Error),
