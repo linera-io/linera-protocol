@@ -2729,6 +2729,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "formats-registry"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "frunk"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

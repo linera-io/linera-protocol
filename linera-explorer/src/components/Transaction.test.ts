@@ -1,6 +1,64 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import Transaction from './Transaction.vue'
 import { set_test_config } from './utils'
+
+// `Transaction.vue` ultimately renders `DecodedBytes`, which reads `config` and
+// `decode_user_message` from `$root` (i.e. `App.vue` at runtime). vue-test-utils
+// inserts its own VTUROOT wrapper, so we expose those names via
+// `globalProperties` exactly like in `Op.test.ts`.
+function mountReceiveUserMessage(opts: {
+  applicationId: string,
+  bytesHex: string,
+  formats_registry?: string | null,
+  decode?: (app: string, bytes: string) => any
+}) {
+  return mount(Transaction, {
+    props: {
+      transaction: {
+        transactionType: 'ReceiveMessages',
+        operation: null,
+        incomingBundle: {
+          origin: { medium: 'Direct', sender: 'aee928d4bf3880353b4a3cd9b6f88e6cc6e5ed050860abae439e7782e9b2dfe8' },
+          action: 'Accept',
+          bundle: {
+            height: 7,
+            timestamp: 1694097510206912,
+            certificateHash: 'f1c748c5e39591125250e85d57fdeac0b7ba44a32c12c616eb4537f93b6e5d0a',
+            transactionIndex: 0,
+            messages: [{
+              authenticatedSigner: null,
+              grant: '0',
+              refundGrantTo: null,
+              kind: 'Tracked',
+              index: 0,
+              message: {},
+              messageMetadata: {
+                messageType: 'User',
+                applicationId: opts.applicationId,
+                userBytesHex: opts.bytesHex,
+                systemMessage: null
+              }
+            }]
+          }
+        }
+      },
+      index: 0,
+      blockHash: 'decoded-msg-block-hash'
+    },
+    global: {
+      config: {
+        globalProperties: {
+          config: {
+            formats_registry_chain: opts.formats_registry ? 'fake-chain-id' : null,
+            formats_registry_app_id: opts.formats_registry ?? null,
+          },
+          decode_user_message: (application_id: string, bytes_hex: string) =>
+            opts.decode ? opts.decode(application_id, bytes_hex) : null
+        } as any
+      }
+    }
+  })
+}
 
 describe('Transaction Component', () => {
   beforeAll(async () => {
@@ -267,6 +325,34 @@ describe('Transaction Component', () => {
 
     // Check that unknown transaction type is handled
     expect(wrapper.text()).toContain('Unknown transaction type: UnknownType')
+  })
+
+  test('renders decoded user message when registry is configured', async () => {
+    const decode = vi.fn(async (_app: string, _bytes: string) => ({ tip: 'hello' }))
+    const wrapper = mountReceiveUserMessage({
+      applicationId: 'app-msg-1',
+      bytesHex: 'deadbeef',
+      formats_registry: 'fake-registry-app-id',
+      decode
+    })
+    await flushPromises()
+    expect(decode).toHaveBeenCalledWith('app-msg-1', 'deadbeef')
+    expect(wrapper.text()).toContain('Decoded Message:')
+    expect(wrapper.text()).toContain('tip')
+    expect(wrapper.text()).toContain('hello')
+  })
+
+  test('does not decode user message when registry is not configured', async () => {
+    const decode = vi.fn()
+    const wrapper = mountReceiveUserMessage({
+      applicationId: 'app-msg-1',
+      bytesHex: 'deadbeef',
+      formats_registry: null,
+      decode
+    })
+    await flushPromises()
+    expect(decode).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('Decoded Message:')
   })
 
   test('displays user operation transaction correctly', () => {

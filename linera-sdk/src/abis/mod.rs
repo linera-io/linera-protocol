@@ -5,5 +5,6 @@
 
 pub mod controller;
 pub mod evm;
+pub mod formats_registry;
 pub mod fungible;
 pub mod wrapped_fungible;

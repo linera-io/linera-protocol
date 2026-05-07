@@ -2,3 +2,4 @@ node_modules
 pkg
 dist
 gql
+.env.local

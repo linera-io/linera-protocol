@@ -9,6 +9,7 @@ members = [
     "counter-no-graphql",
     "crowd-funding",
     "ethereum-tracker",
+    "formats-registry",
     "fungible",
     "game-of-life-challenge",
     "gen-nft",

@@ -6,6 +6,7 @@
 #![recursion_limit = "256"]
 
 mod entrypoint;
+mod formats;
 mod graphql;
 mod input_type;
 mod js_utils;
@@ -95,6 +96,17 @@ pub struct Config {
     indexer: String,
     node: String,
     tls: bool,
+    /// Hex-encoded chain id where the formats registry application is deployed.
+    /// Must be set together with [`Self::formats_registry_app_id`]. Stored as a
+    /// raw string so the JS-side `v-model` round-trips cleanly through
+    /// `serde_wasm_bindgen`; we validate the format only when actually using
+    /// the value.
+    #[serde(default)]
+    formats_registry_chain: Option<String>,
+    /// Hex-encoded application id of the formats registry. Same string-storage
+    /// rationale as [`Self::formats_registry_chain`].
+    #[serde(default)]
+    formats_registry_app_id: Option<String>,
 }
 
 impl Config {
@@ -104,6 +116,8 @@ impl Config {
             indexer: "localhost:8081".to_string(),
             node: "localhost:8080".to_string(),
             tls: false,
+            formats_registry_chain: None,
+            formats_registry_app_id: None,
         };
         // Return default if window doesn't exist (e.g., in test environment).
         let Some(window) = web_sys::window() else {
@@ -902,6 +916,243 @@ pub async fn start(app: JsValue) {
             route_aux(&app, &data, &path, &args, true).await;
         }
     }
+}
+
+/// Fetch the registered `Formats` for a deployed application by chaining
+/// `applications -> module_id -> formats_registry::get`. Returns `None` when no
+/// registry is configured, the app does not exist on the active chain, or the
+/// registry has no entry for that module. All failures are logged to the JS
+/// console with the caller's `op` label so the explorer never throws into Vue.
+async fn fetch_user_app_formats(
+    op: &str,
+    app: JsValue,
+    application_id: &str,
+) -> Option<formats::Formats> {
+    let data = match from_value::<Data>(app) {
+        Ok(d) => d,
+        Err(e) => {
+            log_str(&format!("{op}: cannot parse vue data: {e}"));
+            return None;
+        }
+    };
+    let Some(registry_chain) = data
+        .config
+        .formats_registry_chain
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    else {
+        log_str(&format!("{op}: no formats_registry_chain set in config"));
+        return None;
+    };
+    let Some(registry_app_id) = data
+        .config
+        .formats_registry_app_id
+        .as_deref()
+        .filter(|s| !s.is_empty())
+    else {
+        log_str(&format!("{op}: no formats_registry_app_id set in config"));
+        return None;
+    };
+    let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
+    log_str(&format!(
+        "{op}: looking up module for app {application_id} on active chain {} (node={node})",
+        data.chain
+    ));
+    let module_id_hex = match application_module_id(&node, data.chain, application_id).await {
+        Ok(Some(m)) => {
+            log_str(&format!("{op}: resolved module_id={m}"));
+            m
+        }
+        Ok(None) => {
+            log_str(&format!(
+                "{op}: application {application_id} not found on chain {}",
+                data.chain
+            ));
+            return None;
+        }
+        Err(e) => {
+            log_str(&format!("{op}: failed to look up module id: {e}"));
+            return None;
+        }
+    };
+    log_str(&format!(
+        "{op}: querying registry chain={registry_chain} app={registry_app_id} module={module_id_hex}"
+    ));
+    match formats::fetch_formats(&node, registry_chain, registry_app_id, &module_id_hex).await {
+        Ok(Some(f)) => {
+            log_str(&format!("{op}: registry returned formats"));
+            Some(f)
+        }
+        Ok(None) => {
+            log_str(&format!(
+                "{op}: registry has no entry for module {module_id_hex}"
+            ));
+            None
+        }
+        Err(e) => {
+            log_str(&format!("{op}: registry query failed: {e}"));
+            None
+        }
+    }
+}
+
+/// Run a `Formats::decode_*` method against `bytes_hex`, returning a JS value or
+/// `JsValue::NULL` if anything in the pipeline fails. Errors are logged with
+/// the `op` label.
+async fn decode_user_bytes(
+    op: &str,
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+    decode: fn(&formats::Formats, &[u8]) -> linera_sdk::bcs::Result<Value>,
+) -> JsValue {
+    let bytes = match hex::decode(&bytes_hex) {
+        Ok(b) => b,
+        Err(e) => {
+            log_str(&format!("{op}: invalid hex: {e}"));
+            return JsValue::NULL;
+        }
+    };
+    let Some(formats) = fetch_user_app_formats(op, app, &application_id).await else {
+        return JsValue::NULL;
+    };
+    match decode(&formats, &bytes) {
+        Ok(value) => value.serialize(&SER).unwrap_or(JsValue::NULL),
+        Err(e) => {
+            log_str(&format!("{op}: BCS decode failed: {e}"));
+            JsValue::NULL
+        }
+    }
+}
+
+/// Decode the bytes of a `User` operation against the formats published by its
+/// application's module in the configured `formats_registry`. Returns
+/// `JsValue::NULL` if no registry is configured, the application's module has
+/// no entry, or decoding fails for any reason; in the failure case the error is
+/// also logged to the JS console.
+#[wasm_bindgen]
+pub async fn decode_user_operation(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_operation",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_operation,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application cross-chain message. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_message(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_message",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_message,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application operation response. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_response(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_response",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_response,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application event-stream value. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_event_value(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_event_value",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_event_value,
+    )
+    .await
+}
+
+/// Fetch the registered `Formats` for a deployed application and return them
+/// as a JS object, or `JsValue::NULL` if no entry is available (no registry
+/// configured, the app is not on the active chain, or the registry has no
+/// entry for that module).
+#[wasm_bindgen]
+pub async fn fetch_user_app_formats_js(app: JsValue, application_id: String) -> JsValue {
+    let Some(formats) =
+        fetch_user_app_formats("fetch_user_app_formats_js", app, &application_id).await
+    else {
+        return JsValue::NULL;
+    };
+    // `Formats` contains maps keyed by enum-variant indices (`u32`), which the
+    // `serde_wasm_bindgen` "maps as objects" path cannot serialize ("Map key is
+    // not a string and cannot be an object key"). Round-trip through a JSON
+    // string instead — `JSON.parse` produces a plain JS object with all keys
+    // coerced to strings, which is what the UI consumes anyway.
+    match serde_json::to_string(&formats) {
+        Ok(s) => match js_sys::JSON::parse(&s) {
+            Ok(v) => v,
+            Err(e) => {
+                log_str(&format!(
+                    "fetch_user_app_formats_js: JSON.parse failed for {application_id}: {e:?}"
+                ));
+                JsValue::NULL
+            }
+        },
+        Err(e) => {
+            log_str(&format!(
+                "fetch_user_app_formats_js: serde_json::to_string failed for {application_id}: {e}"
+            ));
+            JsValue::NULL
+        }
+    }
+}
+
+/// Look up the `module_id` (as a hex string) of a deployed application on the
+/// given chain. Returns `Ok(None)` if no application with the given id exists
+/// on that chain.
+async fn application_module_id(
+    node: &str,
+    chain_id: ChainId,
+    application_id: &str,
+) -> Result<Option<String>> {
+    let apps = get_applications(node, chain_id).await?;
+    let Some(app) = apps.into_iter().find(|a| a.id == application_id) else {
+        return Ok(None);
+    };
+    let description: Value = serde_json::to_value(&app.description)
+        .context("application description is not JSON-serializable")?;
+    Ok(description
+        .get("module_id")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned))
 }
 
 /// Saves config to local storage.
