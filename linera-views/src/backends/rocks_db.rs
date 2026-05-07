@@ -193,7 +193,14 @@ impl RocksDbStoreExecutor {
         read_opts.set_total_order_seek(true);
 
         let upper_bound = match end {
-            Included(bound) => get_upper_bound_option(bound),
+            Included(bound) => {
+                // RocksDB's iterate_upper_bound is exclusive. The smallest key
+                // strictly greater than `bound` is `bound + [0]`, which
+                // correctly excludes any key that lex-extends `bound`.
+                let mut upper = bound.clone();
+                upper.push(0);
+                Some(upper)
+            }
             Excluded(bound) => Some(bound.clone()),
             Unbounded => None,
         };

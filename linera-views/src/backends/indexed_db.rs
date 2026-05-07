@@ -113,12 +113,12 @@ fn interval_to_range(
     };
     let upper = match &key_interval.end {
         Bound::Included(key) => {
-            let key = [start_key, key.as_slice()].concat();
-            if let Some(upper) = get_upper_bound_option(&key) {
-                Bound::Excluded(js_sys::Uint8Array::from(upper.as_slice()).into())
-            } else {
-                Bound::Unbounded
-            }
+            // The cursor's upper bound is exclusive. The smallest key strictly
+            // greater than `start_key + key` is obtained by appending `0`,
+            // which correctly excludes any key that lex-extends `key`.
+            let mut full_key = [start_key, key.as_slice()].concat();
+            full_key.push(0);
+            Bound::Excluded(js_sys::Uint8Array::from(full_key.as_slice()).into())
         }
         Bound::Excluded(key) => {
             let key = [start_key, key.as_slice()].concat();

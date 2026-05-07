@@ -339,6 +339,67 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
         assert_eq!(values_read_stat, test_exists);
         assert_eq!(values_read_stat, test_exists_direct);
     }
+
+    // Regression test for `Included(end)` translation in interval scans.
+    //
+    // Some backends translate `Included(end)` into an exclusive upper bound
+    // computed by `get_upper_bound_option(end)` (e.g. `[1, 2, 3]` becomes
+    // `[1, 2, 4]`). That bound still admits any key that lex-extends `end`,
+    // such as `[1, 2, 3, 0]`, even though those keys are strictly greater
+    // than `end` and must be excluded. We seed a partition under the
+    // unused `0xfe` byte (random test data uses prefix `[0]`, so it cannot
+    // collide) with several prefix-extending keys, then verify that every
+    // `Included(cutoff)` query returns exactly the keys `<= cutoff`.
+    let bug_test_prefix: Vec<u8> = vec![0xfe];
+    let bug_test_keys: Vec<Vec<u8>> = vec![
+        vec![0xfe, 1],
+        vec![0xfe, 1, 0],
+        vec![0xfe, 1, 0, 0],
+        vec![0xfe, 2],
+        vec![0xfe, 2, 0xff],
+    ];
+    let mut bug_test_batch = Batch::new();
+    for key in &bug_test_keys {
+        bug_test_batch.put_key_value_bytes(key.clone(), b"v".to_vec());
+    }
+    store.write_batch(bug_test_batch).await.unwrap();
+    for cutoff in &bug_test_keys {
+        let (keys, is_finished) = store
+            .find_keys_in_interval(KeyInterval::new(
+                KeyIntervalStart::Included(bug_test_prefix.clone()),
+                std::ops::Bound::Included(cutoff.clone()),
+            ))
+            .await
+            .unwrap();
+        assert!(is_finished);
+        let expected: Vec<Vec<u8>> = bug_test_keys
+            .iter()
+            .filter(|k| k.as_slice() <= cutoff.as_slice())
+            .cloned()
+            .collect();
+        assert_eq!(
+            keys, expected,
+            "find_keys_in_interval Included({cutoff:?}) returned wrong keys",
+        );
+
+        let (key_values, is_finished) = store
+            .find_key_values_in_interval(KeyInterval::new(
+                KeyIntervalStart::Included(bug_test_prefix.clone()),
+                std::ops::Bound::Included(cutoff.clone()),
+            ))
+            .await
+            .unwrap();
+        assert!(is_finished);
+        let expected: Vec<(Vec<u8>, Vec<u8>)> = bug_test_keys
+            .iter()
+            .filter(|k| k.as_slice() <= cutoff.as_slice())
+            .map(|k| (k.clone(), b"v".to_vec()))
+            .collect();
+        assert_eq!(
+            key_values, expected,
+            "find_key_values_in_interval Included({cutoff:?}) returned wrong entries",
+        );
+    }
 }
 
 /// Generates a list of random key-values with no duplicates
