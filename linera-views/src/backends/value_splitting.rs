@@ -220,6 +220,9 @@ where
 
         let mut first_segments_stream = self.store.read_multi_values_bytes_iter(big_keys);
 
+        // We use `stream!` rather than `try_stream!` because `MissingSegment` is yielded as an
+        // explicit `Err` item (without an inner cause to propagate via `?`), and `try_stream!`
+        // wraps bare yields in `Ok`, which would turn a `yield Err(...)` into `Ok(Err(...))`.
         Box::pin(async_stream::stream! {
             for key in keys {
                 // Get the next value from the first segments stream
