@@ -754,6 +754,7 @@ dependencies = [
  "num-bigint 0.4.6",
  "num-traits",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2123,6 +2124,7 @@ dependencies = [
  "alloy-sol-types",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2520,6 +2522,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -2530,6 +2533,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -2859,6 +2863,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -3559,6 +3564,7 @@ dependencies = [
  "async-graphql",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -3871,6 +3877,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -10035,6 +10042,7 @@ dependencies = [
  "bcs",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]

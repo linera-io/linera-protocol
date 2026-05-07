@@ -727,10 +727,12 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "num-bigint",
  "num-traits",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1446,8 +1448,10 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "assert_matches",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1639,6 +1643,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.16.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d64e8af5551369d19cf50138de61f1c42074ab970f74e99be916646777f8fc87"
+dependencies = [
+ "encode_unicode",
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "const-hex"
 version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1664,9 +1679,11 @@ dependencies = [
  "async-graphql",
  "bcs",
  "futures",
+ "insta",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -1716,8 +1733,10 @@ dependencies = [
  "assert_matches",
  "async-graphql",
  "futures",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -1728,8 +1747,10 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "futures",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -1889,8 +1910,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
@@ -2405,6 +2428,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "encode_unicode"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2524,8 +2553,10 @@ dependencies = [
  "alloy-primitives",
  "assert_matches",
  "async-graphql",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -2558,11 +2589,13 @@ dependencies = [
  "async-graphql",
  "fungible",
  "hex",
+ "insta",
  "linera-bridge",
  "linera-ethereum",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "tokio",
  "wrapped-fungible",
 ]
@@ -2769,8 +2802,10 @@ dependencies = [
  "async-graphql",
  "fungible",
  "futures",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -3018,11 +3053,13 @@ dependencies = [
  "candle-core",
  "candle-transformers",
  "getrandom 0.2.15",
+ "insta",
  "linera-sdk",
  "log",
  "non-fungible",
  "rand 0.8.5",
  "serde",
+ "serde-reflection",
  "sha3",
  "tokenizers",
  "tokio",
@@ -3247,9 +3284,11 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
  "serde_json",
  "test-log",
  "tokio",
@@ -3664,6 +3703,19 @@ dependencies = [
  "equivalent",
  "hashbrown 0.14.5",
  "serde",
+]
+
+[[package]]
+name = "insta"
+version = "1.47.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4a6248eb93a4401ed2f37dfe8ea592d3cf05b7cf4f8efa867b6895af7e094e"
+dependencies = [
+ "console",
+ "once_cell",
+ "serde",
+ "similar",
+ "tempfile",
 ]
 
 [[package]]
@@ -4359,9 +4411,11 @@ dependencies = [
  "candle-core",
  "candle-transformers",
  "getrandom 0.2.15",
+ "insta",
  "linera-sdk",
  "log",
  "rand 0.8.5",
+ "serde-reflection",
  "sha3",
  "tokenizers",
  "tokio",
@@ -4453,8 +4507,10 @@ dependencies = [
  "async-graphql",
  "bcs",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -4608,10 +4664,12 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "log",
  "native-fungible",
  "serde",
+ "serde-reflection",
  "test-log",
  "tokio",
 ]
@@ -4633,9 +4691,11 @@ dependencies = [
  "async-graphql",
  "base64 0.22.1",
  "bcs",
+ "insta",
  "linera-sdk",
  "non-fungible",
  "serde",
+ "serde-reflection",
  "sha3",
  "tokio",
 ]
@@ -5547,8 +5607,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "fungible",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -6150,6 +6212,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+
+[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6179,8 +6247,10 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "bcs",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "tokio",
 ]
 
@@ -6473,8 +6543,10 @@ name = "task-processor"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -7452,6 +7524,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "windows-link"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+
+[[package]]
 name = "windows-result"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7498,6 +7576,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.61.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]
@@ -7798,7 +7885,9 @@ dependencies = [
  "async-graphql",
  "fungible",
  "hex",
+ "insta",
  "linera-sdk",
+ "serde-reflection",
  "tokio",
 ]
 
