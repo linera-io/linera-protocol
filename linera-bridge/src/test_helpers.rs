@@ -452,7 +452,7 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    // Write shared source files so imports resolve
+    // Write hand-written shared contracts so imports resolve.
     for (name, content) in [
         ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
         (
@@ -467,21 +467,33 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
         writeln!(f, "{content}").unwrap();
     }
 
-    // Write the contract under test
+    // Write the contract under test.
     let test_path = path.join(file_name);
     let mut test_file = File::create(&test_path).unwrap();
     writeln!(test_file, "{source_code}").unwrap();
 
-    // Write solc config
-    write_compilation_json(path, file_name);
+    // Resolve the OpenZeppelin submodule path. Tests run from the crate root.
+    let oz_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/solidity/lib/openzeppelin-contracts");
 
-    // Compile
+    let oz_files: &[&str] = &[
+        "contracts/token/ERC20/ERC20.sol",
+        "contracts/token/ERC20/IERC20.sol",
+        "contracts/token/ERC20/extensions/IERC20Metadata.sol",
+        "contracts/utils/Context.sol",
+        "contracts/interfaces/draft-IERC6093.sol",
+    ];
+
+    write_compilation_json(path, file_name, &oz_root, oz_files);
+
     let config_file = File::open(path.join("config.json")).unwrap();
     let output_file = File::create(path.join("result.json")).unwrap();
 
     let status = Command::new("solc")
         .current_dir(path)
         .arg("--standard-json")
+        .arg("--allow-paths")
+        .arg(oz_root.to_str().unwrap())
         .stdin(Stdio::from(config_file))
         .stdout(Stdio::from(output_file))
         .status()
@@ -491,7 +503,6 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     let contents = std::fs::read_to_string(path.join("result.json")).unwrap();
     let json_data: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
-    // Check for compilation errors
     if let Some(errors) = json_data.get("errors") {
         for error in errors.as_array().unwrap() {
             let severity = error["severity"].as_str().unwrap_or("");
@@ -511,33 +522,31 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     hex::decode(bytecode_hex).unwrap()
 }
 
-fn write_compilation_json(path: &Path, file_name: &str) {
-    let config_path = path.join("config.json");
-    let mut source = File::create(config_path).unwrap();
-    writeln!(
-        source,
-        r#"
-{{
-  "language": "Solidity",
-  "sources": {{
-    "{file_name}": {{
-      "urls": ["./{file_name}"]
-    }}
-  }},
-  "settings": {{
-    "viaIR": true,
-    "optimizer": {{
-      "enabled": true,
-      "runs": 1
-    }},
-    "outputSelection": {{
-      "*": {{
-        "*": ["evm.bytecode"]
-      }}
-    }}
-  }}
-}}
-"#
-    )
-    .unwrap();
+fn write_compilation_json(path: &Path, file_name: &str, oz_root: &Path, oz_files: &[&str]) {
+    let mut sources = serde_json::Map::new();
+    sources.insert(
+        file_name.to_string(),
+        serde_json::json!({ "urls": [format!("./{file_name}")] }),
+    );
+    for rel in oz_files {
+        let import_key = format!("@openzeppelin/{rel}");
+        let abs = oz_root.join(rel);
+        sources.insert(
+            import_key,
+            serde_json::json!({ "urls": [abs.to_str().unwrap()] }),
+        );
+    }
+
+    let config = serde_json::json!({
+        "language": "Solidity",
+        "sources": sources,
+        "settings": {
+            "viaIR": true,
+            "optimizer": { "enabled": true, "runs": 1 },
+            "remappings": ["@openzeppelin/contracts/=@openzeppelin/contracts/"],
+            "outputSelection": { "*": { "*": ["evm.bytecode"] } }
+        }
+    });
+
+    std::fs::write(path.join("config.json"), config.to_string()).unwrap();
 }
