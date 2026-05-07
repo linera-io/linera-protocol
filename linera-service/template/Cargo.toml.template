@@ -23,6 +23,12 @@ unicode-segmentation = {{ version = ">=1, <1.13" }}
 {linera_sdk_dev_dep}
 tokio = {{ version = "1.40", features = ["rt", "sync"] }}
 
+# TODO(#4742): Remove the pinned versions once the `linera-*` crates work with Rust > 1.86.0.
+tonic = {{ version = ">=0.14, <0.14.6", default-features = false }}
+tonic-build = {{ version = ">=0.14, <0.14.6", default-features = false }}
+tonic-prost = {{ version = ">=0.14, <0.14.6", default-features = false }}
+tonic-prost-build = {{ version = ">=0.14, <0.14.6", default-features = false }}
+
 [[bin]]
 name = "{contract_binary_name}"
 path = "src/contract.rs"
