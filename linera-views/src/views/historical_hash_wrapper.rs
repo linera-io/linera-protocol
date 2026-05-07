@@ -365,8 +365,16 @@ fn decode_key_values(bytes: &[u8]) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ViewError>
 }
 
 fn hash_bytes(bytes: &[u8]) -> HasherOutput {
-    use crate::views::Hasher as _;
+    // Domain-separation tag: ensures the SHA3 input here cannot equal the SHA3 input of
+    // `make_hash` (`<32-byte stored_hash> || bcs(batch)`). For the two SHA3 inputs to
+    // coincide, an attacker would need a stored_hash equal to the first 32 bytes of this
+    // tag — i.e., a SHA3-256 preimage attack. The tag is therefore at least 32 bytes long.
+    const DOMAIN_TAG: &[u8] = b"linera-views::HistoricallyHashableView::dump_content/v1";
+    const _: () = assert!(DOMAIN_TAG.len() >= 32);
     let mut hasher = sha3::Sha3_256::default();
+    hasher
+        .update_with_bytes(DOMAIN_TAG)
+        .expect("Sha3_256 hashing of a byte slice cannot fail");
     hasher
         .update_with_bytes(bytes)
         .expect("Sha3_256 hashing of a byte slice cannot fail");
