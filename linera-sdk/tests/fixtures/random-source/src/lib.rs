@@ -35,5 +35,9 @@ pub enum Query {
 #[derive(Debug, Deserialize, Serialize)]
 pub enum QueryResponse {
     /// The seed and the two distinct random `u64` values it produced.
-    Samples { seed: u64, sample1: u64, sample2: u64 },
+    Samples {
+        seed: u64,
+        sample1: u64,
+        sample2: u64,
+    },
 }
