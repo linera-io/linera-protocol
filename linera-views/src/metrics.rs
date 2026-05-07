@@ -20,9 +20,9 @@ pub fn increment_counter(counter: &LazyLock<IntCounterVec>, struct_name: &str, b
 pub static LOAD_VIEW_LATENCY: LazyLock<prometheus::HistogramVec> = LazyLock::new(|| {
     prometheus_util::register_histogram_vec(
         "load_view_latency",
-        "Load view latency",
+        "Load view latency in milliseconds",
         &[],
-        exponential_bucket_latencies(10.0),
+        exponential_bucket_latencies(1000.0),
     )
 });
 
