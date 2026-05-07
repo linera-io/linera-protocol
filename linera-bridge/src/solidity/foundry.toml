@@ -1,0 +1,36 @@
+[profile.default]
+src = "."
+out = "out"
+libs = ["lib"]
+script = "script"
+test = "test"
+solc_version = "0.8.30"
+optimizer = true
+optimizer_runs = 1
+via_ir = true
+evm_version = "shanghai"
+fs_permissions = [
+    { access = "read", path = "./test/fixtures" },
+    { access = "read", path = "./broadcast" },
+    # Runtime path used by the docker bridge-init container; the host
+    # bind-mounts the shared volume under this path inside the container.
+    { access = "read", path = "/shared" },
+]
+
+[lint]
+# Fail CI on high- or medium-severity findings; lower-severity notes
+# (mixed-case naming, gas micro-opts, etc.) stay informational.
+severity = ["high", "med"]
+ignore = [
+    # Tests and scripts use vm.* cheatcodes intentionally (broadcast,
+    # setEnv, readFile); script files also do unchecked typecasts on
+    # JSON-parsed values that the script itself validates. forge-std is
+    # third-party.
+    "lib/**",
+    "test/**",
+    "script/**",
+    # Auto-generated BCS serializer; intentional bytes1(uint8(x)) truncation
+    # is the encoding's defining behaviour.
+    "BridgeTypes.sol",
+    "WrappedFungibleTypes.sol",
+]
