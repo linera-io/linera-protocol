@@ -29,7 +29,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera service`↴](#linera-service)
 * [`linera faucet`↴](#linera-faucet)
 * [`linera publish-module`↴](#linera-publish-module)
-* [`linera publish-bcs-module`↴](#linera-publish-bcs-module)
+* [`linera publish-module-with-formats`↴](#linera-publish-module-with-formats)
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
@@ -107,7 +107,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `service` — Run a GraphQL service to explore and extend the chains of the wallet
 * `faucet` — Run a GraphQL service that exposes a faucet where users can claim tokens. This gives away the chain's tokens, and is mainly intended for testing
 * `publish-module` — Publish module
-* `publish-bcs-module` — Publish a module along with the JSON-encoded `Formats` description loaded from an insta SNAP file. The publication and the formats-registry write happen atomically in a single block
+* `publish-module-with-formats` — Publish a module along with the JSON-encoded `Formats` description loaded from an insta SNAP file. The publication and the formats-registry write happen atomically in a single block
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
@@ -848,11 +848,11 @@ Publish module
 
 
 
-## `linera publish-bcs-module`
+## `linera publish-module-with-formats`
 
 Publish a module along with the JSON-encoded `Formats` description loaded from an insta SNAP file. The publication and the formats-registry write happen atomically in a single block
 
-**Usage:** `linera publish-bcs-module [OPTIONS] <CONTRACT> <SERVICE> <SNAP_PATH> <REGISTRY_APPLICATION_ID> [PUBLISHER]`
+**Usage:** `linera publish-module-with-formats [OPTIONS] <CONTRACT> <SERVICE> <SNAP_PATH> <REGISTRY_APPLICATION_ID> [PUBLISHER]`
 
 ###### **Arguments:**
 

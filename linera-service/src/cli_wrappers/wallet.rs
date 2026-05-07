@@ -426,9 +426,9 @@ impl ClientWrapper {
         Ok(module_id.with_abi())
     }
 
-    /// Runs `linera publish-bcs-module`.
+    /// Runs `linera publish-module-with-formats`.
     #[allow(clippy::too_many_arguments)]
-    pub async fn publish_bcs_module<Abi, Parameters, InstantiationArgument>(
+    pub async fn publish_module_with_formats<Abi, Parameters, InstantiationArgument>(
         &self,
         contract: PathBuf,
         service: PathBuf,
@@ -440,7 +440,7 @@ impl ClientWrapper {
         let stdout = self
             .command()
             .await?
-            .arg("publish-bcs-module")
+            .arg("publish-module-with-formats")
             .args([contract, service, snap_path])
             .arg(registry_application_id.to_string())
             .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])

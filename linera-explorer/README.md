@@ -97,7 +97,7 @@ chain request. The summary here highlights the explorer-specific steps.
    `formats_registry_app_id`.
 
 3. **Deploy a user application whose formats get registered atomically.**
-   The CLI command `linera publish-bcs-module` publishes a module *and*
+   The CLI command `linera publish-module-with-formats` publishes a module *and*
    writes its `Formats` to the registry in a single block. It expects an
    insta SNAP file containing the YAML serialization of `Formats`.
 
@@ -115,7 +115,7 @@ chain request. The summary here highlights the explorer-specific steps.
    application instance:
 
    ```bash
-   MODULE_ID=$(linera publish-bcs-module \
+   MODULE_ID=$(linera publish-module-with-formats \
      ../target/wasm32-unknown-unknown/release/fungible_{contract,service}.wasm \
      examples/fungible/tests/snapshots/format__format.snap \
      $FORMATS_REGISTRY_APP_ID)

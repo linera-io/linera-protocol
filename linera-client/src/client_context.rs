@@ -836,23 +836,9 @@ impl<Env: Environment> ClientContext<Env> {
         service: PathBuf,
         vm_runtime: VmRuntime,
     ) -> Result<ModuleId, Error> {
-        info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(&contract).map_err(|e| {
-            std::io::Error::new(
-                e.kind(),
-                format!("failed to load contract bytecode from {contract:?}: {e}"),
-            )
-        })?;
-        let service_bytecode = Bytecode::load_from_file(&service).map_err(|e| {
-            std::io::Error::new(
-                e.kind(),
-                format!("failed to load service bytecode from {service:?}: {e}"),
-            )
-        })?;
+        let (blobs, module_id) = load_bytecode_blobs(&contract, &service, vm_runtime).await?;
 
         info!("Publishing module");
-        let (blobs, module_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
         let (module_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let blobs = blobs.clone();
@@ -931,7 +917,7 @@ impl<Env: Environment> ClientContext<Env> {
     /// Publishes a module along with the JSON-encoded `Formats` description loaded
     /// from `snap_path`. The module publication and the formats-registry write
     /// happen atomically in a single block.
-    pub async fn publish_bcs_module(
+    pub async fn publish_module_with_formats(
         &mut self,
         chain_client: &ChainClient<Env>,
         contract: PathBuf,
@@ -1061,22 +1047,7 @@ impl<Env: Environment> ClientContext<Env> {
         vm_runtime: VmRuntime,
         snap_path: &Path,
     ) -> Result<(Vec<linera_base::data_types::Blob>, ModuleId, Vec<u8>), Error> {
-        info!("Loading bytecode files");
-        let contract_bytecode = Bytecode::load_from_file(contract).map_err(|e| {
-            std::io::Error::new(
-                e.kind(),
-                format!("failed to load contract bytecode from {contract:?}: {e}"),
-            )
-        })?;
-        let service_bytecode = Bytecode::load_from_file(service).map_err(|e| {
-            std::io::Error::new(
-                e.kind(),
-                format!("failed to load service bytecode from {service:?}: {e}"),
-            )
-        })?;
-
-        let (blobs, module_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
+        let (blobs, module_id) = load_bytecode_blobs(contract, service, vm_runtime).await?;
 
         info!("Loading formats from {snap_path:?}");
         let formats = read_formats_from_snap(snap_path)?;
@@ -1090,6 +1061,32 @@ impl<Env: Environment> ClientContext<Env> {
         let registry_op_bytes = bcs::to_bytes(&registry_op)?;
         Ok((blobs, module_id, registry_op_bytes))
     }
+}
+
+/// Reads the contract and service Wasm bytecode files from disk and turns them
+/// into the blobs needed for module publication. Shared between
+/// [`ClientContext::publish_module`] and the formats-aware variants so the two
+/// code paths can't drift on error messages or blob construction.
+#[cfg(feature = "fs")]
+async fn load_bytecode_blobs(
+    contract: &Path,
+    service: &Path,
+    vm_runtime: VmRuntime,
+) -> Result<(Vec<linera_base::data_types::Blob>, ModuleId), Error> {
+    info!("Loading bytecode files");
+    let contract_bytecode = Bytecode::load_from_file(contract).map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("failed to load contract bytecode from {contract:?}: {e}"),
+        )
+    })?;
+    let service_bytecode = Bytecode::load_from_file(service).map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!("failed to load service bytecode from {service:?}: {e}"),
+        )
+    })?;
+    Ok(create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await)
 }
 
 #[cfg(all(feature = "fs", not(web)))]

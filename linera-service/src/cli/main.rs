@@ -1380,7 +1380,7 @@ impl Runnable for Job {
                 );
             }
 
-            PublishBcsModule {
+            PublishModuleWithFormats {
                 contract,
                 service,
                 snap_path,
@@ -1400,7 +1400,7 @@ impl Runnable for Job {
                 );
                 let chain_client = context.make_chain_client(publisher).await?;
                 let module_id = context
-                    .publish_bcs_module(
+                    .publish_module_with_formats(
                         &chain_client,
                         contract,
                         service,

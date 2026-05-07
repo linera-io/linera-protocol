@@ -888,7 +888,7 @@ pub enum ClientCommand {
     /// Publish a module along with the JSON-encoded `Formats` description loaded
     /// from an insta SNAP file. The publication and the formats-registry write
     /// happen atomically in a single block.
-    PublishBcsModule {
+    PublishModuleWithFormats {
         /// Path to the Wasm file for the application "contract" bytecode.
         contract: PathBuf,
 
@@ -1128,7 +1128,7 @@ impl ClientCommand {
             | ClientCommand::RevokeEpochs { .. }
             | ClientCommand::CreateGenesisConfig { .. }
             | ClientCommand::PublishModule { .. }
-            | ClientCommand::PublishBcsModule { .. }
+            | ClientCommand::PublishModuleWithFormats { .. }
             | ClientCommand::ListEventsFromIndex { .. }
             | ClientCommand::PublishDataBlob { .. }
             | ClientCommand::ReadDataBlob { .. }
