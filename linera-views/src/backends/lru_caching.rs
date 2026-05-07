@@ -11,36 +11,11 @@ use serde::{Deserialize, Serialize};
 use crate::memory::MemoryDatabase;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueDatabase;
-use std::ops::Bound;
-
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{
-        KeyInterval, KeyIntervalStart, KeyValueDatabase, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
-    },
+    store::{KeyInterval, KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
 };
-
-/// Returns the longest common byte prefix shared by `start` and `end`. Any key
-/// inside `[start, end]` (any inclusivity) must start with this prefix. For
-/// `Unbounded` ends the LCP is empty (only an empty-prefix cache entry could
-/// cover the request).
-fn lcp_of_interval(key_interval: &KeyInterval) -> Vec<u8> {
-    let start = match &key_interval.start {
-        KeyIntervalStart::Included(k) | KeyIntervalStart::Excluded(k) => k.as_slice(),
-    };
-    let end = match &key_interval.end {
-        Bound::Included(k) | Bound::Excluded(k) => k.as_slice(),
-        Bound::Unbounded => return Vec::new(),
-    };
-    let n = start
-        .iter()
-        .zip(end.iter())
-        .take_while(|(a, b)| a == b)
-        .count();
-    start[..n].to_vec()
-}
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -368,7 +343,7 @@ where
         // Any key in the user interval starts with `lcp(start, end)`. The
         // prefix cache walks back from this prefix to any shorter cached
         // prefix that covers it, so a single probe is sufficient.
-        let lcp = lcp_of_interval(&key_interval);
+        let lcp = key_interval.common_prefix();
         let cached = {
             let mut cache = cache.lock().unwrap();
             cache.query_find_keys(&lcp)
@@ -438,7 +413,7 @@ where
         let Some(cache) = self.get_exclusive_cache() else {
             return self.store.find_key_values_in_interval(key_interval).await;
         };
-        let lcp = lcp_of_interval(&key_interval);
+        let lcp = key_interval.common_prefix();
         let cached = {
             let mut cache = cache.lock().unwrap();
             cache.query_find_key_values(&lcp)

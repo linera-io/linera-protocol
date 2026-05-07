@@ -82,6 +82,26 @@ impl KeyInterval {
         }
     }
 
+    /// Returns the longest common byte prefix shared by the start and end
+    /// keys of this interval. Any key inside the interval (any inclusivity)
+    /// must start with this prefix. Returns the empty vector when the end
+    /// is `Unbounded` (only an empty-prefix scan can cover such a request).
+    pub fn common_prefix(&self) -> Vec<u8> {
+        let start = match &self.start {
+            KeyIntervalStart::Included(k) | KeyIntervalStart::Excluded(k) => k.as_slice(),
+        };
+        let end = match &self.end {
+            Included(k) | Excluded(k) => k.as_slice(),
+            Unbounded => return Vec::new(),
+        };
+        let n = start
+            .iter()
+            .zip(end.iter())
+            .take_while(|(a, b)| a == b)
+            .count();
+        start[..n].to_vec()
+    }
+
     /// Returns `true` if `key` falls within this interval's bounds. The
     /// `limit` field is ignored.
     pub fn contains(&self, key: &[u8]) -> bool {

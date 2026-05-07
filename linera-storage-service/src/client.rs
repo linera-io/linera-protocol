@@ -265,20 +265,22 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             is_finished,
         } = response;
         let prefix_len = self.start_key.len();
-        if num_chunks == 0 {
-            let keys = keys
-                .into_iter()
-                .map(|key| key[prefix_len..].to_vec())
-                .collect();
-            Ok((keys, is_finished))
+        let keys = if num_chunks == 0 {
+            keys
         } else {
-            let keys: Vec<Vec<u8>> = self.read_entries(message_index, num_chunks).await?;
-            let keys = keys
-                .into_iter()
-                .map(|key| key[prefix_len..].to_vec())
-                .collect();
-            Ok((keys, is_finished))
-        }
+            self.read_entries(message_index, num_chunks).await?
+        };
+        let keys = keys
+            .into_iter()
+            .map(|key| {
+                ensure!(
+                    key.starts_with(&self.start_key),
+                    StorageServiceStoreError::KeyOutsidePartition
+                );
+                Ok::<_, StorageServiceStoreError>(key[prefix_len..].to_vec())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((keys, is_finished))
     }
 
     async fn find_key_values_in_interval(
@@ -333,21 +335,22 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             is_finished,
         } = response;
         let prefix_len = self.start_key.len();
-        if num_chunks == 0 {
-            let key_values = key_values
-                .into_iter()
-                .map(|x| (x.key[prefix_len..].to_vec(), x.value))
-                .collect::<Vec<_>>();
-            Ok((key_values, is_finished))
+        let key_values: Vec<(Vec<u8>, Vec<u8>)> = if num_chunks == 0 {
+            key_values.into_iter().map(|x| (x.key, x.value)).collect()
         } else {
-            let key_values: Vec<(Vec<u8>, Vec<u8>)> =
-                self.read_entries(message_index, num_chunks).await?;
-            let key_values = key_values
-                .into_iter()
-                .map(|(key, value)| (key[prefix_len..].to_vec(), value))
-                .collect();
-            Ok((key_values, is_finished))
-        }
+            self.read_entries(message_index, num_chunks).await?
+        };
+        let key_values = key_values
+            .into_iter()
+            .map(|(key, value)| {
+                ensure!(
+                    key.starts_with(&self.start_key),
+                    StorageServiceStoreError::KeyOutsidePartition
+                );
+                Ok::<_, StorageServiceStoreError>((key[prefix_len..].to_vec(), value))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((key_values, is_finished))
     }
 }
 
