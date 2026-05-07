@@ -24,7 +24,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_mock_erc20, exec_ok, light_client_address,
+    compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok, light_client_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
@@ -185,10 +185,10 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let (listener, _abort_handle, _) = cc_b.listen().await?;
     tokio::spawn(listener);
 
-    // ── 5. Deploy MockERC20 on Anvil ──
-    tracing::info!("Deploying MockERC20 via forge script...");
-    let erc20_addr = deploy_mock_erc20(&compose, project_name, &compose_file).await?;
-    tracing::info!(%erc20_addr, "MockERC20 deployed");
+    // ── 5. Deploy LineraToken on Anvil ──
+    tracing::info!("Deploying LineraToken via forge script...");
+    let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
+    tracing::info!(%erc20_addr, "LineraToken deployed");
 
     // ── 6. Deploy FungibleBridge on Anvil ──
     let app_id_bytes32 = format!("0x{}", app_id.application_description_hash);
