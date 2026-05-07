@@ -400,6 +400,153 @@ pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec
             "find_key_values_in_interval Included({cutoff:?}) returned wrong entries",
         );
     }
+
+    // Exhaustive coverage of the 4 boundary combinations (II, IE, EI, EE) for
+    // every (start, end) pair drawn from `bug_test_keys`, both with and
+    // without a small `limit`. This exercises:
+    //   - the DynamoDB `BETWEEN` pushdown for inclusive-inclusive intervals,
+    //   - the `BETWEEN`-plus-end-drop path for exclusive-end intervals,
+    //   - the `Excluded(start) -> Included(start || [0])` translation for
+    //     exclusive-start intervals,
+    //   - DynamoDB's `Limit` pushdown with paginated continuation,
+    //   - and the degenerate empty cases (e.g. `Excluded(K), Included(K)`)
+    //     that DynamoDB would reject without a guard.
+    let bound_kinds: &[(bool, bool)] =
+        &[(true, true), (true, false), (false, true), (false, false)];
+    let limits: &[Option<usize>] = &[None, Some(1), Some(2)];
+    for start_key in &bug_test_keys {
+        for end_key in &bug_test_keys {
+            for &(start_inclusive, end_inclusive) in bound_kinds {
+                for &limit in limits {
+                    let start_bound = if start_inclusive {
+                        KeyIntervalStart::Included(start_key.clone())
+                    } else {
+                        KeyIntervalStart::Excluded(start_key.clone())
+                    };
+                    let end_bound = if end_inclusive {
+                        std::ops::Bound::Included(end_key.clone())
+                    } else {
+                        std::ops::Bound::Excluded(end_key.clone())
+                    };
+                    let mut interval = KeyInterval::new(start_bound, end_bound);
+                    if let Some(l) = limit {
+                        interval = interval.with_limit(l);
+                    }
+
+                    let lo_passes = move |k: &Vec<u8>| {
+                        if start_inclusive {
+                            k.as_slice() >= start_key.as_slice()
+                        } else {
+                            k.as_slice() > start_key.as_slice()
+                        }
+                    };
+                    let hi_passes = move |k: &Vec<u8>| {
+                        if end_inclusive {
+                            k.as_slice() <= end_key.as_slice()
+                        } else {
+                            k.as_slice() < end_key.as_slice()
+                        }
+                    };
+                    let full_match: Vec<Vec<u8>> = bug_test_keys
+                        .iter()
+                        .filter(|k| lo_passes(k) && hi_passes(k))
+                        .cloned()
+                        .collect();
+                    let expected_keys: Vec<Vec<u8>> = match limit {
+                        None => full_match.clone(),
+                        Some(l) => full_match.iter().take(l).cloned().collect(),
+                    };
+
+                    let (keys, is_finished) =
+                        store.find_keys_in_interval(interval.clone()).await.unwrap();
+                    assert_eq!(
+                        keys, expected_keys,
+                        "find_keys_in_interval start={start_key:?} (incl={start_inclusive}) \
+                         end={end_key:?} (incl={end_inclusive}) limit={limit:?} \
+                         returned wrong keys",
+                    );
+                    if expected_keys.len() < full_match.len() {
+                        assert!(!is_finished, "expected !is_finished for partial result");
+                    }
+                    if limit.is_none() {
+                        assert!(is_finished, "expected is_finished when no limit");
+                    }
+                    // `is_finished` is checked one-sided: backends may
+                    // conservatively report `false` when the limit happens to
+                    // equal the full-match length, so we only assert the
+                    // direction that must hold.
+
+                    let (key_values, is_finished_kv) = store
+                        .find_key_values_in_interval(interval.clone())
+                        .await
+                        .unwrap();
+                    let expected_kv: Vec<(Vec<u8>, Vec<u8>)> = expected_keys
+                        .iter()
+                        .map(|k| (k.clone(), b"v".to_vec()))
+                        .collect();
+                    assert_eq!(
+                        key_values, expected_kv,
+                        "find_key_values_in_interval start={start_key:?} \
+                         (incl={start_inclusive}) end={end_key:?} \
+                         (incl={end_inclusive}) limit={limit:?} returned wrong entries",
+                    );
+                    if expected_keys.len() < full_match.len() {
+                        assert!(!is_finished_kv);
+                    }
+                    if limit.is_none() {
+                        assert!(is_finished_kv);
+                    }
+                }
+            }
+        }
+    }
+
+    // Unbounded-end variants, with and without a limit, and with both start
+    // boundary kinds.
+    for start_key in &bug_test_keys {
+        for &start_inclusive in &[true, false] {
+            for &limit in limits {
+                let start_bound = if start_inclusive {
+                    KeyIntervalStart::Included(start_key.clone())
+                } else {
+                    KeyIntervalStart::Excluded(start_key.clone())
+                };
+                let mut interval = KeyInterval::new(start_bound, std::ops::Bound::Unbounded);
+                if let Some(l) = limit {
+                    interval = interval.with_limit(l);
+                }
+                let lo_passes = |k: &Vec<u8>| {
+                    if start_inclusive {
+                        k.as_slice() >= start_key.as_slice()
+                    } else {
+                        k.as_slice() > start_key.as_slice()
+                    }
+                };
+                let full_match: Vec<Vec<u8>> = bug_test_keys
+                    .iter()
+                    .filter(|k| lo_passes(k))
+                    .cloned()
+                    .collect();
+                let expected_keys: Vec<Vec<u8>> = match limit {
+                    None => full_match.clone(),
+                    Some(l) => full_match.iter().take(l).cloned().collect(),
+                };
+                let (keys, is_finished) =
+                    store.find_keys_in_interval(interval.clone()).await.unwrap();
+                assert_eq!(
+                    keys, expected_keys,
+                    "Unbounded-end start={start_key:?} (incl={start_inclusive}) limit={limit:?} \
+                     returned wrong keys",
+                );
+                if expected_keys.len() < full_match.len() {
+                    assert!(!is_finished);
+                }
+                if limit.is_none() {
+                    assert!(is_finished);
+                }
+            }
+        }
+    }
 }
 
 /// Generates a list of random key-values with no duplicates

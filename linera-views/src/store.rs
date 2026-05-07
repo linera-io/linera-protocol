@@ -81,6 +81,24 @@ impl KeyInterval {
             Unbounded => Unbounded,
         }
     }
+
+    /// Returns `true` if the bounds make this interval provably empty
+    /// (i.e. `start` is past `end`). Backends that delegate to a range
+    /// primitive which panics on degenerate input (`BTreeMap::range`
+    /// rejects equal-and-excluded; DynamoDB rejects `BETWEEN lo > hi`)
+    /// must short-circuit on this case.
+    pub fn is_empty(&self) -> bool {
+        let (start_key, start_inclusive) = match &self.start {
+            KeyIntervalStart::Included(key) => (key.as_slice(), true),
+            KeyIntervalStart::Excluded(key) => (key.as_slice(), false),
+        };
+        match &self.end {
+            Included(end) if start_inclusive => start_key > end.as_slice(),
+            Included(end) => start_key >= end.as_slice(),
+            Excluded(end) => start_key >= end.as_slice(),
+            Unbounded => false,
+        }
+    }
 }
 
 /// The error type for the key-value stores.

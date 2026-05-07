@@ -183,6 +183,9 @@ impl ReadableKeyValueStore for MemoryStore {
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<Vec<u8>>, bool), MemoryStoreError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let map = self
             .map
             .read()
@@ -205,6 +208,9 @@ impl ReadableKeyValueStore for MemoryStore {
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), MemoryStoreError> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let map = self
             .map
             .read()

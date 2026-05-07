@@ -6,6 +6,7 @@
 use std::{
     collections::HashMap,
     env,
+    ops::Bound,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -21,7 +22,7 @@ use aws_sdk_dynamodb::{
         delete_table::DeleteTableError,
         get_item::GetItemError,
         list_tables::ListTablesError,
-        query::{QueryError, QueryOutput},
+        query::QueryError,
         transact_write_items::TransactWriteItemsError,
     },
     primitives::Blob,
@@ -43,12 +44,12 @@ use crate::metering::MeteredDatabase;
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::SimpleUnorderedBatch,
-    common::{get_uleb128_size, key_matches_interval},
+    common::get_uleb128_size,
     journaling::JournalingKeyValueDatabase,
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyInterval, KeyValueDatabase, KeyValueStoreError,
-        ReadableKeyValueStore, WithError,
+        DirectWritableKeyValueStore, KeyInterval, KeyIntervalStart, KeyValueDatabase,
+        KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -602,35 +603,128 @@ impl DynamoDbStoreInternal {
         }
     }
 
-    async fn get_query_output(
+    /// Builds the inclusive lower bound (in DynamoDB sort-key space) for an
+    /// interval scan. Items in the partition have sort key `[1] || user_key`,
+    /// and `Excluded(k)` is rewritten to `Included(k || [0x00])` (the smallest
+    /// sort key strictly greater than `[1] || k`).
+    fn lower_sort_bound(start: &KeyIntervalStart<Vec<u8>>) -> Vec<u8> {
+        let mut bound = vec![1];
+        match start {
+            KeyIntervalStart::Included(k) => bound.extend(k),
+            KeyIntervalStart::Excluded(k) => {
+                bound.extend(k);
+                bound.push(0);
+            }
+        }
+        bound
+    }
+
+    /// Builds the inclusive upper bound (in DynamoDB sort-key space). Returns
+    /// `None` for `Unbounded`. When the user requested `Excluded(end)` the
+    /// caller drops the (at most one) returned item whose sort key matches
+    /// this bound.
+    fn upper_sort_bound(end: &Bound<Vec<u8>>) -> Option<Vec<u8>> {
+        match end {
+            Bound::Included(k) | Bound::Excluded(k) => {
+                let mut bound = vec![1];
+                bound.extend(k);
+                Some(bound)
+            }
+            Bound::Unbounded => None,
+        }
+    }
+
+    /// Runs a DynamoDB Query with the user-supplied interval and limit pushed
+    /// down to the database. Pages until the limit is reached, the exclusive
+    /// upper bound is hit, or the partition is exhausted.
+    async fn run_interval_query(
         &self,
         attribute_str: &str,
-        start_key: &[u8],
-        key_prefix: &[u8],
-        start_key_map: Option<HashMap<String, AttributeValue>>,
-    ) -> Result<QueryOutput, DynamoDbStoreInternalError> {
-        let _guard = self.acquire().await;
-        let start_key = start_key.to_vec();
-        let mut prefixed_key_prefix = vec![1];
-        prefixed_key_prefix.extend(key_prefix);
-        let response = self
-            .client
-            .query()
-            .table_name(&self.namespace)
-            .projection_expression(attribute_str)
-            .key_condition_expression(format!(
-                "{PARTITION_ATTRIBUTE} = :partition and begins_with({KEY_ATTRIBUTE}, :prefix)"
-            ))
-            .expression_attribute_values(":partition", AttributeValue::B(Blob::new(start_key)))
-            .expression_attribute_values(
-                ":prefix",
-                AttributeValue::B(Blob::new(prefixed_key_prefix)),
-            )
-            .set_exclusive_start_key(start_key_map)
-            .send()
-            .boxed_sync()
-            .await?;
-        Ok(response)
+        key_interval: &KeyInterval,
+    ) -> Result<(Vec<HashMap<String, AttributeValue>>, bool), DynamoDbStoreInternalError> {
+        match &key_interval.start {
+            KeyIntervalStart::Included(k) | KeyIntervalStart::Excluded(k) => check_key_size(k)?,
+        }
+        if let Bound::Included(k) | Bound::Excluded(k) = &key_interval.end {
+            check_key_size(k)?;
+        }
+
+        // DynamoDB's BETWEEN rejects requests where lower > upper, which the
+        // pagination loop in callers can produce for degenerate intervals
+        // (e.g. `Excluded(K), Included(K)`).
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
+
+        let lower = Self::lower_sort_bound(&key_interval.start);
+        let upper = Self::upper_sort_bound(&key_interval.end);
+        let drop_upper = matches!(key_interval.end, Bound::Excluded(_));
+        let user_limit = key_interval.limit;
+
+        let mut items: Vec<HashMap<String, AttributeValue>> = Vec::new();
+        let mut start_key_map: Option<HashMap<String, AttributeValue>> = None;
+
+        loop {
+            let _guard = self.acquire().await;
+            let mut query = self
+                .client
+                .query()
+                .table_name(&self.namespace)
+                .projection_expression(attribute_str)
+                .expression_attribute_values(
+                    ":partition",
+                    AttributeValue::B(Blob::new(self.start_key.to_vec())),
+                )
+                .expression_attribute_values(
+                    ":lo",
+                    AttributeValue::B(Blob::new(lower.clone())),
+                )
+                .set_exclusive_start_key(start_key_map.take());
+            query = match &upper {
+                Some(hi) => query
+                    .key_condition_expression(format!(
+                        "{PARTITION_ATTRIBUTE} = :partition AND \
+                         {KEY_ATTRIBUTE} BETWEEN :lo AND :hi"
+                    ))
+                    .expression_attribute_values(":hi", AttributeValue::B(Blob::new(hi.clone()))),
+                None => query.key_condition_expression(format!(
+                    "{PARTITION_ATTRIBUTE} = :partition AND {KEY_ATTRIBUTE} >= :lo"
+                )),
+            };
+            if let Some(limit) = user_limit {
+                let remaining = limit - items.len();
+                query = query.limit(i32::try_from(remaining).unwrap_or(i32::MAX));
+            }
+
+            let response = query.send().boxed_sync().await?;
+            let last_evaluated_key = response.last_evaluated_key;
+            let response_items = response.items.unwrap_or_default();
+
+            for item in response_items {
+                if drop_upper {
+                    if let Some(upper_bytes) = &upper {
+                        if let Some(AttributeValue::B(blob)) = item.get(KEY_ATTRIBUTE) {
+                            if blob.as_ref() == upper_bytes.as_slice() {
+                                // Excluded upper bound reached. BETWEEN's
+                                // upper is inclusive, so this is the only
+                                // item we ever need to drop, and no items
+                                // strictly less than the bound remain.
+                                return Ok((items, true));
+                            }
+                        }
+                    }
+                }
+                items.push(item);
+                if user_limit.is_some_and(|limit| items.len() >= limit) {
+                    return Ok((items, false));
+                }
+            }
+
+            match last_evaluated_key {
+                None => return Ok((items, true)),
+                Some(next) => start_key_map = Some(next),
+            }
+        }
     }
 
     async fn read_value_bytes_general(
@@ -672,36 +766,6 @@ impl DynamoDbStoreInternal {
             .await?;
 
         Ok(response.item.is_some())
-    }
-
-    async fn get_list_responses(
-        &self,
-        attribute: &str,
-        start_key: &[u8],
-        key_prefix: &[u8],
-    ) -> Result<QueryResponses, DynamoDbStoreInternalError> {
-        check_key_size(key_prefix)?;
-        let mut responses = Vec::new();
-        let mut start_key_map = None;
-        loop {
-            let response = self
-                .get_query_output(attribute, start_key, key_prefix, start_key_map)
-                .await?;
-            let last_evaluated = response.last_evaluated_key.clone();
-            responses.push(response);
-            match last_evaluated {
-                None => {
-                    break;
-                }
-                Some(value) => {
-                    start_key_map = Some(value);
-                }
-            }
-        }
-        Ok(QueryResponses {
-            prefix_len: key_prefix.len(),
-            responses,
-        })
     }
 
     async fn read_batch_values_bytes(
@@ -784,29 +848,6 @@ impl DynamoDbStoreInternal {
     }
 }
 
-struct QueryResponses {
-    prefix_len: usize,
-    responses: Vec<QueryOutput>,
-}
-
-impl QueryResponses {
-    fn keys(&self) -> impl Iterator<Item = Result<&[u8], DynamoDbStoreInternalError>> {
-        self.responses
-            .iter()
-            .flat_map(|response| response.items.iter().flatten())
-            .map(|item| extract_key(self.prefix_len, item))
-    }
-
-    fn key_values(
-        &self,
-    ) -> impl Iterator<Item = Result<(&[u8], &[u8]), DynamoDbStoreInternalError>> {
-        self.responses
-            .iter()
-            .flat_map(|response| response.items.iter().flatten())
-            .map(|item| extract_key_value(self.prefix_len, item))
-    }
-}
-
 impl WithError for DynamoDbStoreInternal {
     type Error = DynamoDbStoreInternalError;
 }
@@ -877,20 +918,13 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<Vec<u8>>, bool), DynamoDbStoreInternalError> {
-        let result_queries = self
-            .get_list_responses(KEY_ATTRIBUTE, &self.start_key, &[])
+        let (items, is_finished) = self
+            .run_interval_query(KEY_ATTRIBUTE, &key_interval)
             .await?;
-        let mut keys = Vec::new();
-        for key in result_queries.keys() {
-            let key = key?;
-            if key_matches_interval(key, key_interval.start_bound(), key_interval.end_bound()) {
-                keys.push(key.to_vec());
-                if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
-                    break;
-                }
-            }
+        let mut keys = Vec::with_capacity(items.len());
+        for item in &items {
+            keys.push(extract_key(0, item)?.to_vec());
         }
-        let is_finished = key_interval.limit.is_none_or(|limit| keys.len() < limit);
         Ok((keys, is_finished))
     }
 
@@ -898,25 +932,14 @@ impl ReadableKeyValueStore for DynamoDbStoreInternal {
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), DynamoDbStoreInternalError> {
-        let result_queries = self
-            .get_list_responses(KEY_VALUE_ATTRIBUTE, &self.start_key, &[])
+        let (items, is_finished) = self
+            .run_interval_query(KEY_VALUE_ATTRIBUTE, &key_interval)
             .await?;
-        let mut key_values = Vec::new();
-        for entry in result_queries.key_values() {
-            let (key, value) = entry?;
-            if key_matches_interval(key, key_interval.start_bound(), key_interval.end_bound()) {
-                key_values.push((key.to_vec(), value.to_vec()));
-                if key_interval
-                    .limit
-                    .is_some_and(|limit| key_values.len() >= limit)
-                {
-                    break;
-                }
-            }
+        let mut key_values = Vec::with_capacity(items.len());
+        for item in &items {
+            let (key, value) = extract_key_value(0, item)?;
+            key_values.push((key.to_vec(), value.to_vec()));
         }
-        let is_finished = key_interval
-            .limit
-            .is_none_or(|limit| key_values.len() < limit);
         Ok((key_values, is_finished))
     }
 }

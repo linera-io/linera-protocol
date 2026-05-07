@@ -92,6 +92,24 @@ async fn test_reads_dynamo_db() {
     }
 }
 
+#[cfg(with_dynamodb)]
+#[tokio::test]
+async fn test_reads_dynamo_db_internal() {
+    use linera_views::{
+        dynamo_db::DynamoDbDatabaseInternal, journaling::JournalingKeyValueDatabase,
+        store::KeyValueDatabase as _,
+    };
+
+    for scenario in get_random_test_scenarios() {
+        let database =
+            JournalingKeyValueDatabase::<DynamoDbDatabaseInternal>::connect_test_namespace()
+                .await
+                .unwrap();
+        let store = database.open_exclusive(&[]).unwrap();
+        run_reads(store, scenario).await;
+    }
+}
+
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_reads_scylla_db() {
