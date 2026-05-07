@@ -3,7 +3,9 @@
 
 //! Centralized Linera client for all bridge chain interactions.
 
-use anyhow::Result;
+use std::sync::Arc;
+
+use anyhow::{Context as _, Result};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, Event},
@@ -17,13 +19,14 @@ use crate::proof::DepositKey;
 
 /// A write operation to be executed on the bridge chain.
 /// Sent to the main loop which serializes all chain mutations.
+#[derive(Debug)]
 pub(crate) enum ChainOperation {
     ProcessInbox {
-        response: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>, String>>,
+        response: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>>>,
     },
     ProcessDeposit {
         proof: crate::proof::gen::DepositProof,
-        response: oneshot::Sender<Result<(), String>>,
+        response: oneshot::Sender<Result<()>>,
     },
 }
 
@@ -87,14 +90,17 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
     pub async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<linera_chain::block::ConfirmedBlock> {
+    ) -> Result<Arc<linera_chain::block::ConfirmedBlock>> {
         self.chain_client
             .read_confirmed_block(hash)
             .await
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    pub async fn read_certificate(&self, hash: CryptoHash) -> Result<ConfirmedBlockCertificate> {
+    pub async fn read_certificate(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Arc<ConfirmedBlockCertificate>> {
         self.chain_client
             .read_certificate(hash)
             .await
@@ -116,11 +122,8 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
                 response: resp_tx,
             })
             .await
-            .map_err(|_| anyhow::anyhow!("Chain operation channel closed"))?;
-        resp_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("Response channel closed"))?
-            .map_err(|e| anyhow::anyhow!(e))
+            .with_context(|| "Chain operation channel closed")?;
+        resp_rx.await.with_context(|| "Response channel closed")?
     }
 
     pub async fn process_inbox(&self) -> Result<Vec<ConfirmedBlockCertificate>> {
@@ -128,11 +131,8 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         self.op_tx
             .send(ChainOperation::ProcessInbox { response: resp_tx })
             .await
-            .map_err(|_| anyhow::anyhow!("Chain operation channel closed"))?;
-        resp_rx
-            .await
-            .map_err(|_| anyhow::anyhow!("Response channel closed"))?
-            .map_err(|e| anyhow::anyhow!(e))
+            .with_context(|| "Chain operation channel closed")?;
+        resp_rx.await.with_context(|| "Response channel closed")?
     }
 }
 

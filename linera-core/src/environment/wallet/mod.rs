@@ -21,7 +21,7 @@ pub struct Chain {
     pub block_hash: Option<CryptoHash>,
     pub next_block_height: BlockHeight,
     pub timestamp: Timestamp,
-    pub pending_proposal: Option<PendingProposal>,
+    pub pending_fast_proposal: Option<PendingProposal>,
     pub epoch: Option<Epoch>,
 }
 
@@ -32,7 +32,7 @@ impl From<&ChainInfo> for Chain {
             block_hash: info.block_hash,
             next_block_height: info.next_block_height,
             timestamp: info.timestamp,
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(info.epoch),
         }
     }
@@ -64,7 +64,7 @@ impl Chain {
             block_hash: None,
             timestamp: now,
             next_block_height: BlockHeight::ZERO,
-            pending_proposal: None,
+            pending_fast_proposal: None,
             epoch: Some(current_epoch),
         }
     }

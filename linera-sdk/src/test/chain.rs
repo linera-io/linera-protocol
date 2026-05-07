@@ -333,13 +333,12 @@ impl ActiveChain {
             .index_values()
             .await
             .expect("Failed to query chain's event subscriptions");
-        // Collect the indices of all new events.
         let futures = subscription_map
             .into_iter()
             .map(|((chain_id, stream_id), subscriptions)| {
                 let worker = worker.clone();
                 async move {
-                    Box::pin(worker.chain_state_view(chain_id))
+                    let next_index = Box::pin(worker.chain_state_view(chain_id))
                         .await
                         .expect("Failed to query chain state view")
                         .execution_state
@@ -347,20 +346,36 @@ impl ActiveChain {
                         .stream_event_counts
                         .get(&stream_id)
                         .await
-                        .expect("Failed to query chain's event counts")
-                        .filter(|next_index| *next_index > subscriptions.next_index)
-                        .map(|next_index| (chain_id, stream_id, next_index))
+                        .expect("Failed to query chain's event counts");
+                    let Some(next_index) =
+                        next_index.filter(|next_index| *next_index > subscriptions.min_next_index)
+                    else {
+                        return Vec::new();
+                    };
+                    subscriptions
+                        .applications
+                        .into_iter()
+                        .filter(|(_, app_index)| *app_index < next_index)
+                        .map(|(application_id, _)| SystemOperation::UpdateStream {
+                            application_id,
+                            chain_id,
+                            stream_id: stream_id.clone(),
+                            next_index,
+                        })
+                        .collect::<Vec<_>>()
                 }
             });
-        let updates = future::join_all(futures)
+        let updates: Vec<SystemOperation> = future::join_all(futures)
             .await
             .into_iter()
             .flatten()
-            .collect::<Vec<_>>();
+            .collect();
         assert!(!updates.is_empty(), "No new events to process");
 
         Box::pin(self.add_block(|block| {
-            block.with_system_operation(SystemOperation::UpdateStreams(updates));
+            for update in updates {
+                block.with_system_operation(update);
+            }
         }))
         .await
     }
@@ -462,8 +477,8 @@ impl ActiveChain {
         let base_path = Self::find_output_directory_of(repository)
             .await
             .expect("Failed to look for output binaries");
-        let contract_path = base_path.join(format!("{}.wasm", contract_binary));
-        let service_path = base_path.join(format!("{}.wasm", service_binary));
+        let contract_path = base_path.join(format!("{contract_binary}.wasm"));
+        let service_path = base_path.join(format!("{service_binary}.wasm"));
 
         let contract = Bytecode::load_from_file(contract_path)
             .await

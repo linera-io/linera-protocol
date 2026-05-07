@@ -716,7 +716,7 @@ pub async fn namespace_admin_test<D: TestKeyValueDatabase>() {
     // Creating the initial list of namespaces
     let mut working_namespaces = BTreeSet::new();
     for i in 0..size {
-        let namespace = format!("{}_{}", prefix, i);
+        let namespace = format!("{prefix}_{i}");
         assert!(!D::exists(&config, &namespace).await.expect("test"));
         working_namespaces.insert(namespace);
     }

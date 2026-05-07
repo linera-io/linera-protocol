@@ -5,7 +5,7 @@
 Welcome to the reference manual of Linera, the decentralized protocol for
 **real-time Web3 applications**.
 
-This documentation is split into three main parts:
+This documentation is split into two main parts:
 
 1. The first section gives a [high-level overview](protocol/overview.md) of the
    protocol.
@@ -14,8 +14,10 @@ This documentation is split into three main parts:
    [developers](developers/getting_started.md) building applications using the
    Linera Rust SDK.
 
-3. The third section is intended for [operators](operators/devnets.md) who wish
-   to run Linera validators.
+If you operate a Linera validator, the [Node Operators](operators.md)
+section points to a dedicated site at <https://docs.infra.linera.net/>,
+with deployment artifacts (Helm charts, Docker Compose stack, deploy
+scripts) at <https://github.com/linera-io/linera-artifacts>.
 
 > **NEW: Publish and test your Web3 application on the Linera Testnet!**
 >

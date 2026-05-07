@@ -11,7 +11,7 @@ use evm_bridge::{BridgeParameters, EvmBridgeAbi};
 use linera_sdk::{
     ethereum::{EthereumQueries, ServiceEthereumClient},
     linera_base_types::WithServiceAbi,
-    views::{linera_views, RootView, SetView, View, ViewStorageContext},
+    views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Service, ServiceRuntime,
 };
 
@@ -20,6 +20,7 @@ use linera_sdk::{
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<[u8; 32]>,
+    pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
 }
 
 #[derive(Clone)]
@@ -62,10 +63,13 @@ impl EvmBridgeService {
         params.source_chain_id
     }
 
-    /// The bridge contract address on EVM (hex-encoded).
-    async fn bridge_contract_address(&self) -> String {
-        let params: BridgeParameters = self.runtime.application_parameters();
-        format!("0x{}", hex::encode(params.bridge_contract_address))
+    /// The bridge contract address on EVM (hex-encoded), or `None` if it has
+    /// not yet been registered via `RegisterFungibleBridge`.
+    async fn bridge_contract_address(&self) -> Option<String> {
+        self.state
+            .bridge_contract_address
+            .get()
+            .map(|addr| format!("0x{}", hex::encode(addr)))
     }
 
     /// The ERC-20 token address on the source EVM chain (hex-encoded).

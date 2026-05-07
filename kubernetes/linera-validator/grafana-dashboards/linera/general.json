@@ -160,7 +160,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (instance)",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (instance)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -171,7 +171,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m]))",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
@@ -274,7 +274,7 @@
           "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "(\n    sum(rate(linera_proxy_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_proxy_request_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_proxy_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n) * 100",
+          "expr": "(\n    sum(rate(linera_proxy_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_proxy_request_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_proxy_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\", method_name!=\"non_grpc\"}[1m])) by (method_name)\n) * 100",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -426,7 +426,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\", traffic_type=~\"$traffic_type\"}) by (le))",
           "format": "time_series",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
@@ -442,7 +442,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\", traffic_type=~\"$traffic_type\"}) by (le))",
           "instant": false,
           "legendFormat": "p90",
           "range": true,
@@ -454,7 +454,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:proxy_request_latency:rate1m{validator=~\"$validator\", traffic_type=~\"$traffic_type\"}) by (le))",
           "instant": false,
           "legendFormat": "p50",
           "range": true,
@@ -554,7 +554,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
           "legendFormat": "{{method_name}} - p99",
           "range": true,
           "refId": "A"
@@ -565,7 +565,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
           "legendFormat": "{{method_name}} - p90",
           "range": true,
           "refId": "B"
@@ -576,7 +576,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_proxy_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (le, method_name))",
           "legendFormat": "{{method_name}} - p50",
           "range": true,
           "refId": "C"
@@ -675,7 +675,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (method_name)",
+          "expr": "sum(rate(linera_proxy_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\", method_name=~\"[A-Z][a-zA-Z]+\", method_name!~\"HEAD|ServerReflectionInfo\"}[1m])) by (method_name)",
           "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A"
@@ -788,7 +788,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(instance) (rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "expr": "sum by(instance) (rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -799,7 +799,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m]))",
+          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m]))",
           "hide": false,
           "legendFormat": "Total",
           "range": true,
@@ -901,7 +901,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "(\n    sum(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_server_request_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)\n) * 100",
+          "expr": "(\n    sum(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n) / (\n    sum(rate(linera_server_request_success{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n    +\n    sum(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (method_name)\n) * 100",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1052,7 +1052,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(linera:server_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "expr": "histogram_quantile(0.99, sum(linera:server_request_latency:rate1m{validator=~\"$validator\", traffic_type=~\"$traffic_type\"}) by (le))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1067,7 +1067,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(linera:server_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "expr": "histogram_quantile(0.90, sum(linera:server_request_latency:rate1m{validator=~\"$validator\", traffic_type=~\"$traffic_type\"}) by (le))",
           "instant": false,
           "legendFormat": "p90",
           "range": true,
@@ -1079,7 +1079,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(linera:server_request_latency:rate1m{validator=~\"$validator\"}) by (le))",
+          "expr": "histogram_quantile(0.50, sum(linera:server_request_latency:rate1m{validator=~\"$validator\", traffic_type=~\"$traffic_type\"}) by (le))",
           "instant": false,
           "legendFormat": "p50",
           "range": true,
@@ -1227,7 +1227,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.99, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1243,7 +1243,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.90, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1259,7 +1259,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (le, method_name))",
+          "expr": "histogram_quantile(0.50, sum(rate(linera_server_request_latency_bucket{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (le, method_name))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
@@ -1362,7 +1362,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\"}[1m])) by (method_name)",
+          "expr": "sum(rate(linera_server_request_count{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m])) by (method_name)",
           "legendFormat": "{{method_name}}",
           "range": true,
           "refId": "A"
@@ -1377,7 +1377,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 50
+        "y": 58
       },
       "id": 8,
       "panels": [],
@@ -1451,7 +1451,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 51
+        "y": 59
       },
       "id": 9,
       "options": {
@@ -1566,7 +1566,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 51
+        "y": 59
       },
       "id": 47,
       "options": {
@@ -1681,7 +1681,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 67
       },
       "id": 39,
       "options": {
@@ -1782,7 +1782,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 67
       },
       "id": 46,
       "options": {
@@ -1887,7 +1887,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 67
+        "y": 75
       },
       "id": 36,
       "options": {
@@ -2001,7 +2001,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 67
+        "y": 75
       },
       "id": 29,
       "options": {
@@ -2108,7 +2108,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 83
       },
       "id": 41,
       "options": {
@@ -2222,7 +2222,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 75
+        "y": 83
       },
       "id": 5,
       "options": {
@@ -2359,7 +2359,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 91
       },
       "id": 32,
       "options": {
@@ -2473,7 +2473,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 91
       },
       "id": 31,
       "options": {
@@ -2587,7 +2587,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 99
       },
       "id": 44,
       "options": {
@@ -2640,7 +2640,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 99
+        "y": 107
       },
       "id": 34,
       "panels": [],
@@ -2714,7 +2714,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 100
+        "y": 108
       },
       "id": 30,
       "options": {
@@ -2815,7 +2815,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 100
+        "y": 108
       },
       "id": 48,
       "options": {
@@ -2916,7 +2916,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 108
+        "y": 116
       },
       "id": 45,
       "options": {
@@ -3021,7 +3021,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 108
+        "y": 116
       },
       "id": 27,
       "options": {
@@ -3128,7 +3128,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 116
+        "y": 124
       },
       "id": 26,
       "options": {
@@ -3229,7 +3229,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 116
+        "y": 124
       },
       "id": 38,
       "options": {
@@ -3334,7 +3334,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 124
+        "y": 132
       },
       "id": 28,
       "options": {
@@ -3435,7 +3435,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 124
+        "y": 132
       },
       "id": 10,
       "options": {
@@ -3542,7 +3542,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 132
+        "y": 140
       },
       "id": 42,
       "options": {
@@ -3643,7 +3643,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 132
+        "y": 140
       },
       "id": 43,
       "options": {
@@ -3744,7 +3744,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 140
+        "y": 148
       },
       "id": 33,
       "options": {
@@ -3777,6 +3777,291 @@
       ],
       "title": "ScyllaDB FS written bytes per second",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Proxy gRPC request errors split by error_type label (gRPC status code). Empty/missing label is bucketed as `_no_label` (some scrape targets may be on older code without PR #5951/#5966).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 60,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (error_type) (label_replace(rate(linera_proxy_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m]), \"error_type\", \"_no_label\", \"error_type\", \"\"))",
+          "legendFormat": "{{error_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Proxy Errors by error_type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Server request errors split by error_type label (qualified Rust error variant: WorkerError::, ChainError::, ExecutionError::). Empty/missing label is bucketed as `_no_label` (some scrape targets may be on older code without PR #5951/#5966).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "id": 61,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (error_type) (label_replace(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[1m]), \"error_type\", \"_no_label\", \"error_type\", \"\"))",
+          "legendFormat": "{{error_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Server Errors by error_type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Top 20 (method_name \u00d7 error_type) pairs from server_request_error \u2014 pinpoints which gRPC method is failing with which error variant.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 50
+      },
+      "id": 62,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "topk(20, sum by (method_name, error_type) (label_replace(rate(linera_server_request_error{validator=~\"$validator\", job=~\"linera-linera-server|linera-linera-proxy\", traffic_type=~\"$traffic_type\"}[5m]), \"error_type\", \"_no_label\", \"error_type\", \"\")))",
+          "legendFormat": "{{method_name}} / {{error_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Top Server Error Pairs (method \u00d7 error_type)",
+      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -3804,6 +4089,27 @@
         "name": "validator",
         "options": [],
         "query": "label_values(linera_proxy_request_count, validator)",
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(linera_proxy_request_count, traffic_type)",
+        "includeAll": true,
+        "label": "Traffic Type",
+        "multi": true,
+        "name": "traffic_type",
+        "options": [],
+        "query": "label_values(linera_proxy_request_count, traffic_type)",
         "refresh": 1,
         "regex": "",
         "type": "query"

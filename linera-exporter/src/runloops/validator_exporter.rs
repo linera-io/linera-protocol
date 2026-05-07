@@ -117,7 +117,7 @@ where
             crate::metrics::VALIDATOR_EXPORTER_QUEUE_LENGTH
                 .with_label_values(&[self.node.address()])
                 .set(receiver.len() as i64);
-            match self.dispatch_block((*block).clone()).await {
+            match self.dispatch_block(block.clone()).await {
                 Ok(_) => {}
 
                 Err(NodeError::BlobsNotFound(blobs_to_maybe_send)) => {
@@ -126,7 +126,7 @@ where
                         .filter(|id| blobs_to_maybe_send.contains(id))
                         .collect();
                     self.upload_blobs(blobs).await?;
-                    self.dispatch_block((*block).clone()).await?
+                    self.dispatch_block(block).await?
                 }
 
                 Err(e) => Err(e)?,
@@ -180,7 +180,7 @@ where
 
     async fn dispatch_block(
         &self,
-        certificate: ConfirmedBlockCertificate,
+        certificate: Arc<ConfirmedBlockCertificate>,
     ) -> Result<(), NodeError> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
         let block_id = BlockId::from_confirmed_block(certificate.value());

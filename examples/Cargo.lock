@@ -3860,6 +3860,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-trie",
  "anyhow",
+ "linera-base",
  "serde",
 ]
 

@@ -1,20 +1,9 @@
 name: Get Solc
-description: Download `solc` tool.
-author: Pontem Network team
-branding:
-  icon: sunrise
-  color: purple
+description: Download `solc` from the Solidity Foundation's binary distribution.
 inputs:
   version:
     default: "latest"
     description: Solc version (ex. `v0.8.15` or default `latest`).
-    required: false
-  token:
-    description: GITHUB_TOKEN. Optional
-    required: false
-  prerelease:
-    default: "false"
-    description: Allow pre-release. False by default.
     required: false
 runs:
   using: "composite"
@@ -24,5 +13,3 @@ runs:
       shell: bash
       env:
         SOLC_VERSION: ${{inputs.version}}
-        SOLC_PRERELEASE: ${{inputs.prerelease}}
-        SECRET_TOKEN: ${{inputs.token}}

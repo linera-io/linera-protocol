@@ -178,7 +178,7 @@ where
     /// its execution flow. The error can be checked later via `process_any_error()`.
     pub fn insert_error(&self, exec_error: &ExecutionError) {
         let mut error = self.error.lock().unwrap();
-        *error = Some(format!("Runtime error {:?}", exec_error));
+        *error = Some(format!("Runtime error {exec_error:?}"));
     }
 
     /// Checks for and returns any captured errors.
@@ -464,7 +464,7 @@ where
         // We have no such concept in Linera.
         let basefee = 0;
         let chain_id = runtime.chain_id()?;
-        let entry = format!("{}{}", chain_id, block_height_linera);
+        let entry = format!("{chain_id}{block_height_linera}");
         // The randomness beacon being used.
         let prevrandao = keccak256(entry.as_bytes());
         // The blob excess gas and price is not relevant to the execution

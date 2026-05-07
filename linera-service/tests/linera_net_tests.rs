@@ -5591,14 +5591,12 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
         .await?;
 
     let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {{SetAdmins: {{ admins: [\"{}\"] }} }})",
-        admin_owner, admin_owner
+        "executeControllerCommand(admin: \"{admin_owner}\", command: {{SetAdmins: {{ admins: [\"{admin_owner}\"] }} }})"
     );
     admin_app.mutate(&mutation).await?;
 
     let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
-        admin_owner, service_id, worker1_chain
+        "executeControllerCommand(admin: \"{admin_owner}\", command: {{UpdateService: {{ service_id: \"{service_id}\", workers: [\"{worker1_chain}\"] }} }})"
     );
     admin_app.mutate(&mutation).await?;
 
@@ -5656,8 +5654,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
 
     // Move the service to the second worker.
     let mutation = format!(
-        "executeControllerCommand(admin: \"{}\", command: {{UpdateService: {{ service_id: \"{}\", workers: [\"{}\"] }} }})",
-        admin_owner, service_id, worker2_chain
+        "executeControllerCommand(admin: \"{admin_owner}\", command: {{UpdateService: {{ service_id: \"{service_id}\", workers: [\"{worker2_chain}\"] }} }})"
     );
     admin_app.mutate(&mutation).await?;
 
@@ -5693,8 +5690,7 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     let admin_task_app = admin_node_service.make_application(&admin_chain, &task_processor_id)?;
     admin_task_app
         .mutate(&format!(
-            r#"requestTaskOn(chainId: "{}", operator: "ls", input: "")"#,
-            service_chain
+            r#"requestTaskOn(chainId: "{service_chain}", operator: "ls", input: "")"#
         ))
         .await?;
 

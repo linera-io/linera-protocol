@@ -133,11 +133,6 @@ pub fn init(log_name: &str, otlp_endpoint: Option<&str>) {
             Ok(ep) if !ep.is_empty() => ep,
             _ => {
                 crate::tracing::init(log_name);
-                tracing::warn!(
-                    "LINERA_OTLP_EXPORTER_ENDPOINT not set and no endpoint provided. \
-                     Falling back to standard tracing without OpenTelemetry span export. \
-                     Baggage propagation is still enabled."
-                );
                 return;
             }
         },

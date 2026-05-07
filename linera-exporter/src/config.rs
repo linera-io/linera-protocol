@@ -298,7 +298,7 @@ impl Destination {
                     TlsConfig::Tls => "https",
                 };
 
-                format!("{}://{}:{}", tls, endpoint, port)
+                format!("{tls}://{endpoint}:{port}")
             }
 
             Destination::Validator { endpoint, port } => {

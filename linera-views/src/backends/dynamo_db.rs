@@ -1067,7 +1067,6 @@ impl DynamoDbStoreInternalError {
 
     fn type_description_of(value: &AttributeValue) -> String {
         match value {
-            AttributeValue::B(_) => unreachable!("creating an error type for the correct type"),
             AttributeValue::Bool(_) => "a boolean",
             AttributeValue::Bs(_) => "a list of binary blobs",
             AttributeValue::L(_) => "a list",

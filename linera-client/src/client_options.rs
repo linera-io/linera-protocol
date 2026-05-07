@@ -73,6 +73,10 @@ pub struct Options {
     #[arg(long, value_parser = util::parse_chain_set)]
     pub prioritize_bundles_from: Option<HashSet<ChainId>>,
 
+    /// Comma-separated list of chain IDs whose incoming bundles should be ignored.
+    #[arg(long, value_parser = util::parse_chain_set)]
+    pub ignore_bundles_from: Option<HashSet<ChainId>>,
+
     /// The duration in milliseconds after which an idle chain worker will free its memory.
     /// Use 0 to disable expiry.
     #[arg(
@@ -92,6 +96,11 @@ pub struct Options {
         value_parser = util::parse_millis
     )]
     pub sender_chain_worker_ttl: Duration,
+
+    /// Maximum number of cross-chain requests coalesced into a single batch by the
+    /// per-chain driver. Bounds the worst-case write-lock hold time.
+    #[arg(long, default_value_t = 1000)]
+    pub cross_chain_batch_size_limit: usize,
 
     /// Delay increment for retrying to connect to a validator.
     #[arg(
@@ -170,6 +179,15 @@ pub struct Options {
     /// applications from this set will be processed.
     #[arg(long, value_parser = util::parse_app_set)]
     pub process_events_from_application_ids: Option<HashSet<GenericApplicationId>>,
+
+    /// A set of application IDs whose messages must never be rejected. Bundles whose messages
+    /// are all from one of these applications bypass the other rejection rules (except
+    /// `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from
+    /// the same sender) are removed from the block for later retry instead of being rejected,
+    /// with a warning logged. Bundles that contain any message from an application not on this
+    /// list can be rejected.
+    #[arg(long, value_parser = util::parse_app_set)]
+    pub never_reject_application_ids: Option<HashSet<GenericApplicationId>>,
 
     /// Enable timing reports during operations
     #[cfg(not(web))]
@@ -313,20 +331,29 @@ impl Default for Options {
 impl Options {
     /// Creates [`chain_client::Options`] with the corresponding values.
     pub(crate) fn to_chain_client_options(&self) -> chain_client::Options {
-        let message_policy = MessagePolicy::new(
-            self.blanket_message_policy,
-            self.restrict_chain_ids_to.clone(),
-            self.reject_message_bundles_without_application_ids.clone(),
-            self.reject_message_bundles_with_other_application_ids
+        let message_policy = MessagePolicy {
+            blanket: self.blanket_message_policy,
+            restrict_chain_ids_to: self.restrict_chain_ids_to.clone(),
+            ignore_chain_ids: self.ignore_bundles_from.clone().unwrap_or_default(),
+            reject_message_bundles_without_application_ids: self
+                .reject_message_bundles_without_application_ids
                 .clone(),
-            self.process_events_from_application_ids.clone(),
-        );
+            reject_message_bundles_with_other_application_ids: self
+                .reject_message_bundles_with_other_application_ids
+                .clone(),
+            process_events_from_application_ids: self.process_events_from_application_ids.clone(),
+            never_reject_application_ids: self
+                .never_reject_application_ids
+                .clone()
+                .unwrap_or_default(),
+        };
         let cross_chain_message_delivery =
             CrossChainMessageDelivery::new(self.wait_for_outgoing_messages);
         chain_client::Options {
             max_pending_message_bundles: self.max_pending_message_bundles,
             max_block_limit_errors: self.max_block_limit_errors,
             staging_bundles_time_budget: self.staging_bundles_time_budget,
+            priority_bundle_origins: self.prioritize_bundles_from.clone().unwrap_or_default(),
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
@@ -580,6 +607,6 @@ impl std::str::FromStr for ResourceControlPolicyConfig {
 
 impl fmt::Display for ResourceControlPolicyConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }

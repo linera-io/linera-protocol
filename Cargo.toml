@@ -355,6 +355,8 @@ counter = { path = "./examples/counter" }
 counter-no-graphql = { path = "./examples/counter-no-graphql" }
 crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
+event-emitter = { path = "./linera-sdk/tests/fixtures/event-emitter" }
+event-subscriber = { path = "./linera-sdk/tests/fixtures/event-subscriber" }
 fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }
@@ -405,13 +407,14 @@ iter_not_returning_iterator = "deny"
 large_futures = "deny"
 large_stack_arrays = "deny"
 large_types_passed_by_value = "deny"
+let_underscore_untyped = "deny"
+let_underscore_must_use = "deny"
 macro_use_imports = "deny"
 manual_instant_elapsed = "deny"
 manual_is_power_of_two = "deny"
 manual_is_variant_and = "deny"
 map_unwrap_or = "deny"
 map_flatten = "deny"
-match_on_vec_items = "deny"
 mismatching_type_param_order = "deny"
 naive_bytecount = "deny"
 needless_collect = "deny"
@@ -421,5 +424,6 @@ range_minus_one = "deny"
 range_plus_one = "deny"
 ref_option_ref = "deny"
 str_split_at_newline = "deny"
+uninlined_format_args = "deny"
 unnecessary_wraps = "deny"
 used_underscore_binding = "deny"

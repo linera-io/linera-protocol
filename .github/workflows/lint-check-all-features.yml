@@ -27,8 +27,31 @@ permissions:
   contents: read
 
 jobs:
+  changed-files:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.files-changed.outputs.paths }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Filter paths
+        uses: dorny/paths-filter@v3
+        id: files-changed
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            paths:
+              - '!docker/**'
+              - '!configuration/**'
+              - '!kubernetes/**'
+              - '!docs/**'
+              - '!mdbook/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
+              - '!README.md'
+
   check-all-features-partition:
-    if: github.event_name != 'pull_request'
+    needs: changed-files
+    if: github.event_name != 'pull_request' && needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -44,10 +67,7 @@ jobs:
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - uses: taiki-e/install-action@cargo-hack
     - name: Install Protoc
-      uses: arduino/setup-protoc@v3
-      with:
-        version: "34.1"
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      uses: ./.github/actions/install-protoc
     - name: Run cargo hack check (partition ${{ matrix.partition }}/6)
       run: |
         cargo hack check --each-feature --workspace --all-targets --partition ${{ matrix.partition }}/6

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -159,7 +159,16 @@ where
         round: Option<u32>,
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), LocalNodeError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            Block,
+            ChainInfoResponse,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        LocalNodeError,
+    > {
         Ok(self
             .node
             .state
@@ -171,14 +180,9 @@ where
     pub async fn read_blobs_from_storage(
         &self,
         blob_ids: &[BlobId],
-    ) -> Result<Option<Vec<Blob>>, LocalNodeError> {
+    ) -> Result<Option<Vec<Arc<Blob>>>, LocalNodeError> {
         let storage = self.storage_client();
-        Ok(storage
-            .read_blobs(blob_ids)
-            .await?
-            .into_iter()
-            .map(|opt| opt.map(Arc::unwrap_or_clone))
-            .collect())
+        Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
     }
 
     /// Reads blob states from storage.

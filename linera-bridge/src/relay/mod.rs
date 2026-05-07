@@ -26,15 +26,10 @@ use alloy::{
 };
 use anyhow::{Context as _, Result};
 use futures::StreamExt as _;
-use linera_base::{
-    crypto::InMemorySigner,
-    identifiers::{AccountOwner, ApplicationId, ChainId},
-};
+use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
-use linera_faucet_client::Faucet;
-use linera_persistent::Persist;
 use linera_storage::{DbStorage, Storage as _};
 use linera_views::{
     backends::{
@@ -44,7 +39,7 @@ use linera_views::{
     lru_prefix_cache::StorageCacheConfig,
 };
 use linera_wallet_json::PersistentWallet;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Notify, RwLock};
 
 use crate::{
     monitor::{self, MonitorState},
@@ -88,12 +83,11 @@ pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::En
 #[expect(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
-    faucet_url: Option<&str>,
     wallet_path: Option<&Path>,
     keystore_path: Option<&Path>,
     storage_config: Option<&str>,
-    chain_id_arg: Option<ChainId>,
-    chain_owner_arg: Option<AccountOwner>,
+    chain_id: ChainId,
+    chain_owner: AccountOwner,
     evm_bridge_address: &str,
     linera_bridge_address: &str,
     linera_fungible_address: &str,
@@ -101,7 +95,7 @@ pub async fn run(
     evm_light_client_address: Option<&str>,
     port: u16,
     cache_sizes: linera_storage::StorageCacheConfig,
-    monitor_scan_interval: u64,
+    monitor_scan_interval: Duration,
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path: Option<&Path>,
@@ -128,16 +122,15 @@ pub async fn run(
         "Resolved paths"
     );
 
-    // ── Common init ──
-    let faucet = faucet_url.map(|url| {
-        tracing::info!("Using Linera faucet at {url}");
-        Faucet::new(url.to_string())
-    });
+    anyhow::ensure!(
+        wallet_path.exists(),
+        "wallet not found at {}",
+        wallet_path.display(),
+    );
 
-    let mut signer: InMemorySigner =
-        linera_persistent::File::<InMemorySigner>::read(&keystore_path)
-            .context("failed to read keystore")?
-            .into_value();
+    let signer = linera_wallet_json::Keystore::read(&keystore_path)
+        .context("failed to read keystore")?
+        .into_signer();
 
     // Parse storage path: expect "rocksdb:/path/to/db"
     let db_path = storage_path
@@ -145,24 +138,13 @@ pub async fn run(
         .context("storage config must start with 'rocksdb:'")?;
     let mut storage = create_rocksdb_storage(Path::new(db_path), cache_sizes).await?;
 
-    // ── Wallet: load existing or create fresh ──
-    let wallet = if wallet_path.exists() {
-        tracing::info!("Loading existing wallet from {}", wallet_path.display());
-        let wallet = PersistentWallet::read(&wallet_path).context("failed to read wallet")?;
-        wallet
-            .genesis_config()
-            .initialize_storage(&mut storage)
-            .await?;
-        wallet
-    } else {
-        let faucet = faucet
-            .as_ref()
-            .context("--faucet-url is required when no wallet exists")?;
-        tracing::info!("Creating new wallet at {}", wallet_path.display());
-        let genesis_config = faucet.genesis_config().await?;
-        genesis_config.initialize_storage(&mut storage).await?;
-        PersistentWallet::create(&wallet_path, genesis_config).context("failed to create wallet")?
-    };
+    // Wallet: must already exist
+    tracing::info!(path = %wallet_path.display(), "Loading existing wallet");
+    let wallet = PersistentWallet::read(&wallet_path).context("failed to read wallet")?;
+    wallet
+        .genesis_config()
+        .initialize_storage(&mut storage)
+        .await?;
 
     let admin_chain_id = wallet.genesis_config().admin_chain_id();
     let genesis_config = wallet.genesis_config().clone();
@@ -185,64 +167,29 @@ pub async fn run(
     let admin_chain_height = admin_client.chain_info().await?.next_block_height;
     tracing::info!(%admin_chain_height, "Admin chain synced");
 
-    // ── Resolve bridge chain ──
-    let (chain_id, _owner) = if let Some(cid) = chain_id_arg {
-        let owner = chain_owner_arg.context(
-            "--linera-bridge-chain-owner is required when --linera-bridge-chain-id is provided",
-        )?;
+    // ── Register bridge chain in the local wallet ──
+    anyhow::ensure!(
+        signer
+            .contains_key(&chain_owner)
+            .await
+            .context("failed to query keystore")?,
+        "keystore does not contain a key for owner {chain_owner}"
+    );
 
-        // Verify the keystore has the signing key for this owner.
-        anyhow::ensure!(
-            signer
-                .contains_key(&owner)
-                .await
-                .context("failed to query keystore")?,
-            "keystore does not contain a key for owner {owner}"
-        );
+    ctx.update_wallet_for_new_chain(
+        chain_id,
+        Some(chain_owner),
+        linera_base::data_types::Timestamp::default(),
+        linera_base::data_types::Epoch::ZERO,
+    )
+    .await?;
 
-        // Register the chain with the specified owner.
-        ctx.update_wallet_for_new_chain(
-            cid,
-            Some(owner),
-            linera_base::data_types::Timestamp::default(),
-            linera_base::data_types::Epoch::ZERO,
-        )
-        .await?;
-
-        // Register for notifications so the listener can connect to validators.
-        ctx.client
-            .extend_chain_mode(cid, linera_core::client::ListeningMode::FullChain);
-
-        // Sync from validators.
-        let chain_client = ctx.make_chain_client(cid).await?;
-        chain_client.synchronize_from_validators().await?;
-
-        tracing::info!(%cid, %owner, "Using pre-existing chain");
-        (cid, owner)
-    } else {
-        // Claim from faucet.
-        let faucet = faucet
-            .as_ref()
-            .context("--faucet-url is required when --linera-bridge-chain-id is not provided")?;
-        tracing::info!("Claiming bridge chain from faucet...");
-        let owner = AccountOwner::from(signer.generate_new());
-        let chain_desc = faucet.claim(&owner).await?;
-        let cid = chain_desc.id();
-        tracing::info!(%cid, %owner, "Chain claimed, extending wallet...");
-        ctx.extend_with_chain(chain_desc, Some(owner)).await?;
-
-        // Save updated keystore (has new key from generate_new).
-        let mut ks_file = linera_persistent::File::new(&keystore_path, signer.clone())?;
-        ks_file.persist().await?;
-
-        // Sync bridge chain.
-        let chain_client = ctx.make_chain_client(cid).await?;
-        chain_client.synchronize_from_validators().await?;
-        tracing::info!(%cid, "Bridge chain claimed and synced");
-        (cid, owner)
-    };
+    ctx.client
+        .extend_chain_mode(chain_id, linera_core::client::ListeningMode::FullChain);
 
     let chain_client = ctx.make_chain_client(chain_id).await?;
+    chain_client.synchronize_from_validators().await?;
+    tracing::info!(%chain_id, %chain_owner, "Bridge chain registered and synced");
 
     Box::pin(serve_loop(
         chain_client,
@@ -307,7 +254,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     evm_private_key: &str,
     evm_light_client_address: Option<&str>,
     port: u16,
-    monitor_scan_interval: u64,
+    monitor_scan_interval: Duration,
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
@@ -371,7 +318,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let admin_notifications = chain_client.subscribe_to(admin_chain_id)?;
     let mut notifications = futures::stream::select(chain_notifications, admin_notifications);
     let (listener, _abort_handle, _) = chain_client.listen().await?;
-    let chain_listener_handle = tokio::spawn(listener);
+    let mut chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan/retry ──
     let mut monitor_state = MonitorState::new(monitor_start_block);
@@ -379,10 +326,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .parent()
         .unwrap_or(storage_dir)
         .join("bridge_relay.sqlite3");
-    let sqlite_path = match sqlite_path_override {
-        Some(p) => p,
-        None => &default_sqlite_path,
-    };
+    let sqlite_path = sqlite_path_override.unwrap_or(&default_sqlite_path);
     let db = monitor::db::BridgeDb::open(sqlite_path)
         .await
         .with_context(|| {
@@ -393,40 +337,42 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         })?;
     tracing::info!(path = %sqlite_path.display(), "Opened bridge relay SQLite database");
     monitor_state.set_db(db);
+    monitor_state
+        .load_from_db()
+        .await
+        .context("failed to recover pending bridge requests from SQLite WAL")?;
     let monitor = Arc::new(RwLock::new(monitor_state));
-    let scan_interval = Duration::from_secs(monitor_scan_interval);
-    let (pending_deposit_tx, pending_deposit_rx) =
-        tokio::sync::mpsc::channel::<monitor::PendingDeposit>(64);
-    let (pending_burn_tx, pending_burn_rx) = tokio::sync::mpsc::channel::<monitor::PendingBurn>(64);
+    let deposit_notify = Arc::new(Notify::new());
+    let burn_notify = Arc::new(Notify::new());
 
-    let evm_scan_handle = {
+    let mut evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
+        let deposit_notify = Arc::clone(&deposit_notify);
         tokio::spawn(monitor::evm::evm_scan_loop(
             monitor,
             evm_client,
             linera_client,
-            pending_deposit_tx,
-            scan_interval,
-            max_retries,
+            deposit_notify,
+            monitor_scan_interval,
         ))
     };
-    let linera_scan_handle = {
+    let mut linera_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
+        let burn_notify = Arc::clone(&burn_notify);
         tokio::spawn(monitor::linera::linera_scan_loop(
             monitor,
             evm_client,
             linera_client,
-            pending_burn_tx,
-            scan_interval,
-            max_retries,
+            burn_notify,
+            monitor_scan_interval,
         ))
     };
 
-    let retry_handle = {
+    let mut retry_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
@@ -436,8 +382,10 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             proof_client,
             evm_client,
             linera_client,
-            pending_deposit_rx,
-            pending_burn_rx,
+            deposit_notify,
+            burn_notify,
+            monitor_scan_interval,
+            max_retries,
         ))
     };
 
@@ -447,7 +395,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     tracing::info!("HTTP server listening on {bind_addr}");
 
     let tcp_listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    let http_server_handle = tokio::spawn(async move {
+    let mut http_server_handle = tokio::spawn(async move {
         axum::serve(tcp_listener, app)
             .await
             .context("HTTP server error")
@@ -464,11 +412,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
 
     // ── Main loop: process chain operations + notifications ──
     tracing::info!("Listening for chain operations and notifications...");
-    let mut chain_listener_handle = chain_listener_handle;
-    let mut evm_scan_handle = evm_scan_handle;
-    let mut linera_scan_handle = linera_scan_handle;
-    let mut retry_handle = retry_handle;
-    let mut http_server_handle = http_server_handle;
     loop {
         tokio::select! {
             result = &mut chain_listener_handle => {
@@ -564,12 +507,14 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             let (certs, _) = chain_client.process_inbox().await?;
                             Ok(certs)
                         }.await;
-                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        if response.send(result).is_err() {
+                            tracing::debug!("ProcessInbox response receiver dropped");
+                        }
                     }
                     linera::ChainOperation::ProcessDeposit { proof, response } => {
                         let result = async {
                             let operations: Vec<_> = proof.log_indices.iter().map(|&log_index| {
-                                let op = evm::BridgeOperation::ProcessDeposit {
+                                let op = crate::abi::BridgeOperation::ProcessDeposit {
                                     block_header_rlp: proof.block_header_rlp.clone(),
                                     receipt_rlp: proof.receipt_rlp.clone(),
                                     proof_nodes: proof.proof_nodes.clone(),
@@ -608,7 +553,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             };
                             Ok(())
                         }.await;
-                        let _ = response.send(result.map_err(|e: anyhow::Error| format!("{e:#}")));
+                        if response.send(result).is_err() {
+                            tracing::debug!("ProcessDeposit response receiver dropped");
+                        }
                         update_balance_metrics(&evm_client, &linera_client).await;
                     }
                 }

@@ -155,6 +155,9 @@ spec:
                 {{- if .Values.notificationQueueSize }}
                 --notification-queue-size {{ .Values.notificationQueueSize }}
                 {{- end }}
+                {{- if .Values.chainWorkerTtlMs }}
+                --chain-worker-ttl-ms {{ .Values.chainWorkerTtlMs | int }}
+                {{- end }}
           env:
             - name: RUST_LOG
               value: {{ .Values.logLevel }}

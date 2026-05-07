@@ -36,7 +36,17 @@ wasm-bindgen \
     --out-name index \
     --typescript \
     --target web \
+    --keep-debug \
     --split-linked-modules
+
+if command -v wasm-split >/dev/null; then
+    wasm-split \
+        src/wasm/index_bg.wasm \
+        --strip \
+        --debug-out src/wasm/index_bg.debug.wasm
+else
+    echo "wasm-split not found, skipping (debug wasm and stripping disabled)" >&2
+fi
 
 mkdir -p dist
 cp -r src/wasm dist/

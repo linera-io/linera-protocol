@@ -194,14 +194,11 @@ where
                 .read_multi_values_bytes(&keys_add)
                 .await?
                 .into_iter();
-            for (idx, count) in n_blocks.iter().enumerate() {
-                if count > &1 {
-                    let value = big_values.get_mut(idx).unwrap();
-                    if let Some(ref mut value) = value {
-                        for _ in 1..*count {
-                            let segment = segments.next().unwrap().unwrap();
-                            value.extend(segment);
-                        }
+            for (big_value, count) in big_values.iter_mut().zip(&n_blocks) {
+                if let Some(value) = big_value {
+                    for _ in 1..*count {
+                        let segment = segments.next().unwrap().unwrap();
+                        value.extend(segment);
                     }
                 }
             }

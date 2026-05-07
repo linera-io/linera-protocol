@@ -754,7 +754,7 @@ impl LocalNet {
         let child = self
             .command_for_binary("linera-proxy")
             .await?
-            .arg(format!("server_{}.json", validator))
+            .arg(format!("server_{validator}.json"))
             .args(["--storage", &storage.to_string()])
             .args(["--id", &proxy_id.to_string()])
             .spawn_into()?;
@@ -926,7 +926,7 @@ impl LocalNet {
         command
             .arg("run")
             .args(["--storage", &storage.to_string()])
-            .args(["--server", &format!("server_{}.json", validator)])
+            .args(["--server", &format!("server_{validator}.json")])
             .args(["--shard", &shard.to_string()])
             .args(self.cross_chain_config.to_args());
         let child = command.spawn_into()?;

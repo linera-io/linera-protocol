@@ -14,7 +14,7 @@ use crate::{
 };
 
 fn dummy_chain_id(index: u32) -> ChainId {
-    ChainId(CryptoHash::test_hash(format!("chain{}", index)))
+    ChainId(CryptoHash::test_hash(format!("chain{index}")))
 }
 
 #[test]

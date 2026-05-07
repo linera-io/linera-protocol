@@ -5,6 +5,15 @@
 **/node_modules
 **/dist
 **/web-frontend
+web/@linera/client/src/wasm
+**/.env.local
+**/.DS_Store
+**/.vscode
+**/.idea
+**/.zed
+**/.vite
+**/*.swp
+**/*.swo
 *.log
 # ignore .git and .cache folders
 .git
@@ -16,7 +25,7 @@ README-secret.md
 # github related files
 .github/
 **/target
-Dockerfile
+**/Dockerfile*
 .dockerignore
 .gitignore
 .gcloudignore

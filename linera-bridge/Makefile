@@ -42,7 +42,6 @@ relayer-up: ## Run the bridge relayer container
 	@echo "  EVM_PRIVATE_KEY      = $(EVM_PRIVATE_KEY)"
 	@echo ""
 	@echo "Optional:"
-	@echo "  FAUCET_URL           = $(or $(FAUCET_URL),(not set))"
 	@echo "  PORT                 = $(or $(PORT),3001)"
 	@echo "  MONITOR_SCAN_INTERVAL= $(or $(MONITOR_SCAN_INTERVAL),30)"
 	@echo "  MONITOR_START_BLOCK  = $(or $(MONITOR_START_BLOCK),0)"
@@ -59,7 +58,6 @@ relayer-up: ## Run the bridge relayer container
 		-e LINERA_BRIDGE_APP="$(LINERA_BRIDGE_APP)" \
 		-e LINERA_FUNGIBLE_APP="$(LINERA_FUNGIBLE_APP)" \
 		-e EVM_PRIVATE_KEY="$(EVM_PRIVATE_KEY)" \
-		$(if $(FAUCET_URL),-e FAUCET_URL="$(FAUCET_URL)") \
 		$(if $(PORT),-e PORT="$(PORT)") \
 		$(if $(MONITOR_SCAN_INTERVAL),-e MONITOR_SCAN_INTERVAL="$(MONITOR_SCAN_INTERVAL)") \
 		$(if $(MONITOR_START_BLOCK),-e MONITOR_START_BLOCK="$(MONITOR_START_BLOCK)") \

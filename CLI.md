@@ -146,10 +146,14 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `3`
 * `--staging-bundles-time-budget-ms <STAGING_BUNDLES_TIME_BUDGET>` — Time budget for staging message bundles in milliseconds. When set, limits bundle execution by wall-clock time, in addition to the count limit from `max_pending_message_bundles`
 * `--prioritize-bundles-from <PRIORITIZE_BUNDLES_FROM>` — Comma-separated list of chain IDs whose incoming bundles should be processed first
+* `--ignore-bundles-from <IGNORE_BUNDLES_FROM>` — Comma-separated list of chain IDs whose incoming bundles should be ignored
 * `--chain-worker-ttl-ms <CHAIN_WORKER_TTL>` — The duration in milliseconds after which an idle chain worker will free its memory. Use 0 to disable expiry
 
   Default value: `30000`
 * `--sender-chain-worker-ttl-ms <SENDER_CHAIN_WORKER_TTL>` — The duration, in milliseconds, after which an idle sender chain worker will free its memory. Use 0 to disable expiry
+
+  Default value: `1000`
+* `--cross-chain-batch-size-limit <CROSS_CHAIN_BATCH_SIZE_LIMIT>` — Maximum number of cross-chain requests coalesced into a single batch by the per-chain driver. Bounds the worst-case write-lock hold time
 
   Default value: `1000`
 * `--retry-delay-ms <RETRY_DELAY>` — Delay increment for retrying to connect to a validator
@@ -186,6 +190,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--reject-message-bundles-without-application-ids <REJECT_MESSAGE_BUNDLES_WITHOUT_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles with at least one message from one of these applications will be accepted
 * `--reject-message-bundles-with-other-application-ids <REJECT_MESSAGE_BUNDLES_WITH_OTHER_APPLICATION_IDS>` — A set of application IDs. If specified, only bundles where all messages are from one of these applications will be accepted
 * `--process-events-from-application-ids <PROCESS_EVENTS_FROM_APPLICATION_IDS>` — A set of application IDs. If specified, only events coming from streams created by applications from this set will be processed
+* `--never-reject-application-ids <NEVER_REJECT_APPLICATION_IDS>` — A set of application IDs whose messages must never be rejected. Bundles whose messages are all from one of these applications bypass the other rejection rules (except `--restrict-chain-ids-to`), and on execution failure they (and subsequent bundles from the same sender) are removed from the block for later retry instead of being rejected, with a warning logged. Bundles that contain any message from an application not on this list can be rejected
 * `--timings` — Enable timing reports during operations
 * `--timing-interval <TIMING_INTERVAL>` — Interval in seconds between timing reports (defaults to 5)
 

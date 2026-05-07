@@ -54,10 +54,6 @@ struct ServeOptions {
     #[arg(long)]
     rpc_url: String,
 
-    /// URL of the Linera faucet (required when wallet doesn't exist or chain ID not provided)
-    #[arg(long)]
-    faucet_url: Option<String>,
-
     /// Path to the wallet state file.
     #[arg(long = "wallet", env = "LINERA_WALLET")]
     wallet: Option<PathBuf>,
@@ -70,13 +66,13 @@ struct ServeOptions {
     #[arg(long = "storage", env = "LINERA_STORAGE")]
     storage: Option<String>,
 
-    /// Linera bridge chain ID. If omitted, claims a new chain from faucet.
+    /// Linera bridge chain ID
     #[arg(long)]
-    linera_bridge_chain_id: Option<linera_base::identifiers::ChainId>,
+    linera_bridge_chain_id: linera_base::identifiers::ChainId,
 
-    /// Owner to use for the bridge chain. Required when --linera-bridge-chain-id is provided.
-    #[arg(long, requires = "linera_bridge_chain_id")]
-    linera_bridge_chain_owner: Option<linera_base::identifiers::AccountOwner>,
+    /// Owner of the bridge chain
+    #[arg(long)]
+    linera_bridge_chain_owner: linera_base::identifiers::AccountOwner,
 
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
@@ -164,14 +160,8 @@ impl ServeOptions {
             .install_default()
             .expect("failed to install rustls crypto provider");
 
-        // Tonic pulls in rustls 0.23 which requires an explicit crypto provider.
-        rustls::crypto::ring::default_provider()
-            .install_default()
-            .expect("failed to install rustls crypto provider");
-
         Box::pin(linera_bridge::relay::run(
             &self.rpc_url,
-            self.faucet_url.as_deref(),
             self.wallet.as_deref(),
             self.keystore.as_deref(),
             self.storage.as_deref(),
@@ -191,7 +181,7 @@ impl ServeOptions {
                 event_cache_size: self.event_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
-            self.monitor_scan_interval,
+            std::time::Duration::from_secs(self.monitor_scan_interval),
             self.monitor_start_block,
             self.max_retries,
             self.sqlite_path.as_deref(),
@@ -295,7 +285,7 @@ impl InitLightClientOptions {
             .find(|c| c.origin() == ChainOrigin::Root(0))
             .ok_or_else(|| anyhow::anyhow!("no admin chain (Root(0)) in genesis config"))?
             .id();
-        let admin_chain_bytes = <[u8; 32]>::from(*admin_chain_id.0.as_bytes());
+        let admin_chain_bytes = *admin_chain_id.0.as_bytes();
 
         let mut validators: Vec<String> = Vec::new();
         let mut weights: Vec<u64> = Vec::new();

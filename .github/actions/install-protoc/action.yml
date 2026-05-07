@@ -1,0 +1,20 @@
+name: Install Protoc
+description: Install the Protocol Buffers compiler from official GitHub releases.
+inputs:
+  version:
+    description: Protoc version (e.g. "34.1").
+    required: false
+    default: "34.1"
+runs:
+  using: "composite"
+  steps:
+    - name: Download and install protoc
+      shell: bash
+      env:
+        PB_VER: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        curl -fsSL -o /tmp/protoc.zip \
+          "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
+        sudo unzip -o /tmp/protoc.zip -d /usr/local
+        protoc --version

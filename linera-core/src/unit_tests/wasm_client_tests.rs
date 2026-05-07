@@ -24,8 +24,8 @@ use hex_game::{HexAbi, Operation as HexOperation, Timeouts};
 use linera_base::{
     crypto::{CryptoHash, InMemorySigner},
     data_types::{
-        Amount, BlanketMessagePolicy, BlobContent, BlockHeight, Bytecode, ChainDescription, Epoch,
-        Event, MessagePolicy, OracleResponse, Round, TimeDelta, Timestamp,
+        Amount, BlobContent, BlockHeight, Bytecode, ChainDescription, Epoch, Event, MessagePolicy,
+        OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
         Account, AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId,
@@ -368,11 +368,11 @@ where
     let block = cert.block();
     let responses = &block.body.oracle_responses;
     let [_, responses] = &responses[..] else {
-        panic!("Unexpected oracle responses: {:?}", responses);
+        panic!("Unexpected oracle responses: {responses:?}");
     };
     let [OracleResponse::Service(json)] = &responses[..] else {
         assert_eq!(&responses[..], &[]);
-        panic!("Unexpected oracle responses: {:?}", responses);
+        panic!("Unexpected oracle responses: {responses:?}");
     };
     let response_json = serde_json::from_slice::<serde_json::Value>(json).unwrap();
     assert_eq!(response_json["data"], json!({"value": 10}));
@@ -769,10 +769,9 @@ where
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
@@ -780,7 +779,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender.chain_id(),
+            stream_id,
+            next_index: 1,
+        }
     );
 
     let query = async_graphql::Request::new("{ receivedPosts { keys { author, index } } }");
@@ -836,22 +840,18 @@ where
 
     receiver.synchronize_from_validators().await.unwrap();
 
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        Some([sender.chain_id()].into_iter().collect()),
-        None,
-        None,
-        None,
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        restrict_chain_ids_to: Some([sender.chain_id()].into_iter().collect()),
+        ..Default::default()
+    };
 
     // Receiver should only process the event from sender now.
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
@@ -859,21 +859,24 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 2)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender.chain_id(),
+            stream_id,
+            next_index: 2,
+        }
     );
 
     // Let's receive from everyone again.
-    receiver.options_mut().message_policy =
-        MessagePolicy::new(BlanketMessagePolicy::Accept, None, None, None, None);
+    receiver.options_mut().message_policy = MessagePolicy::default();
 
     // Receiver should now process the event from sender2 as well.
     let certs = receiver.process_inbox().await.unwrap().0;
     assert_eq!(certs.len(), 1);
 
-    // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
@@ -881,7 +884,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender2.chain_id(), stream_id, 1)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender2.chain_id(),
+            stream_id,
+            next_index: 1,
+        }
     );
 
     // Make one more post.
@@ -899,26 +907,22 @@ where
 
     // Turn on the events publishing whitelist: with no applications on it, processing the
     // events will effectively be disabled.
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        None,
-        Some(Default::default()),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        process_events_from_application_ids: Some(Default::default()),
+        ..Default::default()
+    };
 
     // Receiver should not process the event.
     let certs = receiver.process_inbox().await.unwrap().0;
     assert!(certs.is_empty());
 
     // Let's whitelist the social app now.
-    receiver.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        None,
-        Some([application_id.forget_abi().into()].into_iter().collect()),
-    );
+    receiver.options_mut().message_policy = MessagePolicy {
+        process_events_from_application_ids: Some(
+            [application_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
 
     // Receiver should process the new event now.
     let certs = receiver.process_inbox().await.unwrap().0;
@@ -927,7 +931,7 @@ where
     // There should be an UpdateStreams operation due to the new post.
     let operations = certs[0].block().body.operations().collect::<Vec<_>>();
     let [Operation::System(operation)] = &*operations else {
-        panic!("Expected one operation, got {:?}", operations);
+        panic!("Expected one operation, got {operations:?}");
     };
     let stream_id = StreamId {
         application_id: application_id.forget_abi().into(),
@@ -935,7 +939,12 @@ where
     };
     assert_eq!(
         **operation,
-        SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 3)])
+        SystemOperation::UpdateStream {
+            application_id: application_id.forget_abi(),
+            chain_id: sender.chain_id(),
+            stream_id,
+            next_index: 3,
+        }
     );
 
     // Make sure that the receiver is still at epoch 0.
@@ -1073,13 +1082,21 @@ where
     // Verify that receiver2 can process its inbox and consume the pre-existing events.
     let certs = receiver2.process_inbox().await?.0;
     assert!(!certs.is_empty(), "receiver2 should have events to process");
-    // The inbox processing should produce UpdateStreams operations for the events.
-    let has_update_streams = certs.iter().any(|cert| {
-        cert.block().body.operations().any(|op| {
-            matches!(op, Operation::System(op) if matches!(**op, SystemOperation::UpdateStreams(_)))
+    // The inbox processing should produce UpdateStream operations for the events.
+    let count_update_streams: usize = certs
+        .iter()
+        .map(|cert| {
+            cert.block()
+                .body
+                .operations()
+                .filter(|op| op.is_update_stream())
+                .count()
         })
-    });
-    assert!(has_update_streams, "should have UpdateStreams operations");
+        .sum();
+    assert_eq!(
+        count_update_streams, 1,
+        "should have UpdateStreams operations"
+    );
 
     Ok(())
 }
@@ -1201,13 +1218,12 @@ where
     campaign_chain.synchronize_from_validators().await?;
 
     // Test 1: Accept bundles with at least one message from fungible app.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        Some([fungible_id.forget_abi().into()].into_iter().collect()),
-        None,
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_without_application_ids: Some(
+            [fungible_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(certs.len(), 1, "Should accept bundle with fungible message");
 
@@ -1225,13 +1241,12 @@ where
     campaign_chain.synchronize_from_validators().await?;
 
     // Test 2: Accept bundles with at least one message from crowd-funding app.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        Some([crowd_funding_id.forget_abi().into()].into_iter().collect()),
-        None,
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_without_application_ids: Some(
+            [crowd_funding_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
@@ -1255,13 +1270,12 @@ where
     // Test 3: Reject bundles without any message from a non-existent app.
     // Use a different application description hash to create a fake app ID.
     let fake_app_id = ApplicationId::new(CryptoHash::test_hash("fake app"));
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        Some([fake_app_id.into()].into_iter().collect()),
-        None,
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_without_application_ids: Some(
+            [fake_app_id.into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
@@ -1291,13 +1305,12 @@ where
 
     // Test 4: Reject bundles that contain messages from apps not in the allowlist.
     // The bundle has messages from both fungible and crowd-funding, but we only allow fungible.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        Some([fungible_id.forget_abi().into()].into_iter().collect()),
-        None,
-    );
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_with_other_application_ids: Some(
+            [fungible_id.forget_abi().into()].into_iter().collect(),
+        ),
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
@@ -1326,11 +1339,8 @@ where
     campaign_chain.synchronize_from_validators().await?;
 
     // Test 5: Accept bundles when all app messages are in the allowlist.
-    campaign_chain.options_mut().message_policy = MessagePolicy::new(
-        BlanketMessagePolicy::Accept,
-        None,
-        None,
-        Some(
+    campaign_chain.options_mut().message_policy = MessagePolicy {
+        reject_message_bundles_with_other_application_ids: Some(
             [
                 fungible_id.forget_abi().into(),
                 crowd_funding_id.forget_abi().into(),
@@ -1338,8 +1348,8 @@ where
             .into_iter()
             .collect(),
         ),
-        None,
-    );
+        ..Default::default()
+    };
     let certs = campaign_chain.process_inbox().await?.0;
     assert_eq!(
         certs.len(),
@@ -1936,7 +1946,13 @@ where
     };
     receiver
         .execute_operations(
-            vec![SystemOperation::UpdateStreams(vec![(sender.chain_id(), stream_id, 1)]).into()],
+            vec![SystemOperation::UpdateStream {
+                application_id: application_id.forget_abi(),
+                chain_id: sender.chain_id(),
+                stream_id,
+                next_index: 1,
+            }
+            .into()],
             vec![],
         )
         .await

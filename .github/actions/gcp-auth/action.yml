@@ -1,0 +1,72 @@
+# Composite action: authenticate to Google Cloud via Workload Identity
+# Federation, then install/configure the gcloud SDK.
+#
+# Why this exists:
+#   Every image-push workflow in this repo (agent-sandbox-image.yml,
+#   build-runner-image.yml, build-linera-utils.yml) needs the same three
+#   things before it can `docker push` or `gcloud builds submit`:
+#     1. WIF auth using the org-wide GitHub Apps provider.
+#     2. The gcloud CLI on PATH.
+#     3. (Optionally) Docker credential helper wired up for Artifact Registry.
+#   Copy-pasting the WIF provider ARN into every workflow makes provider
+#   rotations error-prone, so we centralize it here.
+#
+# How to use it:
+#   Call from a job that has `permissions: id-token: write` (composite
+#   actions inherit job permissions but cannot declare their own) and that
+#   has already run `actions/checkout@v4` (the action is referenced by
+#   path, so the repo must be on disk):
+#
+#     - uses: actions/checkout@v4
+#     - uses: ./.github/actions/gcp-auth
+#       with:
+#         service_account: actions-runner@linera-io-dev.iam.gserviceaccount.com
+#         configure_docker_for: us-docker.pkg.dev   # optional
+#
+# References:
+#   - google-github-actions/auth README:
+#     https://github.com/google-github-actions/auth
+#   - GCP WIF with deployment pipelines:
+#     https://cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines
+
+name: GCP Auth (WIF)
+description: >-
+  Authenticate to Google Cloud via Workload Identity Federation and set up
+  the gcloud SDK. Optionally configure Docker for Artifact Registry.
+
+inputs:
+  service_account:
+    description: >-
+      Service account email to impersonate via Workload Identity Federation
+      (e.g. actions-runner@linera-io-dev.iam.gserviceaccount.com).
+    required: true
+  configure_docker_for:
+    description: >-
+      If non-empty, run `gcloud auth configure-docker <value> --quiet` so
+      `docker push` can use the WIF-derived credentials. Set to e.g.
+      `us-docker.pkg.dev` for Artifact Registry. Leave empty when the
+      workflow only uses `gcloud builds submit` (Cloud Build authenticates
+      directly and does not need a Docker credential helper).
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        # Org-wide WIF provider. Hard-coded on purpose: the whole reason
+        # this composite action exists is so the ARN lives in exactly one
+        # place. If it ever rotates, change it here, not in every workflow.
+        workload_identity_provider: >-
+          projects/886017272224/locations/global/workloadIdentityPools/github-apps-pool/providers/github-apps-provider
+        service_account: ${{ inputs.service_account }}
+
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker for Artifact Registry
+      if: inputs.configure_docker_for != ''
+      shell: bash
+      run: gcloud auth configure-docker "${{ inputs.configure_docker_for }}" --quiet

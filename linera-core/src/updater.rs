@@ -248,12 +248,12 @@ where
     )]
     async fn send_confirmed_certificate(
         &mut self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: &Arc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
             .remote_node
-            .handle_optimized_confirmed_certificate(&certificate, delivery)
+            .handle_optimized_confirmed_certificate(certificate, delivery)
             .await;
 
         let mut sent_admin_chain = false;
@@ -275,7 +275,7 @@ where
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
                     self.remote_node
-                        .check_blobs_not_found(&certificate, &blob_ids)?;
+                        .check_blobs_not_found(certificate, &blob_ids)?;
                     // The certificate is confirmed, so the blobs must be in storage.
                     let maybe_blobs = self
                         .client
@@ -680,7 +680,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<(), chain_client::Error> {
         // Phase 1: Height synchronization
         let info = if target_block_height.0 > 0 {
@@ -726,7 +726,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let height = target_block_height.try_sub_one()?;
 
@@ -746,7 +746,10 @@ where
         };
 
         // Optimistically try sending just the last certificate
-        let info = match self.send_confirmed_certificate(certificate, delivery).await {
+        let info = match self
+            .send_confirmed_certificate(&certificate, delivery)
+            .await
+        {
             Ok(info) => info,
             Err(error) => {
                 tracing::debug!(
@@ -774,7 +777,7 @@ where
                 .await?;
 
             for certificate in certificates {
-                self.send_confirmed_certificate(certificate, delivery)
+                self.send_confirmed_certificate(&certificate, delivery)
                     .await?;
             }
         }
@@ -787,18 +790,14 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<GenericCertificate<ConfirmedBlock>>, chain_client::Error> {
+    ) -> Result<Vec<Arc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
 
         let certificates_by_height = storage
             .read_certificates_by_heights(chain_id, &heights)
             .await?;
 
-        Ok(certificates_by_height
-            .into_iter()
-            .flatten()
-            .map(Arc::unwrap_or_clone)
-            .collect())
+        Ok(certificates_by_height.into_iter().flatten().collect())
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.
@@ -959,13 +958,12 @@ where
                         .await?
                         .into_iter()
                         .flatten()
-                        .map(Arc::unwrap_or_clone)
                         .collect::<Vec<_>>();
 
                     // Send each certificate
                     for certificate in certificates {
                         updater
-                            .send_confirmed_certificate(certificate, delivery)
+                            .send_confirmed_certificate(&certificate, delivery)
                             .await?;
                     }
 

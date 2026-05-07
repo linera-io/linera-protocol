@@ -1,3 +1,8 @@
+# syntax=docker/dockerfile:1.6
+#
+# Requires BuildKit for `RUN --mount=type=cache` (DOCKER_BUILDKIT=1, `docker buildx`,
+# or recent Docker Desktop/Engine).
+
 ARG git_commit
 ARG build_date
 ARG build_flag=--release
@@ -6,22 +11,40 @@ ARG rustflags="-C force-frame-pointers=yes"
 
 # ── Stage 0: chef base (rust + cargo-chef + system deps) ──
 
-FROM rust:1.88-slim-bookworm AS chef
+FROM rust:1.86-slim-bookworm AS chef
 
-RUN apt-get update && apt-get install -y \
+# `rm -f /etc/apt/apt.conf.d/docker-clean`: Debian's slim images ship that file
+# with `APT::Keep-Downloaded-Packages "false";`, which makes apt delete
+# downloaded `.deb` files right after install. That defeats the cache mount on
+# `/var/cache/apt` — every rebuild re-downloads. Remove the config so packages
+# stay in the cache mount across builds.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install --no-install-recommends -y \
     pkg-config \
     protobuf-compiler \
-    clang \
-    && rm -rf /var/lib/apt/lists/*
+    libprotobuf-dev \
+    clang
 
-RUN cargo install cargo-chef --locked
 WORKDIR /app
+
+# Pre-install the toolchain matching rust-toolchain.toml so planner/builder
+# stages don't trigger rustup downloads. The layer caches on the file's hash.
+COPY rust-toolchain.toml rust-toolchain.toml
+RUN rustup show
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cargo install cargo-chef --version 0.1.71 --locked
 
 # ── Stage 1: planner — generate dependency recipe from full source ──
 
 FROM chef AS planner
 COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cargo chef prepare --recipe-path recipe.json
 
 # The examples/ workspace is separate from the root workspace, but
 # `fungible` is a dev-dependency of linera-bridge so Cargo must resolve it.
@@ -68,7 +91,10 @@ ENV GIT_COMMIT=${git_commit}
 ENV RUSTFLAGS=${rustflags}
 
 # Cook dependencies — this layer is cached until Cargo.toml / Cargo.lock change.
-RUN cargo chef cook ${build_flag:+"$build_flag"} \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo chef cook ${build_flag:+"$build_flag"} \
     --recipe-path recipe.json \
     --bin linera-bridge \
     -p linera-bridge \
@@ -76,10 +102,15 @@ RUN cargo chef cook ${build_flag:+"$build_flag"} \
 
 # Copy full source and build (only changed crates recompile).
 COPY . .
-RUN cargo build ${build_flag:+"$build_flag"} \
-    --bin linera-bridge \
-    -p linera-bridge \
-    --features relay \
+# target/ is a cache mount — build + copy binary OUT in same RUN so it persists
+# in the image layer (cache mounts don't survive across RUNs).
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build ${build_flag:+"$build_flag"} \
+        --bin linera-bridge \
+        -p linera-bridge \
+        --features relay \
     && cp target/"$build_folder"/linera-bridge /usr/local/bin/linera-bridge
 
 # ── Stage 3: runtime ──

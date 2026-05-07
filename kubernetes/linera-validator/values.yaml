@@ -108,6 +108,15 @@ blockCacheSize: 20000
 # Execution state cache size (number of entries)
 executionStateCacheSize: 20000
 
+# Chain worker TTL in milliseconds.
+# How long an idle chain worker stays in memory on the validator before its
+# state is freed. Higher values keep chains warm across notification gaps and
+# brief client restarts at the cost of more memory; lower values bound memory
+# at the cost of cold ChainStateView reloads from Scylla on next access.
+# Binary default: 30000 (30 seconds).
+# Set to a number (e.g. 600000) to override; leave empty to use the binary default.
+chainWorkerTtlMs: ""
+
 # Dual storage mode (RocksDB + ScyllaDB)
 dualStore: false
 

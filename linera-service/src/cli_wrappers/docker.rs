@@ -78,7 +78,7 @@ impl DockerImage {
                         "arm" => "aarch",
                         _ => arch,
                     };
-                    format!("target={}-unknown-linux-gnu", docker_arch)
+                    format!("target={docker_arch}-unknown-linux-gnu")
                 }
             };
 

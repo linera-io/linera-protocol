@@ -5,7 +5,7 @@
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::{self, Arc},
 };
 
@@ -18,7 +18,6 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
 use linera_cache::{UniqueValueCache, ValueCache};
@@ -53,7 +52,7 @@ use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
     client::ListeningMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
-    worker::{NetworkActions, Notification, Reason, WorkerError},
+    worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
 
 /// Type alias for event subscriptions result.
@@ -106,7 +105,7 @@ where
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -118,7 +117,7 @@ where
 
 /// The result of processing a cross-chain update.
 pub(crate) enum CrossChainUpdateResult {
-    /// The update was applied and the chain was saved up to the given height.
+    /// The update was applied up to the given height. The caller must save.
     Updated(BlockHeight),
     /// All bundles were already received; nothing to do.
     NothingToDo,
@@ -150,7 +149,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
         execution_state_cache: Option<
             Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
@@ -251,12 +250,16 @@ where
         chain_id = %self.chain_id(),
         blob_id = %blob_id
     ))]
-    pub(crate) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
+    pub(crate) async fn download_pending_blob(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<Arc<Blob>, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
-            return Ok(blob);
+            return Ok(self.storage.cache_blob(blob));
         }
-        let blob = self.storage.read_blob(blob_id).await?;
-        blob.map(Arc::unwrap_or_clone)
+        self.storage
+            .read_blob(blob_id)
+            .await?
             .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
@@ -426,10 +429,8 @@ where
         let mut uncached_hashes = Vec::new();
 
         for (i, hash) in hashes.iter().enumerate() {
-            if let Some(hashed_block) = self.block_values.get(hash) {
-                blocks.push(Some(Arc::new(ConfirmedBlock::from_hashed(
-                    Arc::unwrap_or_clone(hashed_block),
-                ))));
+            if let Some(block) = self.block_values.get(hash) {
+                blocks.push(Some(block));
             } else {
                 blocks.push(None);
                 uncached_indices.push(i);
@@ -440,10 +441,6 @@ where
         if !uncached_hashes.is_empty() {
             let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
             for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
-                if let Some(block) = &maybe_block {
-                    self.block_values
-                        .insert_hashed(Cow::Borrowed(block.inner()));
-                }
                 blocks[i] = maybe_block;
             }
         }
@@ -916,7 +913,7 @@ where
         } else {
             let (proposed_block, outcome) = certificate.into_value().into_block().into_proposal();
             let oracle_responses = Some(outcome.oracle_responses.clone());
-            let (proposed_block, verified, _resource_tracker) = chain
+            let (proposed_block, verified, _resource_tracker, _) = chain
                 .execute_block(
                     proposed_block,
                     local_time,
@@ -1088,42 +1085,135 @@ where
             );
             return Ok(CrossChainUpdateResult::NothingToDo);
         }
-        // Save the chain.
-        self.save().await?;
         Ok(CrossChainUpdateResult::Updated(last_updated_height))
     }
 
     /// Handles the cross-chain request confirming that the recipient was updated.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
-        recipient = %recipient,
-        latest_height = %latest_height
+        %recipient,
+        %latest_height
     ))]
     pub(crate) async fn confirm_updated_recipient(
         &mut self,
         recipient: ChainId,
         latest_height: BlockHeight,
-    ) -> Result<NetworkActions, WorkerError> {
-        let fully_delivered = self
+    ) -> Result<bool, WorkerError> {
+        Ok(self
             .chain
             .mark_messages_as_received(&recipient, latest_height)
             .await?
             && self
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)
-                .await?;
+                .await?)
+    }
 
-        // Send the next chunk of cross-chain messages for this recipient, if any.
-        let actions = self
-            .create_cross_chain_actions_for_recipient(recipient)
-            .await?;
+    /// Notifies delivery waiters that all messages up to `height` have been delivered.
+    pub(crate) fn notify_delivery(&self, height: BlockHeight) {
+        self.delivery_notifier.notify(height);
+    }
 
-        self.save().await?;
+    /// Processes a batch of cross-chain requests, performing at most one `save()`.
+    ///
+    /// Both update and confirmation requests are handled together so that a
+    /// single write-lock acquisition covers all pending work for the chain.
+    pub(crate) async fn process_batch(&mut self, requests: Vec<BatchRequest>) {
+        let mut update_results = Vec::new();
+        let mut confirm_results = Vec::new();
+        let mut need_save = false;
+        let mut need_rollback = false;
+        let mut max_delivered_height: Option<BlockHeight> = None;
 
-        if fully_delivered {
-            self.delivery_notifier.notify(latest_height);
+        for request in requests {
+            match request {
+                BatchRequest::Update {
+                    origin,
+                    bundles,
+                    previous_height,
+                    result_sender,
+                } => {
+                    if need_rollback {
+                        send_result(result_sender, Err(WorkerError::BatchRolledBack));
+                        continue;
+                    }
+                    let result = self
+                        .process_cross_chain_update(origin, bundles, previous_height)
+                        .await;
+                    let update_result = match result {
+                        Ok(update_result) => update_result,
+                        Err(error) => {
+                            need_rollback = true;
+                            send_result(result_sender, Err(error));
+                            continue;
+                        }
+                    };
+                    match &update_result {
+                        CrossChainUpdateResult::Updated(_) => need_save = true,
+                        CrossChainUpdateResult::GapDetected { .. }
+                        | CrossChainUpdateResult::NothingToDo => {}
+                    }
+                    update_results.push((result_sender, update_result));
+                }
+                BatchRequest::Confirm {
+                    recipient,
+                    latest_height,
+                    result_sender,
+                } => {
+                    if need_rollback {
+                        send_result(result_sender, Err(WorkerError::BatchRolledBack));
+                        continue;
+                    }
+                    match self
+                        .confirm_updated_recipient(recipient, latest_height)
+                        .await
+                    {
+                        Ok(fully_delivered) => {
+                            need_save = true;
+                            if fully_delivered {
+                                max_delivered_height = Some(
+                                    max_delivered_height
+                                        .map_or(latest_height, |h| h.max(latest_height)),
+                                );
+                            }
+                            confirm_results.push((result_sender, recipient));
+                        }
+                        Err(error) => {
+                            need_rollback = true;
+                            send_result(result_sender, Err(error));
+                        }
+                    }
+                }
+            }
+        }
+        if !need_rollback && need_save {
+            if let Err(error) = self.save().await {
+                tracing::error!(%error, "failed to save batch; rolling back");
+                need_rollback = true;
+            }
+        }
+        if need_rollback {
+            for (result_sender, _) in update_results {
+                send_result(result_sender, Err(WorkerError::BatchRolledBack));
+            }
+            for (result_sender, _) in confirm_results {
+                send_result(result_sender, Err(WorkerError::BatchRolledBack));
+            }
+            return;
         }
 
-        Ok(actions)
+        if let Some(height) = max_delivered_height {
+            self.notify_delivery(height);
+        }
+
+        for (result_sender, update_result) in update_results {
+            send_result(result_sender, Ok(update_result));
+        }
+        for (result_sender, recipient) in confirm_results {
+            let result = self
+                .create_cross_chain_actions_for_recipient(recipient)
+                .await;
+            send_result(result_sender, result);
+        }
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -1645,7 +1735,7 @@ where
     pub(crate) async fn read_certificate(
         &self,
         height: BlockHeight,
-    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
+    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
         let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1654,7 +1744,6 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
-            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }
@@ -1755,7 +1844,16 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
-    ) -> Result<(ProposedBlock, Block, ChainInfoResponse, ResourceTracker), WorkerError> {
+    ) -> Result<
+        (
+            ProposedBlock,
+            Block,
+            ChainInfoResponse,
+            ResourceTracker,
+            HashSet<ChainId>,
+        ),
+        WorkerError,
+    > {
         self.initialize_and_save_if_needed().await?;
         let local_time = self.storage.clock().current_time();
         let (_, committee) = self.chain.current_committee().await?;
@@ -1764,7 +1862,7 @@ where
         self.chain
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
-        let (executed_block, resource_tracker) =
+        let (executed_block, resource_tracker, never_reject_origins) =
             Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
 
         // No need to sign: only used internally.
@@ -1781,7 +1879,13 @@ where
         }
 
         let (proposed_block, _) = executed_block.clone().into_proposal();
-        Ok((proposed_block, executed_block, response, resource_tracker))
+        Ok((
+            proposed_block,
+            executed_block,
+            response,
+            resource_tracker,
+            never_reject_origins,
+        ))
     }
 
     /// Validates and executes a block proposed to extend this chain.
@@ -1899,7 +2003,7 @@ where
         let block = if let Some(outcome) = outcome {
             outcome.clone().with(proposal.content.block.clone())
         } else {
-            let (executed_block, _resource_tracker) = Box::pin(self.execute_block(
+            let (executed_block, _resource_tracker, _) = Box::pin(self.execute_block(
                 block.clone(),
                 local_time,
                 round.multi_leader(),
@@ -2006,14 +2110,6 @@ where
                     });
                 }
             }
-            let priority_origins = &self.config.priority_bundle_origins;
-            bundles.sort_by(|a, b| {
-                let a_priority = priority_origins.contains(&a.origin);
-                let b_priority = priority_origins.contains(&b.origin);
-                b_priority
-                    .cmp(&a_priority)
-                    .then(a.bundle.timestamp.cmp(&b.bundle.timestamp))
-            });
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = chain
@@ -2074,15 +2170,11 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
-    ) -> Result<(Block, ResourceTracker), WorkerError> {
-        let (proposed_block, outcome, resource_tracker) = Box::pin(self.chain.execute_block(
-            block,
-            local_time,
-            round,
-            published_blobs,
-            None,
-            policy,
-        ))
+    ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
+        let (proposed_block, outcome, resource_tracker, never_reject_origins) = Box::pin(
+            self.chain
+                .execute_block(block, local_time, round, published_blobs, None, policy),
+        )
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = CryptoHash::new(&executed_block);
@@ -2097,7 +2189,7 @@ where
                 .await,
             );
         }
-        Ok((executed_block, resource_tracker))
+        Ok((executed_block, resource_tracker, never_reject_origins))
     }
 
     /// Initializes and saves the current chain if it is not active yet.
@@ -2125,7 +2217,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id()
     ))]
-    async fn save(&mut self) -> Result<(), WorkerError> {
+    pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
             tracing::error!(
                 ?error,
@@ -2173,6 +2265,14 @@ where
                 Err(WorkerError::PoisonedWorker)
             }
         }
+    }
+}
+
+/// Sends a result through a oneshot channel, logging at `debug` level if the
+/// receiver has been dropped.
+pub(crate) fn send_result<T>(sender: oneshot::Sender<T>, value: T) {
+    if sender.send(value).is_err() {
+        tracing::debug!("cannot send cross-chain result; receiver dropped");
     }
 }
 

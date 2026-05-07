@@ -66,9 +66,9 @@ spec:
   - name: linera.request.rules
     rules:
     - record: linera:proxy_request_latency:rate1m
-      expr: sum(rate(linera_proxy_request_latency_bucket{job=~"linera-linera-server|linera-linera-proxy"}[1m])) by (le, validator, method_name)
+      expr: sum(rate(linera_proxy_request_latency_bucket{job=~"linera-linera-server|linera-linera-proxy"}[1m])) by (le, validator, method_name, traffic_type)
     - record: linera:server_request_latency:rate1m
-      expr: sum(rate(linera_server_request_latency_bucket{job=~"linera-linera-server|linera-linera-proxy"}[1m])) by (le, validator, method_name)
+      expr: sum(rate(linera_server_request_latency_bucket{job=~"linera-linera-server|linera-linera-proxy"}[1m])) by (le, validator, method_name, traffic_type)
 
   - name: linera.storage.rules
     rules:

@@ -216,7 +216,7 @@ impl VersionInfo {
                     == Some(1);
                 git_outcome.output[..10].to_owned()
             } else {
-                format!("v{}", crate_version)
+                format!("v{crate_version}")
             }
         }
         .into();

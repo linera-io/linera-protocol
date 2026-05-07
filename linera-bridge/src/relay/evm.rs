@@ -32,25 +32,6 @@ sol! {
     function currentEpoch() external view returns (uint32);
 }
 
-/// Must match `evm_bridge::BridgeOperation` variant-for-variant for BCS compatibility.
-#[derive(serde::Serialize)]
-#[allow(dead_code)]
-pub(crate) enum BridgeOperation {
-    RegisterFungibleApp {
-        app_id: linera_base::identifiers::ApplicationId,
-    },
-    ProcessDeposit {
-        block_header_rlp: Vec<u8>,
-        receipt_rlp: Vec<u8>,
-        proof_nodes: Vec<Vec<u8>>,
-        tx_index: u64,
-        log_index: u64,
-    },
-    VerifyBlockHash {
-        block_hash: [u8; 32],
-    },
-}
-
 /// Maximum block range per `eth_getLogs` query.
 const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
 

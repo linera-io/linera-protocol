@@ -154,6 +154,18 @@ impl ConfirmedBlock {
     }
 }
 
+impl From<Hashed<Block>> for ConfirmedBlock {
+    fn from(block: Hashed<Block>) -> Self {
+        Self::from_hashed(block)
+    }
+}
+
+impl From<Hashed<Block>> for ValidatedBlock {
+    fn from(block: Hashed<Block>) -> Self {
+        Self::from_hashed(block)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct Timeout(Hashed<TimeoutInner>);
@@ -585,6 +597,28 @@ impl Block {
             && *timestamp == self.header.timestamp
             && *authenticated_owner == self.header.authenticated_owner
             && *previous_block_hash == self.header.previous_block_hash
+    }
+
+    /// Returns whether the block's execution produced the given outcome.
+    pub fn outcome_matches(&self, expected: &BlockExecutionOutcome) -> bool {
+        let BlockExecutionOutcome {
+            state_hash,
+            messages,
+            previous_message_blocks,
+            previous_event_blocks,
+            oracle_responses,
+            events,
+            blobs,
+            operation_results,
+        } = expected;
+        self.header.state_hash == *state_hash
+            && self.body.messages == *messages
+            && self.body.previous_message_blocks == *previous_message_blocks
+            && self.body.previous_event_blocks == *previous_event_blocks
+            && self.body.oracle_responses == *oracle_responses
+            && self.body.events == *events
+            && self.body.blobs == *blobs
+            && self.body.operation_results == *operation_results
     }
 
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {

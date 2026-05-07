@@ -21,7 +21,12 @@
     perSystem = { config, self', inputs', pkgs, lib, system, ... }: {
       _module.args.pkgs = import inputs.nixpkgs {
         inherit system;
-        overlays = [ (import inputs.rust-overlay) ];
+        overlays = [
+          (import inputs.rust-overlay)
+          (self: super: {
+            symbolicator = self.callPackage ./nix/symbolicator.nix {};
+          })
+        ];
       };
 
       packages = let

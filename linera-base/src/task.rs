@@ -17,11 +17,26 @@ pub trait MaybeSend: Send {}
 #[cfg(not(web))]
 impl<T: Send> MaybeSend for T {}
 
+/// `Sync` on native targets; no bound on web (where there's only one thread).
+///
+/// Use this in generic bounds that need `Sync` on native but should compile on
+/// web without the bound.
+#[cfg(not(web))]
+pub trait MaybeSync: Sync {}
+#[cfg(not(web))]
+impl<T: Sync> MaybeSync for T {}
+
 /// `Send` on native targets; no bound on web (where there's only one thread).
 #[cfg(web)]
 pub trait MaybeSend {}
 #[cfg(web)]
 impl<T> MaybeSend for T {}
+
+/// `Sync` on native targets; no bound on web (where there's only one thread).
+#[cfg(web)]
+pub trait MaybeSync {}
+#[cfg(web)]
+impl<T> MaybeSync for T {}
 
 /// Spawns `future` on the runtime and awaits its completion.
 ///
@@ -74,7 +89,7 @@ impl<R: 'static> Task<R> {
     ) -> Self {
         let (abortable_future, abort_handle) = future::abortable(future);
         let (task, output) = abortable_future.remote_handle();
-        let _ = spawn(task);
+        spawn(task);
         Self {
             abort_handle,
             output,
@@ -106,7 +121,8 @@ impl<R: 'static> Task<R> {
     /// Cancels the task, resolving only when the wrapped future is completely dropped.
     pub async fn cancel(self) {
         self.abort_handle.abort();
-        let _ = self.output.await;
+        // We just want to wait for the task to finish unwinding; an `Aborted` error is the expected outcome.
+        self.output.await.ok();
     }
 
     /// Forgets the task. The task will continue to run to completion in the
