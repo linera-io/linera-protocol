@@ -38,10 +38,6 @@ pub struct ChainWorkerConfig {
     pub block_cache_size: usize,
     /// Maximum number of entries in the execution state cache.
     pub execution_state_cache_size: usize,
-    /// Chain IDs whose incoming bundles should be processed first.
-    pub priority_bundle_origins: HashSet<ChainId>,
-    /// Chain IDs whose incoming bundles should be ignored.
-    pub ignored_bundle_origins: HashSet<ChainId>,
     /// Maximum estimated serialized size of bundles in a single `UpdateRecipient`
     /// cross-chain message. When exceeded, the bundles are split into multiple requests.
     /// Defaults to `usize::MAX` (no chunking).
@@ -95,8 +91,6 @@ impl Default for ChainWorkerConfig {
             chain_info_max_received_log_entries: CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
             block_cache_size: crate::worker::DEFAULT_BLOCK_CACHE_SIZE,
             execution_state_cache_size: crate::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
-            priority_bundle_origins: HashSet::new(),
-            ignored_bundle_origins: HashSet::new(),
             cross_chain_message_chunk_limit: usize::MAX,
             allow_revert_confirm: false,
             reset_on_corrupted_chain_state: None,

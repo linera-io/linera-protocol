@@ -2086,18 +2086,6 @@ where
                     });
                 }
             }
-            let ignored_origins = &self.config.ignored_bundle_origins;
-            if !ignored_origins.is_empty() {
-                bundles.retain(|b| !ignored_origins.contains(&b.origin));
-            }
-            let priority_origins = &self.config.priority_bundle_origins;
-            bundles.sort_by(|a, b| {
-                let a_priority = priority_origins.contains(&a.origin);
-                let b_priority = priority_origins.contains(&b.origin);
-                b_priority
-                    .cmp(&a_priority)
-                    .then(a.bundle.timestamp.cmp(&b.bundle.timestamp))
-            });
             info.requested_pending_message_bundles = bundles;
         }
         let hashes = self
