@@ -1,7 +1,7 @@
-# Linera Bridge — Testnet Deployment Runbook
+# Linera Bridge — Mainnet Deployment Runbook
 
 This describes how to provision and operate a `linera-bridge` relayer
-on a single VM, bridging Base Sepolia (EVM) and Testnet Conway (Linera).
+on a single VM, bridging Base (EVM) and Mainnet (Linera).
 
 ## Prerequisites
 
@@ -9,9 +9,9 @@ on a single VM, bridging Base Sepolia (EVM) and Testnet Conway (Linera).
 - Foundry (`forge`, `cast`) and a recent `linera` binary on the VM (or
   available inside docker images)
 - Outbound network access to:
-  - Base Sepolia RPC (`https://sepolia.base.org` or operator's provider)
-  - Testnet Conway faucet (`https://faucet.testnet-conway.linera.net`)
-- A funded Base Sepolia account (private key) for contract deployment
+  - Base RPC (operator's provider)
+  - Mainnet faucet (TBD)
+- A funded Base account (private key) for contract deployment
   and `addBlock` signing
 
 ## Initial deployment (one-time)
@@ -51,8 +51,8 @@ reused here. The operator must end up with:
 
 ```
 # /etc/linera-bridge/.env
-RPC_URL=https://sepolia.base.org
-FAUCET_URL=https://faucet.testnet-conway.linera.net
+RPC_URL=
+FAUCET_URL=
 EVM_BRIDGE_ADDRESS=0x...
 LINERA_BRIDGE_APP=...                 # evm-bridge app ID (64 hex)
 LINERA_FUNGIBLE_APP=...               # wrapped-fungible app ID (64 hex)
@@ -85,11 +85,11 @@ setting `EXPLORER_API_KEY` and `VERIFIER_URL` in the operator shell
 before invocation appends `--verify` and publishes the verified
 contract source to a block explorer atomically with the deploy.
 
-Example for Base Sepolia:
+Example for Base:
 
 ```bash
 export EXPLORER_API_KEY="..."
-export VERIFIER_URL="https://api-sepolia.basescan.org/api"
+export VERIFIER_URL="..."
 ```
 
 Both must be set for verification to be appended; either one alone is
@@ -98,13 +98,13 @@ ignored.
 ### 4. Start the relayer
 
 ```bash
-docker compose -f docker/docker-compose.bridge-testnet.yml up -d
+docker compose -f docker/docker-compose.bridge-mainnet.yml up -d
 ```
 
 Verify it came up healthy:
 
 ```bash
-docker compose -f docker/docker-compose.bridge-testnet.yml ps
+docker compose -f docker/docker-compose.bridge-mainnet.yml ps
 # State should be 'running (healthy)' after ~60s.
 curl -sI http://localhost:3001/health | head -1
 # Expected: HTTP/1.1 200 OK
@@ -117,7 +117,7 @@ curl -s http://localhost:3001/metrics | grep '^linera_bridge_' | head -10
 ### Restart (after VM reboot or image update)
 
 ```bash
-docker compose -f docker/docker-compose.bridge-testnet.yml up -d
+docker compose -f docker/docker-compose.bridge-mainnet.yml up -d
 ```
 
 Idempotent. Wallet, chain IDs, contracts persist across restarts.
@@ -125,13 +125,13 @@ Idempotent. Wallet, chain IDs, contracts persist across restarts.
 ### Image update
 
 ```bash
-docker compose -f docker/docker-compose.bridge-testnet.yml pull
-docker compose -f docker/docker-compose.bridge-testnet.yml up -d
+docker compose -f docker/docker-compose.bridge-mainnet.yml pull
+docker compose -f docker/docker-compose.bridge-mainnet.yml up -d
 ```
 
-### Top up Base Sepolia gas
+### Top up Base gas
 
-The relayer signs `addBlock` transactions on Base Sepolia. When ETH
+The relayer signs `addBlock` transactions on Base. When ETH
 runs low, bridging stalls. Send ETH to the relayer's address (the
 public address of `EVM_PRIVATE_KEY`) — no relayer restart required.
 
@@ -147,7 +147,7 @@ sudo cast wallet address \
 ```bash
 journalctl CONTAINER_TAG=linera-bridge -f
 # or
-docker compose -f docker/docker-compose.bridge-testnet.yml logs -f
+docker compose -f docker/docker-compose.bridge-mainnet.yml logs -f
 ```
 
 ### Inspect pending bridge requests
@@ -198,7 +198,7 @@ the deployed artifacts are unrecoverable as well.
 ## Observability
 
 The relayer exposes Prometheus metrics on `http://127.0.0.1:3001/metrics`.
-Key metrics for testnet operations:
+Key metrics for Mainnet operations:
 
 All metrics are namespaced `linera_bridge_*`:
 
@@ -210,7 +210,7 @@ All metrics are namespaced `linera_bridge_*`:
 | `linera_bridge_deposits_failed`, `linera_bridge_burns_failed`   | IntGauge | Any > 0 → investigate via SQLite                      |
 | `linera_bridge_deposits_detected`, `linera_bridge_burns_detected`     | Counter | Total seen by scanners (cumulative)             |
 | `linera_bridge_deposits_completed`, `linera_bridge_burns_completed`   | Counter | Total successfully processed (cumulative)       |
-| `linera_bridge_last_scanned_evm_block`                          | IntGauge | Should track Base Sepolia head                        |
+| `linera_bridge_last_scanned_evm_block`                          | IntGauge | Should track Base head                        |
 | `linera_bridge_last_scanned_linera_height`                      | IntGauge | Should track Linera bridge chain head                 |
 
 Suggested alert rules (apply on the external Prometheus):

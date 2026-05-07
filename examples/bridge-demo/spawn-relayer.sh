@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Spawn a single linera-bridge relayer container against an external network
-# where contracts and Linera apps are already deployed (e.g. Base Sepolia +
-# testnet Conway). No deploys, no app registrations.
+# where contracts and Linera apps are already deployed (e.g. Base +
+# Linera mainnet). No deploys, no app registrations.
 #
 # For full local development (anvil + local validator + frontend) use
 # `make demo` from linera-bridge/ instead — that path uses setup.sh.
@@ -52,7 +52,7 @@ if [[ -z "$ENV_SECRET_FILE" ]]; then
 fi
 [[ -f "$ENV_SECRET_FILE" ]] || die "--env-secret-file path does not exist: $ENV_SECRET_FILE"
 
-RELAYER_COMPOSE="$(cd "$SCRIPT_DIR/../.." && pwd)/docker/docker-compose.bridge-testnet.yml"
+RELAYER_COMPOSE="$(cd "$SCRIPT_DIR/../.." && pwd)/docker/docker-compose.bridge-mainnet.yml"
 [[ -f "$RELAYER_COMPOSE" ]] || die "expected compose file at $RELAYER_COMPOSE"
 
 echo "Spawning relayer:"

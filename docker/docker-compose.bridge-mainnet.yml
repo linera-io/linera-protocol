@@ -1,12 +1,12 @@
 # Long-running linera-bridge relayer.
 #
-# Defaults match the testnet host layout (env at /etc/linera-bridge,
+# Defaults match the mainnet host layout (env at /etc/linera-bridge,
 # data at /var/lib/linera-bridge). Override RELAYER_ENV_FILE,
 # RELAYER_ENV_SECRET, RELAYER_DATA_DIR to reuse this compose file
 # from a developer machine pointing at a real network — see
 # examples/bridge-demo/spawn-relayer.sh.
 #
-# Prerequisites (testnet operator does this once on the VM):
+# Prerequisites (mainnet operator does this once on the VM):
 #   1. Create /var/lib/linera-bridge (data) and /etc/linera-bridge (env)
 #   2. Populate /etc/linera-bridge/.env with the keys consumed by
 #      bridge-entrypoint.sh (RPC_URL, FAUCET_URL, EVM_BRIDGE_ADDRESS,
@@ -16,10 +16,10 @@
 #   3. Drop the EVM signing key in /etc/linera-bridge/.env.secret
 #      (mode 0600, root:root): EVM_PRIVATE_KEY=0x...
 #
-# See docker/README.testnet.md for the full procedure.
+# See docker/README.mainnet.md for the full procedure.
 services:
   relayer:
-    image: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-bridge:testnet_conway_internal
+    image: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-bridge:mainnet_conway_internal
     restart: unless-stopped
     env_file:
       - ${RELAYER_ENV_FILE:-/etc/linera-bridge/.env}

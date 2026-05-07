@@ -147,9 +147,6 @@ services:
 
         echo "Deploying LightClient via forge script..."
         VERIFY_ARGS=""
-        if [ -n "$$EXPLORER_API_KEY" ] && [ -n "$$VERIFIER_URL" ]; then
-            VERIFY_ARGS="--verify --etherscan-api-key $$EXPLORER_API_KEY --verifier-url $$VERIFIER_URL"
-        fi
         LIGHT_CLIENT_ARGS_JSON_FILE=/shared/light-client-args.json \
           forge script /contracts/script/DeployLightClient.s.sol \
           --root /contracts \
@@ -169,12 +166,6 @@ services:
           /contracts/broadcast/DeployLightClient.s.sol/$$CHAIN_ID/run-latest.json)
         echo "LightClient deployed at: $$CONTRACT_ADDRESS"
         echo "$$CONTRACT_ADDRESS" > /shared/light-client-address
-    environment:
-      # Optional: setting both publishes the verified contract source to an
-      # explorer atomically with the deploy. Local-dev (anvil) leaves them
-      # unset; --verify is omitted.
-      - EXPLORER_API_KEY=${EXPLORER_API_KEY:-}
-      - VERIFIER_URL=${VERIFIER_URL:-}
     volumes:
       - bridge-shared:/shared
       - ../linera-bridge/src/solidity:/contracts
