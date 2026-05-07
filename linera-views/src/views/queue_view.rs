@@ -133,7 +133,7 @@ where
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &index)?;
+                    .derive_tag_key(KeyTag::Index as u8, index)?;
                 batch.delete_key(key);
             }
         }
@@ -143,7 +143,7 @@ where
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
+                    .derive_tag_key(KeyTag::Index as u8, new_stored_indices.end)?;
                 batch.put_key_value(key, value)?;
                 new_stored_indices.end = new_stored_indices
                     .end
@@ -214,7 +214,7 @@ where
         let key = self
             .context
             .base_key()
-            .derive_tag_key(KeyTag::Index as u8, &index)?;
+            .derive_tag_key(KeyTag::Index as u8, index)?;
         Ok(self.context.store().read_value(&key).await?)
     }
 
@@ -328,7 +328,7 @@ where
             let key = self
                 .context
                 .base_key()
-                .derive_tag_key(KeyTag::Index as u8, &index)?;
+                .derive_tag_key(KeyTag::Index as u8, index)?;
             keys.push(key)
         }
         let mut values = Vec::with_capacity(count);

@@ -112,21 +112,21 @@ where
         }
         if !self.new_values.is_empty() {
             delete_view = false;
-            let mut count = self.stored_count as usize;
-            for value in &self.new_values {
-                let key = self
-                    .context
-                    .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &count)?;
-                batch.put_key_value(key, value)?;
-                count += 1;
-            }
             let new_values_len =
                 u32::try_from(self.new_values.len()).map_err(|_| ArithmeticError::Overflow)?;
             let count_u32 = self
                 .stored_count
                 .checked_add(new_values_len)
                 .ok_or(ArithmeticError::Overflow)?;
+            let mut count = self.stored_count;
+            for value in &self.new_values {
+                let key = self
+                    .context
+                    .base_key()
+                    .derive_tag_key(KeyTag::Index as u8, count)?;
+                batch.put_key_value(key, value)?;
+                count += 1;
+            }
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
             batch.put_key_value(key, &count_u32)?;
         }
@@ -233,10 +233,11 @@ where
         let value = if self.delete_storage_first {
             self.new_values.get(index).cloned()
         } else if index < self.stored_count as usize {
+            let index_u32 = index as u32;
             let key = self
                 .context
                 .base_key()
-                .derive_tag_key(KeyTag::Index as u8, &index)?;
+                .derive_tag_key(KeyTag::Index as u8, index_u32)?;
             self.context.store().read_value(&key).await?
         } else {
             self.new_values
@@ -285,10 +286,11 @@ where
             let mut keys = Vec::new();
             let mut vec_positions = Vec::new();
             for (index, positions) in index_to_positions {
+                let index_u32 = index as u32;
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &index)?;
+                    .derive_tag_key(KeyTag::Index as u8, index_u32)?;
                 keys.push(key);
                 vec_positions.push(positions);
             }
@@ -333,10 +335,11 @@ where
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
+            let index_u32 = index as u32;
             let key = self
                 .context
                 .base_key()
-                .derive_tag_key(KeyTag::Index as u8, &index)?;
+                .derive_tag_key(KeyTag::Index as u8, index_u32)?;
             keys.push(key);
         }
         let mut values = Vec::with_capacity(count);
