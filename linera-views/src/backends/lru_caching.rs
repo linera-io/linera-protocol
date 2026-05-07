@@ -123,6 +123,46 @@ mod metrics {
                 &[],
             )
         });
+
+    /// The total number of find_keys_in_interval cache misses.
+    pub static FIND_KEYS_IN_INTERVAL_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "num_find_keys_in_interval_cache_miss",
+                "Number of find keys in interval cache misses",
+                &[],
+            )
+        });
+
+    /// The total number of find_keys_in_interval cache hits.
+    pub static FIND_KEYS_IN_INTERVAL_CACHE_HIT_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "num_find_keys_in_interval_cache_hit",
+                "Number of find keys in interval cache hits",
+                &[],
+            )
+        });
+
+    /// The total number of find_key_values_in_interval cache misses.
+    pub static FIND_KEY_VALUES_IN_INTERVAL_CACHE_MISS_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "num_find_key_values_in_interval_cache_miss",
+                "Number of find key values in interval cache misses",
+                &[],
+            )
+        });
+
+    /// The total number of find_key_values_in_interval cache hits.
+    pub static FIND_KEY_VALUES_IN_INTERVAL_CACHE_HIT_COUNT: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "num_find_key_values_in_interval_cache_hit",
+                "Number of find key values in interval cache hits",
+                &[],
+            )
+        });
 }
 
 /// The maximum number of entries in the cache.
@@ -335,13 +375,13 @@ where
         };
         let Some(stripped) = cached else {
             #[cfg(with_metrics)]
-            metrics::FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT
+            metrics::FIND_KEYS_IN_INTERVAL_CACHE_MISS_COUNT
                 .with_label_values(&[])
                 .inc();
             return self.store.find_keys_in_interval(key_interval).await;
         };
         #[cfg(with_metrics)]
-        metrics::FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT
+        metrics::FIND_KEYS_IN_INTERVAL_CACHE_HIT_COUNT
             .with_label_values(&[])
             .inc();
         // The cached prefix family is complete, so we can compute
@@ -405,13 +445,13 @@ where
         };
         let Some(stripped) = cached else {
             #[cfg(with_metrics)]
-            metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT
+            metrics::FIND_KEY_VALUES_IN_INTERVAL_CACHE_MISS_COUNT
                 .with_label_values(&[])
                 .inc();
             return self.store.find_key_values_in_interval(key_interval).await;
         };
         #[cfg(with_metrics)]
-        metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
+        metrics::FIND_KEY_VALUES_IN_INTERVAL_CACHE_HIT_COUNT
             .with_label_values(&[])
             .inc();
         let mut key_values = Vec::new();

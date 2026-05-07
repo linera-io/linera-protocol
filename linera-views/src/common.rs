@@ -77,7 +77,7 @@ impl DeletionSet {
 /// is possible with the way the comparison operators for vectors are built.
 ///
 /// The statement is that `p` is a prefix of `v` if and only if `p <= v < upper_bound(p)`.
-pub(crate) fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
+pub fn get_upper_bound_option(key_prefix: &[u8]) -> Option<Vec<u8>> {
     let len = key_prefix.len();
     for i in (0..len).rev() {
         if key_prefix[i] < u8::MAX {

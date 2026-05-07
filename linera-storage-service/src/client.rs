@@ -19,6 +19,7 @@ use linera_views::metering::MeteredDatabase;
 use linera_views::store::TestKeyValueDatabase;
 use linera_views::{
     batch::{Batch, WriteOperation},
+    common::get_upper_bound_option,
     lru_caching::LruCachingDatabase,
     store::{
         KeyInterval, KeyIntervalStart, KeyValueDatabase, ReadableKeyValueStore, WithError,
@@ -48,19 +49,6 @@ use crate::{
 
 // The maximum key size is set to 1M rather arbitrarily.
 const MAX_KEY_SIZE: usize = 1000000;
-
-/// Computes the exclusive upper bound for a prefix scan.
-/// Returns `None` if the prefix is all 0xFF bytes (no upper bound exists).
-fn upper_bound_of_prefix(prefix: &[u8]) -> Option<Vec<u8>> {
-    for i in (0..prefix.len()).rev() {
-        if prefix[i] < u8::MAX {
-            let mut upper_bound = prefix[0..=i].to_vec();
-            upper_bound[i] += 1;
-            return Some(upper_bound);
-        }
-    }
-    None
-}
 
 // The shared store client.
 // * Interior mutability is required for the client because
@@ -250,7 +238,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 full_key.extend(key);
                 (Some(full_key), matches!(&key_interval.end, Included(_)))
             }
-            Unbounded => (upper_bound_of_prefix(&self.start_key), false),
+            Unbounded => (get_upper_bound_option(&self.start_key), false),
         };
         let query = RequestFindKeysInInterval {
             start,
@@ -259,7 +247,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             end_inclusive,
             limit: key_interval
                 .limit
-                .and_then(|limit| u32::try_from(limit).ok()),
+                .map(|limit| u32::try_from(limit).unwrap_or(u32::MAX)),
         };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();
@@ -318,7 +306,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
                 full_key.extend(key);
                 (Some(full_key), matches!(&key_interval.end, Included(_)))
             }
-            Unbounded => (upper_bound_of_prefix(&self.start_key), false),
+            Unbounded => (get_upper_bound_option(&self.start_key), false),
         };
         let query = RequestFindKeyValuesInInterval {
             start,
@@ -327,7 +315,7 @@ impl ReadableKeyValueStore for StorageServiceStoreInternal {
             end_inclusive,
             limit: key_interval
                 .limit
-                .and_then(|limit| u32::try_from(limit).ok()),
+                .map(|limit| u32::try_from(limit).unwrap_or(u32::MAX)),
         };
         let request = tonic::Request::new(query);
         let channel = self.channel.clone();

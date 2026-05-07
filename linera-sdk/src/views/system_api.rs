@@ -242,7 +242,7 @@ impl WitInterface {
             end_inclusive: matches!(&key_interval.end, std::ops::Bound::Included(_)),
             limit: key_interval
                 .limit
-                .and_then(|limit| u32::try_from(limit).ok()),
+                .map(|limit| u32::try_from(limit).unwrap_or(u32::MAX)),
         }
     }
 
@@ -261,7 +261,7 @@ impl WitInterface {
             end_inclusive: matches!(&key_interval.end, std::ops::Bound::Included(_)),
             limit: key_interval
                 .limit
-                .and_then(|limit| u32::try_from(limit).ok()),
+                .map(|limit| u32::try_from(limit).unwrap_or(u32::MAX)),
         }
     }
 
