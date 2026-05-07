@@ -269,8 +269,6 @@ impl<Env: Environment> Client<Env> {
         name: impl Into<String>,
         chain_worker_ttl: Option<Duration>,
         sender_chain_worker_ttl: Option<Duration>,
-        priority_bundle_origins: HashSet<ChainId>,
-        ignored_bundle_origins: HashSet<ChainId>,
         cross_chain_batch_size_limit: usize,
         options: chain_client::Options,
         requests_scheduler_config: &requests_scheduler::RequestsSchedulerConfig,
@@ -285,10 +283,8 @@ impl<Env: Environment> Client<Env> {
             allow_messages_from_deprecated_epochs: true,
             ttl: chain_worker_ttl,
             sender_chain_ttl: sender_chain_worker_ttl,
-            priority_bundle_origins,
             block_cache_size,
             execution_state_cache_size,
-            ignored_bundle_origins,
             cross_chain_batch_size_limit,
             ..ChainWorkerConfig::default()
         };

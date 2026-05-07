@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
@@ -125,8 +125,6 @@ async fn test_chain_listener() -> anyhow::Result<()> {
             format!("Client node for {chain_id0:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
-            HashSet::new(),
             1000,
             chain_client::Options::test_default(),
             &linera_core::client::RequestsSchedulerConfig::default(),
@@ -241,8 +239,6 @@ async fn test_chain_listener_follow_only() -> anyhow::Result<()> {
             "Client node with follow-only and owned chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
-            HashSet::new(),
             1000,
             chain_client::Options::test_default(),
             &linera_core::client::RequestsSchedulerConfig::default(),
@@ -393,8 +389,6 @@ async fn test_chain_listener_admin_chain() -> anyhow::Result<()> {
             "Client node with no chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
-            HashSet::new(),
             1000,
             chain_client::Options::test_default(),
             &linera_core::client::RequestsSchedulerConfig::default(),
@@ -473,8 +467,6 @@ async fn test_chain_listener_listen_command_adds_chains_to_wallet() -> anyhow::R
             "Client node with no chains".to_string(),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
-            HashSet::new(),
             1000,
             chain_client::Options::test_default(),
             &linera_core::client::RequestsSchedulerConfig::default(),
@@ -593,8 +585,6 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
             format!("Client node for {chain_id0:.8}"),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
-            HashSet::new(),
             1000,
             chain_client::Options::test_default(),
             &linera_core::client::RequestsSchedulerConfig::default(),
@@ -797,8 +787,6 @@ async fn test_chain_listener_sparse_event_download() -> anyhow::Result<()> {
             format!("Client node for {:.8}", receiver_id),
             Some(Duration::from_secs(30)),
             Some(Duration::from_secs(1)),
-            HashSet::new(),
-            HashSet::new(),
             1000,
             chain_client::Options::test_default(),
             &linera_core::client::RequestsSchedulerConfig::default(),

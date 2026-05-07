@@ -268,6 +268,9 @@ impl IncomingBundle {
                 return None;
             }
         }
+        if policy.ignore_chain_ids.contains(&self.origin) {
+            return None;
+        }
         if !policy.never_reject_application_ids.is_empty()
             && self.messages().all(|posted_msg| {
                 policy

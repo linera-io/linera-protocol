@@ -337,6 +337,7 @@ impl Options {
         let message_policy = MessagePolicy {
             blanket: self.blanket_message_policy,
             restrict_chain_ids_to: self.restrict_chain_ids_to.clone(),
+            ignore_chain_ids: self.ignore_bundles_from.clone().unwrap_or_default(),
             reject_message_bundles_without_application_ids: self
                 .reject_message_bundles_without_application_ids
                 .clone(),
@@ -356,6 +357,7 @@ impl Options {
             max_block_limit_errors: self.max_block_limit_errors,
             max_new_events_per_block: self.max_new_events_per_block,
             staging_bundles_time_budget: self.staging_bundles_time_budget,
+            priority_bundle_origins: self.prioritize_bundles_from.clone().unwrap_or_default(),
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
