@@ -1502,9 +1502,7 @@ impl Operation {
         };
         matches!(
             **system_op,
-            SystemOperation::ProcessNewEpoch(_)
-                | SystemOperation::ProcessRemovedEpoch(_)
-                | SystemOperation::UpdateStream { .. }
+            SystemOperation::ProcessNewEpoch(_) | SystemOperation::UpdateStream { .. }
         )
     }
 

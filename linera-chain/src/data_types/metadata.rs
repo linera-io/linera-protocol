@@ -102,7 +102,7 @@ pub struct SystemOperationMetadata {
     pub verify_blob: Option<VerifyBlobMetadata>,
     /// Publish module operation details
     pub publish_module: Option<PublishModuleMetadata>,
-    /// Epoch operation details (`ProcessNewEpoch`, `ProcessRemovedEpoch`)
+    /// Epoch operation details (`ProcessNewEpoch`)
     pub epoch: Option<i32>,
     /// `UpdateStream` operation details
     pub update_stream: Option<UpdateStreamMetadata>,
@@ -371,10 +371,6 @@ impl From<&SystemOperation> for SystemOperationMetadata {
             SystemOperation::ProcessNewEpoch(epoch) => SystemOperationMetadata {
                 epoch: Some(epoch.0 as i32),
                 ..SystemOperationMetadata::new("ProcessNewEpoch")
-            },
-            SystemOperation::ProcessRemovedEpoch(epoch) => SystemOperationMetadata {
-                epoch: Some(epoch.0 as i32),
-                ..SystemOperationMetadata::new("ProcessRemovedEpoch")
             },
             SystemOperation::UpdateStream {
                 application_id,

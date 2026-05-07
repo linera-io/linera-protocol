@@ -523,9 +523,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// Obtains the basic `ChainInfo` data for the local chain, with chain manager values.
     #[instrument(level = "trace")]
     pub async fn chain_info_with_manager_values(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(self.chain_id)
-            .with_manager_values()
-            .with_committees();
+        let query = ChainInfoQuery::new(self.chain_id).with_manager_values();
         let response = self
             .client
             .local_node
@@ -646,32 +644,14 @@ impl<Env: Environment> ChainClient<Env> {
             .collect::<Vec<_>>())
     }
 
-    #[instrument(level = "trace")]
-    async fn chain_info_with_committees(&self) -> Result<Box<ChainInfo>, LocalNodeError> {
-        self.client.chain_info_with_committees(self.chain_id).await
-    }
-
-    /// Obtains the current epoch of the local chain as well as its set of trusted committees.
-    #[instrument(level = "trace")]
-    async fn epoch_and_committees(
-        &self,
-    ) -> Result<(Epoch, BTreeMap<Epoch, CryptoHash>), LocalNodeError> {
-        let info = self.chain_info_with_committees().await?;
-        let epoch = info.epoch;
-        let committees = info
-            .requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
-        Ok((epoch, committees))
-    }
-
     /// Obtains the committee for the current epoch of the local chain.
     #[instrument(level = "trace")]
     pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
-        let info = match self.chain_info_with_committees().await {
+        let info = match self.client.local_node.chain_info(self.chain_id).await {
             Ok(info) => info,
             Err(LocalNodeError::BlobsNotFound(_)) => {
                 self.synchronize_chain_state(self.chain_id).await?;
-                self.chain_info_with_committees().await?
+                self.client.local_node.chain_info(self.chain_id).await?
             }
             Err(LocalNodeError::EventsNotFound(event_ids))
                 if event_ids
@@ -682,16 +662,12 @@ impl<Env: Environment> ChainClient<Env> {
                 // the admin chain's epoch events aren't synced yet.
                 self.synchronize_chain_state(self.client.admin_chain_id)
                     .await?;
-                self.chain_info_with_committees().await?
+                self.client.local_node.chain_info(self.chain_id).await?
             }
             Err(err) => return Err(err.into()),
         };
         let hash = info
-            .requested_committees
-            .as_ref()
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .get(&info.epoch)
-            .copied()
+            .committee_hash
             .ok_or(LocalNodeError::InactiveChain(self.chain_id))?;
         Ok(self
             .storage_client()
@@ -810,7 +786,7 @@ impl<Env: Environment> ChainClient<Env> {
             info = self.client.synchronize_chain_state(self.chain_id).await?;
         }
 
-        if info.epoch > self.client.admin_committees().await?.0 {
+        if info.epoch > self.client.admin_committee().await?.0 {
             self.client
                 .synchronize_chain_state(self.client.admin_chain_id)
                 .await?;
@@ -1497,7 +1473,7 @@ impl<Env: Environment> ChainClient<Env> {
                 use the `linera retry-pending-block` command to commit that first"
             )
         );
-        let info = self.chain_info_with_committees().await?;
+        let info = self.chain_info().await?;
         let timestamp = self.next_timestamp(&transactions, info.timestamp);
         let proposed_block = ProposedBlock {
             epoch: info.epoch,
@@ -2598,14 +2574,9 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Returns operations to process all pending epoch changes: first the new epochs, in order,
-    /// then the removed epochs, in order.
+    /// Returns operations to process all pending new epochs, in order.
     async fn collect_epoch_changes(&self) -> Result<Vec<Operation>, Error> {
-        let (mut min_epoch, mut next_epoch) = {
-            let (epoch, committees) = self.epoch_and_committees().await?;
-            let min_epoch = *committees.keys().next().unwrap_or(&Epoch::ZERO);
-            (min_epoch, epoch.try_add_one()?)
-        };
+        let mut next_epoch = self.chain_info().await?.epoch.try_add_one()?;
         let mut epoch_change_ops = Vec::new();
         while self
             .has_admin_event(EPOCH_STREAM_NAME, next_epoch.0)
@@ -2615,15 +2586,6 @@ impl<Env: Environment> ChainClient<Env> {
                 next_epoch,
             )));
             next_epoch.try_add_assign_one()?;
-        }
-        while self
-            .has_admin_event(REMOVED_EPOCH_STREAM_NAME, min_epoch.0)
-            .await?
-        {
-            epoch_change_ops.push(Operation::system(SystemOperation::ProcessRemovedEpoch(
-                min_epoch,
-            )));
-            min_epoch.try_add_assign_one()?;
         }
         Ok(epoch_change_ops)
     }
@@ -2657,37 +2619,34 @@ impl<Env: Environment> ChainClient<Env> {
             .await?)
     }
 
-    /// Deprecates all the configurations of voting rights up to the given one (admin chains
-    /// only). Currently, each individual chain is still entitled to wait before accepting
-    /// this command. However, it is expected that deprecated validators stop functioning
-    /// shortly after such command is issued.
+    /// Deprecates all configurations of voting rights up to the given one (admin chains only).
+    /// Emits a `RemoveCommittee` event for every still-active epoch up to and including
+    /// `revoked_epoch`.
     #[instrument(level = "trace")]
     pub async fn revoke_epochs(
         &self,
         revoked_epoch: Epoch,
     ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         self.prepare_chain().await?;
-        let (current_epoch, committees) = self.epoch_and_committees().await?;
+        let current_epoch = self.chain_info().await?.epoch;
         ensure!(
             revoked_epoch < current_epoch,
             Error::CannotRevokeCurrentEpoch(current_epoch)
         );
-        ensure!(
-            committees.contains_key(&revoked_epoch),
-            Error::EpochAlreadyRevoked
-        );
-        let operations = committees
-            .keys()
-            .filter_map(|epoch| {
-                if *epoch <= revoked_epoch {
-                    Some(Operation::system(SystemOperation::Admin(
-                        AdminOperation::RemoveCommittee { epoch: *epoch },
-                    )))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let mut operations = Vec::new();
+        for epoch_index in 0..=revoked_epoch.0 {
+            let epoch = Epoch(epoch_index);
+            if self
+                .has_admin_event(REMOVED_EPOCH_STREAM_NAME, epoch.0)
+                .await?
+            {
+                continue;
+            }
+            operations.push(Operation::system(SystemOperation::Admin(
+                AdminOperation::RemoveCommittee { epoch },
+            )));
+        }
+        ensure!(!operations.is_empty(), Error::EpochAlreadyRevoked);
         self.execute_operations(operations, vec![]).await
     }
 

@@ -85,7 +85,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::{ChainWorkerConfig, CrossChainUpdateHelper},
+    chain_worker::ChainWorkerConfig,
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -149,8 +149,6 @@ where
             balance: amount,
             ownership: ChainOwnership::single(account_secret.public().into()),
             epoch: Epoch::ZERO,
-            min_active_epoch: Epoch::ZERO,
-            max_active_epoch: Epoch::ZERO,
             application_permissions: Default::default(),
         };
         let admin_description = ChainDescription::new(origin, config, Timestamp::from(0));
@@ -183,7 +181,6 @@ where
             let config = ChainWorkerConfig {
                 nickname: "Single validator node".to_string(),
                 allow_inactive_chains: is_client,
-                allow_messages_from_deprecated_epochs: is_client,
                 long_lived_services: has_long_lived_services,
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
                 sender_chain_ttl: None,
@@ -277,8 +274,6 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership,
-            min_active_epoch: self.admin_description.config().min_active_epoch,
-            max_active_epoch: self.admin_description.config().max_active_epoch,
             balance,
             application_permissions: Default::default(),
         };
@@ -312,8 +307,6 @@ where
         let config = InitialChainConfig {
             epoch: self.admin_description.config().epoch,
             ownership: ChainOwnership::single(owner),
-            min_active_epoch: self.admin_description.config().min_active_epoch,
-            max_active_epoch: self.admin_description.config().max_active_epoch,
             balance,
             application_permissions: Default::default(),
         };
@@ -2858,7 +2851,12 @@ where
                 message: Message::System(SystemMessage::Credit { .. }), ..
             }])
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 1);
+        assert!(user_chain
+            .execution_state
+            .system
+            .committee_hash
+            .get()
+            .is_some());
     }
     let proposal3 = make_first_block(user_id)
         .with_incoming_bundle(IncomingBundle {
@@ -2920,7 +2918,10 @@ where
             *user_chain.execution_state.system.admin_chain_id.get(),
             Some(admin_chain_id)
         );
-        assert_eq!(user_chain.execution_state.system.committees.get().len(), 2);
+        assert_eq!(
+            *user_chain.execution_state.system.committee_hash.get(),
+            Some(blob_hash)
+        );
         assert_no_removed_bundles(&user_chain).await;
         Ok(())
     }
@@ -3142,7 +3143,7 @@ where
         );
         assert_eq!(*user_chain.execution_state.system.epoch.get(), Epoch::ZERO);
 
-        // .. but the message hasn't gone through.
+        // .. but the message has been refused: epoch 0 is revoked on the admin chain.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert!(admin_chain.inboxes.indices().await?.is_empty());
@@ -3183,7 +3184,8 @@ where
         .await?;
 
     {
-        // The admin chain has an anticipated message.
+        // The admin chain has an anticipated message (executed via proposal2 above
+        // even though normal delivery refused it).
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert!(admin_chain
@@ -3198,13 +3200,13 @@ where
     }
 
     // Try again to execute the transfer from the user chain to the admin chain.
-    // This time, the epoch verification should be overruled.
+    // This time, normal delivery is allowed because the bundle's height is at most
+    // `last_anticipated_block_height` (it was already executed by anticipation).
     env.worker()
         .fully_handle_certificate_with_notifications(certificate0.clone(), &())
         .await?;
 
     {
-        // The admin chain has no more anticipated messages.
         let admin_chain = env.worker().chain_state_view(admin_chain_id).await?;
         assert!(admin_chain.is_active().await?);
         assert_no_removed_bundles(&admin_chain).await;
@@ -3266,14 +3268,25 @@ where
 #[test(tokio::test)]
 async fn test_cross_chain_helper() -> anyhow::Result<()> {
     let mut storage_builder = MemoryStorageBuilder::default();
-    let env = TestEnvironment::new(&mut storage_builder, true, false).await?;
-    // CrossChainUpdateHelper only checks `contains_key` on this map, so a dummy hash
-    // per known epoch is enough.
-    let committees = BTreeMap::from([(Epoch::from(1), CryptoHash::test_hash("epoch 1"))]);
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    let chain_1 = env
+        .add_root_chain(1, AccountOwner::CHAIN, Amount::ZERO)
+        .await;
+    // Mark epoch 0 as revoked so the helper rejects bundles signed by it,
+    // unless they're re-certified by a later trusted-epoch bundle.
+    env.worker()
+        .storage_client()
+        .write_events([(
+            EventId {
+                chain_id: env.admin_chain_id(),
+                stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
+                index: 0,
+            },
+            Vec::new(),
+        )])
+        .await?;
 
     let chain_0 = env.admin_description.clone();
-    let chain_1 = dummy_chain_description(1);
-
     let key_pair0 = AccountSecretKey::generate();
     let id0 = chain_0.id();
     let id1 = chain_1.id();
@@ -3368,80 +3381,79 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
             .collect()
     }
 
-    let helper = CrossChainUpdateHelper {
-        allow_messages_from_deprecated_epochs: true,
-        current_epoch: Epoch::from(1),
-        committees: &committees,
-    };
-    // Epoch is not tested when `allow_messages_from_deprecated_epochs` is true.
+    let worker = env.worker();
+    // Bundles from a revoked epoch are rejected.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
-        without_epochs(&bundles01)
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles01.clone())
+            .await?,
+        vec![]
     );
-    // Received heights is removing prefixes.
+    // Already-received bundles are skipped, regardless of epoch.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles01.clone())?,
-        without_epochs(&bundles1)
-    );
-    assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(2), None, bundles01.clone())?,
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::from(2), None, bundles01.clone())
+            .await?,
         vec![]
     );
     // Order of certificates is checked.
     assert_matches!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            None,
-            bundles1
-                .iter()
-                .cloned()
-                .chain(bundles0.iter().cloned())
-                .collect::<Vec<_>>()
-        ),
+        worker
+            .select_message_bundles(
+                id1,
+                &id0,
+                BlockHeight::ZERO,
+                None,
+                bundles1
+                    .iter()
+                    .cloned()
+                    .chain(bundles0.iter().cloned())
+                    .collect::<Vec<_>>()
+            )
+            .await,
         Err(WorkerError::InvalidCrossChainRequest)
     );
 
-    let helper = CrossChainUpdateHelper {
-        allow_messages_from_deprecated_epochs: false,
-        current_epoch: Epoch::from(1),
-        committees: &committees,
-    };
-    // Epoch is tested when `allow_messages_from_deprecated_epochs` is false.
+    // A later bundle in a still-trusted epoch re-certifies preceding revoked-epoch
+    // bundles via prev-hash chaining, but a trailing revoked-epoch bundle (heights 3+)
+    // beyond the trusted one is dropped.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles01.clone())?,
-        vec![]
-    );
-    // A certificate with a recent epoch certifies all the previous blocks.
-    assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::ZERO, None, bundles0123.clone())?,
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::ZERO, None, bundles0123.clone())
+            .await?,
         without_epochs(&bundles012)
     );
-    // Received heights is still removing prefixes.
+    // Skipping bundle 0 still works with re-certification across epochs.
     assert_eq!(
-        helper.select_message_bundles(&id0, id1, BlockHeight::from(1), None, bundles012.clone())?,
+        worker
+            .select_message_bundles(id1, &id0, BlockHeight::from(1), None, bundles012.clone())
+            .await?,
         without_epochs(bundles1.iter().chain(&bundles2))
     );
-    // Anticipated messages re-certify blocks up to the given height.
+    // Anticipation: bundles up to `last_anticipated_block_height` are accepted even
+    // from a revoked epoch.
     assert_eq!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::from(1),
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )?,
+        worker
+            .select_message_bundles(
+                id1,
+                &id0,
+                BlockHeight::from(1),
+                Some(BlockHeight::from(1)),
+                bundles01.clone()
+            )
+            .await?,
         without_epochs(&bundles1)
     );
     assert_eq!(
-        helper.select_message_bundles(
-            &id0,
-            id1,
-            BlockHeight::ZERO,
-            Some(BlockHeight::from(1)),
-            bundles01.clone()
-        )?,
+        worker
+            .select_message_bundles(
+                id1,
+                &id0,
+                BlockHeight::ZERO,
+                Some(BlockHeight::from(1)),
+                bundles01.clone()
+            )
+            .await?,
         without_epochs(&bundles01)
     );
     Ok(())
@@ -4063,9 +4075,7 @@ where
     let chain_id = chain_desc.id();
 
     // At time 0 we don't vote for fallback mode.
-    let query = ChainInfoQuery::new(chain_id)
-        .with_fallback()
-        .with_committees();
+    let query = ChainInfoQuery::new(chain_id).with_fallback();
     let response = env
         .executing_worker()
         .handle_chain_info_query(query.clone())
@@ -4131,12 +4141,7 @@ where
         .handle_chain_info_query(query.clone())
         .await?;
     let manager = response.info.manager;
-    let committee_hash = *response
-        .info
-        .requested_committees
-        .unwrap()
-        .get(&response.info.epoch)
-        .unwrap();
+    let committee_hash = response.info.committee_hash.unwrap();
     let committee = env
         .executing_worker()
         .storage
@@ -4798,7 +4803,6 @@ where
             ChainWorkerConfig {
                 nickname: "No-recovery worker".to_string(),
                 allow_inactive_chains: true,
-                allow_messages_from_deprecated_epochs: true,
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
                 ..ChainWorkerConfig::default()
             }
@@ -4824,7 +4828,6 @@ where
             ChainWorkerConfig {
                 nickname: "Whitelist-excludes worker".to_string(),
                 allow_inactive_chains: true,
-                allow_messages_from_deprecated_epochs: true,
                 reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
                 recovery_whitelist: Some(HashSet::from([target_id])),
                 block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),
@@ -4860,7 +4863,6 @@ where
         ChainWorkerConfig {
             nickname: "Recovery worker".to_string(),
             allow_inactive_chains: true,
-            allow_messages_from_deprecated_epochs: true,
             reset_on_corrupted_chain_state: Some(Duration::from_secs(0)),
             recovery_whitelist: Some(HashSet::from([chain_id])),
             block_time_grace_period: Duration::from_micros(TEST_GRACE_PERIOD_MICROS),

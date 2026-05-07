@@ -39,7 +39,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, ExecutionError};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use rand::seq::SliceRandom;
 use received_log::ReceivedLogs;
@@ -289,7 +289,6 @@ impl<Env: Environment> Client<Env> {
             nickname: name.into(),
             long_lived_services,
             allow_inactive_chains: true,
-            allow_messages_from_deprecated_epochs: true,
             ttl: chain_worker_ttl,
             sender_chain_ttl: sender_chain_worker_ttl,
             block_cache_size,
@@ -650,8 +649,6 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let mut validators = self.validator_nodes().await?;
         let timeout = self.options.certificate_batch_download_timeout;
-        let (max_epoch, committees) = self.admin_committees().await?;
-        let committees_ref = &committees;
         let mut remaining_event_ids = event_ids.to_vec();
 
         while !remaining_event_ids.is_empty() {
@@ -721,7 +718,8 @@ impl<Env: Environment> Client<Env> {
                                 }
                             }
                             for cert in certificates {
-                                Self::check_certificate(max_epoch, committees_ref, &cert)
+                                self.check_certificate(&cert)
+                                    .await
                                     .map_err(|error| {
                                         tracing::debug!(
                                             %validator_address, %error,
@@ -845,48 +843,11 @@ impl<Env: Environment> Client<Env> {
             .await
     }
 
-    async fn chain_info_with_committees(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self.local_node.handle_chain_info_query(query).await?.info;
-        Ok(info)
-    }
-
-    /// Obtains all the committees trusted by any of the given chains. Also returns the highest
-    /// of their epochs.
-    #[instrument(level = "trace", skip_all)]
-    async fn admin_committees(
-        &self,
-    ) -> Result<(Epoch, BTreeMap<Epoch, Arc<Committee>>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        let hashes = info
-            .requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
-        let committees =
-            futures::future::try_join_all(hashes.into_iter().map(|(epoch, hash)| async move {
-                let committee = self
-                    .storage_client()
-                    .get_or_load_committee_by_hash(hash)
-                    .await?;
-                Ok::<_, LocalNodeError>((epoch, committee))
-            }))
-            .await?
-            .into_iter()
-            .collect();
-        Ok((info.epoch, committees))
-    }
-
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
+        let info = self.local_node.chain_info(self.admin_chain_id).await?;
         let hash = info
-            .requested_committees
-            .as_ref()
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .get(&info.epoch)
-            .copied()
+            .committee_hash
             .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
         let committee = self
             .storage_client()
@@ -1172,9 +1133,8 @@ impl<Env: Environment> Client<Env> {
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), chain_client::Error> {
         // Verify the certificate before doing any expensive networking.
-        let (max_epoch, committees) = self.admin_committees().await?;
         if let ReceiveCertificateMode::NeedsCheck = mode {
-            Self::check_certificate(max_epoch, &committees, &certificate)?.into_result()?;
+            self.check_certificate(&certificate).await?.into_result()?;
         }
         // Recover history from the network.
         let nodes = if let Some(nodes) = nodes {
@@ -1210,14 +1170,6 @@ impl<Env: Environment> Client<Env> {
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
-        let (max_epoch, committees) = match self.admin_committees().await {
-            Ok(result) => result,
-            Err(error) => {
-                error!(%error, %sender_chain_id, "could not read admin committees");
-                return;
-            }
-        };
-        let committees_ref = &committees;
         let mut nodes = nodes.to_vec();
         while !remote_heights.is_empty() {
             // Check local storage first — certificates may already be available from
@@ -1276,8 +1228,7 @@ impl<Env: Environment> Client<Env> {
                         .await?;
                     let mut certificates_with_check_results = vec![];
                     for cert in certificates {
-                        let check_result =
-                            Self::check_certificate(max_epoch, committees_ref, &cert)?;
+                        let check_result = self.check_certificate(&cert).await?;
                         certificates_with_check_results
                             .push((cert, check_result.into_result().is_ok()));
                     }
@@ -1412,7 +1363,6 @@ impl<Env: Environment> Client<Env> {
             .get(&sender_chain_id)
             .copied()
             .unwrap_or(BlockHeight::ZERO);
-        let (max_epoch, committees) = self.admin_committees().await?;
 
         // Recursively collect all certificates we need, following
         // the chain of previous_message_blocks back to next_outbox_height.
@@ -1451,8 +1401,7 @@ impl<Env: Environment> Client<Env> {
             };
 
             // Validate the certificate.
-            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
-                .into_result()?;
+            self.check_certificate(&certificate).await?.into_result()?;
 
             // Check if there's a previous message block to our chain.
             let block = certificate.block();
@@ -1507,7 +1456,6 @@ impl<Env: Environment> Client<Env> {
         if initial_blocks.is_empty() {
             return Ok(());
         }
-        let (max_epoch, committees) = self.admin_committees().await?;
 
         let mut certificates = BTreeMap::new();
         let mut blocks_to_fetch = initial_blocks;
@@ -1546,8 +1494,7 @@ impl<Env: Environment> Client<Env> {
                     continue;
                 };
 
-                Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
-                    .into_result()?;
+                self.check_certificate(&certificate).await?.into_result()?;
 
                 self.storage_client().cache_certificate(certificate)
             };
@@ -1627,25 +1574,23 @@ impl<Env: Environment> Client<Env> {
         level = "trace", skip_all,
         fields(certificate_hash = ?incoming_certificate.hash()),
     )]
-    fn check_certificate(
-        highest_known_epoch: Epoch,
-        committees: &BTreeMap<Epoch, Arc<Committee>>,
+    async fn check_certificate(
+        &self,
         incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
-        let block = incoming_certificate.block();
-        // Check that certificates are valid w.r.t one of our trusted committees.
-        if block.header.epoch > highest_known_epoch {
+        let epoch = incoming_certificate.block().header.epoch;
+        let storage = self.storage_client();
+        let view_err = |error: ExecutionError| NodeError::ViewError {
+            error: error.to_string(),
+        };
+        if storage.is_epoch_revoked(epoch).await.map_err(view_err)? {
+            return Ok(CheckCertificateResult::OldEpoch);
+        }
+        let Some(committee) = storage.committee_for_epoch(epoch).await.map_err(view_err)? else {
             return Ok(CheckCertificateResult::FutureEpoch);
-        }
-        if let Some(known_committee) = committees.get(&block.header.epoch) {
-            // This epoch is recognized by our chain. Let's verify the
-            // certificate.
-            incoming_certificate.check(known_committee)?;
-            Ok(CheckCertificateResult::New)
-        } else {
-            // We don't accept a certificate from a committee that was retired.
-            Ok(CheckCertificateResult::OldEpoch)
-        }
+        };
+        incoming_certificate.check(&committee)?;
+        Ok(CheckCertificateResult::New)
     }
 
     /// Downloads and processes any certificates we are missing for the given chain.
@@ -2080,17 +2025,20 @@ enum ReceiveCertificateMode {
 }
 
 enum CheckCertificateResult {
+    /// The certificate's epoch has been revoked on the admin chain.
     OldEpoch,
-    New,
+    /// The committee for the certificate's epoch is unknown to us yet, e.g. because
+    /// our local view of the admin chain is behind.
     FutureEpoch,
+    New,
 }
 
 impl CheckCertificateResult {
     fn into_result(self) -> Result<(), chain_client::Error> {
         match self {
             Self::OldEpoch => Err(chain_client::Error::CommitteeDeprecationError),
-            Self::New => Ok(()),
             Self::FutureEpoch => Err(chain_client::Error::CommitteeSynchronizationError),
+            Self::New => Ok(()),
         }
     }
 }

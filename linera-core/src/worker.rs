@@ -1445,6 +1445,29 @@ where
         guard.read_certificate(height).await
     }
 
+    /// Test helper that runs `ChainWorkerState::select_message_bundles` for the given
+    /// recipient chain.
+    #[cfg(with_testing)]
+    pub async fn select_message_bundles(
+        &self,
+        recipient: ChainId,
+        origin: &ChainId,
+        next_height_to_receive: BlockHeight,
+        last_anticipated_block_height: Option<BlockHeight>,
+        bundles: Vec<(Epoch, MessageBundle)>,
+    ) -> Result<Vec<MessageBundle>, WorkerError> {
+        let state = self.get_or_create_chain_worker(recipient).await?;
+        let guard = handle::read_lock(&state).await?;
+        guard
+            .select_message_bundles(
+                origin,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+            )
+            .await
+    }
+
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///

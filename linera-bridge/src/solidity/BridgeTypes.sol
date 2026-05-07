@@ -2677,9 +2677,7 @@ library BridgeTypes {
         AdminOperation admin;
         // choice=11 corresponds to ProcessNewEpoch
         Epoch process_new_epoch;
-        // choice=12 corresponds to ProcessRemovedEpoch
-        Epoch process_removed_epoch;
-        // choice=13 corresponds to UpdateStream
+        // choice=12 corresponds to UpdateStream
         SystemOperation_UpdateStream update_stream;
     }
 
@@ -2698,9 +2696,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(0), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(0), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_claim(SystemOperation_Claim memory claim)
@@ -2718,9 +2715,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(1), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(1), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_open_chain(OpenChainConfig memory open_chain)
@@ -2738,9 +2734,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(2), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(2), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_close_chain()
@@ -2759,9 +2754,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(3), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(3), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_change_ownership(SystemOperation_ChangeOwnership memory change_ownership)
@@ -2779,9 +2773,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(4), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(4), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_change_application_permissions(ApplicationPermissions memory change_application_permissions)
@@ -2799,9 +2792,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(5), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(5), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_publish_module(SystemOperation_PublishModule memory publish_module)
@@ -2819,9 +2811,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(6), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(6), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_publish_data_blob(SystemOperation_PublishDataBlob memory publish_data_blob)
@@ -2839,9 +2830,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(7), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(7), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_verify_blob(SystemOperation_VerifyBlob memory verify_blob)
@@ -2859,9 +2849,8 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(8), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(8), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_create_application(SystemOperation_CreateApplication memory create_application)
@@ -2879,9 +2868,8 @@ library BridgeTypes {
         SystemOperation_VerifyBlob memory verify_blob;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(9), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(9), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_admin(AdminOperation memory admin)
@@ -2899,9 +2887,8 @@ library BridgeTypes {
         SystemOperation_VerifyBlob memory verify_blob;
         SystemOperation_CreateApplication memory create_application;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(10), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(10), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_process_new_epoch(Epoch memory process_new_epoch)
@@ -2919,29 +2906,8 @@ library BridgeTypes {
         SystemOperation_VerifyBlob memory verify_blob;
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
-        Epoch memory process_removed_epoch;
         SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(11), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
-    }
-
-    function SystemOperation_case_process_removed_epoch(Epoch memory process_removed_epoch)
-        internal
-        pure
-        returns (SystemOperation memory)
-    {
-        SystemOperation_Transfer memory transfer_;
-        SystemOperation_Claim memory claim;
-        OpenChainConfig memory open_chain;
-        SystemOperation_ChangeOwnership memory change_ownership;
-        ApplicationPermissions memory change_application_permissions;
-        SystemOperation_PublishModule memory publish_module;
-        SystemOperation_PublishDataBlob memory publish_data_blob;
-        SystemOperation_VerifyBlob memory verify_blob;
-        SystemOperation_CreateApplication memory create_application;
-        AdminOperation memory admin;
-        Epoch memory process_new_epoch;
-        SystemOperation_UpdateStream memory update_stream;
-        return SystemOperation(uint8(12), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(11), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function SystemOperation_case_update_stream(SystemOperation_UpdateStream memory update_stream)
@@ -2960,8 +2926,7 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
-        Epoch memory process_removed_epoch;
-        return SystemOperation(uint8(13), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream);
+        return SystemOperation(uint8(12), transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream);
     }
 
     function bcs_serialize_SystemOperation(SystemOperation memory input)
@@ -3003,9 +2968,6 @@ library BridgeTypes {
             return abi.encodePacked(input.choice, bcs_serialize_Epoch(input.process_new_epoch));
         }
         if (input.choice == 12) {
-            return abi.encodePacked(input.choice, bcs_serialize_Epoch(input.process_removed_epoch));
-        }
-        if (input.choice == 13) {
             return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_UpdateStream(input.update_stream));
         }
         return abi.encodePacked(input.choice);
@@ -3063,16 +3025,12 @@ library BridgeTypes {
         if (choice == 11) {
             (new_pos, process_new_epoch) = bcs_deserialize_offset_Epoch(new_pos, input);
         }
-        Epoch memory process_removed_epoch;
-        if (choice == 12) {
-            (new_pos, process_removed_epoch) = bcs_deserialize_offset_Epoch(new_pos, input);
-        }
         SystemOperation_UpdateStream memory update_stream;
-        if (choice == 13) {
+        if (choice == 12) {
             (new_pos, update_stream) = bcs_deserialize_offset_SystemOperation_UpdateStream(new_pos, input);
         }
-        require(choice < 14);
-        return (new_pos, SystemOperation(choice, transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, process_removed_epoch, update_stream));
+        require(choice < 13);
+        return (new_pos, SystemOperation(choice, transfer_, claim, open_chain, change_ownership, change_application_permissions, publish_module, publish_data_blob, verify_blob, create_application, admin, process_new_epoch, update_stream));
     }
 
     function bcs_deserialize_SystemOperation(bytes memory input)

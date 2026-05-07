@@ -1446,7 +1446,7 @@ type SystemExecutionStateView {
 	description: ChainDescription
 	epoch: Epoch!
 	adminChainId: ChainId
-	committees: JSONObject!
+	committeeHash: CryptoHash
 	ownership: ChainOwnership!
 	balance: Amount!
 	balances: MapView_AccountOwner_Amount_11ef1379!
@@ -1520,7 +1520,7 @@ type SystemOperationMetadata {
 	"""
 	publishModule: PublishModuleMetadata
 	"""
-	Epoch operation details (`ProcessNewEpoch`, `ProcessRemovedEpoch`)
+	Epoch operation details (`ProcessNewEpoch`)
 	"""
 	epoch: Int
 	"""
