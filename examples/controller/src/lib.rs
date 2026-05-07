@@ -64,9 +64,6 @@ pub enum Message {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
-    use serde_reflection::{Samples, Tracer, TracerConfig};
-
-    use super::Message;
     use linera_sdk::{
         abis::controller::{
             ControllerAbi, ControllerCommand, ManagedServiceId, Operation, Worker, WorkerCommand,
@@ -74,6 +71,9 @@ pub mod formats {
         formats::{BcsApplication, Formats},
         linera_base_types::AccountOwner,
     };
+    use serde_reflection::{Samples, Tracer, TracerConfig};
+
+    use super::Message;
 
     /// The Controller application.
     pub struct ControllerApplication;

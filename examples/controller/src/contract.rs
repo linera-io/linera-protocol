@@ -14,7 +14,7 @@ use linera_sdk::{
         ControllerAbi, ControllerCommand, ManagedService, ManagedServiceId, Operation,
         PendingService, Worker, WorkerCommand,
     },
-    linera_base_types::{AccountOwner, BlockHeight, ChainId, WithContractAbi},
+    linera_base_types::{AccountOwner, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
