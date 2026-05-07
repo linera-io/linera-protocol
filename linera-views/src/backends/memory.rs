@@ -193,7 +193,7 @@ impl ReadableKeyValueStore for MemoryStore {
         let mut iter = map.range(get_interval_range(key_interval.start, key_interval.end));
         let mut values = Vec::new();
         let mut hit_limit = false;
-        while let Some((key, _value)) = iter.next() {
+        for (key, _value) in iter.by_ref() {
             values.push(key.to_vec());
             if key_interval
                 .limit
@@ -227,7 +227,7 @@ impl ReadableKeyValueStore for MemoryStore {
         let mut iter = map.range(get_interval_range(key_interval.start, key_interval.end));
         let mut key_values = Vec::new();
         let mut hit_limit = false;
-        while let Some((key, value)) = iter.next() {
+        for (key, value) in iter.by_ref() {
             key_values.push((key.to_vec(), value.to_vec()));
             if key_interval
                 .limit

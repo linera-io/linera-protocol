@@ -14,7 +14,9 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
-    store::{KeyInterval, KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyInterval, KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[cfg(with_metrics)]
@@ -370,10 +372,7 @@ where
             if !key_interval.contains(&full) {
                 continue;
             }
-            if key_interval
-                .limit
-                .is_some_and(|limit| keys.len() >= limit)
-            {
+            if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
                 more_after_limit = true;
                 break;
             }

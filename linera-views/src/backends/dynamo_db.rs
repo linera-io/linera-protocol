@@ -17,13 +17,9 @@ use async_lock::{Semaphore, SemaphoreGuard};
 use aws_sdk_dynamodb::{
     error::SdkError,
     operation::{
-        batch_get_item::BatchGetItemError,
-        create_table::CreateTableError,
-        delete_table::DeleteTableError,
-        get_item::GetItemError,
-        list_tables::ListTablesError,
-        query::QueryError,
-        transact_write_items::TransactWriteItemsError,
+        batch_get_item::BatchGetItemError, create_table::CreateTableError,
+        delete_table::DeleteTableError, get_item::GetItemError, list_tables::ListTablesError,
+        query::QueryError, transact_write_items::TransactWriteItemsError,
     },
     primitives::Blob,
     types::{
@@ -675,10 +671,7 @@ impl DynamoDbStoreInternal {
                     ":partition",
                     AttributeValue::B(Blob::new(self.start_key.to_vec())),
                 )
-                .expression_attribute_values(
-                    ":lo",
-                    AttributeValue::B(Blob::new(lower.clone())),
-                )
+                .expression_attribute_values(":lo", AttributeValue::B(Blob::new(lower.clone())))
                 .set_exclusive_start_key(start_key_map.take());
             query = match &upper {
                 Some(hi) => query

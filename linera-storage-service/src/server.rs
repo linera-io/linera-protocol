@@ -158,17 +158,22 @@ impl StorageServer {
         key_interval: KeyInterval,
     ) -> Result<(Vec<Vec<u8>>, bool), Status> {
         match &self.store {
-            LocalStore::Memory(store) => store
-                .find_keys_in_interval(key_interval)
-                .await
-                .map_err(|e| {
-                    Status::unknown(format!("Memory error {e:?} at find_keys_in_interval"))
-                }),
+            LocalStore::Memory(store) => {
+                store
+                    .find_keys_in_interval(key_interval)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("Memory error {e:?} at find_keys_in_interval"))
+                    })
+            }
             #[cfg(with_rocksdb)]
             LocalStore::RocksDb(store) => {
-                store.find_keys_in_interval(key_interval).await.map_err(|e| {
-                    Status::unknown(format!("RocksDB error {e:?} at find_keys_in_interval"))
-                })
+                store
+                    .find_keys_in_interval(key_interval)
+                    .await
+                    .map_err(|e| {
+                        Status::unknown(format!("RocksDB error {e:?} at find_keys_in_interval"))
+                    })
             }
         }
     }
@@ -189,7 +194,9 @@ impl StorageServer {
                 .find_key_values_in_interval(key_interval)
                 .await
                 .map_err(|e| {
-                    Status::unknown(format!("RocksDB error {e:?} at find_key_values_in_interval"))
+                    Status::unknown(format!(
+                        "RocksDB error {e:?} at find_key_values_in_interval"
+                    ))
                 }),
         }
     }

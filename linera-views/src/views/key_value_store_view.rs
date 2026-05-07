@@ -1029,10 +1029,7 @@ impl<C: Context> KeyValueStoreView<C> {
             if !key_interval.contains(&full) {
                 continue;
             }
-            if key_interval
-                .limit
-                .is_some_and(|limit| keys.len() >= limit)
-            {
+            if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
                 more_after_limit = true;
                 break;
             }
@@ -1365,10 +1362,7 @@ impl<C: Context> ReadableKeyValueStore for ViewContainer<C> {
             if !key_interval.contains(&full) {
                 continue;
             }
-            if key_interval
-                .limit
-                .is_some_and(|limit| keys.len() >= limit)
-            {
+            if key_interval.limit.is_some_and(|limit| keys.len() >= limit) {
                 more_after_limit = true;
                 break;
             }

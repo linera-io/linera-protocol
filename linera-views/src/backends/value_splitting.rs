@@ -328,8 +328,7 @@ where
                     let missing_keys: Vec<Vec<u8>> = (consumed_idx + 1..count)
                         .map(|i| Self::get_segment_key(&user_key, i))
                         .collect::<Result<_, _>>()?;
-                    let missing_values =
-                        self.store.read_multi_values_bytes(&missing_keys).await?;
+                    let missing_values = self.store.read_multi_values_bytes(&missing_keys).await?;
                     for (i, value_opt) in missing_values.into_iter().enumerate() {
                         let value = value_opt.ok_or(ValueSplittingError::MissingSegment)?;
                         full_value.extend(value);
