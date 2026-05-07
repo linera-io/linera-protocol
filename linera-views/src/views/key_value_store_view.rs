@@ -18,19 +18,17 @@ use std::{collections::BTreeMap, fmt::Debug, ops::Bound::Included, sync::Mutex};
 use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
-use linera_base::{data_types::ArithmeticError, ensure, visit_allocative_simple};
-use serde::{Deserialize, Serialize};
+use linera_base::{ensure, visit_allocative_simple};
 
 use crate::{
     batch::{Batch, WriteOperation},
     common::{
-        from_bytes_option, from_bytes_option_or_default, get_key_range_for_prefix, get_upper_bound,
-        DeletionSet, HasherOutput, SuffixClosedSetIterator, Update,
+        from_bytes_option, get_key_range_for_prefix, get_upper_bound, DeletionSet, HasherOutput,
+        SuffixClosedSetIterator, Update,
     },
     context::Context,
     hashable_wrapper::WrappedHashableContainerView,
     historical_hash_wrapper::HistoricallyHashableView,
-    map_view::ByteMapView,
     store::ReadableKeyValueStore,
     views::{ClonableView, HashableView, Hasher, ReplaceContext, View, ViewError, MIN_VIEW_TAG},
 };
@@ -141,47 +139,8 @@ use {
 enum KeyTag {
     /// Prefix for the indices of the view.
     Index = MIN_VIEW_TAG,
-    /// The total stored size
-    TotalSize,
-    /// The prefix where the sizes are being stored
-    Sizes,
     /// Prefix for the hash.
     Hash,
-}
-
-/// A pair containing the key and value size.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Allocative)]
-pub struct SizeData {
-    /// The size of the key
-    pub key: u32,
-    /// The size of the value
-    pub value: u32,
-}
-
-impl SizeData {
-    /// Sums both terms
-    pub fn sum(&mut self) -> u32 {
-        self.key + self.value
-    }
-
-    /// Adds a size to `self`
-    pub fn add_assign(&mut self, size: SizeData) -> Result<(), ViewError> {
-        self.key = self
-            .key
-            .checked_add(size.key)
-            .ok_or(ViewError::ArithmeticError(ArithmeticError::Overflow))?;
-        self.value = self
-            .value
-            .checked_add(size.value)
-            .ok_or(ViewError::ArithmeticError(ArithmeticError::Overflow))?;
-        Ok(())
-    }
-
-    /// Subtracts a size from `self`
-    pub fn sub_assign(&mut self, size: SizeData) {
-        self.key -= size.key;
-        self.value -= size.value;
-    }
 }
 
 /// A view that represents the functions of `KeyValueStore`.
@@ -211,12 +170,6 @@ pub struct KeyValueStoreView<C> {
     deletion_set: DeletionSet,
     /// Pending changes not yet persisted to storage.
     updates: BTreeMap<Vec<u8>, Update<Vec<u8>>>,
-    /// The total size of keys and values persisted in storage.
-    stored_total_size: SizeData,
-    /// The total size of keys and values including pending changes.
-    total_size: SizeData,
-    /// Map of key to value size for tracking storage usage.
-    sizes: ByteMapView<C, u32>,
     /// The hash persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
     stored_hash: Option<HasherOutput>,
@@ -237,9 +190,6 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for KeyValueStoreView<C> {
             context: ctx.clone()(&self.context),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
-            stored_total_size: self.stored_total_size,
-            total_size: self.total_size,
-            sizes: self.sizes.with_context(ctx.clone()).await,
             stored_hash: self.stored_hash,
             hash: Mutex::new(hash),
         }
@@ -247,7 +197,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for KeyValueStoreView<C> {
 }
 
 impl<C: Context> View for KeyValueStoreView<C> {
-    const NUM_INIT_KEYS: usize = 2 + ByteMapView::<C, u32>::NUM_INIT_KEYS;
+    const NUM_INIT_KEYS: usize = 1;
 
     type Context = C;
 
@@ -257,31 +207,15 @@ impl<C: Context> View for KeyValueStoreView<C> {
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         let key_hash = context.base_key().base_tag(KeyTag::Hash as u8);
-        let key_total_size = context.base_key().base_tag(KeyTag::TotalSize as u8);
-        let mut v = vec![key_hash, key_total_size];
-        let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
-        let context_sizes = context.clone_with_base_key(base_key);
-        v.extend(ByteMapView::<C, u32>::pre_load(&context_sizes)?);
-        Ok(v)
+        Ok(vec![key_hash])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let hash = from_bytes_option(values.first().ok_or(ViewError::PostLoadValuesError)?)?;
-        let total_size =
-            from_bytes_option_or_default(values.get(1).ok_or(ViewError::PostLoadValuesError)?)?;
-        let base_key = context.base_key().base_tag(KeyTag::Sizes as u8);
-        let context_sizes = context.clone_with_base_key(base_key);
-        let sizes = ByteMapView::post_load(
-            context_sizes,
-            values.get(2..).ok_or(ViewError::PostLoadValuesError)?,
-        )?;
         Ok(Self {
             context,
             deletion_set: DeletionSet::new(),
             updates: BTreeMap::new(),
-            stored_total_size: total_size,
-            total_size,
-            sizes,
             stored_hash: hash,
             hash: Mutex::new(hash),
         })
@@ -290,8 +224,6 @@ impl<C: Context> View for KeyValueStoreView<C> {
     fn rollback(&mut self) {
         self.deletion_set.rollback();
         self.updates.clear();
-        self.total_size = self.stored_total_size;
-        self.sizes.rollback();
         *self.hash.get_mut().unwrap() = self.stored_hash;
     }
 
@@ -300,12 +232,6 @@ impl<C: Context> View for KeyValueStoreView<C> {
             return true;
         }
         if !self.updates.is_empty() {
-            return true;
-        }
-        if self.stored_total_size != self.total_size {
-            return true;
-        }
-        if self.sizes.has_pending_changes().await {
             return true;
         }
         let hash = self.hash.lock().unwrap();
@@ -346,7 +272,6 @@ impl<C: Context> View for KeyValueStoreView<C> {
                 }
             }
         }
-        self.sizes.pre_save(batch)?;
         let hash = *self.hash.lock().unwrap();
         if self.stored_hash != hash {
             let key = self.context.base_key().base_tag(KeyTag::Hash as u8);
@@ -355,10 +280,6 @@ impl<C: Context> View for KeyValueStoreView<C> {
                 Some(hash) => batch.put_key_value(key, &hash)?,
             }
         }
-        if self.stored_total_size != self.total_size {
-            let key = self.context.base_key().base_tag(KeyTag::TotalSize as u8);
-            batch.put_key_value(key, &self.total_size)?;
-        }
         Ok(delete_view)
     }
 
@@ -366,17 +287,13 @@ impl<C: Context> View for KeyValueStoreView<C> {
         self.deletion_set.delete_storage_first = false;
         self.deletion_set.deleted_prefixes.clear();
         self.updates.clear();
-        self.sizes.post_save();
         let hash = *self.hash.lock().unwrap();
         self.stored_hash = hash;
-        self.stored_total_size = self.total_size;
     }
 
     fn clear(&mut self) {
         self.deletion_set.clear();
         self.updates.clear();
-        self.total_size = SizeData::default();
-        self.sizes.clear();
         *self.hash.get_mut().unwrap() = None;
     }
 }
@@ -387,9 +304,6 @@ impl<C: Context> ClonableView for KeyValueStoreView<C> {
             context: self.context.clone(),
             deletion_set: self.deletion_set.clone(),
             updates: self.updates.clone(),
-            stored_total_size: self.stored_total_size,
-            total_size: self.total_size,
-            sizes: self.sizes.clone_unchecked()?,
             stored_hash: self.stored_hash,
             hash: Mutex::new(*self.hash.get_mut().unwrap()),
         })
@@ -400,23 +314,6 @@ impl<C: Context> KeyValueStoreView<C> {
     fn max_key_size(&self) -> usize {
         let prefix_len = self.context.base_key().bytes.len();
         <C::Store as ReadableKeyValueStore>::MAX_KEY_SIZE - 1 - prefix_len
-    }
-
-    /// Getting the total sizes that will be used for keys and values when stored
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::key_value_store_view::{KeyValueStoreView, SizeData};
-    /// # use linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut view = KeyValueStoreView::load(context).await.unwrap();
-    /// view.insert(vec![0, 1], vec![0, 1, 2, 3, 4]).await.unwrap();
-    /// let total_size = view.total_size();
-    /// assert_eq!(total_size, SizeData { key: 2, value: 5 });
-    /// # })
-    /// ```
-    pub fn total_size(&self) -> SizeData {
-        self.total_size
     }
 
     /// Applies the function f over all indices. If the function f returns
@@ -878,12 +775,12 @@ impl<C: Context> KeyValueStoreView<C> {
     /// view.insert(vec![3, 4], vec![42]).await.unwrap();
     /// let mut batch = Batch::new();
     /// batch.delete_key_prefix(vec![0]);
-    /// view.write_batch(batch).await.unwrap();
+    /// view.write_batch(batch).unwrap();
     /// let key_values = view.find_key_values_by_prefix(&[0]).await.unwrap();
     /// assert_eq!(key_values, vec![]);
     /// # })
     /// ```
-    pub async fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
+    pub fn write_batch(&mut self, batch: Batch) -> Result<(), ViewError> {
         #[cfg(with_metrics)]
         let _latency = metrics::KEY_VALUE_STORE_VIEW_WRITE_BATCH_LATENCY.measure_latency();
         *self.hash.get_mut().unwrap() = None;
@@ -892,14 +789,6 @@ impl<C: Context> KeyValueStoreView<C> {
             match operation {
                 WriteOperation::Delete { key } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    if let Some(value) = self.sizes.get(&key).await? {
-                        let entry_size = SizeData {
-                            key: u32::try_from(key.len()).map_err(|_| ArithmeticError::Overflow)?,
-                            value,
-                        };
-                        self.total_size.sub_assign(entry_size);
-                    }
-                    self.sizes.remove(key.clone());
                     if self.deletion_set.contains_prefix_of(&key) {
                         // Optimization: No need to mark `short_key` for deletion as we are going to remove all the keys at once.
                         self.updates.remove(&key);
@@ -909,19 +798,6 @@ impl<C: Context> KeyValueStoreView<C> {
                 }
                 WriteOperation::Put { key, value } => {
                     ensure!(key.len() <= max_key_size, ViewError::KeyTooLong);
-                    let entry_size = SizeData {
-                        key: key.len() as u32,
-                        value: value.len() as u32,
-                    };
-                    self.total_size.add_assign(entry_size)?;
-                    if let Some(value) = self.sizes.get(&key).await? {
-                        let entry_size = SizeData {
-                            key: key.len() as u32,
-                            value,
-                        };
-                        self.total_size.sub_assign(entry_size);
-                    }
-                    self.sizes.insert(key.clone(), entry_size.value);
                     self.updates.insert(key, Update::Set(value));
                 }
                 WriteOperation::DeletePrefix { key_prefix } => {
@@ -934,16 +810,6 @@ impl<C: Context> KeyValueStoreView<C> {
                     for key in key_list {
                         self.updates.remove(&key);
                     }
-                    let key_values = self.sizes.key_values_by_prefix(key_prefix.clone()).await?;
-                    for (key, value) in key_values {
-                        let entry_size = SizeData {
-                            key: key.len() as u32,
-                            value,
-                        };
-                        self.total_size.sub_assign(entry_size);
-                        self.sizes.remove(key);
-                    }
-                    self.sizes.remove_by_prefix(key_prefix.clone());
                     self.deletion_set.insert_key_prefix(key_prefix);
                 }
             }
@@ -966,7 +832,7 @@ impl<C: Context> KeyValueStoreView<C> {
     pub async fn insert(&mut self, index: Vec<u8>, value: Vec<u8>) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.put_key_value_bytes(index, value);
-        self.write_batch(batch).await
+        self.write_batch(batch)
     }
 
     /// Removes a value. If absent then the action has no effect.
@@ -985,7 +851,7 @@ impl<C: Context> KeyValueStoreView<C> {
     pub async fn remove(&mut self, index: Vec<u8>) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.delete_key(index);
-        self.write_batch(batch).await
+        self.write_batch(batch)
     }
 
     /// Deletes a key prefix.
@@ -1004,7 +870,7 @@ impl<C: Context> KeyValueStoreView<C> {
     pub async fn remove_by_prefix(&mut self, key_prefix: Vec<u8>) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         batch.delete_key_prefix(key_prefix);
-        self.write_batch(batch).await
+        self.write_batch(batch)
     }
 
     /// Iterates over all the keys matching the given prefix. The prefix is not included in the returned keys.
@@ -1306,7 +1172,7 @@ impl<C: Context> WritableKeyValueStore for ViewContainer<C> {
 
     async fn write_batch(&self, batch: Batch) -> Result<(), ViewContainerError> {
         let mut view = self.view.write().await;
-        view.write_batch(batch).await?;
+        view.write_batch(batch)?;
         let mut batch = Batch::new();
         view.pre_save(&mut batch)?;
         view.post_save();

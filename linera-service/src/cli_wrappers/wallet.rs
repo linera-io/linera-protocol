@@ -1283,7 +1283,6 @@ impl ClientWrapper {
             blob_published,
             blob_byte_read,
             blob_byte_published,
-            byte_stored,
             operation,
             operation_byte,
             message,
@@ -1338,9 +1337,6 @@ impl ClientWrapper {
         }
         if let Some(value) = blob_byte_published {
             command.args(["--blob-byte-published", &value.to_string()]);
-        }
-        if let Some(value) = byte_stored {
-            command.args(["--byte-stored", &value.to_string()]);
         }
         if let Some(value) = operation {
             command.args(["--operation", &value.to_string()]);

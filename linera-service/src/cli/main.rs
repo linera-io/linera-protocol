@@ -574,7 +574,6 @@ impl Runnable for Job {
                                             blob_published,
                                             blob_byte_read,
                                             blob_byte_published,
-                                            byte_stored,
                                             operation,
                                             operation_byte,
                                             message,
@@ -620,8 +619,6 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.blob_byte_read),
                                         blob_byte_published: blob_byte_published
                                             .unwrap_or(existing_policy.blob_byte_published),
-                                        byte_stored: byte_stored
-                                            .unwrap_or(existing_policy.byte_stored),
                                         operation: operation.unwrap_or(existing_policy.operation),
                                         operation_byte: operation_byte
                                             .unwrap_or(existing_policy.operation_byte),
@@ -2199,7 +2196,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
             byte_runtime_price,
             byte_read_price,
             byte_written_price,
-            byte_stored_price,
             blob_read_price,
             blob_published_price,
             blob_byte_read_price,
@@ -2245,7 +2241,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 blob_byte_read: blob_byte_read_price.unwrap_or(existing_policy.blob_byte_read),
                 blob_byte_published: blob_byte_published_price
                     .unwrap_or(existing_policy.blob_byte_published),
-                byte_stored: byte_stored_price.unwrap_or(existing_policy.byte_stored),
                 operation: operation_price.unwrap_or(existing_policy.operation),
                 operation_byte: operation_byte_price.unwrap_or(existing_policy.operation_byte),
                 message: message_price.unwrap_or(existing_policy.message),

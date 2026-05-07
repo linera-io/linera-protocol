@@ -181,8 +181,6 @@ pub struct ResourceTracker {
     pub event_bytes_read: u64,
     /// The number of event bytes published.
     pub event_bytes_published: u64,
-    /// The change in the number of bytes being stored by user applications.
-    pub bytes_stored: i32,
     /// The number of operations executed.
     pub operations: u32,
     /// The total size of the arguments of user operations.
@@ -254,9 +252,6 @@ impl fmt::Display for ResourceTracker {
         }
         if self.bytes_written != 0 {
             storage_parts.push(format!("bytes_written={}", self.bytes_written));
-        }
-        if self.bytes_stored != 0 {
-            storage_parts.push(format!("bytes_stored={}", self.bytes_stored));
         }
         if !storage_parts.is_empty() {
             lines.push(format!("storage: {}", storage_parts.join(", ")));
@@ -732,19 +727,6 @@ where
                 .ok_or(ArithmeticError::Overflow)?;
         }
         self.update_balance(self.policy.blob_published_price(size)?)?;
-        Ok(())
-    }
-
-    /// Tracks a change in the number of bytes stored.
-    // TODO(#1536): This is not fully implemented.
-    #[allow(dead_code)]
-    pub(crate) fn track_stored_bytes(&mut self, delta: i32) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().bytes_stored = self
-            .tracker
-            .as_mut()
-            .bytes_stored
-            .checked_add(delta)
-            .ok_or(ArithmeticError::Overflow)?;
         Ok(())
     }
 

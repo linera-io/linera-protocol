@@ -252,10 +252,6 @@ pub struct ResourceControlPolicyOverrides {
     #[arg(long)]
     pub blob_byte_published: Option<Amount>,
 
-    /// Set the price per byte stored.
-    #[arg(long)]
-    pub byte_stored: Option<Amount>,
-
     /// Set the base price of sending an operation from a block..
     #[arg(long)]
     pub operation: Option<Amount>,
@@ -614,11 +610,6 @@ pub enum ClientCommand {
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
         blob_byte_published_price: Option<Amount>,
-
-        /// Set the price per byte stored.
-        /// (This will overwrite value from `--policy-config`)
-        #[arg(long)]
-        byte_stored_price: Option<Amount>,
 
         /// Set the base price of sending an operation from a block..
         /// (This will overwrite value from `--policy-config`)
