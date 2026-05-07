@@ -915,7 +915,7 @@ impl<Env: Environment> ClientContext<Env> {
 #[cfg(all(feature = "fs", not(web)))]
 impl<Env: Environment> ClientContext<Env> {
     /// Publishes a module along with the JSON-encoded `Formats` description loaded
-    /// from `snap_path`. The module publication and the formats-registry write
+    /// from `formats`. The module publication and the formats-registry write
     /// happen atomically in a single block.
     pub async fn publish_module_with_formats(
         &mut self,
@@ -923,11 +923,11 @@ impl<Env: Environment> ClientContext<Env> {
         contract: PathBuf,
         service: PathBuf,
         vm_runtime: VmRuntime,
-        snap_path: PathBuf,
+        formats: PathBuf,
         registry_application_id: ApplicationId,
     ) -> Result<ModuleId, Error> {
         let (blobs, module_id, registry_op_bytes) = self
-            .prepare_bcs_publication(&contract, &service, vm_runtime, &snap_path)
+            .prepare_bcs_publication(&contract, &service, vm_runtime, &formats)
             .await?;
 
         info!("Publishing module and registering its formats");
@@ -972,14 +972,14 @@ impl<Env: Environment> ClientContext<Env> {
         contract: PathBuf,
         service: PathBuf,
         vm_runtime: VmRuntime,
-        snap_path: PathBuf,
+        formats: PathBuf,
         registry_application_id: ApplicationId,
         parameters: Vec<u8>,
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<(ApplicationId, ModuleId), Error> {
         let (blobs, module_id, registry_op_bytes) = self
-            .prepare_bcs_publication(&contract, &service, vm_runtime, &snap_path)
+            .prepare_bcs_publication(&contract, &service, vm_runtime, &formats)
             .await?;
 
         info!("Publishing module, registering its formats and creating the application");
@@ -1045,13 +1045,13 @@ impl<Env: Environment> ClientContext<Env> {
         contract: &Path,
         service: &Path,
         vm_runtime: VmRuntime,
-        snap_path: &Path,
+        formats: &Path,
     ) -> Result<(Vec<linera_base::data_types::Blob>, ModuleId, Vec<u8>), Error> {
         let (blobs, module_id) = load_bytecode_blobs(contract, service, vm_runtime).await?;
 
-        info!("Loading formats from {snap_path:?}");
-        let formats = read_formats_from_snap(snap_path)?;
-        let value = serde_json::to_vec(&formats).map_err(|e| {
+        info!("Loading formats from {formats:?}");
+        let parsed = read_formats_from_snap(formats)?;
+        let value = serde_json::to_vec(&parsed).map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("failed to serialize Formats as JSON: {e}"),

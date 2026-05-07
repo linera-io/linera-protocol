@@ -852,13 +852,13 @@ Publish module
 
 Publish a module along with the JSON-encoded `Formats` description loaded from an insta SNAP file. The publication and the formats-registry write happen atomically in a single block
 
-**Usage:** `linera publish-module-with-formats [OPTIONS] <CONTRACT> <SERVICE> <SNAP_PATH> <REGISTRY_APPLICATION_ID> [PUBLISHER]`
+**Usage:** `linera publish-module-with-formats [OPTIONS] <CONTRACT> <SERVICE> <FORMATS> <REGISTRY_APPLICATION_ID> [PUBLISHER]`
 
 ###### **Arguments:**
 
 * `<CONTRACT>` — Path to the Wasm file for the application "contract" bytecode
 * `<SERVICE>` — Path to the Wasm file for the application "service" bytecode
-* `<SNAP_PATH>` — Path to the insta SNAP file containing the YAML serialization of the application's `Formats`
+* `<FORMATS>` — Path to the insta SNAP file containing the YAML serialization of the application's `Formats`
 * `<REGISTRY_APPLICATION_ID>` — The application ID of the formats registry that will receive the JSON-encoded formats
 * `<PUBLISHER>` — An optional chain ID to publish the module. The default chain of the wallet is used otherwise
 

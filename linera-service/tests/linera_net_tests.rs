@@ -1993,13 +1993,13 @@ async fn test_publish_module_with_formats_registers_formats(
     // Publish the counter module while atomically registering its serde
     // `Formats` description in the registry.
     let (contract, service) = client.build_example("counter").await?;
-    let snap_path =
+    let formats =
         ClientWrapper::example_path("counter")?.join("tests/snapshots/format__format.snap");
     let module_id = client
         .publish_module_with_formats::<CounterAbi, (), u64>(
             contract,
             service,
-            snap_path,
+            formats,
             registry_app_id.forget_abi(),
             VmRuntime::Wasm,
             None,

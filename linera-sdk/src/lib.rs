@@ -33,7 +33,6 @@ pub mod contract;
 #[cfg(feature = "ethereum")]
 pub mod ethereum;
 mod extensions;
-#[cfg(feature = "format-decode")]
 pub mod formats;
 pub mod graphql;
 pub mod linera_base_types;

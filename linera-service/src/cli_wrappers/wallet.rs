@@ -432,7 +432,7 @@ impl ClientWrapper {
         &self,
         contract: PathBuf,
         service: PathBuf,
-        snap_path: PathBuf,
+        formats: PathBuf,
         registry_application_id: ApplicationId,
         vm_runtime: VmRuntime,
         publisher: impl Into<Option<ChainId>>,
@@ -441,7 +441,7 @@ impl ClientWrapper {
             .command()
             .await?
             .arg("publish-module-with-formats")
-            .args([contract, service, snap_path])
+            .args([contract, service, formats])
             .arg(registry_application_id.to_string())
             .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])
             .args(publisher.into().iter().map(ChainId::to_string))

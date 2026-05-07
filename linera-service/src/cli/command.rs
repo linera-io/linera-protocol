@@ -897,7 +897,7 @@ pub enum ClientCommand {
 
         /// Path to the insta SNAP file containing the YAML serialization of the
         /// application's `Formats`.
-        snap_path: PathBuf,
+        formats: PathBuf,
 
         /// The application ID of the formats registry that will receive the
         /// JSON-encoded formats.

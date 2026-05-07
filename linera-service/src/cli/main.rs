@@ -1383,7 +1383,7 @@ impl Runnable for Job {
             PublishModuleWithFormats {
                 contract,
                 service,
-                snap_path,
+                formats,
                 registry_application_id,
                 vm_runtime,
                 publisher,
@@ -1405,7 +1405,7 @@ impl Runnable for Job {
                         contract,
                         service,
                         vm_runtime,
-                        snap_path,
+                        formats,
                         registry_application_id,
                     )
                     .await?;
