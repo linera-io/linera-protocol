@@ -1,0 +1,53 @@
+# Long-running linera-bridge relayer.
+#
+# Defaults match the mainnet host layout (env at /etc/linera-bridge,
+# data at /var/lib/linera-bridge). Override RELAYER_ENV_FILE,
+# RELAYER_ENV_SECRET, RELAYER_DATA_DIR to reuse this compose file
+# from a developer machine pointing at a real network — see
+# examples/bridge-demo/spawn-relayer.sh.
+#
+# Prerequisites (mainnet operator does this once on the VM):
+#   1. Create /var/lib/linera-bridge (data) and /etc/linera-bridge (env)
+#   2. Populate /etc/linera-bridge/.env with the keys consumed by
+#      bridge-entrypoint.sh (RPC_URL, FAUCET_URL, EVM_BRIDGE_ADDRESS,
+#      LINERA_BRIDGE_APP, LINERA_FUNGIBLE_APP, LINERA_BRIDGE_CHAIN_ID,
+#      LINERA_BRIDGE_CHAIN_OWNER, LINERA_WALLET, LINERA_KEYSTORE,
+#      LINERA_STORAGE, MONITOR_*, MAX_RETRIES, PORT)
+#   3. Drop the EVM signing key in /etc/linera-bridge/.env.secret
+#      (mode 0600, root:root): EVM_PRIVATE_KEY=0x...
+#
+# See docker/README.mainnet.md for the full procedure.
+services:
+  relayer:
+    image: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-bridge:mainnet_conway_internal
+    restart: unless-stopped
+    env_file:
+      - ${RELAYER_ENV_FILE:-/etc/linera-bridge/.env}
+      - ${RELAYER_ENV_SECRET:-/etc/linera-bridge/.env.secret}
+    ports:
+      # Loopback only — /metrics and /health are not public-facing.
+      # Scrape via SSH tunnel or VPN from the ops network.
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - ${RELAYER_DATA_DIR:-/var/lib/linera-bridge}:/data
+    healthcheck:
+      # The runtime image only ships netcat (no wget/curl). A bare TCP probe
+      # is enough — the /health route exists for any axum-based liveness
+      # checks downstream collectors might run separately.
+      test: ["CMD", "nc", "-z", "localhost", "3001"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: journald
+      options:
+        tag: linera-bridge
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
