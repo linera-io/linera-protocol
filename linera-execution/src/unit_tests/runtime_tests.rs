@@ -244,16 +244,18 @@ fn create_handle_with_caller_and_callee() -> (
     let callee_id = callee.id;
     runtime.push_application(caller);
     runtime.push_application(callee);
-    (SyncRuntimeHandle::from(runtime), receiver, caller_id, callee_id)
+    (
+        SyncRuntimeHandle::from(runtime),
+        receiver,
+        caller_id,
+        callee_id,
+    )
 }
 
 /// Helper that returns a dummy `(source_owner, destination_account, amount)` triple.
 fn dummy_transfer_args() -> (AccountOwner, Account, Amount) {
     let source = AccountOwner::CHAIN;
-    let destination = Account::new(
-        dummy_chain_description(0).id(),
-        AccountOwner::CHAIN,
-    );
+    let destination = Account::new(dummy_chain_description(0).id(), AccountOwner::CHAIN);
     let amount = Amount::from_tokens(1);
     (source, destination, amount)
 }
@@ -288,8 +290,7 @@ async fn transfer_auth_depth_zero_uses_current_application() {
 /// application's id.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn transfer_auth_depth_one_uses_caller() {
-    let (mut handle, mut receiver, caller_id, callee_id) =
-        create_handle_with_caller_and_callee();
+    let (mut handle, mut receiver, caller_id, callee_id) = create_handle_with_caller_and_callee();
     assert_ne!(caller_id, callee_id);
     let (source, destination, amount) = dummy_transfer_args();
 
@@ -331,8 +332,7 @@ async fn transfer_auth_depth_out_of_range() {
 /// `claim_auth_depth(.., 1)` stamps the request with the caller's id.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn claim_auth_depth_one_uses_caller() {
-    let (mut handle, mut receiver, caller_id, _callee_id) =
-        create_handle_with_caller_and_callee();
+    let (mut handle, mut receiver, caller_id, _callee_id) = create_handle_with_caller_and_callee();
     let chain = dummy_chain_description(0).id();
     let source = Account::new(chain, AccountOwner::CHAIN);
     let destination = Account::new(chain, AccountOwner::CHAIN);
@@ -378,8 +378,7 @@ async fn claim_auth_depth_out_of_range() {
 /// `transfer_from_auth_depth(.., 1)` stamps the request with the caller's id.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn transfer_from_auth_depth_one_uses_caller() {
-    let (mut handle, mut receiver, caller_id, _callee_id) =
-        create_handle_with_caller_and_callee();
+    let (mut handle, mut receiver, caller_id, _callee_id) = create_handle_with_caller_and_callee();
     let owner = AccountOwner::CHAIN;
     let spender = AccountOwner::CHAIN;
     let destination = Account::new(dummy_chain_description(0).id(), AccountOwner::CHAIN);

@@ -35,6 +35,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
 * [`linera create-application`↴](#linera-create-application)
+* [`linera create-native-application`↴](#linera-create-native-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
 * [`linera keygen`↴](#linera-keygen)
 * [`linera assign`↴](#linera-assign)
@@ -115,6 +116,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
 * `create-application` — Create an application
+* `create-native-application` — Create a runtime-native application (no bytecode required)
 * `publish-and-create` — Create an application, and publish the required module
 * `keygen` — Create an unassigned key pair
 * `assign` — Link the owner to the chain. Expects that the caller has a private key corresponding to the `public_key`, otherwise block proposals will fail when signing with it
@@ -925,6 +927,30 @@ Create an application
 ###### **Arguments:**
 
 * `<MODULE_ID>` — The module ID of the application to create
+* `<CREATOR>` — An optional chain ID to host the application. The default chain of the wallet is used otherwise
+
+###### **Options:**
+
+* `--json-parameters <JSON_PARAMETERS>` — The shared parameters as JSON string
+* `--json-parameters-path <JSON_PARAMETERS_PATH>` — Path to a JSON file containing the shared parameters
+* `--json-argument <JSON_ARGUMENT>` — The instantiation argument as a JSON string
+* `--json-argument-path <JSON_ARGUMENT_PATH>` — Path to a JSON file containing the instantiation argument
+* `--required-application-ids <REQUIRED_APPLICATION_IDS>` — The list of required dependencies of application, if any
+
+
+
+## `linera create-native-application`
+
+Create a runtime-native application (no bytecode required)
+
+**Usage:** `linera create-native-application [OPTIONS] <KIND> [CREATOR]`
+
+###### **Arguments:**
+
+* `<KIND>` — The kind of native application to create
+
+  Possible values: `fungible`
+
 * `<CREATOR>` — An optional chain ID to host the application. The default chain of the wallet is used otherwise
 
 ###### **Options:**

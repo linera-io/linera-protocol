@@ -30,6 +30,8 @@ use custom_debug_derive::Debug;
 use derive_more::Display;
 #[cfg(web)]
 use js_sys::wasm_bindgen::JsValue;
+#[cfg(with_testing)]
+use linera_base::data_types::ApplicationKind;
 use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
@@ -52,9 +54,6 @@ use system::AdminOperation;
 use thiserror::Error;
 pub use web_thread_pool::Pool as ThreadPool;
 use web_thread_select as web_thread;
-
-#[cfg(with_testing)]
-use linera_base::data_types::ApplicationKind;
 
 #[cfg(with_revm)]
 use crate::evm::EvmExecutionError;
