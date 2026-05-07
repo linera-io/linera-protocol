@@ -722,8 +722,6 @@ mod test {
                     epoch: Default::default(),
                     balance: Default::default(),
                     application_permissions: Default::default(),
-                    min_active_epoch: Epoch::ZERO,
-                    max_active_epoch: Epoch::ZERO,
                 },
                 Timestamp::now(),
             );

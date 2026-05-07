@@ -37,9 +37,6 @@ pub struct ChainInfoQuery {
     pub test_next_block_height: Option<BlockHeight>,
     /// Request the balance of a given [`AccountOwner`].
     pub request_owner_balance: AccountOwner,
-    /// Query the current committees.
-    #[debug(skip_if = Not::not)]
-    pub request_committees: bool,
     /// Query the received messages that are waiting to be picked in the next block.
     #[debug(skip_if = Not::not)]
     pub request_pending_message_bundles: bool,
@@ -69,7 +66,6 @@ impl ChainInfoQuery {
         Self {
             chain_id,
             test_next_block_height: None,
-            request_committees: false,
             request_owner_balance: AccountOwner::CHAIN,
             request_pending_message_bundles: false,
             request_received_log_excluding_first_n: None,
@@ -79,11 +75,6 @@ impl ChainInfoQuery {
             request_sent_certificate_hashes_by_heights: Vec::new(),
             request_previous_event_blocks: Vec::new(),
         }
-    }
-
-    pub fn with_committees(mut self) -> Self {
-        self.request_committees = true;
-        self
     }
 
     pub fn with_pending_message_bundles(mut self) -> Self {
@@ -150,9 +141,10 @@ pub struct ChainInfo {
     /// The requested owner balance, if any.
     #[debug(skip_if = Option::is_none)]
     pub requested_owner_balance: Option<Amount>,
-    /// Committee blob hashes indexed by epoch, if requested.
+    /// The blob hash of the committee that signs the next block on this chain. `None` if the
+    /// chain has not been initialized.
     #[debug(skip_if = Option::is_none)]
-    pub requested_committees: Option<BTreeMap<Epoch, CryptoHash>>,
+    pub committee_hash: Option<CryptoHash>,
     /// The received messages that are waiting be picked in the next block (if requested).
     #[debug(skip_if = Vec::is_empty)]
     pub requested_pending_message_bundles: Vec<IncomingBundle>,
@@ -273,7 +265,7 @@ impl ChainInfo {
             next_block_height: tip_state.next_block_height,
             timestamp: *view.execution_state.system.timestamp.get(),
             state_hash: Some(view.execution_state.crypto_hash_mut().await?),
-            requested_committees: None,
+            committee_hash: *view.execution_state.system.committee_hash.get(),
             requested_owner_balance: None,
             requested_pending_message_bundles: Vec::new(),
             requested_sent_certificate_hashes: Vec::new(),

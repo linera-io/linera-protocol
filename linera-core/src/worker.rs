@@ -335,7 +335,7 @@ pub enum WorkerError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
 
-    #[error("Certificates are in confirmed_log but not in storage: {0:?}")]
+    #[error("Certificates referenced from chain state are missing in storage: {0:?}")]
     ReadCertificatesError(Vec<CryptoHash>),
 
     #[error(transparent)]
@@ -392,20 +392,8 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-    #[error("confirmed_log entry at height {height} for chain {chain_id:8} not found")]
-    ConfirmedLogEntryNotFound {
-        height: BlockHeight,
-        chain_id: ChainId,
-    },
-    #[error("preprocessed_blocks entry at height {height} for chain {chain_id:8} not found")]
-    PreprocessedBlocksEntryNotFound {
-        height: BlockHeight,
-        chain_id: ChainId,
-    },
-    #[error(
-        "confirmed_log/preprocessed_blocks entry at height {height} for chain {chain_id} not found"
-    )]
-    ConfirmedBlockHashNotFound {
+    #[error("Block hash at height {height} for chain {chain_id} not found")]
+    BlockHashNotFound {
         height: BlockHeight,
         chain_id: ChainId,
     },
@@ -456,9 +444,7 @@ impl WorkerError {
             WorkerError::BcsError(_)
             | WorkerError::InvalidCrossChainRequest
             | WorkerError::ViewError(_)
-            | WorkerError::ConfirmedLogEntryNotFound { .. }
-            | WorkerError::PreprocessedBlocksEntryNotFound { .. }
-            | WorkerError::ConfirmedBlockHashNotFound { .. }
+            | WorkerError::BlockHashNotFound { .. }
             | WorkerError::LocalBlockNotFound { .. }
             | WorkerError::MissingNetworkDescription
             | WorkerError::Thread(_)
@@ -1445,6 +1431,29 @@ where
         guard.read_certificate(height).await
     }
 
+    /// Test helper that runs `ChainWorkerState::select_message_bundles` for the given
+    /// recipient chain.
+    #[cfg(with_testing)]
+    pub async fn select_message_bundles(
+        &self,
+        recipient: ChainId,
+        origin: &ChainId,
+        next_height_to_receive: BlockHeight,
+        last_anticipated_block_height: Option<BlockHeight>,
+        bundles: Vec<(Epoch, MessageBundle)>,
+    ) -> Result<Vec<MessageBundle>, WorkerError> {
+        let state = self.get_or_create_chain_worker(recipient).await?;
+        let guard = handle::read_lock(&state).await?;
+        guard
+            .select_message_bundles(
+                origin,
+                next_height_to_receive,
+                last_anticipated_block_height,
+                bundles,
+            )
+            .await
+    }
+
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
@@ -1926,7 +1935,7 @@ where
         chain_id: ChainId,
     ) -> Result<BlockHeight, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
-            guard.get_next_height_to_preprocess().await
+            Ok(guard.get_next_height_to_preprocess())
         })
         .await
     }

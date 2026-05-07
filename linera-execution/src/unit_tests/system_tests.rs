@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use linera_base::data_types::{Blob, BlockHeight, Bytecode};
 #[cfg(with_testing)]
 use linera_base::vm::VmRuntime;

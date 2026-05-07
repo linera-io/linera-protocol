@@ -80,9 +80,9 @@ impl<C: Send + Sync + Context> SystemExecutionStateView<C> {
         self.admin_chain_id.get()
     }
 
-    #[graphql(derived(name = "committees"))]
-    async fn _committees(&self) -> &BTreeMap<Epoch, CryptoHash> {
-        self.committees.get()
+    #[graphql(derived(name = "committee_hash"))]
+    async fn _committee_hash(&self) -> &Option<CryptoHash> {
+        self.committee_hash.get()
     }
 
     #[graphql(derived(name = "ownership"))]

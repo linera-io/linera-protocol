@@ -12,7 +12,7 @@ use itertools::Itertools;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode,
+        ApplicationDescription, Blob, BlockHeight, ChainDescription, CompressedBytecode, Epoch,
         NetworkDescription, Timestamp,
     },
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
@@ -440,6 +440,53 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         Ok(self.shared_committees().insert(hash, Arc::new(committee)))
     }
 
+    /// Returns whether the given epoch's committee has been revoked, i.e. whether the
+    /// admin chain has written a `REMOVED_EPOCH_STREAM` event for it.
+    async fn is_epoch_revoked(&self, epoch: Epoch) -> Result<bool, ExecutionError> {
+        let net_desc = self
+            .read_network_description()
+            .await?
+            .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+        let event_id = EventId {
+            chain_id: net_desc.admin_chain_id,
+            stream_id: StreamId::system(linera_execution::system::REMOVED_EPOCH_STREAM_NAME),
+            index: epoch.0,
+        };
+        Ok(self.contains_event(event_id).await?)
+    }
+
+    /// Returns the committee that signs blocks in the given epoch, looking up its blob
+    /// hash via the admin chain's epoch event stream (or the genesis committee for
+    /// epoch 0). Returns `Ok(None)` if the corresponding event has not been written
+    /// to local storage yet.
+    async fn committee_for_epoch(
+        &self,
+        epoch: Epoch,
+    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+        let blob_hash = if epoch == Epoch::ZERO {
+            self.read_network_description()
+                .await?
+                .ok_or(ExecutionError::NoNetworkDescriptionFound)?
+                .genesis_committee_blob_hash
+        } else {
+            let net_desc = self
+                .read_network_description()
+                .await?
+                .ok_or(ExecutionError::NoNetworkDescriptionFound)?;
+            let event_id = EventId {
+                chain_id: net_desc.admin_chain_id,
+                stream_id: StreamId::system(linera_execution::system::EPOCH_STREAM_NAME),
+                index: epoch.0,
+            };
+            let Some(bytes) = self.read_event(event_id).await? else {
+                return Ok(None);
+            };
+            let event_data: linera_execution::system::EpochEventData = bcs::from_bytes(&bytes)?;
+            event_data.blob_hash
+        };
+        Ok(Some(self.get_or_load_committee_by_hash(blob_hash).await?))
+    }
+
     /// Lists the blob IDs in storage.
     async fn list_blob_ids(&self) -> Result<Vec<BlobId>, ViewError>;
 
@@ -650,8 +697,6 @@ mod tests {
             InitialChainConfig {
                 ownership: ChainOwnership::single(AccountPublicKey::test_key(0).into()),
                 epoch: Epoch::ZERO,
-                min_active_epoch: Epoch::ZERO,
-                max_active_epoch: Epoch::ZERO,
                 balance: Amount::ZERO,
                 application_permissions: ApplicationPermissions::default(),
             },

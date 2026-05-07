@@ -20,8 +20,6 @@ pub struct ChainWorkerConfig {
     pub key_pair: Option<Arc<ValidatorSecretKey>>,
     /// Whether inactive chains are allowed in storage.
     pub allow_inactive_chains: bool,
-    /// Whether new messages from deprecated epochs are allowed.
-    pub allow_messages_from_deprecated_epochs: bool,
     /// Whether the user application services should be long-lived.
     pub long_lived_services: bool,
     /// Blocks with a timestamp this far in the future will still be accepted, but the validator
@@ -88,7 +86,6 @@ impl Default for ChainWorkerConfig {
             nickname: String::new(),
             key_pair: None,
             allow_inactive_chains: false,
-            allow_messages_from_deprecated_epochs: false,
             long_lived_services: false,
             block_time_grace_period: Default::default(),
             ttl: None,

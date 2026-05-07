@@ -303,6 +303,19 @@ impl CustomSerialize for u128 {
     }
 }
 
+impl CustomSerialize for linera_base::data_types::BlockHeight {
+    fn to_custom_bytes(&self) -> Result<Vec<u8>, ViewError> {
+        Ok(self.0.to_be_bytes().to_vec())
+    }
+
+    fn from_custom_bytes(bytes: &[u8]) -> Result<Self, ViewError> {
+        let array: [u8; 8] = bytes
+            .try_into()
+            .map_err(|_| ViewError::PostLoadValuesError)?;
+        Ok(Self(u64::from_be_bytes(array)))
+    }
+}
+
 /// This computes the offset of the BCS serialization of a vector.
 /// The formula that should be satisfied is
 /// `serialized_size(vec![v_1, ...., v_n]) = get_uleb128_size(n)`
