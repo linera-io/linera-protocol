@@ -35,9 +35,3 @@ pub struct FlashLoanParameters {
     /// Interest in millionths (e.g. 10_000 = 1%).
     pub interest_millionths: u64,
 }
-
-/// The initial state: how many tokens the pool starts with.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct FlashLoanInitialState {
-    pub pool_balance: Amount,
-}

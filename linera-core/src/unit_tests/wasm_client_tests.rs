@@ -1589,18 +1589,17 @@ where
     // 2. Publish and create the flash-loan app.
     let flash_loan_module = chain.publish_wasm_example("flash-loan").await?;
     let flash_loan_module = flash_loan_module
-        .with_abi::<flash_loan::FlashLoanAbi, flash_loan::FlashLoanParameters, flash_loan::FlashLoanInitialState>();
+        .with_abi::<flash_loan::FlashLoanAbi, flash_loan::FlashLoanParameters, ()>();
     let pool_balance = Amount::from_tokens(100);
     let flash_params = flash_loan::FlashLoanParameters {
         fungible_app_id: fungible_id,
         interest_millionths: 10_000, // 1%
     };
-    let flash_init = flash_loan::FlashLoanInitialState { pool_balance };
     let (flash_loan_id, _cert) = chain
         .create_application(
             flash_loan_module,
             &flash_params,
-            &flash_init,
+            &(),
             vec![fungible_id.forget_abi()],
         )
         .await

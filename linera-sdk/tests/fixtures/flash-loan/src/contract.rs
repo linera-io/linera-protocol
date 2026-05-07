@@ -3,7 +3,7 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use flash_loan::{FlashLoanAbi, FlashLoanInitialState, FlashLoanParameters, Operation};
+use flash_loan::{FlashLoanAbi, FlashLoanParameters, Operation};
 use linera_sdk::{
     abis::fungible::FungibleOperation,
     linera_base_types::{Account, AccountOwner, Amount, WithContractAbi},
@@ -35,7 +35,7 @@ impl WithContractAbi for FlashLoanContract {
 impl Contract for FlashLoanContract {
     type Message = ();
     type Parameters = FlashLoanParameters;
-    type InstantiationArgument = FlashLoanInitialState;
+    type InstantiationArgument = ();
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -45,7 +45,7 @@ impl Contract for FlashLoanContract {
         FlashLoanContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _initial: FlashLoanInitialState) {
+    async fn instantiate(&mut self, _initial: ()) {
         self.runtime.application_parameters();
     }
 
