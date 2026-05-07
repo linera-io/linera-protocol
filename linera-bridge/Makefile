@@ -3,7 +3,10 @@ COMPOSE_FILE := $(DOCKER_DIR)/docker-compose.bridge-test.yml
 DEMO_DIR := ../examples/bridge-demo
 PROJECT := linera-bridge-demo
 
-.PHONY: build-wasm build-all build-relayer relayer-up relayer-down relayer-logs up down demo demo-setup demo-frontend demo-logs
+SOLIDITY_DIR := src/solidity
+SOLIDITY_LINT_FILES := $(addprefix $(SOLIDITY_DIR)/,FungibleBridge.sol Microchain.sol MockERC20.sol LightClient.sol)
+
+.PHONY: build-wasm build-all build-relayer relayer-up relayer-down relayer-logs up down demo demo-setup demo-frontend demo-logs lint-solidity
 
 build-relayer: ## Build the bridge relayer docker image
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile.bridge \
@@ -113,6 +116,15 @@ demo-frontend: ## Install deps and start the Vite dev server
 
 demo-logs: ## Tail logs from the relay service
 	docker compose -f $(COMPOSE_FILE) -p $(PROJECT) logs -f linera-relay
+
+lint-solidity: ## Run forge lint on the hand-written bridge contracts; fails on any high/med-severity finding
+	@cd $(SOLIDITY_DIR) && \
+	  OUT=$$(forge lint $(notdir $(SOLIDITY_LINT_FILES)) 2>&1 || true); \
+	  echo "$$OUT"; \
+	  if echo "$$OUT" | grep -qE '^(warning|error)\['; then \
+	    echo "forge lint reported warnings or errors" >&2; \
+	    exit 1; \
+	  fi
 
 demo: build-all up demo-setup ## Build everything, start network, deploy contracts, and print next steps
 	@echo ""

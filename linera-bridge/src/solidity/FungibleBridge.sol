@@ -36,12 +36,7 @@ contract FungibleBridge is Microchain {
     IERC20 public immutable token;
     uint256 public depositNonce;
 
-    constructor(
-        address _lightClient,
-        bytes32 _chainId,
-        address _token,
-        bytes32 _fungibleApplicationId
-    )
+    constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId)
         Microchain(_lightClient, _chainId)
     {
         require(_fungibleApplicationId != bytes32(0), "fungibleApplicationId must be non-zero");
@@ -85,14 +80,16 @@ contract FungibleBridge is Microchain {
     /// events on the "burns" stream from the wrapped-fungible application.
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
         bytes32 burnsHash = keccak256("burns");
-        for (uint i = 0; i < blockValue.body.events.length; i++) {
+        for (uint256 i = 0; i < blockValue.body.events.length; i++) {
             BridgeTypes.Event[] memory txEvents = blockValue.body.events[i];
-            for (uint j = 0; j < txEvents.length; j++) {
+            for (uint256 j = 0; j < txEvents.length; j++) {
                 BridgeTypes.Event memory evt = txEvents[j];
 
                 // choice==1 is User application
                 if (evt.stream_id.application_id.choice != 1) continue;
-                if (evt.stream_id.application_id.user.application_description_hash.value != fungibleApplicationId) continue;
+                if (evt.stream_id.application_id.user.application_description_hash.value != fungibleApplicationId) {
+                    continue;
+                }
 
                 // Check stream name is "burns"
                 if (keccak256(evt.stream_id.stream_name.value) != burnsHash) continue;
@@ -108,9 +105,8 @@ contract FungibleBridge is Microchain {
 
     /// @dev Calls transferFrom and handles tokens that don't return a boolean.
     function _safeTransferFrom(address from, address to, uint256 amount_) internal {
-        (bool success, bytes memory data) = address(token).call(
-            abi.encodeWithSelector(token.transferFrom.selector, from, to, amount_)
-        );
+        (bool success, bytes memory data) =
+            address(token).call(abi.encodeWithSelector(token.transferFrom.selector, from, to, amount_));
         require(success && (data.length == 0 || abi.decode(data, (bool))), "safeTransferFrom failed");
     }
 }

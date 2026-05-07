@@ -122,28 +122,6 @@ linera_exec() {
         ./linera "$@"
 }
 
-# Parse "Deployed to: 0x..." from forge create output.
-parse_address() {
-    grep 'Deployed to:' | sed 's/.*Deployed to: //' | tr -d '[:space:]'
-}
-
-# Parse "Transaction hash: 0x..." from forge create output.
-parse_tx_hash() {
-    grep 'Transaction hash:' | sed 's/.*Transaction hash: //' | tr -d '[:space:]'
-}
-
-# Wait for a transaction to be mined. Needed on public testnets where forge
-# create returns before the tx is confirmed, causing nonce races.
-wait_for_tx() {
-    local tx_hash="$1"
-    if [[ -z "$tx_hash" || "$tx_hash" == "0x" ]]; then
-        return 0
-    fi
-    echo "  Waiting for tx $tx_hash..."
-    evm_exec cast receipt --confirmations 1 \
-        --rpc-url "$EVM_RPC_URL" "$tx_hash" >/dev/null
-}
-
 # ── Defaults ──
 echo "Compose file: $COMPOSE_FILE"
 EVM_RPC_URL="${EVM_RPC_URL:-http://anvil:8545}"
@@ -205,19 +183,24 @@ dc_exec linera-network sh -c "\
     cp -r $WALLET_DIR/client_0.db $WALLET_DIR/client_${EXTRA_WALLET_ID}.db"
 
 # ── 3. Deploy MockERC20 ──
-echo "Deploying MockERC20..."
-ERC20_OUTPUT=$(evm_exec \
-    forge create "$CONTRACTS_DIR/MockERC20.sol:MockERC20" \
-    --root "$CONTRACTS_DIR" \
-    --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
-    "${FORGE_USE_SOLC[@]}" \
-    --out /tmp/forge-out --cache-path /tmp/forge-cache \
+echo "Deploying MockERC20 via forge script..."
+EVM_CHAIN_ID_DECIMAL=$(dc_exec foundry-tools cast chain-id --rpc-url "$EVM_RPC_URL")
+dc_exec foundry-tools env \
+    TOKEN_NAME="TestToken" \
+    TOKEN_SYMBOL="TT" \
+    TOKEN_SUPPLY="1000000000000000000000" \
+    forge script /contracts/script/DeployMockERC20.s.sol \
+    --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast \
-    --constructor-args "TestToken" "TT" 1000000000000000000000)
-TOKEN_ADDRESS=$(echo "$ERC20_OUTPUT" | parse_address)
-wait_for_tx "$(echo "$ERC20_OUTPUT" | parse_tx_hash)"
+    --broadcast >/tmp/mock-erc20-deploy.log 2>&1 || {
+    cat /tmp/mock-erc20-deploy.log >&2
+    die "MockERC20 deploy failed"
+}
+TOKEN_ADDRESS=$(dc_exec foundry-tools \
+    jq -r '.transactions[0].contractAddress' \
+    "/contracts/broadcast/DeployMockERC20.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
+    | tr -d '[:space:]')
 echo "  MockERC20: $TOKEN_ADDRESS"
 validate_eth_address "Token address" "$TOKEN_ADDRESS"
 TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
@@ -325,23 +308,24 @@ echo "$WRAPPED_APP_ID" > "$SHARED_DIR/wrapped-app-id"
 APP_ID_BYTES32="0x${WRAPPED_APP_ID:0:64}"
 
 # ── 7. Deploy FungibleBridge with the wrapped-fungible applicationId baked in ──
-echo "Deploying FungibleBridge..."
-BRIDGE_OUTPUT=$(evm_exec \
-    forge create "$CONTRACTS_DIR/FungibleBridge.sol:FungibleBridge" \
-    --root "$CONTRACTS_DIR" \
-    --via-ir --optimize --optimizer-runs 1 --evm-version shanghai \
-    "${FORGE_USE_SOLC[@]}" --ignored-error-codes 6321 \
-    --out /tmp/forge-out --cache-path /tmp/forge-cache \
+echo "Deploying FungibleBridge via forge script..."
+dc_exec foundry-tools env \
+    LIGHT_CLIENT="$LIGHT_CLIENT_ADDR" \
+    BRIDGE_CHAIN_ID="$CHAIN_BYTES32" \
+    TOKEN_ADDRESS="$TOKEN_ADDRESS" \
+    FUNGIBLE_APP_ID="$APP_ID_BYTES32" \
+    forge script /contracts/script/DeployFungibleBridge.s.sol \
+    --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast \
-    --constructor-args \
-    "$LIGHT_CLIENT_ADDR" \
-    "$CHAIN_BYTES32" \
-    "$TOKEN_ADDRESS" \
-    "$APP_ID_BYTES32")
-BRIDGE_ADDRESS=$(echo "$BRIDGE_OUTPUT" | parse_address)
-wait_for_tx "$(echo "$BRIDGE_OUTPUT" | parse_tx_hash)"
+    --broadcast >/tmp/bridge-deploy.log 2>&1 || {
+    cat /tmp/bridge-deploy.log >&2
+    die "FungibleBridge deploy failed"
+}
+BRIDGE_ADDRESS=$(dc_exec foundry-tools \
+    jq -r '.transactions[0].contractAddress' \
+    "/contracts/broadcast/DeployFungibleBridge.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
+    | tr -d '[:space:]')
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
 BRIDGE_ADDR_HEX=$(echo "$BRIDGE_ADDRESS" | sed 's/^0x//')
 echo "  FungibleBridge: $BRIDGE_ADDRESS"
