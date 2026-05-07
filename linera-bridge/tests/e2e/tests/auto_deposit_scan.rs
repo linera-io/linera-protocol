@@ -399,7 +399,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337,
         block_hash: deposit_receipt.block_hash.unwrap(),
-        tx_index: 0,
+        tx_index: deposit_receipt.transaction_index.expect("transaction_index missing"),
         log_index,
     };
 
