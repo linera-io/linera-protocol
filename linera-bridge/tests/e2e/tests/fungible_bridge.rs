@@ -131,7 +131,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
 
     let (module_id, cert) = cc_a
-        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+        .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm, None)
         .await?
         .expect("publish module committed");
     tracing::info!(height=?cert.inner().block().header.height, "Module published");

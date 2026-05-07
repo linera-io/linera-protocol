@@ -74,7 +74,7 @@ impl<Env: Environment> ChainClientExt for ChainClient<Env> {
         let contract_bytecode = Bytecode::load_from_file(contract_path).await?;
         let service_bytecode = Bytecode::load_from_file(service_path).await?;
         let (module_id, _cert) = self
-            .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm)
+            .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm, None)
             .await
             .unwrap_ok_committed();
         Ok(module_id)
@@ -150,7 +150,7 @@ where
     let creator = builder.add_root_chain(1, Amount::ONE).await?;
 
     let (module_id, _cert) = publisher
-        .publish_module(contract_bytecode, service_bytecode, vm_runtime)
+        .publish_module(contract_bytecode, service_bytecode, vm_runtime, None)
         .await
         .unwrap_ok_committed();
     let module_id = module_id.with_abi::<counter::CounterAbi, (), u64>();
@@ -197,7 +197,7 @@ where
     let small_bytecode = Bytecode::new(vec![]);
     // Publishing bytecode that exceeds the limit fails.
     let result = publisher
-        .publish_module(large_bytecode.clone(), small_bytecode.clone(), vm_runtime)
+        .publish_module(large_bytecode.clone(), small_bytecode.clone(), vm_runtime, None)
         .await;
     assert_matches!(
         result,
@@ -208,7 +208,7 @@ where
         ) if matches!(**error, ExecutionError::BytecodeTooLarge))
     );
     let result = publisher
-        .publish_module(small_bytecode, large_bytecode, vm_runtime)
+        .publish_module(small_bytecode, large_bytecode, vm_runtime, None)
         .await;
     assert_matches!(
         result,

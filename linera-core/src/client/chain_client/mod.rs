@@ -2363,16 +2363,19 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Publishes some module.
+    /// Publishes some module, optionally along with a JSON-encoded `Formats`
+    /// description that becomes a third blob alongside contract and service.
     #[cfg(not(target_arch = "wasm32"))]
-    #[instrument(level = "trace", skip(contract, service))]
+    #[instrument(level = "trace", skip(contract, service, formats))]
     pub async fn publish_module(
         &self,
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
     ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, Error> {
-        let (blobs, module_id) = super::create_bytecode_blobs(contract, service, vm_runtime).await;
+        let (blobs, module_id) =
+            super::create_bytecode_blobs(contract, service, vm_runtime, formats).await;
         self.publish_module_blobs(blobs, module_id).await
     }
 

@@ -2043,14 +2043,19 @@ impl CheckCertificateResult {
     }
 }
 
-/// Creates a compressed Contract, Service and bytecode.
+/// Creates a compressed Contract, Service and bytecode, plus an optional
+/// `ApplicationFormats` blob built from the JSON-encoded `Formats` description
+/// bytes.
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn create_bytecode_blobs(
     contract: Bytecode,
     service: Bytecode,
     vm_runtime: VmRuntime,
+    formats: Option<Vec<u8>>,
 ) -> (Vec<Blob>, ModuleId) {
-    match vm_runtime {
+    let formats_blob = formats.map(Blob::new_application_formats);
+    let formats_blob_hash = formats_blob.as_ref().map(|blob| blob.id().hash);
+    let (mut blobs, module_id) = match vm_runtime {
         VmRuntime::Wasm => {
             let (compressed_contract, compressed_service) =
                 tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
@@ -2058,19 +2063,28 @@ pub async fn create_bytecode_blobs(
                     .expect("Compression should not panic");
             let contract_blob = Blob::new_contract_bytecode(compressed_contract);
             let service_blob = Blob::new_service_bytecode(compressed_service);
-            let module_id =
-                ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+            let module_id = ModuleId::new_with_formats(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                vm_runtime,
+                formats_blob_hash,
+            );
             (vec![contract_blob, service_blob], module_id)
         }
         VmRuntime::Evm => {
             let compressed_contract = contract.compress();
             let evm_contract_blob = Blob::new_evm_bytecode(compressed_contract);
-            let module_id = ModuleId::new(
+            let module_id = ModuleId::new_with_formats(
                 evm_contract_blob.id().hash,
                 evm_contract_blob.id().hash,
                 vm_runtime,
+                formats_blob_hash,
             );
             (vec![evm_contract_blob], module_id)
         }
+    };
+    if let Some(blob) = formats_blob {
+        blobs.push(blob);
     }
+    (blobs, module_id)
 }

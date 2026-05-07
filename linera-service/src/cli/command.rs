@@ -866,6 +866,14 @@ pub enum ClientCommand {
         #[arg(long, default_value = "wasm")]
         vm_runtime: VmRuntime,
 
+        /// Optional path to an insta SNAP file containing the YAML serialization
+        /// of the application's `Formats`. When provided, the formats are
+        /// JSON-encoded and published as a third blob alongside the contract
+        /// and service blobs; the resulting `ModuleId` carries the formats blob
+        /// hash.
+        #[arg(long)]
+        formats: Option<PathBuf>,
+
         /// An optional chain ID to publish the module. The default chain of the wallet
         /// is used otherwise.
         publisher: Option<ChainId>,

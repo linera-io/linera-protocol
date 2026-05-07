@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Json from './Json.vue'
+import DecodedBytes from './DecodedBytes.vue'
 import { displayValue } from './utils'
 
 defineProps<{
@@ -7,6 +8,12 @@ defineProps<{
   transactionIndex: number
   blockHash: string
 }>()
+
+function bytesToHex(value: any): string | null {
+  if (Array.isArray(value)) return value.map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  if (typeof value === 'string') return value
+  return null
+}
 
 // Helper function to extract message metadata from the message field
 function getMessageMetadata(msg: any) {
@@ -152,6 +159,13 @@ function getMessageMetadata(msg: any) {
               <span class="badge bg-success mb-2">User Message</span>
               <div v-if="getMessageMetadata(msg).applicationId" class="small">
                 <strong>Application:</strong> {{ short_app_id(getMessageMetadata(msg).applicationId) }}
+              </div>
+              <div v-if="getMessageMetadata(msg).applicationId && bytesToHex(getMessageMetadata(msg).userBytesHex)" class="mt-2">
+                <DecodedBytes
+                  :application-id="getMessageMetadata(msg).applicationId"
+                  :bytes-hex="bytesToHex(getMessageMetadata(msg).userBytesHex)!"
+                  kind="message"
+                />
               </div>
             </div>
           </div>

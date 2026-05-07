@@ -1425,6 +1425,7 @@ impl Runnable for Job {
                 contract,
                 service,
                 vm_runtime,
+                formats,
                 publisher,
             } => {
                 let mut context = options
@@ -1436,7 +1437,7 @@ impl Runnable for Job {
                 info!("Publishing module on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher).await?;
                 let module_id = context
-                    .publish_module(&chain_client, contract, service, vm_runtime)
+                    .publish_module(&chain_client, contract, service, vm_runtime, formats)
                     .await?;
                 println!("{module_id}");
                 info!(
@@ -1568,7 +1569,7 @@ impl Runnable for Job {
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
                 let module_id = context
-                    .publish_module(&chain_client, contract, service, vm_runtime)
+                    .publish_module(&chain_client, contract, service, vm_runtime, None)
                     .await?;
 
                 let (application_id, _) = context
@@ -1669,7 +1670,13 @@ impl Runnable for Job {
                     let (contract_path, service_path) = project.build(name)?;
 
                     let module_id = context
-                        .publish_module(&chain_client, contract_path, service_path, vm_runtime)
+                        .publish_module(
+                            &chain_client,
+                            contract_path,
+                            service_path,
+                            vm_runtime,
+                            None,
+                        )
                         .await?;
 
                     let (application_id, _) = context

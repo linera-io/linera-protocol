@@ -429,14 +429,22 @@ where
         hash.into()
     }
 
-    /// Publishes a module with contract and service bytecode and returns the module ID.
+    /// Publishes a module with contract and service bytecode and an optional
+    /// JSON-encoded `Formats` description, returning the module ID.
     pub fn publish_module(
         &mut self,
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
     ) -> ModuleId {
-        contract_wit::publish_module(&contract.into(), &service.into(), vm_runtime.into()).into()
+        contract_wit::publish_module(
+            &contract.into(),
+            &service.into(),
+            vm_runtime.into(),
+            formats.as_deref(),
+        )
+        .into()
     }
 
     /// Returns the multi-leader round in which this block was validated.

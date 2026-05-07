@@ -83,9 +83,12 @@ pub const RUNTIME_CRYPTO_HASH_SIZE: u32 = 32;
 pub const RUNTIME_VM_RUNTIME_SIZE: u32 = 1;
 
 /// The runtime constant part size of an `ApplicationDescription`.
-/// This includes: `ModuleId` (2 hashes + VmRuntime) + `ChainId` + `BlockHeight` + `u32`.
-/// Variable parts (`parameters` and `required_application_ids`) are calculated separately.
-pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId
+/// This includes: `ModuleId` (2 hashes + VmRuntime + Option<CryptoHash> discriminator)
+/// + `ChainId` + `BlockHeight` + `u32`. Variable parts (`parameters`,
+/// `required_application_ids`, and the optional formats blob hash payload) are
+/// calculated separately.
+pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId core
+    + 1                                                      // formats_blob_hash discriminator
     + RUNTIME_CHAIN_ID_SIZE                                  // creator_chain_id
     + RUNTIME_BLOCK_HEIGHT_SIZE                              // block_height
     + 4; // application_index (u32)

@@ -669,7 +669,9 @@ and no system operations."
         self.execute_system_operation(operation, chain_id).await
     }
 
-    /// Publishes a new application module.
+    /// Publishes a new application module, optionally along with a JSON-encoded
+    /// `Formats` description that becomes a third blob alongside the contract
+    /// and service blobs.
     async fn publish_module(
         &self,
         #[graphql(desc = "The chain publishing the module")] chain_id: ChainId,
@@ -678,13 +680,16 @@ and no system operations."
         service: Bytecode,
         #[graphql(desc = "The virtual machine being used (either Wasm or Evm)")]
         vm_runtime: VmRuntime,
+        #[graphql(desc = "Optional JSON-encoded `Formats` description bytes")]
+        formats: Option<Vec<u8>>,
     ) -> Result<ModuleId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let contract = contract.clone();
             let service = service.clone();
+            let formats = formats.clone();
             async move {
                 let result = client
-                    .publish_module(contract, service, vm_runtime)
+                    .publish_module(contract, service, vm_runtime, formats)
                     .await
                     .map_err(Error::from)
                     .map(|outcome| outcome.map(|(module_id, _)| module_id));
@@ -877,6 +882,28 @@ where
     /// Returns the version information on this node service.
     async fn version(&self) -> linera_version::VersionInfo {
         linera_version::VersionInfo::default()
+    }
+
+    /// Returns the bytes of an application formats blob (JSON-encoded `Formats`)
+    /// stored in the local node, given the formats blob hash carried by a
+    /// `ModuleId`. Returns `None` if the blob is not present locally.
+    async fn application_formats(
+        &self,
+        chain_id: ChainId,
+        formats_blob_hash: CryptoHash,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        let client = self
+            .context
+            .lock()
+            .await
+            .make_chain_client(chain_id)
+            .await?;
+        let blob_id = linera_base::identifiers::BlobId::new(
+            formats_blob_hash,
+            linera_base::identifiers::BlobType::ApplicationFormats,
+        );
+        let blob = client.storage_client().read_blob(blob_id).await?;
+        Ok(blob.map(|b| b.bytes().to_vec()))
     }
 }
 
