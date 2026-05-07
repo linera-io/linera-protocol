@@ -191,6 +191,9 @@ impl ReadableKeyValueStore for IndexedDbStore {
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<Vec<u8>>, bool)> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let range = interval_to_range(&self.start_key, &key_interval);
         // Ask for one extra key past the user limit so we can decide
         // `is_finished` precisely without an extra round-trip.
@@ -226,6 +229,9 @@ impl ReadableKeyValueStore for IndexedDbStore {
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool)> {
+        if key_interval.is_empty() {
+            return Ok((Vec::new(), true));
+        }
         let range = interval_to_range(&self.start_key, &key_interval);
         let prefix_len = self.start_key.len() as u32;
         let user_limit = key_interval.limit;
