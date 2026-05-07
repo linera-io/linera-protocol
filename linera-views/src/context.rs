@@ -49,18 +49,11 @@ impl BaseKey {
         key
     }
 
-    /// Obtains the `Vec<u8>` key from the key by serialization and using the base key.
-    pub fn derive_key(&self, index: u32) -> Result<Vec<u8>, bcs::Error> {
-        let mut key = self.bytes.clone();
-        bcs::serialize_into(&mut key, &index)?;
-        Ok(key)
-    }
-
     /// Obtains the `Vec<u8>` key from the key by serialization and using the `base_key`.
-    pub fn derive_tag_key(&self, tag: u8, index: u32) -> Result<Vec<u8>, bcs::Error> {
+    pub fn derive_tag_key<I: Serialize>(&self, tag: u8, index: &I) -> Result<Vec<u8>, bcs::Error> {
         assert!(tag >= MIN_VIEW_TAG, "tag should be at least MIN_VIEW_TAG");
         let mut key = self.base_tag(tag);
-        bcs::serialize_into(&mut key, &index)?;
+        bcs::serialize_into(&mut key, index)?;
         Ok(key)
     }
 

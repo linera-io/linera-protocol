@@ -391,7 +391,7 @@ impl<C: Context, T, const N: u32> BucketQueueView<C, T, N> {
         } else {
             self.context
                 .base_key()
-                .derive_tag_key(KeyTag::Index as u8, index)?
+                .derive_tag_key(KeyTag::Index as u8, &index)?
         })
     }
 

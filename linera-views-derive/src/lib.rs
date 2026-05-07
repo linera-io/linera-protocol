@@ -108,7 +108,7 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
         let idx_u32 = u32::try_from(idx).expect("number of fields exceeds u32::MAX");
         let derive_key_logic = quote! {
             let __linera_reserved_index: u32 = #idx_u32;
-            let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, __linera_reserved_index)?;
+            let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
         };
 
         pre_load_keys_quotes.push(quote! {

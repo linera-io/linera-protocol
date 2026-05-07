@@ -123,7 +123,7 @@ where
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, count)?;
+                    .derive_tag_key(KeyTag::Index as u8, &count)?;
                 batch.put_key_value(key, value)?;
                 count += 1;
             }
@@ -237,7 +237,7 @@ where
             let key = self
                 .context
                 .base_key()
-                .derive_tag_key(KeyTag::Index as u8, index_u32)?;
+                .derive_tag_key(KeyTag::Index as u8, &index_u32)?;
             self.context.store().read_value(&key).await?
         } else {
             self.new_values
@@ -290,7 +290,7 @@ where
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, index_u32)?;
+                    .derive_tag_key(KeyTag::Index as u8, &index_u32)?;
                 keys.push(key);
                 vec_positions.push(positions);
             }
@@ -339,7 +339,7 @@ where
             let key = self
                 .context
                 .base_key()
-                .derive_tag_key(KeyTag::Index as u8, index_u32)?;
+                .derive_tag_key(KeyTag::Index as u8, &index_u32)?;
             keys.push(key);
         }
         let mut values = Vec::with_capacity(count);
