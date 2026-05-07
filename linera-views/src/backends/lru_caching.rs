@@ -11,13 +11,36 @@ use serde::{Deserialize, Serialize};
 use crate::memory::MemoryDatabase;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueDatabase;
+use std::ops::Bound;
+
 use crate::{
     batch::{Batch, WriteOperation},
     lru_prefix_cache::{LruPrefixCache, StorageCacheConfig},
     store::{
-        KeyInterval, KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+        KeyInterval, KeyIntervalStart, KeyValueDatabase, ReadableKeyValueStore, WithError,
+        WritableKeyValueStore,
     },
 };
+
+/// Returns the longest common byte prefix shared by `start` and `end`. Any key
+/// inside `[start, end]` (any inclusivity) must start with this prefix. For
+/// `Unbounded` ends the LCP is empty (only an empty-prefix cache entry could
+/// cover the request).
+fn lcp_of_interval(key_interval: &KeyInterval) -> Vec<u8> {
+    let start = match &key_interval.start {
+        KeyIntervalStart::Included(k) | KeyIntervalStart::Excluded(k) => k.as_slice(),
+    };
+    let end = match &key_interval.end {
+        Bound::Included(k) | Bound::Excluded(k) => k.as_slice(),
+        Bound::Unbounded => return Vec::new(),
+    };
+    let n = start
+        .iter()
+        .zip(end.iter())
+        .take_while(|(a, b)| a == b)
+        .count();
+    start[..n].to_vec()
+}
 
 #[cfg(with_metrics)]
 mod metrics {
@@ -299,7 +322,49 @@ where
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<Vec<u8>>, bool), Self::Error> {
-        self.store.find_keys_in_interval(key_interval).await
+        let Some(cache) = self.get_exclusive_cache() else {
+            return self.store.find_keys_in_interval(key_interval).await;
+        };
+        // Any key in the user interval starts with `lcp(start, end)`. The
+        // prefix cache walks back from this prefix to any shorter cached
+        // prefix that covers it, so a single probe is sufficient.
+        let lcp = lcp_of_interval(&key_interval);
+        let cached = {
+            let mut cache = cache.lock().unwrap();
+            cache.query_find_keys(&lcp)
+        };
+        let Some(stripped) = cached else {
+            #[cfg(with_metrics)]
+            metrics::FIND_KEYS_BY_PREFIX_CACHE_MISS_COUNT
+                .with_label_values(&[])
+                .inc();
+            return self.store.find_keys_in_interval(key_interval).await;
+        };
+        #[cfg(with_metrics)]
+        metrics::FIND_KEYS_BY_PREFIX_CACHE_HIT_COUNT
+            .with_label_values(&[])
+            .inc();
+        // The cached prefix family is complete, so we can compute
+        // `is_finished` exactly: the answer is unfinished iff we stopped
+        // because of `limit` while a further matching key remained.
+        let mut keys = Vec::new();
+        let mut more_after_limit = false;
+        for sk in &stripped {
+            let mut full = lcp.clone();
+            full.extend(sk);
+            if !key_interval.contains(&full) {
+                continue;
+            }
+            if key_interval
+                .limit
+                .is_some_and(|limit| keys.len() >= limit)
+            {
+                more_after_limit = true;
+                break;
+            }
+            keys.push(full);
+        }
+        Ok((keys, !more_after_limit))
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
@@ -330,7 +395,43 @@ where
         &self,
         key_interval: KeyInterval,
     ) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Self::Error> {
-        self.store.find_key_values_in_interval(key_interval).await
+        let Some(cache) = self.get_exclusive_cache() else {
+            return self.store.find_key_values_in_interval(key_interval).await;
+        };
+        let lcp = lcp_of_interval(&key_interval);
+        let cached = {
+            let mut cache = cache.lock().unwrap();
+            cache.query_find_key_values(&lcp)
+        };
+        let Some(stripped) = cached else {
+            #[cfg(with_metrics)]
+            metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_MISS_COUNT
+                .with_label_values(&[])
+                .inc();
+            return self.store.find_key_values_in_interval(key_interval).await;
+        };
+        #[cfg(with_metrics)]
+        metrics::FIND_KEY_VALUES_BY_PREFIX_CACHE_HIT_COUNT
+            .with_label_values(&[])
+            .inc();
+        let mut key_values = Vec::new();
+        let mut more_after_limit = false;
+        for (sk, value) in &stripped {
+            let mut full = lcp.clone();
+            full.extend(sk);
+            if !key_interval.contains(&full) {
+                continue;
+            }
+            if key_interval
+                .limit
+                .is_some_and(|limit| key_values.len() >= limit)
+            {
+                more_after_limit = true;
+                break;
+            }
+            key_values.push((full, value.clone()));
+        }
+        Ok((key_values, !more_after_limit))
     }
 
     async fn find_key_values_by_prefix(
