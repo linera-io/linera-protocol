@@ -4052,11 +4052,14 @@ dependencies = [
 name = "linera-storage"
 version = "0.16.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bcs",
  "cfg-if",
  "cfg_aliases",
+ "clap",
  "futures",
+ "hex",
  "itertools 0.14.0",
  "linera-base",
  "linera-cache",
