@@ -1,6 +1,6 @@
 ---
 source: linera-views-derive/src/lib.rs
-expression: "pretty(generate_view_code(input, true).unwrap())"
+expression: "pretty(generate_view_code(&input, true).unwrap())"
 ---
 impl linera_views::views::View for TestView
 where
@@ -115,7 +115,8 @@ where
     async fn load(
         context: custom::GenericContext<T>,
     ) -> Result<Self, linera_views::ViewError> {
-        use linera_views::{context::Context as _, store::ReadableKeyValueStore as _};
+        use linera_views::context::Context as _;
+        use linera_views::store::ReadableKeyValueStore as _;
         #[cfg(not(target_arch = "wasm32"))]
         linera_views::metrics::increment_counter(
             &linera_views::metrics::LOAD_VIEW_COUNTER,

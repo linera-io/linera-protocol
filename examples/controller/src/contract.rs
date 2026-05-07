@@ -87,19 +87,18 @@ impl Contract for ControllerContract {
     type InstantiationArgument = ();
     type EventValue = ();
 
-    async fn load(runtime: ContractRuntime<Self>) -> Self {
+    fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = ControllerState::load(runtime.root_view_storage_context())
-            .await
             .expect("Failed to load state");
         ControllerContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
+    fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
         // validate that the application parameters were configured correctly.
         self.runtime.application_parameters();
     }
 
-    async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
+    fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         log::info!(
             "Processing operation on chain {}: {operation:?}",
             self.runtime.chain_id()
@@ -109,11 +108,10 @@ impl Contract for ControllerContract {
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Failed to authenticate owner for ExecuteWorkerCommand operation");
-                self.prepare_worker_command_locally(owner, &command).await;
+                self.prepare_worker_command_locally(owner, &command);
                 let creator_chain_id = self.runtime.application_creator_chain_id();
                 if self.runtime.chain_id() == creator_chain_id {
-                    self.execute_worker_command_locally(owner, command, creator_chain_id)
-                        .await;
+                    self.execute_worker_command_locally(owner, command, creator_chain_id);
                 } else {
                     log::info!(
                         "Sending worker command from {} to {creator_chain_id} \
@@ -131,8 +129,7 @@ impl Contract for ControllerContract {
                     .expect("Failed to authenticate admin for ExecuteControllerCommand operation");
                 let creator_chain_id = self.runtime.application_creator_chain_id();
                 if self.runtime.chain_id() == creator_chain_id {
-                    self.execute_controller_command_locally(admin, command)
-                        .await;
+                    self.execute_controller_command_locally(admin, command);
                 } else {
                     log::info!(
                         "Sending controller command from {} to {creator_chain_id} \
@@ -151,7 +148,6 @@ impl Contract for ControllerContract {
                     .state
                     .local_pending_services
                     .get(&service_id)
-                    .await
                     .expect("storage")
                     .expect("pending service should exist");
                 self.state
@@ -175,7 +171,7 @@ impl Contract for ControllerContract {
         }
     }
 
-    async fn execute_message(&mut self, message: Self::Message) {
+    fn execute_message(&mut self, message: Self::Message) {
         log::info!(
             "Processing message on chain {}: {message:?}",
             self.runtime.chain_id()
@@ -190,8 +186,7 @@ impl Contract for ControllerContract {
                 let origin_chain_id = self.runtime.message_origin_chain_id().expect(
                     "Incoming message origin chain ID has to be available when executing a message",
                 );
-                self.execute_worker_command_locally(owner, command, origin_chain_id)
-                    .await;
+                self.execute_worker_command_locally(owner, command, origin_chain_id);
             }
             Message::ExecuteControllerCommand { admin, command } => {
                 assert_eq!(
@@ -199,8 +194,7 @@ impl Contract for ControllerContract {
                     self.runtime.application_creator_chain_id(),
                     "ExecuteControllerCommand can only be executed on the chain that created the controller"
                 );
-                self.execute_controller_command_locally(admin, command)
-                    .await;
+                self.execute_controller_command_locally(admin, command);
             }
             Message::HandoffStarted {
                 service_id,
@@ -215,7 +209,6 @@ impl Contract for ControllerContract {
                     .state
                     .pending_services
                     .get(&service_id)
-                    .await
                     .expect("storage")
                     .unwrap_or_default();
                 self.state
@@ -327,20 +320,13 @@ impl Contract for ControllerContract {
         }
     }
 
-    async fn store(self) {
-        self.state
-            .save_and_drop()
-            .await
-            .expect("Failed to save state");
+    fn store(self) {
+        self.state.save_and_drop().expect("Failed to save state");
     }
 }
 
 impl ControllerContract {
-    async fn prepare_worker_command_locally(
-        &mut self,
-        owner: AccountOwner,
-        command: &WorkerCommand,
-    ) {
+    fn prepare_worker_command_locally(&mut self, owner: AccountOwner, command: &WorkerCommand) {
         match command {
             WorkerCommand::RegisterWorker { capabilities } => {
                 assert!(
@@ -363,7 +349,7 @@ impl ControllerContract {
         }
     }
 
-    async fn execute_worker_command_locally(
+    fn execute_worker_command_locally(
         &mut self,
         owner: AccountOwner,
         command: WorkerCommand,
@@ -390,7 +376,7 @@ impl ControllerContract {
         }
     }
 
-    async fn execute_controller_command_locally(
+    fn execute_controller_command_locally(
         &mut self,
         admin: AccountOwner,
         command: ControllerCommand,
@@ -421,30 +407,28 @@ impl ControllerContract {
                 self.runtime
                     .prepare_message(Message::Reset)
                     .send_to(worker_id);
-                let services_ids = self.state.services.indices().await.expect("storage");
+                let services_ids = self.state.services.indices().expect("storage");
                 for id in services_ids {
                     let mut workers = self
                         .state
                         .services
                         .get(&id)
-                        .await
                         .expect("storage")
                         .expect("value should be present");
                     if workers.remove(&worker_id) {
-                        self.update_service(id, workers).await;
+                        self.update_service(id, workers);
                     }
                 }
-                let chain_ids = self.state.chains.indices().await.expect("storage");
+                let chain_ids = self.state.chains.indices().expect("storage");
                 for id in chain_ids {
                     let mut workers = self
                         .state
                         .chains
                         .get(&id)
-                        .await
                         .expect("storage")
                         .expect("value should be present");
                     if workers.remove(&worker_id) {
-                        self.update_chain(id, workers).await;
+                        self.update_chain(id, workers);
                     }
                 }
             }
@@ -452,67 +436,58 @@ impl ControllerContract {
                 service_id,
                 workers,
             } => {
-                self.update_service(service_id, workers.into_iter().collect())
-                    .await;
+                self.update_service(service_id, workers.into_iter().collect());
             }
             ControllerCommand::RemoveService { service_id } => {
-                self.update_service(service_id, HashSet::new()).await;
+                self.update_service(service_id, HashSet::new());
             }
             ControllerCommand::UpdateAllServices { services } => {
                 let mut previous_ids = self
                     .state
                     .services
                     .indices()
-                    .await
                     .expect("storage")
                     .into_iter()
                     .collect::<HashSet<_>>();
                 for (id, workers) in services {
                     previous_ids.remove(&id);
-                    self.update_service(id, workers.into_iter().collect()).await;
+                    self.update_service(id, workers.into_iter().collect());
                 }
                 for id in previous_ids {
-                    self.update_service(id, HashSet::new()).await;
+                    self.update_service(id, HashSet::new());
                 }
             }
             ControllerCommand::UpdateChain { chain_id, workers } => {
-                self.update_chain(chain_id, workers.into_iter().collect())
-                    .await;
+                self.update_chain(chain_id, workers.into_iter().collect());
             }
             ControllerCommand::RemoveChain { chain_id } => {
-                self.update_chain(chain_id, HashSet::new()).await;
+                self.update_chain(chain_id, HashSet::new());
             }
             ControllerCommand::UpdateAllChains { chains } => {
                 let mut previous_ids = self
                     .state
                     .chains
                     .indices()
-                    .await
                     .expect("storage")
                     .into_iter()
                     .collect::<HashSet<_>>();
                 for (id, workers) in chains {
                     previous_ids.remove(&id);
-                    self.update_chain(id, workers.into_iter().collect()).await;
+                    self.update_chain(id, workers.into_iter().collect());
                 }
                 for id in previous_ids {
-                    self.update_chain(id, HashSet::new()).await;
+                    self.update_chain(id, HashSet::new());
                 }
             }
         }
     }
 
-    async fn update_service(
-        &mut self,
-        service_id: ManagedServiceId,
-        new_workers: HashSet<ChainId>,
-    ) {
+    fn update_service(&mut self, service_id: ManagedServiceId, new_workers: HashSet<ChainId>) {
         log::info!("Updating {service_id:?}: {new_workers:?}");
         let existing_workers = self
             .state
             .services
             .get(&service_id)
-            .await
             .expect("storage")
             .unwrap_or_default();
 
@@ -539,14 +514,12 @@ impl ControllerContract {
                 .state
                 .pending_services
                 .get_mut_or_default(&service_id)
-                .await
                 .expect("storage");
             for worker_to_remove in existing_workers.difference(&new_workers) {
                 let worker_key = self
                     .state
                     .workers
                     .get(worker_to_remove)
-                    .await
                     .expect("storage")
                     .expect("should be removing an existing worker from a service")
                     .owner;
@@ -558,7 +531,6 @@ impl ControllerContract {
                     .state
                     .workers
                     .get(worker)
-                    .await
                     .expect("storage")
                     .expect("should assign service to a registered worker")
                     .owner;
@@ -592,12 +564,11 @@ impl ControllerContract {
         }
     }
 
-    async fn update_chain(&mut self, chain_id: ChainId, new_workers: HashSet<ChainId>) {
+    fn update_chain(&mut self, chain_id: ChainId, new_workers: HashSet<ChainId>) {
         let existing_workers = self
             .state
             .chains
             .get(&chain_id)
-            .await
             .expect("storage")
             .unwrap_or_default();
 
@@ -674,8 +645,7 @@ impl ControllerState {}
 
 #[cfg(test)]
 mod tests {
-    use futures::FutureExt as _;
-    use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
+    use linera_sdk::{views::View, Contract, ContractRuntime};
 
     use super::{ControllerContract, ControllerState};
 
@@ -689,15 +659,11 @@ mod tests {
         let runtime = ContractRuntime::new().with_application_parameters(());
         let mut contract = ControllerContract {
             state: ControllerState::load(runtime.root_view_storage_context())
-                .blocking_wait()
                 .expect("Failed to read from mock key value store"),
             runtime,
         };
 
-        contract
-            .instantiate(())
-            .now_or_never()
-            .expect("Initialization of application state should not await anything");
+        contract.instantiate(());
 
         contract
     }

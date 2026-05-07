@@ -31,9 +31,8 @@ impl Service for AmmService {
     type Parameters = Parameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = AmmState::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
+        let state =
+            AmmState::load(runtime.root_view_storage_context()).expect("Failed to load state");
         AmmService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),
