@@ -1802,6 +1802,40 @@ impl ContractSyncRuntimeHandle {
             .recv_response()?;
         Ok(())
     }
+
+    /// Like [`transfer_from`][`ContractRuntime::transfer_from`] but authenticates the
+    /// transfer using the application at `auth_depth` levels above the current call frame,
+    /// instead of the current application. See
+    /// [`transfer_auth_depth`][`Self::transfer_auth_depth`] for the depth semantics.
+    pub(crate) fn transfer_from_auth_depth(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let signer = this.current_application().signer;
+        let application_id = this.application_id_at_depth(auth_depth).ok_or_else(|| {
+            ExecutionError::UserError(format!(
+                "transfer_from_auth_depth: depth {auth_depth} exceeds call stack",
+            ))
+        })?;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::TransferFrom {
+                owner,
+                spender,
+                destination,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
 }
 
 impl ServiceSyncRuntime {

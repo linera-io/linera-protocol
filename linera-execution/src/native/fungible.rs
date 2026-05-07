@@ -183,8 +183,18 @@ impl UserContract for NativeFungibleContract {
                 amount,
                 target_account,
             } => {
-                self.runtime
-                    .transfer_from(owner, spender, target_account, amount)?;
+                if self.runtime.authenticated_caller_id()?.is_some() {
+                    self.runtime.transfer_from_auth_depth(
+                        owner,
+                        spender,
+                        target_account,
+                        amount,
+                        1,
+                    )?;
+                } else {
+                    self.runtime
+                        .transfer_from(owner, spender, target_account, amount)?;
+                }
                 self.maybe_notify(target_account.chain_id)?;
                 FungibleResponse::Ok
             }
