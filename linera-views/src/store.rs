@@ -82,6 +82,21 @@ impl KeyInterval {
         }
     }
 
+    /// Returns `true` if `key` falls within this interval's bounds. The
+    /// `limit` field is ignored.
+    pub fn contains(&self, key: &[u8]) -> bool {
+        let lo_ok = match &self.start {
+            KeyIntervalStart::Included(bound) => key >= bound.as_slice(),
+            KeyIntervalStart::Excluded(bound) => key > bound.as_slice(),
+        };
+        let hi_ok = match &self.end {
+            Included(bound) => key <= bound.as_slice(),
+            Excluded(bound) => key < bound.as_slice(),
+            Unbounded => true,
+        };
+        lo_ok && hi_ok
+    }
+
     /// Returns `true` if the bounds make this interval provably empty
     /// (i.e. `start` is past `end`). Backends that delegate to a range
     /// primitive which panics on degenerate input (`BTreeMap::range`
