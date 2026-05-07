@@ -32,5 +32,6 @@ contract DeployFungibleBridgeTest is Test {
         FungibleBridge bridge = new DeployFungibleBridge().run();
 
         assertEq(address(bridge.lightClient()), address(lc));
+        assertEq(address(bridge.token()), address(token));
     }
 }
