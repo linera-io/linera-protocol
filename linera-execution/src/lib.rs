@@ -349,6 +349,8 @@ pub enum ExecutionError {
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right owner")]
     UnauthenticatedClaimOwner,
+    #[error("Authentication depth {depth} exceeds the current call stack")]
+    AuthDepthOutOfRange { depth: u32 },
     #[error("The transferred amount must not exceed the allowance for spender {spender} from owner {owner}: {allowance}")]
     InsufficientAllowance {
         allowance: Amount,
@@ -418,6 +420,7 @@ impl ExecutionError {
             | ExecutionError::FeesExceedFunding { .. }
             | ExecutionError::IncorrectClaimAmount
             | ExecutionError::UnauthenticatedClaimOwner
+            | ExecutionError::AuthDepthOutOfRange { .. }
             | ExecutionError::InsufficientAllowance { .. }
             | ExecutionError::AdminOperationOnNonAdminChain
             | ExecutionError::InvalidCommitteeEpoch { .. }

@@ -1752,11 +1752,9 @@ impl ContractSyncRuntimeHandle {
     ) -> Result<(), ExecutionError> {
         let this = self.inner();
         let signer = this.current_application().signer;
-        let application_id = this.application_id_at_depth(auth_depth).ok_or_else(|| {
-            ExecutionError::UserError(format!(
-                "transfer_auth_depth: depth {auth_depth} exceeds call stack",
-            ))
-        })?;
+        let application_id = this
+            .application_id_at_depth(auth_depth)
+            .ok_or(ExecutionError::AuthDepthOutOfRange { depth: auth_depth })?;
 
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::Transfer {
@@ -1784,11 +1782,9 @@ impl ContractSyncRuntimeHandle {
     ) -> Result<(), ExecutionError> {
         let this = self.inner();
         let signer = this.current_application().signer;
-        let application_id = this.application_id_at_depth(auth_depth).ok_or_else(|| {
-            ExecutionError::UserError(format!(
-                "claim_auth_depth: depth {auth_depth} exceeds call stack",
-            ))
-        })?;
+        let application_id = this
+            .application_id_at_depth(auth_depth)
+            .ok_or(ExecutionError::AuthDepthOutOfRange { depth: auth_depth })?;
 
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::Claim {
@@ -1817,11 +1813,9 @@ impl ContractSyncRuntimeHandle {
     ) -> Result<(), ExecutionError> {
         let this = self.inner();
         let signer = this.current_application().signer;
-        let application_id = this.application_id_at_depth(auth_depth).ok_or_else(|| {
-            ExecutionError::UserError(format!(
-                "transfer_from_auth_depth: depth {auth_depth} exceeds call stack",
-            ))
-        })?;
+        let application_id = this
+            .application_id_at_depth(auth_depth)
+            .ok_or(ExecutionError::AuthDepthOutOfRange { depth: auth_depth })?;
 
         this.execution_state_sender
             .send_request(|callback| ExecutionRequest::TransferFrom {
