@@ -503,3 +503,46 @@ impl UserServiceModule for NativeFungibleServiceModule {
         Ok(Box::new(NativeFungibleService { runtime }))
     }
 }
+
+#[cfg(web)]
+pub(crate) const NATIVE_FUNGIBLE_CONTRACT_TAG: &str = "linera:native-fungible-contract-module";
+#[cfg(web)]
+pub(crate) const NATIVE_FUNGIBLE_SERVICE_TAG: &str = "linera:native-fungible-service-module";
+
+#[cfg(web)]
+const _: () = {
+    use js_sys::wasm_bindgen::JsValue;
+    use web_thread_select as web_thread;
+
+    impl web_thread::AsJs for NativeFungibleContractModule {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            Ok(JsValue::from_str(NATIVE_FUNGIBLE_CONTRACT_TAG))
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            if value.as_string().as_deref() == Some(NATIVE_FUNGIBLE_CONTRACT_TAG) {
+                Ok(Self)
+            } else {
+                Err(value)
+            }
+        }
+    }
+
+    impl web_thread::Post for NativeFungibleContractModule {}
+
+    impl web_thread::AsJs for NativeFungibleServiceModule {
+        fn to_js(&self) -> Result<JsValue, JsValue> {
+            Ok(JsValue::from_str(NATIVE_FUNGIBLE_SERVICE_TAG))
+        }
+
+        fn from_js(value: JsValue) -> Result<Self, JsValue> {
+            if value.as_string().as_deref() == Some(NATIVE_FUNGIBLE_SERVICE_TAG) {
+                Ok(Self)
+            } else {
+                Err(value)
+            }
+        }
+    }
+
+    impl web_thread::Post for NativeFungibleServiceModule {}
+};

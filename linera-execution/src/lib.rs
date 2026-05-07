@@ -162,16 +162,53 @@ const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
     // implementor
 
+    use crate::native::fungible::{
+        NativeFungibleContractModule, NativeFungibleServiceModule,
+    };
+
+    const TAG_WASM: &str = "wasm";
+    const TAG_NATIVE_FUNGIBLE: &str = "native-fungible";
+
+    fn pack(tag: &str, payload: JsValue) -> JsValue {
+        let array = js_sys::Array::new();
+        array.push(&JsValue::from_str(tag));
+        array.push(&payload);
+        array.into()
+    }
+
+    fn unpack(value: JsValue) -> Result<(String, JsValue), JsValue> {
+        let array = js_sys::Array::from(&value);
+        if array.length() != 2 {
+            return Err(value);
+        }
+        let tag = array
+            .get(0)
+            .as_string()
+            .ok_or_else(|| JsValue::from_str("missing module tag"))?;
+        Ok((tag, array.get(1)))
+    }
+
     impl web_thread::AsJs for UserContractCode {
         fn to_js(&self) -> Result<JsValue, JsValue> {
-            ((&*self.0) as &dyn Any)
-                .downcast_ref::<WasmContractModule>()
-                .expect("we only support Wasm modules on the Web for now")
-                .to_js()
+            let inner: &dyn Any = &*self.0;
+            if let Some(module) = inner.downcast_ref::<WasmContractModule>() {
+                Ok(pack(TAG_WASM, module.to_js()?))
+            } else if let Some(module) = inner.downcast_ref::<NativeFungibleContractModule>() {
+                Ok(pack(TAG_NATIVE_FUNGIBLE, module.to_js()?))
+            } else {
+                Err(JsValue::from_str("unsupported contract module type"))
+            }
         }
 
         fn from_js(value: JsValue) -> Result<Self, JsValue> {
-            WasmContractModule::from_js(value).map(Into::into)
+            let (tag, payload) = unpack(value)?;
+            match tag.as_str() {
+                TAG_WASM => WasmContractModule::from_js(payload).map(Into::into),
+                TAG_NATIVE_FUNGIBLE => {
+                    NativeFungibleContractModule::from_js(payload).map(Into::into)
+                }
+                _ => Err(JsValue::from_str("unknown contract module tag")),
+            }
         }
     }
 
@@ -183,14 +220,25 @@ const _: () = {
 
     impl web_thread::AsJs for UserServiceCode {
         fn to_js(&self) -> Result<JsValue, JsValue> {
-            ((&*self.0) as &dyn Any)
-                .downcast_ref::<WasmServiceModule>()
-                .expect("we only support Wasm modules on the Web for now")
-                .to_js()
+            let inner: &dyn Any = &*self.0;
+            if let Some(module) = inner.downcast_ref::<WasmServiceModule>() {
+                Ok(pack(TAG_WASM, module.to_js()?))
+            } else if let Some(module) = inner.downcast_ref::<NativeFungibleServiceModule>() {
+                Ok(pack(TAG_NATIVE_FUNGIBLE, module.to_js()?))
+            } else {
+                Err(JsValue::from_str("unsupported service module type"))
+            }
         }
 
         fn from_js(value: JsValue) -> Result<Self, JsValue> {
-            WasmServiceModule::from_js(value).map(Into::into)
+            let (tag, payload) = unpack(value)?;
+            match tag.as_str() {
+                TAG_WASM => WasmServiceModule::from_js(payload).map(Into::into),
+                TAG_NATIVE_FUNGIBLE => {
+                    NativeFungibleServiceModule::from_js(payload).map(Into::into)
+                }
+                _ => Err(JsValue::from_str("unknown service module tag")),
+            }
         }
     }
 
