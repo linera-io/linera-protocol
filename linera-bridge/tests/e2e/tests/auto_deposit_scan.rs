@@ -387,11 +387,20 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .await?;
     tracing::info!("Deposit confirmed on EVM");
 
+    let event_sig = linera_bridge::proof::deposit_event_signature();
+    let log_index = deposit_receipt
+        .inner
+        .logs()
+        .iter()
+        .position(|log| log.address() == bridge_addr && log.topic0() == Some(&event_sig))
+        .map(|i| i as u64)
+        .expect("DepositInitiated event not found in deposit receipt");
+
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337,
         block_hash: deposit_receipt.block_hash.unwrap(),
         tx_index: 0,
-        log_index: 0,
+        log_index,
     };
 
     // Wait for relay to auto-process the deposit.
