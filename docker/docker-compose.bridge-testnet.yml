@@ -3,7 +3,8 @@
 # Defaults match the testnet host layout (env at /etc/linera-bridge,
 # data at /var/lib/linera-bridge). Override RELAYER_ENV_FILE,
 # RELAYER_ENV_SECRET, RELAYER_DATA_DIR to reuse this compose file
-# from a developer machine.
+# from a developer machine pointing at a real network — see
+# examples/bridge-demo/spawn-relayer.sh.
 #
 # Prerequisites (testnet operator does this once on the VM):
 #   1. Create /var/lib/linera-bridge (data) and /etc/linera-bridge (env)
