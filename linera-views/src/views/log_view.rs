@@ -121,8 +121,8 @@ where
                 batch.put_key_value(key, value)?;
                 count += 1;
             }
-            let new_values_len = u32::try_from(self.new_values.len())
-                .map_err(|_| ArithmeticError::Overflow)?;
+            let new_values_len =
+                u32::try_from(self.new_values.len()).map_err(|_| ArithmeticError::Overflow)?;
             let count_u32 = self
                 .stored_count
                 .checked_add(new_values_len)
@@ -139,9 +139,7 @@ where
         }
         self.stored_count = self
             .stored_count
-            .checked_add(
-                u32::try_from(self.new_values.len()).expect("verified in pre_save"),
-            )
+            .checked_add(u32::try_from(self.new_values.len()).expect("verified in pre_save"))
             .expect("verified in pre_save");
         self.new_values.clear();
         self.delete_storage_first = false;
@@ -468,8 +466,7 @@ mod graphql {
     {
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(u32::try_from(self.count())
-                .map_err(|_| ArithmeticError::Overflow)?)
+            Ok(u32::try_from(self.count()).map_err(|_| ArithmeticError::Overflow)?)
         }
 
         async fn entries(

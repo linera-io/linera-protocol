@@ -302,9 +302,7 @@ where
                     index,
                     length: (end - start) as u32,
                 });
-                index = index
-                    .checked_add(1)
-                    .ok_or(ArithmeticError::Overflow)?;
+                index = index.checked_add(1).ok_or(ArithmeticError::Overflow)?;
                 start = end;
             }
         }
@@ -864,8 +862,7 @@ mod graphql {
     {
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(u32::try_from(self.count())
-                .map_err(|_| ArithmeticError::Overflow)?)
+            Ok(u32::try_from(self.count()).map_err(|_| ArithmeticError::Overflow)?)
         }
 
         async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
