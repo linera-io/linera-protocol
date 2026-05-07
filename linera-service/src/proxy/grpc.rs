@@ -430,7 +430,9 @@ where
             | ViewError::TryLockError(_)
             | ViewError::InconsistentEntries
             | ViewError::PostLoadValuesError
+            | ViewError::HasPendingChanges
             | ViewError::IoError(_) => Status::internal(err.to_string()),
+            ViewError::MalformedContent(_) => Status::invalid_argument(err.to_string()),
             ViewError::KeyTooLong | ViewError::ArithmeticError(_) => {
                 Status::out_of_range(err.to_string())
             }
