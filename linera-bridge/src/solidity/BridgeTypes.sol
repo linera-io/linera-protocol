@@ -522,7 +522,8 @@ library BridgeTypes {
         EvmBytecode,
         ApplicationDescription,
         Committee,
-        ChainDescription
+        ChainDescription,
+        ApplicationFormats
     }
 
     function bcs_serialize_BlobType(BlobType input) internal pure returns (bytes memory) {
@@ -564,7 +565,11 @@ library BridgeTypes {
             return (pos + 1, BlobType.ChainDescription);
         }
 
-        require(choice < 7);
+        if (choice == 7) {
+            return (pos + 1, BlobType.ApplicationFormats);
+        }
+
+        require(choice < 8);
     }
 
     function bcs_deserialize_BlobType(bytes memory input) internal pure returns (BlobType) {
@@ -1439,12 +1444,14 @@ library BridgeTypes {
         CryptoHash contract_blob_hash;
         CryptoHash service_blob_hash;
         VmRuntime vm_runtime;
+        opt_CryptoHash formats_blob_hash;
     }
 
     function bcs_serialize_ModuleId(ModuleId memory input) internal pure returns (bytes memory) {
         bytes memory result = bcs_serialize_CryptoHash(input.contract_blob_hash);
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.service_blob_hash));
-        return abi.encodePacked(result, bcs_serialize_VmRuntime(input.vm_runtime));
+        result = abi.encodePacked(result, bcs_serialize_VmRuntime(input.vm_runtime));
+        return abi.encodePacked(result, bcs_serialize_opt_CryptoHash(input.formats_blob_hash));
     }
 
     function bcs_deserialize_offset_ModuleId(uint256 pos, bytes memory input)
@@ -1459,7 +1466,9 @@ library BridgeTypes {
         (new_pos, service_blob_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         VmRuntime vm_runtime;
         (new_pos, vm_runtime) = bcs_deserialize_offset_VmRuntime(new_pos, input);
-        return (new_pos, ModuleId(contract_blob_hash, service_blob_hash, vm_runtime));
+        opt_CryptoHash memory formats_blob_hash;
+        (new_pos, formats_blob_hash) = bcs_deserialize_offset_opt_CryptoHash(new_pos, input);
+        return (new_pos, ModuleId(contract_blob_hash, service_blob_hash, vm_runtime, formats_blob_hash));
     }
 
     function bcs_deserialize_ModuleId(bytes memory input) internal pure returns (ModuleId memory) {

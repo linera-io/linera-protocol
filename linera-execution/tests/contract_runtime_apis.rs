@@ -990,10 +990,10 @@ async fn test_publish_module_different_bytecode() -> anyhow::Result<()> {
     application.expect_call(ExpectedCall::execute_operation(
         move |runtime, _operation| {
             let module_id1 = runtime
-                .publish_module(contract_bytecode1, service_bytecode1, vm_runtime)
+                .publish_module(contract_bytecode1, service_bytecode1, vm_runtime, None)
                 .unwrap();
             let module_id2 = runtime
-                .publish_module(contract_bytecode2, service_bytecode2, vm_runtime)
+                .publish_module(contract_bytecode2, service_bytecode2, vm_runtime, None)
                 .unwrap();
 
             // Different bytecode should produce different module IDs

@@ -159,7 +159,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
     let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
     let (eb_module_id, _) = cc_a
-        .publish_module(eb_contract, eb_service, VmRuntime::Wasm)
+        .publish_module(eb_contract, eb_service, VmRuntime::Wasm, None)
         .await?
         .expect("publish evm-bridge module committed");
     cc_a.synchronize_from_validators().await?;
@@ -187,7 +187,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let wf_service =
         Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
     let (wf_module_id, _) = cc_a
-        .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
+        .publish_module(wf_contract, wf_service, VmRuntime::Wasm, None)
         .await?
         .expect("publish wrapped-fungible module committed");
     cc_a.synchronize_from_validators().await?;

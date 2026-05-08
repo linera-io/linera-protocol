@@ -426,6 +426,7 @@ impl ResourceControlPolicy {
             }
             BlobType::Data
             | BlobType::ApplicationDescription
+            | BlobType::ApplicationFormats
             | BlobType::Committee
             | BlobType::ChainDescription => {}
         }

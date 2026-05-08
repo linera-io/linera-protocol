@@ -141,6 +141,7 @@ interface base-runtime-api {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
         vm-runtime: vm-runtime,
+        formats-blob-hash: option<crypto-hash>,
     }
 
     record time-delta {

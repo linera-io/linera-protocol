@@ -30,6 +30,7 @@ struct ExpectedPublishModuleCall {
     contract: Bytecode,
     service: Bytecode,
     vm_runtime: VmRuntime,
+    formats: Option<Vec<u8>>,
     module_id: ModuleId,
 }
 
@@ -879,6 +880,7 @@ where
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
         module_id: ModuleId,
     ) {
         self.expected_publish_module_calls
@@ -886,6 +888,7 @@ where
                 contract,
                 service,
                 vm_runtime,
+                formats,
                 module_id,
             });
     }
@@ -929,11 +932,13 @@ where
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
     ) -> ModuleId {
         let ExpectedPublishModuleCall {
             contract: expected_contract,
             service: expected_service,
             vm_runtime: expected_vm_runtime,
+            formats: expected_formats,
             module_id,
         } = self
             .expected_publish_module_calls
@@ -942,6 +947,7 @@ where
         assert_eq!(&contract, &expected_contract);
         assert_eq!(&service, &expected_service);
         assert_eq!(vm_runtime, expected_vm_runtime);
+        assert_eq!(formats, expected_formats);
         module_id
     }
 

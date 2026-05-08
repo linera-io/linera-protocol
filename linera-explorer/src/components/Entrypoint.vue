@@ -6,6 +6,19 @@ import Json from './Json.vue'
 import InputType from './InputType.vue'
 import OutputType from './OutputType.vue'
 
+const HASH_REGEX = /^[0-9a-f]{64}$/i
+
+function parseLink(link: string): { base: string; chainId: string; appId: string } | null {
+  const m = link.match(/^(.*?)\/chains\/([0-9a-fA-F]+)\/applications\/([0-9a-fA-F]+)$/)
+  return m ? { base: m[1], chainId: m[2], appId: m[3] } : null
+}
+
+function bytesToHex(value: any): string | null {
+  if (Array.isArray(value)) return value.map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  if (typeof value === 'string') return value
+  return null
+}
+
 export default defineComponent({
   components: { Json, InputType, OutputType },
   props: {
@@ -15,8 +28,20 @@ export default defineComponent({
   },
   data() {
     return {
-      result: undefined,
-      errors: undefined,
+      result: undefined as any,
+      errors: undefined as any,
+      blockHash: null as string | null,
+      decodedResponses: [] as { hex: string; decoded: any }[],
+    }
+  },
+  watch: {
+    result(newVal: any) {
+      this.blockHash = null
+      this.decodedResponses = []
+      if (this.kind !== 'mutation') return
+      if (typeof newVal !== 'string' || !HASH_REGEX.test(newVal)) return
+      this.blockHash = newVal
+      this.fetchAndDecode(newVal)
     }
   },
   methods: {
@@ -25,7 +50,61 @@ export default defineComponent({
     },
     empty_response(t: any) : any {
       return rust_empty(t)
-    }
+    },
+    routeToBlock() {
+      if (!this.blockHash) return
+      const parsed = parseLink(this.link)
+      const args: [string, string][] = [['block', this.blockHash]]
+      if (parsed) args.push(['chain', parsed.chainId])
+      ;(this.$root as any).route('block', args)
+    },
+    async fetchAndDecode(hash: string) {
+      const parsed = parseLink(this.link)
+      if (!parsed) return
+      const body = JSON.stringify({
+        query: `query Block($hash: CryptoHash, $chainId: ChainId!) {
+          block(hash: $hash, chainId: $chainId) {
+            block {
+              body {
+                operationResults
+                transactionMetadata {
+                  transactionType
+                  operation { operationType applicationId }
+                }
+              }
+            }
+          }
+        }`,
+        variables: { hash, chainId: parsed.chainId }
+      })
+      let json: any
+      try {
+        const r = await fetch(parsed.base + '/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        })
+        json = await r.json()
+      } catch (_) { return }
+      const ops = (json?.data?.block?.block?.body?.transactionMetadata ?? [])
+        .filter((tx: any) => tx.transactionType === 'ExecuteOperation' && tx.operation)
+        .map((tx: any) => tx.operation)
+      const results: any[] = json?.data?.block?.block?.body?.operationResults ?? []
+      const decoded: { hex: string; decoded: any }[] = []
+      for (let i = 0; i < ops.length; i++) {
+        const op = ops[i]
+        if (op.operationType !== 'User' || op.applicationId !== parsed.appId) continue
+        const hex = bytesToHex(results[i])
+        if (hex === null) continue
+        let dec: any = null
+        try { dec = await (this.$root as any).decode_user_response(parsed.appId, hex) }
+        catch (_) { /* leave dec as null */ }
+        decoded.push({ hex, decoded: dec })
+      }
+      // Re-check the watched hash is still current — guards against an older
+      // fetch landing after the user fired a newer mutation.
+      if (this.blockHash === hash) this.decodedResponses = decoded
+    },
   }
 })
 </script>
@@ -56,7 +135,18 @@ export default defineComponent({
       <!-- RESULT -->
       <div class="card card-body" v-if="result">
         <div class="card-title">RESULT</div>
-        <Json :data="result"/>
+        <div v-if="blockHash" class="font-monospace text-break">
+          <span>Block </span>
+          <a role="button" class="btn-link" @click="routeToBlock()">{{ blockHash }}</a>
+        </div>
+        <Json v-else :data="result"/>
+        <div v-if="decodedResponses.length !== 0" class="mt-3">
+          <div class="card-title">Decoded Response<span v-if="decodedResponses.length > 1">s</span></div>
+          <div v-for="(d, i) in decodedResponses" :key="'decoded-'+i" class="border rounded p-2 mb-2">
+            <Json v-if="d.decoded !== null && d.decoded !== undefined" :data="d.decoded"/>
+            <div v-else class="font-monospace small text-muted" style="word-break:break-all">{{ d.hex || '(empty)' }}</div>
+          </div>
+        </div>
       </div>
       <!-- ERRORS -->
       <div class="card card-body" v-if="errors">

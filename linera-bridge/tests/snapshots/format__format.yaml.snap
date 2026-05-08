@@ -95,6 +95,8 @@ BlobType:
       Committee: UNIT
     6:
       ChainDescription: UNIT
+    7:
+      ApplicationFormats: UNIT
 Block:
   STRUCT:
     - header:
@@ -298,6 +300,9 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+    - formats_blob_hash:
+        OPTION:
+          TYPENAME: CryptoHash
 OpenChainConfig:
   STRUCT:
     - ownership:

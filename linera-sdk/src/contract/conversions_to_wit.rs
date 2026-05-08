@@ -100,6 +100,7 @@ impl From<ModuleId> for wit_contract_api::ModuleId {
             contract_blob_hash: module_id.contract_blob_hash.into(),
             service_blob_hash: module_id.service_blob_hash.into(),
             vm_runtime: module_id.vm_runtime.into(),
+            formats_blob_hash: module_id.formats_blob_hash.map(Into::into),
         }
     }
 }

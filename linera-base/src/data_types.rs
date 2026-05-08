@@ -1337,6 +1337,12 @@ impl BlobContent {
         BlobContent::new(BlobType::ApplicationDescription, bytes)
     }
 
+    /// Creates a new application formats [`BlobContent`] from the JSON-encoded
+    /// `Formats` description bytes.
+    pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
+        BlobContent::new(BlobType::ApplicationFormats, bytes)
+    }
+
     /// Creates a new committee [`BlobContent`] from the provided serialized committee.
     pub fn new_committee(committee: impl Into<Box<[u8]>>) -> Self {
         BlobContent::new(BlobType::Committee, committee)
@@ -1451,6 +1457,12 @@ impl Blob {
         Blob::new(BlobContent::new_application_description(
             application_description,
         ))
+    }
+
+    /// Creates a new application formats [`Blob`] from the JSON-encoded
+    /// `Formats` description bytes.
+    pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
+        Blob::new(BlobContent::new_application_formats(bytes))
     }
 
     /// Creates a new committee [`Blob`] from the provided bytes.
@@ -1736,8 +1748,13 @@ mod tests {
 
     use alloy_primitives::U256;
 
-    use super::{Amount, BlobContent};
-    use crate::identifiers::BlobType;
+    use super::{Amount, ApplicationDescription, BlobContent};
+    use crate::{
+        crypto::CryptoHash,
+        data_types::BlockHeight,
+        identifiers::{BlobType, ChainId, ModuleId},
+        vm::VmRuntime,
+    };
 
     #[test]
     fn display_amount() {
@@ -1802,5 +1819,41 @@ mod tests {
         let value_u256: U256 = value_amount.into();
         let value_amount_rev = Amount::try_from(value_u256).expect("Failed conversion");
         assert_eq!(value_amount, value_amount_rev);
+    }
+
+    /// `linera-explorer` running on `wasm32` does not have access to the
+    /// strongly-typed `ApplicationDescription`: the GraphQL client substitutes
+    /// it for `serde_json::Value`. The explorer therefore fetches the module ID
+    /// for an application by indexing into the JSON object as
+    /// `description["module_id"]`. This test pins that field name and the
+    /// hex-string shape of the serialized `ModuleId` so a future rename or
+    /// representation change immediately breaks here instead of silently in the
+    /// browser.
+    #[test]
+    fn application_description_serializes_module_id_as_hex_string() {
+        let module_id = ModuleId::new(
+            CryptoHash::test_hash("contract-bytecode"),
+            CryptoHash::test_hash("service-bytecode"),
+            VmRuntime::Wasm,
+        );
+        let description = ApplicationDescription {
+            module_id,
+            creator_chain_id: ChainId(CryptoHash::test_hash("chain")),
+            block_height: BlockHeight(0),
+            application_index: 0,
+            parameters: Vec::new(),
+            required_application_ids: Vec::new(),
+        };
+
+        let value = serde_json::to_value(&description).unwrap();
+        let module_id_value = value
+            .get("module_id")
+            .expect("`module_id` is the field name the explorer indexes into");
+        let hex = module_id_value
+            .as_str()
+            .expect("`module_id` must serialize as a hex string in human-readable form");
+        let roundtrip: ModuleId =
+            serde_json::from_value(serde_json::Value::String(hex.to_owned())).unwrap();
+        assert_eq!(roundtrip, module_id);
     }
 }
