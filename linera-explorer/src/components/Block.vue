@@ -127,23 +127,24 @@ function operationApplicationIdAt(opIndex: number): string | null {
             />
           </div>
         </div>
-        <li v-if="block.block.body.messages.length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#out-messages-collapse-'+block.hash">
-          <span><strong>Outgoing Messages</strong> ({{ block.block.body.messages.length }})</span>
+        <li v-if="block.block.body.messages.flat().length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#out-messages-collapse-'+block.hash">
+          <span><strong>Outgoing Messages</strong> ({{ block.block.body.messages.flat().length }})</span>
           <i class="bi bi-caret-down-fill"></i>
         </li>
         <li v-else class="list-group-item d-flex justify-content-between">
           <span><strong>Outgoing Messages</strong> (0)</span>
           <span></span>
         </li>
-        <div v-if="block.block.body.messages.length!==0" class="collapse" :id="'out-messages-collapse-'+block.hash">
+        <div v-if="block.block.body.messages.flat().length!==0" class="collapse" :id="'out-messages-collapse-'+block.hash">
           <div class="p-3">
-            <OutgoingMessages
-              v-for="(messages, i) in block.block.body.messages"
-              :key="block.hash+'-outmessages-'+i"
-              :messages="messages"
-              :transaction-index="i"
-              :block-hash="block.hash"
-            />
+            <template v-for="(messages, i) in block.block.body.messages" :key="block.hash+'-outmessages-'+i">
+              <OutgoingMessages
+                v-if="messages.length !== 0"
+                :messages="messages"
+                :transaction-index="i"
+                :block-hash="block.hash"
+              />
+            </template>
           </div>
         </div>
         <li v-if="Object.keys(block.block.body.previousMessageBlocks).length!==0" class="list-group-item d-flex justify-content-between" data-bs-toggle="collapse" :data-bs-target="'#previous-message-blocks-collapse-'+block.hash">
