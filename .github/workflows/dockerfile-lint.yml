@@ -4,13 +4,11 @@ on:
   push:
     branches: [main, 'devnet_*', 'testnet_*']
     paths:
-      - 'docker/Dockerfile*'
-      - 'docker/**/Dockerfile*'
+      - '**/Dockerfile*'
       - '.github/workflows/dockerfile-lint.yml'
   pull_request:
     paths:
-      - 'docker/Dockerfile*'
-      - 'docker/**/Dockerfile*'
+      - '**/Dockerfile*'
       - '.github/workflows/dockerfile-lint.yml'
   merge_group:
   workflow_dispatch:
@@ -28,25 +26,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
-    strategy:
-      fail-fast: false
-      matrix:
-        dockerfile:
-          - docker/Dockerfile
-          - docker/Dockerfile.bridge
-          - docker/Dockerfile.explorer
-          - docker/Dockerfile.exporter
-          - docker/Dockerfile.foundry
-          - docker/Dockerfile.indexer
-          - docker/debug/Dockerfile.debug
-
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: false
 
-      - name: Hadolint ${{ matrix.dockerfile }}
+      # Recursive scan rather than a hardcoded path list so a future Dockerfile
+      # added anywhere in the tree gets gated automatically — no need to remember
+      # to update this job. `--failure-threshold error` mirrors the convention
+      # used elsewhere in linera-io repos: errors break CI, warnings stay
+      # advisory. Real exceptions to error-level rules are handled via inline
+      # `# hadolint ignore=...` comments next to the offending RUN.
+      - name: Hadolint (recursive)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: ${{ matrix.dockerfile }}
+          dockerfile: "."
+          recursive: true
           failure-threshold: error
