@@ -339,7 +339,10 @@ mod web_round_trip_tests {
         let js = original.to_js().expect("to_js");
         let restored = UserContractCode::from_js(js).expect("from_js");
         assert!(
-            matches!(restored, UserContractCode::Native(NativeApplicationKind::Fungible)),
+            matches!(
+                restored,
+                UserContractCode::Native(NativeApplicationKind::Fungible)
+            ),
             "round-tripped contract code is not Native(Fungible)",
         );
     }
@@ -350,7 +353,10 @@ mod web_round_trip_tests {
         let js = original.to_js().expect("to_js");
         let restored = UserServiceCode::from_js(js).expect("from_js");
         assert!(
-            matches!(restored, UserServiceCode::Native(NativeApplicationKind::Fungible)),
+            matches!(
+                restored,
+                UserServiceCode::Native(NativeApplicationKind::Fungible)
+            ),
             "round-tripped service code is not Native(Fungible)",
         );
     }
