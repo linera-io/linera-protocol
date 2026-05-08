@@ -4,7 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use alloy_primitives::Bytes;
-use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
+use evm_bridge::{
+    BridgeInstantiationArgument, BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi,
+};
 use fungible::Account;
 use linera_bridge::proof;
 use linera_sdk::{
@@ -25,6 +27,7 @@ pub struct BridgeState {
     pub verified_block_hashes: SetView<[u8; 32]>,
     pub fungible_app_id: RegisterView<Option<ApplicationId>>,
     pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
+    pub rpc_endpoint: RegisterView<String>,
 }
 
 pub struct EvmBridgeContract {
@@ -41,7 +44,7 @@ impl WithContractAbi for EvmBridgeContract {
 impl Contract for EvmBridgeContract {
     type Message = ();
     type Parameters = BridgeParameters;
-    type InstantiationArgument = ();
+    type InstantiationArgument = BridgeInstantiationArgument;
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -51,10 +54,10 @@ impl Contract for EvmBridgeContract {
         EvmBridgeContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    async fn instantiate(&mut self, argument: BridgeInstantiationArgument) {
         let params = self.runtime.application_parameters();
-        if !params.rpc_endpoint.is_empty() {
-            let client = ContractEthereumClient::new(params.rpc_endpoint.clone());
+        if !argument.rpc_endpoint.is_empty() {
+            let client = ContractEthereumClient::new(argument.rpc_endpoint.clone());
             let chain_id = client
                 .get_chain_id()
                 .await
@@ -65,6 +68,7 @@ impl Contract for EvmBridgeContract {
                 params.source_chain_id
             );
         }
+        self.state.rpc_endpoint.set(argument.rpc_endpoint);
     }
 
     async fn execute_operation(&mut self, operation: BridgeOperation) {
