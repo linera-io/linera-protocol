@@ -54,7 +54,7 @@ mod tests {
             &call,
         );
 
-        assert_eq!(light_client.query_current_epoch(), 1);
+        assert_eq!(light_client.query_current_epoch(), Epoch(1));
     }
 
     #[test]
@@ -471,14 +471,14 @@ mod tests {
             )
         }
 
-        fn query_current_epoch(&mut self) -> u32 {
+        fn query_current_epoch(&mut self) -> Epoch {
             let (epoch, _, _) = call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
                 &currentEpochCall {},
             );
-            epoch
+            Epoch(epoch)
         }
 
         fn verify_block(&mut self, data: Vec<u8>) {
@@ -549,7 +549,7 @@ mod tests {
             &call,
         );
 
-        assert_eq!(light_client.query_current_epoch(), 1);
+        assert_eq!(light_client.query_current_epoch(), Epoch(1));
     }
 
     #[test]
@@ -625,7 +625,7 @@ mod tests {
             &call,
         );
 
-        assert_eq!(light_client.query_current_epoch(), 1);
+        assert_eq!(light_client.query_current_epoch(), Epoch(1));
     }
 
     /// Creates a committee blob with multiple validators and returns `(committee_bytes, blob_hash)`.
