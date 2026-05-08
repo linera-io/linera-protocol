@@ -1,0 +1,52 @@
+name: Dockerfile Lint
+
+on:
+  push:
+    branches: [main, 'devnet_*', 'testnet_*']
+    paths:
+      - 'docker/Dockerfile*'
+      - 'docker/**/Dockerfile*'
+      - '.github/workflows/dockerfile-lint.yml'
+  pull_request:
+    paths:
+      - 'docker/Dockerfile*'
+      - 'docker/**/Dockerfile*'
+      - '.github/workflows/dockerfile-lint.yml'
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hadolint:
+    name: Hadolint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - docker/Dockerfile
+          - docker/Dockerfile.bridge
+          - docker/Dockerfile.explorer
+          - docker/Dockerfile.exporter
+          - docker/Dockerfile.foundry
+          - docker/Dockerfile.indexer
+          - docker/debug/Dockerfile.debug
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Hadolint ${{ matrix.dockerfile }}
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ${{ matrix.dockerfile }}
+          failure-threshold: error
