@@ -4431,6 +4431,7 @@ dependencies = [
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6802,6 +6803,7 @@ dependencies = [
  "fungible",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -6980,6 +6982,7 @@ dependencies = [
  "linera-sdk",
  "log",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -7001,6 +7004,7 @@ dependencies = [
  "bcs",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "sha3",
 ]
 
@@ -10580,6 +10584,7 @@ dependencies = [
  "async-graphql",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
@@ -12922,6 +12927,7 @@ dependencies = [
  "fungible",
  "hex",
  "linera-sdk",
+ "serde-reflection",
 ]
 
 [[package]]
