@@ -34,7 +34,10 @@ where
         let __linera_reserved_index: u32 = 0u32;
         let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, __linera_reserved_index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         keys.extend(
             RegisterView::<
                 C,
@@ -44,7 +47,10 @@ where
         let __linera_reserved_index: u32 = 1u32;
         let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, __linera_reserved_index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         keys.extend(
             CollectionView::<
                 C,
@@ -63,7 +69,10 @@ where
         let __linera_reserved_index: u32 = 0u32;
         let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, __linera_reserved_index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         let __linera_reserved_pos_next = __linera_reserved_pos
             + RegisterView::<C, usize>::NUM_INIT_KEYS;
         let register = RegisterView::<
@@ -77,7 +86,10 @@ where
         let __linera_reserved_index: u32 = 1u32;
         let __linera_reserved_base_key = context
             .base_key()
-            .derive_tag_key(linera_views::views::MIN_VIEW_TAG, __linera_reserved_index)?;
+            .derive_tag_key(
+                linera_views::views::MIN_VIEW_TAG,
+                &__linera_reserved_index,
+            )?;
         let __linera_reserved_pos_next = __linera_reserved_pos
             + CollectionView::<C, usize, RegisterView<C, usize>>::NUM_INIT_KEYS;
         let collection = CollectionView::<
