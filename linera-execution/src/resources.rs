@@ -89,7 +89,7 @@ pub const RUNTIME_VM_RUNTIME_SIZE: u32 = 1;
 ///   `required_application_ids`, and the optional formats blob hash payload) are
 ///   calculated separately.
 pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId core
-    + RUNTIME_CRYPTO_HASH_SIZE                               // formats_blob_hash discriminator
+    + RUNTIME_CRYPTO_HASH_SIZE + 1                           // formats_blob_hash discriminator
     + RUNTIME_CHAIN_ID_SIZE                                  // creator_chain_id
     + RUNTIME_BLOCK_HEIGHT_SIZE                              // block_height
     + 4; // application_index (u32)
@@ -99,6 +99,7 @@ mod tests {
     use std::mem::size_of;
 
     use linera_base::{
+        crypto::CryptoHash,
         data_types::{Amount, ApplicationDescription, BlockHeight, Timestamp},
         identifiers::{ApplicationId, ChainId, ModuleId},
     };
@@ -129,8 +130,10 @@ mod tests {
     fn test_application_description_size() {
         // Verify using BCS serialization, which is architecture-independent.
         // BCS encodes Vec length as ULEB128, so empty vectors add 1 byte each.
+        let mut module_id = ModuleId::default();
+        module_id.formats_blob_hash = Some(CryptoHash::default());
         let description = ApplicationDescription {
-            module_id: ModuleId::default(),
+            module_id,
             creator_chain_id: ChainId::default(),
             block_height: BlockHeight::default(),
             application_index: 0,
