@@ -2,6 +2,7 @@
 members = [
     "linera-base",
     "linera-bridge",
+    "linera-bridge/contracts/evm-bridge",
     "linera-cache",
     "linera-chain",
     "linera-client",
