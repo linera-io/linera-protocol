@@ -5688,7 +5688,6 @@ dependencies = [
  "clap",
  "custom_debug_derive",
  "derive_more 1.0.0",
- "dyn-clone",
  "futures",
  "hex",
  "js-sys",
