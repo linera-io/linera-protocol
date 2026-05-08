@@ -45,12 +45,7 @@ pub enum BridgeOperation {
     SetRpcEndpoint { rpc_endpoint: String },
 }
 
-/// Initial mutable state passed at `create_application`.
-///
-/// Distinct from `BridgeParameters` (immutable, part of the ApplicationId
-/// hash). Fields here are written to the contract's state during
-/// `instantiate` and may be mutated later by operations such as
-/// `SetRpcEndpoint`.
+/// Initial state passed at `create_application`.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BridgeInstantiationArgument {
     /// JSON-RPC endpoint of the source EVM chain for finality verification.
