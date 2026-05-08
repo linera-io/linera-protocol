@@ -18,10 +18,6 @@ pub struct BridgeParameters {
     pub source_chain_id: u64,
     /// ERC-20 token address on the source EVM chain.
     pub token_address: [u8; 20],
-    /// JSON-RPC endpoint of the source EVM chain for finality verification.
-    /// When non-empty, `ProcessDeposit` requires the block hash to be verified first
-    /// via `VerifyBlockHash`.
-    pub rpc_endpoint: String,
 }
 
 /// Operations accepted by the bridge contract.
