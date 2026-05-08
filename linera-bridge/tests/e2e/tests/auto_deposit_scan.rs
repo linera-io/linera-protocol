@@ -10,7 +10,7 @@
 //! - Chain B (user): test operates here, never touches chain A directly
 //!
 //! Deploy order (same as setup.sh):
-//! 1. MockERC20
+//! 1. LineraToken
 //! 2. wrapped-fungible app (Linera)
 //! 3. FungibleBridge with real applicationId (EVM)
 //! 4. evm-bridge app with bridge address (Linera)
@@ -35,7 +35,7 @@ use linera_base::{
 };
 use linera_bridge::abi::{BridgeOperation, BridgeParameters};
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_mock_erc20, exec_ok, light_client_address,
+    compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok, light_client_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
@@ -137,10 +137,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     cc_b.synchronize_from_validators().await?;
     tracing::info!(%chain_b, "Chain B claimed");
 
-    // ── Phase 3: Deploy MockERC20 ──
-    tracing::info!("Deploying MockERC20 via forge script...");
-    let erc20_addr = deploy_mock_erc20(&compose, project_name, &compose_file).await?;
-    tracing::info!(%erc20_addr, "MockERC20 deployed");
+    // ── Phase 3: Deploy LineraToken ──
+    tracing::info!("Deploying LineraToken via forge script...");
+    let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
+    tracing::info!(%erc20_addr, "LineraToken deployed");
 
     // ── Phase 4 (deferred): FungibleBridge is deployed after the wrapped-fungible
     // app is created, so the wrapped applicationId can be baked into the constructor.
@@ -389,11 +389,20 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .await?;
     tracing::info!("Deposit confirmed on EVM");
 
+    let event_sig = linera_bridge::proof::deposit_event_signature();
+    let log_index = deposit_receipt
+        .inner
+        .logs()
+        .iter()
+        .position(|log| log.address() == bridge_addr && log.topic0() == Some(&event_sig))
+        .map(|i| i as u64)
+        .expect("DepositInitiated event not found in deposit receipt");
+
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337,
         block_hash: deposit_receipt.block_hash.unwrap(),
-        tx_index: 0,
-        log_index: 0,
+        tx_index: deposit_receipt.transaction_index.expect("transaction_index missing"),
+        log_index,
     };
 
     // Wait for relay to auto-process the deposit.

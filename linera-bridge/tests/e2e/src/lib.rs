@@ -178,10 +178,9 @@ pub async fn parse_broadcast_address(
     Ok(output.trim().parse()?)
 }
 
-/// Deploys MockERC20 via the `DeployMockERC20.s.sol` forge script and
-/// returns the deployed contract address. Constructor args are hardcoded
-/// to the local-dev defaults (TestToken / TT / 1e21 supply).
-pub async fn deploy_mock_erc20(
+/// Deploys LineraToken via the `DeployLineraToken.s.sol` forge script and
+/// returns its deployed address (parsed from the broadcast artifact).
+pub async fn deploy_linera_token(
     compose: &DockerCompose,
     project_name: &str,
     compose_file: &std::path::Path,
@@ -190,8 +189,7 @@ pub async fn deploy_mock_erc20(
         compose,
         "foundry-tools",
         &format!(
-            "env TOKEN_NAME=TestToken TOKEN_SYMBOL=TT TOKEN_SUPPLY=1000000000000000000000 \
-             forge script /contracts/script/DeployMockERC20.s.sol \
+            "forge script /contracts/script/DeployLineraToken.s.sol \
              --root /contracts \
              --rpc-url http://anvil:8545 \
              --private-key {ANVIL_PRIVATE_KEY} \
@@ -201,7 +199,7 @@ pub async fn deploy_mock_erc20(
         compose_file,
     )
     .await;
-    parse_broadcast_address(compose, project_name, compose_file, "DeployMockERC20.s.sol").await
+    parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
 }
 
 /// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge

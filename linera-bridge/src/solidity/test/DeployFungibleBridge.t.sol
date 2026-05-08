@@ -4,10 +4,10 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {DeployFungibleBridge} from "../script/DeployFungibleBridge.s.sol";
 import {DeployLightClient} from "../script/DeployLightClient.s.sol";
-import {DeployMockERC20} from "../script/DeployMockERC20.s.sol";
+import {DeployLineraToken} from "../script/DeployLineraToken.s.sol";
 import {FungibleBridge} from "../FungibleBridge.sol";
 import {LightClient} from "../LightClient.sol";
-import {MockERC20} from "../MockERC20.sol";
+import {LineraToken} from "../LineraToken.sol";
 
 contract DeployFungibleBridgeTest is Test {
     function setUp() public {
@@ -19,7 +19,7 @@ contract DeployFungibleBridgeTest is Test {
 
     function test_run_wires_constructor_args() public {
         LightClient lc = new DeployLightClient().run();
-        MockERC20 token = new DeployMockERC20().run();
+        LineraToken token = new DeployLineraToken().run();
 
         bytes32 chainId = bytes32(uint256(0xdeadbeef));
         bytes32 appId = bytes32(uint256(0xfeedface));
