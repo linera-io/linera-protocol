@@ -159,50 +159,16 @@ pub fn deploy_fungible_bridge(
     deploy_contract(db, deployer, deploy_data)
 }
 
-const MOCK_ERC20_SOL: &str = r#"
-// SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+const LINERA_TOKEN_SOL: &str = include_str!("solidity/LineraToken.sol");
 
-contract MockERC20 {
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    uint256 public totalSupply;
-
-    constructor(uint256 initialSupply) {
-        balanceOf[msg.sender] = initialSupply;
-        totalSupply = initialSupply;
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        require(balanceOf[msg.sender] >= amount, "insufficient balance");
-        balanceOf[msg.sender] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        require(balanceOf[from] >= amount, "insufficient balance");
-        require(allowance[from][msg.sender] >= amount, "insufficient allowance");
-        allowance[from][msg.sender] -= amount;
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-}
-"#;
-
-pub fn deploy_mock_erc20(
+pub fn deploy_linera_token(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     initial_supply: alloy_primitives::U256,
 ) -> Address {
-    let bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
-    let constructor_args = (initial_supply,).abi_encode_params();
+    let bytecode = compile_contract(LINERA_TOKEN_SOL, "LineraToken.sol", "LineraToken");
+    let constructor_args =
+        ("TestToken".to_string(), "TT".to_string(), initial_supply).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -452,7 +418,7 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    // Write shared source files so imports resolve
+    // Write hand-written shared contracts so imports resolve.
     for (name, content) in [
         ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
         (
@@ -467,21 +433,33 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
         writeln!(f, "{content}").unwrap();
     }
 
-    // Write the contract under test
+    // Write the contract under test.
     let test_path = path.join(file_name);
     let mut test_file = File::create(&test_path).unwrap();
     writeln!(test_file, "{source_code}").unwrap();
 
-    // Write solc config
-    write_compilation_json(path, file_name);
+    // Resolve the OpenZeppelin submodule path. Tests run from the crate root.
+    let oz_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/solidity/lib/openzeppelin-contracts");
 
-    // Compile
+    let oz_files: &[&str] = &[
+        "contracts/token/ERC20/ERC20.sol",
+        "contracts/token/ERC20/IERC20.sol",
+        "contracts/token/ERC20/extensions/IERC20Metadata.sol",
+        "contracts/utils/Context.sol",
+        "contracts/interfaces/draft-IERC6093.sol",
+    ];
+
+    write_compilation_json(path, file_name, &oz_root, oz_files);
+
     let config_file = File::open(path.join("config.json")).unwrap();
     let output_file = File::create(path.join("result.json")).unwrap();
 
     let status = Command::new("solc")
         .current_dir(path)
         .arg("--standard-json")
+        .arg("--allow-paths")
+        .arg(oz_root.to_str().unwrap())
         .stdin(Stdio::from(config_file))
         .stdout(Stdio::from(output_file))
         .status()
@@ -491,7 +469,6 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     let contents = std::fs::read_to_string(path.join("result.json")).unwrap();
     let json_data: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
-    // Check for compilation errors
     if let Some(errors) = json_data.get("errors") {
         for error in errors.as_array().unwrap() {
             let severity = error["severity"].as_str().unwrap_or("");
@@ -511,33 +488,31 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     hex::decode(bytecode_hex).unwrap()
 }
 
-fn write_compilation_json(path: &Path, file_name: &str) {
-    let config_path = path.join("config.json");
-    let mut source = File::create(config_path).unwrap();
-    writeln!(
-        source,
-        r#"
-{{
-  "language": "Solidity",
-  "sources": {{
-    "{file_name}": {{
-      "urls": ["./{file_name}"]
-    }}
-  }},
-  "settings": {{
-    "viaIR": true,
-    "optimizer": {{
-      "enabled": true,
-      "runs": 1
-    }},
-    "outputSelection": {{
-      "*": {{
-        "*": ["evm.bytecode"]
-      }}
-    }}
-  }}
-}}
-"#
-    )
-    .unwrap();
+fn write_compilation_json(path: &Path, file_name: &str, oz_root: &Path, oz_files: &[&str]) {
+    let mut sources = serde_json::Map::new();
+    sources.insert(
+        file_name.to_string(),
+        serde_json::json!({ "urls": [format!("./{file_name}")] }),
+    );
+    for rel in oz_files {
+        let import_key = format!("@openzeppelin/{rel}");
+        let abs = oz_root.join(rel);
+        sources.insert(
+            import_key,
+            serde_json::json!({ "urls": [abs.to_str().unwrap()] }),
+        );
+    }
+
+    let config = serde_json::json!({
+        "language": "Solidity",
+        "sources": sources,
+        "settings": {
+            "viaIR": true,
+            "optimizer": { "enabled": true, "runs": 1 },
+            "remappings": ["@openzeppelin/contracts/=@openzeppelin/contracts/"],
+            "outputSelection": { "*": { "*": ["evm.bytecode"] } }
+        }
+    });
+
+    std::fs::write(path.join("config.json"), config.to_string()).unwrap();
 }

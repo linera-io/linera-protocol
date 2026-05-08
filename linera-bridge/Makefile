@@ -4,7 +4,7 @@ DEMO_DIR := ../examples/bridge-demo
 PROJECT := linera-bridge-demo
 
 SOLIDITY_DIR := src/solidity
-SOLIDITY_LINT_FILES := $(addprefix $(SOLIDITY_DIR)/,FungibleBridge.sol Microchain.sol MockERC20.sol LightClient.sol)
+SOLIDITY_LINT_FILES := $(addprefix $(SOLIDITY_DIR)/,FungibleBridge.sol Microchain.sol LineraToken.sol LightClient.sol)
 
 .PHONY: build-wasm build-all build-relayer relayer-up relayer-down relayer-logs up down demo demo-setup demo-frontend demo-logs lint-solidity
 

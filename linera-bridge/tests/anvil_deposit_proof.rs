@@ -37,42 +37,7 @@ use linera_bridge::{
     },
 };
 
-const MOCK_ERC20_SOL: &str = r#"
-// SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
-
-contract MockERC20 {
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    uint256 public totalSupply;
-
-    constructor(uint256 initialSupply) {
-        balanceOf[msg.sender] = initialSupply;
-        totalSupply = initialSupply;
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        require(balanceOf[msg.sender] >= amount, "insufficient balance");
-        balanceOf[msg.sender] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        require(balanceOf[from] >= amount, "insufficient balance");
-        require(allowance[from][msg.sender] >= amount, "insufficient allowance");
-        allowance[from][msg.sender] -= amount;
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-}
-"#;
+const LINERA_TOKEN_SOL: &str = include_str!("../src/solidity/LineraToken.sol");
 
 // ABI bindings for contract interactions
 alloy_sol_types::sol! {
@@ -91,7 +56,6 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
-    // Write all shared Solidity files so imports resolve
     for (name, content) in [
         ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
         ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
@@ -103,54 +67,78 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         writeln!(f, "{content}").unwrap();
     }
 
-    // Write the contract under test
     let mut test_file = File::create(path.join(file_name)).unwrap();
     writeln!(test_file, "{source_code}").unwrap();
 
-    // Solc standard JSON config
+    let oz_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/solidity/lib/openzeppelin-contracts");
+    let oz_files: &[&str] = &[
+        "contracts/token/ERC20/ERC20.sol",
+        "contracts/token/ERC20/IERC20.sol",
+        "contracts/token/ERC20/extensions/IERC20Metadata.sol",
+        "contracts/utils/Context.sol",
+        "contracts/interfaces/draft-IERC6093.sol",
+    ];
+
+    let mut sources = serde_json::Map::new();
+    sources.insert(
+        file_name.to_string(),
+        serde_json::json!({ "urls": [format!("./{file_name}")] }),
+    );
+    for rel in oz_files {
+        let abs = oz_root.join(rel);
+        sources.insert(
+            format!("@openzeppelin/{rel}"),
+            serde_json::json!({ "urls": [abs.to_str().unwrap()] }),
+        );
+    }
+
     let config = serde_json::json!({
         "language": "Solidity",
-        "sources": {
-            file_name: { "urls": [format!("./{file_name}")] }
-        },
+        "sources": sources,
         "settings": {
             "viaIR": true,
+            "remappings": ["@openzeppelin/contracts/=@openzeppelin/contracts/"],
             "outputSelection": { "*": { "*": ["evm.bytecode"] } }
         }
     });
-    let config_path = path.join("config.json");
-    std::fs::write(&config_path, config.to_string()).unwrap();
 
-    let config_file = File::open(&config_path).unwrap();
+    std::fs::write(path.join("config.json"), config.to_string()).unwrap();
+
+    let config_file = File::open(path.join("config.json")).unwrap();
     let output_file = File::create(path.join("result.json")).unwrap();
 
     let status = Command::new("solc")
         .current_dir(path)
         .arg("--standard-json")
+        .arg("--allow-paths")
+        .arg(oz_root.to_str().unwrap())
         .stdin(Stdio::from(config_file))
         .stdout(Stdio::from(output_file))
         .status()
         .expect("solc must be installed");
     assert!(status.success(), "solc compilation failed");
 
-    let result: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(path.join("result.json")).unwrap()).unwrap();
+    let contents = std::fs::read_to_string(path.join("result.json")).unwrap();
+    let json_data: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
-    if let Some(errors) = result.get("errors") {
+    if let Some(errors) = json_data.get("errors") {
         for error in errors.as_array().unwrap() {
-            if error["severity"].as_str() == Some("error") {
+            let severity = error["severity"].as_str().unwrap_or("");
+            if severity == "error" {
                 panic!(
-                    "solc error: {}",
+                    "solc compilation error: {}",
                     error["formattedMessage"].as_str().unwrap_or("unknown")
                 );
             }
         }
     }
 
-    let hex_str = result["contracts"][file_name][contract_name]["evm"]["bytecode"]["object"]
+    let bytecode_hex = json_data["contracts"][file_name][contract_name]["evm"]["bytecode"]
+        ["object"]
         .as_str()
-        .expect("bytecode not found in solc output");
-    hex::decode(hex_str).unwrap()
+        .expect("failed to extract bytecode from solc output");
+    hex::decode(bytecode_hex).unwrap()
 }
 
 // Fixed gas budgets sized well above measured cost. Pinning these skips
@@ -181,11 +169,13 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     // extra round-trips.
     let chain_id = provider.get_chain_id().await?;
 
-    // 2. Compile and deploy MockERC20
-    let erc20_bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
+    // 2. Compile and deploy LineraToken
+    let erc20_bytecode = compile_contract(LINERA_TOKEN_SOL, "LineraToken.sol", "LineraToken");
     let initial_supply = U256::from(1_000_000_000u64);
     let mut erc20_deploy = erc20_bytecode;
-    erc20_deploy.extend_from_slice(&(initial_supply,).abi_encode_params());
+    erc20_deploy.extend_from_slice(
+        &("TestToken".to_string(), "TT".to_string(), initial_supply).abi_encode_params(),
+    );
 
     let tx = TransactionRequest::default()
         .with_deploy_code(Bytes::from(erc20_deploy))

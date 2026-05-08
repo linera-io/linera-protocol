@@ -70,7 +70,7 @@ mod tests {
     impl TestBridge {
         fn new() -> Self {
             let mut db = CacheDB::new(EmptyDB::default());
-            let deployer = Address::ZERO;
+            let deployer = Address::from([0x01; 20]);
 
             let secret = ValidatorSecretKey::generate();
             let public = secret.public();
@@ -85,7 +85,7 @@ mod tests {
                 0,
             );
 
-            let token = deploy_mock_erc20(
+            let token = deploy_linera_token(
                 &mut db,
                 deployer,
                 alloy_primitives::U256::from(INITIAL_SUPPLY),
@@ -262,7 +262,7 @@ mod tests {
     /// (bridge is NOT pre-funded — deposits flow from user to bridge).
     fn setup_deposit_test() -> TestBridge {
         let mut db = CacheDB::new(EmptyDB::default());
-        let deployer = Address::ZERO;
+        let deployer = Address::from([0x01; 20]);
 
         let secret = ValidatorSecretKey::generate();
         let public = secret.public();
@@ -277,7 +277,7 @@ mod tests {
             0,
         );
 
-        let token = deploy_mock_erc20(
+        let token = deploy_linera_token(
             &mut db,
             deployer,
             alloy_primitives::U256::from(INITIAL_SUPPLY),
@@ -528,7 +528,7 @@ mod tests {
         use alloy_sol_types::SolValue;
 
         let mut db = CacheDB::new(EmptyDB::default());
-        let deployer = Address::ZERO;
+        let deployer = Address::from([0x01; 20]);
         let secret = ValidatorSecretKey::generate();
         let public = secret.public();
         let validator_addr = validator_evm_address(&public);
@@ -541,7 +541,7 @@ mod tests {
             admin_chain_id,
             0,
         );
-        let token = deploy_mock_erc20(
+        let token = deploy_linera_token(
             &mut db,
             deployer,
             alloy_primitives::U256::from(INITIAL_SUPPLY),

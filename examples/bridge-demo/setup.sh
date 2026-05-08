@@ -182,26 +182,26 @@ dc_exec linera-network sh -c "\
     cp $WALLET_DIR/keystore_0.json $WALLET_DIR/keystore_${EXTRA_WALLET_ID}.json && \
     cp -r $WALLET_DIR/client_0.db $WALLET_DIR/client_${EXTRA_WALLET_ID}.db"
 
-# ── 3. Deploy MockERC20 ──
-echo "Deploying MockERC20 via forge script..."
+# ── 3. Deploy LineraToken ──
+echo "Deploying LineraToken via forge script..."
 EVM_CHAIN_ID_DECIMAL=$(dc_exec foundry-tools cast chain-id --rpc-url "$EVM_RPC_URL")
 dc_exec foundry-tools env \
     TOKEN_NAME="TestToken" \
     TOKEN_SYMBOL="TT" \
     TOKEN_SUPPLY="1000000000000000000000" \
-    forge script /contracts/script/DeployMockERC20.s.sol \
+    forge script /contracts/script/DeployLineraToken.s.sol \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast >/tmp/mock-erc20-deploy.log 2>&1 || {
-    cat /tmp/mock-erc20-deploy.log >&2
-    die "MockERC20 deploy failed"
+    --broadcast >/tmp/linera-token-deploy.log 2>&1 || {
+    cat /tmp/linera-token-deploy.log >&2
+    die "LineraToken deploy failed"
 }
 TOKEN_ADDRESS=$(dc_exec foundry-tools \
     jq -r '.transactions[0].contractAddress' \
-    "/contracts/broadcast/DeployMockERC20.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
+    "/contracts/broadcast/DeployLineraToken.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
     | tr -d '[:space:]')
-echo "  MockERC20: $TOKEN_ADDRESS"
+echo "  LineraToken: $TOKEN_ADDRESS"
 validate_eth_address "Token address" "$TOKEN_ADDRESS"
 TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
 
@@ -397,7 +397,7 @@ echo ""
 echo "Addresses & IDs:"
 echo "  LightClient (EVM):          $LIGHT_CLIENT_ADDR"
 echo "  FungibleBridge (EVM):       $BRIDGE_ADDRESS"
-echo "  MockERC20 (EVM):            $TOKEN_ADDRESS"
+echo "  LineraToken (EVM):          $TOKEN_ADDRESS"
 echo "  evm-bridge (Linera):        $BRIDGE_APP_ID"
 echo "  wrapped-fungible (Linera):  $WRAPPED_APP_ID"
 echo "  Bridge chain ID:            $BRIDGE_CHAIN_ID"

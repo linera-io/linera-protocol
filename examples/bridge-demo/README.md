@@ -69,7 +69,7 @@ Save and switch to the new network.
 
 #### 2. Import the deployer account
 
-The setup script deploys the MockERC20 token from Anvil's default account
+The setup script deploys the LineraToken from Anvil's default account
 (account 0), which holds the entire token supply (1000 TT). You need to
 import this account into MetaMask to have tokens available for deposits.
 
