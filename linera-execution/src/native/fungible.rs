@@ -17,12 +17,31 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use async_graphql::{EmptySubscription, Object, Request, Schema};
+use async_graphql::{EmptySubscription, InputObject, Object, Request, Schema};
 use linera_base::{
     data_types::{Amount, Resources, SendMessageRequest, StreamUpdate},
     identifiers::{Account, AccountOwner, ChainId},
 };
 use serde::{Deserialize, Serialize};
+
+/// GraphQL-input flavor of [`Account`]. Has the same shape, but exposes its fields with
+/// the GraphQL camelCase mapping (e.g. `chainId`) that the existing `fungible` end-to-end
+/// tests use. The contract operation enum still carries the BCS-compatible
+/// [`linera_base::identifiers::Account`].
+#[derive(Clone, Copy, Debug, InputObject)]
+struct AccountArg {
+    chain_id: ChainId,
+    owner: AccountOwner,
+}
+
+impl From<AccountArg> for Account {
+    fn from(arg: AccountArg) -> Self {
+        Account {
+            chain_id: arg.chain_id,
+            owner: arg.owner,
+        }
+    }
+}
 
 use crate::{
     runtime::{ContractSyncRuntimeHandle, ServiceSyncRuntimeHandle},
@@ -338,12 +357,12 @@ impl MutationRoot {
         &self,
         owner: AccountOwner,
         amount: Amount,
-        target_account: Account,
+        target_account: AccountArg,
     ) -> [u8; 0] {
         self.push(FungibleOperation::Transfer {
             owner,
             amount,
-            target_account,
+            target_account: target_account.into(),
         })
     }
 
@@ -352,26 +371,26 @@ impl MutationRoot {
         owner: AccountOwner,
         spender: AccountOwner,
         amount: Amount,
-        target_account: Account,
+        target_account: AccountArg,
     ) -> [u8; 0] {
         self.push(FungibleOperation::TransferFrom {
             owner,
             spender,
             amount,
-            target_account,
+            target_account: target_account.into(),
         })
     }
 
     async fn claim(
         &self,
-        source_account: Account,
+        source_account: AccountArg,
         amount: Amount,
-        target_account: Account,
+        target_account: AccountArg,
     ) -> [u8; 0] {
         self.push(FungibleOperation::Claim {
-            source_account,
+            source_account: source_account.into(),
             amount,
-            target_account,
+            target_account: target_account.into(),
         })
     }
 }
