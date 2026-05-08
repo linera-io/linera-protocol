@@ -121,6 +121,12 @@ impl Contract for EvmBridgeContract {
                 );
                 self.state.bridge_contract_address.set(Some(address));
             }
+            BridgeOperation::SetRpcEndpoint { rpc_endpoint } => {
+                self.runtime
+                    .authenticated_signer()
+                    .expect("SetRpcEndpoint requires an authenticated signer");
+                self.state.rpc_endpoint.set(rpc_endpoint);
+            }
         }
     }
 

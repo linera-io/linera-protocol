@@ -44,6 +44,9 @@ pub enum BridgeOperation {
     /// Can only be called once, by the chain owner.
     /// Must be set before ProcessDeposit can succeed.
     RegisterFungibleBridge { address: [u8; 20] },
+    /// Replace the bridge's RPC endpoint. Chain-owner-only.
+    /// Empty string disables finality verification.
+    SetRpcEndpoint { rpc_endpoint: String },
 }
 
 /// Initial mutable state passed at `create_application`.
