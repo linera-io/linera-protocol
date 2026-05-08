@@ -183,6 +183,58 @@ async fn execute_checkpoint_publishes_blob_and_records_oracle_response() -> anyh
 }
 
 #[tokio::test]
+async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow::Result<()> {
+    use linera_views::{
+        batch::Batch, context::MemoryContext, store::WritableKeyValueStore as _, views::View as _,
+    };
+
+    use crate::ExecutionStateView;
+
+    // Producer side: build a view with non-trivial state, save, prepare-and-apply a
+    // checkpoint, save with the override hash.
+    let mut producer = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        balance: Amount::from_tokens(100),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+    let mut batch = Batch::new();
+    producer.pre_save(&mut batch)?;
+    producer.context().store().write_batch(batch).await?;
+    producer.post_save();
+
+    let blob = producer.prepare_checkpoint().await?;
+    let blob_bytes = blob.bytes().to_vec();
+    let mut txn_tracker = TransactionTracker::default();
+    producer.apply_checkpoint(blob, &mut txn_tracker)?;
+    let mut batch = Batch::new();
+    producer.pre_save(&mut batch)?;
+    producer.context().store().write_batch(batch).await?;
+    producer.post_save();
+    let producer_hash = producer.crypto_hash_mut().await?;
+    drop(producer);
+
+    // Bootstrap side: a fresh, separate view (different storage backend, same chain
+    // description so the test contexts agree on `chain_id`). Restore the checkpoint
+    // blob's bytes, then reload the view. Its execution-state hash must match the
+    // producer's — that's the contract a bootstrapping node relies on.
+    let mut bootstrap = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+    let bootstrap_context: MemoryContext<TestExecutionRuntimeContext> = bootstrap.context().clone();
+    bootstrap.restore_from_content(&blob_bytes).await?;
+    drop(bootstrap);
+    let mut reloaded = ExecutionStateView::load(bootstrap_context).await?;
+    assert_eq!(reloaded.crypto_hash_mut().await?, producer_hash);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn execute_checkpoint_rejects_chain_with_published_events() -> anyhow::Result<()> {
     use linera_base::identifiers::StreamId;
 
