@@ -40,7 +40,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::{committee::Committee, ExecutionError};
-use linera_storage::{Clock as _, Storage as _};
+use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use rand::seq::SliceRandom;
 use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
@@ -559,24 +559,21 @@ impl<Env: Environment> Client<Env> {
             .local_node
             .get_preprocessed_block_hashes(chain_id, next_height, end)
             .await?;
-        last_info = Box::pin(async {
-            let certificates = self.storage_client().read_certificates(&hashes).await?;
-            let mut info = last_info;
-            // Missing certificates are skipped; they will be downloaded from the remote node below.
-            for certificate in certificates.into_iter().flatten() {
-                if let Some(until) = until_block_time {
-                    if certificate.value().block().header.timestamp >= until {
-                        break;
-                    }
-                }
-                info = self
-                    .handle_certificate(Arc::unwrap_or_clone(certificate))
-                    .await?
-                    .info;
+        let certificates = self.storage_client().read_certificates(&hashes).await?;
+        let certificates = match ResultReadCertificates::new(certificates, hashes) {
+            ResultReadCertificates::Certificates(certificates) => certificates,
+            ResultReadCertificates::InvalidHashes(hashes) => {
+                return Err(chain_client::Error::ReadCertificatesError(hashes))
             }
-            Ok::<_, chain_client::Error>(info)
-        })
-        .await?;
+        };
+        for certificate in certificates {
+            if let Some(until) = until_block_time {
+                if certificate.value().block().header.timestamp >= until {
+                    break;
+                }
+            }
+            last_info = self.handle_certificate(certificate).await?.info;
+        }
         Ok(last_info)
     }
 

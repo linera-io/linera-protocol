@@ -778,11 +778,9 @@ where
                 self.send_confirmed_certificate(&certificate?, delivery)
                     .await?;
             }
-            Ok::<_, chain_client::Error>(())
+            Ok::<_, chain_client::Error>(info)
         })
-        .await?;
-
-        Ok(info)
+        .await
     }
 
     /// Reads certificates for the given heights from storage.
