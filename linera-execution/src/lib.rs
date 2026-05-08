@@ -943,10 +943,6 @@ pub trait ContractRuntime: BaseRuntime {
     fn authenticated_owner(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
 
     /// The index of the current transaction within its block.
-    ///
-    /// Combined with the chain ID, application ID and block height, this can be used by
-    /// smart contracts to derive a deterministic seed (e.g. for pseudo-random number
-    /// generation).
     fn transaction_index(&mut self) -> Result<u32, ExecutionError>;
 
     /// If the current message (if there is one) was rejected by its destination and is now
