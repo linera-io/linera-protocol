@@ -931,6 +931,16 @@ where
                 // `restore_from_content` writes directly to storage and leaves the
                 // in-memory view in an undefined state — reload from storage.
                 self.chain = self.storage.load_chain(chain_id).await?;
+                // We only reset `execution_state` (via restore) and `tip_state`. The
+                // other `ChainStateView` fields are either (a) already default for a
+                // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
+                // (b) about to be overwritten by `apply_confirmed_block` when the
+                // cert is applied (`manager`, `block_hashes` for height `height`),
+                // or (c) outside the protocol state hash so divergence from the
+                // producer is fine (inboxes; subsequent blocks reconcile by
+                // anticipation if needed). The `num_*` counters on `ChainTipState`
+                // are write-only in current code, so leaving them at zero has no
+                // functional impact.
                 let new_tip = ChainTipState {
                     block_hash: block.header.previous_block_hash,
                     next_block_height: height,

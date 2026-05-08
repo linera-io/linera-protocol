@@ -779,6 +779,39 @@ impl<Env: Environment> Client<Env> {
     /// If `until_block_time` is `Some`, stops before processing any certificate whose
     /// block timestamp is greater or equal than the given value.
     #[instrument(level = "trace", skip_all)]
+    /// Downloads the checkpoint certificate at `checkpoint_height` from `remote_node`
+    /// and processes it locally, if our chain isn't already past that height. The
+    /// worker's `process_confirmed_block` recognises the gap-plus-checkpoint case and
+    /// installs the chain's execution state from the checkpoint blob before re-running
+    /// the certificate.
+    async fn bootstrap_chain_from_checkpoint(
+        &self,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+        chain_id: ChainId,
+        checkpoint_height: BlockHeight,
+    ) -> Result<(), chain_client::Error> {
+        let local_next = self
+            .local_node
+            .chain_info(chain_id)
+            .await
+            .map(|info| info.next_block_height)
+            .unwrap_or(BlockHeight::ZERO);
+        if local_next > checkpoint_height {
+            return Ok(());
+        }
+        let certificates = remote_node
+            .download_certificates_by_heights(chain_id, vec![checkpoint_height])
+            .await?;
+        if certificates.is_empty() {
+            // The validator advertised a checkpoint height it can't actually serve;
+            // skip and let the regular sync path take over.
+            return Ok(());
+        }
+        self.process_certificates(slice::from_ref(remote_node), certificates, None)
+            .await?;
+        Ok(())
+    }
+
     async fn process_certificates(
         &self,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
@@ -1660,7 +1693,20 @@ impl<Env: Environment> Client<Env> {
         } else {
             ChainInfoQuery::new(chain_id)
         };
+        let query = query.with_latest_checkpoint_height();
         let remote_info = remote_node.handle_chain_info_query(query).await?;
+
+        // If the validator advertises a checkpoint and our local tip is below it, fetch
+        // the checkpoint cert and blob and apply the cert directly. The chain worker's
+        // `process_confirmed_block` recognises the gap-plus-checkpoint case and installs
+        // the chain's execution state from the blob before re-executing the cert. The
+        // subsequent `download_certificates_from` call then resumes from the post-
+        // checkpoint height and skips downloading any pre-checkpoint blocks.
+        if let Some(checkpoint_height) = remote_info.requested_latest_checkpoint_height {
+            self.bootstrap_chain_from_checkpoint(remote_node, chain_id, checkpoint_height)
+                .await?;
+        }
+
         let local_info = self
             .download_certificates_from(remote_node, chain_id, remote_info.next_block_height, None)
             .await?;
