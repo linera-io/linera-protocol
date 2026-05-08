@@ -38,7 +38,7 @@ use crate::{
     UserContractInstance, UserServiceCode, UserServiceInstance, MAX_STREAM_NAME_LEN,
 };
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "unit_tests/runtime_tests.rs"]
 mod tests;
 
@@ -355,6 +355,19 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
         self.call_stack
             .last()
             .expect("Call stack is unexpectedly empty")
+    }
+
+    /// Returns the application ID at the given depth from the top of the call stack.
+    /// Depth 0 is the current (topmost) application, depth 1 is its caller, etc.
+    /// Returns `None` if the depth exceeds the call stack size.
+    fn application_id_at_depth(&self, depth: u32) -> Option<ApplicationId> {
+        let depth = depth as usize;
+        let len = self.call_stack.len();
+        if depth < len {
+            Some(self.call_stack[len - 1 - depth].id)
+        } else {
+            None
+        }
     }
 
     /// Inserts a new [`ApplicationStatus`] to the end of the `call_stack`.
@@ -1715,6 +1728,101 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .send_request(|callback| ExecutionRequest::WriteBatch {
                 id,
                 batch,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+}
+
+impl ContractSyncRuntimeHandle {
+    /// Like [`transfer`][`ContractRuntime::transfer`] but authenticates the transfer using
+    /// the application at `auth_depth` levels above the current call frame, instead of the
+    /// current application. Depth 0 is equivalent to [`transfer`][`ContractRuntime::transfer`];
+    /// depth 1 uses the immediate caller. Returns an error if `auth_depth` exceeds the call
+    /// stack depth.
+    pub(crate) fn transfer_auth_depth(
+        &mut self,
+        source: AccountOwner,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let signer = this.current_application().signer;
+        let application_id = this
+            .application_id_at_depth(auth_depth)
+            .ok_or(ExecutionError::AuthDepthOutOfRange { depth: auth_depth })?;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::Transfer {
+                source,
+                destination,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    /// Like [`claim`][`ContractRuntime::claim`] but authenticates the claim using the
+    /// application at `auth_depth` levels above the current call frame, instead of the
+    /// current application. See [`transfer_auth_depth`][`Self::transfer_auth_depth`] for
+    /// the depth semantics.
+    pub(crate) fn claim_auth_depth(
+        &mut self,
+        source: Account,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let signer = this.current_application().signer;
+        let application_id = this
+            .application_id_at_depth(auth_depth)
+            .ok_or(ExecutionError::AuthDepthOutOfRange { depth: auth_depth })?;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::Claim {
+                source,
+                destination,
+                amount,
+                signer,
+                application_id,
+                callback,
+            })?
+            .recv_response()?;
+        Ok(())
+    }
+
+    /// Like [`transfer_from`][`ContractRuntime::transfer_from`] but authenticates the
+    /// transfer using the application at `auth_depth` levels above the current call frame,
+    /// instead of the current application. See
+    /// [`transfer_auth_depth`][`Self::transfer_auth_depth`] for the depth semantics.
+    pub(crate) fn transfer_from_auth_depth(
+        &mut self,
+        owner: AccountOwner,
+        spender: AccountOwner,
+        destination: Account,
+        amount: Amount,
+        auth_depth: u32,
+    ) -> Result<(), ExecutionError> {
+        let this = self.inner();
+        let signer = this.current_application().signer;
+        let application_id = this
+            .application_id_at_depth(auth_depth)
+            .ok_or(ExecutionError::AuthDepthOutOfRange { depth: auth_depth })?;
+
+        this.execution_state_sender
+            .send_request(|callback| ExecutionRequest::TransferFrom {
+                owner,
+                spender,
+                destination,
+                amount,
+                signer,
+                application_id,
                 callback,
             })?
             .recv_response()?;

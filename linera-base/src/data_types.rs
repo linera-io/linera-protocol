@@ -1064,11 +1064,41 @@ pub enum OracleResponse {
 
 impl BcsHashable<'_> for OracleResponse {}
 
+/// The kind of a built-in application that the runtime executes natively, without bytecode.
+#[derive(
+    Allocative,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    PartialEq,
+    Hash,
+    Serialize,
+    WitType,
+    WitLoad,
+    WitStore,
+)]
+pub enum NativeApplicationKind {
+    /// A fungible token application backed by chain-level balances.
+    Fungible,
+}
+
+/// How an application is implemented: either a published module (Wasm/EVM bytecode), or a
+/// runtime-native application that needs no bytecode.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitLoad, WitStore)]
+pub enum ApplicationKind {
+    /// A user-published module (Wasm or EVM bytecode).
+    Module(ModuleId),
+    /// A runtime-native application implemented directly in `linera-execution`.
+    Native(NativeApplicationKind),
+}
+
 /// Description of a user application.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitLoad, WitStore)]
 pub struct ApplicationDescription {
-    /// The unique ID of the bytecode to use for the application.
-    pub module_id: ModuleId,
+    /// How the application is implemented (a published module, or a runtime-native built-in).
+    pub kind: ApplicationKind,
     /// The chain ID that created the application.
     pub creator_chain_id: ChainId,
     /// Height of the block that created this application.
@@ -1086,7 +1116,13 @@ pub struct ApplicationDescription {
 impl From<&ApplicationDescription> for ApplicationId {
     fn from(description: &ApplicationDescription) -> Self {
         let mut hash = CryptoHash::new(&BlobContent::new_application_description(description));
-        if matches!(description.module_id.vm_runtime, VmRuntime::Evm) {
+        if matches!(
+            description.kind,
+            ApplicationKind::Module(ModuleId {
+                vm_runtime: VmRuntime::Evm,
+                ..
+            })
+        ) {
             hash.make_evm_compatible();
         }
         ApplicationId::new(hash)
@@ -1101,14 +1137,21 @@ impl ApplicationDescription {
         bcs::to_bytes(self).expect("Serializing blob bytes should not fail!")
     }
 
-    /// Gets the `BlobId` of the contract
-    pub fn contract_bytecode_blob_id(&self) -> BlobId {
-        self.module_id.contract_bytecode_blob_id()
+    /// Returns the `ModuleId` if this is a module-based application.
+    pub fn module_id(&self) -> Option<&ModuleId> {
+        match &self.kind {
+            ApplicationKind::Module(module_id) => Some(module_id),
+            ApplicationKind::Native(_) => None,
+        }
     }
 
-    /// Gets the `BlobId` of the service
-    pub fn service_bytecode_blob_id(&self) -> BlobId {
-        self.module_id.service_bytecode_blob_id()
+    /// Returns the bytecode `BlobId`s required to load this application, if any. Native
+    /// applications have no bytecode and return an empty vector.
+    pub fn bytecode_blob_ids(&self) -> Vec<BlobId> {
+        match &self.kind {
+            ApplicationKind::Module(module_id) => module_id.bytecode_blob_ids(),
+            ApplicationKind::Native(_) => Vec::new(),
+        }
     }
 }
 
@@ -1399,7 +1442,13 @@ impl Blob {
         if matches!(content.blob_type, BlobType::ApplicationDescription) {
             let application_description = bcs::from_bytes::<ApplicationDescription>(&content.bytes)
                 .expect("to obtain an application description");
-            if matches!(application_description.module_id.vm_runtime, VmRuntime::Evm) {
+            if matches!(
+                application_description.kind,
+                ApplicationKind::Module(ModuleId {
+                    vm_runtime: VmRuntime::Evm,
+                    ..
+                })
+            ) {
                 hash.make_evm_compatible();
             }
         }

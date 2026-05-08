@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::vec;
 
 use assert_matches::assert_matches;

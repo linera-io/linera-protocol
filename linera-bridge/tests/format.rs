@@ -3,7 +3,7 @@
 
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{OracleResponse, Round},
+    data_types::{NativeApplicationKind, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
     vm::VmRuntime,
 };
@@ -56,6 +56,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<SystemOperation>(&samples)?;
     tracer.trace_type::<AdminOperation>(&samples)?;
     tracer.trace_type::<VmRuntime>(&samples)?;
+    tracer.trace_type::<NativeApplicationKind>(&samples)?;
     tracer.trace_type::<CertificateKind>(&samples)?;
     tracer.trace_type::<Transaction>(&samples)?;
     tracer.trace_type::<VoteValue>(&samples)?;

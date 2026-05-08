@@ -274,6 +274,7 @@ impl SqliteDatabase {
                         "ChangeApplicationPermissions"
                     }
                     SystemOperation::CreateApplication { .. } => "CreateApplication",
+                    SystemOperation::CreateNativeApplication { .. } => "CreateNativeApplication",
                     SystemOperation::PublishModule { .. } => "PublishModule",
                     SystemOperation::PublishDataBlob { .. } => "PublishDataBlob",
                     SystemOperation::Admin(_) => "Admin",

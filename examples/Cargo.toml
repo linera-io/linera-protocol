@@ -15,7 +15,6 @@ members = [
     "how-to/perform-http-requests",
     "llm",
     "matching-engine",
-    "native-fungible",
     "non-fungible",
     "rfq",
     "social",
@@ -66,7 +65,6 @@ ethereum-tracker = { path = "./ethereum-tracker", features = ["ethereum"] }
 evm-bridge = { path = "./evm-bridge" }
 fungible = { path = "./fungible" }
 matching-engine = { path = "./matching-engine" }
-native-fungible = { path = "./native-fungible" }
 non-fungible = { path = "./non-fungible" }
 wrapped-fungible = { path = "./wrapped-fungible" }
 

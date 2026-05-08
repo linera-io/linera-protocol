@@ -10,11 +10,12 @@ mod execution;
 pub mod execution_state_actor;
 #[cfg(with_graphql)]
 mod graphql;
+pub mod native;
 mod policy;
 mod resources;
 mod runtime;
 pub mod system;
-#[cfg(with_testing)]
+#[cfg(all(with_testing, not(target_arch = "wasm32")))]
 pub mod test_utils;
 mod transaction_tracker;
 mod util;
@@ -29,13 +30,15 @@ use custom_debug_derive::Debug;
 use derive_more::Display;
 #[cfg(web)]
 use js_sys::wasm_bindgen::JsValue;
+#[cfg(with_testing)]
+use linera_base::data_types::ApplicationKind;
 use linera_base::{
     abi::Abi,
     crypto::{BcsHashable, CryptoHash},
     data_types::{
         Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
-        Bytecode, DecompressionError, Epoch, NetworkDescription, SendMessageRequest, StreamUpdate,
-        Timestamp,
+        Bytecode, DecompressionError, Epoch, NativeApplicationKind, NetworkDescription,
+        SendMessageRequest, StreamUpdate, Timestamp,
     },
     doc_scalar, ensure, hex_debug, http,
     identifiers::{
@@ -88,13 +91,25 @@ pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 /// The maximum length of a stream name.
 const MAX_STREAM_NAME_LEN: usize = 64;
 
-/// An implementation of [`UserContractModule`].
+/// A reference to user code that can be instantiated to run a contract or service.
+///
+/// On web, the `Module` arm carries a real artifact (a compiled `WebAssembly.Module`)
+/// that has to be moved to the worker thread; the `Native` arm carries only a kind
+/// tag, since the worker already has the native implementation linked into the same
+/// wasm binary.
 #[derive(Clone)]
-pub struct UserContractCode(Box<dyn UserContractModule>);
+pub enum UserContractCode {
+    /// A user-published module (currently always Wasm).
+    Module(Arc<dyn UserContractModule>),
+    /// A runtime-native built-in.
+    Native(NativeApplicationKind),
+}
 
-/// An implementation of [`UserServiceModule`].
 #[derive(Clone)]
-pub struct UserServiceCode(Box<dyn UserServiceModule>);
+pub enum UserServiceCode {
+    Module(Arc<dyn UserServiceModule>),
+    Native(NativeApplicationKind),
+}
 
 /// An implementation of [`UserContract`].
 pub type UserContractInstance = Box<dyn UserContract>;
@@ -102,8 +117,8 @@ pub type UserContractInstance = Box<dyn UserContract>;
 /// An implementation of [`UserService`].
 pub type UserServiceInstance = Box<dyn UserService>;
 
-/// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
-pub trait UserContractModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
+/// A factory trait to obtain a [`UserContract`] from a published module.
+pub trait UserContractModule: Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -112,14 +127,18 @@ pub trait UserContractModule: dyn_clone::DynClone + Any + web_thread::Post + Sen
 
 impl<T: UserContractModule + Send + Sync + 'static> From<T> for UserContractCode {
     fn from(module: T) -> Self {
-        Self(Box::new(module))
+        Self::Module(Arc::new(module))
     }
 }
 
-dyn_clone::clone_trait_object!(UserContractModule);
+impl From<NativeApplicationKind> for UserContractCode {
+    fn from(kind: NativeApplicationKind) -> Self {
+        Self::Native(kind)
+    }
+}
 
-/// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
-pub trait UserServiceModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
+/// A factory trait to obtain a [`UserService`] from a published module.
+pub trait UserServiceModule: Any + web_thread::Post + Send + Sync {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -128,18 +147,25 @@ pub trait UserServiceModule: dyn_clone::DynClone + Any + web_thread::Post + Send
 
 impl<T: UserServiceModule + Send + Sync + 'static> From<T> for UserServiceCode {
     fn from(module: T) -> Self {
-        Self(Box::new(module))
+        Self::Module(Arc::new(module))
     }
 }
 
-dyn_clone::clone_trait_object!(UserServiceModule);
+impl From<NativeApplicationKind> for UserServiceCode {
+    fn from(kind: NativeApplicationKind) -> Self {
+        Self::Native(kind)
+    }
+}
 
 impl UserServiceCode {
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
     ) -> Result<UserServiceInstance, ExecutionError> {
-        self.0.instantiate(runtime)
+        match self {
+            Self::Module(module) => module.instantiate(runtime),
+            Self::Native(kind) => crate::native::instantiate_service(*kind, runtime),
+        }
     }
 }
 
@@ -148,7 +174,10 @@ impl UserContractCode {
         &self,
         runtime: ContractSyncRuntimeHandle,
     ) -> Result<UserContractInstance, ExecutionError> {
-        self.0.instantiate(runtime)
+        match self {
+            Self::Module(module) => module.instantiate(runtime),
+            Self::Native(kind) => crate::native::instantiate_contract(*kind, runtime),
+        }
     }
 }
 
@@ -159,41 +188,105 @@ const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
     // implementor
 
+    const TAG_MODULE: &str = "module";
+    const TAG_NATIVE: &str = "native";
+
+    fn pack(tag: &str, payload: JsValue) -> JsValue {
+        let array = js_sys::Array::new();
+        array.push(&JsValue::from_str(tag));
+        array.push(&payload);
+        array.into()
+    }
+
+    fn unpack(value: JsValue) -> Result<(String, JsValue), JsValue> {
+        let array = js_sys::Array::from(&value);
+        if array.length() != 2 {
+            return Err(value);
+        }
+        let tag = array
+            .get(0)
+            .as_string()
+            .ok_or_else(|| JsValue::from_str("missing module tag"))?;
+        Ok((tag, array.get(1)))
+    }
+
+    fn native_kind_to_js(kind: NativeApplicationKind) -> Result<JsValue, JsValue> {
+        let bytes = bcs::to_bytes(&kind)
+            .map_err(|error| JsValue::from_str(&format!("encoding native kind: {error}")))?;
+        let array = js_sys::Uint8Array::new_with_length(bytes.len() as u32);
+        array.copy_from(&bytes);
+        Ok(array.into())
+    }
+
+    fn native_kind_from_js(value: JsValue) -> Result<NativeApplicationKind, JsValue> {
+        let array = js_sys::Uint8Array::new(&value);
+        bcs::from_bytes(&array.to_vec())
+            .map_err(|error| JsValue::from_str(&format!("decoding native kind: {error}")))
+    }
+
     impl web_thread::AsJs for UserContractCode {
         fn to_js(&self) -> Result<JsValue, JsValue> {
-            ((&*self.0) as &dyn Any)
-                .downcast_ref::<WasmContractModule>()
-                .expect("we only support Wasm modules on the Web for now")
-                .to_js()
+            match self {
+                Self::Module(module) => {
+                    let inner: &dyn Any = &**module;
+                    let wasm = inner
+                        .downcast_ref::<WasmContractModule>()
+                        .ok_or_else(|| JsValue::from_str("unsupported contract module type"))?;
+                    Ok(pack(TAG_MODULE, wasm.to_js()?))
+                }
+                Self::Native(kind) => Ok(pack(TAG_NATIVE, native_kind_to_js(*kind)?)),
+            }
         }
 
         fn from_js(value: JsValue) -> Result<Self, JsValue> {
-            WasmContractModule::from_js(value).map(Into::into)
+            let (tag, payload) = unpack(value)?;
+            match tag.as_str() {
+                TAG_MODULE => WasmContractModule::from_js(payload).map(Into::into),
+                TAG_NATIVE => native_kind_from_js(payload).map(Self::Native),
+                _ => Err(JsValue::from_str("unknown contract module tag")),
+            }
         }
     }
 
     impl web_thread::Post for UserContractCode {
         fn transferables(&self) -> js_sys::Array {
-            self.0.transferables()
+            match self {
+                Self::Module(module) => module.transferables(),
+                Self::Native(_) => js_sys::Array::new(),
+            }
         }
     }
 
     impl web_thread::AsJs for UserServiceCode {
         fn to_js(&self) -> Result<JsValue, JsValue> {
-            ((&*self.0) as &dyn Any)
-                .downcast_ref::<WasmServiceModule>()
-                .expect("we only support Wasm modules on the Web for now")
-                .to_js()
+            match self {
+                Self::Module(module) => {
+                    let inner: &dyn Any = &**module;
+                    let wasm = inner
+                        .downcast_ref::<WasmServiceModule>()
+                        .ok_or_else(|| JsValue::from_str("unsupported service module type"))?;
+                    Ok(pack(TAG_MODULE, wasm.to_js()?))
+                }
+                Self::Native(kind) => Ok(pack(TAG_NATIVE, native_kind_to_js(*kind)?)),
+            }
         }
 
         fn from_js(value: JsValue) -> Result<Self, JsValue> {
-            WasmServiceModule::from_js(value).map(Into::into)
+            let (tag, payload) = unpack(value)?;
+            match tag.as_str() {
+                TAG_MODULE => WasmServiceModule::from_js(payload).map(Into::into),
+                TAG_NATIVE => native_kind_from_js(payload).map(Self::Native),
+                _ => Err(JsValue::from_str("unknown service module tag")),
+            }
         }
     }
 
     impl web_thread::Post for UserServiceCode {
         fn transferables(&self) -> js_sys::Array {
-            self.0.transferables()
+            match self {
+                Self::Module(module) => module.transferables(),
+                Self::Native(_) => js_sys::Array::new(),
+            }
         }
     }
 
@@ -227,6 +320,110 @@ const _: () = {
         }
     }
 };
+
+#[cfg(all(web, test))]
+mod web_round_trip_tests {
+    use std::any::Any;
+
+    use linera_base::data_types::NativeApplicationKind;
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+    use web_thread_select::AsJs;
+
+    use super::{UserContractCode, UserServiceCode};
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn native_fungible_contract_round_trips() {
+        let original = UserContractCode::Native(NativeApplicationKind::Fungible);
+        let js = original.to_js().expect("to_js");
+        let restored = UserContractCode::from_js(js).expect("from_js");
+        assert!(
+            matches!(
+                restored,
+                UserContractCode::Native(NativeApplicationKind::Fungible)
+            ),
+            "round-tripped contract code is not Native(Fungible)",
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn native_fungible_service_round_trips() {
+        let original = UserServiceCode::Native(NativeApplicationKind::Fungible);
+        let js = original.to_js().expect("to_js");
+        let restored = UserServiceCode::from_js(js).expect("from_js");
+        assert!(
+            matches!(
+                restored,
+                UserServiceCode::Native(NativeApplicationKind::Fungible)
+            ),
+            "round-tripped service code is not Native(Fungible)",
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn from_js_rejects_unknown_tag() {
+        let array = js_sys::Array::new();
+        array.push(&js_sys::wasm_bindgen::JsValue::from_str("not-a-real-tag"));
+        array.push(&js_sys::wasm_bindgen::JsValue::UNDEFINED);
+        assert!(UserContractCode::from_js(array.into()).is_err());
+    }
+
+    #[wasm_bindgen_test]
+    fn from_js_rejects_invalid_native_payload() {
+        // Valid wrapper, but the payload isn't a valid BCS encoding of
+        // `NativeApplicationKind`.
+        let payload = js_sys::Uint8Array::new_with_length(1);
+        payload.copy_from(&[0xff]);
+        let array = js_sys::Array::new();
+        array.push(&js_sys::wasm_bindgen::JsValue::from_str("native"));
+        array.push(&payload.into());
+        assert!(UserContractCode::from_js(array.into()).is_err());
+    }
+
+    #[cfg(with_wasmer)]
+    mod wasm_dispatch {
+        use super::*;
+        use crate::wasm::{WasmContractModule, WasmServiceModule};
+
+        // Smallest valid WebAssembly module: magic bytes + version, no sections.
+        const EMPTY_WASM: &[u8] = &[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+
+        #[wasm_bindgen_test]
+        fn wasm_contract_module_round_trips() {
+            let engine = wasmer::Engine::default();
+            let module = wasmer::Module::new(&engine, EMPTY_WASM).expect("compile module");
+            let original: UserContractCode = WasmContractModule::Wasmer { engine, module }.into();
+            let js = original.to_js().expect("to_js");
+            let restored = UserContractCode::from_js(js).expect("from_js");
+            let UserContractCode::Module(module) = restored else {
+                panic!("round-tripped contract code is not Module variant");
+            };
+            let inner: &dyn Any = &*module;
+            assert!(
+                inner.downcast_ref::<WasmContractModule>().is_some(),
+                "inner module is not WasmContractModule",
+            );
+        }
+
+        #[wasm_bindgen_test]
+        fn wasm_service_module_round_trips() {
+            let engine = wasmer::Engine::default();
+            let module = wasmer::Module::new(&engine, EMPTY_WASM).expect("compile module");
+            let original: UserServiceCode = WasmServiceModule::Wasmer { module }.into();
+            let js = original.to_js().expect("to_js");
+            let restored = UserServiceCode::from_js(js).expect("from_js");
+            let UserServiceCode::Module(module) = restored else {
+                panic!("round-tripped service code is not Module variant");
+            };
+            let inner: &dyn Any = &*module;
+            assert!(
+                inner.downcast_ref::<WasmServiceModule>().is_some(),
+                "inner module is not WasmServiceModule",
+            );
+        }
+    }
+}
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug, strum::IntoStaticStr)]
@@ -345,6 +542,8 @@ pub enum ExecutionError {
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right owner")]
     UnauthenticatedClaimOwner,
+    #[error("Authentication depth {depth} exceeds the current call stack")]
+    AuthDepthOutOfRange { depth: u32 },
     #[error("The transferred amount must not exceed the allowance for spender {spender} from owner {owner}: {allowance}")]
     InsufficientAllowance {
         allowance: Amount,
@@ -414,6 +613,7 @@ impl ExecutionError {
             | ExecutionError::FeesExceedFunding { .. }
             | ExecutionError::IncorrectClaimAmount
             | ExecutionError::UnauthenticatedClaimOwner
+            | ExecutionError::AuthDepthOutOfRange { .. }
             | ExecutionError::InsufficientAllowance { .. }
             | ExecutionError::AdminOperationOnNonAdminChain
             | ExecutionError::InvalidCommitteeEpoch { .. }
@@ -1331,6 +1531,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError> {
+        if let ApplicationKind::Native(kind) = description.kind {
+            return Ok(UserContractCode::Native(kind));
+        }
         let application_id: ApplicationId = description.into();
         let pinned = self.user_contracts().pin();
         Ok(pinned
@@ -1346,6 +1549,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError> {
+        if let ApplicationKind::Native(kind) = description.kind {
+            return Ok(UserServiceCode::Native(kind));
+        }
         let application_id: ApplicationId = description.into();
         let pinned = self.user_services().pin();
         Ok(pinned

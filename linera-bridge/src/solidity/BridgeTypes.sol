@@ -1470,6 +1470,36 @@ library BridgeTypes {
         return value;
     }
 
+    enum NativeApplicationKind {
+        Fungible
+    }
+
+    function bcs_serialize_NativeApplicationKind(NativeApplicationKind input) internal pure returns (bytes memory) {
+        return abi.encodePacked(input);
+    }
+
+    function bcs_deserialize_offset_NativeApplicationKind(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, NativeApplicationKind)
+    {
+        uint8 choice = uint8(input[pos]);
+
+        if (choice == 0) {
+            return (pos + 1, NativeApplicationKind.Fungible);
+        }
+
+        require(choice < 1);
+    }
+
+    function bcs_deserialize_NativeApplicationKind(bytes memory input) internal pure returns (NativeApplicationKind) {
+        uint256 new_pos;
+        NativeApplicationKind value;
+        (new_pos, value) = bcs_deserialize_offset_NativeApplicationKind(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct OpenChainConfig {
         ChainOwnership ownership;
         Amount balance_;
@@ -2312,6 +2342,8 @@ library BridgeTypes {
         Epoch process_new_epoch;
         // choice=12 corresponds to UpdateStream
         SystemOperation_UpdateStream update_stream;
+        // choice=13 corresponds to CreateNativeApplication
+        SystemOperation_CreateNativeApplication create_native_application;
     }
 
     function SystemOperation_case_transfer(SystemOperation_Transfer memory transfer_)
@@ -2330,6 +2362,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(0),
             transfer_,
@@ -2343,7 +2376,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2363,6 +2397,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(1),
             transfer_,
@@ -2376,7 +2411,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2396,6 +2432,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(2),
             transfer_,
@@ -2409,7 +2446,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2426,6 +2464,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(3),
             transfer_,
@@ -2439,7 +2478,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2459,6 +2499,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(4),
             transfer_,
@@ -2472,7 +2513,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2492,6 +2534,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(5),
             transfer_,
@@ -2505,7 +2548,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2525,6 +2569,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(6),
             transfer_,
@@ -2538,7 +2583,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2558,6 +2604,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(7),
             transfer_,
@@ -2571,7 +2618,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2591,6 +2639,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(8),
             transfer_,
@@ -2604,7 +2653,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2624,6 +2674,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(9),
             transfer_,
@@ -2637,7 +2688,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2653,6 +2705,7 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(10),
             transfer_,
@@ -2666,7 +2719,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2686,6 +2740,7 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         SystemOperation_UpdateStream memory update_stream;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(11),
             transfer_,
@@ -2699,7 +2754,8 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2719,6 +2775,7 @@ library BridgeTypes {
         SystemOperation_CreateApplication memory create_application;
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
+        SystemOperation_CreateNativeApplication memory create_native_application;
         return SystemOperation(
             uint8(12),
             transfer_,
@@ -2732,7 +2789,43 @@ library BridgeTypes {
             create_application,
             admin,
             process_new_epoch,
-            update_stream
+            update_stream,
+            create_native_application
+        );
+    }
+
+    function SystemOperation_case_create_native_application(SystemOperation_CreateNativeApplication memory create_native_application)
+        internal
+        pure
+        returns (SystemOperation memory)
+    {
+        SystemOperation_Transfer memory transfer_;
+        SystemOperation_Claim memory claim;
+        OpenChainConfig memory open_chain;
+        SystemOperation_ChangeOwnership memory change_ownership;
+        ApplicationPermissions memory change_application_permissions;
+        SystemOperation_PublishModule memory publish_module;
+        SystemOperation_PublishDataBlob memory publish_data_blob;
+        SystemOperation_VerifyBlob memory verify_blob;
+        SystemOperation_CreateApplication memory create_application;
+        AdminOperation memory admin;
+        Epoch memory process_new_epoch;
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(
+            uint8(13),
+            transfer_,
+            claim,
+            open_chain,
+            change_ownership,
+            change_application_permissions,
+            publish_module,
+            publish_data_blob,
+            verify_blob,
+            create_application,
+            admin,
+            process_new_epoch,
+            update_stream,
+            create_native_application
         );
     }
 
@@ -2779,6 +2872,11 @@ library BridgeTypes {
         }
         if (input.choice == 12) {
             return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_UpdateStream(input.update_stream));
+        }
+        if (input.choice == 13) {
+            return abi.encodePacked(
+                input.choice, bcs_serialize_SystemOperation_CreateNativeApplication(input.create_native_application)
+            );
         }
         return abi.encodePacked(input.choice);
     }
@@ -2839,7 +2937,12 @@ library BridgeTypes {
         if (choice == 12) {
             (new_pos, update_stream) = bcs_deserialize_offset_SystemOperation_UpdateStream(new_pos, input);
         }
-        require(choice < 13);
+        SystemOperation_CreateNativeApplication memory create_native_application;
+        if (choice == 13) {
+            (new_pos, create_native_application) =
+                bcs_deserialize_offset_SystemOperation_CreateNativeApplication(new_pos, input);
+        }
+        require(choice < 14);
         return (
             new_pos,
             SystemOperation(
@@ -2855,7 +2958,8 @@ library BridgeTypes {
                 create_application,
                 admin,
                 process_new_epoch,
-                update_stream
+                update_stream,
+                create_native_application
             )
         );
     }
@@ -3021,6 +3125,56 @@ library BridgeTypes {
         uint256 new_pos;
         SystemOperation_CreateApplication memory value;
         (new_pos, value) = bcs_deserialize_offset_SystemOperation_CreateApplication(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct SystemOperation_CreateNativeApplication {
+        NativeApplicationKind kind;
+        bytes parameters;
+        bytes instantiation_argument;
+        ApplicationId[] required_application_ids;
+    }
+
+    function bcs_serialize_SystemOperation_CreateNativeApplication(SystemOperation_CreateNativeApplication memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_NativeApplicationKind(input.kind);
+        result = abi.encodePacked(result, bcs_serialize_bytes(input.parameters));
+        result = abi.encodePacked(result, bcs_serialize_bytes(input.instantiation_argument));
+        return abi.encodePacked(result, bcs_serialize_seq_ApplicationId(input.required_application_ids));
+    }
+
+    function bcs_deserialize_offset_SystemOperation_CreateNativeApplication(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, SystemOperation_CreateNativeApplication memory)
+    {
+        uint256 new_pos;
+        NativeApplicationKind kind;
+        (new_pos, kind) = bcs_deserialize_offset_NativeApplicationKind(pos, input);
+        bytes memory parameters;
+        (new_pos, parameters) = bcs_deserialize_offset_bytes(new_pos, input);
+        bytes memory instantiation_argument;
+        (new_pos, instantiation_argument) = bcs_deserialize_offset_bytes(new_pos, input);
+        ApplicationId[] memory required_application_ids;
+        (new_pos, required_application_ids) = bcs_deserialize_offset_seq_ApplicationId(new_pos, input);
+        return (
+            new_pos,
+            SystemOperation_CreateNativeApplication(kind, parameters, instantiation_argument, required_application_ids)
+        );
+    }
+
+    function bcs_deserialize_SystemOperation_CreateNativeApplication(bytes memory input)
+        internal
+        pure
+        returns (SystemOperation_CreateNativeApplication memory)
+    {
+        uint256 new_pos;
+        SystemOperation_CreateNativeApplication memory value;
+        (new_pos, value) = bcs_deserialize_offset_SystemOperation_CreateNativeApplication(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

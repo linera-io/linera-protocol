@@ -660,6 +660,10 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+NativeApplicationKind:
+  ENUM:
+    0:
+      Fungible: UNIT
 NetworkDescription:
   STRUCT:
     - name: STR
@@ -1308,6 +1312,16 @@ SystemOperation:
           - stream_id:
               TYPENAME: StreamId
           - next_index: U32
+    13:
+      CreateNativeApplication:
+        STRUCT:
+          - kind:
+              TYPENAME: NativeApplicationKind
+          - parameters: BYTES
+          - instantiation_argument: BYTES
+          - required_application_ids:
+              SEQ:
+                TYPENAME: ApplicationId
 TimeDelta:
   NEWTYPESTRUCT: U64
 Timeout:

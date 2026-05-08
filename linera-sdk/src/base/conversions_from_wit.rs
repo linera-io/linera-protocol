@@ -6,7 +6,8 @@
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, BlockHeight, TimeDelta, Timestamp,
+        Amount, ApplicationDescription, ApplicationKind, ApplicationPermissions, BlockHeight,
+        NativeApplicationKind, TimeDelta, Timestamp,
     },
     http,
     identifiers::{AccountOwner, ApplicationId, ChainId, DataBlobHash, ModuleId},
@@ -205,10 +206,33 @@ macro_rules! impl_from_wit {
             }
         }
 
+        impl From<$wit_base_api::NativeApplicationKind> for NativeApplicationKind {
+            fn from(kind: $wit_base_api::NativeApplicationKind) -> Self {
+                match kind {
+                    $wit_base_api::NativeApplicationKind::Fungible => {
+                        NativeApplicationKind::Fungible
+                    }
+                }
+            }
+        }
+
+        impl From<$wit_base_api::ApplicationKind> for ApplicationKind {
+            fn from(kind: $wit_base_api::ApplicationKind) -> Self {
+                match kind {
+                    $wit_base_api::ApplicationKind::Module(module_id) => {
+                        ApplicationKind::Module(module_id.into())
+                    }
+                    $wit_base_api::ApplicationKind::Native(native_kind) => {
+                        ApplicationKind::Native(native_kind.into())
+                    }
+                }
+            }
+        }
+
         impl From<$wit_base_api::ApplicationDescription> for ApplicationDescription {
             fn from(description: $wit_base_api::ApplicationDescription) -> Self {
                 ApplicationDescription {
-                    module_id: description.module_id.into(),
+                    kind: description.kind.into(),
                     creator_chain_id: description.creator_chain_id.into(),
                     block_height: description.block_height.into(),
                     application_index: description.application_index,

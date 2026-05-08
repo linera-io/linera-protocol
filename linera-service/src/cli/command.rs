@@ -6,7 +6,7 @@ use std::{borrow::Cow, num::NonZeroU16, path::PathBuf};
 use chrono::{DateTime, Utc};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorPublicKey},
-    data_types::{Amount, BlockHeight, Epoch, Timestamp},
+    data_types::{Amount, BlockHeight, Epoch, NativeApplicationKind, Timestamp},
     identifiers::{Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamId},
     time::Duration,
     vm::VmRuntime,
@@ -204,6 +204,20 @@ use crate::cli_wrappers::local_kubernetes_net::BuildMode;
 use crate::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
+
+/// CLI argument variant for [`NativeApplicationKind`].
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+pub enum NativeApplicationKindArg {
+    Fungible,
+}
+
+impl From<NativeApplicationKindArg> for NativeApplicationKind {
+    fn from(arg: NativeApplicationKindArg) -> Self {
+        match arg {
+            NativeApplicationKindArg::Fungible => NativeApplicationKind::Fungible,
+        }
+    }
+}
 
 /// Optional overrides for fields in the active resource control policy.
 #[derive(Clone, Default, clap::Args)]
@@ -934,6 +948,37 @@ pub enum ClientCommand {
         required_application_ids: Option<Vec<ApplicationId>>,
     },
 
+    /// Create a runtime-native application (no bytecode required).
+    CreateNativeApplication {
+        /// The kind of native application to create.
+        #[arg(value_enum)]
+        kind: NativeApplicationKindArg,
+
+        /// An optional chain ID to host the application. The default chain of the wallet
+        /// is used otherwise.
+        creator: Option<ChainId>,
+
+        /// The shared parameters as JSON string.
+        #[arg(long)]
+        json_parameters: Option<String>,
+
+        /// Path to a JSON file containing the shared parameters.
+        #[arg(long)]
+        json_parameters_path: Option<PathBuf>,
+
+        /// The instantiation argument as a JSON string.
+        #[arg(long)]
+        json_argument: Option<String>,
+
+        /// Path to a JSON file containing the instantiation argument.
+        #[arg(long)]
+        json_argument_path: Option<PathBuf>,
+
+        /// The list of required dependencies of application, if any.
+        #[arg(long, num_args(0..))]
+        required_application_ids: Option<Vec<ApplicationId>>,
+    },
+
     /// Create an application, and publish the required module.
     PublishAndCreate {
         /// Path to the Wasm file for the application "contract" bytecode.
@@ -1092,6 +1137,7 @@ impl ClientCommand {
             | ClientCommand::PublishDataBlob { .. }
             | ClientCommand::ReadDataBlob { .. }
             | ClientCommand::CreateApplication { .. }
+            | ClientCommand::CreateNativeApplication { .. }
             | ClientCommand::PublishAndCreate { .. }
             | ClientCommand::Keygen
             | ClientCommand::Assign { .. }

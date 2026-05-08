@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
@@ -13,8 +13,9 @@ use custom_debug_derive::Debug;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
+        Amount, ApplicationKind, ApplicationPermissions, ArithmeticError, Blob, BlobContent,
+        BlockHeight, ChainDescription, ChainOrigin, Epoch, InitialChainConfig,
+        NativeApplicationKind, OracleResponse, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -33,7 +34,7 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::Committee, util::OracleResponseExt as _, ApplicationDescription, ApplicationId,
@@ -264,6 +265,20 @@ pub enum SystemOperation {
         stream_id: StreamId,
         next_index: u32,
     },
+    /// Creates a new runtime-native application (no bytecode). Kept at the end of the
+    /// enum so the BCS variant indices of the older variants are preserved — the EVM
+    /// bridge contract relies on the indices of `Admin` and friends being stable.
+    CreateNativeApplication {
+        kind: NativeApplicationKind,
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        parameters: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
+        instantiation_argument: Vec<u8>,
+        #[debug(skip_if = Vec::is_empty)]
+        required_application_ids: Vec<ApplicationId>,
+    },
 }
 
 /// Operations that are only allowed on the admin chain.
@@ -492,6 +507,24 @@ where
                         context.chain_id,
                         context.height,
                         module_id,
+                        parameters,
+                        required_application_ids,
+                        txn_tracker,
+                    )
+                    .await?;
+                new_application = Some((app_id, instantiation_argument));
+            }
+            CreateNativeApplication {
+                kind,
+                parameters,
+                instantiation_argument,
+                required_application_ids,
+            } => {
+                let CreateApplicationResult { app_id } = self
+                    .create_native_application(
+                        context.chain_id,
+                        context.height,
+                        kind,
                         parameters,
                         required_application_ids,
                         txn_tracker,
@@ -951,7 +984,38 @@ where
         }
 
         let application_description = ApplicationDescription {
-            module_id,
+            kind: ApplicationKind::Module(module_id),
+            creator_chain_id: chain_id,
+            block_height,
+            application_index,
+            parameters,
+            required_application_ids,
+        };
+        self.check_required_applications(&application_description, txn_tracker)
+            .await?;
+
+        let blob = Blob::new_application_description(&application_description);
+        self.used_blobs.insert(&blob.id())?;
+        txn_tracker.add_created_blob(blob);
+
+        Ok(CreateApplicationResult {
+            app_id: ApplicationId::from(&application_description),
+        })
+    }
+
+    pub async fn create_native_application(
+        &mut self,
+        chain_id: ChainId,
+        block_height: BlockHeight,
+        kind: NativeApplicationKind,
+        parameters: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<CreateApplicationResult, ExecutionError> {
+        let application_index = txn_tracker.next_application_index();
+
+        let application_description = ApplicationDescription {
+            kind: ApplicationKind::Native(kind),
             creator_chain_id: chain_id,
             block_height,
             application_index,
@@ -996,13 +1060,13 @@ where
         self.blob_used(txn_tracker, blob_id).await?;
         let description: ApplicationDescription = bcs::from_bytes(content.bytes())?;
 
-        let blob_ids = self
-            .check_bytecode_blobs(&description.module_id, txn_tracker)
-            .await?;
-        // We only remember to register the blobs that aren't recorded in `used_blobs`
-        // already.
-        for blob_id in blob_ids {
-            self.blob_used(txn_tracker, blob_id).await?;
+        if let ApplicationKind::Module(module_id) = &description.kind {
+            let blob_ids = self.check_bytecode_blobs(module_id, txn_tracker).await?;
+            // We only remember to register the blobs that aren't recorded in `used_blobs`
+            // already.
+            for blob_id in blob_ids {
+                self.blob_used(txn_tracker, blob_id).await?;
+            }
         }
 
         self.check_required_applications(&description, txn_tracker)

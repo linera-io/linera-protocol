@@ -42,7 +42,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationDescription, Bytecode, Resources, SendMessageRequest, StreamUpdate,
+        Amount, ApplicationDescription, ApplicationKind, Bytecode, Resources, SendMessageRequest,
+        StreamUpdate,
     },
     ensure,
     identifiers::{self, Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamName},
@@ -902,7 +903,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         let parameters = JSON_EMPTY_VECTOR.to_vec(); // No constructor
         let required_application_ids = Vec::new();
         let application_description = ApplicationDescription {
-            module_id,
+            kind: ApplicationKind::Module(module_id),
             creator_chain_id: chain_id,
             block_height,
             application_index,

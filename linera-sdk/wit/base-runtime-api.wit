@@ -45,7 +45,7 @@ interface base-runtime-api {
     }
 
     record application-description {
-        module-id: module-id,
+        kind: application-kind,
         creator-chain-id: chain-id,
         block-height: block-height,
         application-index: u32,
@@ -55,6 +55,11 @@ interface base-runtime-api {
 
     record application-id {
         application-description-hash: crypto-hash,
+    }
+
+    variant application-kind {
+        module(module-id),
+        native(native-application-kind),
     }
 
     record application-permissions {
@@ -141,6 +146,10 @@ interface base-runtime-api {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
         vm-runtime: vm-runtime,
+    }
+
+    enum native-application-kind {
+        fungible,
     }
 
     record time-delta {

@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -11,8 +13,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash},
     data_types::{
-        Amount, ApplicationDescription, ApplicationPermissions, Blob, BlockHeight, Bytecode,
-        CompressedBytecode, OracleResponse,
+        Amount, ApplicationDescription, ApplicationKind, ApplicationPermissions, Blob, BlockHeight,
+        Bytecode, CompressedBytecode, OracleResponse,
     },
     http,
     identifiers::{Account, AccountOwner, ApplicationId, DataBlobHash, ModuleId},
@@ -632,7 +634,7 @@ impl TransferTestEndpoint {
         let vm_runtime = VmRuntime::Wasm;
 
         ApplicationDescription {
-            module_id: ModuleId::new(contract_id, service_id, vm_runtime),
+            kind: ApplicationKind::Module(ModuleId::new(contract_id, service_id, vm_runtime)),
             creator_chain_id: dummy_chain_description(1000).id(),
             block_height: BlockHeight(0),
             application_index: 0,

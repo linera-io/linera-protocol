@@ -16,7 +16,8 @@ use assert_matches::assert_matches;
 use linera_base::{
     crypto::AccountSecretKey,
     data_types::{
-        Amount, ApplicationDescription, Blob, BlockHeight, Bytecode, OracleResponse, Timestamp,
+        Amount, ApplicationDescription, ApplicationKind, Blob, BlockHeight, Bytecode,
+        OracleResponse, Timestamp,
     },
     identifiers::ModuleId,
     vm::VmRuntime,
@@ -179,7 +180,7 @@ where
         required_application_ids: vec![],
     };
     let application_description = ApplicationDescription {
-        module_id,
+        kind: ApplicationKind::Module(module_id),
         creator_chain_id: creator_chain.id(),
         block_height: BlockHeight::from(0),
         application_index: 0,
@@ -359,7 +360,7 @@ where
         required_application_ids: vec![],
     };
     let counter_app_desc = ApplicationDescription {
-        module_id: counter_module_id,
+        kind: ApplicationKind::Module(counter_module_id),
         creator_chain_id: sender_chain.id(),
         block_height: BlockHeight::from(1),
         application_index: 0,
@@ -385,7 +386,7 @@ where
         required_application_ids: vec![counter_app_id],
     };
     let meta_app_desc = ApplicationDescription {
-        module_id: meta_module_id,
+        kind: ApplicationKind::Module(meta_module_id),
         creator_chain_id: sender_chain.id(),
         block_height: BlockHeight::from(2),
         application_index: 0,
