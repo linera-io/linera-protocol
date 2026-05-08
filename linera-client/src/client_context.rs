@@ -847,9 +847,13 @@ impl<Env: Environment> ClientContext<Env> {
         };
 
         info!("Publishing module");
-        let (blobs, module_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime, formats_bytes)
-                .await;
+        let (blobs, module_id) = create_bytecode_blobs(
+            contract_bytecode,
+            service_bytecode,
+            vm_runtime,
+            formats_bytes,
+        )
+        .await;
         let (module_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let blobs = blobs.clone();

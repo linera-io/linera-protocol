@@ -197,7 +197,12 @@ where
     let small_bytecode = Bytecode::new(vec![]);
     // Publishing bytecode that exceeds the limit fails.
     let result = publisher
-        .publish_module(large_bytecode.clone(), small_bytecode.clone(), vm_runtime, None)
+        .publish_module(
+            large_bytecode.clone(),
+            small_bytecode.clone(),
+            vm_runtime,
+            None,
+        )
         .await;
     assert_matches!(
         result,

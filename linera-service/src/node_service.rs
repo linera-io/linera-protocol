@@ -680,8 +680,9 @@ and no system operations."
         service: Bytecode,
         #[graphql(desc = "The virtual machine being used (either Wasm or Evm)")]
         vm_runtime: VmRuntime,
-        #[graphql(desc = "Optional JSON-encoded `Formats` description bytes")]
-        formats: Option<Vec<u8>>,
+        #[graphql(desc = "Optional JSON-encoded `Formats` description bytes")] formats: Option<
+            Vec<u8>,
+        >,
     ) -> Result<ModuleId, Error> {
         self.apply_client_command(&chain_id, move |client| {
             let contract = contract.clone();
