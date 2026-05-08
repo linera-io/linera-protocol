@@ -181,7 +181,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} |~ \" ERROR \" [$__interval]))",
+          "expr": "sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} |= \" ERROR \" [$__interval]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -243,7 +243,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} |~ \" WARN \" [$__interval]))",
+          "expr": "sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} |= \" WARN \" [$__interval]))",
           "queryType": "range",
           "refId": "A"
         }
@@ -309,7 +309,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} |~ \" ERROR \" [$__interval])) / sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} [$__interval])) * 100",
+          "expr": "sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} |= \" ERROR \" [$__interval])) / sum(count_over_time({validator=~\"$validator\", container=~\"$container\"} [$__interval])) * 100",
           "queryType": "range",
           "refId": "A"
         }
@@ -473,7 +473,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "sum by (level, validator) (count_over_time({validator=~\"$validator\", container=~\"$container\"} | regexp \"(?P<level>ERROR|WARN|INFO|DEBUG|TRACE)\" [$__interval]))",
+          "expr": "sum by (level, validator) (count_over_time({validator=~\"$validator\", container=~\"$container\"} | pattern `<_>  <level> <_>` | level=~\"ERROR|WARN|INFO|DEBUG|TRACE\" [$__interval]))",
           "legendFormat": "{{level}} - {{validator}}",
           "queryType": "range",
           "refId": "A"
@@ -565,7 +565,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "sum by (validator) (count_over_time({validator=~\"$validator\", container=~\"$container\"} |~ \" ERROR \" [$__interval]))",
+          "expr": "sum by (validator) (count_over_time({validator=~\"$validator\", container=~\"$container\"} |= \" ERROR \" [$__interval]))",
           "legendFormat": "{{validator}}",
           "queryType": "range",
           "refId": "A"
@@ -615,7 +615,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{validator=~\"$validator\", container=~\"$container\"} |~ \"$level\" |~ \"$search\"",
+          "expr": "{validator=~\"$validator\", container=~\"$container\"} |= \"$level\" |~ \"$search\"",
           "queryType": "range",
           "refId": "A"
         }
