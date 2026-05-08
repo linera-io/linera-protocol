@@ -162,9 +162,7 @@ const _: () = {
     // TODO(#2775): add a vtable pointer into the JsValue rather than assuming the
     // implementor
 
-    use crate::native::fungible::{
-        NativeFungibleContractModule, NativeFungibleServiceModule,
-    };
+    use crate::native::fungible::{NativeFungibleContractModule, NativeFungibleServiceModule};
 
     const TAG_WASM: &str = "wasm";
     const TAG_NATIVE_FUNGIBLE: &str = "native-fungible";

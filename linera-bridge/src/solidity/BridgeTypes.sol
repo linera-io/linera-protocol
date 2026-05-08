@@ -156,9 +156,11 @@ library BridgeTypes {
         AdminOperation_RemoveCommittee remove_committee;
     }
 
-    function AdminOperation_case_publish_committee_blob(
-        AdminOperation_PublishCommitteeBlob memory publish_committee_blob
-    ) internal pure returns (AdminOperation memory) {
+    function AdminOperation_case_publish_committee_blob(AdminOperation_PublishCommitteeBlob memory publish_committee_blob)
+        internal
+        pure
+        returns (AdminOperation memory)
+    {
         AdminOperation_CreateCommittee memory create_committee;
         AdminOperation_RemoveCommittee memory remove_committee;
         return AdminOperation(uint8(0), publish_committee_blob, create_committee, remove_committee);
@@ -2516,9 +2518,11 @@ library BridgeTypes {
         );
     }
 
-    function SystemOperation_case_change_application_permissions(
-        ApplicationPermissions memory change_application_permissions
-    ) internal pure returns (SystemOperation memory) {
+    function SystemOperation_case_change_application_permissions(ApplicationPermissions memory change_application_permissions)
+        internal
+        pure
+        returns (SystemOperation memory)
+    {
         SystemOperation_Transfer memory transfer_;
         SystemOperation_Claim memory claim;
         OpenChainConfig memory open_chain;
@@ -2790,9 +2794,11 @@ library BridgeTypes {
         );
     }
 
-    function SystemOperation_case_create_native_application(
-        SystemOperation_CreateNativeApplication memory create_native_application
-    ) internal pure returns (SystemOperation memory) {
+    function SystemOperation_case_create_native_application(SystemOperation_CreateNativeApplication memory create_native_application)
+        internal
+        pure
+        returns (SystemOperation memory)
+    {
         SystemOperation_Transfer memory transfer_;
         SystemOperation_Claim memory claim;
         OpenChainConfig memory open_chain;
@@ -2837,9 +2843,10 @@ library BridgeTypes {
             return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_ChangeOwnership(input.change_ownership));
         }
         if (input.choice == 5) {
-            return abi.encodePacked(
-                input.choice, bcs_serialize_ApplicationPermissions(input.change_application_permissions)
-            );
+            return
+                abi.encodePacked(
+                    input.choice, bcs_serialize_ApplicationPermissions(input.change_application_permissions)
+                );
         }
         if (input.choice == 6) {
             return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_PublishModule(input.publish_module));
@@ -2852,9 +2859,10 @@ library BridgeTypes {
             return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_VerifyBlob(input.verify_blob));
         }
         if (input.choice == 9) {
-            return abi.encodePacked(
-                input.choice, bcs_serialize_SystemOperation_CreateApplication(input.create_application)
-            );
+            return
+                abi.encodePacked(
+                    input.choice, bcs_serialize_SystemOperation_CreateApplication(input.create_application)
+                );
         }
         if (input.choice == 10) {
             return abi.encodePacked(input.choice, bcs_serialize_AdminOperation(input.admin));
@@ -3713,9 +3721,11 @@ library BridgeTypes {
         tuple_CryptoHash_BlockHeight value;
     }
 
-    function bcs_serialize_key_values_ChainId_tuple_CryptoHash_BlockHeight(
-        key_values_ChainId_tuple_CryptoHash_BlockHeight memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_key_values_ChainId_tuple_CryptoHash_BlockHeight(key_values_ChainId_tuple_CryptoHash_BlockHeight memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = bcs_serialize_ChainId(input.key);
         return abi.encodePacked(result, bcs_serialize_tuple_CryptoHash_BlockHeight(input.value));
     }
@@ -3750,9 +3760,11 @@ library BridgeTypes {
         tuple_CryptoHash_BlockHeight value;
     }
 
-    function bcs_serialize_key_values_StreamId_tuple_CryptoHash_BlockHeight(
-        key_values_StreamId_tuple_CryptoHash_BlockHeight memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_key_values_StreamId_tuple_CryptoHash_BlockHeight(key_values_StreamId_tuple_CryptoHash_BlockHeight memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = bcs_serialize_StreamId(input.key);
         return abi.encodePacked(result, bcs_serialize_tuple_CryptoHash_BlockHeight(input.value));
     }
@@ -4399,9 +4411,11 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(
-        key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_len(len);
         for (uint256 i = 0; i < len; i++) {
@@ -4440,9 +4454,11 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(
-        key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_len(len);
         for (uint256 i = 0; i < len; i++) {
@@ -4679,9 +4695,11 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(
-        tuple_Secp256k1PublicKey_Secp256k1Signature[] memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(tuple_Secp256k1PublicKey_Secp256k1Signature[] memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_len(len);
         for (uint256 i = 0; i < len; i++) {
@@ -4855,9 +4873,11 @@ library BridgeTypes {
         Secp256k1Signature entry1;
     }
 
-    function bcs_serialize_tuple_Secp256k1PublicKey_Secp256k1Signature(
-        tuple_Secp256k1PublicKey_Secp256k1Signature memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_tuple_Secp256k1PublicKey_Secp256k1Signature(tuple_Secp256k1PublicKey_Secp256k1Signature memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = bcs_serialize_Secp256k1PublicKey(input.entry0);
         return abi.encodePacked(result, bcs_serialize_Secp256k1Signature(input.entry1));
     }
