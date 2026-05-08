@@ -524,6 +524,16 @@ type CreateApplicationOperationMetadata {
 }
 
 """
+Create native application operation metadata.
+"""
+type CreateNativeApplicationOperationMetadata {
+	kind: String!
+	parametersHex: String!
+	instantiationArgumentHex: String!
+	requiredApplicationIds: [ApplicationId!]!
+}
+
+"""
 Credit message metadata.
 """
 type CreditMessageMetadata {
@@ -1372,6 +1382,10 @@ type SystemOperationMetadata {
 	Create application operation details
 	"""
 	createApplication: CreateApplicationOperationMetadata
+	"""
+	Create native application operation details
+	"""
+	createNativeApplication: CreateNativeApplicationOperationMetadata
 	"""
 	Publish data blob operation details
 	"""

@@ -49,9 +49,7 @@ impl fmt::Display for VmRuntime {
         match self {
             VmRuntime::Wasm => f.write_str("Wasm"),
             VmRuntime::Evm => f.write_str("Evm"),
-            VmRuntime::Native(NativeApplicationKind::Fungible) => {
-                f.write_str("Native(Fungible)")
-            }
+            VmRuntime::Native(NativeApplicationKind::Fungible) => f.write_str("Native(Fungible)"),
         }
     }
 }

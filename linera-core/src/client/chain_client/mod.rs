@@ -2549,12 +2549,14 @@ impl<Env: Environment> ChainClient<Env> {
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, Error> {
-        Box::pin(self.execute_operation(SystemOperation::CreateNativeApplication {
-            kind,
-            parameters,
-            instantiation_argument,
-            required_application_ids,
-        }))
+        Box::pin(
+            self.execute_operation(SystemOperation::CreateNativeApplication {
+                kind,
+                parameters,
+                instantiation_argument,
+                required_application_ids,
+            }),
+        )
         .await?
         .try_map(|certificate| {
             let mut creation: Vec<_> = certificate

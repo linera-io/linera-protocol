@@ -104,6 +104,10 @@ interface contract-runtime-api {
         vm-runtime: vm-runtime,
     }
 
+    enum native-application-kind {
+        fungible,
+    }
+
     record resources {
         wasm-fuel: u64,
         evm-fuel: u64,
@@ -147,10 +151,6 @@ interface contract-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
-
-    enum native-application-kind {
-        fungible,
-    }
 
     variant vm-runtime {
         wasm,

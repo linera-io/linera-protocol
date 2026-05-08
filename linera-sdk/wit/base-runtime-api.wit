@@ -141,6 +141,10 @@ interface base-runtime-api {
         vm-runtime: vm-runtime,
     }
 
+    enum native-application-kind {
+        fungible,
+    }
+
     record time-delta {
         inner0: u64,
     }
@@ -157,10 +161,6 @@ interface base-runtime-api {
     }
 
     type u128 = tuple<u64, u64>;
-
-    enum native-application-kind {
-        fungible,
-    }
 
     variant vm-runtime {
         wasm,

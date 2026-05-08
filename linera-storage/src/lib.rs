@@ -373,9 +373,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
                     }
                 }
             }
-            VmRuntime::Native(_) => unreachable!(
-                "load_contract should not be called for runtime-native applications"
-            ),
+            VmRuntime::Native(_) => {
+                unreachable!("load_contract should not be called for runtime-native applications")
+            }
         }
     }
 
@@ -439,9 +439,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
                     }
                 }
             }
-            VmRuntime::Native(_) => unreachable!(
-                "load_service should not be called for runtime-native applications"
-            ),
+            VmRuntime::Native(_) => {
+                unreachable!("load_service should not be called for runtime-native applications")
+            }
         }
     }
 
