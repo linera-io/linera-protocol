@@ -21,7 +21,7 @@ use linera_base::{
 use linera_execution::{
     committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
     Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, SystemOperation, TransactionTracker,
+    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -709,7 +709,7 @@ where
         // inner view's pending-changes set. The matching operation handler will publish
         // the resulting blob without re-dumping; subsequent fees and other state changes
         // accumulate normally and end up persisted with the override hash on save.
-        let prepared_checkpoint_blob = if Self::block_starts_with_checkpoint(block) {
+        let prepared_checkpoint_blob = if block.starts_with_checkpoint() {
             Some(
                 chain
                     .prepare_checkpoint()
@@ -1108,7 +1108,7 @@ where
             &block,
         )?;
 
-        if Self::block_starts_with_checkpoint(&block) {
+        if block.starts_with_checkpoint() {
             self.check_checkpoint_preconditions(&block).await?;
         }
 
@@ -1232,17 +1232,6 @@ where
             ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
         Ok(())
-    }
-
-    /// Returns whether the first transaction in `block` is a `SystemOperation::Checkpoint`.
-    /// Under the chain-level checkpoint preconditions, this is equivalent to "the block is
-    /// a checkpoint block", since Checkpoint must be the only transaction.
-    fn block_starts_with_checkpoint(block: &ProposedBlock) -> bool {
-        matches!(
-            block.transactions.first(),
-            Some(Transaction::ExecuteOperation(Operation::System(sys)))
-                if matches!(**sys, SystemOperation::Checkpoint)
-        )
     }
 
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:

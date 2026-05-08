@@ -167,8 +167,9 @@ where
     /// Convenience helper that combines [`Self::prepare_checkpoint`] and
     /// [`Self::apply_checkpoint`] in a single call. Production block-execution code
     /// invokes the two halves separately so the dump runs before any block-level state
-    /// mutation; this helper is useful for unit tests that exercise the operation in
+    /// mutation; this helper is only used by unit tests that exercise the operation in
     /// isolation.
+    #[cfg(test)]
     pub async fn execute_checkpoint(
         &mut self,
         txn_tracker: &mut TransactionTracker,
