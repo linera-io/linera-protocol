@@ -15,8 +15,8 @@ use linera_base::{
 use linera_core::{
     client::{
         chain_client, DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
-        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_MAX_EVENT_STREAM_QUERIES,
-        DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+        DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE, DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
+        DEFAULT_MAX_EVENT_STREAM_QUERIES, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
     },
     node::CrossChainMessageDelivery,
     DEFAULT_QUORUM_GRACE_PERIOD,
@@ -245,6 +245,10 @@ pub struct Options {
     )]
     pub sender_certificate_download_batch_size: usize,
 
+    /// Maximum number of certificate batches downloaded concurrently during chain sync.
+    #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS)]
+    pub max_concurrent_batch_downloads: usize,
+
     /// Maximum number of tasks that can are joined concurrently in the client.
     #[arg(long, default_value = "100")]
     pub max_joined_tasks: usize,
@@ -362,6 +366,7 @@ impl Options {
             certificate_download_batch_size: self.certificate_download_batch_size,
             certificate_upload_batch_size: self.certificate_upload_batch_size,
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
+            max_concurrent_batch_downloads: self.max_concurrent_batch_downloads,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
             notification_circuit_breaker_initial_probe_interval: self
