@@ -7,18 +7,25 @@ pub mod fungible;
 
 use linera_base::data_types::NativeApplicationKind;
 
-use crate::{UserContractCode, UserServiceCode};
+use crate::{
+    runtime::{ContractSyncRuntimeHandle, ServiceSyncRuntimeHandle},
+    ExecutionError, UserContractInstance, UserServiceInstance,
+};
 
-/// Returns the native [`UserContractCode`] for the given kind.
-pub fn user_contract_code(kind: NativeApplicationKind) -> UserContractCode {
+pub(crate) fn instantiate_contract(
+    kind: NativeApplicationKind,
+    runtime: ContractSyncRuntimeHandle,
+) -> Result<UserContractInstance, ExecutionError> {
     match kind {
-        NativeApplicationKind::Fungible => fungible::NativeFungibleContractModule.into(),
+        NativeApplicationKind::Fungible => fungible::instantiate_contract(runtime),
     }
 }
 
-/// Returns the native [`UserServiceCode`] for the given kind.
-pub fn user_service_code(kind: NativeApplicationKind) -> UserServiceCode {
+pub(crate) fn instantiate_service(
+    kind: NativeApplicationKind,
+    runtime: ServiceSyncRuntimeHandle,
+) -> Result<UserServiceInstance, ExecutionError> {
     match kind {
-        NativeApplicationKind::Fungible => fungible::NativeFungibleServiceModule.into(),
+        NativeApplicationKind::Fungible => fungible::instantiate_service(runtime),
     }
 }

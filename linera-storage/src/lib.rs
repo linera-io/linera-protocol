@@ -578,7 +578,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
             ApplicationKind::Module(_) => {
                 self.storage.load_contract(description, txn_tracker).await?
             }
-            ApplicationKind::Native(kind) => linera_execution::native::user_contract_code(*kind),
+            ApplicationKind::Native(kind) => UserContractCode::Native(*kind),
         };
         pinned.insert(application_id, contract.clone());
         Ok(contract)
@@ -598,7 +598,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
             ApplicationKind::Module(_) => {
                 self.storage.load_service(description, txn_tracker).await?
             }
-            ApplicationKind::Native(kind) => linera_execution::native::user_service_code(*kind),
+            ApplicationKind::Native(kind) => UserServiceCode::Native(*kind),
         };
         pinned.insert(application_id, service.clone());
         Ok(service)
