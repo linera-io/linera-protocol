@@ -86,6 +86,12 @@ fn get_account_owner(client: &ClientWrapper) -> AccountOwner {
     client.get_owner().unwrap()
 }
 
+#[derive(serde::Deserialize)]
+struct NativeFungibleAccountEntry {
+    key: AccountOwner,
+    value: Amount,
+}
+
 struct NativeFungibleApp(ApplicationWrapper<NativeFungibleTokenAbi>);
 
 impl NativeFungibleApp {
@@ -110,7 +116,7 @@ impl NativeFungibleApp {
         }
     }
 
-    async fn entries(&self) -> Vec<native_fungible::AccountEntry> {
+    async fn entries(&self) -> Vec<NativeFungibleAccountEntry> {
         let query = "accounts { entries { key, value } }";
         let response_body = self.0.query(&query).await.unwrap();
         serde_json::from_value(response_body["accounts"]["entries"].clone()).unwrap()
@@ -2418,14 +2424,12 @@ async fn publish_and_create_native_fungible(
     state: &fungible::InitialState,
     chain_id: Option<ChainId>,
 ) -> Result<ApplicationId<NativeFungibleTokenAbi>> {
-    let (contract, service) = client.build_example(name).await?;
     use fungible::{FungibleTokenAbi, InitialState, Parameters};
     if name == "native-fungible" {
+        // Runs natively inside `linera-execution`; no bytecode to publish.
         client
-            .publish_and_create::<NativeFungibleTokenAbi, Parameters, InitialState>(
-                contract,
-                service,
-                VmRuntime::Wasm,
+            .create_native_application::<NativeFungibleTokenAbi, Parameters, InitialState>(
+                "fungible",
                 params,
                 state,
                 &[],
@@ -2433,6 +2437,7 @@ async fn publish_and_create_native_fungible(
             )
             .await
     } else {
+        let (contract, service) = client.build_example(name).await?;
         let application_id = client
             .publish_and_create::<FungibleTokenAbi, Parameters, InitialState>(
                 contract,

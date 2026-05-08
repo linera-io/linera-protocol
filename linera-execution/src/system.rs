@@ -17,11 +17,13 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
+        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, NativeApplicationKind,
+        OracleResponse, Timestamp,
     },
     ensure, hex_debug,
     identifiers::{Account, AccountOwner, BlobId, BlobType, ChainId, EventId, ModuleId, StreamId},
     ownership::{ChainOwnership, TimeoutConfig},
+    vm::VmRuntime,
 };
 use linera_views::{
     context::Context,
@@ -237,6 +239,20 @@ pub enum SystemOperation {
     ProcessRemovedEpoch(Epoch),
     /// Updates the event stream trackers.
     UpdateStreams(Vec<(ChainId, StreamId, u32)>),
+    /// Creates a new runtime-native application (no bytecode). Kept at the end of the
+    /// enum so the BCS variant indices of the older variants are preserved — the EVM
+    /// bridge contract relies on the indices of `Admin` and friends being stable.
+    CreateNativeApplication {
+        kind: NativeApplicationKind,
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug")]
+        parameters: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        #[debug(with = "hex_debug", skip_if = Vec::is_empty)]
+        instantiation_argument: Vec<u8>,
+        #[debug(skip_if = Vec::is_empty)]
+        required_application_ids: Vec<ApplicationId>,
+    },
 }
 
 /// Operations that are only allowed on the admin chain.
@@ -572,6 +588,24 @@ where
                     ExecutionError::EventsNotFound(missing_events)
                 );
             }
+            CreateNativeApplication {
+                kind,
+                parameters,
+                instantiation_argument,
+                required_application_ids,
+            } => {
+                let CreateApplicationResult { app_id } = self
+                    .create_native_application(
+                        context.chain_id,
+                        context.height,
+                        kind,
+                        parameters,
+                        required_application_ids,
+                        txn_tracker,
+                    )
+                    .await?;
+                new_application = Some((app_id, instantiation_argument));
+            }
         }
 
         Ok(new_application)
@@ -888,6 +922,43 @@ where
         })
     }
 
+    pub async fn create_native_application(
+        &mut self,
+        chain_id: ChainId,
+        block_height: BlockHeight,
+        kind: NativeApplicationKind,
+        parameters: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<CreateApplicationResult, ExecutionError> {
+        let application_index = txn_tracker.next_application_index();
+
+        // Native applications carry no bytecode. The `ModuleId` uses zero-byte hashes
+        // as sentinels and a `VmRuntime::Native(...)` variant to mark this application
+        // as runtime-native.
+        let sentinel = CryptoHash::from([0u8; 32]);
+        let module_id = ModuleId::new(sentinel, sentinel, VmRuntime::Native(kind));
+
+        let application_description = ApplicationDescription {
+            module_id,
+            creator_chain_id: chain_id,
+            block_height,
+            application_index,
+            parameters,
+            required_application_ids,
+        };
+        self.check_required_applications(&application_description, txn_tracker)
+            .await?;
+
+        let blob = Blob::new_application_description(&application_description);
+        self.used_blobs.insert(&blob.id())?;
+        txn_tracker.add_created_blob(blob);
+
+        Ok(CreateApplicationResult {
+            app_id: ApplicationId::from(&application_description),
+        })
+    }
+
     async fn check_required_applications(
         &mut self,
         application_description: &ApplicationDescription,
@@ -914,13 +985,15 @@ where
         self.blob_used(txn_tracker, blob_id).await?;
         let description: ApplicationDescription = bcs::from_bytes(content.bytes())?;
 
-        let blob_ids = self
-            .check_bytecode_blobs(&description.module_id, txn_tracker)
-            .await?;
-        // We only remember to register the blobs that aren't recorded in `used_blobs`
-        // already.
-        for blob_id in blob_ids {
-            self.blob_used(txn_tracker, blob_id).await?;
+        if description.is_module() {
+            let blob_ids = self
+                .check_bytecode_blobs(&description.module_id, txn_tracker)
+                .await?;
+            // We only remember to register the blobs that aren't recorded in `used_blobs`
+            // already.
+            for blob_id in blob_ids {
+                self.blob_used(txn_tracker, blob_id).await?;
+            }
         }
 
         self.check_required_applications(&description, txn_tracker)

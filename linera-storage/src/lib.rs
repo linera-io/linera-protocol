@@ -373,6 +373,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
                     }
                 }
             }
+            VmRuntime::Native(_) => unreachable!(
+                "load_contract should not be called for runtime-native applications"
+            ),
         }
     }
 
@@ -436,6 +439,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
                     }
                 }
             }
+            VmRuntime::Native(_) => unreachable!(
+                "load_service should not be called for runtime-native applications"
+            ),
         }
     }
 
@@ -516,7 +522,10 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         if let Some(contract) = pinned.get(&application_id) {
             return Ok(contract.clone());
         }
-        let contract = self.storage.load_contract(description, txn_tracker).await?;
+        let contract = match description.native_kind() {
+            Some(kind) => linera_execution::native::user_contract_code(kind),
+            None => self.storage.load_contract(description, txn_tracker).await?,
+        };
         pinned.insert(application_id, contract.clone());
         Ok(contract)
     }
@@ -531,7 +540,10 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         if let Some(service) = pinned.get(&application_id) {
             return Ok(service.clone());
         }
-        let service = self.storage.load_service(description, txn_tracker).await?;
+        let service = match description.native_kind() {
+            Some(kind) => linera_execution::native::user_service_code(kind),
+            None => self.storage.load_service(description, txn_tracker).await?,
+        };
         pinned.insert(application_id, service.clone());
         Ok(service)
     }

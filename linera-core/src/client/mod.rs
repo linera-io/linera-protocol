@@ -2088,5 +2088,8 @@ pub async fn create_bytecode_blobs(
             );
             (vec![evm_contract_blob], module_id)
         }
+        VmRuntime::Native(_) => {
+            panic!("create_bytecode_blobs is not applicable to runtime-native modules")
+        }
     }
 }

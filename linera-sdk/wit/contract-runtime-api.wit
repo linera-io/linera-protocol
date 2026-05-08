@@ -148,9 +148,14 @@ interface contract-runtime-api {
 
     type u128 = tuple<u64, u64>;
 
-    enum vm-runtime {
+    enum native-application-kind {
+        fungible,
+    }
+
+    variant vm-runtime {
         wasm,
         evm,
+        native(native-application-kind),
     }
 
     variant write-operation {

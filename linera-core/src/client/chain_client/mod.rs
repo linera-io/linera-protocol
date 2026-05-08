@@ -21,7 +21,7 @@ use linera_base::{
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, NativeApplicationKind, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -2518,6 +2518,45 @@ impl<Env: Environment> ChainClient<Env> {
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
+            let mut creation: Vec<_> = certificate
+                .block()
+                .created_blob_ids()
+                .into_iter()
+                .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
+                .collect();
+            if creation.len() > 1 {
+                return Err(Error::InternalError(
+                    "Unexpected number of application descriptions published",
+                ));
+            }
+            let blob_id = creation.pop().ok_or(Error::InternalError(
+                "ApplicationDescription blob not found.",
+            ))?;
+            let id = ApplicationId::new(blob_id.hash);
+            Ok((id, certificate))
+        })
+    }
+
+    /// Creates a runtime-native application of the given kind. No bytecode is required.
+    #[instrument(
+        level = "trace",
+        skip(self, parameters, instantiation_argument, required_application_ids)
+    )]
+    pub async fn create_native_application_untyped(
+        &self,
+        kind: NativeApplicationKind,
+        parameters: Vec<u8>,
+        instantiation_argument: Vec<u8>,
+        required_application_ids: Vec<ApplicationId>,
+    ) -> Result<ClientOutcome<(ApplicationId, ConfirmedBlockCertificate)>, Error> {
+        Box::pin(self.execute_operation(SystemOperation::CreateNativeApplication {
+            kind,
+            parameters,
+            instantiation_argument,
+            required_application_ids,
+        }))
+        .await?
+        .try_map(|certificate| {
             let mut creation: Vec<_> = certificate
                 .block()
                 .created_blob_ids()

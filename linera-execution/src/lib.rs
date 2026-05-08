@@ -10,6 +10,7 @@ mod execution;
 pub mod execution_state_actor;
 #[cfg(with_graphql)]
 mod graphql;
+pub mod native;
 mod policy;
 mod resources;
 mod runtime;
@@ -365,6 +366,8 @@ pub enum ExecutionError {
     IncorrectClaimAmount,
     #[error("Claim must be authenticated by the right signer")]
     UnauthenticatedClaimOwner,
+    #[error("Authentication depth {depth} exceeds the current call stack")]
+    AuthDepthOutOfRange { depth: u32 },
     #[error("Admin operations are only allowed on the admin chain.")]
     AdminOperationOnNonAdminChain,
     #[error("Failed to create new committee: expected {expected}, but got {provided}")]
@@ -426,6 +429,7 @@ impl ExecutionError {
             | ExecutionError::FeesExceedFunding { .. }
             | ExecutionError::IncorrectClaimAmount
             | ExecutionError::UnauthenticatedClaimOwner
+            | ExecutionError::AuthDepthOutOfRange { .. }
             | ExecutionError::AdminOperationOnNonAdminChain
             | ExecutionError::InvalidCommitteeEpoch { .. }
             | ExecutionError::InvalidCommitteeRemoval
@@ -1295,6 +1299,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError> {
+        if let Some(kind) = description.native_kind() {
+            return Ok(crate::native::user_contract_code(kind));
+        }
         let application_id: ApplicationId = description.into();
         let pinned = self.user_contracts().pin();
         Ok(pinned
@@ -1310,6 +1317,9 @@ impl ExecutionRuntimeContext for TestExecutionRuntimeContext {
         description: &ApplicationDescription,
         _txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError> {
+        if let Some(kind) = description.native_kind() {
+            return Ok(crate::native::user_service_code(kind));
+        }
         let application_id: ApplicationId = description.into();
         let pinned = self.user_services().pin();
         Ok(pinned

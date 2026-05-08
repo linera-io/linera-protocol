@@ -196,7 +196,7 @@ pub struct ResourceTracker {
 impl ResourceTracker {
     fn fuel(&self, vm_runtime: VmRuntime) -> u64 {
         match vm_runtime {
-            VmRuntime::Wasm => self.wasm_fuel,
+            VmRuntime::Wasm | VmRuntime::Native(_) => self.wasm_fuel,
             VmRuntime::Evm => self.evm_fuel,
         }
     }
@@ -455,7 +455,7 @@ where
         vm_runtime: VmRuntime,
     ) -> Result<(), ExecutionError> {
         match vm_runtime {
-            VmRuntime::Wasm => {
+            VmRuntime::Wasm | VmRuntime::Native(_) => {
                 self.tracker.as_mut().wasm_fuel = self
                     .tracker
                     .as_ref()

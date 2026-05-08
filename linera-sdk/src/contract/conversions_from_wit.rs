@@ -75,6 +75,19 @@ impl From<wit_contract_api::VmRuntime> for VmRuntime {
         match vm_runtime {
             wit_contract_api::VmRuntime::Wasm => VmRuntime::Wasm,
             wit_contract_api::VmRuntime::Evm => VmRuntime::Evm,
+            wit_contract_api::VmRuntime::Native(kind) => VmRuntime::Native(kind.into()),
+        }
+    }
+}
+
+impl From<wit_contract_api::NativeApplicationKind>
+    for linera_base::data_types::NativeApplicationKind
+{
+    fn from(kind: wit_contract_api::NativeApplicationKind) -> Self {
+        match kind {
+            wit_contract_api::NativeApplicationKind::Fungible => {
+                linera_base::data_types::NativeApplicationKind::Fungible
+            }
         }
     }
 }

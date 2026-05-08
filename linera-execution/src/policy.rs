@@ -231,10 +231,11 @@ impl ResourceControlPolicy {
             .contains(&Self::free_app_flag(app_id))
     }
 
-    /// The maximum fuel per block according to the `VmRuntime`.
+    /// The maximum fuel per block according to the `VmRuntime`. Runtime-native
+    /// applications consume no fuel, so the fuel cap is shared with Wasm.
     pub fn maximum_fuel_per_block(&self, vm_runtime: VmRuntime) -> u64 {
         match vm_runtime {
-            VmRuntime::Wasm => self.maximum_wasm_fuel_per_block,
+            VmRuntime::Wasm | VmRuntime::Native(_) => self.maximum_wasm_fuel_per_block,
             VmRuntime::Evm => self.maximum_evm_fuel_per_block,
         }
     }
@@ -402,7 +403,7 @@ impl ResourceControlPolicy {
 
     fn fuel_unit_price(&self, vm_runtime: VmRuntime) -> Amount {
         match vm_runtime {
-            VmRuntime::Wasm => self.wasm_fuel_unit,
+            VmRuntime::Wasm | VmRuntime::Native(_) => self.wasm_fuel_unit,
             VmRuntime::Evm => self.evm_fuel_unit,
         }
     }

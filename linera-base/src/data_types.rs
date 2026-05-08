@@ -1066,6 +1066,29 @@ pub enum OracleResponse {
 
 impl BcsHashable<'_> for OracleResponse {}
 
+/// The kind of a built-in application that the runtime executes natively, without bytecode.
+#[derive(
+    Allocative,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    PartialEq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    WitType,
+    WitLoad,
+    WitStore,
+)]
+#[cfg_attr(with_testing, derive(test_strategy::Arbitrary))]
+pub enum NativeApplicationKind {
+    /// A fungible token application backed by chain-level balances.
+    Fungible,
+}
+
 /// Description of a user application.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitLoad, WitStore)]
 pub struct ApplicationDescription {
@@ -1103,14 +1126,34 @@ impl ApplicationDescription {
         bcs::to_bytes(self).expect("Serializing blob bytes should not fail!")
     }
 
-    /// Gets the `BlobId` of the contract
+    /// Returns the [`NativeApplicationKind`] iff this application is a runtime-native
+    /// built-in (no bytecode).
+    pub fn native_kind(&self) -> Option<NativeApplicationKind> {
+        match self.module_id.vm_runtime {
+            VmRuntime::Native(kind) => Some(kind),
+            VmRuntime::Wasm | VmRuntime::Evm => None,
+        }
+    }
+
+    /// Returns true iff this application is implemented by a published bytecode module.
+    pub fn is_module(&self) -> bool {
+        self.native_kind().is_none()
+    }
+
+    /// Gets the `BlobId` of the contract. Panics for runtime-native applications.
     pub fn contract_bytecode_blob_id(&self) -> BlobId {
         self.module_id.contract_bytecode_blob_id()
     }
 
-    /// Gets the `BlobId` of the service
+    /// Gets the `BlobId` of the service. Panics for runtime-native applications.
     pub fn service_bytecode_blob_id(&self) -> BlobId {
         self.module_id.service_bytecode_blob_id()
+    }
+
+    /// Returns the bytecode `BlobId`s required to load this application, if any.
+    /// Native applications have no bytecode and return an empty vector.
+    pub fn bytecode_blob_ids(&self) -> Vec<BlobId> {
+        self.module_id.bytecode_blob_ids()
     }
 }
 

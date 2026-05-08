@@ -405,6 +405,41 @@ impl ClientWrapper {
         Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
     }
 
+    /// Runs `linera create-native-application <kind>`. Native applications carry no bytecode
+    /// and run directly inside `linera-execution`.
+    pub async fn create_native_application<
+        Abi: ContractAbi,
+        Parameters: Serialize,
+        InstantiationArgument: Serialize,
+    >(
+        &self,
+        kind: &str,
+        parameters: &Parameters,
+        argument: &InstantiationArgument,
+        required_application_ids: &[ApplicationId],
+        creator: impl Into<Option<ChainId>>,
+    ) -> Result<ApplicationId<Abi>> {
+        let json_parameters = serde_json::to_string(parameters)?;
+        let json_argument = serde_json::to_string(argument)?;
+        let mut command = self.command().await?;
+        command
+            .arg("create-native-application")
+            .arg(kind)
+            .args(creator.into().iter().map(ChainId::to_string))
+            .args(["--json-parameters", &json_parameters])
+            .args(["--json-argument", &json_argument]);
+        if !required_application_ids.is_empty() {
+            command.arg("--required-application-ids");
+            command.args(
+                required_application_ids
+                    .iter()
+                    .map(ApplicationId::to_string),
+            );
+        }
+        let stdout = command.spawn_and_wait_for_stdout().await?;
+        Ok(stdout.trim().parse::<ApplicationId>()?.with_abi())
+    }
+
     /// Runs `linera publish-module`.
     pub async fn publish_module<Abi, Parameters, InstantiationArgument>(
         &self,

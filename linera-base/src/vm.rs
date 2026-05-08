@@ -3,20 +3,20 @@
 
 //! The virtual machines being supported.
 
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 use allocative::Allocative;
 use async_graphql::scalar;
-use derive_more::Display;
 use linera_witty::{WitLoad, WitStore, WitType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::data_types::NativeApplicationKind;
 
 #[derive(
     Clone,
     Copy,
     Default,
-    Display,
     Hash,
     PartialEq,
     Eq,
@@ -38,6 +38,22 @@ pub enum VmRuntime {
     Wasm,
     /// The Evm virtual machine
     Evm,
+    /// A runtime-native application implemented directly in `linera-execution`. The
+    /// associated bytecode hashes in the `ModuleId` are sentinel values and are not
+    /// expected to resolve to any blob.
+    Native(NativeApplicationKind),
+}
+
+impl fmt::Display for VmRuntime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            VmRuntime::Wasm => f.write_str("Wasm"),
+            VmRuntime::Evm => f.write_str("Evm"),
+            VmRuntime::Native(NativeApplicationKind::Fungible) => {
+                f.write_str("Native(Fungible)")
+            }
+        }
+    }
 }
 
 impl FromStr for VmRuntime {
@@ -47,6 +63,7 @@ impl FromStr for VmRuntime {
         match string {
             "wasm" => Ok(VmRuntime::Wasm),
             "evm" => Ok(VmRuntime::Evm),
+            "native-fungible" => Ok(VmRuntime::Native(NativeApplicationKind::Fungible)),
             unknown => Err(InvalidVmRuntime(unknown.to_owned())),
         }
     }

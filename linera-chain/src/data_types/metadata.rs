@@ -96,6 +96,8 @@ pub struct SystemOperationMetadata {
     pub admin: Option<AdminOperationMetadata>,
     /// Create application operation details
     pub create_application: Option<CreateApplicationOperationMetadata>,
+    /// Create native application operation details
+    pub create_native_application: Option<CreateNativeApplicationOperationMetadata>,
     /// Publish data blob operation details
     pub publish_data_blob: Option<PublishDataBlobMetadata>,
     /// Verify blob operation details
@@ -120,6 +122,7 @@ impl SystemOperationMetadata {
             change_application_permissions: None,
             admin: None,
             create_application: None,
+            create_native_application: None,
             publish_data_blob: None,
             verify_blob: None,
             publish_module: None,
@@ -189,6 +192,15 @@ pub struct AdminOperationMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 pub struct CreateApplicationOperationMetadata {
     pub module_id: String,
+    pub parameters_hex: String,
+    pub instantiation_argument_hex: String,
+    pub required_application_ids: Vec<ApplicationId>,
+}
+
+/// Create native application operation metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct CreateNativeApplicationOperationMetadata {
+    pub kind: String,
     pub parameters_hex: String,
     pub instantiation_argument_hex: String,
     pub required_application_ids: Vec<ApplicationId>,
@@ -384,6 +396,20 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                         .collect(),
                 ),
                 ..SystemOperationMetadata::new("UpdateStreams")
+            },
+            SystemOperation::CreateNativeApplication {
+                kind,
+                parameters,
+                instantiation_argument,
+                required_application_ids,
+            } => SystemOperationMetadata {
+                create_native_application: Some(CreateNativeApplicationOperationMetadata {
+                    kind: format!("{kind:?}"),
+                    parameters_hex: hex::encode(parameters),
+                    instantiation_argument_hex: hex::encode(instantiation_argument),
+                    required_application_ids: required_application_ids.clone(),
+                }),
+                ..SystemOperationMetadata::new("CreateNativeApplication")
             },
         }
     }

@@ -857,23 +857,32 @@ impl ModuleId {
         }
     }
 
-    /// Gets the `BlobId` of the contract
+    /// Gets the `BlobId` of the contract. Panics for runtime-native modules, which
+    /// have no bytecode.
     pub fn contract_bytecode_blob_id(&self) -> BlobId {
         match self.vm_runtime {
             VmRuntime::Wasm => BlobId::new(self.contract_blob_hash, BlobType::ContractBytecode),
             VmRuntime::Evm => BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode),
+            VmRuntime::Native(_) => {
+                panic!("contract_bytecode_blob_id called on a runtime-native module")
+            }
         }
     }
 
-    /// Gets the `BlobId` of the service
+    /// Gets the `BlobId` of the service. Panics for runtime-native modules, which
+    /// have no bytecode.
     pub fn service_bytecode_blob_id(&self) -> BlobId {
         match self.vm_runtime {
             VmRuntime::Wasm => BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode),
             VmRuntime::Evm => BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode),
+            VmRuntime::Native(_) => {
+                panic!("service_bytecode_blob_id called on a runtime-native module")
+            }
         }
     }
 
-    /// Gets all bytecode `BlobId`s of the module
+    /// Gets all bytecode `BlobId`s of the module. Returns an empty vector for
+    /// runtime-native modules.
     pub fn bytecode_blob_ids(&self) -> Vec<BlobId> {
         match self.vm_runtime {
             VmRuntime::Wasm => vec![
@@ -881,6 +890,7 @@ impl ModuleId {
                 BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode),
             ],
             VmRuntime::Evm => vec![BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode)],
+            VmRuntime::Native(_) => Vec::new(),
         }
     }
 }

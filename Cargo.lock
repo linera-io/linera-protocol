@@ -5523,7 +5523,6 @@ dependencies = [
  "linera-version",
  "linera-views",
  "matching-engine",
- "native-fungible",
  "non-fungible",
  "num-format",
  "papaya",
@@ -6151,7 +6150,6 @@ dependencies = [
  "linera-wallet-json",
  "lru 0.15.0",
  "matching-engine",
- "native-fungible",
  "non-fungible",
  "nonzero_lit",
  "papaya",
@@ -6912,18 +6910,6 @@ name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
-
-[[package]]
-name = "native-fungible"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "fungible",
- "linera-sdk",
- "log",
- "serde",
- "serde-reflection",
-]
 
 [[package]]
 name = "nom"
