@@ -4,29 +4,57 @@ version = "0.1.0"
 authors = ["Linera <contact@linera.io>"]
 edition = "2021"
 
+# Separate workspace — required so [profile.release] can set `lto = true`,
+# which is forbidden in per-package profile overrides in the main workspace.
+
+[workspace]
+
 [features]
 test = []
 
+[package.metadata.cargo-machete]
+# `alloy` is declared so the resolver picks the wasmer-fork-compatible
+# version of the meta-crate (cascading the pin to alloy-* sub-crates),
+# but no source file imports it directly. machete would otherwise flag it.
+ignored = ["alloy"]
+
 [dependencies]
-alloy-primitives = { workspace = true }
-async-graphql = { workspace = true }
+# Pinned to 1.0.42 to mirror the root workspace. alloy >=1.7 requires
+# Rust 1.91+, which removed __rust_probestack and breaks the linera
+# wasmer fork (v4.4.0-linera.7). Pinning the meta-crate cascades the
+# pin to all alloy-* sub-crates (alloy-consensus, alloy-eips, etc.)
+# via alloy 1.0.42's internal `=1.0.42` deps.
+alloy = { version = "1.0.42", default-features = false }
+alloy-primitives = { version = "1.0.0", default-features = false, features = [
+    "serde",
+    "k256",
+] }
+async-graphql = { version = "=7.0.17", features = ["raw_value"] }
 fungible = { path = "../../../examples/fungible" }
-hex = { workspace = true }
-linera-bridge = { path = "../..", default-features = false, features = ["chain"] }
-linera-sdk = { workspace = true, features = ["ethereum"] }
-log = { workspace = true }
-serde = { workspace = true }
+hex = "0.4.3"
+linera-bridge = { path = "../..", default-features = false, features = [
+    "chain",
+] }
+linera-sdk = { path = "../../../linera-sdk", features = ["ethereum"] }
+log = "0.4.21"
+serde = { version = "1.0.197", features = ["derive"] }
 wrapped-fungible = { path = "../../../examples/wrapped-fungible" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-alloy-primitives = { workspace = true }
-async-graphql = { workspace = true }
+alloy-primitives = { version = "1.0.0", default-features = false, features = [
+    "serde",
+    "k256",
+] }
+async-graphql = { version = "=7.0.17", features = ["raw_value"] }
 fungible = { path = "../../../examples/fungible", features = ["test"] }
-linera-bridge = { path = "../..", default-features = false, features = ["chain", "testing"] }
-linera-ethereum = { workspace = true }
-linera-sdk = { workspace = true, features = ["test", "wasmer"] }
-serde = { workspace = true }
-tokio = { workspace = true }
+linera-bridge = { path = "../..", default-features = false, features = [
+    "chain",
+    "testing",
+] }
+linera-ethereum = { path = "../../../linera-ethereum" }
+linera-sdk = { path = "../../../linera-sdk", features = ["test", "wasmer"] }
+serde = { version = "1.0.197", features = ["derive"] }
+tokio = "1.36.0"
 wrapped-fungible = { path = "../../../examples/wrapped-fungible" }
 
 [[bin]]
@@ -36,3 +64,9 @@ path = "src/contract.rs"
 [[bin]]
 name = "evm_bridge_service"
 path = "src/service.rs"
+
+[profile.release]
+debug = true
+lto = true
+opt-level = "z"
+strip = "debuginfo"

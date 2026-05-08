@@ -2,7 +2,6 @@
 members = [
     "linera-base",
     "linera-bridge",
-    "linera-bridge/contracts/evm-bridge",
     "linera-cache",
     "linera-chain",
     "linera-client",
@@ -72,7 +71,12 @@ default-members = [
     "linera-witty-macros",
     "linera-witty/test-modules",
 ]
-exclude = ["examples", "scripts", "linera-bridge/tests/e2e"]
+exclude = [
+    "examples",
+    "scripts",
+    "linera-bridge/contracts/evm-bridge",
+    "linera-bridge/tests/e2e",
+]
 resolver = "2"
 
 [workspace.package]

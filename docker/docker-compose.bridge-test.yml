@@ -100,7 +100,7 @@ services:
       - network-data:/data
       - bridge-shared:/shared
       - ../examples/target/wasm32-unknown-unknown/release:/wasm/examples:ro
-      - ../target/wasm32-unknown-unknown/release:/wasm/root:ro
+      - ../linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release:/wasm/root:ro
     depends_on:
       scylla:
         condition: service_healthy
