@@ -696,6 +696,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
 ]
 
@@ -706,6 +707,7 @@ dependencies = [
  "futures",
  "linera-sdk",
  "serde",
+ "serde-reflection",
 ]
 
 [[package]]
