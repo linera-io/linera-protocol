@@ -195,20 +195,20 @@ function pendingBundleCount(): number {
                     <strong>From</strong>
                     <a @click="$root.route(undefined, [['chain', inbox.key]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(inbox.key) }}</a>
                   </span>
-                  <span v-if="inbox.value.addedBundles?.entries?.length" class="badge bg-warning text-dark">{{ inbox.value.addedBundles.entries.length }} pending</span>
+                  <span v-if="inbox.value?.addedBundles?.entries?.length" class="badge bg-warning text-dark">{{ inbox.value.addedBundles.entries.length }} pending</span>
                 </div>
                 <div class="card-body">
                   <div class="row mb-2 small">
                     <div class="col-md-6">
                       <strong>Next cursor to add:</strong>
-                      <span v-if="inbox.value.nextCursorToAdd" class="ms-1">h={{ displayValue(inbox.value.nextCursorToAdd.height) }}, i={{ displayValue(inbox.value.nextCursorToAdd.index) }}</span>
+                      <span v-if="inbox.value?.nextCursorToAdd" class="ms-1">h={{ displayValue(inbox.value.nextCursorToAdd.height) }}, i={{ displayValue(inbox.value.nextCursorToAdd.index) }}</span>
                     </div>
                     <div class="col-md-6">
                       <strong>Next cursor to remove:</strong>
-                      <span v-if="inbox.value.nextCursorToRemove" class="ms-1">h={{ displayValue(inbox.value.nextCursorToRemove.height) }}, i={{ displayValue(inbox.value.nextCursorToRemove.index) }}</span>
+                      <span v-if="inbox.value?.nextCursorToRemove" class="ms-1">h={{ displayValue(inbox.value.nextCursorToRemove.height) }}, i={{ displayValue(inbox.value.nextCursorToRemove.index) }}</span>
                     </div>
                   </div>
-                  <div v-if="inbox.value.addedBundles?.entries?.length" class="mb-2">
+                  <div v-if="inbox.value?.addedBundles?.entries?.length" class="mb-2">
                     <details>
                       <summary class="small"><strong>Added Bundles</strong> ({{ inbox.value.addedBundles.entries.length }})</summary>
                       <div v-for="(bundle, bi) in inbox.value.addedBundles.entries" :key="bi" class="border rounded p-2 mb-1 mt-1 small">
@@ -261,7 +261,7 @@ function pendingBundleCount(): number {
                       </div>
                     </details>
                   </div>
-                  <div v-if="inbox.value.removedBundles?.entries?.length">
+                  <div v-if="inbox.value?.removedBundles?.entries?.length">
                     <details>
                       <summary class="small"><strong>Removed Bundles</strong> ({{ inbox.value.removedBundles.entries.length }})</summary>
                       <div v-for="(bundle, bi) in inbox.value.removedBundles.entries" :key="bi" class="border rounded p-2 mb-1 mt-1 small">
@@ -331,14 +331,14 @@ function pendingBundleCount(): number {
                     <strong>To</strong>
                     <a @click="$root.route(undefined, [['chain', outbox.key]])" class="btn btn-link btn-sm p-0 font-monospace">{{ short_hash(outbox.key) }}</a>
                   </span>
-                  <span v-if="outbox.value.queue?.entries?.length" class="badge bg-warning text-dark">{{ outbox.value.queue.entries.length }} queued</span>
+                  <span v-if="outbox.value?.queue?.entries?.length" class="badge bg-warning text-dark">{{ outbox.value.queue.entries.length }} queued</span>
                 </div>
                 <div class="card-body small">
-                  <div class="mb-2">
+                  <div v-if="outbox.value" class="mb-2">
                     <strong>Next height to schedule:</strong>
                     <span class="ms-1">{{ displayValue(outbox.value.nextHeightToSchedule) }}</span>
                   </div>
-                  <div v-if="outbox.value.queue?.entries?.length">
+                  <div v-if="outbox.value?.queue?.entries?.length">
                     <details>
                       <summary><strong>Queue</strong> ({{ outbox.value.queue.entries.length }})</summary>
                       <Json :data="outbox.value.queue.entries"/>
