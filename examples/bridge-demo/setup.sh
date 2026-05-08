@@ -126,7 +126,8 @@ linera_exec() {
 echo "Compose file: $COMPOSE_FILE"
 EVM_RPC_URL="${EVM_RPC_URL:-http://anvil:8545}"
 EVM_PRIVATE_KEY="${EVM_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
-WASM_DIR="${WASM_DIR:-/wasm}"
+WASM_DIR="${WASM_DIR:-/wasm/examples}"
+EVM_BRIDGE_WASM_DIR="${EVM_BRIDGE_WASM_DIR:-/wasm/root}"
 CONTRACTS_DIR="${CONTRACTS_DIR:-/contracts}"
 OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
 FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
@@ -245,11 +246,12 @@ print(json.dumps(params))
 
 for attempt in 1 2 3; do
     BRIDGE_APP_OUTPUT=$(linera_exec publish-and-create \
-        "$WASM_DIR/evm_bridge_contract.wasm" \
-        "$WASM_DIR/evm_bridge_service.wasm" \
+        "$EVM_BRIDGE_WASM_DIR/evm_bridge_contract.wasm" \
+        "$EVM_BRIDGE_WASM_DIR/evm_bridge_service.wasm" \
         --json-parameters "$BRIDGE_PARAMS" \
         --json-argument 'null' 2>&1) && break
-    echo "  Attempt $attempt failed, retrying..." >&2
+    echo "  Attempt $attempt failed:" >&2
+    echo "$BRIDGE_APP_OUTPUT" >&2
     sleep 2
 done
 [[ -z "$BRIDGE_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create evm-bridge failed after retries" >&2; exit 1; }

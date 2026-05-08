@@ -81,8 +81,9 @@ relayer-logs: ## Tail logs from the standalone relayer container
 	docker logs -f $(RELAYER_CONTAINER)
 
 build-wasm: ## Build all Wasm files needed for bridge demo
+	cd contracts/evm-bridge && cargo build --release --target wasm32-unknown-unknown
 	cd ../examples && cargo build --release --target wasm32-unknown-unknown \
-		-p fungible -p wrapped-fungible -p evm-bridge
+		-p fungible -p wrapped-fungible
 
 build-all: build-wasm ## Build Wasm files and all docker images (debug mode)
 	cd $(DOCKER_DIR) && docker build -f ./Dockerfile \

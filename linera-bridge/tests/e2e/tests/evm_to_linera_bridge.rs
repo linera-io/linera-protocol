@@ -135,6 +135,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         .nth(3)
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
+    let evm_bridge_wasm_dir = repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
 
     // 4a. Publish and create wrapped-fungible app
@@ -152,8 +153,10 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // 4b. Publish and create evm-bridge app first (so wrapped-fungible can reference it)
     tracing::info!("Publishing evm-bridge module...");
-    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
-    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
+    let eb_contract =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_service.wasm")).await?;
 
     let (eb_module_id, _) = cc
         .publish_module(eb_contract, eb_service, VmRuntime::Wasm, None)
