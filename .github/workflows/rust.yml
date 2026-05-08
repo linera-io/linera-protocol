@@ -57,6 +57,9 @@ jobs:
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
               - '!README.md'
+              # Workflow-only PRs don't need heavy code tests; merge to main
+              # validates the workflow itself by running it for real.
+              - '!.github/workflows/**'
   changed-files-kubernetes:
     runs-on: ubuntu-latest
     outputs:
@@ -76,6 +79,9 @@ jobs:
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
               - '!README.md'
+              # Workflow-only PRs don't need heavy code tests; merge to main
+              # validates the workflow itself by running it for real.
+              - '!.github/workflows/**'
   execution-wasmtime-test:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'

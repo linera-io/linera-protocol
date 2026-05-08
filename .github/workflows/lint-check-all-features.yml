@@ -48,6 +48,9 @@ jobs:
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
               - '!README.md'
+              # Workflow-only PRs don't need heavy code tests; merge to main
+              # validates the workflow itself by running it for real.
+              - '!.github/workflows/**'
 
   check-all-features-partition:
     needs: changed-files
