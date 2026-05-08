@@ -5726,6 +5726,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.19",
  "url",
+ "wasm-bindgen-test",
  "wasmtime",
  "web-thread-pool",
  "web-thread-select",

@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
@@ -34,7 +34,7 @@ use linera_views::{
 };
 use serde::{Deserialize, Serialize};
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 use crate::test_utils::SystemExecutionState;
 use crate::{
     committee::Committee, util::OracleResponseExt as _, ApplicationDescription, ApplicationId,

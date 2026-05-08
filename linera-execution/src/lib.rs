@@ -15,7 +15,7 @@ mod policy;
 mod resources;
 mod runtime;
 pub mod system;
-#[cfg(with_testing)]
+#[cfg(all(with_testing, not(target_arch = "wasm32")))]
 pub mod test_utils;
 mod transaction_tracker;
 mod util;
@@ -276,6 +276,63 @@ const _: () = {
         }
     }
 };
+
+#[cfg(all(web, test))]
+mod web_round_trip_tests {
+    use std::any::Any;
+
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+    use web_thread_select::AsJs;
+
+    use super::{UserContractCode, UserServiceCode};
+    use crate::native::fungible::{
+        NativeFungibleContractModule, NativeFungibleServiceModule,
+    };
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn native_fungible_contract_module_round_trips() {
+        let original: UserContractCode = NativeFungibleContractModule.into();
+        let js = original.to_js().expect("to_js");
+        let restored = UserContractCode::from_js(js).expect("from_js");
+        let inner: &dyn Any = &*restored.0;
+        assert!(
+            inner.downcast_ref::<NativeFungibleContractModule>().is_some(),
+            "round-tripped contract module is not NativeFungibleContractModule",
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn native_fungible_service_module_round_trips() {
+        let original: UserServiceCode = NativeFungibleServiceModule.into();
+        let js = original.to_js().expect("to_js");
+        let restored = UserServiceCode::from_js(js).expect("from_js");
+        let inner: &dyn Any = &*restored.0;
+        assert!(
+            inner.downcast_ref::<NativeFungibleServiceModule>().is_some(),
+            "round-tripped service module is not NativeFungibleServiceModule",
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn from_js_rejects_unknown_tag() {
+        let array = js_sys::Array::new();
+        array.push(&js_sys::wasm_bindgen::JsValue::from_str("not-a-real-tag"));
+        array.push(&js_sys::wasm_bindgen::JsValue::UNDEFINED);
+        assert!(UserContractCode::from_js(array.into()).is_err());
+    }
+
+    #[wasm_bindgen_test]
+    fn from_js_rejects_malformed_payload_for_native_fungible() {
+        // Valid wrapper, but the payload sentinel doesn't match what
+        // `NativeFungibleContractModule::from_js` expects.
+        let array = js_sys::Array::new();
+        array.push(&js_sys::wasm_bindgen::JsValue::from_str("native-fungible"));
+        array.push(&js_sys::wasm_bindgen::JsValue::from_str("wrong-sentinel"));
+        assert!(UserContractCode::from_js(array.into()).is_err());
+    }
+}
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug, strum::IntoStaticStr)]

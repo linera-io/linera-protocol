@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(with_wasm_runtime)]
+#![cfg(all(with_wasm_runtime, not(target_arch = "wasm32")))]
 
 use std::sync::Arc;
 

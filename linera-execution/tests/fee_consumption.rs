@@ -3,6 +3,8 @@
 
 //! Tests for how the runtime computes fees based on consumed resources.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::{collections::BTreeSet, sync::Arc, vec};
 
 use linera_base::{

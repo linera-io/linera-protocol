@@ -115,22 +115,27 @@ wasmer-compiler-singlepass.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 wasmer = { workspace = true, optional = true, features = ["js-default"] }
 
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test.workspace = true
+
 [dev-dependencies]
 anyhow.workspace = true
 assert_matches.workspace = true
 bcs.workspace = true
 linera-base = { workspace = true, features = ["test"] }
+proptest.workspace = true
+test-case.workspace = true
+test-log = { workspace = true, features = ["trace"] }
+test-strategy.workspace = true
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 linera-execution = { path = ".", default-features = false, features = [
     "fs",
     "test",
 ] }
 linera-witty = { workspace = true, features = ["log", "macros", "test"] }
-proptest.workspace = true
-test-case.workspace = true
-test-log = { workspace = true, features = ["trace"] }
-test-strategy.workspace = true
 tokio = { workspace = true, features = ["rt", "test-util"] }
-tracing-subscriber = { workspace = true, features = ["fmt"] }
 wasmer = { workspace = true, features = ["singlepass", "wat"] }
 
 [build-dependencies]

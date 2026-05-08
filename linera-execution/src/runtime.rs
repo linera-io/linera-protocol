@@ -38,7 +38,7 @@ use crate::{
     UserContractInstance, UserServiceCode, UserServiceInstance, MAX_STREAM_NAME_LEN,
 };
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "unit_tests/runtime_tests.rs"]
 mod tests;
 
