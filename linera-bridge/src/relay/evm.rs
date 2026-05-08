@@ -102,11 +102,7 @@ impl<P: Provider> EvmClient<P> {
     /// `_onBlock` loop iteration ran to completion in some prior `addBlock`
     /// transaction. The answer is intrinsic to the burn rather than inferred
     /// from block-level state or token transfer events.
-    pub async fn is_burn_processed(
-        &self,
-        height: BlockHeight,
-        burn_index: usize,
-    ) -> Result<bool> {
+    pub async fn is_burn_processed(&self, height: BlockHeight, burn_index: usize) -> Result<bool> {
         let bridge_contract = IFungibleBridge::new(self.bridge_addr, &self.provider);
         Ok(bridge_contract
             .isBurnProcessed(height.0, U256::from(burn_index))
