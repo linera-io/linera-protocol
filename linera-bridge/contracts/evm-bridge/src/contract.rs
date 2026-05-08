@@ -136,9 +136,9 @@ impl Contract for EvmBridgeContract {
 
 impl EvmBridgeContract {
     async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
-        let params = self.runtime.application_parameters();
+        let rpc_endpoint = self.state.rpc_endpoint.get();
         assert!(
-            !params.rpc_endpoint.is_empty(),
+            !rpc_endpoint.is_empty(),
             "rpc_endpoint must be configured to verify block hashes"
         );
 
@@ -181,7 +181,7 @@ impl EvmBridgeContract {
         // 1b. Finality check: when an endpoint is configured, verify the block hash
         //     is finalized. Uses cached result if a previous deposit from this block
         //     was already processed.
-        if params.rpc_endpoint.is_empty() {
+        if self.state.rpc_endpoint.get().is_empty() {
             log::warn!("rpc_endpoint is empty — skipping block finality verification.");
         } else if !self
             .state
@@ -253,7 +253,7 @@ impl EvmBridgeContract {
 
         // 5b. Cache the verified block hash so subsequent deposits from the same
         //     block skip the RPC finality check.
-        if !params.rpc_endpoint.is_empty() {
+        if !self.state.rpc_endpoint.get().is_empty() {
             self.state
                 .verified_block_hashes
                 .insert(&block_hash.0)
