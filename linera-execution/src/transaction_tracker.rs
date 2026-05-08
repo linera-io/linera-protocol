@@ -56,6 +56,12 @@ pub struct TransactionTracker {
     blobs_published: BTreeSet<BlobId>,
     /// Blob IDs created or published by free apps (fees waived).
     free_blob_ids: BTreeSet<BlobId>,
+    /// A checkpoint blob computed pre-block by `ExecutionStateView::prepare_checkpoint`,
+    /// stashed here so that the matching `SystemOperation::Checkpoint` operation handler
+    /// can publish it without re-dumping mid-block (which would fail because the inner
+    /// view has by then accumulated pending changes from block-level setup).
+    #[debug(skip_if = Option::is_none)]
+    prepared_checkpoint_blob: Option<Blob>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -108,6 +114,18 @@ impl TransactionTracker {
     pub fn with_blobs(mut self, blobs: BTreeMap<BlobId, BlobContent>) -> Self {
         self.blobs = blobs;
         self
+    }
+
+    /// Stashes a pre-block-computed checkpoint blob on the tracker. The matching
+    /// `SystemOperation::Checkpoint` operation handler will retrieve it via
+    /// [`Self::take_prepared_checkpoint_blob`] when the operation runs.
+    pub fn set_prepared_checkpoint_blob(&mut self, blob: Blob) {
+        self.prepared_checkpoint_blob = Some(blob);
+    }
+
+    /// Takes the pre-block-computed checkpoint blob, if one was stashed.
+    pub fn take_prepared_checkpoint_blob(&mut self) -> Option<Blob> {
+        self.prepared_checkpoint_blob.take()
     }
 
     pub fn local_time(&self) -> Timestamp {
@@ -308,6 +326,7 @@ impl TransactionTracker {
             streams_to_process,
             blobs_published,
             free_blob_ids,
+            prepared_checkpoint_blob: _,
         } = self;
         ensure!(
             streams_to_process.is_empty(),

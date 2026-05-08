@@ -1201,6 +1201,7 @@ pub mod tests {
             count_received_log: 0,
             requested_received_log: vec![],
             requested_previous_event_blocks: BTreeMap::new(),
+            requested_latest_checkpoint_height: None,
         });
 
         let chain_info_response_none = ChainInfoResponse {
@@ -1237,6 +1238,7 @@ pub mod tests {
             request_fallback: true,
             request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
             request_previous_event_blocks: Vec::new(),
+            request_latest_checkpoint_height: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_some);
     }

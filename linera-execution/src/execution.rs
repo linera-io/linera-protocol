@@ -107,20 +107,18 @@ where
         Ok(CryptoHash::new(&ExecutionStateViewHash(hash.into())))
     }
 
-    /// Executes a `SystemOperation::Checkpoint`: validates execution-state-level
-    /// preconditions, dumps the inner view's persisted content as a blob, and records
-    /// the resulting blob ID as an [`OracleResponse::Checkpoint`].
+    /// Validates the execution-state-level preconditions for a `SystemOperation::Checkpoint`
+    /// and dumps the inner view's persisted content as a [`Blob`]. The blob is not yet
+    /// published; the caller is expected to register it during transaction execution via
+    /// [`Self::apply_checkpoint`].
     ///
-    /// The dump captures the chain's pre-block state. Subsequent fees and other state
-    /// changes within this same block mutate the inner view normally; on save, the
-    /// `force_stored_hash` override scheduled by `dump_content` causes the persisted
-    /// state hash to be the hash of the dumped bytes. A bootstrapping node can then
-    /// install the dumped state via `restore_from_content` and replay the checkpoint
-    /// block to converge to the same post-block state.
-    pub async fn execute_checkpoint(
-        &mut self,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), ExecutionError> {
+    /// This is a *pre-block* operation: it must run before the block-level setup mutates
+    /// the chain state (e.g. setting `system.timestamp`), because `dump_content` reads
+    /// from storage and refuses to run with pending in-memory changes. Splitting the
+    /// dump out of the operation handler also guarantees the captured bytes represent
+    /// the chain's pre-block state, which is exactly what a bootstrapping node will
+    /// `restore_from_content` from before re-applying the certified checkpoint block.
+    pub async fn prepare_checkpoint(&mut self) -> Result<Blob, ExecutionError> {
         let mut had_event_block = false;
         self.previous_event_blocks
             .for_each_index_while(|_| {
@@ -146,12 +144,37 @@ where
         );
 
         let (bytes, _content_hash) = self.inner.dump_content().await?;
-        let blob = Blob::new(BlobContent::new(BlobType::CheckpointContent, bytes));
+        Ok(Blob::new(BlobContent::new(
+            BlobType::CheckpointContent,
+            bytes,
+        )))
+    }
+
+    /// Registers the checkpoint blob (produced by [`Self::prepare_checkpoint`]) with the
+    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`].
+    pub fn apply_checkpoint(
+        &self,
+        blob: Blob,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
         let blob_id = blob.id();
         txn_tracker.add_created_blob(blob);
         txn_tracker.add_published_blob(blob_id);
         txn_tracker.replay_oracle_response(OracleResponse::Checkpoint(blob_id))?;
         Ok(())
+    }
+
+    /// Convenience helper that combines [`Self::prepare_checkpoint`] and
+    /// [`Self::apply_checkpoint`] in a single call. Production block-execution code
+    /// invokes the two halves separately so the dump runs before any block-level state
+    /// mutation; this helper is useful for unit tests that exercise the operation in
+    /// isolation.
+    pub async fn execute_checkpoint(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
+        let blob = self.prepare_checkpoint().await?;
+        self.apply_checkpoint(blob, txn_tracker)
     }
 
     /// Replaces the persisted execution state with the content of a checkpoint blob,

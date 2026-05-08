@@ -703,6 +703,23 @@ where
 
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
+
+        // Pre-block hook: if this block contains a `SystemOperation::Checkpoint`, dump the
+        // execution state from storage *now*, before any block-level mutation taints the
+        // inner view's pending-changes set. The matching operation handler will publish
+        // the resulting blob without re-dumping; subsequent fees and other state changes
+        // accumulate normally and end up persisted with the override hash on save.
+        let prepared_checkpoint_blob = if Self::block_starts_with_checkpoint(block) {
+            Some(
+                chain
+                    .prepare_checkpoint()
+                    .await
+                    .with_execution_context(ChainExecutionContext::Block)?,
+            )
+        } else {
+            None
+        };
+
         chain.system.timestamp.set(block.timestamp);
 
         let committee_policy = chain
@@ -740,6 +757,9 @@ where
             replaying_oracle_responses,
             block,
         )?;
+        if let Some(blob) = prepared_checkpoint_blob {
+            block_execution_tracker.set_prepared_checkpoint_blob(blob);
+        }
 
         // Extract failure-policy parameters from exec_policy.
         let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
@@ -1088,10 +1108,7 @@ where
             &block,
         )?;
 
-        if block
-            .operations()
-            .any(|op| matches!(op, Operation::System(sys) if matches!(**sys, SystemOperation::Checkpoint)))
-        {
+        if Self::block_starts_with_checkpoint(&block) {
             self.check_checkpoint_preconditions(&block).await?;
         }
 
@@ -1215,6 +1232,17 @@ where
             ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
         Ok(())
+    }
+
+    /// Returns whether the first transaction in `block` is a `SystemOperation::Checkpoint`.
+    /// Under the chain-level checkpoint preconditions, this is equivalent to "the block is
+    /// a checkpoint block", since Checkpoint must be the only transaction.
+    fn block_starts_with_checkpoint(block: &ProposedBlock) -> bool {
+        matches!(
+            block.transactions.first(),
+            Some(Transaction::ExecuteOperation(Operation::System(sys)))
+                if matches!(**sys, SystemOperation::Checkpoint)
+        )
     }
 
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
