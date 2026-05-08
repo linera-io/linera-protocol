@@ -154,8 +154,12 @@ jobs:
           BRANCH="${{ github.base_ref || github.ref_name }}"
           docker push "${GCP_REGISTRY}/linera-bridge:${BRANCH}"
 
-      - name: Build example Wasm modules for bridge tests
-        run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible -p evm-bridge
+      - name: Build evm-bridge Wasm module
+        run: cargo build --release --target wasm32-unknown-unknown
+        working-directory: linera-bridge/contracts/evm-bridge
+
+      - name: Build wrapped-fungible Wasm module
+        run: cargo build --release --target wasm32-unknown-unknown -p wrapped-fungible
         working-directory: examples
 
       - name: Build linera-bridge binary for local relay tests
