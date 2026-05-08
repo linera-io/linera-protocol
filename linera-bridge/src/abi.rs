@@ -45,3 +45,36 @@ pub enum BridgeOperation {
     /// Must be set before ProcessDeposit can succeed.
     RegisterFungibleBridge { address: [u8; 20] },
 }
+
+/// Initial mutable state passed at `create_application`.
+///
+/// Distinct from `BridgeParameters` (immutable, part of the ApplicationId
+/// hash). Fields here are written to the contract's state during
+/// `instantiate` and may be mutated later by operations such as
+/// `SetRpcEndpoint`.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BridgeInstantiationArgument {
+    /// JSON-RPC endpoint of the source EVM chain for finality verification.
+    /// Empty string means "skip finality verification" (test / local-dev mode).
+    pub rpc_endpoint: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn instantiation_argument_json_roundtrip() {
+        let arg = BridgeInstantiationArgument {
+            rpc_endpoint: "https://example.com/rpc".to_string(),
+        };
+        let json = serde_json::to_string(&arg).unwrap();
+        let back: BridgeInstantiationArgument = serde_json::from_str(&json).unwrap();
+        assert_eq!(arg, back);
+
+        // Empty string is a valid value (skip-finality mode).
+        let empty = BridgeInstantiationArgument::default();
+        let json = serde_json::to_string(&empty).unwrap();
+        assert_eq!(json, r#"{"rpc_endpoint":""}"#);
+    }
+}
