@@ -33,7 +33,7 @@ use linera_base::{
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
-use linera_bridge::abi::{BridgeOperation, BridgeParameters};
+use linera_bridge::abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok, light_client_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
@@ -175,9 +175,10 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             serde_json::to_vec(&BridgeParameters {
                 source_chain_id: 31337,
                 token_address: erc20_addr.0 .0,
+            })?,
+            serde_json::to_vec(&BridgeInstantiationArgument {
                 rpc_endpoint: String::new(),
             })?,
-            serde_json::to_vec(&())?,
             vec![],
         )
         .await?

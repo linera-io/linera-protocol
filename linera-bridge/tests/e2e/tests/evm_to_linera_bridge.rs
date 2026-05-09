@@ -24,7 +24,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_bridge::{
-    abi::{BridgeOperation, BridgeParameters},
+    abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
     proof::gen::{DepositProofClient as _, HttpDepositProofClient},
 };
 use linera_bridge_e2e::{
@@ -170,13 +170,14 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let bridge_params = BridgeParameters {
         source_chain_id: 31337,
         token_address: erc20_addr.0 .0,
-        rpc_endpoint: String::new(),
     };
     let (bridge_app_id, _) = cc
         .create_application_untyped(
             eb_module_id,
             serde_json::to_vec(&bridge_params)?,
-            serde_json::to_vec(&())?,
+            serde_json::to_vec(&BridgeInstantiationArgument {
+                rpc_endpoint: String::new(),
+            })?,
             vec![],
         )
         .await?

@@ -231,7 +231,6 @@ echo "Publishing and creating evm-bridge app..."
 BRIDGE_PARAMS=$(
     CHAIN_ID="$EVM_CHAIN_ID" \
     TOKEN_HEX="$TOKEN_ADDR_HEX" \
-    EVM_RPC_URL="$EVM_RPC_URL" \
     python3 -c "
 import json, os
 def hex_to_array(h):
@@ -239,9 +238,13 @@ def hex_to_array(h):
 params = {
     'source_chain_id': int(os.environ['CHAIN_ID']),
     'token_address': hex_to_array(os.environ['TOKEN_HEX']),
-    'rpc_endpoint': os.environ.get('EVM_RPC_URL', ''),
 }
 print(json.dumps(params))
+")
+
+BRIDGE_ARGUMENT=$(EVM_RPC_URL="$EVM_RPC_URL" python3 -c "
+import json, os
+print(json.dumps({'rpc_endpoint': os.environ.get('EVM_RPC_URL', '')}))
 ")
 
 for attempt in 1 2 3; do
@@ -249,7 +252,7 @@ for attempt in 1 2 3; do
         "$EVM_BRIDGE_WASM_DIR/evm_bridge_contract.wasm" \
         "$EVM_BRIDGE_WASM_DIR/evm_bridge_service.wasm" \
         --json-parameters "$BRIDGE_PARAMS" \
-        --json-argument 'null' 2>&1) && break
+        --json-argument "$BRIDGE_ARGUMENT" 2>&1) && break
     echo "  Attempt $attempt failed:" >&2
     echo "$BRIDGE_APP_OUTPUT" >&2
     sleep 2
