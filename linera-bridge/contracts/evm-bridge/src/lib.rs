@@ -8,7 +8,7 @@
 
 use async_graphql::{Request, Response};
 pub use linera_bridge::{
-    abi::{BridgeOperation, BridgeParameters},
+    abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
     proof::DepositKey,
 };
 use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
