@@ -1,6 +1,6 @@
 ---
 source: linera-views-derive/src/lib.rs
-expression: "pretty(generate_view_code(&input, true).unwrap())"
+expression: "pretty(generate_view_code(input, true).unwrap())"
 ---
 impl linera_views::views::View for TestView
 where
