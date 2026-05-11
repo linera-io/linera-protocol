@@ -6278,6 +6278,7 @@ name = "linera-storage"
 version = "0.16.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "bcs",
  "cfg-if",
@@ -6324,6 +6325,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-lock",
+ "async-stream",
  "bcs",
  "cfg_aliases",
  "clap",
@@ -6392,6 +6394,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-lock",
+ "async-stream",
  "aws-config",
  "aws-sdk-dynamodb",
  "aws-smithy-types",

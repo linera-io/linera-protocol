@@ -367,10 +367,6 @@ impl<Env: Environment> Client<Env> {
         self.environment.network()
     }
 
-    pub(crate) fn options(&self) -> &chain_client::Options {
-        &self.options
-    }
-
     /// Handles any pending local cross-chain requests, notifying subscribers.
     pub async fn retry_pending_cross_chain_requests(
         &self,

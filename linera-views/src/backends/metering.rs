@@ -9,6 +9,7 @@ use std::{
 };
 
 use convert_case::{Case, Casing};
+use futures::stream::StreamExt;
 use linera_base::prometheus_util::{
     exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
     MeasureLatency as _,
@@ -19,7 +20,9 @@ use prometheus::{exponential_buckets, HistogramVec, IntCounterVec};
 use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
-    store::{KeyValueDatabase, ReadableKeyValueStore, WithError, WritableKeyValueStore},
+    store::{
+        KeyValueDatabase, ReadValueStream, ReadableKeyValueStore, WithError, WritableKeyValueStore,
+    },
 };
 
 #[derive(Clone)]
@@ -414,6 +417,28 @@ where
             .with_label_values(&[])
             .observe(key_sizes as f64);
         self.store.read_multi_values_bytes(keys).await
+    }
+
+    fn read_multi_values_bytes_iter(&self, keys: Vec<Vec<u8>>) -> ReadValueStream<'_, Self::Error> {
+        self.counter
+            .read_multi_values_num_entries
+            .with_label_values(&[])
+            .observe(keys.len() as f64);
+        let key_sizes = keys.iter().map(|k| k.len()).sum::<usize>();
+        self.counter
+            .read_multi_values_key_sizes
+            .with_label_values(&[])
+            .observe(key_sizes as f64);
+
+        // Latency is measured from the first poll until the stream is exhausted or
+        // dropped. The guard lives in the async block, which is entered on first poll.
+        Box::pin(async_stream::try_stream! {
+            let _latency = self.counter.read_multi_values_bytes_latency.measure_latency();
+            let mut stream = self.store.read_multi_values_bytes_iter(keys);
+            while let Some(item) = stream.next().await {
+                yield item?;
+            }
+        })
     }
 
     async fn find_keys_by_prefix(&self, key_prefix: &[u8]) -> Result<Vec<Vec<u8>>, Self::Error> {
