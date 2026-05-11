@@ -483,32 +483,19 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         validators: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
-        let mut downloaded_blobs = HashSet::<BlobId>::new();
-        let mut downloaded_events = HashSet::<EventId>::new();
-        loop {
-            let result = self.local_node.chain_info(chain_id).await;
-            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let new_blobs = filter_new(blob_ids, &downloaded_blobs);
-                if !new_blobs.is_empty() {
-                    // Make sure the admin chain is up to date.
-                    self.synchronize_chain_state(self.admin_chain_id).await?;
-                    // If the chain is missing then the error is a WorkerError
-                    // and so a BlobsNotFound
-                    self.update_local_node_with_blobs_from(new_blobs.clone(), validators)
-                        .await?;
-                    downloaded_blobs.extend(new_blobs);
-                    continue;
-                }
+        match self.local_node.chain_info(chain_id).await {
+            Ok(info) => Ok(info),
+            Err(LocalNodeError::InactiveChain(_)) => {
+                // The chain isn't initialized locally. Sync the admin chain
+                // (so we have committees and epoch events for any non-genesis
+                // initial epoch), then download this chain's description blob.
+                self.synchronize_chain_state(self.admin_chain_id).await?;
+                let desc_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+                self.update_local_node_with_blobs_from(vec![desc_blob_id], validators)
+                    .await?;
+                Ok(self.local_node.chain_info(chain_id).await?)
             }
-            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if self
-                    .download_new_events_into(event_ids, &mut downloaded_events)
-                    .await?
-                {
-                    continue;
-                }
-            }
-            return Ok(result?);
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -1643,7 +1630,7 @@ impl<Env: Environment> Client<Env> {
         }
         let local_height = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
-            Err(error) if error.is_chain_uninitialized() => BlockHeight::ZERO,
+            Err(LocalNodeError::InactiveChain(_)) => BlockHeight::ZERO,
             Err(error) => return Err(error.into()),
         };
         self.download_event_bearing_blocks(

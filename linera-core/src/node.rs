@@ -468,6 +468,7 @@ impl From<ChainError> for NodeError {
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
+                ExecutionError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
                 ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
                 ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
                 _ => Self::ChainError {
@@ -494,6 +495,7 @@ impl From<WorkerError> for NodeError {
         match error {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
+            WorkerError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             WorkerError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
             WorkerError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
             WorkerError::UnexpectedBlockHeight {

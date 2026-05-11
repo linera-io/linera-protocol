@@ -653,15 +653,11 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
         let info = match self.client.local_node.chain_info(self.chain_id).await {
             Ok(info) => info,
-            Err(LocalNodeError::BlobsNotFound(_)) => {
+            Err(LocalNodeError::InactiveChain(_)) => {
+                // The chain isn't initialized locally. Sync it (which downloads
+                // its description blob and any admin-chain events its initial
+                // epoch depends on).
                 self.synchronize_chain_state(self.chain_id).await?;
-                self.client.local_node.chain_info(self.chain_id).await?
-            }
-            Err(LocalNodeError::EventsNotFound(event_ids)) => {
-                // `initialize_and_save_if_needed` couldn't start the chain because
-                // some publisher events (typically the admin chain's epoch events)
-                // aren't synced yet.
-                Box::pin(self.client.download_certificates_for_events(&event_ids)).await?;
                 self.client.local_node.chain_info(self.chain_id).await?
             }
             Err(err) => return Err(err.into()),
@@ -2728,7 +2724,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<Option<Box<ChainInfo>>, Error> {
         match local_node.chain_info(chain_id).await {
             Ok(info) => Ok(Some(info)),
-            Err(err) if err.is_chain_uninitialized() => Ok(None),
+            Err(LocalNodeError::InactiveChain(_)) => Ok(None),
             Err(err) => Err(err.into()),
         }
     }
