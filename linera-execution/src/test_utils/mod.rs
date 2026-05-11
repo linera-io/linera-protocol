@@ -122,6 +122,7 @@ pub fn create_dummy_message_context(
     MessageContext {
         chain_id,
         origin: chain_id,
+        origin_timestamp: Default::default(),
         is_bouncing: false,
         authenticated_owner,
         refund_grant_to: None,

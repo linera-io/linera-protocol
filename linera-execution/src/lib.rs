@@ -643,6 +643,8 @@ pub struct MessageContext {
     pub chain_id: ChainId,
     /// The chain ID where the message originated from.
     pub origin: ChainId,
+    /// The timestamp of the block on the origin chain that sent the message.
+    pub origin_timestamp: Timestamp,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
     /// The authenticated owner of the operation that created the message, if any.
@@ -948,6 +950,10 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// The chain ID where the current message originated from, if there is one.
     fn message_origin_chain_id(&mut self) -> Result<Option<ChainId>, ExecutionError>;
+
+    /// The timestamp of the block on the origin chain that sent the current message, if there
+    /// is one.
+    fn message_origin_timestamp(&mut self) -> Result<Option<Timestamp>, ExecutionError>;
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.

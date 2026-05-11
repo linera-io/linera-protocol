@@ -225,6 +225,11 @@ library Linera {
         ChainId value;
     }
 
+    struct opt_Timestamp {
+        bool has_value;
+        uint64 value;
+    }
+
     function opt_account_owner_from(LineraTypes.opt_AccountOwner memory entry)
         internal
         pure
@@ -247,6 +252,14 @@ library Linera {
         returns (opt_ChainId memory)
     {
         return opt_ChainId(false, ChainId(bytes32(0)));
+    }
+
+    function opt_timestamp_from(LineraTypes.opt_Timestamp memory entry)
+        internal
+        pure
+        returns (opt_Timestamp memory)
+    {
+        return opt_Timestamp(entry.has_value, entry.value.value);
     }
 
     enum OptionBool { None, True, False }
@@ -461,6 +474,17 @@ library Linera {
         require(success);
         LineraTypes.MessageIsBouncing memory output2 = LineraTypes.bcs_deserialize_MessageIsBouncing(output1);
         return optionbool_from(output2);
+    }
+
+    function message_origin_timestamp() internal returns (opt_Timestamp memory) {
+        address precompile = address(0x0b);
+        LineraTypes.ContractRuntimePrecompile memory contract_ = LineraTypes.ContractRuntimePrecompile_case_message_origin_timestamp();
+        LineraTypes.RuntimePrecompile memory input1 = LineraTypes.RuntimePrecompile_case_contract(contract_);
+        bytes memory input2 = LineraTypes.bcs_serialize_RuntimePrecompile(input1);
+        (bool success, bytes memory output1) = precompile.call(input2);
+        require(success);
+        LineraTypes.opt_Timestamp memory output2 = LineraTypes.bcs_deserialize_opt_Timestamp(output1);
+        return opt_timestamp_from(output2);
     }
 
     function authenticated_caller_id() internal returns (Linera.opt_ApplicationId memory) {

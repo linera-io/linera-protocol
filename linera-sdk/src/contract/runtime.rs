@@ -36,6 +36,7 @@ where
     block_height: Option<BlockHeight>,
     message_is_bouncing: Option<Option<bool>>,
     message_origin_chain_id: Option<Option<ChainId>>,
+    message_origin_timestamp: Option<Option<Timestamp>>,
     timestamp: Option<Timestamp>,
 }
 
@@ -53,6 +54,7 @@ where
             block_height: None,
             message_is_bouncing: None,
             message_origin_chain_id: None,
+            message_origin_timestamp: None,
             timestamp: None,
         }
     }
@@ -210,6 +212,14 @@ where
         *self
             .message_origin_chain_id
             .get_or_insert_with(|| contract_wit::message_origin_chain_id().map(ChainId::from))
+    }
+
+    /// Returns the timestamp of the block on the origin chain that sent the incoming message,
+    /// or [`None`] if not executing an incoming message.
+    pub fn message_origin_timestamp(&mut self) -> Option<Timestamp> {
+        *self
+            .message_origin_timestamp
+            .get_or_insert_with(|| contract_wit::message_origin_timestamp().map(Timestamp::from))
     }
 
     /// Returns the authenticated caller ID, if the caller configured it and if the current context

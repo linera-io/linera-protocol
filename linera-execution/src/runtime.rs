@@ -1226,6 +1226,13 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .map(|metadata| metadata.origin))
     }
 
+    fn message_origin_timestamp(&mut self) -> Result<Option<Timestamp>, ExecutionError> {
+        Ok(self
+            .inner()
+            .executing_message
+            .map(|metadata| metadata.origin_timestamp))
+    }
+
     fn authenticated_caller_id(&mut self) -> Result<Option<ApplicationId>, ExecutionError> {
         let this = self.inner();
         if this.call_stack.len() <= 1 {
@@ -1923,6 +1930,7 @@ pub enum ServiceRuntimeRequest {
 struct ExecutingMessage {
     is_bouncing: bool,
     origin: ChainId,
+    origin_timestamp: Timestamp,
 }
 
 impl From<&MessageContext> for ExecutingMessage {
@@ -1930,6 +1938,7 @@ impl From<&MessageContext> for ExecutingMessage {
         ExecutingMessage {
             is_bouncing: context.is_bouncing,
             origin: context.origin,
+            origin_timestamp: context.origin_timestamp,
         }
     }
 }

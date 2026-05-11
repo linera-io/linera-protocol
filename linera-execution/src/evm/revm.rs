@@ -350,6 +350,8 @@ enum ContractRuntimePrecompile {
         account: Account,
         amount: AmountU256,
     },
+    /// Calling `message_origin_timestamp` of `ContractRuntime`
+    MessageOriginTimestamp,
 }
 
 /// Some functionalities from the ServiceRuntime not in BaseRuntime
@@ -573,6 +575,11 @@ impl<'a> ContractPrecompile {
             ContractRuntimePrecompile::MessageIsBouncing => {
                 let mut runtime = context.db().0.lock_runtime();
                 let result = runtime.message_is_bouncing()?;
+                Ok(bcs::to_bytes(&result)?)
+            }
+            ContractRuntimePrecompile::MessageOriginTimestamp => {
+                let mut runtime = context.db().0.lock_runtime();
+                let result = runtime.message_origin_timestamp()?;
                 Ok(bcs::to_bytes(&result)?)
             }
             ContractRuntimePrecompile::AuthenticatedCallerId => {

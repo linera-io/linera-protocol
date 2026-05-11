@@ -75,6 +75,7 @@ async fn test_simple_system_message() -> anyhow::Result<()> {
     let context = MessageContext {
         chain_id,
         origin: chain_id,
+        origin_timestamp: Default::default(),
         is_bouncing: false,
         height: BlockHeight(0),
         round: Some(0),
