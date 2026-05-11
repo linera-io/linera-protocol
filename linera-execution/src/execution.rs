@@ -159,7 +159,6 @@ where
     ) -> Result<(), ExecutionError> {
         let blob_id = blob.id();
         txn_tracker.add_created_blob(blob);
-        txn_tracker.add_published_blob(blob_id);
         txn_tracker.replay_oracle_response(OracleResponse::Checkpoint(blob_id))?;
         Ok(())
     }
