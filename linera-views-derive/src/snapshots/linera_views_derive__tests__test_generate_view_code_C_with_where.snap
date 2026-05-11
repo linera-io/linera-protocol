@@ -32,7 +32,7 @@ where
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut keys = Vec::new();
-        let __linera_reserved_index: u32 = 0u32;
+        let __linera_reserved_index = 0u32;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
@@ -45,7 +45,7 @@ where
                 usize,
             >::pre_load(&context.clone_with_base_key(__linera_reserved_base_key))?,
         );
-        let __linera_reserved_index: u32 = 1u32;
+        let __linera_reserved_index = 1u32;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
@@ -67,7 +67,7 @@ where
     ) -> Result<Self, linera_views::ViewError> {
         use linera_views::context::Context as _;
         let mut __linera_reserved_pos = 0;
-        let __linera_reserved_index: u32 = 0u32;
+        let __linera_reserved_index = 0u32;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
@@ -84,7 +84,7 @@ where
             &values[__linera_reserved_pos..__linera_reserved_pos_next],
         )?;
         __linera_reserved_pos = __linera_reserved_pos_next;
-        let __linera_reserved_index: u32 = 1u32;
+        let __linera_reserved_index = 1u32;
         let __linera_reserved_base_key = context
             .base_key()
             .derive_tag_key(
