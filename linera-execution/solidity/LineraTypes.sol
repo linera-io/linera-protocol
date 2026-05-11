@@ -1581,6 +1581,41 @@ library LineraTypes {
         return value;
     }
 
+    struct OptionTimestamp {
+        opt_Timestamp value;
+    }
+
+    function bcs_serialize_OptionTimestamp(OptionTimestamp memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_opt_Timestamp(input.value);
+    }
+
+    function bcs_deserialize_offset_OptionTimestamp(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OptionTimestamp memory)
+    {
+        uint256 new_pos;
+        opt_Timestamp memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_Timestamp(pos, input);
+        return (new_pos, OptionTimestamp(value));
+    }
+
+    function bcs_deserialize_OptionTimestamp(bytes memory input)
+        internal
+        pure
+        returns (OptionTimestamp memory)
+    {
+        uint256 new_pos;
+        OptionTimestamp memory value;
+        (new_pos, value) = bcs_deserialize_offset_OptionTimestamp(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct OptionU32 {
         opt_uint32 value;
     }
