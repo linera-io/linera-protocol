@@ -80,6 +80,13 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
     let struct_name = &input.ident;
     let field_types: Vec<_> = input.fields.iter().map(|field| &field.ty).collect();
 
+    let num_fields = input.fields.len();
+    if num_fields >= 65536 {
+        return Err(Error::new_spanned(
+            input,
+            format!("struct has too many fields: {num_fields} (maximum is 65535)"),
+        ));
+    }
     let mut name_quotes = Vec::new();
     let mut rollback_quotes = Vec::new();
     let mut pre_save_quotes = Vec::new();
@@ -89,7 +96,7 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
     let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
-    for (e, idx) in input.fields.iter().zip(0u32..) {
+    for (idx, e) in input.fields.iter().enumerate() {
         let name = e.ident.clone().unwrap();
         let delete_view_ident = format_ident!("deleted{}", idx);
         let g = get_extended_entry(e.ty.clone())?;
@@ -105,9 +112,21 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
         });
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
 
-        let derive_key_logic = quote! {
-            let __linera_reserved_index = #idx;
-            let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+        // Use the narrowest fixed-width type that fits all field indices, so that
+        // bcs serializes the index into 1 byte (u8) when possible, falling back to
+        // 2 bytes (u16) for larger structs.
+        let derive_key_logic = if num_fields < 256 {
+            let idx_u8 = idx as u8;
+            quote! {
+                let __linera_reserved_index = #idx_u8;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+            }
+        } else {
+            let idx_u16 = idx as u16;
+            quote! {
+                let __linera_reserved_index = #idx_u16;
+                let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
+            }
         };
 
         pre_load_keys_quotes.push(quote! {
@@ -122,10 +141,12 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
         });
     }
 
-    // derive_key_logic above adds one byte to the key as a tag, plus four bytes for the
-    // `u32`-encoded field index, so we trim 5 bytes total.
-    let trim_key_logic = quote! {
-        let __bytes_to_trim = 5;
+    // `derive_key_logic` above adds one byte to the key as a tag, plus either 1 byte
+    // (u8) or 2 bytes (u16) for the field index.
+    let trim_key_logic = if num_fields < 256 {
+        quote! { let __bytes_to_trim = 2; }
+    } else {
+        quote! { let __bytes_to_trim = 3; }
     };
 
     let first_name_quote = name_quotes
