@@ -50,6 +50,10 @@ impl Contract for MetaCounterContract {
 
     async fn execute_operation(&mut self, operation: Operation) {
         log::trace!("operation: {:?}", operation);
+        assert!(
+            self.runtime.message_origin_timestamp().is_none(),
+            "Origin timestamp must not be set when executing an operation"
+        );
         let Operation {
             recipient_id,
             authenticated,
