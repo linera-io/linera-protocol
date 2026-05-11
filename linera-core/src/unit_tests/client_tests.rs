@@ -3380,11 +3380,7 @@ where
     // *at* epoch 1 — its cert's `get_committee_hashes(1..=1)` then reads the
     // admin event during cert verification.
     let cert = parent
-        .transfer(
-            AccountOwner::CHAIN,
-            Amount::from_tokens(1),
-            Account::chain(admin_client.chain_id()),
-        )
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
         .await
         .unwrap_ok_committed();
     assert_eq!(cert.block().header.epoch, Epoch::from(1));
