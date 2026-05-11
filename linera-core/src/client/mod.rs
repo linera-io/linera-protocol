@@ -501,10 +501,7 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events = filter_new(event_ids, &downloaded_events);
-                if !new_events.is_empty() {
-                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
-                    downloaded_events.extend(new_events);
+                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
                     continue;
                 }
             }
@@ -705,6 +702,25 @@ impl<Env: Environment> Client<Env> {
                 chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(blob_ids.to_vec()))
             })?;
         self.local_node.store_blobs(blobs).await.map_err(Into::into)
+    }
+
+    /// If any of `event_ids` are not in `already_downloaded`, downloads the
+    /// publisher certificates that contain them, marks them as downloaded, and
+    /// returns true. Returns false (without downloading) if every reported event
+    /// has already been downloaded — that prevents an infinite retry loop when
+    /// the events are genuinely unavailable.
+    pub(crate) async fn download_new_events_into(
+        &self,
+        event_ids: &[EventId],
+        already_downloaded: &mut HashSet<EventId>,
+    ) -> Result<bool, chain_client::Error> {
+        let new_events = filter_new(event_ids, already_downloaded);
+        if new_events.is_empty() {
+            return Ok(false);
+        }
+        Box::pin(self.download_certificates_for_events(&new_events)).await?;
+        already_downloaded.extend(new_events);
+        Ok(true)
     }
 
     /// Downloads the publisher chain certificates that contain the given events,
@@ -918,10 +934,7 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events = filter_new(event_ids, &downloaded_events);
-                if !new_events.is_empty() {
-                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
-                    downloaded_events.extend(new_events);
+                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
                     continue;
                 }
             }
@@ -1624,11 +1637,7 @@ impl<Env: Environment> Client<Env> {
         }
         let local_height = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
-            Err(
-                LocalNodeError::InactiveChain(_)
-                | LocalNodeError::BlobsNotFound(_)
-                | LocalNodeError::EventsNotFound(_),
-            ) => BlockHeight::ZERO,
+            Err(error) if error.is_chain_uninitialized() => BlockHeight::ZERO,
             Err(error) => return Err(error.into()),
         };
         self.download_event_bearing_blocks(
@@ -1940,11 +1949,7 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events = filter_new(event_ids, &downloaded_events);
-                if !new_events.is_empty() {
-                    Box::pin(self.download_certificates_for_events(&new_events))
-                        .await?;
-                    downloaded_events.extend(new_events);
+                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
                     continue;
                 }
             }
@@ -2031,10 +2036,7 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events = filter_new(event_ids, &downloaded_events);
-                if !new_events.is_empty() {
-                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
-                    downloaded_events.extend(new_events);
+                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
                     continue; // We downloaded new publisher chain data: retry.
                 }
                 // All reported events were already downloaded; don't loop forever.

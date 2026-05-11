@@ -11,14 +11,16 @@ use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight},
-    identifiers::{BlobId, ChainId, EventId, StreamId},
+    identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, GenericCertificate},
     ChainError, ChainExecutionContext,
 };
-use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
+use linera_execution::{
+    system::EPOCH_STREAM_NAME, BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker,
+};
 use linera_storage::Storage;
 use linera_views::ViewError;
 use thiserror::Error;
@@ -70,6 +72,27 @@ pub enum LocalNodeError {
 
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
+}
+
+impl LocalNodeError {
+    /// Returns true if this error means the chain is not (yet) initialized in
+    /// the local node: its `ChainDescription` blob, an admin-chain epoch event
+    /// needed to load its initial committee, or its activation state is
+    /// missing. Callers that fall back to a "no information yet" default
+    /// should treat all three the same — but unrelated `BlobsNotFound` /
+    /// `EventsNotFound` errors must still surface as real failures.
+    pub fn is_chain_uninitialized(&self) -> bool {
+        match self {
+            LocalNodeError::InactiveChain(_) => true,
+            LocalNodeError::BlobsNotFound(blob_ids) => blob_ids
+                .iter()
+                .all(|blob_id| blob_id.blob_type == BlobType::ChainDescription),
+            LocalNodeError::EventsNotFound(event_ids) => event_ids
+                .iter()
+                .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)),
+            _ => false,
+        }
+    }
 }
 
 impl From<ExecutionError> for LocalNodeError {
@@ -323,11 +346,9 @@ where
                     .await
                 {
                     Ok(info) => info,
-                    Err(
-                        LocalNodeError::BlobsNotFound(_)
-                        | LocalNodeError::EventsNotFound(_)
-                        | LocalNodeError::InactiveChain(_),
-                    ) => return Ok((*chain_id, BlockHeight::ZERO)),
+                    Err(err) if err.is_chain_uninitialized() => {
+                        return Ok((*chain_id, BlockHeight::ZERO))
+                    }
                     Err(err) => Err(err)?,
                 };
                 let next_height = if let Some(scheduled_height) = next_height_to_schedule {

@@ -1559,11 +1559,11 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events = super::filter_new(event_ids, &downloaded_events);
-                if !new_events.is_empty() {
-                    Box::pin(self.client.download_certificates_for_events(&new_events))
-                        .await?;
-                    downloaded_events.extend(new_events);
+                if self
+                    .client
+                    .download_new_events_into(event_ids, &mut downloaded_events)
+                    .await?
+                {
                     continue;
                 }
             }
@@ -2729,11 +2729,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<Option<Box<ChainInfo>>, Error> {
         match local_node.chain_info(chain_id).await {
             Ok(info) => Ok(Some(info)),
-            Err(
-                LocalNodeError::BlobsNotFound(_)
-                | LocalNodeError::EventsNotFound(_)
-                | LocalNodeError::InactiveChain(_),
-            ) => Ok(None),
+            Err(err) if err.is_chain_uninitialized() => Ok(None),
             Err(err) => Err(err.into()),
         }
     }
