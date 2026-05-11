@@ -563,9 +563,48 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            last_info = self.handle_certificate(certificate).await?.info;
+            last_info = self
+                .handle_certificate_with_event_retries(certificate, &[])
+                .await?
+                .info;
         }
         Ok(last_info)
+    }
+
+    /// Wraps `handle_certificate` with retries for `EventsNotFound` (downloading the
+    /// publisher-chain certificates that contain the missing events) and, when
+    /// `remote_nodes` is non-empty, for `BlobsNotFound` (downloading the missing
+    /// blobs from the given validators). Prevents infinite retry loops by tracking
+    /// events that have already been requested.
+    async fn handle_certificate_with_event_retries<T: ProcessableCertificate + Clone>(
+        &self,
+        certificate: GenericCertificate<T>,
+        remote_nodes: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<ChainInfoResponse, chain_client::Error> {
+        let mut downloaded_events = HashSet::<EventId>::new();
+        loop {
+            match self.handle_certificate(certificate.clone()).await {
+                Err(LocalNodeError::BlobsNotFound(blob_ids)) if !remote_nodes.is_empty() => {
+                    self.download_blobs(remote_nodes, &blob_ids).await?;
+                    continue;
+                }
+                Err(LocalNodeError::EventsNotFound(event_ids)) => {
+                    let new_events = event_ids
+                        .iter()
+                        .filter(|id| !downloaded_events.contains(id))
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    if new_events.is_empty() {
+                        // Already tried to download these; don't loop forever.
+                        return Err(NodeError::EventsNotFound(event_ids).into());
+                    }
+                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
+                    downloaded_events.extend(new_events);
+                    continue;
+                }
+                other => return Ok(other?),
+            }
+        }
     }
 
     /// Downloads and processes certificates from the given validator.
@@ -747,32 +786,9 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            // Track event IDs we've already tried to download to avoid looping
-            // forever when a publisher chain refuses to serve them.
-            let mut downloaded_events = HashSet::<EventId>::new();
-            let response = loop {
-                match self.handle_certificate(certificate.clone()).await {
-                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(remote_nodes, &blob_ids).await?;
-                        continue;
-                    }
-                    Err(LocalNodeError::EventsNotFound(event_ids)) => {
-                        let new_events = event_ids
-                            .iter()
-                            .filter(|id| !downloaded_events.contains(id))
-                            .cloned()
-                            .collect::<Vec<_>>();
-                        if new_events.is_empty() {
-                            // Already tried to download these; don't loop forever.
-                            return Err(NodeError::EventsNotFound(event_ids).into());
-                        }
-                        Box::pin(self.download_certificates_for_events(&new_events)).await?;
-                        downloaded_events.extend(new_events);
-                        continue;
-                    }
-                    other => break other?,
-                }
-            };
+            let response = self
+                .handle_certificate_with_event_retries(certificate, remote_nodes)
+                .await?;
             info = Some(response.info);
         }
 
@@ -1783,7 +1799,8 @@ impl<Env: Environment> Client<Env> {
         };
 
         if let Some(timeout) = remote_info.manager.timeout {
-            self.handle_certificate(*timeout).await?;
+            self.handle_certificate_with_event_retries(*timeout, slice::from_ref(remote_node))
+                .await?;
         }
         let mut proposals = Vec::new();
         if let Some(proposal) = remote_info.manager.requested_signed_proposal {
