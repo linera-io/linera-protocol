@@ -747,16 +747,33 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            info = Some(
+            // Track event IDs we've already tried to download to avoid looping
+            // forever when a publisher chain refuses to serve them.
+            let mut downloaded_events = HashSet::<EventId>::new();
+            let response = loop {
                 match self.handle_certificate(certificate.clone()).await {
                     Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
                         self.download_blobs(remote_nodes, &blob_ids).await?;
-                        self.handle_certificate(certificate).await?
+                        continue;
                     }
-                    x => x?,
+                    Err(LocalNodeError::EventsNotFound(event_ids)) => {
+                        let new_events = event_ids
+                            .iter()
+                            .filter(|id| !downloaded_events.contains(id))
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        if new_events.is_empty() {
+                            // Already tried to download these; don't loop forever.
+                            return Err(NodeError::EventsNotFound(event_ids).into());
+                        }
+                        Box::pin(self.download_certificates_for_events(&new_events)).await?;
+                        downloaded_events.extend(new_events);
+                        continue;
+                    }
+                    other => break other?,
                 }
-                .info,
-            );
+            };
+            info = Some(response.info);
         }
 
         Ok(info)
