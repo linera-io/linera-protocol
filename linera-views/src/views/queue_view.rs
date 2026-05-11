@@ -124,31 +124,32 @@ where
             batch.delete_key_prefix(key_prefix);
             new_stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
-            let deletion_range = self
-                .stored_indices
-                .clone()
-                .take(self.front_delete_count as usize);
-            new_stored_indices.start += self.front_delete_count;
-            for index in deletion_range {
+            let deletion_end = new_stored_indices.start + self.front_delete_count;
+            for index in new_stored_indices.start..deletion_end {
                 let key = self
                     .context
                     .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.delete_key(key);
             }
+            new_stored_indices.start = deletion_end;
         }
         if !self.new_back_values.is_empty() {
             delete_view = false;
+            let new_back_len = u32::try_from(self.new_back_values.len())
+                .map_err(|_| ArithmeticError::Overflow)?;
+            new_stored_indices.end = new_stored_indices
+                .end
+                .checked_add(new_back_len)
+                .ok_or(ArithmeticError::Overflow)?;
+            let mut index = new_stored_indices.end - new_back_len;
             for value in &self.new_back_values {
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.put_key_value(key, value)?;
-                new_stored_indices.end = new_stored_indices
-                    .end
-                    .checked_add(1)
-                    .ok_or(ArithmeticError::Overflow)?;
+                index += 1;
             }
         }
         if !self.delete_storage_first || !new_stored_indices.is_empty() {
@@ -322,7 +323,7 @@ where
     }
 
     async fn read_context(&self, range: Range<u32>) -> Result<Vec<T>, ViewError> {
-        let count = (range.end - range.start) as usize;
+        let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
             let key = self
@@ -368,13 +369,13 @@ where
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             if count <= stored_remainder as usize {
-                let count_u32 = count as u32;
-                values.extend(self.read_context(start..(start + count_u32)).await?);
+                let count = u32::try_from(count).map_err(|_| ArithmeticError::Overflow)?;
+                values.extend(self.read_context(start..start + count).await?);
             } else {
                 values.extend(self.read_context(start..self.stored_indices.end).await?);
                 values.extend(
                     self.new_back_values
-                        .range(0..(count - stored_remainder as usize))
+                        .range(0..count - stored_remainder as usize)
                         .cloned(),
                 );
             }
@@ -445,11 +446,10 @@ where
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             let elements = self.read_context(start..self.stored_indices.end).await?;
-            let shift = (self.stored_indices.end - start) as usize;
             for elt in elements {
                 self.new_back_values.push_back(elt);
             }
-            self.new_back_values.rotate_right(shift);
+            self.new_back_values.rotate_right(stored_remainder as usize);
             // All indices are being deleted at the next flush. This is because they are deleted either:
             // * Because a self.front_delete_count forces them to be removed
             // * Or because loading them means that their value can be changed which invalidates
