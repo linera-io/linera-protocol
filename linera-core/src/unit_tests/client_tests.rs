@@ -3989,12 +3989,7 @@ where
         Transaction::ExecuteOperation(Operation::System(op)) if matches!(**op, SystemOperation::Checkpoint),
         "Unexpected first transaction",
     );
-    let blob_id = match block
-        .body
-        .oracle_responses
-        .first()
-        .and_then(|t| t.first())
-    {
+    let blob_id = match block.body.oracle_responses.first().and_then(|t| t.first()) {
         Some(OracleResponse::Checkpoint(id)) => *id,
         other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
     };
