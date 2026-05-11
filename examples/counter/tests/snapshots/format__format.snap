@@ -1,0 +1,16 @@
+---
+source: counter/tests/format.rs
+expression: "CounterApplication::formats().unwrap()"
+---
+REGISTRY:
+  CounterOperation:
+    ENUM:
+      0:
+        Increment:
+          STRUCT:
+            - value: U64
+OPERATION:
+  TYPENAME: CounterOperation
+RESPONSE: U64
+MESSAGE: UNIT
+EVENT_VALUE: UNIT

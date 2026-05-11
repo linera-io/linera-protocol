@@ -1100,7 +1100,9 @@ type MutationRoot {
 	"""
 	removeCommittee(chainId: ChainId!, epoch: Epoch!): CryptoHash!
 	"""
-	Publishes a new application module.
+	Publishes a new application module, optionally along with a JSON-encoded
+	`Formats` description that becomes a third blob alongside the contract
+	and service blobs.
 	"""
 	publishModule(
 		"""
@@ -1118,7 +1120,11 @@ type MutationRoot {
 		"""
 		The virtual machine being used (either Wasm or Evm)
 		"""
-		vmRuntime: VmRuntime!
+		vmRuntime: VmRuntime!,
+		"""
+		Optional JSON-encoded `Formats` description bytes
+		"""
+		formats: [Int!]
 	): ModuleId!
 	"""
 	Publishes a new data blob.
@@ -1343,6 +1349,12 @@ type QueryRoot {
 	Returns the version information on this node service.
 	"""
 	version: VersionInfo!
+	"""
+	Returns the bytes of an application formats blob (JSON-encoded `Formats`)
+	stored in the local node, given the formats blob hash carried by a
+	`ModuleId`. Returns `None` if the blob is not present locally.
+	"""
+	applicationFormats(chainId: ChainId!, formatsBlobHash: CryptoHash!): [Int!]
 }
 
 type QueueView_BlockHeight_e824a938 {

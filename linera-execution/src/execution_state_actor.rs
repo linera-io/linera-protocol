@@ -412,7 +412,7 @@ where
                 callback,
             } => {
                 let mut view = self.state.users.try_load_entry_mut(&id).await?;
-                view.write_batch(batch).await?;
+                view.write_batch(batch)?;
                 callback.respond(());
             }
 
@@ -811,17 +811,14 @@ where
                 callback.respond(validation_round);
             }
 
-            TotalStorageSize {
+            HasEmptyStorage {
                 application,
                 callback,
             } => {
                 let view = self.state.users.try_load_entry(&application).await?;
                 let result = match view {
-                    Some(view) => {
-                        let total_size = view.total_size();
-                        (total_size.key, total_size.value)
-                    }
-                    None => (0, 0),
+                    Some(view) => view.count().await? == 0,
+                    None => true,
                 };
                 callback.respond(result);
             }
@@ -1558,10 +1555,10 @@ pub enum ExecutionRequest {
         callback: Sender<Option<u32>>,
     },
 
-    TotalStorageSize {
+    HasEmptyStorage {
         application: ApplicationId,
         #[debug(skip)]
-        callback: Sender<(u32, u32)>,
+        callback: Sender<bool>,
     },
 
     AllowApplicationLogs {

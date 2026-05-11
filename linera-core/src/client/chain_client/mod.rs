@@ -113,6 +113,8 @@ pub struct Options {
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     pub sender_certificate_download_batch_size: usize,
+    /// Maximum number of certificate batches downloaded concurrently during chain sync.
+    pub max_concurrent_batch_downloads: usize,
     /// Maximum number of tasks that can be joined concurrently using buffer_unordered.
     pub max_joined_tasks: usize,
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
@@ -140,7 +142,8 @@ impl Options {
     pub fn test_default() -> Self {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
-            DEFAULT_MAX_EVENT_STREAM_QUERIES, DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS, DEFAULT_MAX_EVENT_STREAM_QUERIES,
+            DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
         };
         use crate::DEFAULT_QUORUM_GRACE_PERIOD;
 
@@ -157,6 +160,7 @@ impl Options {
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
+            max_concurrent_batch_downloads: DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
@@ -2363,16 +2367,19 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Publishes some module.
+    /// Publishes some module, optionally along with a JSON-encoded `Formats`
+    /// description that becomes a third blob alongside contract and service.
     #[cfg(not(target_arch = "wasm32"))]
-    #[instrument(level = "trace", skip(contract, service))]
+    #[instrument(level = "trace", skip(contract, service, formats))]
     pub async fn publish_module(
         &self,
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
     ) -> Result<ClientOutcome<(ModuleId, ConfirmedBlockCertificate)>, Error> {
-        let (blobs, module_id) = super::create_bytecode_blobs(contract, service, vm_runtime).await;
+        let (blobs, module_id) =
+            super::create_bytecode_blobs(contract, service, vm_runtime, formats).await;
         self.publish_module_blobs(blobs, module_id).await
     }
 

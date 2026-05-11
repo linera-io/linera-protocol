@@ -95,6 +95,10 @@ BlobType:
       Committee: UNIT
     6:
       ChainDescription: UNIT
+    7:
+      ApplicationFormats: UNIT
+    8:
+      CheckpointContent: UNIT
 Block:
   STRUCT:
     - header:
@@ -298,6 +302,9 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+    - formats_blob_hash:
+        OPTION:
+          TYPENAME: CryptoHash
 OpenChainConfig:
   STRUCT:
     - ownership:
@@ -348,6 +355,10 @@ OracleResponse:
       EventExists:
         NEWTYPE:
           TYPENAME: EventId
+    7:
+      Checkpoint:
+        NEWTYPE:
+          TYPENAME: BlobId
 OutgoingMessage:
   STRUCT:
     - destination:
@@ -530,6 +541,8 @@ SystemOperation:
           - stream_id:
               TYPENAME: StreamId
           - next_index: U32
+    13:
+      Checkpoint: UNIT
 TimeDelta:
   NEWTYPESTRUCT: U64
 TimeoutConfig:

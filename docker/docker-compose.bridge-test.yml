@@ -18,10 +18,11 @@ services:
   foundry-tools:
     image: "${FOUNDRY_IMAGE:-foundry-jq}"
     pull_policy: if_not_present
+    user: root
     entrypoint: ["sleep", "infinity"]
     volumes:
       - bridge-shared:/shared
-      - ../linera-bridge/src/solidity:/contracts:ro
+      - ../linera-bridge/src/solidity:/contracts
     depends_on:
       anvil:
         condition: service_healthy
@@ -125,7 +126,7 @@ services:
     networks:
       - linera-network
 
-  # 3b. Bridge init - deploys LightClient contract to Anvil using constructor args
+  # 3b. Bridge init - deploys LightClient contract to Anvil via forge script
   bridge-init:
     image: "${FOUNDRY_IMAGE:-foundry-jq}"
     pull_policy: if_not_present
@@ -144,45 +145,30 @@ services:
           sleep 1
         done
 
-        # Parse constructor args from JSON
-        VALIDATORS=$$(jq -r '[.validators[]] | join(",")' /shared/light-client-args.json)
-        WEIGHTS=$$(jq -r '[.weights[]] | join(",")' /shared/light-client-args.json)
-        ADMIN_CHAIN_ID=$$(jq -r '.admin_chain_id' /shared/light-client-args.json)
-        EPOCH=$$(jq -r '.epoch' /shared/light-client-args.json)
-
-        echo "Deploying LightClient contract..."
-        echo "  Validators: [$$VALIDATORS]"
-        echo "  Weights: [$$WEIGHTS]"
-        echo "  Admin Chain ID: $$ADMIN_CHAIN_ID"
-        echo "  Epoch: $$EPOCH"
-
-        # Deploy using Anvil's default account (account 0)
-        # Constructor: (bytes[] uncompressedKeys, uint64[] weights, bytes32 adminChainId, uint32 epoch)
-        forge create \
-          /contracts/LightClient.sol:LightClient \
+        echo "Deploying LightClient via forge script..."
+        VERIFY_ARGS=""
+        LIGHT_CLIENT_ARGS_JSON_FILE=/shared/light-client-args.json \
+          forge script /contracts/script/DeployLightClient.s.sol \
           --root /contracts \
-          --via-ir \
-          --optimize \
-          --optimizer-runs 1 \
-          --evm-version shanghai \
-          --ignored-error-codes 6321 \
-          --out /tmp/forge-out \
-          --cache-path /tmp/forge-cache \
           --rpc-url http://anvil:8545 \
           --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 \
           --broadcast \
-          --constructor-args "[$$VALIDATORS]" "[$$WEIGHTS]" "$$ADMIN_CHAIN_ID" "$$EPOCH" \
+          $$VERIFY_ARGS \
           2>&1 | tee /tmp/deploy-output.txt || {
-          echo "Deploy failed" >&2
-          exit 1
+            echo "Deploy failed" >&2
+            exit 1
         }
 
-        CONTRACT_ADDRESS=$$(grep 'Deployed to:' /tmp/deploy-output.txt | sed 's/.*Deployed to: //')
+        # The script deploys a single contract via vm.broadcast(), so
+        # transactions[0] is the LightClient creation.
+        CHAIN_ID=$$(cast chain-id --rpc-url http://anvil:8545)
+        CONTRACT_ADDRESS=$$(jq -r '.transactions[0].contractAddress' \
+          /contracts/broadcast/DeployLightClient.s.sol/$$CHAIN_ID/run-latest.json)
         echo "LightClient deployed at: $$CONTRACT_ADDRESS"
         echo "$$CONTRACT_ADDRESS" > /shared/light-client-address
     volumes:
       - bridge-shared:/shared
-      - ../linera-bridge/src/solidity:/contracts:ro
+      - ../linera-bridge/src/solidity:/contracts
     depends_on:
       anvil:
         condition: service_healthy

@@ -100,6 +100,7 @@ impl From<ModuleId> for wit_contract_api::ModuleId {
             contract_blob_hash: module_id.contract_blob_hash.into(),
             service_blob_hash: module_id.service_blob_hash.into(),
             vm_runtime: module_id.vm_runtime.into(),
+            formats_blob_hash: module_id.formats_blob_hash.map(Into::into),
         }
     }
 }
@@ -137,7 +138,6 @@ impl From<Resources> for wit_contract_api::Resources {
             blob_bytes_to_read: resources.blob_bytes_to_read,
             messages: resources.messages,
             message_size: resources.message_size,
-            storage_size_delta: resources.storage_size_delta,
             service_as_oracle_queries: resources.service_as_oracle_queries,
             http_requests: resources.http_requests,
         }

@@ -197,10 +197,11 @@ macro_rules! impl_from_wit {
 
         impl From<$wit_base_api::ModuleId> for ModuleId {
             fn from(module_id: $wit_base_api::ModuleId) -> Self {
-                ModuleId::new(
+                ModuleId::new_with_formats(
                     module_id.contract_blob_hash.into(),
                     module_id.service_blob_hash.into(),
                     module_id.vm_runtime.into(),
+                    module_id.formats_blob_hash.map(Into::into),
                 )
             }
         }

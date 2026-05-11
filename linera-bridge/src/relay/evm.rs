@@ -11,6 +11,7 @@ use alloy::{
 };
 use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
+use linera_base::data_types::Epoch;
 
 use crate::proof::deposit_event_signature;
 
@@ -152,7 +153,7 @@ impl<P: Provider> EvmClient<P> {
     }
 
     /// Queries the LightClient's current epoch.
-    pub async fn get_current_epoch(&self) -> Result<u32> {
+    pub async fn get_current_epoch(&self) -> Result<Epoch> {
         let lc_addr = self.get_light_client_address().await?;
         let call = currentEpochCall {};
         let tx = alloy::rpc::types::TransactionRequest::default()
@@ -165,7 +166,7 @@ impl<P: Provider> EvmClient<P> {
             .context("failed to query LightClient.currentEpoch()")?;
         let epoch = currentEpochCall::abi_decode_returns(&result)
             .context("failed to decode currentEpoch response")?;
-        Ok(epoch)
+        Ok(Epoch(epoch))
     }
 
     /// Relays a committee update to the LightClient contract.

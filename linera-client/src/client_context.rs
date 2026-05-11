@@ -825,6 +825,7 @@ impl<Env: Environment> ClientContext<Env> {
         contract: PathBuf,
         service: PathBuf,
         vm_runtime: VmRuntime,
+        formats: Option<PathBuf>,
     ) -> Result<ModuleId, Error> {
         info!("Loading bytecode files");
         let contract_bytecode = Bytecode::load_from_file(&contract).await.map_err(|e| {
@@ -840,9 +841,19 @@ impl<Env: Environment> ClientContext<Env> {
             )
         })?;
 
+        let formats_bytes = match formats {
+            Some(path) => Some(load_formats_from_snap(&path)?),
+            None => None,
+        };
+
         info!("Publishing module");
-        let (blobs, module_id) =
-            create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await;
+        let (blobs, module_id) = create_bytecode_blobs(
+            contract_bytecode,
+            service_bytecode,
+            vm_runtime,
+            formats_bytes,
+        )
+        .await;
         let (module_id, _) = self
             .apply_client_command(chain_client, |chain_client| {
                 let blobs = blobs.clone();
@@ -914,6 +925,42 @@ impl<Env: Environment> ClientContext<Env> {
         info!("{}", "Data blob verified successfully!");
         Ok(())
     }
+}
+
+/// Reads an insta SNAP file containing a YAML-encoded `Formats` value, parses
+/// it, and returns the canonical JSON encoding to publish as the application
+/// formats blob.
+#[cfg(feature = "fs")]
+fn load_formats_from_snap(path: &std::path::Path) -> Result<Vec<u8>, Error> {
+    let content = fs::read_to_string(path).map_err(|e| {
+        std::io::Error::new(e.kind(), format!("failed to read SNAP file {path:?}: {e}"))
+    })?;
+    let body = strip_snap_frontmatter(&content).ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("SNAP file {path:?} is missing the `---` frontmatter delimiters"),
+        )
+    })?;
+    let formats: linera_sdk::formats::Formats = serde_yaml_08::from_str(body).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("failed to parse SNAP body in {path:?} as Formats: {e}"),
+        )
+    })?;
+    serde_json::to_vec(&formats).map_err(|e| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("failed to serialize Formats as JSON: {e}"),
+        )
+        .into()
+    })
+}
+
+#[cfg(feature = "fs")]
+fn strip_snap_frontmatter(content: &str) -> Option<&str> {
+    let rest = content.strip_prefix("---\n")?;
+    let end = rest.find("\n---\n")?;
+    Some(&rest[end + "\n---\n".len()..])
 }
 
 #[cfg(not(web))]

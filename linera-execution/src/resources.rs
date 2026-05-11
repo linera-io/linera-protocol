@@ -83,9 +83,13 @@ pub const RUNTIME_CRYPTO_HASH_SIZE: u32 = 32;
 pub const RUNTIME_VM_RUNTIME_SIZE: u32 = 1;
 
 /// The runtime constant part size of an `ApplicationDescription`.
-/// This includes: `ModuleId` (2 hashes + VmRuntime) + `ChainId` + `BlockHeight` + `u32`.
-/// Variable parts (`parameters` and `required_application_ids`) are calculated separately.
-pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId
+///
+/// This includes: `ModuleId` (2 hashes + VmRuntime + Option<CryptoHash> discriminator)
+/// + `ChainId` + `BlockHeight` + `u32`. Variable parts (`parameters`,
+///   `required_application_ids`, and the optional formats blob hash payload) are
+///   calculated separately.
+pub const RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE: u32 = 2 * RUNTIME_CRYPTO_HASH_SIZE + RUNTIME_VM_RUNTIME_SIZE  // ModuleId core
+    + RUNTIME_CRYPTO_HASH_SIZE + 1                           // formats_blob_hash discriminator
     + RUNTIME_CHAIN_ID_SIZE                                  // creator_chain_id
     + RUNTIME_BLOCK_HEIGHT_SIZE                              // block_height
     + 4; // application_index (u32)
@@ -95,6 +99,7 @@ mod tests {
     use std::mem::size_of;
 
     use linera_base::{
+        crypto::CryptoHash,
         data_types::{Amount, ApplicationDescription, BlockHeight, Timestamp},
         identifiers::{ApplicationId, ChainId, ModuleId},
     };
@@ -125,8 +130,10 @@ mod tests {
     fn test_application_description_size() {
         // Verify using BCS serialization, which is architecture-independent.
         // BCS encodes Vec length as ULEB128, so empty vectors add 1 byte each.
+        let mut module_id = ModuleId::default();
+        module_id.formats_blob_hash = Some(CryptoHash::default());
         let description = ApplicationDescription {
-            module_id: ModuleId::default(),
+            module_id,
             creator_chain_id: ChainId::default(),
             block_height: BlockHeight::default(),
             application_index: 0,
@@ -181,8 +188,6 @@ pub struct ResourceTracker {
     pub event_bytes_read: u64,
     /// The number of event bytes published.
     pub event_bytes_published: u64,
-    /// The change in the number of bytes being stored by user applications.
-    pub bytes_stored: i32,
     /// The number of operations executed.
     pub operations: u32,
     /// The total size of the arguments of user operations.
@@ -254,9 +259,6 @@ impl fmt::Display for ResourceTracker {
         }
         if self.bytes_written != 0 {
             storage_parts.push(format!("bytes_written={}", self.bytes_written));
-        }
-        if self.bytes_stored != 0 {
-            storage_parts.push(format!("bytes_stored={}", self.bytes_stored));
         }
         if !storage_parts.is_empty() {
             lines.push(format!("storage: {}", storage_parts.join(", ")));
@@ -732,19 +734,6 @@ where
                 .ok_or(ArithmeticError::Overflow)?;
         }
         self.update_balance(self.policy.blob_published_price(size)?)?;
-        Ok(())
-    }
-
-    /// Tracks a change in the number of bytes stored.
-    // TODO(#1536): This is not fully implemented.
-    #[allow(dead_code)]
-    pub(crate) fn track_stored_bytes(&mut self, delta: i32) -> Result<(), ExecutionError> {
-        self.tracker.as_mut().bytes_stored = self
-            .tracker
-            .as_mut()
-            .bytes_stored
-            .checked_add(delta)
-            .ok_or(ArithmeticError::Overflow)?;
         Ok(())
     }
 

@@ -1,0 +1,45 @@
+---
+source: task-processor/tests/format.rs
+assertion_line: 13
+expression: "TaskProcessorApplication::formats().unwrap()"
+---
+REGISTRY:
+  ChainId:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  Message:
+    ENUM:
+      0:
+        RequestTask:
+          STRUCT:
+            - operator: STR
+            - input: STR
+  TaskProcessorOperation:
+    ENUM:
+      0:
+        RequestTask:
+          STRUCT:
+            - operator: STR
+            - input: STR
+      1:
+        RequestTaskOn:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+            - operator: STR
+            - input: STR
+      2:
+        StoreResult:
+          STRUCT:
+            - result: STR
+OPERATION:
+  TYPENAME: TaskProcessorOperation
+RESPONSE: UNIT
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

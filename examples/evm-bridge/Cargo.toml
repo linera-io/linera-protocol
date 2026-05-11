@@ -20,10 +20,14 @@ log.workspace = true
 serde.workspace = true
 wrapped-fungible.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde-reflection.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 alloy-primitives.workspace = true
 async-graphql.workspace = true
 fungible = { workspace = true, features = ["test"] }
+insta.workspace = true
 linera-bridge = { path = "../../linera-bridge", default-features = false, features = [
     "chain",
     "testing",
@@ -31,6 +35,7 @@ linera-bridge = { path = "../../linera-bridge", default-features = false, featur
 linera-ethereum.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 serde.workspace = true
+serde-reflection.workspace = true
 tokio.workspace = true
 wrapped-fungible.workspace = true
 

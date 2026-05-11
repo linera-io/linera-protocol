@@ -656,17 +656,19 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
-    /// Publishes a module with contract and service bytecode and returns the module ID.
+    /// Publishes a module with contract and service bytecode and an optional
+    /// JSON-encoded `Formats` description, returning the module ID.
     fn publish_module(
         caller: &mut Caller,
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
     ) -> Result<ModuleId, RuntimeError> {
         caller
             .user_data_mut()
             .runtime
-            .publish_module(contract, service, vm_runtime)
+            .publish_module(contract, service, vm_runtime, formats)
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 

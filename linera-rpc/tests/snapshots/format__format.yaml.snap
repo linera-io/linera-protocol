@@ -134,6 +134,10 @@ BlobType:
       Committee: UNIT
     6:
       ChainDescription: UNIT
+    7:
+      ApplicationFormats: UNIT
+    8:
+      CheckpointContent: UNIT
 Block:
   STRUCT:
     - header:
@@ -334,6 +338,9 @@ ChainInfo:
             TUPLE:
               - TYPENAME: BlockHeight
               - TYPENAME: CryptoHash
+    - requested_latest_checkpoint_height:
+        OPTION:
+          TYPENAME: BlockHeight
 ChainInfoQuery:
   STRUCT:
     - chain_id:
@@ -359,6 +366,7 @@ ChainInfoQuery:
     - request_previous_event_blocks:
         SEQ:
           TYPENAME: StreamId
+    - request_latest_checkpoint_height: BOOL
 ChainInfoResponse:
   STRUCT:
     - info:
@@ -660,6 +668,9 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+    - formats_blob_hash:
+        OPTION:
+          TYPENAME: CryptoHash
 NetworkDescription:
   STRUCT:
     - name: STR
@@ -869,6 +880,10 @@ OracleResponse:
       EventExists:
         NEWTYPE:
           TYPENAME: EventId
+    7:
+      Checkpoint:
+        NEWTYPE:
+          TYPENAME: BlobId
 OriginalProposal:
   ENUM:
     0:
@@ -1308,6 +1323,8 @@ SystemOperation:
           - stream_id:
               TYPENAME: StreamId
           - next_index: U32
+    13:
+      Checkpoint: UNIT
 TimeDelta:
   NEWTYPESTRUCT: U64
 Timeout:

@@ -1,0 +1,71 @@
+name: Dockerfile Lint
+
+on:
+  push:
+    branches: [main, 'devnet_*', 'testnet_*']
+    paths:
+      - '**/Dockerfile*'
+      - '.github/workflows/dockerfile-lint.yml'
+  pull_request:
+    paths:
+      - '**/Dockerfile*'
+      - '.github/workflows/dockerfile-lint.yml'
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  hadolint:
+    name: Hadolint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      # Hadolint on EVERY Dockerfile in the repo. Discovers Dockerfiles
+      # dynamically (find + name patterns) rather than hardcoding paths so a
+      # future Dockerfile added anywhere gets gated automatically — no need
+      # to update this job.
+      #
+      # We invoke the hadolint binary directly instead of hadolint/hadolint-action
+      # because the action's `recursive: true` is broken in v3.1.0 — it just
+      # passes the directory to `hadolint`, which exits with "is a directory".
+      #
+      # `--failure-threshold error` mirrors the convention used elsewhere in
+      # linera-io repos: errors break CI, warnings stay advisory. Real
+      # exceptions to error-level rules are handled via inline
+      # `# hadolint ignore=...` comments next to the offending RUN.
+      - name: Install hadolint
+        run: |
+          HADOLINT_VERSION=v2.14.0
+          sudo curl -fsSL -o /usr/local/bin/hadolint \
+            "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64"
+          sudo chmod +x /usr/local/bin/hadolint
+          hadolint --version
+
+      - name: Lint all Dockerfiles
+        run: |
+          set -eo pipefail
+          mapfile -t dockerfiles < <(find . -type f \
+            ! -path './.git/*' \
+            ! -path './node_modules/*' \
+            ! -path './target/*' \
+            \( -name 'Dockerfile' -o -name 'Dockerfile.*' -o -iname '*.Dockerfile' \) \
+            | sort)
+          if [ "${#dockerfiles[@]}" -eq 0 ]; then
+            echo "No Dockerfiles found."
+            exit 0
+          fi
+          echo "Linting ${#dockerfiles[@]} Dockerfile(s):"
+          printf '  %s\n' "${dockerfiles[@]}"
+          echo
+          hadolint --failure-threshold error "${dockerfiles[@]}"
