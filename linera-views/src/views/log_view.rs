@@ -112,8 +112,8 @@ where
         }
         if !self.new_values.is_empty() {
             delete_view = false;
-            let new_values_len = u32::try_from(self.new_values.len())
-                .map_err(|_| ArithmeticError::Overflow)?;
+            let new_values_len =
+                u32::try_from(self.new_values.len()).map_err(|_| ArithmeticError::Overflow)?;
             let new_count = self
                 .stored_count
                 .checked_add(new_values_len)

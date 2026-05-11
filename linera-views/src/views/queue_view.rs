@@ -136,8 +136,8 @@ where
         }
         if !self.new_back_values.is_empty() {
             delete_view = false;
-            let new_back_len = u32::try_from(self.new_back_values.len())
-                .map_err(|_| ArithmeticError::Overflow)?;
+            let new_back_len =
+                u32::try_from(self.new_back_values.len()).map_err(|_| ArithmeticError::Overflow)?;
             new_stored_indices.end = new_stored_indices
                 .end
                 .checked_add(new_back_len)

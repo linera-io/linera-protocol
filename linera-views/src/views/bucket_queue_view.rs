@@ -267,8 +267,7 @@ where
                 };
                 batch.put_key_value(key, data)?;
                 descriptions.push(BucketDescription {
-                    length: u32::try_from(bucket.len())
-                        .map_err(|_| ArithmeticError::Overflow)?,
+                    length: u32::try_from(bucket.len()).map_err(|_| ArithmeticError::Overflow)?,
                     index: 0,
                 });
                 cursor.offset + 1
@@ -298,8 +297,7 @@ where
                 batch.put_key_value(key, &chunk)?;
                 descriptions.push(BucketDescription {
                     index,
-                    length: u32::try_from(chunk.len())
-                        .map_err(|_| ArithmeticError::Overflow)?,
+                    length: u32::try_from(chunk.len()).map_err(|_| ArithmeticError::Overflow)?,
                 });
                 index = index.checked_add(1).ok_or(ArithmeticError::Overflow)?;
             }
@@ -738,12 +736,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 unreachable!("Cursor should be Some when stored_count > 0");
             };
             let mut position = cursor.position;
-            for (offset, bucket) in self
-                .stored_buckets
-                .iter()
-                .enumerate()
-                .skip(cursor.offset)
-            {
+            for (offset, bucket) in self.stored_buckets.iter().enumerate().skip(cursor.offset) {
                 let size = bucket.len() - position;
                 if increment < size {
                     return self
