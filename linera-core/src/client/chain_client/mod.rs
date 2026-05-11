@@ -657,14 +657,11 @@ impl<Env: Environment> ChainClient<Env> {
                 self.synchronize_chain_state(self.chain_id).await?;
                 self.client.local_node.chain_info(self.chain_id).await?
             }
-            Err(LocalNodeError::EventsNotFound(event_ids))
-                if event_ids
-                    .iter()
-                    .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)) =>
-            {
+            Err(LocalNodeError::EventsNotFound(event_ids)) => {
                 // `initialize_and_save_if_needed` couldn't start the chain because
-                // the admin chain's epoch events aren't synced yet.
-                self.synchronize_chain_state(self.client.admin_chain_id)
+                // some publisher events (typically the admin chain's epoch events)
+                // aren't synced yet.
+                Box::pin(self.client.download_certificates_for_events(&event_ids))
                     .await?;
                 self.client.local_node.chain_info(self.chain_id).await?
             }
@@ -1542,6 +1539,8 @@ impl<Env: Environment> ChainClient<Env> {
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), Error> {
+        let mut downloaded_blobs = HashSet::<BlobId>::new();
+        let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self
                 .client
@@ -1549,11 +1548,24 @@ impl<Env: Environment> ChainClient<Env> {
                 .query_application(self.chain_id, query.clone(), block_hash)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let validators = self.client.validator_nodes().await?;
-                self.client
-                    .update_local_node_with_blobs_from(blob_ids.clone(), &validators)
-                    .await?;
-                continue; // We found the missing blob: retry.
+                let new_blobs = super::filter_new(blob_ids, &downloaded_blobs);
+                if !new_blobs.is_empty() {
+                    let validators = self.client.validator_nodes().await?;
+                    self.client
+                        .update_local_node_with_blobs_from(new_blobs.clone(), &validators)
+                        .await?;
+                    downloaded_blobs.extend(new_blobs);
+                    continue;
+                }
+            }
+            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
+                let new_events = super::filter_new(event_ids, &downloaded_events);
+                if !new_events.is_empty() {
+                    Box::pin(self.client.download_certificates_for_events(&new_events))
+                        .await?;
+                    downloaded_events.extend(new_events);
+                    continue;
+                }
             }
             return Ok(result?);
         }
@@ -2717,7 +2729,11 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<Option<Box<ChainInfo>>, Error> {
         match local_node.chain_info(chain_id).await {
             Ok(info) => Ok(Some(info)),
-            Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => Ok(None),
+            Err(
+                LocalNodeError::BlobsNotFound(_)
+                | LocalNodeError::EventsNotFound(_)
+                | LocalNodeError::InactiveChain(_),
+            ) => Ok(None),
             Err(err) => Err(err.into()),
         }
     }

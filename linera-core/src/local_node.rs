@@ -323,9 +323,11 @@ where
                     .await
                 {
                     Ok(info) => info,
-                    Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => {
-                        return Ok((*chain_id, BlockHeight::ZERO))
-                    }
+                    Err(
+                        LocalNodeError::BlobsNotFound(_)
+                        | LocalNodeError::EventsNotFound(_)
+                        | LocalNodeError::InactiveChain(_),
+                    ) => return Ok((*chain_id, BlockHeight::ZERO)),
                     Err(err) => Err(err)?,
                 };
                 let next_height = if let Some(scheduled_height) = next_height_to_schedule {
