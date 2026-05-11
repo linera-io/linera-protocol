@@ -83,6 +83,14 @@ impl Contract for MetaCounterContract {
             .runtime
             .message_is_bouncing()
             .expect("Message delivery status has to be available when executing a message");
+        let origin_timestamp = self
+            .runtime
+            .message_origin_timestamp()
+            .expect("Origin timestamp has to be available when executing a message");
+        assert!(
+            origin_timestamp <= self.runtime.system_time(),
+            "Origin timestamp must not be in the future"
+        );
         if is_bouncing {
             log::trace!("receiving a bouncing message {message:?}");
             return;
