@@ -585,6 +585,10 @@ impl<Env: Environment> Client<Env> {
         loop {
             match self.handle_certificate(certificate.clone()).await {
                 Err(LocalNodeError::BlobsNotFound(blob_ids)) if !remote_nodes.is_empty() => {
+                    tracing::warn!(
+                        ?blob_ids,
+                        "FIX_LOCAL_EVENT_NOT_FOUND: retrying handle_certificate after BlobsNotFound"
+                    );
                     self.download_blobs(remote_nodes, &blob_ids).await?;
                     continue;
                 }
@@ -595,9 +599,17 @@ impl<Env: Environment> Client<Env> {
                         .cloned()
                         .collect::<Vec<_>>();
                     if new_events.is_empty() {
+                        tracing::warn!(
+                            ?event_ids,
+                            "FIX_LOCAL_EVENT_NOT_FOUND: giving up — events not retrievable"
+                        );
                         // Already tried to download these; don't loop forever.
                         return Err(NodeError::EventsNotFound(event_ids).into());
                     }
+                    tracing::warn!(
+                        ?new_events,
+                        "FIX_LOCAL_EVENT_NOT_FOUND: downloading certs for missing events and retrying handle_certificate"
+                    );
                     Box::pin(self.download_certificates_for_events(&new_events)).await?;
                     downloaded_events.extend(new_events);
                     continue;
@@ -949,6 +961,10 @@ impl<Env: Environment> Client<Env> {
     /// chain. Used when the admin chain isn't initialized locally and we can't
     /// yet get a committee via the normal `admin_committee` path.
     async fn bootstrap_admin_chain_from_genesis(&self) -> Result<(), chain_client::Error> {
+        tracing::warn!(
+            admin_chain_id = %self.admin_chain_id,
+            "FIX_LOCAL_EVENT_NOT_FOUND: bootstrapping admin chain from genesis committee"
+        );
         let genesis_committee = self
             .storage_client()
             .get_or_load_committee(Epoch::ZERO)
