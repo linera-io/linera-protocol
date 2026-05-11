@@ -418,7 +418,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) enum RootKey {
+pub enum RootKey {
     ChainState(ChainId),
     ConfirmedBlock(CryptoHash),
     Blob(BlobId),
@@ -433,7 +433,7 @@ const CHAIN_ID_TAG: u8 = 0;
 const BLOB_ID_TAG: u8 = 2;
 
 impl RootKey {
-    pub(crate) fn bytes(&self) -> Vec<u8> {
+    pub fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
     }
 }

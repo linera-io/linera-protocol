@@ -43,7 +43,7 @@ pub use crate::db_storage::metrics;
 #[cfg(with_testing)]
 pub use crate::db_storage::TestClock;
 pub use crate::db_storage::{
-    ChainStatesFirstAssignment, DbStorage, StorageCacheConfig, StorageCaches, WallClock,
+    ChainStatesFirstAssignment, DbStorage, RootKey, StorageCacheConfig, StorageCaches, WallClock,
 };
 
 /// The default namespace to be used when none is specified
