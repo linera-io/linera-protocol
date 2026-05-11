@@ -43,6 +43,9 @@ jobs:
               - '!kubernetes/**'
               - '!CONTRIBUTING.md'
               - '!INSTALL.md'
+              # Workflow-only PRs don't need heavy code tests; merge to main
+              # validates the workflow itself by running it for real.
+              - '!.github/workflows/**'
 
   test:
     needs: changed-files

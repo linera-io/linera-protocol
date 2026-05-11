@@ -16,7 +16,7 @@ interface contract-runtime-api {
     change-application-permissions: func(application-permissions: application-permissions) -> result<tuple<>, manage-chain-error>;
     create-application: func(module-id: module-id, parameters: list<u8>, argument: list<u8>, required-application-ids: list<application-id>) -> application-id;
     create-data-blob: func(bytes: list<u8>) -> data-blob-hash;
-    publish-module: func(contract: bytecode, service: bytecode, vm-runtime: vm-runtime) -> module-id;
+    publish-module: func(contract: bytecode, service: bytecode, vm-runtime: vm-runtime, formats: option<list<u8>>) -> module-id;
     try-call-application: func(authenticated: bool, callee-id: application-id, argument: list<u8>) -> list<u8>;
     emit: func(name: stream-name, value: list<u8>) -> u32;
     read-event: func(chain-id: chain-id, name: stream-name, index: u32) -> list<u8>;
@@ -98,6 +98,7 @@ interface contract-runtime-api {
         contract-blob-hash: crypto-hash,
         service-blob-hash: crypto-hash,
         vm-runtime: vm-runtime,
+        formats-blob-hash: option<crypto-hash>,
     }
 
     record resources {
@@ -114,7 +115,6 @@ interface contract-runtime-api {
         blob-bytes-to-publish: u32,
         messages: u32,
         message-size: u32,
-        storage-size-delta: u32,
         service-as-oracle-queries: u32,
         http-requests: u32,
     }

@@ -38,7 +38,7 @@ defineProps<{blocks: ConfirmedBlock[]}>()
           </td>
           <td>{{ b.status }}</td>
           <td>{{ getIncomingBundles(b.block.body.transactionMetadata).length }}</td>
-          <td>{{ b.block.body.messages.length }}</td>
+          <td>{{ b.block.body.messages.flat().length }}</td>
           <td>{{ getOperations(b.block.body.transactionMetadata).length }}</td>
           <td>{{ b.block.body.events.flat().length }}</td>
           <td>{{ b.block.body.oracleResponses.flat().length }}</td>

@@ -82,12 +82,9 @@ pub struct SystemExecutionStateView<C> {
     pub epoch: RegisterView<C, Epoch>,
     /// The admin of the chain.
     pub admin_chain_id: RegisterView<C, Option<ChainId>>,
-    /// The blob hashes of the committees we trust, indexed by epoch number.
-    // Not using a `MapView` because the set of active committees is supposed to be
-    // small. Plus, currently, we would create the `BTreeMap` anyway in various places
-    // (e.g. the `OpenChain` operation). The actual committees live in the blob store
-    // and are cached process-wide via `SharedCommittees`.
-    pub committees: RegisterView<C, BTreeMap<Epoch, CryptoHash>>,
+    /// The blob hash of the committee that is allowed to sign the next block on this chain.
+    /// `None` until the chain is initialized.
+    pub committee_hash: RegisterView<C, Option<CryptoHash>>,
     /// Ownership of the chain.
     pub ownership: LazyRegisterView<C, ChainOwnership>,
     /// Balance of the chain. (Available to any user able to create blocks in the chain.)
@@ -121,7 +118,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             description: self.description.with_context(ctx.clone()).await,
             epoch: self.epoch.with_context(ctx.clone()).await,
             admin_chain_id: self.admin_chain_id.with_context(ctx.clone()).await,
-            committees: self.committees.with_context(ctx.clone()).await,
+            committee_hash: self.committee_hash.with_context(ctx.clone()).await,
             ownership: self.ownership.with_context(ctx.clone()).await,
             balance: self.balance.with_context(ctx.clone()).await,
             balances: self.balances.with_context(ctx.clone()).await,
@@ -182,18 +179,11 @@ pub struct OpenChainConfig {
 impl OpenChainConfig {
     /// Creates an [`InitialChainConfig`] based on this [`OpenChainConfig`] and additional
     /// parameters.
-    pub fn init_chain_config(
-        &self,
-        epoch: Epoch,
-        min_active_epoch: Epoch,
-        max_active_epoch: Epoch,
-    ) -> InitialChainConfig {
+    pub fn init_chain_config(&self, epoch: Epoch) -> InitialChainConfig {
         InitialChainConfig {
             application_permissions: self.application_permissions.clone(),
             balance: self.balance,
             epoch,
-            min_active_epoch,
-            max_active_epoch,
             ownership: self.ownership.clone(),
         }
     }
@@ -267,8 +257,6 @@ pub enum SystemOperation {
     Admin(AdminOperation),
     /// Processes an event about a new epoch and committee.
     ProcessNewEpoch(Epoch),
-    /// Processes an event about a removed epoch and committee.
-    ProcessRemovedEpoch(Epoch),
     /// Updates the event stream trackers.
     UpdateStream {
         application_id: ApplicationId,
@@ -287,9 +275,8 @@ pub enum AdminOperation {
     /// Registers a new committee. Other chains can then migrate to the new epoch by executing
     /// [`SystemOperation::ProcessNewEpoch`].
     CreateCommittee { epoch: Epoch, blob_hash: CryptoHash },
-    /// Removes a committee. Other chains should execute [`SystemOperation::ProcessRemovedEpoch`],
-    /// so that blocks from the retired epoch will not be accepted until they are followed (hence
-    /// re-certified) by a block certified by a recent committee.
+    /// Removes a committee. Blocks signed by this committee will only be accepted once they
+    /// have been followed (hence re-certified) by a block certified by a recent committee.
     RemoveCommittee { epoch: Epoch },
 }
 
@@ -342,18 +329,17 @@ where
     pub async fn is_active(&self) -> Result<bool, ViewError> {
         Ok(self.description.get().await?.is_some()
             && self.ownership.get().await?.is_active()
-            && self.committees.get().contains_key(self.epoch.get())
             && self.admin_chain_id.get().is_some())
     }
 
-    /// Returns the current committee, if any.
+    /// Returns the current committee, if the chain has been initialized.
     pub async fn current_committee(
         &self,
     ) -> Result<Option<(Epoch, Arc<Committee>)>, ExecutionError> {
-        let epoch = *self.epoch.get();
-        let Some(&hash) = self.committees.get().get(&epoch) else {
+        let Some(hash) = *self.committee_hash.get() else {
             return Ok(None);
         };
+        let epoch = *self.epoch.get();
         let committee = self
             .context()
             .extra()
@@ -464,28 +450,29 @@ where
                             .get_or_load_committee_by_hash(blob_hash)
                             .await?;
                         self.blob_used(txn_tracker, blob_id).await?;
-                        self.committees.get_mut().insert(epoch, blob_hash);
+                        self.committee_hash.set(Some(blob_hash));
                         self.epoch.set(epoch);
                         let event_data = EpochEventData {
                             blob_hash,
                             timestamp: context.timestamp,
                         };
-                        txn_tracker.add_event(
-                            StreamId::system(EPOCH_STREAM_NAME),
-                            epoch.0,
-                            bcs::to_bytes(&event_data)?,
-                        );
+                        let stream_id = StreamId::system(EPOCH_STREAM_NAME);
+                        let next_index = epoch.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                        self.stream_event_counts.insert(&stream_id, next_index)?;
+                        txn_tracker.add_event(stream_id, epoch.0, bcs::to_bytes(&event_data)?);
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
+                        let stream_id = StreamId::system(REMOVED_EPOCH_STREAM_NAME);
+                        let count = self.stream_event_counts.get(&stream_id).await?.unwrap_or(0);
+                        // Revocations must happen in increasing epoch order, so the stream's
+                        // indices stay sequential.
                         ensure!(
-                            self.committees.get_mut().remove(&epoch).is_some(),
+                            count == epoch.0 && epoch < *self.epoch.get(),
                             ExecutionError::InvalidCommitteeRemoval
                         );
-                        txn_tracker.add_event(
-                            StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                            epoch.0,
-                            vec![],
-                        );
+                        let next_index = epoch.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                        self.stream_event_counts.insert(&stream_id, next_index)?;
+                        txn_tracker.add_event(stream_id, epoch.0, vec![]);
                     }
                 }
             }
@@ -552,31 +539,8 @@ where
                     .get_or_load_committee_by_hash(event_data.blob_hash)
                     .await?;
                 self.blob_used(txn_tracker, blob_id).await?;
-                self.committees
-                    .get_mut()
-                    .insert(epoch, event_data.blob_hash);
+                self.committee_hash.set(Some(event_data.blob_hash));
                 self.epoch.set(epoch);
-            }
-            ProcessRemovedEpoch(epoch) => {
-                ensure!(
-                    self.committees.get_mut().remove(&epoch).is_some(),
-                    ExecutionError::InvalidCommitteeRemoval
-                );
-                let admin_chain_id = self
-                    .admin_chain_id
-                    .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
-                let event_id = EventId {
-                    chain_id: admin_chain_id,
-                    stream_id: StreamId::system(REMOVED_EPOCH_STREAM_NAME),
-                    index: epoch.0,
-                };
-                txn_tracker
-                    .oracle(|| async {
-                        let bytes = self.get_event(event_id.clone()).await?;
-                        Ok(OracleResponse::Event(event_id, Arc::unwrap_or_clone(bytes)))
-                    })
-                    .await?;
             }
             UpdateStream {
                 application_id,
@@ -895,19 +859,19 @@ where
             ownership,
             epoch,
             balance,
-            min_active_epoch,
-            max_active_epoch,
             application_permissions,
         } = description.config().clone();
         self.timestamp.set(description.timestamp());
         self.description.set(Some(description));
         self.epoch.set(epoch);
 
-        let committees = self
+        let committee_hash = *self
             .context()
             .extra()
-            .get_committee_hashes(min_active_epoch..=max_active_epoch)
-            .await?;
+            .get_committee_hashes(epoch..=epoch)
+            .await?
+            .get(&epoch)
+            .expect("get_committee_hashes returns the requested epoch on success");
         let admin_chain_id = self
             .context()
             .extra()
@@ -916,7 +880,7 @@ where
             .ok_or(ExecutionError::NoNetworkDescriptionFound)?
             .admin_chain_id;
 
-        self.committees.set(committees);
+        self.committee_hash.set(Some(committee_hash));
         self.admin_chain_id.set(Some(admin_chain_id));
         self.ownership.set(ownership);
         self.balance.set(balance);
@@ -955,12 +919,7 @@ where
             block_height,
             chain_index,
         };
-        let committees = self.committees.get();
-        let init_chain_config = config.init_chain_config(
-            *self.epoch.get(),
-            committees.keys().min().copied().unwrap_or(Epoch::ZERO),
-            committees.keys().max().copied().unwrap_or(Epoch::ZERO),
-        );
+        let init_chain_config = config.init_chain_config(*self.epoch.get());
         let chain_description = ChainDescription::new(chain_origin, init_chain_config, timestamp);
         let child_id = chain_description.id();
         self.debit(&AccountOwner::CHAIN, config.balance).await?;

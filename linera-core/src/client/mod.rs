@@ -12,7 +12,7 @@ use std::{
 use custom_debug_derive::Debug;
 use futures::{
     future::Future,
-    stream::{self, AbortHandle, FuturesUnordered, StreamExt},
+    stream::{self, AbortHandle, FuturesOrdered, FuturesUnordered, StreamExt},
 };
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
@@ -39,7 +39,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, ExecutionError};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use rand::seq::SliceRandom;
 use received_log::ReceivedLogs;
@@ -131,6 +131,7 @@ pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
+pub static DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS: usize = 1;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TimingType {
@@ -252,7 +253,7 @@ pub struct Client<Env: Environment> {
     /// tracking.
     pub local_node: LocalNodeClient<Env::Storage>,
     /// Manages the requests sent to validator nodes.
-    requests_scheduler: RequestsScheduler<Env>,
+    requests_scheduler: Arc<RequestsScheduler<Env>>,
     /// The admin chain ID.
     admin_chain_id: ChainId,
     /// Chains that should be tracked by the client, along with their listening mode.
@@ -289,7 +290,6 @@ impl<Env: Environment> Client<Env> {
             nickname: name.into(),
             long_lived_services,
             allow_inactive_chains: true,
-            allow_messages_from_deprecated_epochs: true,
             ttl: chain_worker_ttl,
             sender_chain_ttl: sender_chain_worker_ttl,
             block_cache_size,
@@ -303,7 +303,8 @@ impl<Env: Environment> Client<Env> {
             Some(chain_modes.clone()),
         );
         let local_node = LocalNodeClient::new(state);
-        let requests_scheduler = RequestsScheduler::new(vec![], requests_scheduler_config);
+        let requests_scheduler =
+            Arc::new(RequestsScheduler::new(vec![], requests_scheduler_config));
 
         Self {
             environment,
@@ -599,18 +600,67 @@ impl<Env: Environment> Client<Env> {
             .load_local_certificates(chain_id, stop, until_block_time)
             .await?;
         let mut next_height = last_info.next_block_height;
-        // Now download the rest in batches from the remote node.
-        while next_height < stop {
-            // TODO(#2045): Analyze network errors instead of using a fixed batch size.
-            let limit = u64::from(stop)
-                .checked_sub(u64::from(next_height))
-                .ok_or(ArithmeticError::Overflow)?
-                .min(self.options.certificate_download_batch_size);
 
-            let certificates = self
-                .requests_scheduler
-                .download_certificates(remote_node, chain_id, next_height, limit)
-                .await?;
+        if next_height >= stop {
+            return Ok(last_info);
+        }
+
+        // Download remaining certificates from the remote node using a pipelined
+        // sliding window. A background task downloads up to `max_concurrent_batch_downloads`
+        // batches concurrently and sends them through a channel for sequential processing.
+        #[cfg(not(web))]
+        type CertificateBatchFuture = std::pin::Pin<
+            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>> + Send>,
+        >;
+        #[cfg(web)]
+        type CertificateBatchFuture = std::pin::Pin<
+            Box<dyn Future<Output = Result<Vec<ConfirmedBlockCertificate>, NodeError>>>,
+        >;
+
+        let max_concurrent = self.options.max_concurrent_batch_downloads;
+        let batch_size = self.options.certificate_download_batch_size;
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(max_concurrent);
+        let scheduler = self.requests_scheduler.clone();
+        let remote = remote_node.clone();
+
+        let download_task = linera_base::Task::spawn(async move {
+            let mut download_height = next_height;
+            let mut in_flight = FuturesOrdered::<CertificateBatchFuture>::new();
+
+            let try_enqueue = |in_flight: &mut FuturesOrdered<CertificateBatchFuture>,
+                               download_height: &mut BlockHeight| {
+                if *download_height >= stop {
+                    return;
+                }
+                let limit = u64::from(stop)
+                    .saturating_sub(u64::from(*download_height))
+                    .min(batch_size);
+                let height = *download_height;
+                let scheduler = scheduler.clone();
+                let remote = remote.clone();
+                in_flight.push_back(Box::pin(async move {
+                    scheduler
+                        .download_certificates(&remote, chain_id, height, limit)
+                        .await
+                }));
+                *download_height = BlockHeight(u64::from(*download_height) + limit);
+            };
+
+            while in_flight.len() < max_concurrent && download_height < stop {
+                try_enqueue(&mut in_flight, &mut download_height);
+            }
+
+            while let Some(result) = in_flight.next().await {
+                if sender.send(result).await.is_err() {
+                    break;
+                }
+                try_enqueue(&mut in_flight, &mut download_height);
+            }
+        });
+
+        // Process downloaded batches sequentially.
+        while let Some(result) = receiver.recv().await {
+            let certificates = result?;
             let Some(info) = self
                 .process_certificates(slice::from_ref(remote_node), certificates, until_block_time)
                 .await?
@@ -621,6 +671,9 @@ impl<Env: Environment> Client<Env> {
             next_height = info.next_block_height;
             last_info = info;
         }
+        // Await the downloader so any panic inside the spawned task surfaces here
+        // instead of being silently swallowed when the channel closes.
+        download_task.await;
         Ok(last_info)
     }
 
@@ -650,8 +703,6 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let mut validators = self.validator_nodes().await?;
         let timeout = self.options.certificate_batch_download_timeout;
-        let (max_epoch, committees) = self.admin_committees().await?;
-        let committees_ref = &committees;
         let mut remaining_event_ids = event_ids.to_vec();
 
         while !remaining_event_ids.is_empty() {
@@ -721,7 +772,8 @@ impl<Env: Environment> Client<Env> {
                                 }
                             }
                             for cert in certificates {
-                                Self::check_certificate(max_epoch, committees_ref, &cert)
+                                self.check_certificate(&cert)
+                                    .await
                                     .map_err(|error| {
                                         tracing::debug!(
                                             %validator_address, %error,
@@ -845,48 +897,11 @@ impl<Env: Environment> Client<Env> {
             .await
     }
 
-    async fn chain_info_with_committees(
-        &self,
-        chain_id: ChainId,
-    ) -> Result<Box<ChainInfo>, LocalNodeError> {
-        let query = ChainInfoQuery::new(chain_id).with_committees();
-        let info = self.local_node.handle_chain_info_query(query).await?.info;
-        Ok(info)
-    }
-
-    /// Obtains all the committees trusted by any of the given chains. Also returns the highest
-    /// of their epochs.
-    #[instrument(level = "trace", skip_all)]
-    async fn admin_committees(
-        &self,
-    ) -> Result<(Epoch, BTreeMap<Epoch, Arc<Committee>>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
-        let hashes = info
-            .requested_committees
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?;
-        let committees =
-            futures::future::try_join_all(hashes.into_iter().map(|(epoch, hash)| async move {
-                let committee = self
-                    .storage_client()
-                    .get_or_load_committee_by_hash(hash)
-                    .await?;
-                Ok::<_, LocalNodeError>((epoch, committee))
-            }))
-            .await?
-            .into_iter()
-            .collect();
-        Ok((info.epoch, committees))
-    }
-
     /// Obtains the committee for the latest epoch on the admin chain.
     pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
+        let info = self.local_node.chain_info(self.admin_chain_id).await?;
         let hash = info
-            .requested_committees
-            .as_ref()
-            .ok_or(LocalNodeError::InvalidChainInfoResponse)?
-            .get(&info.epoch)
-            .copied()
+            .committee_hash
             .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
         let committee = self
             .storage_client()
@@ -1172,9 +1187,8 @@ impl<Env: Environment> Client<Env> {
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), chain_client::Error> {
         // Verify the certificate before doing any expensive networking.
-        let (max_epoch, committees) = self.admin_committees().await?;
         if let ReceiveCertificateMode::NeedsCheck = mode {
-            Self::check_certificate(max_epoch, &committees, &certificate)?.into_result()?;
+            self.check_certificate(&certificate).await?.into_result()?;
         }
         // Recover history from the network.
         let nodes = if let Some(nodes) = nodes {
@@ -1210,14 +1224,6 @@ impl<Env: Environment> Client<Env> {
         mut remote_heights: Vec<BlockHeight>,
         sender: mpsc::UnboundedSender<ChainAndHeight>,
     ) {
-        let (max_epoch, committees) = match self.admin_committees().await {
-            Ok(result) => result,
-            Err(error) => {
-                error!(%error, %sender_chain_id, "could not read admin committees");
-                return;
-            }
-        };
-        let committees_ref = &committees;
         let mut nodes = nodes.to_vec();
         while !remote_heights.is_empty() {
             // Check local storage first — certificates may already be available from
@@ -1276,8 +1282,7 @@ impl<Env: Environment> Client<Env> {
                         .await?;
                     let mut certificates_with_check_results = vec![];
                     for cert in certificates {
-                        let check_result =
-                            Self::check_certificate(max_epoch, committees_ref, &cert)?;
+                        let check_result = self.check_certificate(&cert).await?;
                         certificates_with_check_results
                             .push((cert, check_result.into_result().is_ok()));
                     }
@@ -1412,7 +1417,6 @@ impl<Env: Environment> Client<Env> {
             .get(&sender_chain_id)
             .copied()
             .unwrap_or(BlockHeight::ZERO);
-        let (max_epoch, committees) = self.admin_committees().await?;
 
         // Recursively collect all certificates we need, following
         // the chain of previous_message_blocks back to next_outbox_height.
@@ -1451,8 +1455,7 @@ impl<Env: Environment> Client<Env> {
             };
 
             // Validate the certificate.
-            Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
-                .into_result()?;
+            self.check_certificate(&certificate).await?.into_result()?;
 
             // Check if there's a previous message block to our chain.
             let block = certificate.block();
@@ -1507,7 +1510,6 @@ impl<Env: Environment> Client<Env> {
         if initial_blocks.is_empty() {
             return Ok(());
         }
-        let (max_epoch, committees) = self.admin_committees().await?;
 
         let mut certificates = BTreeMap::new();
         let mut blocks_to_fetch = initial_blocks;
@@ -1546,8 +1548,7 @@ impl<Env: Environment> Client<Env> {
                     continue;
                 };
 
-                Client::<Env>::check_certificate(max_epoch, &committees, &certificate)?
-                    .into_result()?;
+                self.check_certificate(&certificate).await?.into_result()?;
 
                 self.storage_client().cache_certificate(certificate)
             };
@@ -1627,25 +1628,23 @@ impl<Env: Environment> Client<Env> {
         level = "trace", skip_all,
         fields(certificate_hash = ?incoming_certificate.hash()),
     )]
-    fn check_certificate(
-        highest_known_epoch: Epoch,
-        committees: &BTreeMap<Epoch, Arc<Committee>>,
+    async fn check_certificate(
+        &self,
         incoming_certificate: &ConfirmedBlockCertificate,
     ) -> Result<CheckCertificateResult, NodeError> {
-        let block = incoming_certificate.block();
-        // Check that certificates are valid w.r.t one of our trusted committees.
-        if block.header.epoch > highest_known_epoch {
+        let epoch = incoming_certificate.block().header.epoch;
+        let storage = self.storage_client();
+        let view_err = |error: ExecutionError| NodeError::ViewError {
+            error: error.to_string(),
+        };
+        if storage.is_epoch_revoked(epoch).await.map_err(view_err)? {
+            return Ok(CheckCertificateResult::OldEpoch);
+        }
+        let Some(committee) = storage.committee_for_epoch(epoch).await.map_err(view_err)? else {
             return Ok(CheckCertificateResult::FutureEpoch);
-        }
-        if let Some(known_committee) = committees.get(&block.header.epoch) {
-            // This epoch is recognized by our chain. Let's verify the
-            // certificate.
-            incoming_certificate.check(known_committee)?;
-            Ok(CheckCertificateResult::New)
-        } else {
-            // We don't accept a certificate from a committee that was retired.
-            Ok(CheckCertificateResult::OldEpoch)
-        }
+        };
+        incoming_certificate.check(&committee)?;
+        Ok(CheckCertificateResult::New)
     }
 
     /// Downloads and processes any certificates we are missing for the given chain.
@@ -2080,29 +2079,37 @@ enum ReceiveCertificateMode {
 }
 
 enum CheckCertificateResult {
+    /// The certificate's epoch has been revoked on the admin chain.
     OldEpoch,
-    New,
+    /// The committee for the certificate's epoch is unknown to us yet, e.g. because
+    /// our local view of the admin chain is behind.
     FutureEpoch,
+    New,
 }
 
 impl CheckCertificateResult {
     fn into_result(self) -> Result<(), chain_client::Error> {
         match self {
             Self::OldEpoch => Err(chain_client::Error::CommitteeDeprecationError),
-            Self::New => Ok(()),
             Self::FutureEpoch => Err(chain_client::Error::CommitteeSynchronizationError),
+            Self::New => Ok(()),
         }
     }
 }
 
-/// Creates a compressed Contract, Service and bytecode.
+/// Creates a compressed Contract, Service and bytecode, plus an optional
+/// `ApplicationFormats` blob built from the JSON-encoded `Formats` description
+/// bytes.
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn create_bytecode_blobs(
     contract: Bytecode,
     service: Bytecode,
     vm_runtime: VmRuntime,
+    formats: Option<Vec<u8>>,
 ) -> (Vec<Blob>, ModuleId) {
-    match vm_runtime {
+    let formats_blob = formats.map(Blob::new_application_formats);
+    let formats_blob_hash = formats_blob.as_ref().map(|blob| blob.id().hash);
+    let (mut blobs, module_id) = match vm_runtime {
         VmRuntime::Wasm => {
             let (compressed_contract, compressed_service) =
                 tokio::task::spawn_blocking(move || (contract.compress(), service.compress()))
@@ -2110,19 +2117,28 @@ pub async fn create_bytecode_blobs(
                     .expect("Compression should not panic");
             let contract_blob = Blob::new_contract_bytecode(compressed_contract);
             let service_blob = Blob::new_service_bytecode(compressed_service);
-            let module_id =
-                ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+            let module_id = ModuleId::new_with_formats(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                vm_runtime,
+                formats_blob_hash,
+            );
             (vec![contract_blob, service_blob], module_id)
         }
         VmRuntime::Evm => {
             let compressed_contract = contract.compress();
             let evm_contract_blob = Blob::new_evm_bytecode(compressed_contract);
-            let module_id = ModuleId::new(
+            let module_id = ModuleId::new_with_formats(
                 evm_contract_blob.id().hash,
                 evm_contract_blob.id().hash,
                 vm_runtime,
+                formats_blob_hash,
             );
             (vec![evm_contract_blob], module_id)
         }
+    };
+    if let Some(blob) = formats_blob {
+        blobs.push(blob);
     }
+    (blobs, module_id)
 }

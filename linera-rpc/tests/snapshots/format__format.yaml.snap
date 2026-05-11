@@ -134,6 +134,8 @@ BlobType:
       Committee: UNIT
     6:
       ChainDescription: UNIT
+    7:
+      ApplicationFormats: UNIT
 Block:
   STRUCT:
     - header:
@@ -313,13 +315,9 @@ ChainInfo:
     - requested_owner_balance:
         OPTION:
           TYPENAME: Amount
-    - requested_committees:
+    - committee_hash:
         OPTION:
-          MAP:
-            KEY:
-              TYPENAME: Epoch
-            VALUE:
-              TYPENAME: CryptoHash
+          TYPENAME: CryptoHash
     - requested_pending_message_bundles:
         SEQ:
           TYPENAME: IncomingBundle
@@ -347,7 +345,6 @@ ChainInfoQuery:
           TYPENAME: BlockHeight
     - request_owner_balance:
         TYPENAME: AccountOwner
-    - request_committees: BOOL
     - request_pending_message_bundles: BOOL
     - request_received_log_excluding_first_n:
         OPTION: U64
@@ -576,10 +573,6 @@ InitialChainConfig:
         TYPENAME: ChainOwnership
     - epoch:
         TYPENAME: Epoch
-    - min_active_epoch:
-        TYPENAME: Epoch
-    - max_active_epoch:
-        TYPENAME: Epoch
     - balance:
         TYPENAME: Amount
     - application_permissions:
@@ -669,6 +662,9 @@ ModuleId:
         TYPENAME: CryptoHash
     - vm_runtime:
         TYPENAME: VmRuntime
+    - formats_blob_hash:
+        OPTION:
+          TYPENAME: CryptoHash
 NetworkDescription:
   STRUCT:
     - name: STR
@@ -1308,10 +1304,6 @@ SystemOperation:
         NEWTYPE:
           TYPENAME: Epoch
     12:
-      ProcessRemovedEpoch:
-        NEWTYPE:
-          TYPENAME: Epoch
-    13:
       UpdateStream:
         STRUCT:
           - application_id:

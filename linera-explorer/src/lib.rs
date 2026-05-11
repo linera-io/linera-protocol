@@ -6,6 +6,7 @@
 #![recursion_limit = "256"]
 
 mod entrypoint;
+mod formats;
 mod graphql;
 mod input_type;
 mod js_utils;
@@ -900,6 +901,229 @@ pub async fn start(app: JsValue) {
                 },
             };
             route_aux(&app, &data, &path, &args, true).await;
+        }
+    }
+}
+
+/// Looks up the optional `formats_blob_hash` for an application by reading its
+/// `ApplicationDescription.module_id` on the active chain. Returns `Ok(None)`
+/// if the application does not exist on that chain or has no formats blob hash
+/// registered (i.e. the module was published without `--formats`).
+async fn application_formats_blob_hash(
+    node: &str,
+    chain_id: ChainId,
+    application_id: &str,
+) -> Result<Option<String>> {
+    let apps = get_applications(node, chain_id).await?;
+    let Some(app) = apps.into_iter().find(|a| a.id == application_id) else {
+        return Ok(None);
+    };
+    let description: Value = serde_json::to_value(&app.description)
+        .context("application description is not JSON-serializable")?;
+    // `linera-explorer` runs on `wasm32` and the GraphQL client substitutes
+    // `ApplicationDescription` for `serde_json::Value`. The `module_id` field
+    // serializes as a hex string when human-readable; decode it back into a
+    // `ModuleId` so we can read its optional `formats_blob_hash`.
+    let module_id_hex = description
+        .get("module_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow!("application description has no module_id field"))?;
+    let module_id: linera_base::identifiers::ModuleId =
+        serde_json::from_value(Value::String(module_id_hex.to_owned()))
+            .context("failed to deserialize module_id as ModuleId")?;
+    Ok(module_id.formats_blob_hash.map(|hash| hash.to_string()))
+}
+
+/// Fetch the registered `Formats` for a deployed application via its module's
+/// `formats_blob_hash`. Returns `None` when the app has no formats blob hash
+/// in its module id, or the local node has no such blob. All failures are
+/// logged to the JS console with the caller's `op` label so the explorer
+/// never throws into Vue.
+async fn fetch_user_app_formats(
+    op: &str,
+    app: JsValue,
+    application_id: &str,
+) -> Option<formats::Formats> {
+    let data = match from_value::<Data>(app) {
+        Ok(d) => d,
+        Err(e) => {
+            log_str(&format!("{op}: cannot parse vue data: {e}"));
+            return None;
+        }
+    };
+    let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
+    log_str(&format!(
+        "{op}: looking up formats blob hash for app {application_id} on chain {} (node={node})",
+        data.chain
+    ));
+    let formats_blob_hash_hex =
+        match application_formats_blob_hash(&node, data.chain, application_id).await {
+            Ok(Some(hash)) => {
+                log_str(&format!("{op}: resolved formats_blob_hash={hash}"));
+                hash
+            }
+            Ok(None) => {
+                log_str(&format!(
+                    "{op}: application {application_id} has no formats blob hash"
+                ));
+                return None;
+            }
+            Err(e) => {
+                log_str(&format!("{op}: failed to resolve formats_blob_hash: {e}"));
+                return None;
+            }
+        };
+    match formats::fetch_formats(&node, &data.chain.to_string(), &formats_blob_hash_hex).await {
+        Ok(Some(f)) => {
+            log_str(&format!("{op}: node returned formats"));
+            Some(f)
+        }
+        Ok(None) => {
+            log_str(&format!(
+                "{op}: node has no formats blob with hash {formats_blob_hash_hex}"
+            ));
+            None
+        }
+        Err(e) => {
+            log_str(&format!("{op}: formats query failed: {e}"));
+            None
+        }
+    }
+}
+
+/// Run a `Formats::decode_*` method against `bytes_hex`, returning a JS value or
+/// `JsValue::NULL` if anything in the pipeline fails. Errors are logged with
+/// the `op` label.
+async fn decode_user_bytes(
+    op: &str,
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+    decode: fn(&formats::Formats, &[u8]) -> linera_sdk::bcs::Result<Value>,
+) -> JsValue {
+    let bytes = match hex::decode(&bytes_hex) {
+        Ok(b) => b,
+        Err(e) => {
+            log_str(&format!("{op}: invalid hex: {e}"));
+            return JsValue::NULL;
+        }
+    };
+    let Some(formats) = fetch_user_app_formats(op, app, &application_id).await else {
+        return JsValue::NULL;
+    };
+    match decode(&formats, &bytes) {
+        Ok(value) => value.serialize(&SER).unwrap_or(JsValue::NULL),
+        Err(e) => {
+            log_str(&format!("{op}: BCS decode failed: {e}"));
+            JsValue::NULL
+        }
+    }
+}
+
+/// Decode the bytes of a `User` operation against the formats blob registered
+/// for its module. Returns `JsValue::NULL` if the application has no formats
+/// blob hash, the node has no such blob, or decoding fails for any reason; in
+/// the failure case the error is also logged to the JS console.
+#[wasm_bindgen]
+pub async fn decode_user_operation(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_operation",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_operation,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application cross-chain message. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_message(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_message",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_message,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application operation response. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_response(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_response",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_response,
+    )
+    .await
+}
+
+/// Decode the bytes of a user-application event-stream value. See
+/// [`decode_user_operation`] for behaviour and error semantics.
+#[wasm_bindgen]
+pub async fn decode_user_event_value(
+    app: JsValue,
+    application_id: String,
+    bytes_hex: String,
+) -> JsValue {
+    decode_user_bytes(
+        "decode_user_event_value",
+        app,
+        application_id,
+        bytes_hex,
+        formats::Formats::decode_event_value,
+    )
+    .await
+}
+
+/// Fetch the registered `Formats` for a deployed application and return them
+/// as a JS object, or `JsValue::NULL` if no entry is available (no formats
+/// blob hash on the module, or the local node has no such blob).
+#[wasm_bindgen]
+pub async fn fetch_user_app_formats_js(app: JsValue, application_id: String) -> JsValue {
+    let Some(formats) =
+        fetch_user_app_formats("fetch_user_app_formats_js", app, &application_id).await
+    else {
+        return JsValue::NULL;
+    };
+    // `Formats` contains maps keyed by enum-variant indices (`u32`), which the
+    // `serde_wasm_bindgen` "maps as objects" path cannot serialize ("Map key is
+    // not a string and cannot be an object key"). Round-trip through a JSON
+    // string instead — `JSON.parse` produces a plain JS object with all keys
+    // coerced to strings, which is what the UI consumes anyway.
+    match serde_json::to_string(&formats) {
+        Ok(s) => match js_sys::JSON::parse(&s) {
+            Ok(v) => v,
+            Err(e) => {
+                log_str(&format!(
+                    "fetch_user_app_formats_js: JSON.parse failed for {application_id}: {e:?}"
+                ));
+                JsValue::NULL
+            }
+        },
+        Err(e) => {
+            log_str(&format!(
+                "fetch_user_app_formats_js: serde_json::to_string failed for {application_id}: {e}"
+            ));
+            JsValue::NULL
         }
     }
 }

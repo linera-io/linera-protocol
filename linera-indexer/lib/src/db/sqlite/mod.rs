@@ -278,7 +278,6 @@ impl SqliteDatabase {
                     SystemOperation::PublishDataBlob { .. } => "PublishDataBlob",
                     SystemOperation::Admin(_) => "Admin",
                     SystemOperation::ProcessNewEpoch(_) => "ProcessNewEpoch",
-                    SystemOperation::ProcessRemovedEpoch(_) => "ProcessRemovedEpoch",
                     SystemOperation::UpdateStream { .. } => "UpdateStream",
                     SystemOperation::ChangeOwnership { .. } => "ChangeOwnership",
                     SystemOperation::VerifyBlob { .. } => "VerifyBlob",

@@ -104,140 +104,70 @@ make demo-logs   # tail relay logs
 make down        # stop everything and remove volumes
 ```
 
-## Testnet / direct mode
+## Spawn just the relayer (against an external network)
 
-For real network deployments, run everything directly on the host instead of
-through Docker.
+When you already have contracts deployed on a real EVM (e.g. Base Sepolia)
+and apps published on a real Linera network (e.g. testnet Conway), and you
+just want to run the relayer locally pointing at those artifacts, use
+`spawn-relayer.sh`. It does **not** deploy or register anything — operator
+supplies a pre-built env file and a pre-populated data directory.
 
-### Prerequisites
-
-- [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`, `cast`)
-- `linera` CLI (built from this repo or installed)
-- `linera-bridge` CLI: `cargo build -p linera-bridge --features relay`
-- pnpm (for the frontend)
-- A funded EVM account (private key with ETH for gas)
-- An EVM RPC endpoint (e.g. Base Sepolia)
-- A running Linera testnet with faucet
-
-### 1. Build the Wasm binaries
-
-From the `linera-bridge/` directory:
-
-```bash
-make build-wasm
-```
-
-This compiles `fungible`, `wrapped-fungible`, and `evm-bridge` to
-`examples/target/wasm32-unknown-unknown/release/`.
-
-### 2. Initialize wallet and claim a bridge chain
-
-```bash
-export FAUCET_URL=https://faucet.testnet-conway.linera.net
-
-# Initialize a Linera wallet from the faucet
-linera wallet init --faucet "$FAUCET_URL"
-
-# Claim a chain that the relay will use as the "bridge chain"
-linera wallet request-chain --faucet "$FAUCET_URL"
-```
-
-Note the **chain ID** and **owner** printed by `request-chain` — you'll need
-them for both the setup script and the relay.
-
-### 3. Deploy contracts
-
-Pick a shared directory for coordination files between the setup script and
-the relay:
-
-```bash
-export SHARED_DIR="/tmp/bridge-demo-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$SHARED_DIR"
-```
-
-Run the setup script to deploy EVM contracts and Linera apps:
+For full local development (anvil + local validator + frontend) use
+`make demo` from `linera-bridge/` instead — that's what `setup.sh` is for.
 
 ```bash
 cd examples/bridge-demo
-
-./setup.sh \
-  --evm-rpc-url https://base-sepolia.g.alchemy.com/v2/YOUR_KEY \
-  --evm-private-key 0x... \
-  --evm-chain-id 84532 \
-  --linera-bridge-chain-id <CHAIN_ID> \
-  --relay-owner <OWNER> \
-  --faucet-url "$FAUCET_URL" \
-  --linera-wallet ~/.config/linera/wallet.json \
-  --linera-keystore ~/.config/linera/keystore.json \
-  --linera-storage rocksdb:~/.config/linera/client.db \
-  --shared-dir "$SHARED_DIR"
+./spawn-relayer.sh \
+  --env-file /path/to/relayer.env \
+  --env-secret-file /path/to/relayer.env.secret \
+  --data-dir /path/to/wallet-host-dir
 ```
 
-The setup script:
-1. Fetches validator info and deploys the **LightClient** contract
-2. Deploys a **MockERC20** token (or pass `--token-address` to use an existing one)
-3. Publishes **wrapped-fungible** and **evm-bridge** apps on the bridge chain
-4. Deploys the **FungibleBridge** contract (referencing LightClient + apps)
-5. Funds the bridge with ERC-20 tokens
-6. Writes contract/app addresses to `$SHARED_DIR` (relay picks them up) and
-   `.env.local` (frontend reads them)
+Internally this is `docker compose -f docker/docker-compose.bridge-testnet.yml up -d relayer`
+with the env-file + data-dir paths injected via `RELAYER_ENV_FILE`,
+`RELAYER_ENV_SECRET`, `RELAYER_DATA_DIR`.
 
-### 4. Start the relay
+The env file must contain the keys consumed by `bridge-entrypoint.sh`:
 
-The relay uses the same wallet, keystore, and storage as the `linera` CLI.
-By default it reads from `~/.config/linera/` — the same location `linera
-wallet init` writes to. You can override with `--wallet`, `--keystore`,
-`--storage` flags or `LINERA_WALLET`, `LINERA_KEYSTORE`, `LINERA_STORAGE`
-env vars.
-
-Pass the contract addresses and app IDs from the setup script output:
-
-```bash
-linera-bridge serve \
-  --rpc-url <evm-rpc> \
-  --faucet-url "$FAUCET_URL" \
-  --linera-bridge-chain-id <chain-id> \
-  --linera-bridge-address <bridge-app-id-on-linera> \
-  --linera-fungible-address <fungible-app-id-on-linera> \
-  --evm-bridge-address <bridge-contract-address-on-evm> \
-  --evm-private-key <relayer-private-key>
+```
+RPC_URL=https://sepolia.base.org
+FAUCET_URL=https://faucet.testnet-conway.linera.net
+EVM_BRIDGE_ADDRESS=0x...
+LINERA_BRIDGE_APP=...
+LINERA_FUNGIBLE_APP=...
+LINERA_BRIDGE_CHAIN_ID=...
+LINERA_BRIDGE_CHAIN_OWNER=...
+LINERA_WALLET=/data/wallet.json
+LINERA_KEYSTORE=/data/keystore.json
+LINERA_STORAGE=rocksdb:/data/client.db
+MONITOR_SCAN_INTERVAL=30
+MONITOR_START_BLOCK=0
+MAX_RETRIES=10
+PORT=3001
 ```
 
-On restart, run the same command — the relay loads persistent state from
-the wallet and storage, and syncs from validators to catch up.
+Plus `EVM_PRIVATE_KEY=0x...` in the secret env file.
 
-### 5. Start the frontend
+The data dir is bind-mounted at `/data` in the container and must already
+contain `wallet.json`, `keystore.json`, and `client.db` for a wallet that
+owns the bridge chain on the target Linera network.
 
-```bash
-pnpm install && pnpm dev
-```
+For a production testnet deployment runbook see
+[`docker/README.testnet.md`](../../docker/README.testnet.md).
 
-Open <http://localhost:5173>, connect MetaMask to your EVM network, and use
-the deposit/withdraw forms.
+### Setup script flags (Docker mode)
 
-### Setup script flags
-
-| Flag | Default (Docker) | Default (Direct) | Description |
-|------|-------------------|-------------------|-------------|
-| `--compose-file PATH` | -- | -- | Enables Docker mode |
-| `--evm-rpc-url URL` | `http://anvil:8545` | `http://localhost:8545` | EVM JSON-RPC endpoint |
-| `--evm-private-key KEY` | Anvil account 0 | **required** | Private key for EVM txs |
-| `--evm-chain-id ID` | 31337 | 31337 | EVM chain ID |
-| `--light-client-address ADDR` | read from `/shared/` | deployed if omitted | Skip LightClient deploy |
-| `--linera-bridge-chain-id ID` | polled from relay | **required** | Linera bridge chain (64 hex chars) |
-| `--token-address ADDR` | deployed | deployed | Skip MockERC20 deploy |
-| `--relay-owner OWNER` | read from `/shared/` | **required** | Relay's AccountOwner (minter) |
-| `--faucet-url URL` | `http://localhost:8080` | `http://localhost:8080` | Linera faucet |
-| `--relay-url URL` | `http://localhost:3001` | `http://localhost:3001` | Relay HTTP endpoint |
-| `--ticker-symbol SYM` | wTT | wTT | Wrapped token ticker |
-| `--fund-amount WEI` | 500e18 | 500e18 | Fund bridge with ERC-20; 0 to skip |
-| `--shared-dir PATH` | auto (`/tmp/bridge-demo-*`) | auto | Shared state directory for relay coordination |
-| `--wasm-dir PATH` | `/wasm` | `../../examples/target/wasm32-unknown-unknown/release` | Directory with `.wasm` binaries |
-| `--contracts-dir PATH` | `/contracts` | `../../linera-bridge/src/solidity` | Solidity source root |
-| `--output PATH` | `.env.local` | `.env.local` | Output env file |
-| `--linera-wallet PATH` | -- | auto (temp dir) | Path to existing Linera wallet.json |
-| `--linera-keystore PATH` | -- | auto (temp dir) | Path to existing Linera keystore.json |
-| `--linera-storage CONFIG` | -- | auto (temp dir) | Linera storage config (e.g. `rocksdb:path/to/db`) |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--compose-file PATH` | **required** | Docker Compose file |
+| `--faucet-url URL` | `http://localhost:8080` | Linera faucet |
+| `--relay-url URL` | `http://localhost:3001` | Relay HTTP endpoint |
+| `--ticker-symbol SYM` | wTT | Wrapped token ticker |
+| `--fund-amount WEI` | 500e18 | Fund bridge with ERC-20; 0 to skip |
+| `--shared-dir PATH` | auto (`/tmp/bridge-demo-*`) | Shared state directory for relay coordination |
+| `--wasm-dir PATH` | `/wasm` | Directory with `.wasm` binaries |
+| `--contracts-dir PATH` | `/contracts` | Solidity source root |
+| `--output PATH` | `.env.local` | Output env file |
 
 ## How a deposit works
 

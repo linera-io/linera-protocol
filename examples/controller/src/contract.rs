@@ -8,17 +8,16 @@ mod state;
 use std::collections::HashSet;
 
 use async_graphql::ComplexObject;
+use controller::Message;
 use linera_sdk::{
     abis::controller::{
         ControllerAbi, ControllerCommand, ManagedService, ManagedServiceId, Operation,
         PendingService, Worker, WorkerCommand,
     },
-    graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, BlockHeight, ChainId, WithContractAbi},
+    linera_base_types::{AccountOwner, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use serde::{Deserialize, Serialize};
 
 use self::state::ControllerState;
 
@@ -31,54 +30,6 @@ linera_sdk::contract!(ControllerContract);
 
 impl WithContractAbi for ControllerContract {
     type Abi = ControllerAbi;
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, GraphQLMutationRoot)]
-pub enum Message {
-    // -- Message to the controller chain --
-    ExecuteWorkerCommand {
-        owner: AccountOwner,
-        command: WorkerCommand,
-    },
-    ExecuteControllerCommand {
-        admin: AccountOwner,
-        command: ControllerCommand,
-    },
-    // -- Messages sent to the workers' control chains from the controller chain --
-    Reset,
-    Start {
-        service_id: ManagedServiceId,
-        owners_to_remove: HashSet<AccountOwner>,
-        start_height: Option<BlockHeight>,
-    },
-    Stop {
-        service_id: ManagedServiceId,
-        new_owners: HashSet<AccountOwner>,
-    },
-    FollowChain {
-        chain_id: ChainId,
-    },
-    ForgetChain {
-        chain_id: ChainId,
-    },
-    // -- Messages sent from the worker's control chain to a service chain --
-    AddOwners {
-        service_id: ManagedServiceId,
-        new_owners: HashSet<AccountOwner>,
-    },
-    RemoveOwners {
-        owners_to_remove: HashSet<AccountOwner>,
-    },
-    // -- Messages sent from a service chain to the worker's control chain --
-    OwnersAdded {
-        service_id: ManagedServiceId,
-        added_at: BlockHeight,
-    },
-    // -- Messages sent from the workers' control chains to the controller chain --
-    HandoffStarted {
-        service_id: ManagedServiceId,
-        target_block_height: BlockHeight,
-    },
 }
 
 impl Contract for ControllerContract {

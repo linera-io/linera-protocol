@@ -58,6 +58,14 @@ pub enum ViewError {
     /// The values are incoherent.
     #[error("post load values error")]
     PostLoadValuesError,
+
+    /// The operation requires the view to have no pending in-memory changes.
+    #[error("the view has pending in-memory changes; flush them before continuing")]
+    HasPendingChanges,
+
+    /// The canonical byte stream is malformed.
+    #[error("malformed canonical content stream: {0}")]
+    MalformedContent(&'static str),
 }
 
 impl ViewError {

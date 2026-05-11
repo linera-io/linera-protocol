@@ -59,7 +59,7 @@ impl Contract for CreateAndCallContract {
         let service_bytecode = Bytecode::new(service_bytes);
         let module_id =
             self.runtime
-                .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm);
+                .publish_module(contract_bytecode, service_bytecode, VmRuntime::Wasm, None);
 
         // Step 2: Create application with initialization value
         let application_id = self

@@ -988,14 +988,12 @@ where
 
     fn has_empty_storage(&mut self, application: ApplicationId) -> Result<bool, ExecutionError> {
         let this = self.inner();
-        let (key_size, value_size) = this
-            .execution_state_sender
-            .send_request(move |callback| ExecutionRequest::TotalStorageSize {
+        this.execution_state_sender
+            .send_request(move |callback| ExecutionRequest::HasEmptyStorage {
                 application,
                 callback,
             })?
-            .recv_response()?;
-        Ok(key_size + value_size == 0)
+            .recv_response()
     }
 
     fn maximum_blob_size(&mut self) -> Result<u64, ExecutionError> {
@@ -1680,9 +1678,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
     ) -> Result<ModuleId, ExecutionError> {
-        let (blobs, module_id) =
-            crate::runtime::create_bytecode_blobs_sync(&contract, &service, vm_runtime);
+        let (blobs, module_id) = crate::runtime::create_bytecode_blobs_sync(
+            &contract,
+            &service,
+            vm_runtime,
+            formats.as_deref(),
+        );
         let this = self.inner();
         for blob in blobs {
             this.execution_state_sender
@@ -1931,31 +1934,45 @@ impl From<&MessageContext> for ExecutingMessage {
     }
 }
 
-/// Creates a compressed contract and service bytecode synchronously.
+/// Creates a compressed contract and service bytecode synchronously, plus an
+/// optional `ApplicationFormats` blob built from the JSON-encoded `Formats`
+/// description bytes.
 pub fn create_bytecode_blobs_sync(
     contract: &Bytecode,
     service: &Bytecode,
     vm_runtime: VmRuntime,
+    formats: Option<&[u8]>,
 ) -> (Vec<Blob>, ModuleId) {
-    match vm_runtime {
+    let formats_blob = formats.map(Blob::new_application_formats);
+    let formats_blob_hash = formats_blob.as_ref().map(|blob| blob.id().hash);
+    let (mut blobs, module_id) = match vm_runtime {
         VmRuntime::Wasm => {
             let compressed_contract = contract.compress();
             let compressed_service = service.compress();
             let contract_blob = Blob::new_contract_bytecode(compressed_contract);
             let service_blob = Blob::new_service_bytecode(compressed_service);
-            let module_id =
-                ModuleId::new(contract_blob.id().hash, service_blob.id().hash, vm_runtime);
+            let module_id = ModuleId::new_with_formats(
+                contract_blob.id().hash,
+                service_blob.id().hash,
+                vm_runtime,
+                formats_blob_hash,
+            );
             (vec![contract_blob, service_blob], module_id)
         }
         VmRuntime::Evm => {
             let compressed_contract = contract.compress();
             let evm_contract_blob = Blob::new_evm_bytecode(compressed_contract);
-            let module_id = ModuleId::new(
+            let module_id = ModuleId::new_with_formats(
                 evm_contract_blob.id().hash,
                 evm_contract_blob.id().hash,
                 vm_runtime,
+                formats_blob_hash,
             );
             (vec![evm_contract_blob], module_id)
         }
+    };
+    if let Some(blob) = formats_blob {
+        blobs.push(blob);
     }
+    (blobs, module_id)
 }

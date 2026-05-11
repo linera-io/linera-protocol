@@ -574,7 +574,6 @@ impl Runnable for Job {
                                             blob_published,
                                             blob_byte_read,
                                             blob_byte_published,
-                                            byte_stored,
                                             operation,
                                             operation_byte,
                                             message,
@@ -620,8 +619,6 @@ impl Runnable for Job {
                                             .unwrap_or(existing_policy.blob_byte_read),
                                         blob_byte_published: blob_byte_published
                                             .unwrap_or(existing_policy.blob_byte_published),
-                                        byte_stored: byte_stored
-                                            .unwrap_or(existing_policy.byte_stored),
                                         operation: operation.unwrap_or(existing_policy.operation),
                                         operation_byte: operation_byte
                                             .unwrap_or(existing_policy.operation_byte),
@@ -1428,6 +1425,7 @@ impl Runnable for Job {
                 contract,
                 service,
                 vm_runtime,
+                formats,
                 publisher,
             } => {
                 let mut context = options
@@ -1439,7 +1437,7 @@ impl Runnable for Job {
                 info!("Publishing module on chain {}", publisher);
                 let chain_client = context.make_chain_client(publisher).await?;
                 let module_id = context
-                    .publish_module(&chain_client, contract, service, vm_runtime)
+                    .publish_module(&chain_client, contract, service, vm_runtime, formats)
                     .await?;
                 println!("{module_id}");
                 info!(
@@ -1571,7 +1569,7 @@ impl Runnable for Job {
                 let parameters = read_json(json_parameters, json_parameters_path)?;
                 let argument = read_json(json_argument, json_argument_path)?;
                 let module_id = context
-                    .publish_module(&chain_client, contract, service, vm_runtime)
+                    .publish_module(&chain_client, contract, service, vm_runtime, None)
                     .await?;
 
                 let (application_id, _) = context
@@ -1672,7 +1670,13 @@ impl Runnable for Job {
                     let (contract_path, service_path) = project.build(name)?;
 
                     let module_id = context
-                        .publish_module(&chain_client, contract_path, service_path, vm_runtime)
+                        .publish_module(
+                            &chain_client,
+                            contract_path,
+                            service_path,
+                            vm_runtime,
+                            None,
+                        )
                         .await?;
 
                     let (application_id, _) = context
@@ -1840,7 +1844,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to load chain")?;
                 let block_hash = chain_state_view
-                    .block_hashes([height])
+                    .block_hashes_for_heights([height])
                     .await
                     .context("Failed to find a block hash for the given height")?[0];
                 let block = context
@@ -2199,7 +2203,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
             byte_runtime_price,
             byte_read_price,
             byte_written_price,
-            byte_stored_price,
             blob_read_price,
             blob_published_price,
             blob_byte_read_price,
@@ -2245,7 +2248,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
                 blob_byte_read: blob_byte_read_price.unwrap_or(existing_policy.blob_byte_read),
                 blob_byte_published: blob_byte_published_price
                     .unwrap_or(existing_policy.blob_byte_published),
-                byte_stored: byte_stored_price.unwrap_or(existing_policy.byte_stored),
                 operation: operation_price.unwrap_or(existing_policy.operation),
                 operation_byte: operation_byte_price.unwrap_or(existing_policy.operation_byte),
                 message: message_price.unwrap_or(existing_policy.message),

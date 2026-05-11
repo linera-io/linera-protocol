@@ -252,10 +252,6 @@ pub struct ResourceControlPolicyOverrides {
     #[arg(long)]
     pub blob_byte_published: Option<Amount>,
 
-    /// Set the price per byte stored.
-    #[arg(long)]
-    pub byte_stored: Option<Amount>,
-
     /// Set the base price of sending an operation from a block..
     #[arg(long)]
     pub operation: Option<Amount>,
@@ -615,11 +611,6 @@ pub enum ClientCommand {
         #[arg(long)]
         blob_byte_published_price: Option<Amount>,
 
-        /// Set the price per byte stored.
-        /// (This will overwrite value from `--policy-config`)
-        #[arg(long)]
-        byte_stored_price: Option<Amount>,
-
         /// Set the base price of sending an operation from a block..
         /// (This will overwrite value from `--policy-config`)
         #[arg(long)]
@@ -874,6 +865,14 @@ pub enum ClientCommand {
         /// The virtual machine runtime to use.
         #[arg(long, default_value = "wasm")]
         vm_runtime: VmRuntime,
+
+        /// Optional path to an insta SNAP file containing the YAML serialization
+        /// of the application's `Formats`. When provided, the formats are
+        /// JSON-encoded and published as a third blob alongside the contract
+        /// and service blobs; the resulting `ModuleId` carries the formats blob
+        /// hash.
+        #[arg(long)]
+        formats: Option<PathBuf>,
 
         /// An optional chain ID to publish the module. The default chain of the wallet
         /// is used otherwise.

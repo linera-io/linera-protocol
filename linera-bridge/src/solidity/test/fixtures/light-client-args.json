@@ -1,0 +1,6 @@
+{
+  "validators": ["0x1905CD31982CDca7b55194e0e3a67A7D8630fb9f"],
+  "weights": [100],
+  "admin_chain_id": "0xc175bb0579c7a182de91397710c39a3b27b241a163e2347fb458f297d1f583de",
+  "epoch": "0"
+}

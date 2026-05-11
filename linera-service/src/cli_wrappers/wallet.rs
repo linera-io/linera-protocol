@@ -422,12 +422,28 @@ impl ClientWrapper {
         vm_runtime: VmRuntime,
         publisher: impl Into<Option<ChainId>>,
     ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
-        let stdout = self
-            .command()
-            .await?
+        self.publish_module_with_formats(contract, service, None, vm_runtime, publisher)
+            .await
+    }
+
+    /// Runs `linera publish-module` with an optional `--formats` SNAP file path.
+    pub async fn publish_module_with_formats<Abi, Parameters, InstantiationArgument>(
+        &self,
+        contract: PathBuf,
+        service: PathBuf,
+        formats: Option<PathBuf>,
+        vm_runtime: VmRuntime,
+        publisher: impl Into<Option<ChainId>>,
+    ) -> Result<ModuleId<Abi, Parameters, InstantiationArgument>> {
+        let mut command = self.command().await?;
+        command
             .arg("publish-module")
             .args([contract, service])
-            .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()])
+            .args(["--vm-runtime", &format!("{vm_runtime}").to_lowercase()]);
+        if let Some(formats_path) = formats {
+            command.arg("--formats").arg(formats_path);
+        }
+        let stdout = command
             .args(publisher.into().iter().map(ChainId::to_string))
             .spawn_and_wait_for_stdout()
             .await?;
@@ -1283,7 +1299,6 @@ impl ClientWrapper {
             blob_published,
             blob_byte_read,
             blob_byte_published,
-            byte_stored,
             operation,
             operation_byte,
             message,
@@ -1338,9 +1353,6 @@ impl ClientWrapper {
         }
         if let Some(value) = blob_byte_published {
             command.args(["--blob-byte-published", &value.to_string()]);
-        }
-        if let Some(value) = byte_stored {
-            command.args(["--byte-stored", &value.to_string()]);
         }
         if let Some(value) = operation {
             command.args(["--operation", &value.to_string()]);
@@ -1797,18 +1809,26 @@ impl NodeService {
         Ok(module_id.with_abi())
     }
 
-    pub async fn query_committees(
-        &self,
-        chain_id: &ChainId,
-    ) -> Result<BTreeMap<Epoch, CryptoHash>> {
+    pub async fn query_committee_hash(&self, chain_id: &ChainId) -> Result<Option<CryptoHash>> {
         let query = format!(
             "query {{ chain(chainId:\"{chain_id}\") {{
-                executionState {{ system {{ committees }} }}
+                executionState {{ system {{ committeeHash }} }}
             }} }}"
         );
         let mut response = self.query_node(query).await?;
-        let committees = response["chain"]["executionState"]["system"]["committees"].take();
-        Ok(serde_json::from_value(committees)?)
+        let hash = response["chain"]["executionState"]["system"]["committeeHash"].take();
+        Ok(serde_json::from_value(hash)?)
+    }
+
+    pub async fn query_chain_epoch(&self, chain_id: &ChainId) -> Result<Epoch> {
+        let query = format!(
+            "query {{ chain(chainId:\"{chain_id}\") {{
+                executionState {{ system {{ epoch }} }}
+            }} }}"
+        );
+        let mut response = self.query_node(query).await?;
+        let epoch = response["chain"]["executionState"]["system"]["epoch"].take();
+        Ok(serde_json::from_value(epoch)?)
     }
 
     pub async fn events_from_index(

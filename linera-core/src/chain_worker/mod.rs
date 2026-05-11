@@ -10,6 +10,4 @@ pub(crate) mod state;
 
 pub use self::config::ChainWorkerConfig;
 pub(super) use self::delivery_notifier::DeliveryNotifier;
-#[cfg(test)]
-pub(crate) use self::state::CrossChainUpdateHelper;
 pub(crate) use self::state::{BlockOutcome, CrossChainUpdateResult, EventSubscriptionsResult};

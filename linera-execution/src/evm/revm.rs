@@ -921,7 +921,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         let contract = linera_base::data_types::Bytecode::new(inputs.init_code.to_vec());
         let service = linera_base::data_types::Bytecode::new(vec![]);
         let mut runtime = context.db().0.lock_runtime();
-        runtime.publish_module(contract, service, VmRuntime::Evm)
+        runtime.publish_module(contract, service, VmRuntime::Evm, None)
     }
 
     /// The function `create` of the `Inspector` trait is called

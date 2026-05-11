@@ -271,6 +271,9 @@ pub enum BlobType {
     Committee,
     /// A blob containing a chain description.
     ChainDescription,
+    /// A blob containing the JSON-encoded `Formats` description published
+    /// alongside an application's contract and service blobs.
+    ApplicationFormats,
 }
 
 impl BlobType {
@@ -282,6 +285,7 @@ impl BlobType {
             | BlobType::ServiceBytecode
             | BlobType::EvmBytecode
             | BlobType::ApplicationDescription
+            | BlobType::ApplicationFormats
             | BlobType::ChainDescription => false,
             BlobType::Committee => true,
         }
@@ -520,6 +524,10 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     pub service_blob_hash: CryptoHash,
     /// The virtual machine being used.
     pub vm_runtime: VmRuntime,
+    /// The hash of an optional blob containing the JSON-encoded `Formats`
+    /// description for this module's application. Published alongside the
+    /// contract and service blobs when available.
+    pub formats_blob_hash: Option<CryptoHash>,
     #[witty(skip)]
     #[debug(skip)]
     phantom: PhantomData<(Abi, Parameters, InstantiationArgument)>,
@@ -755,11 +763,13 @@ impl<Abi, Parameters, InstantiationArgument> PartialEq
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
+            formats_blob_hash,
             phantom: _,
         } = other;
         self.contract_blob_hash == *contract_blob_hash
             && self.service_blob_hash == *service_blob_hash
             && self.vm_runtime == *vm_runtime
+            && self.formats_blob_hash == *formats_blob_hash
     }
 }
 
@@ -784,14 +794,21 @@ impl<Abi, Parameters, InstantiationArgument> Ord
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
+            formats_blob_hash,
             phantom: _,
         } = other;
         (
             self.contract_blob_hash,
             self.service_blob_hash,
             self.vm_runtime,
+            self.formats_blob_hash,
         )
-            .cmp(&(*contract_blob_hash, *service_blob_hash, *vm_runtime))
+            .cmp(&(
+                *contract_blob_hash,
+                *service_blob_hash,
+                *vm_runtime,
+                *formats_blob_hash,
+            ))
     }
 }
 
@@ -803,11 +820,13 @@ impl<Abi, Parameters, InstantiationArgument> Hash
             contract_blob_hash: contract_blob_id,
             service_blob_hash: service_blob_id,
             vm_runtime: vm_runtime_id,
+            formats_blob_hash,
             phantom: _,
         } = self;
         contract_blob_id.hash(state);
         service_blob_id.hash(state);
         vm_runtime_id.hash(state);
+        formats_blob_hash.hash(state);
     }
 }
 
@@ -817,6 +836,8 @@ struct SerializableModuleId {
     contract_blob_hash: CryptoHash,
     service_blob_hash: CryptoHash,
     vm_runtime: VmRuntime,
+    #[serde(default)]
+    formats_blob_hash: Option<CryptoHash>,
 }
 
 impl<Abi, Parameters, InstantiationArgument> Serialize
@@ -830,6 +851,7 @@ impl<Abi, Parameters, InstantiationArgument> Serialize
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
+            formats_blob_hash: self.formats_blob_hash,
         };
         if serializer.is_human_readable() {
             let bytes =
@@ -857,6 +879,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
+                formats_blob_hash: serializable_module_id.formats_blob_hash,
                 phantom: PhantomData,
             })
         } else {
@@ -865,6 +888,7 @@ impl<'de, Abi, Parameters, InstantiationArgument> Deserialize<'de>
                 contract_blob_hash: serializable_module_id.contract_blob_hash,
                 service_blob_hash: serializable_module_id.service_blob_hash,
                 vm_runtime: serializable_module_id.vm_runtime,
+                formats_blob_hash: serializable_module_id.formats_blob_hash,
                 phantom: PhantomData,
             })
         }
@@ -882,6 +906,24 @@ impl ModuleId {
             contract_blob_hash,
             service_blob_hash,
             vm_runtime,
+            formats_blob_hash: None,
+            phantom: PhantomData,
+        }
+    }
+
+    /// Creates a module ID from contract/service hashes, the VM runtime, and an
+    /// optional formats blob hash.
+    pub fn new_with_formats(
+        contract_blob_hash: CryptoHash,
+        service_blob_hash: CryptoHash,
+        vm_runtime: VmRuntime,
+        formats_blob_hash: Option<CryptoHash>,
+    ) -> Self {
+        ModuleId {
+            contract_blob_hash,
+            service_blob_hash,
+            vm_runtime,
+            formats_blob_hash,
             phantom: PhantomData,
         }
     }
@@ -894,6 +936,7 @@ impl ModuleId {
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
+            formats_blob_hash: self.formats_blob_hash,
             phantom: PhantomData,
         }
     }
@@ -914,15 +957,27 @@ impl ModuleId {
         }
     }
 
-    /// Gets all bytecode `BlobId`s of the module
+    /// Gets the `BlobId` of the application formats blob, if one was registered
+    /// at module publication.
+    pub fn formats_blob_id(&self) -> Option<BlobId> {
+        self.formats_blob_hash
+            .map(|hash| BlobId::new(hash, BlobType::ApplicationFormats))
+    }
+
+    /// Gets all bytecode `BlobId`s of the module, including the optional
+    /// application formats blob when present.
     pub fn bytecode_blob_ids(&self) -> Vec<BlobId> {
-        match self.vm_runtime {
+        let mut blobs = match self.vm_runtime {
             VmRuntime::Wasm => vec![
                 BlobId::new(self.contract_blob_hash, BlobType::ContractBytecode),
                 BlobId::new(self.service_blob_hash, BlobType::ServiceBytecode),
             ],
             VmRuntime::Evm => vec![BlobId::new(self.contract_blob_hash, BlobType::EvmBytecode)],
+        };
+        if let Some(blob_id) = self.formats_blob_id() {
+            blobs.push(blob_id);
         }
+        blobs
     }
 }
 
@@ -933,6 +988,7 @@ impl<Abi, Parameters, InstantiationArgument> ModuleId<Abi, Parameters, Instantia
             contract_blob_hash: self.contract_blob_hash,
             service_blob_hash: self.service_blob_hash,
             vm_runtime: self.vm_runtime,
+            formats_blob_hash: self.formats_blob_hash,
             phantom: PhantomData,
         }
     }
@@ -1272,8 +1328,6 @@ mod tests {
             epoch: Epoch::ZERO,
             ownership: ChainOwnership::single(AccountOwner::Reserved(0)),
             balance: Amount::ZERO,
-            min_active_epoch: Epoch::ZERO,
-            max_active_epoch: Epoch::ZERO,
             application_permissions: Default::default(),
         };
         let description = ChainDescription::new(
@@ -1283,7 +1337,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "76e3a8c7b2449e6bc238642ac68b4311a809cb57328bea0a1ef9122f08a0053d"
+            "6699e88680fe07056777caa26522cea7493c9cbe0611aa0e5c9d4918469d9e82"
         );
     }
 

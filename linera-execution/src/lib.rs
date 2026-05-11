@@ -1079,12 +1079,14 @@ pub trait ContractRuntime: BaseRuntime {
     /// Creates a new data blob and returns its hash.
     fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError>;
 
-    /// Publishes a module with contract and service bytecode and returns the module ID.
+    /// Publishes a module with contract and service bytecode and an optional
+    /// JSON-encoded `Formats` description, returning the module ID.
     fn publish_module(
         &mut self,
         contract: Bytecode,
         service: Bytecode,
         vm_runtime: VmRuntime,
+        formats: Option<Vec<u8>>,
     ) -> Result<ModuleId, ExecutionError>;
 
     /// Returns the multi-leader round in which this block was validated.
@@ -1502,9 +1504,7 @@ impl Operation {
         };
         matches!(
             **system_op,
-            SystemOperation::ProcessNewEpoch(_)
-                | SystemOperation::ProcessRemovedEpoch(_)
-                | SystemOperation::UpdateStream { .. }
+            SystemOperation::ProcessNewEpoch(_) | SystemOperation::UpdateStream { .. }
         )
     }
 

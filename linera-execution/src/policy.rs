@@ -47,9 +47,6 @@ pub struct ResourceControlPolicy {
     pub blob_byte_read: Amount,
     /// The price to publish a blob, per byte.
     pub blob_byte_published: Amount,
-    /// The price of increasing storage by a byte.
-    // TODO(#1536): This is not fully supported.
-    pub byte_stored: Amount,
     /// The base price of adding an operation to a block.
     pub operation: Amount,
     /// The additional price for each byte in the argument of a user operation.
@@ -112,7 +109,6 @@ impl fmt::Display for ResourceControlPolicy {
             blob_published,
             blob_byte_read,
             blob_byte_published,
-            byte_stored,
             operation,
             operation_byte,
             message,
@@ -149,7 +145,6 @@ impl fmt::Display for ResourceControlPolicy {
             {blob_published:.2} base cost per published blob\n\
             {blob_byte_read:.2} cost of reading blobs, per byte\n\
             {blob_byte_published:.2} cost of publishing blobs, per byte\n\
-            {byte_stored:.2} cost per byte stored\n\
             {operation:.2} per operation\n\
             {operation_byte:.2} per byte in the argument of an operation\n\
             {service_as_oracle_query:.2} per query to a service as an oracle\n\
@@ -200,7 +195,6 @@ impl ResourceControlPolicy {
             blob_published: Amount::ZERO,
             blob_byte_read: Amount::ZERO,
             blob_byte_published: Amount::ZERO,
-            byte_stored: Amount::ZERO,
             operation: Amount::ZERO,
             operation_byte: Amount::ZERO,
             message: Amount::ZERO,
@@ -285,7 +279,6 @@ impl ResourceControlPolicy {
             blob_byte_published: Amount::from_nanos(100),
             read_operation: Amount::from_micros(10),
             write_operation: Amount::from_micros(20),
-            byte_stored: Amount::from_nanos(10),
             message_byte: Amount::from_nanos(100),
             operation_byte: Amount::from_nanos(10),
             operation: Amount::from_micros(10),
@@ -334,7 +327,6 @@ impl ResourceControlPolicy {
         )?;
         amount.try_add_assign(self.message.try_mul(resources.messages as u128)?)?;
         amount.try_add_assign(self.message_bytes_price(resources.message_size as u64)?)?;
-        amount.try_add_assign(self.bytes_stored_price(resources.storage_size_delta as u64)?)?;
         amount.try_add_assign(
             self.service_as_oracle_queries_price(resources.service_as_oracle_queries)?,
         )?;
@@ -380,12 +372,6 @@ impl ResourceControlPolicy {
         self.blob_byte_published
             .try_mul(count as u128)?
             .try_add(self.blob_published)
-    }
-
-    // TODO(#1536): This is not fully implemented.
-    #[allow(dead_code)]
-    pub(crate) fn bytes_stored_price(&self, count: u64) -> Result<Amount, ArithmeticError> {
-        self.byte_stored.try_mul(count as u128)
     }
 
     /// Returns how much it would cost to perform `count` queries to services running as oracles.
@@ -440,6 +426,7 @@ impl ResourceControlPolicy {
             }
             BlobType::Data
             | BlobType::ApplicationDescription
+            | BlobType::ApplicationFormats
             | BlobType::Committee
             | BlobType::ChainDescription => {}
         }
