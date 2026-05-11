@@ -60,7 +60,7 @@ pub struct ChainInfoQuery {
     #[cfg_attr(with_testing, strategy(proptest::strategy::Just(Vec::new())))]
     pub request_previous_event_blocks: Vec<StreamId>,
     /// Query the height of the most recent block on this chain whose certificate
-    /// records an [`OracleResponse::Checkpoint`]. A bootstrapping client uses this
+    /// records an [`OracleResponse::Checkpoint`][linera_base::data_types::OracleResponse]. A bootstrapping client uses this
     /// to skip downloading and replaying pre-checkpoint blocks.
     #[debug(skip_if = Not::not)]
     pub request_latest_checkpoint_height: bool,
@@ -171,7 +171,7 @@ pub struct ChainInfo {
     #[debug(skip_if = BTreeMap::is_empty)]
     pub requested_previous_event_blocks: BTreeMap<StreamId, (BlockHeight, CryptoHash)>,
     /// The response to `request_latest_checkpoint_height`: the height of the most
-    /// recent block whose certificate records an [`OracleResponse::Checkpoint`], or
+    /// recent block whose certificate records an [`OracleResponse::Checkpoint`][linera_base::data_types::OracleResponse], or
     /// `None` if no such block exists or the field was not requested.
     #[debug(skip_if = Option::is_none)]
     pub requested_latest_checkpoint_height: Option<BlockHeight>,
