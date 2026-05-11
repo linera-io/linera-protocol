@@ -36,7 +36,7 @@ use linera_chain::{
     },
     ChainError,
 };
-use linera_execution::committee::Committee;
+use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
 use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
 use rand::prelude::SliceRandom as _;
 use received_log::ReceivedLogs;
@@ -818,9 +818,8 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn admin_committees(
         &self,
-    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), LocalNodeError> {
-        let query = ChainInfoQuery::new(self.admin_chain_id);
-        let info = self.local_node.handle_chain_info_query(query).await?.info;
+    ) -> Result<(Epoch, BTreeMap<Epoch, Committee>), chain_client::Error> {
+        let info = self.admin_chain_info(false).await?;
         let max_epoch = info.epoch;
         let mut committees = BTreeMap::new();
         let mut needs_fallback = false;
@@ -833,7 +832,7 @@ impl<Env: Environment> Client<Env> {
             }
         }
         if needs_fallback {
-            let info = self.chain_info_with_committees(self.admin_chain_id).await?;
+            let info = self.admin_chain_info(true).await?;
             if let Some(chain_state) = info.requested_committees.as_ref() {
                 for (epoch, committee) in chain_state {
                     if !committees.contains_key(epoch) {
@@ -851,9 +850,8 @@ impl<Env: Environment> Client<Env> {
     /// Obtains the committee for the latest epoch on the admin chain.
     ///
     /// See `admin_committees` for the fallback rationale (transitional).
-    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
-        let query = ChainInfoQuery::new(self.admin_chain_id);
-        let info = self.local_node.handle_chain_info_query(query).await?.info;
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), chain_client::Error> {
+        let info = self.admin_chain_info(false).await?;
         let epoch = info.epoch;
         if let Some(committee) = self.storage_client().get_or_load_committee(epoch).await? {
             return Ok((epoch, committee));
@@ -861,7 +859,7 @@ impl<Env: Environment> Client<Env> {
         // Slow path: events/blob missing in storage. Use the admin chain's own
         // `committees` view (still populated on testnet — #6114 is not being
         // ported) and seed the shared cache so subsequent calls hit the fast path.
-        let info = self.chain_info_with_committees(self.admin_chain_id).await?;
+        let info = self.admin_chain_info(true).await?;
         let committee = info
             .requested_committees
             .as_ref()
@@ -872,6 +870,62 @@ impl<Env: Environment> Client<Env> {
             .shared_committees()
             .insert(epoch, Arc::new(committee));
         Ok((epoch, arc_committee))
+    }
+
+    /// Queries the local node for the admin chain's info. If the chain isn't yet
+    /// initialized locally and the worker raises `EventsNotFound` on admin
+    /// `EPOCH_STREAM_NAME` events (initialization couldn't load the committees
+    /// for the admin chain's `min_active_epoch..=max_active_epoch` range), bootstrap
+    /// by syncing the admin chain from the genesis committee in storage and retry.
+    ///
+    /// Goes straight to `synchronize_chain_state_from_committee` rather than
+    /// `synchronize_chain_state`, which would re-enter `admin_committee` and recurse.
+    async fn admin_chain_info(
+        &self,
+        with_committees: bool,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let make_query = || {
+            let q = ChainInfoQuery::new(self.admin_chain_id);
+            if with_committees {
+                q.with_committees()
+            } else {
+                q
+            }
+        };
+        match self.local_node.handle_chain_info_query(make_query()).await {
+            Ok(response) => Ok(response.info),
+            Err(LocalNodeError::EventsNotFound(event_ids))
+                if event_ids.iter().all(|id| {
+                    id.chain_id == self.admin_chain_id
+                        && id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
+                }) =>
+            {
+                self.bootstrap_admin_chain_from_genesis().await?;
+                Ok(self
+                    .local_node
+                    .handle_chain_info_query(make_query())
+                    .await?
+                    .info)
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    /// Loads the genesis committee from storage (via the genesis committee blob,
+    /// which doesn't require any synced events) and uses it to sync the admin
+    /// chain. Used when the admin chain isn't initialized locally and we can't
+    /// yet get a committee via the normal `admin_committee` path.
+    async fn bootstrap_admin_chain_from_genesis(&self) -> Result<(), chain_client::Error> {
+        let genesis_committee = self
+            .storage_client()
+            .get_or_load_committee(Epoch::ZERO)
+            .await?
+            .ok_or(LocalNodeError::InactiveChain(self.admin_chain_id))?;
+        Box::pin(
+            self.synchronize_chain_state_from_committee(self.admin_chain_id, genesis_committee),
+        )
+        .await?;
+        Ok(())
     }
 
     /// Obtains the validators for the latest epoch.

@@ -712,7 +712,7 @@ impl<Env: Environment> ChainClient<Env> {
 
     /// Obtains the committee for the latest epoch on the admin chain.
     #[instrument(level = "trace")]
-    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), LocalNodeError> {
+    pub async fn admin_committee(&self) -> Result<(Epoch, Arc<Committee>), Error> {
         self.client.admin_committee().await
     }
 
