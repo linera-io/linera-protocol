@@ -35,7 +35,7 @@ use linera_base::{
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
-    wait_for_light_client, ANVIL_PRIVATE_KEY,
+    wait_for_light_client, wait_for_relay_http_ready, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -221,20 +221,10 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     let relay_url = format!("http://localhost:{relay_port}");
     let http = reqwest::Client::new();
-    for attempt in 0..30 {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        if http
-            .get(format!("{relay_url}/metrics"))
-            .send()
-            .await
-            .is_ok()
-        {
-            break;
-        }
-        if attempt == 29 {
-            relay_handle.abort();
-            anyhow::bail!("Relay did not become ready");
-        }
+    if let Err(error) = wait_for_relay_http_ready(&http, &relay_url, Duration::from_secs(60)).await
+    {
+        relay_handle.abort();
+        return Err(error);
     }
 
     // Trigger a single burn: chain B transfers wrapped tokens to an

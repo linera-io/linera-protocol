@@ -1,32 +1,25 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Reproduces the UI-demo bug: many burns to the same EVM recipient
-//! across separate Linera blocks. The pre-fix relayer's
-//! `check_burn_completion` used a recipient-only ERC-20 `Transfer`-log
-//! filter, so once any pending burn for a recipient saw an on-chain
-//! transfer, every other pending burn for that same recipient flipped
-//! to completed regardless of whether its own `token.transfer` ran.
-//! With the per-burn `isBurnProcessed(height, eventIndex)` query,
-//! completion is decided per burn and the relayer must actually
-//! release every one before marking them done.
+//! Verifies that multiple BurnEvents in a single Linera block are all
+//! relayed and completed on the EVM side. The user chain submits one
+//! block carrying N Transfer operations to N distinct Address20
+//! recipients on the bridge chain. The test process drives the inbox
+//! processing on the bridge chain so the resulting Credit messages
+//! all land in one chain-A block — a single cert with N BurnEvents.
+//! After the relayer is spawned, exactly one `addBlock` call should
+//! release all N tokens (one `token.transfer` per burn in `_onBlock`)
+//! and the relayer must mark every pending burn complete.
 //!
-//! Setup: 5 burns to the same EVM recipient, materialised as 5
-//! separate Linera blocks on the bridge chain BEFORE the relayer is
-//! spawned. The test process drives both the cross-chain Transfer on
-//! the user chain and the inbox processing on the bridge chain, so
-//! each Credit lands in its own block deterministically (no race with
-//! the relayer's notification loop batching multiple Credits into one
-//! block). When the relayer starts, its first scan iteration finds
-//! all 5 pending burns at once — the multi-pending shape required to
-//! reproduce the mark-by-existence false positive.
-//!
-//! Expected outcome on the pre-fix code: only some `addBlock` calls
-//! complete before `check_burn_completion` false-marks every pending
-//! burn complete; the recipient's ERC-20 balance ends up below
-//! `5 * amount` while `linera_bridge_burns_completed == 5`. The
-//! balance assertion fails. Post-fix: per-burn dedup forces the
-//! relayer to forward every burn, balance reaches the full amount.
+//! Expected outcome on the pre-fix code: `_onBlock` atomically
+//! transfers all N tokens in the single `addBlock` call (recipient
+//! balances are correct), but the off-chain `check_burn_completion`'s
+//! Transfer-log filter does not mark these burns complete —
+//! `linera_bridge_burns_completed` stays at 0. The
+//! `burns_completed == NUM_BURNS` assertion fails. Post-fix: per-burn
+//! `isBurnProcessed(height, eventIndex)` returns true for every flag
+//! written inside the same `_onBlock` call, so all N entries flip
+//! to complete on the next `check_burn_completion` iteration.
 
 #![recursion_limit = "512"]
 
@@ -56,16 +49,16 @@ sol! {
     }
 }
 
-const NUM_BURNS: u32 = 5;
+const NUM_BURNS: usize = 4;
 const BURN_AMOUNT_TOKENS: u128 = 1;
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary.
-async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> {
+async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_test_writer().try_init().ok();
     linera_bridge_e2e::ensure_rustls_provider();
     let compose_file = compose_file_path();
-    let project_name = "linera-multi-burn-same-recipient-test";
+    let project_name = "linera-multi-burn-same-block-test";
 
     let compose = start_compose(&compose_file, project_name).await;
     wait_for_light_client(&compose, project_name, &compose_file).await;
@@ -80,7 +73,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(
         &store_config,
-        "multi-burn-same-recipient-e2e",
+        "multi-burn-same-block-e2e",
         Some(WasmRuntime::default()),
         StorageCacheConfig {
             blob_cache_size: 1000,
@@ -107,7 +100,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     )
     .await?;
 
-    // Chain A hosts the bridge contract
+    // Chain A hosts the bridge contract.
     let owner_a = AccountOwner::from(signer.generate_new());
     let chain_a_desc = faucet.claim(&owner_a).await?;
     let chain_a = chain_a_desc.id();
@@ -151,34 +144,60 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     )
     .await;
 
-    let evm_recipient: alloy::primitives::Address =
-        "0x70997970C51812dc3A010C7d01b50e0d17dc79C8".parse()?;
-    let receiver = AccountOwner::Address20(evm_recipient.0 .0);
+    // NUM_BURNS Address20 recipients in the order they appear in the
+    // block. One address is intentionally repeated to exercise per-burn
+    // accounting independently of the recipient; `_onBlock` must release
+    // tokens for each occurrence even though the dedup key shares no
+    // recipient bits.
+    let recipients: [alloy::primitives::Address; NUM_BURNS] = [
+        "0x70997970C51812dc3A010C7d01b50e0d17dc79C8".parse()?,
+        "0x70997970C51812dc3A010C7d01b50e0d17dc79C8".parse()?,
+        "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC".parse()?,
+        "0x90F79bf6EB2c4f870365E785982E1f101E93b906".parse()?,
+    ];
     let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
 
-    for _ in 0..NUM_BURNS {
-        cc_b.synchronize_from_validators().await?;
-        let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
-            owner: owner_b,
-            amount: burn_amount,
-            target_account: Account {
-                chain_id: chain_a,
-                owner: receiver,
-            },
-        })?;
-        cc_b.execute_operations(
-            vec![Operation::User {
+    // Bundle every Transfer into a SINGLE chain-B block, then drive
+    // chain A's inbox once. The N Credit messages travel together
+    // and `process_inbox` materialises one chain-A block containing
+    // all N BurnEvents.
+    let operations: Vec<Operation> = recipients
+        .iter()
+        .map(|recipient| {
+            let owner = AccountOwner::Address20(recipient.0 .0);
+            let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
+                owner: owner_b,
+                amount: burn_amount,
+                target_account: Account {
+                    chain_id: chain_a,
+                    owner,
+                },
+            })
+            .expect("BCS serialization");
+            Operation::User {
                 application_id: fungible_app_id,
                 bytes: withdraw_bytes,
-            }],
-            vec![],
-        )
-        .await?
-        .expect("cross-chain withdrawal committed on chain B");
+            }
+        })
+        .collect();
 
-        cc_a.synchronize_from_validators().await?;
-        cc_a.process_inbox().await?;
-    }
+    cc_b.synchronize_from_validators().await?;
+    cc_b.execute_operations(operations, vec![])
+        .await?
+        .expect("multi-burn block committed on chain B");
+
+    cc_a.synchronize_from_validators().await?;
+    let height_before_inbox = cc_a.chain_info().await?.next_block_height;
+    cc_a.process_inbox().await?;
+    let height_after_inbox = cc_a.chain_info().await?.next_block_height;
+    assert_eq!(
+        height_after_inbox.0,
+        height_before_inbox.0 + 1,
+        "chain A must produce exactly ONE block carrying all {NUM_BURNS} BurnEvents \
+         (before={}, after={})",
+        height_before_inbox.0,
+        height_after_inbox.0,
+    );
 
     let relay_dir = tempfile::tempdir()?;
     let wallet_path = relay_dir.path().join("wallet.json");
@@ -193,7 +212,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     }
     linera_wallet_json::PersistentWallet::create(&wallet_path, relay_genesis_config)?;
 
-    let relay_port = 3004u16;
+    let relay_port = 3005u16;
     let bridge_addr_str = format!("{bridge_addr}");
     let bridge_app_str = format!("{fungible_app_id}");
     let fungible_app_str = format!("{fungible_app_id}");
@@ -229,35 +248,49 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
         return Err(error);
     }
 
-    // Wait until the relayer has finished work: pending drops to 0 and
-    // all NUM_BURNS appear in burns_completed. Pre-fix gets there via
-    // mark-by-existence flipping every pending burn complete after the
-    // first transfer lands; post-fix gets there via per-burn
-    // `isBurnProcessed` flipping each entry only as its own `addBlock`
-    // confirms.
-    let settle_result = wait_for_relay_metrics(
+    let num_burns_i64 = i64::try_from(NUM_BURNS).unwrap();
+    // Gate on the scanner having found every burn; we deliberately do
+    // NOT wait for `pending == 0` because the failure mode we want to
+    // surface is a balance / counter discrepancy, not a timeout —
+    // assertions below catch the actual state.
+    if let Err(error) = wait_for_relay_metrics(
         &http,
         &relay_url,
-        |_detected, completed, pending, _failed| {
-            pending == 0 && completed >= i64::from(NUM_BURNS)
-        },
-        Duration::from_secs(240),
+        |detected, _completed, _pending, _failed| detected >= num_burns_i64,
+        Duration::from_secs(60),
     )
-    .await;
-    if let Err(error) = settle_result {
+    .await
+    {
         relay_handle.abort();
         return Err(error);
     }
+    // One addBlock processes all N burns in `_onBlock`; allow the
+    // relayer enough time to call it and for the post-tx settle path
+    // (check_burn_completion / per-burn isBurnProcessed query) to run
+    // at least one iteration.
+    tokio::time::sleep(Duration::from_secs(30)).await;
 
     let rpc_url = "http://localhost:8545".parse()?;
     let provider = ProviderBuilder::new().connect_http(rpc_url);
-    let token_balance = IERC20::new(erc20_addr, &provider)
-        .balanceOf(evm_recipient)
-        .call()
-        .await?;
+    let token = IERC20::new(erc20_addr, &provider);
 
-    // Scrape the final metric values once for diagnostic clarity in
-    // both pass and fail cases.
+    // Each occurrence in `recipients` is one expected transfer. A
+    // recipient listed twice should accumulate two transfers, etc.
+    let mut expected_per_recipient: std::collections::BTreeMap<
+        alloy::primitives::Address,
+        U256,
+    > = std::collections::BTreeMap::new();
+    let one_burn = U256::from(BURN_AMOUNT_TOKENS) * U256::from(10u128.pow(18));
+    for recipient in &recipients {
+        *expected_per_recipient.entry(*recipient).or_insert(U256::ZERO) += one_burn;
+    }
+
+    let mut observed_balances = Vec::with_capacity(expected_per_recipient.len());
+    for (recipient, expected) in &expected_per_recipient {
+        let balance = token.balanceOf(*recipient).call().await?;
+        observed_balances.push((*recipient, balance, *expected));
+    }
+
     let final_metrics = http
         .get(format!("{relay_url}/metrics"))
         .send()
@@ -265,35 +298,37 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
         .text()
         .await?;
     let burns_detected = parse_metric_value(&final_metrics, "linera_bridge_burns_detected");
+    let burns_completed = parse_metric_value(&final_metrics, "linera_bridge_burns_completed");
 
     relay_handle.abort();
 
-    let expected_balance =
-        U256::from(BURN_AMOUNT_TOKENS) * U256::from(NUM_BURNS) * U256::from(10u128.pow(18));
     tracing::info!(
-        ?token_balance,
-        ?expected_balance,
+        ?observed_balances,
         burns_detected,
+        burns_completed,
         "Final state"
     );
 
-    // Sanity check: every burn must have reached the scanner. A drop
-    // here would mean the test failed to pre-populate chain A
-    // properly, not the bug we are reproducing.
+    // Sanity: the scanner must have picked up all NUM_BURNS as separate
+    // PendingBurns even though they share a Linera block.
     assert_eq!(
-        burns_detected,
-        i64::from(NUM_BURNS),
+        burns_detected, num_burns_i64,
         "relayer must have detected all {NUM_BURNS} burns; got {burns_detected}"
     );
-
-    // The recipient's balance must reflect every burn. Anything less
-    // means at least one `PendingBurn` was marked complete without
-    // its `token.transfer` actually landing on-chain — the UI-demo bug.
     assert_eq!(
-        token_balance,
-        expected_balance,
-        "recipient must accumulate every burn; got {token_balance}, expected {expected_balance}"
+        burns_completed, num_burns_i64,
+        "relayer must have completed all {NUM_BURNS} burns; got {burns_completed}"
     );
+
+    // Each unique recipient must hold exactly the sum of their
+    // occurrences in `recipients`. Anything less means a per-burn
+    // release was dropped; anything more means double-spend.
+    for (recipient, balance, expected) in &observed_balances {
+        assert_eq!(
+            *balance, *expected,
+            "recipient {recipient:?} balance {balance}, expected {expected}"
+        );
+    }
 
     Ok(())
 }

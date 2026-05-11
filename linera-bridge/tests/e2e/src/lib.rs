@@ -432,6 +432,30 @@ pub async fn fund_bridge_erc20(
     .await;
 }
 
+/// Polls the relayer's `/metrics` endpoint until it responds (any HTTP
+/// status), indicating the embedded server is up and the spawned relay
+/// task is past its boot phase. Bails on `timeout`. Call after
+/// `tokio::spawn`-ing `relay::run` to gate test traffic on readiness.
+pub async fn wait_for_relay_http_ready(
+    http: &reqwest::Client,
+    relay_url: &str,
+    timeout: std::time::Duration,
+) -> anyhow::Result<()> {
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        if http
+            .get(format!("{relay_url}/metrics"))
+            .send()
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+    }
+    anyhow::bail!("relay did not become ready within {timeout:?}")
+}
+
 /// Polls the relayer's `/metrics` endpoint every 2s and returns
 /// `Ok(())` once `predicate(detected, completed, pending, failed)`
 /// returns true. Bails on `timeout`. The poll interval matches the
