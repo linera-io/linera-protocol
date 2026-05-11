@@ -57,10 +57,15 @@ pub struct PendingDeposit {
 }
 
 /// A pending burn detected by the Linera scanner, sent to the retry loop.
+///
+/// `event_index` is the underlying Linera `Event.index` — the position of
+/// the burn event within its stream ("burns" on the configured fungible
+/// application). Used both as the dedup key off-chain and as the value
+/// the `FungibleBridge.isBurnProcessed(height, eventIndex)` view consumes.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingBurn {
     pub height: BlockHeight,
-    pub burn_index: usize,
+    pub event_index: u32,
     pub evm_recipient: Address,
     pub amount: Amount,
 }
@@ -96,7 +101,7 @@ pub type TrackedBurn = Tracked<PendingBurn>;
 /// In-memory monitoring state shared across scan loops and HTTP handlers.
 pub struct MonitorState {
     pub(crate) deposits: HashMap<DepositKey, TrackedDeposit>,
-    pub(crate) burns: HashMap<(BlockHeight, usize), TrackedBurn>,
+    pub(crate) burns: HashMap<(BlockHeight, u32), TrackedBurn>,
     pub(crate) last_scanned_evm_block: u64,
     pub(crate) last_scanned_linera_height: BlockHeight,
     db: Option<db::BridgeDb>,
@@ -160,7 +165,7 @@ impl MonitorState {
     /// Uses Entry API instead of insert() to avoid overwriting existing entries
     /// that may have accumulated retry state.
     pub async fn track_burn(&mut self, pending: PendingBurn) -> bool {
-        let key = (pending.height, pending.burn_index);
+        let key = (pending.height, pending.event_index);
         match self.burns.entry(key) {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
@@ -176,21 +181,24 @@ impl MonitorState {
         }
     }
 
-    pub async fn complete_burn(&mut self, height: BlockHeight, burn_index: usize) {
-        if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
+    pub async fn complete_burn(&mut self, height: BlockHeight, event_index: u32) {
+        if let Some(b) = self.burns.get_mut(&(height, event_index)) {
             b.forwarded = true;
             crate::relay::metrics::burn_completed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_burn_status(height, burn_index, "completed").await {
+                if let Err(e) = db
+                    .update_burn_status(height, event_index, "completed")
+                    .await
+                {
                     tracing::warn!(
                         ?height,
-                        burn_index,
+                        event_index,
                         "Failed to update burn status in SQLite: {e:#}"
                     );
                 }
             }
         } else {
-            tracing::warn!(?height, burn_index, "Attempted to complete unknown burn");
+            tracing::warn!(?height, event_index, "Attempted to complete unknown burn");
         }
     }
 
@@ -282,7 +290,8 @@ impl MonitorState {
             self.deposits.insert(d.key.clone(), Tracked::new(d));
         }
         for b in burns {
-            self.burns.insert((b.height, b.burn_index), Tracked::new(b));
+            self.burns
+                .insert((b.height, b.event_index), Tracked::new(b));
         }
         tracing::info!(
             deposits = n_deposits,
@@ -311,22 +320,22 @@ impl MonitorState {
         }
     }
 
-    pub fn mark_burn_retried(&mut self, height: BlockHeight, burn_index: usize) {
-        if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
+    pub fn mark_burn_retried(&mut self, height: BlockHeight, event_index: u32) {
+        if let Some(b) = self.burns.get_mut(&(height, event_index)) {
             b.retry_count += 1;
             b.last_retry_at = Some(Instant::now());
         }
     }
 
-    pub async fn mark_burn_failed(&mut self, height: BlockHeight, burn_index: usize) {
-        if let Some(b) = self.burns.get_mut(&(height, burn_index)) {
+    pub async fn mark_burn_failed(&mut self, height: BlockHeight, event_index: u32) {
+        if let Some(b) = self.burns.get_mut(&(height, event_index)) {
             b.failed = true;
             crate::relay::metrics::burn_failed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_burn_status(height, burn_index, "failed").await {
+                if let Err(e) = db.update_burn_status(height, event_index, "failed").await {
                     tracing::warn!(
                         ?height,
-                        burn_index,
+                        event_index,
                         "Failed to update burn status in SQLite: {e:#}"
                     );
                 }
@@ -473,7 +482,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(10),
-                burn_index: 0,
+                event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
                 amount: Amount::from_attos(500),
             })
@@ -510,7 +519,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
-                burn_index: 0,
+                event_index: 0,
                 evm_recipient: Address::from([0x12; 20]),
                 amount: Amount::from_attos(100),
             })
@@ -662,7 +671,7 @@ mod tests {
         .unwrap();
         db.insert_burn(&PendingBurn {
             height: BlockHeight(99),
-            burn_index: 2,
+            event_index: 2,
             evm_recipient: Address::from([0xDD; 20]),
             amount: Amount::from_attos(7),
         })
@@ -688,7 +697,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height,
-                burn_index: 0,
+                event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
                 amount: Amount::from_attos(500),
             })
