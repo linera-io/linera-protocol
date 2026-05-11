@@ -89,7 +89,7 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
     let mut num_init_keys_quotes = Vec::new();
     let mut pre_load_keys_quotes = Vec::new();
     let mut post_load_keys_quotes = Vec::new();
-    for (idx, e) in input.fields.iter().enumerate() {
+    for (e, idx) in input.fields.iter().zip(0u32..) {
         let name = e.ident.clone().unwrap();
         let delete_view_ident = format_ident!("deleted{}", idx);
         let g = get_extended_entry(e.ty.clone())?;
@@ -105,9 +105,8 @@ fn generate_view_code(input: &ItemStruct, root: bool) -> Result<TokenStream2, Er
         });
         num_init_keys_quotes.push(quote! { #g :: NUM_INIT_KEYS });
 
-        let idx_u32 = u32::try_from(idx).expect("number of fields exceeds u32::MAX");
         let derive_key_logic = quote! {
-            let __linera_reserved_index = #idx_u32;
+            let __linera_reserved_index = #idx;
             let __linera_reserved_base_key = context.base_key().derive_tag_key(linera_views::views::MIN_VIEW_TAG, &__linera_reserved_index)?;
         };
 

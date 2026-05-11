@@ -415,7 +415,7 @@ where
             );
         } else {
             let stored_consumed =
-                u32::try_from(count - new_back_len).map_err(|_| ArithmeticError::Overflow)?;
+                u32::try_from(count - new_back_len).map_err(|_| ArithmeticError::Underflow)?;
             let start = self.stored_indices.end - stored_consumed;
             values.extend(self.read_context(start..self.stored_indices.end).await?);
             values.extend(self.new_back_values.iter().cloned());
