@@ -661,8 +661,7 @@ impl<Env: Environment> ChainClient<Env> {
                 // `initialize_and_save_if_needed` couldn't start the chain because
                 // some publisher events (typically the admin chain's epoch events)
                 // aren't synced yet.
-                Box::pin(self.client.download_certificates_for_events(&event_ids))
-                    .await?;
+                Box::pin(self.client.download_certificates_for_events(&event_ids)).await?;
                 self.client.local_node.chain_info(self.chain_id).await?
             }
             Err(err) => return Err(err.into()),

@@ -501,7 +501,10 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
+                if self
+                    .download_new_events_into(event_ids, &mut downloaded_events)
+                    .await?
+                {
                     continue;
                 }
             }
@@ -934,7 +937,10 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
+                if self
+                    .download_new_events_into(event_ids, &mut downloaded_events)
+                    .await?
+                {
                     continue;
                 }
             }
@@ -1949,7 +1955,10 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
+                if self
+                    .download_new_events_into(event_ids, &mut downloaded_events)
+                    .await?
+                {
                     continue;
                 }
             }
@@ -2036,7 +2045,10 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if self.download_new_events_into(event_ids, &mut downloaded_events).await? {
+                if self
+                    .download_new_events_into(event_ids, &mut downloaded_events)
+                    .await?
+                {
                     continue; // We downloaded new publisher chain data: retry.
                 }
                 // All reported events were already downloaded; don't loop forever.
