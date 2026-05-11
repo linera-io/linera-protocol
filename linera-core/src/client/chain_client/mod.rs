@@ -1536,12 +1536,22 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<(QueryOutcome, BlockHeight), Error> {
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut downloaded_events = HashSet::<EventId>::new();
+        let mut synced_chain = false;
         loop {
             let result = self
                 .client
                 .local_node
                 .query_application(self.chain_id, query.clone(), block_hash)
                 .await;
+            if let Err(LocalNodeError::InactiveChain(_)) = &result {
+                if !synced_chain {
+                    // Sync the chain so its description blob and any admin-chain
+                    // events its initial epoch depends on land in local storage.
+                    self.synchronize_chain_state(self.chain_id).await?;
+                    synced_chain = true;
+                    continue;
+                }
+            }
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = super::filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {

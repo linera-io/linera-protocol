@@ -905,7 +905,9 @@ impl<Env: Environment> Client<Env> {
 
     /// Calls `handle_certificate`, retrying with any missing blobs (downloaded
     /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators).
+    /// chains via the current validators). If the cert is for a chain that
+    /// isn't initialized locally yet (e.g. a publisher chain we don't track),
+    /// fetches its description blob and retries.
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -915,6 +917,13 @@ impl<Env: Environment> Client<Env> {
         let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self.handle_certificate(certificate.clone()).await;
+            if let Err(LocalNodeError::InactiveChain(chain_id)) = &result {
+                let desc_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+                if downloaded_blobs.insert(desc_blob_id) {
+                    self.download_blobs(nodes, &[desc_blob_id]).await?;
+                    continue;
+                }
+            }
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {
