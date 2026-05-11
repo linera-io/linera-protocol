@@ -40,7 +40,7 @@ use linera_views::{context::Context, views::RootView, ViewError};
 #[cfg(with_metrics)]
 pub use crate::db_storage::metrics;
 pub use crate::db_storage::{
-    ChainStatesFirstAssignment, DbStorage, StorageCacheConfig, StorageCaches, WallClock,
+    ChainStatesFirstAssignment, DbStorage, RootKey, StorageCacheConfig, StorageCaches, WallClock,
 };
 #[cfg(with_testing)]
 pub use crate::db_storage::{TestClock, DEFAULT_STORAGE_CACHE_CONFIG};
