@@ -3355,9 +3355,7 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_synchronize_downloads_admin_chain_events<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
+async fn test_synchronize_downloads_admin_chain_events<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
