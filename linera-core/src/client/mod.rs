@@ -585,7 +585,7 @@ impl<Env: Environment> Client<Env> {
         loop {
             match self.handle_certificate(certificate.clone()).await {
                 Err(LocalNodeError::BlobsNotFound(blob_ids)) if !remote_nodes.is_empty() => {
-                    tracing::warn!(
+                    tracing::error!(
                         ?blob_ids,
                         "FIX_LOCAL_EVENT_NOT_FOUND: retrying handle_certificate after BlobsNotFound"
                     );
@@ -599,14 +599,14 @@ impl<Env: Environment> Client<Env> {
                         .cloned()
                         .collect::<Vec<_>>();
                     if new_events.is_empty() {
-                        tracing::warn!(
+                        tracing::error!(
                             ?event_ids,
                             "FIX_LOCAL_EVENT_NOT_FOUND: giving up — events not retrievable"
                         );
                         // Already tried to download these; don't loop forever.
                         return Err(NodeError::EventsNotFound(event_ids).into());
                     }
-                    tracing::warn!(
+                    tracing::error!(
                         ?new_events,
                         "FIX_LOCAL_EVENT_NOT_FOUND: downloading certs for missing events and retrying handle_certificate"
                     );
@@ -961,7 +961,7 @@ impl<Env: Environment> Client<Env> {
     /// chain. Used when the admin chain isn't initialized locally and we can't
     /// yet get a committee via the normal `admin_committee` path.
     async fn bootstrap_admin_chain_from_genesis(&self) -> Result<(), chain_client::Error> {
-        tracing::warn!(
+        tracing::error!(
             admin_chain_id = %self.admin_chain_id,
             "FIX_LOCAL_EVENT_NOT_FOUND: bootstrapping admin chain from genesis committee"
         );
@@ -1787,6 +1787,11 @@ impl<Env: Environment> Client<Env> {
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
     ) -> Result<(), chain_client::Error> {
+        tracing::error!(
+            %chain_id,
+            remote_node = remote_node.address(),
+            "FIX_LOCAL_EVENT_NOT_FOUND: entered synchronize_chain_state_from"
+        );
         let with_manager_values = !self.is_chain_follow_only(chain_id).await;
         let query = if with_manager_values {
             ChainInfoQuery::new(chain_id).with_manager_values()
