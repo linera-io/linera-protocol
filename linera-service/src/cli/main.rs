@@ -1462,7 +1462,7 @@ impl Runnable for Job {
                     .read_events_from_index(&chain_id, &stream_id, start_index)
                     .await?;
                 let json = serde_json::to_string_pretty(&index_events)?;
-                println!("{}", json);
+                println!("{json}");
                 info!("Events listed in {} ms", start_time.elapsed().as_millis());
             }
 
@@ -1850,7 +1850,7 @@ impl Runnable for Job {
                     .await
                     .context("Failed to find the given block in storage")?;
                 let json = serde_json::to_string_pretty(&block)?;
-                println!("{}", json);
+                println!("{json}");
             }
 
             Chain(ChainCommand::ShowChainDescription { chain_id }) => {
@@ -1868,7 +1868,7 @@ impl Runnable for Job {
                     err => err.context("Failed to get the chain description")?,
                 };
                 let json = serde_json::to_string_pretty(&description)?;
-                println!("{}", json);
+                println!("{json}");
             }
 
             Validator(validator_command) => {
