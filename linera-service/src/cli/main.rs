@@ -677,6 +677,7 @@ impl Runnable for Job {
                                             .transpose()
                                             .expect("Invalid application ID")
                                             .unwrap_or(existing_policy.free_application_ids),
+                                        flags: existing_policy.flags,
                                     };
                                     info!("{policy}");
                                     if committee.policy() == &policy {
@@ -2294,6 +2295,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     .transpose()
                     .expect("Invalid application ID")
                     .unwrap_or(existing_policy.free_application_ids),
+                flags: existing_policy.flags,
             };
             let timestamp = start_timestamp.map_or_else(Timestamp::now, |st| {
                 let micros =

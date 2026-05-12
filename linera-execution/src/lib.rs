@@ -68,7 +68,7 @@ pub use crate::{
     committee::{Committee, SharedCommittees},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
-    policy::ResourceControlPolicy,
+    policy::{ProtocolFlag, ResourceControlPolicy},
     resources::{BalanceHolder, ResourceController, ResourceTracker},
     runtime::{
         ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,
