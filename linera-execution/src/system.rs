@@ -512,10 +512,11 @@ where
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
-                let admin_chain_id = self
-                    .admin_chain_id
-                    .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
+                let admin_chain_id = self.admin_chain_id.get().ok_or_else(|| {
+                    ExecutionError::InternalError(
+                        "execute_operation called for uninitialized chain",
+                    )
+                })?;
                 let event_id = EventId {
                     chain_id: admin_chain_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
