@@ -9,7 +9,7 @@
 //! It also sets overarching limits such as the maximum fuel allowed per block,
 //! the maximum block size, and limits on concurrent operations.
 
-use std::{collections::BTreeSet, fmt};
+use std::{collections::BTreeSet, fmt, str::FromStr};
 
 use allocative::Allocative;
 use linera_base::{
@@ -19,6 +19,7 @@ use linera_base::{
     vm::VmRuntime,
 };
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::ExecutionError;
 
@@ -45,6 +46,27 @@ pub enum ProtocolFlag {
     #[doc(hidden)]
     _Reserved = 0,
 }
+
+impl fmt::Display for ProtocolFlag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProtocolFlag::_Reserved => write!(f, "_Reserved"),
+        }
+    }
+}
+
+impl FromStr for ProtocolFlag {
+    type Err = InvalidProtocolFlag;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Err(InvalidProtocolFlag(s.to_owned()))
+    }
+}
+
+/// Error caused by an unrecognized protocol flag name.
+#[derive(Clone, Debug, Error)]
+#[error("{0:?} is not a valid protocol flag")]
+pub struct InvalidProtocolFlag(String);
 
 /// A collection of prices and limits associated with block execution.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]

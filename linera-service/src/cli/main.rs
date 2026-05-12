@@ -595,6 +595,7 @@ impl Runnable for Job {
                                             http_request_timeout_ms,
                                             http_request_allow_list,
                                             free_application_ids,
+                                            flags,
                                         },
                                 } => {
                                     let existing_policy = policy.clone();
@@ -677,7 +678,16 @@ impl Runnable for Job {
                                             .transpose()
                                             .expect("Invalid application ID")
                                             .unwrap_or(existing_policy.free_application_ids),
-                                        flags: existing_policy.flags,
+                                        flags: flags
+                                            .map(|values| {
+                                                values
+                                                    .into_iter()
+                                                    .map(|s| s.parse())
+                                                    .collect::<Result<BTreeSet<_>, _>>()
+                                            })
+                                            .transpose()
+                                            .expect("Invalid protocol flag")
+                                            .unwrap_or(existing_policy.flags),
                                     };
                                     info!("{policy}");
                                     if committee.policy() == &policy {
@@ -2229,6 +2239,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             http_request_timeout_ms,
             http_request_allow_list,
             free_application_ids,
+            flags,
             testing_prng_seed,
             network_name,
         } => {
@@ -2295,7 +2306,17 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     .transpose()
                     .expect("Invalid application ID")
                     .unwrap_or(existing_policy.free_application_ids),
-                flags: existing_policy.flags,
+                flags: flags
+                    .as_ref()
+                    .map(|values| {
+                        values
+                            .iter()
+                            .map(|s| s.parse())
+                            .collect::<Result<BTreeSet<_>, _>>()
+                    })
+                    .transpose()
+                    .expect("Invalid protocol flag")
+                    .unwrap_or(existing_policy.flags),
             };
             let timestamp = start_timestamp.map_or_else(Timestamp::now, |st| {
                 let micros =
