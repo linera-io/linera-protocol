@@ -692,17 +692,6 @@ impl<Env: Environment> ChainClient<Env> {
                 self.synchronize_chain_state(self.chain_id).await?;
                 self.chain_info().await?
             }
-            Err(LocalNodeError::EventsNotFound(event_ids))
-                if event_ids
-                    .iter()
-                    .all(|event_id| event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)) =>
-            {
-                // `initialize_and_save_if_needed` couldn't start the chain because
-                // the admin chain's epoch events aren't synced yet.
-                self.synchronize_chain_state(self.client.admin_chain_id)
-                    .await?;
-                self.chain_info().await?
-            }
             Err(err) => return Err(err.into()),
         };
         let committee = self
@@ -1592,6 +1581,8 @@ impl<Env: Environment> ChainClient<Env> {
         query: Query,
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), Error> {
+        let mut downloaded_blobs = HashSet::<BlobId>::new();
+        let mut events = super::EventSetDownloader::new(&self.client);
         loop {
             let result = self
                 .client
@@ -1599,11 +1590,20 @@ impl<Env: Environment> ChainClient<Env> {
                 .query_application(self.chain_id, query.clone(), block_hash)
                 .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
-                let validators = self.client.validator_nodes().await?;
-                self.client
-                    .update_local_node_with_blobs_from(blob_ids.clone(), &validators)
-                    .await?;
-                continue; // We found the missing blob: retry.
+                let new_blobs = super::filter_new(blob_ids, &downloaded_blobs);
+                if !new_blobs.is_empty() {
+                    let validators = self.client.validator_nodes().await?;
+                    self.client
+                        .update_local_node_with_blobs_from(new_blobs.clone(), &validators)
+                        .await?;
+                    downloaded_blobs.extend(new_blobs);
+                    continue;
+                }
+            }
+            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
+                if events.download_new(event_ids).await? {
+                    continue;
+                }
             }
             return Ok(result?);
         }
@@ -2765,7 +2765,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     #[instrument(level = "trace", skip(local_node))]
-    async fn local_chain_info(
+    async fn maybe_local_chain_info(
         &self,
         chain_id: ChainId,
         local_node: &LocalNodeClient<Env::Storage>,
@@ -2784,7 +2784,7 @@ impl<Env: Environment> ChainClient<Env> {
         local_node: &LocalNodeClient<Env::Storage>,
     ) -> Result<BlockHeight, Error> {
         Ok(self
-            .local_chain_info(chain_id, local_node)
+            .maybe_local_chain_info(chain_id, local_node)
             .await?
             .map_or(BlockHeight::ZERO, |info| info.next_block_height))
     }
@@ -2920,7 +2920,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
-                if let Some(info) = self.local_chain_info(chain_id, &local_node).await? {
+                if let Some(info) = self.maybe_local_chain_info(chain_id, &local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!(
                             chain_id = %self.chain_id,
@@ -2932,7 +2932,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
-                let Some(info) = self.local_chain_info(chain_id, &local_node).await? else {
+                let Some(info) = self.maybe_local_chain_info(chain_id, &local_node).await? else {
                     error!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to read local chain info for {chain_id}"
@@ -3239,6 +3239,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await
         {
             Ok(info) => info.info.next_block_height,
+            // The validator doesn't have this chain's description blob yet.
             Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
             Err(err) => return Err(err.into()),
         };
@@ -3249,9 +3250,9 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok(());
         }
 
-        let heights: Vec<_> = (validator_next_block_height.0..local_next_block_height.0)
+        let heights = (validator_next_block_height.0..local_next_block_height.0)
             .map(BlockHeight)
-            .collect();
+            .collect::<Vec<_>>();
 
         let certificates = self
             .client
@@ -3260,39 +3261,35 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
             .into_iter()
             .flatten()
-            .map(Arc::unwrap_or_clone)
-            .collect::<Vec<_>>();
+            .map(Arc::unwrap_or_clone);
 
         for certificate in certificates {
-            match remote_node
+            let missing_blob_ids = match remote_node
                 .handle_confirmed_certificate(
                     certificate.clone(),
                     CrossChainMessageDelivery::NonBlocking,
                 )
                 .await
             {
-                Ok(_) => (),
-                Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
-                    // Upload the missing blobs we have and retry.
-                    let missing_blobs: Vec<_> = self
-                        .client
-                        .storage_client()
-                        .read_blobs(&missing_blob_ids)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .map(Arc::unwrap_or_clone)
-                        .collect();
-                    remote_node.upload_blobs(missing_blobs).await?;
-                    remote_node
-                        .handle_confirmed_certificate(
-                            certificate,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
-                }
+                Ok(_) => continue,
+                Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
                 Err(err) => return Err(err.into()),
-            }
+            };
+            // The validator is missing blobs the certificate depends on
+            // (including possibly the chain description). Upload and retry.
+            let missing_blobs = self
+                .client
+                .storage_client()
+                .read_blobs(&missing_blob_ids)
+                .await?
+                .into_iter()
+                .flatten()
+                .map(Arc::unwrap_or_clone)
+                .collect();
+            remote_node.upload_blobs(missing_blobs).await?;
+            remote_node
+                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
+                .await?;
         }
 
         Ok(())

@@ -472,10 +472,9 @@ impl<Env: Environment> Client<Env> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
             Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                // Make sure the admin chain is up to date.
+                // Make sure the admin chain is up to date so we can validate the
+                // certificate that creates this chain's description blob.
                 Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
-                // If the chain is missing then the error is a WorkerError
-                // and so a BlobsNotFound
                 self.update_local_node_with_blobs_from(blob_ids, validators)
                     .await?;
                 Ok(self.local_node.chain_info(chain_id).await?)
@@ -684,7 +683,7 @@ impl<Env: Environment> Client<Env> {
     /// the block heights, downloads those certificates, and processes them — all
     /// as one atomic unit per validator attempt, with staggered fallback.
     #[instrument(level = "trace", skip_all)]
-    async fn download_certificates_for_events(
+    pub(crate) async fn download_certificates_for_events(
         &self,
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
@@ -801,19 +800,42 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            info = Some(
-                match self.handle_certificate(certificate.clone()).await {
-                    Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                        self.download_blobs(remote_nodes, &blob_ids).await?;
-                        self.handle_certificate(certificate).await?
-                    }
-                    x => x?,
-                }
-                .info,
-            );
+            let response = self
+                .handle_certificate_with_retry(&certificate, remote_nodes)
+                .await?;
+            info = Some(response.info);
         }
 
         Ok(info)
+    }
+
+    /// Calls `handle_certificate`, retrying with any missing blobs (downloaded
+    /// from `nodes`) and any missing events (downloaded from the publisher
+    /// chains via the current validators).
+    async fn handle_certificate_with_retry(
+        &self,
+        certificate: &ConfirmedBlockCertificate,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+    ) -> Result<ChainInfoResponse, chain_client::Error> {
+        let mut downloaded_blobs = HashSet::<BlobId>::new();
+        let mut events = EventSetDownloader::new(self);
+        loop {
+            let result = self.handle_certificate(certificate.clone()).await;
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                let new_blobs = filter_new(blob_ids, &downloaded_blobs);
+                if !new_blobs.is_empty() {
+                    self.download_blobs(nodes, &new_blobs).await?;
+                    downloaded_blobs.extend(new_blobs);
+                    continue;
+                }
+            }
+            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
+                if events.download_new(event_ids).await? {
+                    continue;
+                }
+            }
+            return Ok(result?);
+        }
     }
 
     async fn handle_certificate<T: ProcessableCertificate>(
@@ -1177,22 +1199,9 @@ impl<Env: Environment> Client<Env> {
             .await?;
         // Process the received operations. Download required hashed certificate values if
         // necessary.
-        if let Err(err) = self.handle_certificate(certificate.clone()).await {
-            match &err {
-                LocalNodeError::BlobsNotFound(blob_ids) => {
-                    self.download_blobs(&self.validator_nodes().await?, blob_ids)
-                        .await
-                        .map_err(|_| err)?;
-                    self.handle_certificate(certificate).await?;
-                }
-                _ => {
-                    // The certificate is not as expected. Give up.
-                    warn!("Failed to process network hashed certificate value");
-                    return Err(err.into());
-                }
-            }
-        }
-
+        let nodes = self.validator_nodes().await?;
+        self.handle_certificate_with_retry(&certificate, &nodes)
+            .await?;
         Ok(())
     }
 
@@ -1215,20 +1224,8 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        if let Err(err) = self.handle_certificate(certificate.clone()).await {
-            match &err {
-                LocalNodeError::BlobsNotFound(blob_ids) => {
-                    self.download_blobs(&nodes, blob_ids).await?;
-                    self.handle_certificate(certificate.clone()).await?;
-                }
-                _ => {
-                    // The certificate is not as expected. Give up.
-                    warn!("Failed to process network hashed certificate value");
-                    return Err(err.into());
-                }
-            }
-        }
-
+        self.handle_certificate_with_retry(&certificate, &nodes)
+            .await?;
         Ok(())
     }
 
@@ -1853,6 +1850,30 @@ impl<Env: Environment> Client<Env> {
                         }
                     }
                 }
+                if let LocalNodeError::EventsNotFound(event_ids) = &err {
+                    if let Err(error) =
+                        Box::pin(self.download_certificates_for_events(event_ids)).await
+                    {
+                        info!(
+                            remote_node = remote_node.address(),
+                            height = %local_height,
+                            proposer = %owner,
+                            %error,
+                            "skipping proposal from validator; failed to download events",
+                        );
+                        continue 'proposal_loop;
+                    }
+                    // We found the missing publisher chain data: retry.
+                    if let Err(new_err) = self
+                        .local_node
+                        .handle_block_proposal(proposal.clone())
+                        .await
+                    {
+                        err = new_err;
+                    } else {
+                        continue;
+                    }
+                }
                 while let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
                     if let ChainError::MissingCrossChainUpdate {
                         chain_id,
@@ -1898,24 +1919,35 @@ impl<Env: Environment> Client<Env> {
         certificate: GenericCertificate<ValidatedBlock>,
     ) -> Result<(), chain_client::Error> {
         let chain_id = certificate.inner().chain_id();
-        match self.handle_certificate(certificate.clone()).await {
-            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
-                let mut blobs = Vec::new();
-                for blob_id in blob_ids {
-                    let blob_content = self
-                        .requests_scheduler
-                        .download_pending_blob(remote_node, chain_id, blob_id)
+        let mut downloaded_blobs = HashSet::<BlobId>::new();
+        let mut events = EventSetDownloader::new(self);
+        loop {
+            let result = self.handle_certificate(certificate.clone()).await;
+            if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
+                let new_blobs = filter_new(blob_ids, &downloaded_blobs);
+                if !new_blobs.is_empty() {
+                    let mut blobs = Vec::new();
+                    for blob_id in &new_blobs {
+                        let blob_content = self
+                            .requests_scheduler
+                            .download_pending_blob(remote_node, chain_id, *blob_id)
+                            .await?;
+                        blobs.push(Blob::new(blob_content));
+                    }
+                    self.local_node
+                        .handle_pending_blobs(chain_id, blobs)
                         .await?;
-                    blobs.push(Blob::new(blob_content));
+                    downloaded_blobs.extend(new_blobs);
+                    continue;
                 }
-                self.local_node
-                    .handle_pending_blobs(chain_id, blobs)
-                    .await?;
-                self.handle_certificate(certificate).await?;
-                Ok(())
             }
-            Err(err) => Err(err.into()),
-            Ok(_) => Ok(()),
+            if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
+                if events.download_new(event_ids).await? {
+                    continue;
+                }
+            }
+            result?;
+            return Ok(());
         }
     }
 
@@ -1980,7 +2012,7 @@ impl<Env: Environment> Client<Env> {
         published_blobs: Vec<Blob>,
         policy: BundleExecutionPolicy,
     ) -> Result<(Block, ChainInfoResponse, HashSet<ChainId>), chain_client::Error> {
-        let mut downloaded_events = HashSet::<EventId>::new();
+        let mut events = EventSetDownloader::new(self);
         loop {
             let result = self
                 .local_node
@@ -1998,14 +2030,7 @@ impl<Env: Environment> Client<Env> {
                 continue; // We found the missing blob: retry.
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                let new_events = event_ids
-                    .iter()
-                    .filter(|id| !downloaded_events.contains(id))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if !new_events.is_empty() {
-                    Box::pin(self.download_certificates_for_events(&new_events)).await?;
-                    downloaded_events.extend(new_events);
+                if events.download_new(event_ids).await? {
                     continue; // We downloaded new publisher chain data: retry.
                 }
                 // All reported events were already downloaded; don't loop forever.
@@ -2030,6 +2055,53 @@ impl<Env: Environment> Client<Env> {
             ) = result?;
             return Ok((executed_block, response, never_reject_origins));
         }
+    }
+}
+
+/// Returns the items in `ids` that are not yet present in `already_downloaded`.
+fn filter_new<T: Clone + Eq + std::hash::Hash>(
+    ids: &[T],
+    already_downloaded: &HashSet<T>,
+) -> Vec<T> {
+    ids.iter()
+        .filter(|id| !already_downloaded.contains(*id))
+        .cloned()
+        .collect()
+}
+
+/// Per-call deduplication for an event-download retry loop. Holds the set of
+/// events the loop has already downloaded and the [`Client`] used to fetch new
+/// ones — call `download_new` each time the inner operation reports
+/// `EventsNotFound` and continue the loop only if it returns `true`.
+pub(crate) struct EventSetDownloader<'a, Env: Environment> {
+    client: &'a Client<Env>,
+    downloaded: HashSet<EventId>,
+}
+
+impl<'a, Env: Environment> EventSetDownloader<'a, Env> {
+    pub(crate) fn new(client: &'a Client<Env>) -> Self {
+        Self {
+            client,
+            downloaded: HashSet::new(),
+        }
+    }
+
+    /// If any of `event_ids` haven't been downloaded yet, fetches the publisher
+    /// certificates that contain them and returns `true`. Returns `false`
+    /// (without downloading) if every reported event has already been
+    /// downloaded — that prevents an infinite retry loop when the events are
+    /// genuinely unavailable.
+    pub(crate) async fn download_new(
+        &mut self,
+        event_ids: &[EventId],
+    ) -> Result<bool, chain_client::Error> {
+        let new_events = filter_new(event_ids, &self.downloaded);
+        if new_events.is_empty() {
+            return Ok(false);
+        }
+        Box::pin(self.client.download_certificates_for_events(&new_events)).await?;
+        self.downloaded.extend(new_events);
+        Ok(true)
     }
 }
 
