@@ -1063,7 +1063,7 @@ where
                 // No need to wait. Also, cross-chain requests may not trigger the
                 // notifier later, even if we register it.
                 if let Err(()) = notifier.send(()) {
-                    warn!("Failed to notify message delivery to caller");
+                    debug!("Failed to notify message delivery to caller (early case)");
                 }
             }
         }
