@@ -13,7 +13,7 @@
 use alloy::{providers::ProviderBuilder, sol};
 use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_linera_token, fetch_latest_cert,
+    compose_file_path, deploy_fungible_bridge, deploy_linera_token_with_supply, fetch_latest_cert,
     fund_bridge_erc20, light_client_address, publish_and_create_wrapped_fungible,
     set_anvil_block_gas_limit, start_compose, wait_for_light_client,
 };
@@ -33,26 +33,24 @@ sol! {
     }
 }
 
-/// Hard cap on the search range. Bounds chain-A block construction cost and
-/// keeps the test runtime predictable. Capped at 1000 because the
-/// `LineraToken` deploy script mints exactly 1000 tokens to the anvil
-/// deployer, and the bridge must hold `MAX_SEARCH_N * BURN_AMOUNT_TOKENS`
-/// to make `eth_estimateGas` succeed at the upper search bound (a dry-run
-/// `token.transfer` reverts on insufficient balance and surfaces as an
-/// estimate error).
+/// Hard cap on the search range. Bounds chain-A block construction cost
+/// and keeps the test runtime predictable. The ERC-20 supply minted to
+/// the bridge is sized off this constant (see `deploy_linera_token_with_supply`
+/// call below), so widening it just costs more iterations — no balance
+/// constraint.
 const MAX_SEARCH_N: u32 = 1000;
 
 /// Chain-B pre-funded balance: enough wrapped-fungible to issue
-/// `MAX_SEARCH_N * doubling_plus_bisect_iterations` `Transfer` ops. ~20 search
-/// iterations × 1000 burns × 1 token each ≈ 20 000 tokens upper bound; round
-/// up to 100 000 for headroom.
-const INITIAL_BALANCE_TOKENS: u128 = 100_000;
+/// `MAX_SEARCH_N * doubling_plus_bisect_iterations * BURN_AMOUNT_TOKENS`
+/// `Transfer` ops. Sized well above the worst case so the test never
+/// runs out of source-chain balance regardless of `BURN_AMOUNT_TOKENS`.
+const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(32);
 
-/// Each burn moves exactly one wrapped-fungible token to a fresh
+/// Each burn moves exactly this many wrapped-fungible tokens to a fresh
 /// `Address20`. Constant token amount keeps per-burn EVM gas constant
 /// (the per-burn cost is dominated by the storage write + ERC-20 transfer,
 /// not by the amount value).
-const BURN_AMOUNT_TOKENS: u128 = 1;
+const BURN_AMOUNT_TOKENS: u128 = 10u128.pow(15);
 
 #[test_case("ethereum",     30_000_000,  Some(50); "ethereum")]
 #[test_case("base",         240_000_000, Some(190); "base")]
@@ -129,7 +127,11 @@ async fn burns_per_evm_tx(
     let cc_b = ctx.make_chain_client(chain_b).await?;
     cc_b.synchronize_from_validators().await?;
 
-    let erc20_addr = deploy_linera_token(&compose, &project_name, &compose_file).await?;
+    // Mint enough so the bridge can be funded for the largest search step.
+    let token_supply_attos = u128::from(MAX_SEARCH_N) * BURN_AMOUNT_TOKENS * 10u128.pow(18);
+    let erc20_addr =
+        deploy_linera_token_with_supply(&compose, &project_name, &compose_file, token_supply_attos)
+            .await?;
     let fungible_app_id = publish_and_create_wrapped_fungible(
         &cc_b,
         owner_b,
@@ -152,16 +154,15 @@ async fn burns_per_evm_tx(
     )
     .await?;
 
-    // Fund the bridge with enough ERC-20 to cover up to MAX_SEARCH_N
-    // releases even though estimation is a dry run — keeps the test
-    // robust if we later switch from estimate to live submission.
+    // Fund the bridge with the full mint so a dry-run `token.transfer`
+    // at the upper search bound never reverts for insufficient balance.
     fund_bridge_erc20(
         &compose,
         &project_name,
         &compose_file,
         erc20_addr,
         bridge_addr,
-        u128::from(MAX_SEARCH_N) * BURN_AMOUNT_TOKENS * 10u128.pow(18),
+        token_supply_attos,
     )
     .await;
 

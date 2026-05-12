@@ -199,6 +199,34 @@ pub async fn deploy_linera_token(
     parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
 }
 
+/// Same as [`deploy_linera_token`] but overrides the initial token supply
+/// minted to the anvil deployer via the script's `TOKEN_SUPPLY` env var.
+/// `supply_attos` is the raw atto amount — pass `tokens * 10u128.pow(18)`
+/// for whole-token amounts.
+pub async fn deploy_linera_token_with_supply(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    supply_attos: u128,
+) -> anyhow::Result<Address> {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "env TOKEN_SUPPLY={supply_attos} \
+             forge script /contracts/script/DeployLineraToken.s.sol \
+             --root /contracts \
+             --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             --broadcast"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
+}
+
 /// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge
 /// script and returns the deployed contract address.
 pub async fn deploy_fungible_bridge(
@@ -517,17 +545,8 @@ where
     E: linera_core::environment::Environment,
 {
     use anyhow::Context as _;
-    chain_client
-        .synchronize_from_validators()
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?;
-    let info = chain_client
-        .chain_info()
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?;
+    chain_client.synchronize_from_validators().await?;
+    let info = chain_client.chain_info().await?;
     let hash = info.block_hash.context("chain has no blocks yet")?;
-    chain_client
-        .read_certificate(hash)
-        .await
-        .map_err(|e| anyhow::anyhow!(e))
+    Ok(chain_client.read_certificate(hash).await?)
 }
