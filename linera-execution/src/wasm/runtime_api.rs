@@ -491,6 +491,16 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Returns the timestamp of the block on the origin chain that sent the current message,
+    /// or [`None`] if not executing an incoming message.
+    fn message_origin_timestamp(caller: &mut Caller) -> Result<Option<Timestamp>, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .message_origin_timestamp()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Returns the authenticated caller ID, if the caller configured it and if the current context.
     fn authenticated_caller_id(caller: &mut Caller) -> Result<Option<ApplicationId>, RuntimeError> {
         caller

@@ -50,6 +50,10 @@ impl Contract for MetaCounterContract {
 
     async fn execute_operation(&mut self, operation: Operation) {
         log::trace!("operation: {:?}", operation);
+        assert!(
+            self.runtime.message_origin_timestamp().is_none(),
+            "Origin timestamp must not be set when executing an operation"
+        );
         let Operation {
             recipient_id,
             authenticated,
@@ -83,6 +87,14 @@ impl Contract for MetaCounterContract {
             .runtime
             .message_is_bouncing()
             .expect("Message delivery status has to be available when executing a message");
+        let origin_timestamp = self
+            .runtime
+            .message_origin_timestamp()
+            .expect("Origin timestamp has to be available when executing a message");
+        assert!(
+            origin_timestamp <= self.runtime.system_time(),
+            "Origin timestamp must not be in the future"
+        );
         if is_bouncing {
             log::trace!("receiving a bouncing message {message:?}");
             return;

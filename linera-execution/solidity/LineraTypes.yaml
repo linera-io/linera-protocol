@@ -106,6 +106,10 @@ OptionChainId:
   NEWTYPESTRUCT:
     OPTION:
       TYPENAME: ChainId
+OptionTimestamp:
+  NEWTYPESTRUCT:
+    OPTION:
+      TYPENAME: Timestamp
 StreamName:
   NEWTYPESTRUCT: BYTES
 ApplicationId:
@@ -211,6 +215,8 @@ ContractRuntimePrecompile:
               TYPENAME: Account
           - amount:
               TYPENAME: Amount
+    13:
+      MessageOriginTimestamp: UNIT
 ServiceRuntimePrecompile:
   ENUM:
     0:

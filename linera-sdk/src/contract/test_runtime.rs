@@ -62,6 +62,7 @@ where
     round: Option<u32>,
     message_is_bouncing: Option<Option<bool>>,
     message_origin_chain_id: Option<Option<ChainId>>,
+    message_origin_timestamp: Option<Option<Timestamp>>,
     authenticated_caller_id: Option<Option<ApplicationId>>,
     timestamp: Option<Timestamp>,
     chain_balance: Option<Amount>,
@@ -115,6 +116,7 @@ where
             round: None,
             message_is_bouncing: None,
             message_origin_chain_id: None,
+            message_origin_timestamp: None,
             authenticated_caller_id: None,
             timestamp: None,
             chain_balance: None,
@@ -380,6 +382,24 @@ where
         self.message_origin_chain_id.expect(
             "`message_origin_chain_id` has not been mocked, \
             please call `MockContractRuntime::set_message_origin_chain_id` first",
+        )
+    }
+
+    /// Configures the `message_origin_timestamp` to return during the test.
+    pub fn set_message_origin_timestamp(
+        &mut self,
+        message_origin_timestamp: impl Into<Option<Timestamp>>,
+    ) -> &mut Self {
+        self.message_origin_timestamp = Some(message_origin_timestamp.into());
+        self
+    }
+
+    /// Returns the timestamp of the block on the origin chain that sent the incoming message,
+    /// or [`None`] if not executing an incoming message.
+    pub fn message_origin_timestamp(&mut self) -> Option<Timestamp> {
+        self.message_origin_timestamp.expect(
+            "`message_origin_timestamp` has not been mocked, \
+            please call `MockContractRuntime::set_message_origin_timestamp` first",
         )
     }
 

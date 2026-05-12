@@ -277,6 +277,7 @@ async fn test_fee_consumption(
     let context = MessageContext {
         chain_id,
         origin: chain_id,
+        origin_timestamp: Timestamp::default(),
         is_bouncing: false,
         authenticated_owner,
         refund_grant_to,
@@ -476,6 +477,7 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
     let context = MessageContext {
         chain_id,
         origin: chain_id,
+        origin_timestamp: Timestamp::default(),
         is_bouncing: false,
         authenticated_owner: Some(signer),
         refund_grant_to,

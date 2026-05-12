@@ -5,7 +5,7 @@
 
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, StreamUpdate},
+    data_types::{Amount, StreamUpdate, Timestamp},
     identifiers::{
         AccountOwner, ApplicationId, ChainId, DataBlobHash, GenericApplicationId, ModuleId,
         StreamId, StreamName,
@@ -89,6 +89,12 @@ impl From<wit_contract_api::ApplicationId> for ApplicationId {
 impl From<wit_contract_api::ChainId> for ChainId {
     fn from(chain_id: wit_contract_api::ChainId) -> Self {
         ChainId(chain_id.inner0.into())
+    }
+}
+
+impl From<wit_contract_api::Timestamp> for Timestamp {
+    fn from(timestamp: wit_contract_api::Timestamp) -> Self {
+        Timestamp::from(timestamp.inner0)
     }
 }
 

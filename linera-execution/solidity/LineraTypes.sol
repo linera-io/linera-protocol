@@ -629,6 +629,7 @@ library LineraTypes {
         // choice=11 corresponds to ValidationRound
         // choice=12 corresponds to Transfer
         ContractRuntimePrecompile_Transfer transfer_;
+        // choice=13 corresponds to MessageOriginTimestamp
     }
 
     function ContractRuntimePrecompile_case_authenticated_owner()
@@ -831,6 +832,22 @@ library LineraTypes {
         return ContractRuntimePrecompile(uint8(12), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service, transfer_);
     }
 
+    function ContractRuntimePrecompile_case_message_origin_timestamp()
+        internal
+        pure
+        returns (ContractRuntimePrecompile memory)
+    {
+        ContractRuntimePrecompile_SendMessage memory send_message;
+        ContractRuntimePrecompile_TryCallApplication memory try_call_application;
+        ContractRuntimePrecompile_Emit memory emit_;
+        ContractRuntimePrecompile_ReadEvent memory read_event;
+        ContractRuntimePrecompile_SubscribeToEvents memory subscribe_to_events;
+        ContractRuntimePrecompile_UnsubscribeFromEvents memory unsubscribe_from_events;
+        ContractRuntimePrecompile_QueryService memory query_service;
+        ContractRuntimePrecompile_Transfer memory transfer_;
+        return ContractRuntimePrecompile(uint8(13), send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service, transfer_);
+    }
+
     function bcs_serialize_ContractRuntimePrecompile(ContractRuntimePrecompile memory input)
         internal
         pure
@@ -903,7 +920,7 @@ library LineraTypes {
         if (choice == 12) {
             (new_pos, transfer_) = bcs_deserialize_offset_ContractRuntimePrecompile_Transfer(new_pos, input);
         }
-        require(choice < 13);
+        require(choice < 14);
         return (new_pos, ContractRuntimePrecompile(choice, send_message, try_call_application, emit_, read_event, subscribe_to_events, unsubscribe_from_events, query_service, transfer_));
     }
 
@@ -1560,6 +1577,41 @@ library LineraTypes {
         uint256 new_pos;
         OptionChainId memory value;
         (new_pos, value) = bcs_deserialize_offset_OptionChainId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct OptionTimestamp {
+        opt_Timestamp value;
+    }
+
+    function bcs_serialize_OptionTimestamp(OptionTimestamp memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_opt_Timestamp(input.value);
+    }
+
+    function bcs_deserialize_offset_OptionTimestamp(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OptionTimestamp memory)
+    {
+        uint256 new_pos;
+        opt_Timestamp memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_Timestamp(pos, input);
+        return (new_pos, OptionTimestamp(value));
+    }
+
+    function bcs_deserialize_OptionTimestamp(bytes memory input)
+        internal
+        pure
+        returns (OptionTimestamp memory)
+    {
+        uint256 new_pos;
+        OptionTimestamp memory value;
+        (new_pos, value) = bcs_deserialize_offset_OptionTimestamp(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -2450,6 +2502,50 @@ library LineraTypes {
         uint256 new_pos;
         opt_TimeDelta memory value;
         (new_pos, value) = bcs_deserialize_offset_opt_TimeDelta(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct opt_Timestamp {
+        bool has_value;
+        Timestamp value;
+    }
+
+    function bcs_serialize_opt_Timestamp(opt_Timestamp memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_Timestamp(input.value));
+        } else {
+            return abi.encodePacked(uint8(0));
+        }
+    }
+
+    function bcs_deserialize_offset_opt_Timestamp(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, opt_Timestamp memory)
+    {
+        uint256 new_pos;
+        bool has_value;
+        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
+        Timestamp memory value;
+        if (has_value) {
+            (new_pos, value) = bcs_deserialize_offset_Timestamp(new_pos, input);
+        }
+        return (new_pos, opt_Timestamp(has_value, value));
+    }
+
+    function bcs_deserialize_opt_Timestamp(bytes memory input)
+        internal
+        pure
+        returns (opt_Timestamp memory)
+    {
+        uint256 new_pos;
+        opt_Timestamp memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_Timestamp(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
