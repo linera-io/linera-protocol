@@ -56,6 +56,7 @@ const BURN_AMOUNT_TOKENS: u128 = 1;
 /// estimate the gas required by `bridge.addBlock(cert_bytes)`.
 ///
 /// Returns the estimated gas. Reverts surface as `Err`.
+#[allow(clippy::too_many_arguments)]
 async fn build_and_estimate<P, E>(
     n: u32,
     cc_a: &linera_core::client::ChainClient<E>,
