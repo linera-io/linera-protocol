@@ -54,85 +54,8 @@ const INITIAL_BALANCE_TOKENS: u128 = 100_000;
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 1;
 
-/// Bundles `n` `WrappedFungibleOperation::Transfer` ops into a single
-/// chain-B block, drives `cc_a.process_inbox()` (which produces one
-/// chain-A block with `n` `BurnEvent`s), reads the resulting
-/// `ConfirmedBlockCertificate`, BCS-encodes it, and asks anvil to
-/// estimate the gas required by `bridge.addBlock(cert_bytes)`.
-///
-/// Returns the estimated gas. Reverts surface as `Err`.
-#[allow(clippy::too_many_arguments)]
-async fn build_and_estimate<P, E>(
-    n: u32,
-    cc_a: &linera_core::client::ChainClient<E>,
-    cc_b: &linera_core::client::ChainClient<E>,
-    owner_b: AccountOwner,
-    chain_a: linera_base::identifiers::ChainId,
-    fungible_app_id: linera_base::identifiers::ApplicationId,
-    bridge_addr: alloy::primitives::Address,
-    provider: &P,
-) -> anyhow::Result<u64>
-where
-    P: alloy::providers::Provider,
-    E: linera_core::environment::Environment,
-{
-    use anyhow::Context as _;
-
-    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
-    let operations = (1..=n)
-        .map(|i| {
-            // Deterministic distinct recipients; high bytes spell out the
-            // iteration counter so log inspection makes the address ↔ burn
-            // mapping easy to read. Start from 1 — `Address20(0…0)` is the
-            // zero address and ERC-20 rejects transfers to it.
-            let mut bytes = [0u8; 20];
-            bytes[16..].copy_from_slice(&i.to_be_bytes());
-            let owner = AccountOwner::Address20(bytes);
-            let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
-                owner: owner_b,
-                amount: burn_amount,
-                target_account: Account {
-                    chain_id: chain_a,
-                    owner,
-                },
-            })
-            .expect("BCS serialization");
-            Operation::User {
-                application_id: fungible_app_id,
-                bytes: withdraw_bytes,
-            }
-        })
-        .collect::<Vec<_>>();
-
-    cc_b.synchronize_from_validators().await?;
-    cc_b.execute_operations(operations, vec![])
-        .await?
-        .expect("chain-B execute_operations committed");
-
-    cc_a.synchronize_from_validators().await?;
-    let height_before = cc_a.chain_info().await?.next_block_height;
-    cc_a.process_inbox().await?;
-    let height_after = cc_a.chain_info().await?.next_block_height;
-    anyhow::ensure!(
-        height_after.0 == height_before.0 + 1,
-        "chain A must produce exactly ONE block (n={n}, before={height_before}, after={height_after})"
-    );
-
-    let cert = fetch_latest_cert(cc_a).await?;
-    let cert_bytes = bcs::to_bytes(&cert).context("BCS-serialize cert")?;
-
-    let bridge = IFungibleBridge::new(bridge_addr, provider);
-    let gas = bridge
-        .addBlock(cert_bytes.into())
-        .estimate_gas()
-        .await
-        .with_context(|| format!("estimate_gas(addBlock) for n={n}"))?;
-
-    Ok(gas)
-}
-
-#[test_case("ethereum",     30_000_000,  None; "ethereum")]
-#[test_case("base",         240_000_000, None; "base")]
+#[test_case("ethereum",     30_000_000,  Some(50); "ethereum")]
+#[test_case("base",         240_000_000, Some(190); "base")]
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and bridge contracts.
 async fn burns_per_evm_tx(
@@ -254,11 +177,11 @@ async fn burns_per_evm_tx(
         &provider,
     )
     .await?;
-    tracing::info!(n = hi, gas = hi_gas, "search: initial hi");
+    tracing::info!(n = hi, gas = hi_gas, "search: initial `Burn` ops count");
 
     while hi_gas <= block_gas_limit && hi < MAX_SEARCH_N {
         let next_hi = hi.saturating_mul(2).min(MAX_SEARCH_N);
-        let g = build_and_estimate(
+        let gas = build_and_estimate(
             next_hi,
             &cc_a,
             &cc_b,
@@ -269,9 +192,13 @@ async fn burns_per_evm_tx(
             &provider,
         )
         .await?;
-        tracing::info!(n = next_hi, gas = g, "search: doubling");
         hi = next_hi;
-        hi_gas = g;
+        hi_gas = gas;
+        if hi_gas > block_gas_limit {
+            tracing::info!(burn_ops = next_hi, gas, "search: found upper bound");
+            break;
+        }
+        tracing::info!(burn_ops = next_hi, gas, "search: doubling, still under limit");
         if hi == MAX_SEARCH_N {
             break;
         }
@@ -359,4 +286,81 @@ async fn burns_per_evm_tx(
     }
 
     Ok(())
+}
+
+/// Bundles `n` `WrappedFungibleOperation::Transfer` ops into a single
+/// chain-B block, drives `cc_a.process_inbox()` (which produces one
+/// chain-A block with `n` `BurnEvent`s), reads the resulting
+/// `ConfirmedBlockCertificate`, BCS-encodes it, and asks anvil to
+/// estimate the gas required by `bridge.addBlock(cert_bytes)`.
+///
+/// Returns the estimated gas. Reverts surface as `Err`.
+#[allow(clippy::too_many_arguments)]
+async fn build_and_estimate<P, E>(
+    n: u32,
+    cc_a: &linera_core::client::ChainClient<E>,
+    cc_b: &linera_core::client::ChainClient<E>,
+    owner_b: AccountOwner,
+    chain_a: linera_base::identifiers::ChainId,
+    fungible_app_id: linera_base::identifiers::ApplicationId,
+    bridge_addr: alloy::primitives::Address,
+    provider: &P,
+) -> anyhow::Result<u64>
+where
+    P: alloy::providers::Provider,
+    E: linera_core::environment::Environment,
+{
+    use anyhow::Context as _;
+
+    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
+    let operations = (1..=n)
+        .map(|i| {
+            // Deterministic distinct recipients; high bytes spell out the
+            // iteration counter so log inspection makes the address ↔ burn
+            // mapping easy to read. Start from 1 — `Address20(0…0)` is the
+            // zero address and ERC-20 rejects transfers to it.
+            let mut bytes = [0u8; 20];
+            bytes[16..].copy_from_slice(&i.to_be_bytes());
+            let owner = AccountOwner::Address20(bytes);
+            let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
+                owner: owner_b,
+                amount: burn_amount,
+                target_account: Account {
+                    chain_id: chain_a,
+                    owner,
+                },
+            })
+            .expect("BCS serialization");
+            Operation::User {
+                application_id: fungible_app_id,
+                bytes: withdraw_bytes,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    cc_b.synchronize_from_validators().await?;
+    cc_b.execute_operations(operations, vec![])
+        .await?
+        .expect("chain-B execute_operations committed");
+
+    cc_a.synchronize_from_validators().await?;
+    let height_before = cc_a.chain_info().await?.next_block_height;
+    cc_a.process_inbox().await?;
+    let height_after = cc_a.chain_info().await?.next_block_height;
+    anyhow::ensure!(
+        height_after.0 == height_before.0 + 1,
+        "chain A must produce exactly ONE block (n={n}, before={height_before}, after={height_after})"
+    );
+
+    let cert = fetch_latest_cert(cc_a).await?;
+    let cert_bytes = bcs::to_bytes(&cert).context("BCS-serialize cert")?;
+
+    let bridge = IFungibleBridge::new(bridge_addr, provider);
+    let gas = bridge
+        .addBlock(cert_bytes.into())
+        .estimate_gas()
+        .await
+        .with_context(|| format!("estimate_gas(addBlock) for n={n}"))?;
+
+    Ok(gas)
 }
