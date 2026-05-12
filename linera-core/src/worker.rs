@@ -370,9 +370,6 @@ pub enum WorkerError {
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
 
-    #[error("The chain {0} is not initialized in the local node")]
-    InactiveChain(ChainId),
-
     // Other server-side errors
     #[error("Invalid cross-chain request")]
     InvalidCrossChainRequest,
@@ -434,7 +431,6 @@ impl WorkerError {
             | WorkerError::UnexpectedBlockHeight { .. }
             | WorkerError::InvalidEpoch { .. }
             | WorkerError::EventsNotFound(_)
-            | WorkerError::InactiveChain(_)
             | WorkerError::InvalidBlockChaining
             | WorkerError::InvalidTimestamp { .. }
             | WorkerError::MissingCertificateValue
@@ -503,7 +499,6 @@ impl From<ChainError> for WorkerError {
     #[instrument(level = "trace", skip(chain_error))]
     fn from(chain_error: ChainError) -> Self {
         match chain_error {
-            ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
                 ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
                 ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),

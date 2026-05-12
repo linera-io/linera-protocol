@@ -2721,7 +2721,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<Option<Box<ChainInfo>>, Error> {
         match local_node.chain_info(chain_id).await {
             Ok(info) => Ok(Some(info)),
-            Err(err) if err.is_chain_uninitialized() => Ok(None),
+            Err(LocalNodeError::BlobsNotFound(_) | LocalNodeError::InactiveChain(_)) => Ok(None),
             Err(err) => Err(err.into()),
         }
     }

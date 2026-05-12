@@ -1627,7 +1627,9 @@ impl<Env: Environment> Client<Env> {
         }
         let local_height = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
-            Err(error) if error.is_chain_uninitialized() => BlockHeight::ZERO,
+            Err(LocalNodeError::InactiveChain(_) | LocalNodeError::BlobsNotFound(_)) => {
+                BlockHeight::ZERO
+            }
             Err(error) => return Err(error.into()),
         };
         self.download_event_bearing_blocks(
