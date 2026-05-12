@@ -11,7 +11,7 @@ use futures::{stream::FuturesUnordered, TryStreamExt as _};
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{ArithmeticError, Blob, BlockHeight},
-    identifiers::{BlobId, ChainId, EventId, StreamId},
+    identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
@@ -72,10 +72,26 @@ pub enum LocalNodeError {
     EventsNotFound(Vec<EventId>),
 }
 
+impl LocalNodeError {
+    /// Returns true if this error means the chain is not (yet) initialized in
+    /// the local node: its `ChainDescription` blob is missing, or its
+    /// activation state is missing. Callers that fall back to a "no
+    /// information yet" default should treat both the same — unrelated
+    /// `BlobsNotFound` errors must still surface as real failures.
+    pub fn is_chain_uninitialized(&self) -> bool {
+        match self {
+            LocalNodeError::InactiveChain(_) => true,
+            LocalNodeError::BlobsNotFound(blob_ids) => blob_ids
+                .iter()
+                .all(|blob_id| blob_id.blob_type == BlobType::ChainDescription),
+            _ => false,
+        }
+    }
+}
+
 impl From<ExecutionError> for LocalNodeError {
     fn from(error: ExecutionError) -> Self {
         match error {
-            ExecutionError::InactiveChain(chain_id) => LocalNodeError::InactiveChain(chain_id),
             ExecutionError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
             ExecutionError::EventsNotFound(event_ids) => LocalNodeError::EventsNotFound(event_ids),
             ExecutionError::ViewError(view_error) => LocalNodeError::ViewError(view_error),
@@ -325,7 +341,7 @@ where
                     .await
                 {
                     Ok(info) => info,
-                    Err(LocalNodeError::InactiveChain(_)) => {
+                    Err(err) if err.is_chain_uninitialized() => {
                         return Ok((*chain_id, BlockHeight::ZERO))
                     }
                     Err(err) => Err(err)?,

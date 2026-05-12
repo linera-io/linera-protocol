@@ -476,8 +476,7 @@ impl<Env: Environment> Client<Env> {
             .update(chain_id, |state| state.with_follow_only(follow_only));
     }
 
-    /// Fetches the chain description blob and any missing admin-chain epoch events
-    /// needed to initialize the chain, then returns the chain info.
+    /// Fetches the chain description blob if needed, and returns the chain info.
     async fn fetch_chain_info(
         &self,
         chain_id: ChainId,
@@ -485,13 +484,11 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         match self.local_node.chain_info(chain_id).await {
             Ok(info) => Ok(info),
-            Err(LocalNodeError::InactiveChain(_)) => {
-                // The chain isn't initialized locally. Sync the admin chain
-                // (so we have committees and epoch events for any non-genesis
-                // initial epoch), then download this chain's description blob.
+            Err(LocalNodeError::BlobsNotFound(blob_ids)) => {
+                // Make sure the admin chain is up to date so we can validate the
+                // certificate that creates this chain's description blob.
                 self.synchronize_chain_state(self.admin_chain_id).await?;
-                let desc_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-                self.update_local_node_with_blobs_from(vec![desc_blob_id], validators)
+                self.update_local_node_with_blobs_from(blob_ids, validators)
                     .await?;
                 Ok(self.local_node.chain_info(chain_id).await?)
             }
@@ -905,9 +902,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Calls `handle_certificate`, retrying with any missing blobs (downloaded
     /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators). If the cert is for a chain that
-    /// isn't initialized locally yet (e.g. a publisher chain we don't track),
-    /// fetches its description blob and retries.
+    /// chains via the current validators).
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -917,13 +912,6 @@ impl<Env: Environment> Client<Env> {
         let mut downloaded_events = HashSet::<EventId>::new();
         loop {
             let result = self.handle_certificate(certificate.clone()).await;
-            if let Err(LocalNodeError::InactiveChain(chain_id)) = &result {
-                let desc_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-                if downloaded_blobs.insert(desc_blob_id) {
-                    self.download_blobs(nodes, &[desc_blob_id]).await?;
-                    continue;
-                }
-            }
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {
@@ -1639,7 +1627,7 @@ impl<Env: Environment> Client<Env> {
         }
         let local_height = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
-            Err(LocalNodeError::InactiveChain(_)) => BlockHeight::ZERO,
+            Err(error) if error.is_chain_uninitialized() => BlockHeight::ZERO,
             Err(error) => return Err(error.into()),
         };
         self.download_event_bearing_blocks(

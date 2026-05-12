@@ -505,7 +505,6 @@ impl From<ChainError> for WorkerError {
         match chain_error {
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
-                ExecutionError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
                 ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
                 ExecutionError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
                 _ => Self::ChainError(Box::new(ChainError::ExecutionError(

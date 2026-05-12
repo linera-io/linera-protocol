@@ -14,7 +14,7 @@ use linera_base::{
         OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, ChainId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -453,18 +453,15 @@ where
     /// Initializes the chain if it is not active yet.
     pub async fn initialize_if_needed(&mut self, local_time: Timestamp) -> Result<(), ChainError> {
         let chain_id = self.chain_id();
-        // Initialize ourselves. Hoist `InactiveChain` out of the
-        // `ExecutionError` wrapper so callers can match on it directly.
-        let already_initialized = self
+        // Initialize ourselves.
+        if self
             .execution_state
             .system
             .initialize_chain(chain_id)
             .await
-            .map_err(|err| match err {
-                ExecutionError::InactiveChain(id) => ChainError::InactiveChain(id),
-                err => ChainError::ExecutionError(Box::new(err), ChainExecutionContext::Block),
-            })?;
-        if already_initialized {
+            .with_execution_context(ChainExecutionContext::Block)?
+        {
+            // The chain was already initialized.
             return Ok(());
         }
         let maybe_committee = self
@@ -521,6 +518,7 @@ where
         add_to_received_log: bool,
     ) -> Result<(), ChainError> {
         assert!(!bundle.messages.is_empty());
+        let chain_id = self.chain_id();
         tracing::trace!(
             "Processing new messages from {origin} at height {}",
             bundle.height,
@@ -532,9 +530,13 @@ where
 
         match self.initialize_if_needed(local_time).await {
             Ok(_) => (),
-            // We may not yet be able to initialize the chain, but we still want
-            // to update the inbox so the bundle isn't lost.
-            Err(ChainError::InactiveChain(_)) => {}
+            // if the only issue was that we couldn't initialize the chain because of a
+            // missing chain description blob, we might still want to update the inbox
+            Err(ChainError::ExecutionError(exec_err, _))
+                if matches!(*exec_err, ExecutionError::BlobsNotFound(ref blobs)
+                if blobs.iter().all(|blob_id| {
+                    blob_id.blob_type == BlobType::ChainDescription && blob_id.hash == chain_id.0
+                })) => {}
             err => {
                 return err;
             }

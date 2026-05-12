@@ -512,10 +512,11 @@ where
             }
             ProcessNewEpoch(epoch) => {
                 self.check_next_epoch(epoch)?;
-                let admin_chain_id = self
-                    .admin_chain_id
-                    .get()
-                    .ok_or_else(|| ExecutionError::InactiveChain(context.chain_id))?;
+                let admin_chain_id = self.admin_chain_id.get().ok_or_else(|| {
+                    ExecutionError::InternalError(
+                        "execute_operation called for uninitialized chain",
+                    )
+                })?;
                 let event_id = EventId {
                     chain_id: admin_chain_id,
                     stream_id: StreamId::system(EPOCH_STREAM_NAME),
@@ -851,19 +852,9 @@ where
             // already initialized
             return Ok(true);
         }
-        // The chain's own description blob and (for non-genesis epochs) the
-        // admin chain's `NewCommittee` event for its initial epoch are the
-        // only data init reads. If either is missing, the chain isn't yet
-        // initialized locally — surface that uniformly as `InactiveChain`,
-        // rather than as a generic missing-blob / missing-event error that
-        // downstream retry logic would mistake for operation-time data.
         let description_blob = self
             .read_blob_content(BlobId::new(chain_id.0, BlobType::ChainDescription))
-            .await
-            .map_err(|err| match err {
-                ExecutionError::BlobsNotFound(_) => ExecutionError::InactiveChain(chain_id),
-                err => err,
-            })?;
+            .await?;
         let description: ChainDescription = bcs::from_bytes(description_blob.bytes())?;
         let InitialChainConfig {
             ownership,
@@ -879,11 +870,7 @@ where
             .context()
             .extra()
             .get_committee_hashes(epoch..=epoch)
-            .await
-            .map_err(|err| match err {
-                ExecutionError::EventsNotFound(_) => ExecutionError::InactiveChain(chain_id),
-                err => err,
-            })?
+            .await?
             .get(&epoch)
             .expect("get_committee_hashes returns the requested epoch on success");
         let admin_chain_id = self

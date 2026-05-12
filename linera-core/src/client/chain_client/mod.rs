@@ -653,10 +653,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn local_committee(&self) -> Result<Arc<Committee>, Error> {
         let info = match self.client.local_node.chain_info(self.chain_id).await {
             Ok(info) => info,
-            Err(LocalNodeError::InactiveChain(_)) => {
-                // The chain isn't initialized locally. Sync it (which downloads
-                // its description blob and any admin-chain events its initial
-                // epoch depends on).
+            Err(LocalNodeError::BlobsNotFound(_)) => {
                 self.synchronize_chain_state(self.chain_id).await?;
                 self.client.local_node.chain_info(self.chain_id).await?
             }
@@ -1536,22 +1533,12 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<(QueryOutcome, BlockHeight), Error> {
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut downloaded_events = HashSet::<EventId>::new();
-        let mut synced_chain = false;
         loop {
             let result = self
                 .client
                 .local_node
                 .query_application(self.chain_id, query.clone(), block_hash)
                 .await;
-            if let Err(LocalNodeError::InactiveChain(_)) = &result {
-                if !synced_chain {
-                    // Sync the chain so its description blob and any admin-chain
-                    // events its initial epoch depends on land in local storage.
-                    self.synchronize_chain_state(self.chain_id).await?;
-                    synced_chain = true;
-                    continue;
-                }
-            }
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = super::filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {
@@ -2734,7 +2721,7 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<Option<Box<ChainInfo>>, Error> {
         match local_node.chain_info(chain_id).await {
             Ok(info) => Ok(Some(info)),
-            Err(LocalNodeError::InactiveChain(_)) => Ok(None),
+            Err(err) if err.is_chain_uninitialized() => Ok(None),
             Err(err) => Err(err.into()),
         }
     }
@@ -3189,8 +3176,8 @@ impl<Env: Environment> ChainClient<Env> {
             .await
         {
             Ok(info) => info.info.next_block_height,
-            // The validator doesn't have any state for this chain yet.
-            Err(NodeError::InactiveChain(_)) => BlockHeight::ZERO,
+            // The validator doesn't have this chain's description blob yet.
+            Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
             Err(err) => return Err(err.into()),
         };
         let local_next_block_height = self.chain_info().await?.next_block_height;
@@ -3222,12 +3209,10 @@ impl<Env: Environment> ChainClient<Env> {
             {
                 Ok(_) => continue,
                 Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
-                Err(NodeError::InactiveChain(chain_id)) => {
-                    vec![BlobId::new(chain_id.0, BlobType::ChainDescription)]
-                }
                 Err(err) => return Err(err.into()),
             };
-            // The validator is missing the chain description or other blobs. Upload and retry.
+            // The validator is missing blobs the certificate depends on
+            // (including possibly the chain description). Upload and retry.
             let missing_blobs = self
                 .client
                 .storage_client()
