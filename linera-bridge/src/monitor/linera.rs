@@ -133,36 +133,31 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             }
         }
 
-        // Forward cert to EVM.
-        let completed = match evm_client.forward_cert(&cert).await {
+        // Forward cert to EVM. `addBlock` returning Ok only proves the
+        // EVM tx didn't revert; it does NOT prove that this specific
+        // burn's `token.transfer` ran inside `_onBlock` (e.g. if the
+        // event match silently rejects the burn event). Per-burn
+        // completion is decided by `check_burn_completion` polling
+        // on-chain state. Here we only forward and retry.
+        match evm_client.forward_cert(&cert).await {
             Ok(()) => {
                 tracing::info!(?credit_height, burn_index, "Burn forwarded to EVM");
-                true
+                relay::update_balance_metrics(evm_client, linera_client).await;
             }
             Err(e) => {
                 let msg = format!("{e:#}");
                 if msg.contains("already verified") {
                     tracing::trace!(?credit_height, burn_index, "Block already verified on EVM");
-                    true
                 } else {
                     tracing::warn!(?credit_height, burn_index, "EVM forwarding failed: {e:#}");
-                    monitor
-                        .write()
-                        .await
-                        .mark_burn_retried(credit_height, burn_index);
-                    false
                 }
             }
-        };
-
-        if completed {
-            monitor
-                .write()
-                .await
-                .complete_burn(credit_height, burn_index)
-                .await;
-            relay::update_balance_metrics(evm_client, linera_client).await;
         }
+
+        monitor
+            .write()
+            .await
+            .mark_burn_retried(credit_height, burn_index);
     }
 }
 
