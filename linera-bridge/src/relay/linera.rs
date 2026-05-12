@@ -142,7 +142,7 @@ impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
     }
 }
 
-/// Finds all BurnEvents in a block's event streams for a given application,
+/// Finds all `BurnEvent`s in a block's event streams for a given application,
 /// returning each burn paired with the underlying `Event.index` — the
 /// position of the event within its stream. That index is what the
 /// `FungibleBridge` contract keys its per-burn dedup mapping on.

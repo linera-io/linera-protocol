@@ -1,25 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Verifies that multiple BurnEvents in a single Linera block are all
+//! Verifies that multiple `BurnEvent`s in a single Linera block are all
 //! relayed and completed on the EVM side. The user chain submits one
-//! block carrying N Transfer operations to N distinct Address20
+//! block carrying N `Transfer` operations to N distinct `Address20`
 //! recipients on the bridge chain. The test process drives the inbox
-//! processing on the bridge chain so the resulting Credit messages
-//! all land in one chain-A block — a single cert with N BurnEvents.
+//! processing on the bridge chain so the resulting `Credit` messages
+//! all land in one chain-A block — a single cert with N `BurnEvent`s.
 //! After the relayer is spawned, exactly one `addBlock` call should
 //! release all N tokens (one `token.transfer` per burn in `_onBlock`)
-//! and the relayer must mark every pending burn complete.
-//!
-//! Expected outcome on the pre-fix code: `_onBlock` atomically
-//! transfers all N tokens in the single `addBlock` call (recipient
-//! balances are correct), but the off-chain `check_burn_completion`'s
-//! Transfer-log filter does not mark these burns complete —
-//! `linera_bridge_burns_completed` stays at 0. The
-//! `burns_completed == NUM_BURNS` assertion fails. Post-fix: per-burn
-//! `isBurnProcessed(height, eventIndex)` returns true for every flag
-//! written inside the same `_onBlock` call, so all N entries flip
-//! to complete on the next `check_burn_completion` iteration.
+//! and the relayer must mark every pending burn complete via the
+//! per-burn `isBurnProcessed(height, eventIndex)` view.
 
 #![recursion_limit = "512"]
 
@@ -161,7 +152,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
     // chain A's inbox once. The N Credit messages travel together
     // and `process_inbox` materialises one chain-A block containing
     // all N BurnEvents.
-    let operations: Vec<Operation> = recipients
+    let operations = recipients
         .iter()
         .map(|recipient| {
             let owner = AccountOwner::Address20(recipient.0 .0);
@@ -194,9 +185,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
         height_after_inbox.0,
         height_before_inbox.0 + 1,
         "chain A must produce exactly ONE block carrying all {NUM_BURNS} BurnEvents \
-         (before={}, after={})",
-        height_before_inbox.0,
-        height_after_inbox.0,
+         (before={height_before_inbox}, after={height_after_inbox})",
     );
 
     let relay_dir = tempfile::tempdir()?;
@@ -264,11 +253,20 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
         relay_handle.abort();
         return Err(error);
     }
-    // One addBlock processes all N burns in `_onBlock`; allow the
-    // relayer enough time to call it and for the post-tx settle path
-    // (check_burn_completion / per-burn isBurnProcessed query) to run
-    // at least one iteration.
-    tokio::time::sleep(Duration::from_secs(30)).await;
+    // Wait for the relayer to finish: one `addBlock` releases all N
+    // tokens inside `_onBlock`, then `check_burn_completion`'s per-burn
+    // `isBurnProcessed` query flips every entry to completed.
+    if let Err(error) = wait_for_relay_metrics(
+        &http,
+        &relay_url,
+        |_detected, completed, _pending, _failed| completed >= num_burns_i64,
+        Duration::from_secs(60),
+    )
+    .await
+    {
+        relay_handle.abort();
+        return Err(error);
+    }
 
     let rpc_url = "http://localhost:8545".parse()?;
     let provider = ProviderBuilder::new().connect_http(rpc_url);

@@ -233,9 +233,7 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
 }
 
 /// Polls the FungibleBridge per pending burn and marks any that the EVM
-/// has already released. Per-burn rather than per-recipient — the previous
-/// `Transfer`-log filter would mark every pending burn for a recipient
-/// complete the moment ANY transfer to that recipient was observed.
+/// has already released.
 async fn check_burn_completion(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,

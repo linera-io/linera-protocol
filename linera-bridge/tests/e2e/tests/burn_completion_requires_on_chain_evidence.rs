@@ -160,7 +160,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
         &compose_file,
         erc20_addr,
         bridge_addr,
-        500_000_000_000_000_000_000u128,
+        500 * 10u128.pow(18),
     )
     .await;
 

@@ -1,32 +1,24 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Reproduces the UI-demo bug: many burns to the same EVM recipient
-//! across separate Linera blocks. The pre-fix relayer's
-//! `check_burn_completion` used a recipient-only ERC-20 `Transfer`-log
-//! filter, so once any pending burn for a recipient saw an on-chain
-//! transfer, every other pending burn for that same recipient flipped
-//! to completed regardless of whether its own `token.transfer` ran.
-//! With the per-burn `isBurnProcessed(height, eventIndex)` query,
-//! completion is decided per burn and the relayer must actually
-//! release every one before marking them done.
+//! Verifies that the relayer decides burn completion per burn rather
+//! than per recipient: many burns to the same EVM recipient, spread
+//! across separate Linera blocks, must each be released on-chain
+//! before the relayer marks them complete.
 //!
 //! Setup: 5 burns to the same EVM recipient, materialised as 5
 //! separate Linera blocks on the bridge chain BEFORE the relayer is
-//! spawned. The test process drives both the cross-chain Transfer on
-//! the user chain and the inbox processing on the bridge chain, so
-//! each Credit lands in its own block deterministically (no race with
-//! the relayer's notification loop batching multiple Credits into one
-//! block). When the relayer starts, its first scan iteration finds
-//! all 5 pending burns at once — the multi-pending shape required to
-//! reproduce the mark-by-existence false positive.
+//! spawned. The test process drives both the cross-chain `Transfer`
+//! on the user chain and the inbox processing on the bridge chain,
+//! so each `Credit` lands in its own block deterministically (no
+//! race with the relayer's notification loop batching multiple
+//! `Credit`s into one block). When the relayer starts, its first
+//! scan iteration finds all 5 pending burns at once.
 //!
-//! Expected outcome on the pre-fix code: only some `addBlock` calls
-//! complete before `check_burn_completion` false-marks every pending
-//! burn complete; the recipient's ERC-20 balance ends up below
-//! `5 * amount` while `linera_bridge_burns_completed == 5`. The
-//! balance assertion fails. Post-fix: per-burn dedup forces the
-//! relayer to forward every burn, balance reaches the full amount.
+//! The relayer must forward every burn via `addBlock` and the
+//! per-burn `isBurnProcessed(height, eventIndex)` query must return
+//! true for every entry; the recipient's ERC-20 balance must equal
+//! `5 * amount`.
 
 #![recursion_limit = "512"]
 
