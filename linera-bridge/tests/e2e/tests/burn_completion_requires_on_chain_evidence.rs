@@ -164,7 +164,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     let real_app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     assert_ne!(
         real_app_id_bytes32, SYNTHETIC_APP_ID_BYTES32,
-        "real app id collided with the synthetic value used to misconfigure the bridge"
+        "real app ID collided with the synthetic value used to misconfigure the bridge"
     );
 
     let chain_a_bytes32 = format!("0x{chain_a}");
@@ -213,8 +213,8 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     let relay_port = 3003u16;
     let bridge_addr_str = format!("{bridge_addr}");
-    // The relayer needs an evm-bridge app id even though this test never
-    // uses the EVM→Linera direction. Reuse the wrapped-fungible app id as
+    // The relayer needs an evm-bridge app ID even though this test never
+    // uses the EVM→Linera direction. Reuse the wrapped-fungible app ID as
     // a syntactically valid placeholder — no deposit flow runs against it.
     let bridge_app_str = format!("{fungible_app_id}");
     let fungible_app_str = format!("{fungible_app_id}");
@@ -351,9 +351,8 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     );
 
     // Sanity: the misconfiguration scenario is reproduced. The contract's
-    // `_onBlock` rejected every burn event (app id mismatch), so no
-    // `token.transfer` ran. Holds true under both current and post-fix
-    // relayer code; if it fails, the test setup itself is wrong.
+    // `_onBlock` rejected every burn event (app ID mismatch), so no
+    // `token.transfer` ran.
     assert_eq!(
         token_balance,
         U256::ZERO,
@@ -362,11 +361,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     );
 
     // Bug demonstration: the relayer must not mark a burn as completed
-    // unless the EVM contract actually released the tokens. On current
-    // code this fails because `process_pending_burns` treats `forward_cert`
-    // Ok as proof of completion, even when `_onBlock` was a no-op for
-    // this burn. Post-fix, completion is gated on per-burn on-chain
-    // dedup state and this assertion holds.
+    // unless the EVM contract actually released the tokens.
     assert_eq!(
         burns_completed, 0,
         "relayer marked a burn complete despite no on-chain Transfer; \
