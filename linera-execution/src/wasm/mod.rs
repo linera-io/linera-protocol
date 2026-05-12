@@ -26,7 +26,6 @@ use linera_base::data_types::Bytecode;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use thiserror::Error;
-use wasm_instrument::{gas_metering, parity_wasm};
 #[cfg(with_wasmer)]
 use wasmer::{WasmerContractInstance, WasmerServiceInstance};
 #[cfg(with_wasmtime)]
@@ -209,45 +208,14 @@ impl UserServiceModule for WasmServiceModule {
 
 /// Instrument the [`Bytecode`] to add fuel metering.
 pub fn add_metering(bytecode: &Bytecode) -> Result<Bytecode, WasmExecutionError> {
-    struct WasmtimeRules;
-
-    impl gas_metering::Rules for WasmtimeRules {
-        /// Calculates the fuel cost of a WebAssembly [`Operator`].
-        ///
-        /// The rules try to follow the hardcoded [rules in the Wasmtime runtime
-        /// engine](https://docs.rs/wasmtime/5.0.0/wasmtime/struct.Store.html#method.add_fuel).
-        fn instruction_cost(
-            &self,
-            instruction: &parity_wasm::elements::Instruction,
-        ) -> Option<u32> {
-            use parity_wasm::elements::Instruction::*;
-
-            Some(match instruction {
-                Nop | Drop | Block(_) | Loop(_) | Unreachable | Else | End => 0,
-                _ => 1,
-            })
-        }
-
-        fn memory_grow_cost(&self) -> gas_metering::MemoryGrowCost {
-            gas_metering::MemoryGrowCost::Free
-        }
-
-        fn call_per_local_cost(&self) -> u32 {
-            0
-        }
-    }
-
-    let instrumented_module = gas_metering::inject(
-        parity_wasm::deserialize_buffer(&bytecode.bytes)?,
-        gas_metering::host_function::Injector::new(
-            "linera:app/contract-runtime-api",
-            "consume-fuel",
-        ),
-        &WasmtimeRules,
+    let instrumented_module = walrus_meter::instrument(
+        &bytecode.bytes,
+        walrus_meter::costs::Wasmtime,
+        ("linera:app/contract-runtime-api", "consume-fuel"),
     )
     .map_err(|_| WasmExecutionError::InstrumentModule)?;
 
-    Ok(Bytecode::new(instrumented_module.into_bytes()?))
+    Ok(Bytecode::new(instrumented_module))
 }
 
 #[cfg(web)]
@@ -316,8 +284,6 @@ pub enum WasmExecutionError {
     LoadServiceModule(#[source] anyhow::Error),
     #[error("Failed to instrument Wasm module to add fuel metering")]
     InstrumentModule,
-    #[error("Invalid Wasm module: {0}")]
-    InvalidBytecode(#[from] wasm_instrument::parity_wasm::SerializationError),
     #[cfg(with_wasmer)]
     #[error("Failed to instantiate Wasm module: {_0}")]
     InstantiateModuleWithWasmer(#[from] Box<::wasmer::InstantiationError>),
