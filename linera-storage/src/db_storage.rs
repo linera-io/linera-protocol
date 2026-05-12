@@ -477,7 +477,7 @@ pub struct DbStorage<Database, Clock = WallClock> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum RootKey {
+pub enum RootKey {
     NetworkDescription,
     BlockExporterState(u32),
     ChainState(ChainId),
@@ -493,7 +493,7 @@ const BLOB_ID_TAG: u8 = 4;
 const EVENT_ID_TAG: u8 = 5;
 
 impl RootKey {
-    fn bytes(&self) -> Vec<u8> {
+    pub fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
     }
 }

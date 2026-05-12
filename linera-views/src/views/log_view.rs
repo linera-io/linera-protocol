@@ -7,6 +7,7 @@ use std::{
 };
 
 use allocative::Allocative;
+use linera_base::data_types::ArithmeticError;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -58,7 +59,7 @@ pub struct LogView<C, T> {
     /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
     /// The number of entries persisted in storage.
-    stored_count: usize,
+    stored_count: u32,
     /// New values not yet persisted to storage.
     new_values: Vec<T>,
 }
@@ -111,17 +112,23 @@ where
         }
         if !self.new_values.is_empty() {
             delete_view = false;
-            let mut count = self.stored_count;
+            let new_values_len =
+                u32::try_from(self.new_values.len()).map_err(|_| ArithmeticError::Overflow)?;
+            let new_count = self
+                .stored_count
+                .checked_add(new_values_len)
+                .ok_or(ArithmeticError::Overflow)?;
+            let mut index = self.stored_count;
             for value in &self.new_values {
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &count)?;
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.put_key_value(key, value)?;
-                count += 1;
+                index += 1;
             }
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
-            batch.put_key_value(key, &count)?;
+            batch.put_key_value(key, &new_count)?;
         }
         Ok(delete_view)
     }
@@ -130,7 +137,7 @@ where
         if self.delete_storage_first {
             self.stored_count = 0;
         }
-        self.stored_count += self.new_values.len();
+        self.stored_count += u32::try_from(self.new_values.len()).expect("verified in pre_save");
         self.new_values.clear();
         self.delete_storage_first = false;
     }
@@ -192,7 +199,7 @@ where
         if self.delete_storage_first {
             self.new_values.len()
         } else {
-            self.stored_count + self.new_values.len()
+            self.stored_count as usize + self.new_values.len()
         }
     }
 
@@ -220,16 +227,18 @@ where
     /// # })
     /// ```
     pub async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
+        let stored_count = self.stored_count as usize;
         let value = if self.delete_storage_first {
             self.new_values.get(index).cloned()
-        } else if index < self.stored_count {
+        } else if index < stored_count {
+            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let key = self
                 .context
                 .base_key()
                 .derive_tag_key(KeyTag::Index as u8, &index)?;
             self.context.store().read_value(&key).await?
         } else {
-            self.new_values.get(index - self.stored_count).cloned()
+            self.new_values.get(index - stored_count).cloned()
         };
         Ok(value)
     }
@@ -257,18 +266,20 @@ where
                 result.push(self.new_values.get(index).cloned());
             }
         } else {
+            let stored_count = self.stored_count as usize;
             let mut index_to_positions = BTreeMap::<usize, Vec<usize>>::new();
             for (pos, index) in indices.into_iter().enumerate() {
-                if index < self.stored_count {
+                if index < stored_count {
                     index_to_positions.entry(index).or_default().push(pos);
                     result.push(None);
                 } else {
-                    result.push(self.new_values.get(index - self.stored_count).cloned());
+                    result.push(self.new_values.get(index - stored_count).cloned());
                 }
             }
             let mut keys = Vec::new();
             let mut vec_positions = Vec::new();
             for (index, positions) in index_to_positions {
+                let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
                 let key = self
                     .context
                     .base_key()
@@ -317,6 +328,7 @@ where
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
+            let index = u32::try_from(index).map_err(|_| ArithmeticError::Overflow)?;
             let key = self
                 .context
                 .base_key()
@@ -356,7 +368,7 @@ where
         let effective_stored_count = if self.delete_storage_first {
             0
         } else {
-            self.stored_count
+            self.stored_count as usize
         };
         let end = match range.end_bound() {
             Bound::Included(end) => *end + 1,
@@ -424,6 +436,8 @@ pub type HistoricallyHashedLogView<C, T> = HistoricallyHashableView<C, LogView<C
 mod graphql {
     use std::borrow::Cow;
 
+    use linera_base::data_types::ArithmeticError;
+
     use super::LogView;
     use crate::{
         context::Context,
@@ -448,7 +462,7 @@ mod graphql {
     {
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count() as u32)
+            Ok(u32::try_from(self.count()).map_err(|_| ArithmeticError::Overflow)?)
         }
 
         async fn entries(

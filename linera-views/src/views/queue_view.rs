@@ -9,7 +9,7 @@ use std::{
 use allocative::Allocative;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
-use linera_base::visit_allocative_simple;
+use linera_base::{data_types::ArithmeticError, visit_allocative_simple};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
@@ -58,9 +58,9 @@ pub struct QueueView<C, T> {
     context: C,
     /// The range of indices for entries persisted in storage.
     #[allocative(visit = visit_allocative_simple)]
-    stored_indices: Range<usize>,
+    stored_indices: Range<u32>,
     /// The number of entries to delete from the front.
-    front_delete_count: usize,
+    front_delete_count: u32,
     /// Whether to clear storage before applying updates.
     delete_storage_first: bool,
     /// New values added to the back, not yet persisted to storage.
@@ -124,25 +124,32 @@ where
             batch.delete_key_prefix(key_prefix);
             new_stored_indices = Range::default();
         } else if self.front_delete_count > 0 {
-            let deletion_range = self.stored_indices.clone().take(self.front_delete_count);
-            new_stored_indices.start += self.front_delete_count;
-            for index in deletion_range {
+            let deletion_end = new_stored_indices.start + self.front_delete_count;
+            for index in new_stored_indices.start..deletion_end {
                 let key = self
                     .context
                     .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.delete_key(key);
             }
+            new_stored_indices.start = deletion_end;
         }
         if !self.new_back_values.is_empty() {
             delete_view = false;
+            let new_back_len =
+                u32::try_from(self.new_back_values.len()).map_err(|_| ArithmeticError::Overflow)?;
+            new_stored_indices.end = new_stored_indices
+                .end
+                .checked_add(new_back_len)
+                .ok_or(ArithmeticError::Overflow)?;
+            let mut index = new_stored_indices.end - new_back_len;
             for value in &self.new_back_values {
                 let key = self
                     .context
                     .base_key()
-                    .derive_tag_key(KeyTag::Index as u8, &new_stored_indices.end)?;
+                    .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.put_key_value(key, value)?;
-                new_stored_indices.end += 1;
+                index += 1;
             }
         }
         if !self.delete_storage_first || !new_stored_indices.is_empty() {
@@ -159,7 +166,8 @@ where
             self.stored_indices.start += self.front_delete_count;
         }
         if !self.new_back_values.is_empty() {
-            self.stored_indices.end += self.new_back_values.len();
+            self.stored_indices.end +=
+                u32::try_from(self.new_back_values.len()).expect("verified in pre_save");
             self.new_back_values.clear();
         }
         self.front_delete_count = 0;
@@ -189,11 +197,11 @@ where
 }
 
 impl<C, T> QueueView<C, T> {
-    fn stored_count(&self) -> usize {
+    fn stored_count(&self) -> u32 {
         if self.delete_storage_first {
             0
         } else {
-            self.stored_indices.len() - self.front_delete_count
+            (self.stored_indices.end - self.stored_indices.start) - self.front_delete_count
         }
     }
 }
@@ -203,7 +211,7 @@ where
     C: Context,
     T: Send + Sync + Clone + Serialize + DeserializeOwned,
 {
-    async fn get(&self, index: usize) -> Result<Option<T>, ViewError> {
+    async fn get(&self, index: u32) -> Result<Option<T>, ViewError> {
         let key = self
             .context
             .base_key()
@@ -306,7 +314,7 @@ where
     /// # })
     /// ```
     pub fn count(&self) -> usize {
-        self.stored_count() + self.new_back_values.len()
+        self.stored_count() as usize + self.new_back_values.len()
     }
 
     /// Obtains the extra data.
@@ -314,7 +322,7 @@ where
         self.context.extra()
     }
 
-    async fn read_context(&self, range: Range<usize>) -> Result<Vec<T>, ViewError> {
+    async fn read_context(&self, range: Range<u32>) -> Result<Vec<T>, ViewError> {
         let count = range.len();
         let mut keys = Vec::with_capacity(count);
         for index in range {
@@ -360,13 +368,14 @@ where
         if !self.delete_storage_first {
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
-            if count <= stored_remainder {
-                values.extend(self.read_context(start..(start + count)).await?);
+            if count <= stored_remainder as usize {
+                let count = u32::try_from(count).map_err(|_| ArithmeticError::Overflow)?;
+                values.extend(self.read_context(start..start + count).await?);
             } else {
                 values.extend(self.read_context(start..self.stored_indices.end).await?);
                 values.extend(
                     self.new_back_values
-                        .range(0..(count - stored_remainder))
+                        .range(0..count - stored_remainder as usize)
                         .cloned(),
                 );
             }
@@ -405,7 +414,9 @@ where
                     .cloned(),
             );
         } else {
-            let start = self.stored_indices.end + new_back_len - count;
+            let stored_consumed =
+                u32::try_from(count - new_back_len).map_err(|_| ArithmeticError::Underflow)?;
+            let start = self.stored_indices.end - stored_consumed;
             values.extend(self.read_context(start..self.stored_indices.end).await?);
             values.extend(self.new_back_values.iter().cloned());
         }
@@ -435,11 +446,10 @@ where
             let stored_remainder = self.stored_count();
             let start = self.stored_indices.end - stored_remainder;
             let elements = self.read_context(start..self.stored_indices.end).await?;
-            let shift = self.stored_indices.end - start;
             for elt in elements {
                 self.new_back_values.push_back(elt);
             }
-            self.new_back_values.rotate_right(shift);
+            self.new_back_values.rotate_right(stored_remainder as usize);
             // All indices are being deleted at the next flush. This is because they are deleted either:
             // * Because a self.front_delete_count forces them to be removed
             // * Or because loading them means that their value can be changed which invalidates
@@ -501,6 +511,8 @@ pub type HistoricallyHashedQueueView<C, T> = HistoricallyHashableView<C, QueueVi
 mod graphql {
     use std::borrow::Cow;
 
+    use linera_base::data_types::ArithmeticError;
+
     use super::QueueView;
     use crate::{
         context::Context,
@@ -525,7 +537,7 @@ mod graphql {
     {
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.count() as u32)
+            Ok(u32::try_from(self.count()).map_err(|_| ArithmeticError::Overflow)?)
         }
 
         async fn entries(&self, count: Option<usize>) -> async_graphql::Result<Vec<T>> {
