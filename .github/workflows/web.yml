@@ -81,7 +81,7 @@ jobs:
     - name: Install pnpm
       uses: pnpm/action-setup@v4
       with:
-        version: 10.17
+        version: 11.0.9
     - name: Install `wasm-split`
       uses: jaxxstorm/action-install-gh-release@v3.0.0
       with:
