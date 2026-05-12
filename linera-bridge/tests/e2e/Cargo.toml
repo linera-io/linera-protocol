@@ -27,6 +27,7 @@ bcs = "0.1.6"
 futures = "0.3"
 linera-base = { path = "../../../linera-base" }
 linera-bridge = { path = "../../../linera-bridge", features = ["relay"] }
+linera-chain = { path = "../../../linera-chain" }
 linera-client = { path = "../../../linera-client", default-features = false, features = [
     "wasmer",
 ] }
@@ -49,6 +50,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
+test-case = "3.3.1"
 testcontainers = { version = "0.27", features = ["docker-compose"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
