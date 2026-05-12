@@ -142,11 +142,14 @@ impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
     }
 }
 
-/// Find all BurnEvents in a block's event streams for a given application.
+/// Finds all `BurnEvent`s in a block's event streams for a given application,
+/// returning each burn paired with the underlying `Event.index` — the
+/// position of the event within its stream. That index is what the
+/// `FungibleBridge` contract keys its per-burn dedup mapping on.
 pub(crate) fn find_burn_events(
     events: &[Vec<Event>],
     fungible_app_id: ApplicationId,
-) -> Vec<wrapped_fungible::BurnEvent> {
+) -> Vec<(u32, wrapped_fungible::BurnEvent)> {
     let mut result = Vec::new();
     for tx_events in events {
         for event in tx_events {
@@ -157,7 +160,7 @@ pub(crate) fn find_burn_events(
                 continue;
             }
             if let Ok(burn) = bcs::from_bytes::<wrapped_fungible::BurnEvent>(&event.value) {
-                result.push(burn);
+                result.push((event.index, burn));
             }
         }
     }

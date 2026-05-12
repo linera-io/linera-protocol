@@ -81,8 +81,8 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
         };
 
         let credit_height = pending.height;
-        let burn_index = pending.burn_index;
-        tracing::info!(?credit_height, burn_index, "Processing burn...");
+        let event_index = pending.event_index;
+        tracing::info!(?credit_height, event_index, "Processing burn...");
 
         // Read the certificate at the burn's block height (already contains the auto-burn).
         let cert = match async {
@@ -106,13 +106,13 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             Err(e) => {
                 tracing::warn!(
                     ?credit_height,
-                    burn_index,
+                    event_index,
                     "Failed to read certificate: {e:#}"
                 );
                 monitor
                     .write()
                     .await
-                    .mark_burn_retried(credit_height, burn_index);
+                    .mark_burn_retried(credit_height, event_index);
                 continue;
             }
         };
@@ -122,12 +122,12 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             bcs::to_bytes(&cert).expect("failed to BCS-serialize ConfirmedBlockCertificate");
         if let Some(db) = monitor.read().await.db() {
             if let Err(e) = db
-                .store_burn_raw(credit_height, burn_index, &cert_bytes)
+                .store_burn_raw(credit_height, event_index, &cert_bytes)
                 .await
             {
                 tracing::warn!(
                     ?credit_height,
-                    burn_index,
+                    event_index,
                     "Failed to store burn raw bytes: {e:#}"
                 );
             }
@@ -141,15 +141,15 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
         // on-chain state. Here we only forward and retry.
         match evm_client.forward_cert(&cert).await {
             Ok(()) => {
-                tracing::info!(?credit_height, burn_index, "Burn forwarded to EVM");
+                tracing::info!(?credit_height, event_index, "Burn forwarded to EVM");
                 relay::update_balance_metrics(evm_client, linera_client).await;
             }
             Err(e) => {
                 let msg = format!("{e:#}");
                 if msg.contains("already verified") {
-                    tracing::trace!(?credit_height, burn_index, "Block already verified on EVM");
+                    tracing::trace!(?credit_height, event_index, "Block already verified on EVM");
                 } else {
-                    tracing::warn!(?credit_height, burn_index, "EVM forwarding failed: {e:#}");
+                    tracing::warn!(?credit_height, event_index, "EVM forwarding failed: {e:#}");
                 }
             }
         }
@@ -157,7 +157,7 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
         monitor
             .write()
             .await
-            .mark_burn_retried(credit_height, burn_index);
+            .mark_burn_retried(credit_height, event_index);
     }
 }
 
@@ -194,10 +194,10 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     for block in &blocks {
         let height = block.block().header.height;
         let burn_events = find_burn_events(&block.block().body.events, fungible_app_id);
-        for (burn_index, burn_event) in burn_events.into_iter().enumerate() {
+        for (event_index, burn_event) in burn_events {
             new_burns.push((
                 height,
-                burn_index,
+                event_index,
                 Address::from(burn_event.target),
                 burn_event.amount,
             ));
@@ -205,14 +205,14 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     }
 
     let mut tracked_any = false;
-    for (height, burn_index, recipient, amount) in &new_burns {
-        tracing::info!(?height, burn_index, %recipient, %amount, "Discovered burn");
+    for (height, event_index, recipient, amount) in &new_burns {
+        tracing::info!(?height, event_index, %recipient, %amount, "Discovered burn");
         let was_new = monitor
             .write()
             .await
             .track_burn(PendingBurn {
                 height: *height,
-                burn_index: *burn_index,
+                event_index: *event_index,
                 evm_recipient: *recipient,
                 amount: *amount,
             })
@@ -232,16 +232,18 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     Ok(())
 }
 
+/// Polls the FungibleBridge per pending burn and marks any that the EVM
+/// has already released.
 async fn check_burn_completion(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
 ) -> anyhow::Result<()> {
-    let pending: Vec<(BlockHeight, usize, Address)> = {
+    let pending: Vec<(BlockHeight, u32)> = {
         let state = monitor.read().await;
         state
             .pending_burns()
             .into_iter()
-            .map(|b| (b.value.height, b.value.burn_index, b.value.evm_recipient))
+            .map(|b| (b.value.height, b.value.event_index))
             .collect()
     };
 
@@ -249,14 +251,23 @@ async fn check_burn_completion(
         return Ok(());
     }
 
-    for (height, burn_index, recipient) in pending {
-        let logs = evm_client.get_transfer_logs(recipient).await?;
-        if !logs.is_empty() {
-            monitor
-                .write()
-                .await
-                .complete_burn(height, burn_index)
-                .await;
+    for (height, event_index) in pending {
+        match evm_client.is_burn_processed(height, event_index).await {
+            Ok(true) => {
+                monitor
+                    .write()
+                    .await
+                    .complete_burn(height, event_index)
+                    .await;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(
+                    ?height,
+                    event_index,
+                    "is_burn_processed query failed: {e:#}"
+                );
+            }
         }
     }
 

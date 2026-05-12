@@ -11,7 +11,7 @@ use alloy::{
 };
 use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
-use linera_base::data_types::Epoch;
+use linera_base::data_types::{BlockHeight, Epoch};
 
 use crate::proof::deposit_event_signature;
 
@@ -20,7 +20,7 @@ sol! {
     interface IFungibleBridge {
         function addBlock(bytes calldata data) external;
         function lightClient() external view returns (address);
-        function token() external view returns (address);
+        function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool);
     }
 }
 
@@ -44,7 +44,6 @@ pub struct EvmClient<P> {
     relayer_addr: Address,
     deposit_event_sig: B256,
     light_client_addr: tokio::sync::OnceCell<Address>,
-    token_addr: tokio::sync::OnceCell<Address>,
 }
 
 impl<P: Provider> EvmClient<P> {
@@ -64,7 +63,6 @@ impl<P: Provider> EvmClient<P> {
             relayer_addr,
             deposit_event_sig: deposit_event_signature(),
             light_client_addr,
-            token_addr: tokio::sync::OnceCell::new(),
         }
     }
 
@@ -99,36 +97,14 @@ impl<P: Provider> EvmClient<P> {
         Ok(all_logs)
     }
 
-    /// Queries ERC-20 `Transfer` events emitted by the bridged token
-    /// contract, with the bridge as the sender (`from`) and `recipient`
-    /// as the receiver (`to`). The events come from `address(token)`,
-    /// not from the bridge itself, because `FungibleBridge._onBlock`
-    /// releases tokens by calling `token.transfer(target, ...)`.
-    pub async fn get_transfer_logs(&self, recipient: Address) -> Result<Vec<Log>> {
-        let token_addr = self.get_token_address().await?;
-        let transfer_sig = alloy::primitives::keccak256("Transfer(address,address,uint256)");
-        let filter = Filter::new()
-            .address(token_addr)
-            .event_signature(transfer_sig)
-            .topic1(B256::left_padding_from(self.bridge_addr.as_slice()))
-            .topic2(B256::left_padding_from(recipient.as_slice()));
-        Ok(self.provider.get_logs(&filter).await?)
-    }
-
-    /// Discovers the bridged ERC-20 token address from the FungibleBridge.
-    pub async fn get_token_address(&self) -> Result<Address> {
-        self.token_addr
-            .get_or_try_init(|| async {
-                let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-                let addr = bridge
-                    .token()
-                    .call()
-                    .await
-                    .context("failed to query FungibleBridge.token()")?;
-                Ok(addr)
-            })
-            .await
-            .copied()
+    /// Returns whether the FungibleBridge has already released the burn
+    /// at `(height, event_index)` — i.e. whether the corresponding
+    /// `_onBlock` loop iteration ran to completion in some prior `addBlock`
+    /// transaction. `event_index` is the underlying Linera `Event.index`.
+    /// Per-burn (not per-block, not per-recipient).
+    pub async fn is_burn_processed(&self, height: BlockHeight, event_index: u32) -> Result<bool> {
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        Ok(bridge.isBurnProcessed(height.0, event_index).call().await?)
     }
 
     /// BCS-serialize and forward a certified block to FungibleBridge on EVM.

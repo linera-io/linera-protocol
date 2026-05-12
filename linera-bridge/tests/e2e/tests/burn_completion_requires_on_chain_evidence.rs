@@ -30,14 +30,12 @@ use alloy::{
 };
 use anyhow::Context as _;
 use linera_base::{
-    crypto::InMemorySigner,
-    data_types::{Amount, Bytecode},
-    identifiers::AccountOwner,
-    vm::VmRuntime,
+    crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner,
 };
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok, light_client_address,
-    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
+    compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
+    light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
+    wait_for_light_client, wait_for_relay_http_ready, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -45,7 +43,7 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-use wrapped_fungible::{Account, InitialState, WrappedFungibleOperation, WrappedParameters};
+use wrapped_fungible::{Account, WrappedFungibleOperation};
 
 sol! {
     #[sol(rpc)]
@@ -128,48 +126,13 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
 
-    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(3)
-        .context("manifest dir has fewer than 3 ancestors")?
-        .to_path_buf();
-    let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
-
-    // Publish + create the wrapped-fungible application on chain B (the
-    // user chain) with `mint_chain_id = chain_a` (the bridge / relayer
-    // chain). Initial balance goes to `owner_b`, the user. The created
-    // app's `application_description_hash` is the *real* fungible_app_id
-    // the scanner will see in burn events. The deployed `FungibleBridge`
-    // is given a *different* id (`SYNTHETIC_APP_ID_BYTES32`) below so
-    // `_onBlock` rejects every burn event the relayer forwards.
-    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
-    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
-    let (wf_module_id, _) = cc_b
-        .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
-        .await?
-        .expect("publish wrapped-fungible module committed");
-    cc_b.synchronize_from_validators().await?;
-    cc_b.process_inbox().await?;
-
-    let initial_balance = Amount::from_tokens(1_000);
-    let (fungible_app_id, _) = cc_b
-        .create_application_untyped(
-            wf_module_id,
-            serde_json::to_vec(&WrappedParameters {
-                ticker_symbol: "wTEST".to_string(),
-                minter: None,
-                mint_chain_id: Some(chain_a),
-                evm_token_address: erc20_addr.0 .0,
-                evm_source_chain_id: 31337,
-                bridge_app_id: None,
-            })?,
-            serde_json::to_vec(&InitialState {
-                accounts: BTreeMap::from([(owner_b, initial_balance)]),
-            })?,
-            vec![],
-        )
-        .await?
-        .expect("create wrapped-fungible app committed");
+    // The created app's `application_description_hash` is the *real*
+    // fungible_app_id the scanner will see in burn events. The deployed
+    // `FungibleBridge` is given a *different* id
+    // (`SYNTHETIC_APP_ID_BYTES32`) below so `_onBlock` rejects every
+    // burn event the relayer forwards.
+    let fungible_app_id =
+        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000).await?;
     let real_app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     assert_ne!(
         real_app_id_bytes32, SYNTHETIC_APP_ID_BYTES32,
@@ -191,19 +154,13 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     // Fund the bridge so that a `token.transfer` inside `_onBlock` would
     // succeed if it ever ran. Eliminates "insufficient balance" as an
     // alternative explanation for the missing on-chain Transfer.
-    exec_ok(
+    fund_bridge_erc20(
         &compose,
-        "foundry-tools",
-        &format!(
-            "cast send --rpc-url http://anvil:8545 \
-             --private-key {ANVIL_PRIVATE_KEY} \
-             {erc20_addr} \
-             'transfer(address,uint256)(bool)' \
-             {bridge_addr} \
-             500000000000000000000"
-        ),
         project_name,
         &compose_file,
+        erc20_addr,
+        bridge_addr,
+        500 * 10u128.pow(18),
     )
     .await;
 
@@ -264,20 +221,10 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     let relay_url = format!("http://localhost:{relay_port}");
     let http = reqwest::Client::new();
-    for attempt in 0..30 {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        if http
-            .get(format!("{relay_url}/metrics"))
-            .send()
-            .await
-            .is_ok()
-        {
-            break;
-        }
-        if attempt == 29 {
-            relay_handle.abort();
-            anyhow::bail!("Relay did not become ready");
-        }
+    if let Err(error) = wait_for_relay_http_ready(&http, &relay_url, Duration::from_secs(60)).await
+    {
+        relay_handle.abort();
+        return Err(error);
     }
 
     // Trigger a single burn: chain B transfers wrapped tokens to an
@@ -324,7 +271,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
             .await?
             .text()
             .await?;
-        if metric_value(&body, "linera_bridge_burns_detected") >= 1 {
+        if parse_metric_value(&body, "linera_bridge_burns_detected") >= 1 {
             detected = true;
             tracing::info!(attempt, "Burn detected by scanner");
             break;
@@ -361,10 +308,10 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
         .await?
         .text()
         .await?;
-    let burns_detected = metric_value(&metrics_body, "linera_bridge_burns_detected");
-    let burns_completed = metric_value(&metrics_body, "linera_bridge_burns_completed");
-    let burns_failed = metric_value(&metrics_body, "linera_bridge_burns_failed");
-    let burns_pending = metric_value(&metrics_body, "linera_bridge_burns_pending");
+    let burns_detected = parse_metric_value(&metrics_body, "linera_bridge_burns_detected");
+    let burns_completed = parse_metric_value(&metrics_body, "linera_bridge_burns_completed");
+    let burns_failed = parse_metric_value(&metrics_body, "linera_bridge_burns_failed");
+    let burns_pending = parse_metric_value(&metrics_body, "linera_bridge_burns_pending");
 
     let evm_recipient: alloy::primitives::Address = format!("0x{evm_recipient_hex}").parse()?;
     let token_balance = IERC20::new(erc20_addr, &provider)
@@ -402,22 +349,4 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     );
 
     Ok(())
-}
-
-/// Parses a Prometheus text-format response and returns the integer value
-/// associated with a metric name. Returns 0 if the metric is absent
-/// (counters are reported only after their first increment).
-fn metric_value(body: &str, name: &str) -> i64 {
-    for line in body.lines() {
-        if line.starts_with('#') {
-            continue;
-        }
-        let Some((metric, value)) = line.split_once(' ') else {
-            continue;
-        };
-        if metric.trim() == name {
-            return value.trim().parse::<f64>().unwrap_or(0.0) as i64;
-        }
-    }
-    0
 }
