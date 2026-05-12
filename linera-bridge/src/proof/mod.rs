@@ -340,9 +340,7 @@ pub fn verify_receipt_inclusion(
     let total_bytes: usize = proof_nodes.iter().map(|n| n.len()).sum();
     ensure!(
         total_bytes <= MAX_PROOF_BYTES,
-        "proof too large: {} bytes (max {})",
-        total_bytes,
-        MAX_PROOF_BYTES
+        "proof too large: {total_bytes} bytes (max {MAX_PROOF_BYTES})",
     );
 
     let key = receipt_trie_key(tx_index);

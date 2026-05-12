@@ -150,7 +150,7 @@ impl FaucetDatabase {
                 .storage_client()
                 .read_certificate(hash)
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {}", hash))?;
+                .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {hash}"))?;
             let current_height = certificate.block().header.height;
 
             // Check if this block's chains are already in our database
@@ -201,7 +201,7 @@ impl FaucetDatabase {
                 .storage_client()
                 .read_certificate(hash)
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {}", hash))?;
+                .ok_or_else(|| anyhow::anyhow!("Certificate not found for hash {hash}"))?;
 
             let block_timestamp = certificate.block().header.timestamp;
             let chains_to_store = super::extract_opened_single_owner_chains(&certificate)?
