@@ -40,7 +40,7 @@ use linera_views::{context::InactiveContext, ViewError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot, OwnedRwLockReadGuard};
-use tracing::{instrument, trace, warn};
+use tracing::{debug, instrument, trace, warn};
 
 /// A read guard providing access to a chain's [`ChainStateView`].
 ///
@@ -1524,7 +1524,7 @@ where
                 if let Some(notifier) = notify_when_messages_are_delivered {
                     // Nothing to wait for.
                     if let Err(()) = notifier.send(()) {
-                        warn!("Failed to notify message delivery to caller");
+                        debug!("Failed to notify message delivery to caller (validation cert)");
                     }
                 }
                 Box::pin(self.handle_validated_certificate(validated)).await

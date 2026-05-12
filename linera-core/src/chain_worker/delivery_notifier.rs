@@ -15,7 +15,7 @@ use std::{
 
 use linera_base::data_types::BlockHeight;
 use tokio::sync::oneshot;
-use tracing::warn;
+use tracing::debug;
 
 /// A set of pending listeners waiting to be notified about the delivery of messages sent
 /// from specific [`BlockHeight`]s.
@@ -59,7 +59,7 @@ impl DeliveryNotifier {
 
         for notifier in relevant_notifiers.into_values().flatten() {
             if let Err(()) = notifier.send(()) {
-                warn!("Failed to notify message delivery to caller");
+                debug!("Failed to notify message delivery to caller");
             }
         }
     }
