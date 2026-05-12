@@ -16,9 +16,18 @@
 
 #![recursion_limit = "512"]
 
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
-use alloy::{primitives::U256, providers::ProviderBuilder, sol};
+use alloy::{
+    primitives::U256,
+    providers::{Provider, ProviderBuilder},
+    signers::local::PrivateKeySigner,
+    sol,
+};
 use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
@@ -211,6 +220,17 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     }
     linera_wallet_json::PersistentWallet::create(&wallet_path, relay_genesis_config)?;
 
+    // Snapshot the deployer's EVM nonce BEFORE spawning the relayer so the
+    // forward-attempt wait below can distinguish a relayer-submitted
+    // `addBlock` tx from the deploy/fund txs already on chain. The relayer
+    // signs with the same `ANVIL_PRIVATE_KEY`, so a global nonce count
+    // alone would already be `>= 1` from setup.
+    let rpc_url = "http://localhost:8545".parse()?;
+    let provider = ProviderBuilder::new().connect_http(rpc_url);
+    let relayer_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse()?;
+    let relayer_addr = relayer_signer.address();
+    let nonce_before_relayer = provider.get_transaction_count(relayer_addr).await?;
+
     let relay_port = 3003u16;
     let bridge_addr_str = format!("{bridge_addr}");
     // The relayer needs an evm-bridge app ID even though this test never
@@ -315,10 +335,25 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
         anyhow::bail!("Relayer never detected the burn");
     }
 
-    // Allow time for `process_pending_burns` to run `forward_cert`. With a
-    // 2s monitor_scan_interval and exponential backoff starting at 5s, two
-    // 5s ticks after detection are plenty for the first attempt to land.
-    tokio::time::sleep(Duration::from_secs(15)).await;
+    // Wait for the relayer to attempt forwarding by polling the relayer
+    // account's EVM nonce until it goes past the pre-spawn snapshot.
+    // `forward_cert` sends `addBlock` to anvil, which bumps the nonce.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut forwarded = false;
+    while Instant::now() < deadline {
+        if relay_handle.is_finished() {
+            anyhow::bail!("Relay exited unexpectedly: {:?}", relay_handle.await);
+        }
+        if provider.get_transaction_count(relayer_addr).await? > nonce_before_relayer {
+            forwarded = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+    if !forwarded {
+        relay_handle.abort();
+        anyhow::bail!("Relayer never submitted an EVM tx (no `addBlock` attempt observed)");
+    }
 
     let metrics_body = http
         .get(format!("{relay_url}/metrics"))
@@ -331,8 +366,6 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     let burns_failed = metric_value(&metrics_body, "linera_bridge_burns_failed");
     let burns_pending = metric_value(&metrics_body, "linera_bridge_burns_pending");
 
-    let rpc_url = "http://localhost:8545".parse()?;
-    let provider = ProviderBuilder::new().connect_http(rpc_url);
     let evm_recipient: alloy::primitives::Address = format!("0x{evm_recipient_hex}").parse()?;
     let token_balance = IERC20::new(erc20_addr, &provider)
         .balanceOf(evm_recipient)
