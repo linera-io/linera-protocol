@@ -1532,7 +1532,7 @@ impl<Env: Environment> ChainClient<Env> {
         block_hash: Option<CryptoHash>,
     ) -> Result<(QueryOutcome, BlockHeight), Error> {
         let mut downloaded_blobs = HashSet::<BlobId>::new();
-        let mut downloaded_events = HashSet::<EventId>::new();
+        let mut events = super::EventSetDownloader::new(&self.client);
         loop {
             let result = self
                 .client
@@ -1551,11 +1551,7 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
-                if self
-                    .client
-                    .download_new_events_into(event_ids, &mut downloaded_events)
-                    .await?
-                {
+                if events.download_new(event_ids).await? {
                     continue;
                 }
             }
