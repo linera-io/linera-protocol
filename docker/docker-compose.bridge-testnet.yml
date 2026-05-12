@@ -1,29 +1,69 @@
 # Long-running linera-bridge relayer.
 #
 # Defaults match the testnet host layout (env at /etc/linera-bridge,
-# data at /var/lib/linera-bridge). Override RELAYER_ENV_FILE,
-# RELAYER_ENV_SECRET, RELAYER_DATA_DIR to reuse this compose file
-# from a developer machine pointing at a real network — see
-# examples/bridge-demo/spawn-relayer.sh.
+# data at /var/lib/linera-bridge, runtime secret cache at /run/linera-bridge).
+# The EVM signing key is fetched from GCP Secret Manager on every start
+# rather than read from a long-lived /etc/linera-bridge/.env.secret file.
 #
 # Prerequisites (testnet operator does this once on the VM):
-#   1. Create /var/lib/linera-bridge (data) and /etc/linera-bridge (env)
-#   2. Populate /etc/linera-bridge/.env with the keys consumed by
-#      bridge-entrypoint.sh (RPC_URL, FAUCET_URL, EVM_BRIDGE_ADDRESS,
-#      LINERA_BRIDGE_APP, LINERA_FUNGIBLE_APP, LINERA_BRIDGE_CHAIN_ID,
-#      LINERA_BRIDGE_CHAIN_OWNER, LINERA_WALLET, LINERA_KEYSTORE,
-#      LINERA_STORAGE, MONITOR_*, MAX_RETRIES, PORT)
-#   3. Drop the EVM signing key in /etc/linera-bridge/.env.secret
-#      (mode 0600, root:root): EVM_PRIVATE_KEY=0x...
+# 1. Create /var/lib/linera-bridge (data) and /etc/linera-bridge (env).
+# 2. Populate /etc/linera-bridge/.env with the keys consumed by
+#    bridge-entrypoint.sh (RPC_URL, FAUCET_URL, EVM_BRIDGE_ADDRESS,
+#    LINERA_BRIDGE_APP, LINERA_FUNGIBLE_APP, LINERA_BRIDGE_CHAIN_ID,
+#    LINERA_BRIDGE_CHAIN_OWNER, LINERA_WALLET, LINERA_KEYSTORE,
+#    LINERA_STORAGE, MONITOR_*, MAX_RETRIES, PORT). EVM_PRIVATE_KEY
+#    is NOT in this file anymore.
+# 3. Store the EVM signing key in GCP Secret Manager (default secret
+#    name: linera-bridge-evm-key; override via EVM_KEY_SECRET). Grant
+#    roles/secretmanager.secretAccessor to the principal used at runtime
+#    (VM service account, or the SA whose key file is mounted) on that
+#    specific secret.
+# 4. Ensure the tmpfs cache dir exists, owned root and mode 0700:
+#      install -d -m 0700 -o root -g root /run/linera-bridge
+#    /run is tmpfs on systemd hosts, so the materialised key never
+#    touches disk and is gone after reboot.
+#
+# Authentication for the fetcher: by default we rely on the GCE metadata
+# server (the VM's attached service account). To use a service account
+# key file instead, set GCP_KEY_FILE=/path/to/key.json on the host before
+# `docker compose up`. GCP_PROJECT_ID is required either way.
 #
 # See docker/README.testnet.md for the full procedure.
+
 services:
+  fetch-evm-key:
+    image: google/cloud-sdk:slim
+    restart: "no"
+    volumes:
+      - ${EVM_KEY_TMP_DIR:-/run/linera-bridge}:/out
+      # Mounting /dev/null when GCP_KEY_FILE is unset is a no-op; the
+      # GOOGLE_APPLICATION_CREDENTIALS var below is also empty in that
+      # case, so gcloud falls back to the GCE metadata server.
+      - ${GCP_KEY_FILE:-/dev/null}:/gcp-key.json:ro
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: ${GCP_KEY_FILE:+/gcp-key.json}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:?GCP_PROJECT_ID must be set}
+      EVM_KEY_SECRET: ${EVM_KEY_SECRET:-linera-bridge-evm-key}
+      EVM_KEY_VERSION: ${EVM_KEY_VERSION:-latest}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        KEY=$$(gcloud secrets versions access "$$EVM_KEY_VERSION" \
+          --secret="$$EVM_KEY_SECRET" \
+          --project="$$GCP_PROJECT_ID")
+        umask 077
+        printf 'EVM_PRIVATE_KEY=%s\n' "$$KEY" > /out/evm.env
+
   relayer:
     image: us-docker.pkg.dev/linera-io-dev/linera-public-registry/linera-bridge:testnet_conway_internal
     restart: unless-stopped
+    depends_on:
+      fetch-evm-key:
+        condition: service_completed_successfully
     env_file:
       - ${RELAYER_ENV_FILE:-/etc/linera-bridge/.env}
-      - ${RELAYER_ENV_SECRET:-/etc/linera-bridge/.env.secret}
+      - ${EVM_KEY_TMP_DIR:-/run/linera-bridge}/evm.env
     ports:
       # Loopback only — /metrics and /health are not public-facing.
       # Scrape via SSH tunnel or VPN from the ops network.
