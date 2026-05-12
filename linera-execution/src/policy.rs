@@ -22,6 +22,32 @@ use serde::{Deserialize, Serialize};
 
 use crate::ExecutionError;
 
+/// A flag that enables an optional protocol feature.
+///
+/// Flags are stored in [`ResourceControlPolicy::flags`] so that new features can be activated
+/// in future testnets or on mainnet by updating the policy, without breaking compatibility
+/// with chains and validators that don't have the feature enabled.
+#[repr(u32)]
+#[derive(
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Clone,
+    Copy,
+    Debug,
+    Serialize,
+    Deserialize,
+    Allocative,
+    strum::Display,
+    strum::EnumString,
+)]
+pub enum ProtocolFlag {
+    #[doc(hidden)]
+    _Reserved = 0,
+}
+
 /// A collection of prices and limits associated with block execution.
 #[derive(Eq, PartialEq, Hash, Clone, Debug, Serialize, Deserialize, Allocative)]
 pub struct ResourceControlPolicy {
@@ -93,6 +119,8 @@ pub struct ResourceControlPolicy {
     pub http_request_allow_list: BTreeSet<String>,
     /// The list of application IDs for which all message- and event-related fees are waived.
     pub free_application_ids: BTreeSet<ApplicationId>,
+    /// The set of optional protocol features that are enabled.
+    pub flags: BTreeSet<ProtocolFlag>,
 }
 
 impl fmt::Display for ResourceControlPolicy {
@@ -130,6 +158,7 @@ impl fmt::Display for ResourceControlPolicy {
             http_request_allow_list,
             http_request_timeout_ms,
             free_application_ids,
+            flags,
         } = self;
         write!(
             f,
@@ -166,7 +195,8 @@ impl fmt::Display for ResourceControlPolicy {
             {maximum_http_response_bytes} maximum number of bytes of an HTTP response\n\
             {http_request_timeout_ms} ms timeout for HTTP requests\n\
             HTTP hosts allowed for contracts and services: {http_request_allow_list:#?}\n\
-            Free application IDs: {free_application_ids:#?}\n",
+            Free application IDs: {free_application_ids:#?}\n\
+            Enabled protocol flags: {flags:#?}\n",
         )?;
         Ok(())
     }
@@ -216,6 +246,7 @@ impl ResourceControlPolicy {
             http_request_timeout_ms: u64::MAX,
             http_request_allow_list: BTreeSet::new(),
             free_application_ids: BTreeSet::new(),
+            flags: BTreeSet::new(),
         }
     }
 
@@ -300,6 +331,7 @@ impl ResourceControlPolicy {
             http_request_timeout_ms: 20_000,
             http_request_allow_list: BTreeSet::new(),
             free_application_ids: BTreeSet::new(),
+            flags: BTreeSet::new(),
         }
     }
 

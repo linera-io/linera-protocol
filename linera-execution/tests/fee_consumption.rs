@@ -239,6 +239,7 @@ async fn test_fee_consumption(
         blob_byte_published: Amount::from_tokens(103),
         http_request_allow_list: BTreeSet::new(),
         free_application_ids: BTreeSet::new(),
+        flags: BTreeSet::new(),
     };
 
     let consumed_fees = spends

@@ -336,6 +336,10 @@ pub struct ResourceControlPolicyOverrides {
     /// Set the list of application IDs for which message- and event-related fees are waived.
     #[arg(long, value_delimiter = ',')]
     pub free_application_ids: Option<Vec<String>>,
+
+    /// Set the protocol flags that are enabled.
+    #[arg(long, value_delimiter = ',')]
+    pub flags: Option<Vec<String>>,
 }
 
 #[derive(Clone, clap::Subcommand)]
@@ -709,6 +713,10 @@ pub enum ClientCommand {
         /// Set the list of application IDs for which message- and event-related fees are waived.
         #[arg(long, value_delimiter = ',')]
         free_application_ids: Option<Vec<String>>,
+
+        /// Set the protocol flags that are enabled.
+        #[arg(long, value_delimiter = ',')]
+        flags: Option<Vec<String>>,
 
         /// Force this wallet to generate keys using a PRNG and a given seed. USE FOR
         /// TESTING ONLY.

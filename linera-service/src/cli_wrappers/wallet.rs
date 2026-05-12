@@ -1320,6 +1320,7 @@ impl ClientWrapper {
             http_request_timeout_ms,
             http_request_allow_list,
             free_application_ids,
+            flags,
         } = overrides;
         if let Some(value) = wasm_fuel_unit {
             command.args(["--wasm-fuel-unit", &value.to_string()]);
@@ -1416,6 +1417,9 @@ impl ClientWrapper {
         }
         if let Some(values) = free_application_ids {
             command.args(["--free-application-ids", &values.join(",")]);
+        }
+        if let Some(values) = flags {
+            command.args(["--flags", &values.join(",")]);
         }
         command.spawn_and_wait_for_stdout().await?;
         Ok(())
