@@ -3950,6 +3950,7 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-bridge",
+ "linera-chain",
  "linera-client",
  "linera-core",
  "linera-execution",

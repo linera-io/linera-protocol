@@ -489,3 +489,45 @@ where
     }
     anyhow::bail!("wait_for_relay_metrics timed out after {timeout:?}")
 }
+
+/// Sets the anvil block gas limit via the `evm_setBlockGasLimit` JSON-RPC
+/// method. Lets the test choose a ceiling well above the chain spec being
+/// measured so `eth_estimateGas` never aborts on anvil's own limit — the
+/// numeric comparison happens in Rust against `ChainSpec::block_gas_limit`.
+pub async fn set_anvil_block_gas_limit(
+    provider: &impl alloy::providers::Provider,
+    limit: u64,
+) -> anyhow::Result<()> {
+    use std::borrow::Cow;
+    let hex_limit = format!("0x{limit:x}");
+    let _: bool = provider
+        .raw_request(Cow::Borrowed("evm_setBlockGasLimit"), (hex_limit,))
+        .await?;
+    Ok(())
+}
+
+/// Fetches the `ConfirmedBlockCertificate` for the chain's current head
+/// block. Mirrors the `sync -> chain_info -> read_certificate` walk in
+/// `linera-bridge/src/monitor/linera.rs::process_pending_burns` but specialised
+/// to the head block (no per-height search loop needed in tests).
+pub async fn fetch_latest_cert<E>(
+    chain_client: &linera_core::client::ChainClient<E>,
+) -> anyhow::Result<linera_chain::types::ConfirmedBlockCertificate>
+where
+    E: linera_core::environment::Environment,
+{
+    use anyhow::Context as _;
+    chain_client
+        .synchronize_from_validators()
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let info = chain_client
+        .chain_info()
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let hash = info.block_hash.context("chain has no blocks yet")?;
+    chain_client
+        .read_certificate(hash)
+        .await
+        .map_err(|e| anyhow::anyhow!(e))
+}

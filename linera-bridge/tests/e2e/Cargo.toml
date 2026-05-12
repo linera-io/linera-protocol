@@ -27,6 +27,7 @@ bcs = "0.1.6"
 futures = "0.3"
 linera-base = { path = "../../../linera-base" }
 linera-bridge = { path = "../../../linera-bridge", features = ["relay"] }
+linera-chain = { path = "../../../linera-chain" }
 linera-client = { path = "../../../linera-client", default-features = false, features = [
     "wasmer",
 ] }
