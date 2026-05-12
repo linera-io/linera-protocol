@@ -2727,7 +2727,7 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     #[instrument(level = "trace", skip(local_node))]
-    async fn local_chain_info(
+    async fn maybe_local_chain_info(
         &self,
         chain_id: ChainId,
         local_node: &LocalNodeClient<Env::Storage>,
@@ -2746,7 +2746,7 @@ impl<Env: Environment> ChainClient<Env> {
         local_node: &LocalNodeClient<Env::Storage>,
     ) -> Result<BlockHeight, Error> {
         Ok(self
-            .local_chain_info(chain_id, local_node)
+            .maybe_local_chain_info(chain_id, local_node)
             .await?
             .map_or(BlockHeight::ZERO, |info| info.next_block_height))
     }
@@ -2876,7 +2876,7 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
-                if let Some(info) = self.local_chain_info(chain_id, &local_node).await? {
+                if let Some(info) = self.maybe_local_chain_info(chain_id, &local_node).await? {
                     if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!(
                             chain_id = %self.chain_id,
@@ -2888,7 +2888,7 @@ impl<Env: Environment> ChainClient<Env> {
                 self.client
                     .synchronize_chain_state_from(&remote_node, chain_id)
                     .await?;
-                let Some(info) = self.local_chain_info(chain_id, &local_node).await? else {
+                let Some(info) = self.maybe_local_chain_info(chain_id, &local_node).await? else {
                     error!(
                         chain_id = %self.chain_id,
                         "NewRound: Fail to read local chain info for {chain_id}"
@@ -3200,9 +3200,9 @@ impl<Env: Environment> ChainClient<Env> {
             return Ok(());
         }
 
-        let heights: Vec<_> = (validator_next_block_height.0..local_next_block_height.0)
+        let heights = (validator_next_block_height.0..local_next_block_height.0)
             .map(BlockHeight)
-            .collect();
+            .collect::<Vec<_>>();
 
         let certificates = self
             .client
@@ -3210,59 +3210,36 @@ impl<Env: Environment> ChainClient<Env> {
             .read_certificates_by_heights(self.chain_id, &heights)
             .await?
             .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
+            .flatten();
 
         for certificate in certificates {
-            match remote_node
+            let missing_blob_ids = match remote_node
                 .handle_confirmed_certificate(
                     certificate.clone(),
                     CrossChainMessageDelivery::NonBlocking,
                 )
                 .await
             {
-                Ok(_) => (),
-                Err(NodeError::BlobsNotFound(missing_blob_ids)) => {
-                    // Upload the missing blobs we have and retry.
-                    let missing_blobs: Vec<_> = self
-                        .client
-                        .storage_client()
-                        .read_blobs(&missing_blob_ids)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .collect();
-                    remote_node.upload_blobs(missing_blobs).await?;
-                    remote_node
-                        .handle_confirmed_certificate(
-                            certificate,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
-                }
+                Ok(_) => continue,
+                Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
                 Err(NodeError::InactiveChain(chain_id)) => {
-                    // The validator doesn't have this chain initialized yet
-                    // (it was offline when the chain was created). Upload its
-                    // description blob and retry.
-                    let desc_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
-                    let blobs: Vec<_> = self
-                        .client
-                        .storage_client()
-                        .read_blobs(&[desc_blob_id])
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .collect();
-                    remote_node.upload_blobs(blobs).await?;
-                    remote_node
-                        .handle_confirmed_certificate(
-                            certificate,
-                            CrossChainMessageDelivery::NonBlocking,
-                        )
-                        .await?;
+                    vec![BlobId::new(chain_id.0, BlobType::ChainDescription)]
                 }
                 Err(err) => return Err(err.into()),
-            }
+            };
+            // The validator is missing the chain description or other blobs. Upload and retry.
+            let missing_blobs = self
+                .client
+                .storage_client()
+                .read_blobs(&missing_blob_ids)
+                .await?
+                .into_iter()
+                .flatten()
+                .collect();
+            remote_node.upload_blobs(missing_blobs).await?;
+            remote_node
+                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
+                .await?;
         }
 
         Ok(())
