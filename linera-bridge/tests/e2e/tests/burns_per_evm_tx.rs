@@ -11,19 +11,20 @@
 #![recursion_limit = "512"]
 
 use alloy::{providers::ProviderBuilder, sol};
-use linera_base::{crypto::InMemorySigner, identifiers::AccountOwner};
+use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
-    light_client_address, publish_and_create_wrapped_fungible, set_anvil_block_gas_limit,
-    start_compose, wait_for_light_client,
+    compose_file_path, deploy_fungible_bridge, deploy_linera_token, fetch_latest_cert,
+    fund_bridge_erc20, light_client_address, publish_and_create_wrapped_fungible,
+    set_anvil_block_gas_limit, start_compose, wait_for_light_client,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
-use linera_execution::WasmRuntime;
+use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use test_case::test_case;
+use wrapped_fungible::{Account, WrappedFungibleOperation};
 
 sol! {
     #[sol(rpc)]
@@ -47,6 +48,81 @@ const INITIAL_BALANCE_TOKENS: u128 = 100_000;
 /// (the per-burn cost is dominated by the storage write + ERC-20 transfer,
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 1;
+
+/// Bundles `n` `WrappedFungibleOperation::Transfer` ops into a single
+/// chain-B block, drives `cc_a.process_inbox()` (which produces one
+/// chain-A block with `n` `BurnEvent`s), reads the resulting
+/// `ConfirmedBlockCertificate`, BCS-encodes it, and asks anvil to
+/// estimate the gas required by `bridge.addBlock(cert_bytes)`.
+///
+/// Returns the estimated gas. Reverts surface as `Err`.
+async fn build_and_estimate<P, E>(
+    n: u32,
+    cc_a: &linera_core::client::ChainClient<E>,
+    cc_b: &linera_core::client::ChainClient<E>,
+    owner_b: AccountOwner,
+    chain_a: linera_base::identifiers::ChainId,
+    fungible_app_id: linera_base::identifiers::ApplicationId,
+    bridge_addr: alloy::primitives::Address,
+    provider: &P,
+) -> anyhow::Result<u64>
+where
+    P: alloy::providers::Provider,
+    E: linera_core::environment::Environment,
+{
+    use anyhow::Context as _;
+
+    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
+    let operations = (0..n)
+        .map(|i| {
+            // Deterministic distinct recipients; high bytes spell out the
+            // iteration counter so log inspection makes the address ↔ burn
+            // mapping easy to read.
+            let mut bytes = [0u8; 20];
+            bytes[16..].copy_from_slice(&i.to_be_bytes());
+            let owner = AccountOwner::Address20(bytes);
+            let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
+                owner: owner_b,
+                amount: burn_amount,
+                target_account: Account {
+                    chain_id: chain_a,
+                    owner,
+                },
+            })
+            .expect("BCS serialization");
+            Operation::User {
+                application_id: fungible_app_id,
+                bytes: withdraw_bytes,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    cc_b.synchronize_from_validators().await?;
+    cc_b.execute_operations(operations, vec![])
+        .await?
+        .expect("chain-B execute_operations committed");
+
+    cc_a.synchronize_from_validators().await?;
+    let height_before = cc_a.chain_info().await?.next_block_height;
+    cc_a.process_inbox().await?;
+    let height_after = cc_a.chain_info().await?.next_block_height;
+    anyhow::ensure!(
+        height_after.0 == height_before.0 + 1,
+        "chain A must produce exactly ONE block (n={n}, before={height_before}, after={height_after})"
+    );
+
+    let cert = fetch_latest_cert(cc_a).await?;
+    let cert_bytes = bcs::to_bytes(&cert).context("BCS-serialize cert")?;
+
+    let bridge = IFungibleBridge::new(bridge_addr, provider);
+    let gas = bridge
+        .addBlock(cert_bytes.into())
+        .estimate_gas()
+        .await
+        .with_context(|| format!("estimate_gas(addBlock) for n={n}"))?;
+
+    Ok(gas)
+}
 
 #[test_case("ethereum",     30_000_000,  None; "ethereum")]
 #[test_case("base",         240_000_000, None; "base")]
@@ -160,18 +236,121 @@ async fn burns_per_evm_tx(
     )
     .await;
 
-    // Suppress unused-variable warnings; subsequent task fills these in.
-    let _ = (
+    let mut hi: u32 = 8;
+    let mut hi_gas = build_and_estimate(
+        hi,
         &cc_a,
         &cc_b,
         owner_b,
         chain_a,
         fungible_app_id,
         bridge_addr,
-        block_gas_limit,
-        min_expected_burns,
         &provider,
+    )
+    .await?;
+    tracing::info!(n = hi, gas = hi_gas, "search: initial hi");
+
+    while hi_gas <= block_gas_limit && hi < MAX_SEARCH_N {
+        let next_hi = hi.saturating_mul(2).min(MAX_SEARCH_N);
+        let g = build_and_estimate(
+            next_hi,
+            &cc_a,
+            &cc_b,
+            owner_b,
+            chain_a,
+            fungible_app_id,
+            bridge_addr,
+            &provider,
+        )
+        .await?;
+        tracing::info!(n = next_hi, gas = g, "search: doubling");
+        hi = next_hi;
+        hi_gas = g;
+        if hi == MAX_SEARCH_N {
+            break;
+        }
+    }
+
+    let mut lo: u32 = 1;
+    let mut lo_gas = if hi == 1 {
+        hi_gas
+    } else {
+        build_and_estimate(
+            lo,
+            &cc_a,
+            &cc_b,
+            owner_b,
+            chain_a,
+            fungible_app_id,
+            bridge_addr,
+            &provider,
+        )
+        .await?
+    };
+    anyhow::ensure!(
+        lo_gas <= block_gas_limit,
+        "n=1 already exceeds block_gas_limit ({lo_gas} > {block_gas_limit}); test cannot proceed"
     );
+
+    // If even the doubling cap fits, we cannot bound from above — report the cap.
+    if hi_gas <= block_gas_limit {
+        tracing::warn!(
+            cap = MAX_SEARCH_N,
+            gas = hi_gas,
+            block_gas_limit,
+            "search hit MAX_SEARCH_N without exceeding gas limit; reported max_n is the cap"
+        );
+        let max_n = hi;
+        tracing::info!(
+            chain = name,
+            max_n,
+            gas_at_max_n = hi_gas,
+            block_gas_limit,
+            "RESULT"
+        );
+        if let Some(floor) = min_expected_burns {
+            anyhow::ensure!(
+                max_n >= floor,
+                "{name}: max_n={max_n} < min_expected_burns={floor}"
+            );
+        }
+        return Ok(());
+    }
+
+    while lo + 1 < hi {
+        let mid = lo + (hi - lo) / 2;
+        let g = build_and_estimate(
+            mid,
+            &cc_a,
+            &cc_b,
+            owner_b,
+            chain_a,
+            fungible_app_id,
+            bridge_addr,
+            &provider,
+        )
+        .await?;
+        tracing::info!(n = mid, gas = g, "search: bisect");
+        if g <= block_gas_limit {
+            lo = mid;
+            lo_gas = g;
+        } else {
+            hi = mid;
+            hi_gas = g;
+        }
+    }
+
+    let _ = hi_gas; // silence dead_store warning in some toolchain configs
+    let max_n = lo;
+    let gas_at_max_n = lo_gas;
+    tracing::info!(chain = name, max_n, gas_at_max_n, block_gas_limit, "RESULT");
+
+    if let Some(floor) = min_expected_burns {
+        anyhow::ensure!(
+            max_n >= floor,
+            "{name}: max_n={max_n} < min_expected_burns={floor}"
+        );
+    }
 
     Ok(())
 }
