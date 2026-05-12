@@ -34,12 +34,17 @@ sol! {
 }
 
 /// Hard cap on the search range. Bounds chain-A block construction cost and
-/// keeps the test runtime predictable even for very-high-gas chains.
-const MAX_SEARCH_N: u32 = 2048;
+/// keeps the test runtime predictable. Capped at 1000 because the
+/// `LineraToken` deploy script mints exactly 1000 tokens to the anvil
+/// deployer, and the bridge must hold `MAX_SEARCH_N * BURN_AMOUNT_TOKENS`
+/// to make `eth_estimateGas` succeed at the upper search bound (a dry-run
+/// `token.transfer` reverts on insufficient balance and surfaces as an
+/// estimate error).
+const MAX_SEARCH_N: u32 = 1000;
 
 /// Chain-B pre-funded balance: enough wrapped-fungible to issue
-/// `MAX_SEARCH_N * doubling_plus_bisect_iterations` `Transfer` ops. 22 search
-/// iterations × 2048 burns × 1 token each = 45 056 tokens upper bound; round
+/// `MAX_SEARCH_N * doubling_plus_bisect_iterations` `Transfer` ops. ~20 search
+/// iterations × 1000 burns × 1 token each ≈ 20 000 tokens upper bound; round
 /// up to 100 000 for headroom.
 const INITIAL_BALANCE_TOKENS: u128 = 100_000;
 
@@ -74,11 +79,12 @@ where
     use anyhow::Context as _;
 
     let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
-    let operations = (0..n)
+    let operations = (1..=n)
         .map(|i| {
             // Deterministic distinct recipients; high bytes spell out the
             // iteration counter so log inspection makes the address ↔ burn
-            // mapping easy to read.
+            // mapping easy to read. Start from 1 — `Address20(0…0)` is the
+            // zero address and ERC-20 rejects transfers to it.
             let mut bytes = [0u8; 20];
             bytes[16..].copy_from_slice(&i.to_be_bytes());
             let owner = AccountOwner::Address20(bytes);
@@ -127,7 +133,6 @@ where
 
 #[test_case("ethereum",     30_000_000,  None; "ethereum")]
 #[test_case("base",         240_000_000, None; "base")]
-#[test_case("base_sepolia", 240_000_000, None; "base_sepolia")]
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and bridge contracts.
 async fn burns_per_evm_tx(
