@@ -1,18 +1,18 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Demonstrates that the current relayer marks a `PendingBurn` as completed
-//! when `addBlock` returns Ok, even though the on-chain `_onBlock` did not
-//! release any tokens for that burn. The misconfiguration here — deploying
-//! `FungibleBridge` with a `fungibleApplicationId` that does not match the
-//! real wrapped-fungible app the scanner watches — makes `_onBlock` skip
-//! every burn event silently while still letting `addBlock` succeed.
+//! Verifies that the relayer marks a `PendingBurn` complete only when
+//! the EVM side has provably released the underlying tokens, not merely
+//! because `addBlock` returned Ok.
 //!
-//! Expected outcome on the current code: the test fails on the
-//! `linera_bridge_burns_completed == 0` assertion because the relayer
-//! treats `forward_cert` Ok as evidence of completion. Post-fix (when
-//! completion is gated on a per-burn on-chain dedup query) the test passes:
-//! no `Transfer` happened, so the relayer must not claim the burn is done.
+//! The setup deploys `FungibleBridge` with a `fungibleApplicationId`
+//! that does not match the real wrapped-fungible app the scanner
+//! watches, so `_onBlock`'s app-id check rejects every burn event the
+//! relayer forwards. `addBlock` still succeeds (the cert is valid)
+//! but no `token.transfer` runs. Completion is gated on the per-burn
+//! `isBurnProcessed(height, eventIndex)` query, which stays false, so
+//! `linera_bridge_burns_completed` must remain at 0 for every detected
+//! burn.
 
 #![recursion_limit = "512"]
 
