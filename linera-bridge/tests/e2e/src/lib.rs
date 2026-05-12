@@ -202,6 +202,34 @@ pub async fn deploy_linera_token(
     parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
 }
 
+/// Same as [`deploy_linera_token`] but overrides the initial token supply
+/// minted to the anvil deployer via the script's `TOKEN_SUPPLY` env var.
+/// `supply_attos` is the raw atto amount — pass `tokens * 10u128.pow(18)`
+/// for whole-token amounts.
+pub async fn deploy_linera_token_with_supply(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    supply_attos: u128,
+) -> anyhow::Result<Address> {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "env TOKEN_SUPPLY={supply_attos} \
+             forge script /contracts/script/DeployLineraToken.s.sol \
+             --root /contracts \
+             --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             --broadcast"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
+}
+
 /// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge
 /// script and returns the deployed contract address.
 pub async fn deploy_fungible_bridge(
@@ -491,4 +519,37 @@ where
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
     anyhow::bail!("wait_for_relay_metrics timed out after {timeout:?}")
+}
+
+/// Sets the anvil block gas limit via the `evm_setBlockGasLimit` JSON-RPC
+/// method. Lets the test choose a ceiling well above the chain spec being
+/// measured so `eth_estimateGas` never aborts on anvil's own limit — the
+/// numeric comparison happens in Rust against `ChainSpec::block_gas_limit`.
+pub async fn set_anvil_block_gas_limit(
+    provider: &impl alloy::providers::Provider,
+    limit: u64,
+) -> anyhow::Result<()> {
+    use std::borrow::Cow;
+    let hex_limit = format!("0x{limit:x}");
+    let _: bool = provider
+        .raw_request(Cow::Borrowed("evm_setBlockGasLimit"), (hex_limit,))
+        .await?;
+    Ok(())
+}
+
+/// Fetches the `ConfirmedBlockCertificate` for the chain's current head
+/// block. Mirrors the `sync -> chain_info -> read_certificate` walk in
+/// `linera-bridge/src/monitor/linera.rs::process_pending_burns` but specialised
+/// to the head block (no per-height search loop needed in tests).
+pub async fn fetch_latest_cert<E>(
+    chain_client: &linera_core::client::ChainClient<E>,
+) -> anyhow::Result<linera_chain::types::ConfirmedBlockCertificate>
+where
+    E: linera_core::environment::Environment,
+{
+    use anyhow::Context as _;
+    chain_client.synchronize_from_validators().await?;
+    let info = chain_client.chain_info().await?;
+    let hash = info.block_hash.context("chain has no blocks yet")?;
+    Ok(chain_client.read_certificate(hash).await?)
 }
