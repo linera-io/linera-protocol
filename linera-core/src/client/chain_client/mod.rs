@@ -3189,7 +3189,8 @@ impl<Env: Environment> ChainClient<Env> {
             .await
         {
             Ok(info) => info.info.next_block_height,
-            Err(NodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
+            // The validator doesn't have any state for this chain yet.
+            Err(NodeError::InactiveChain(_)) => BlockHeight::ZERO,
             Err(err) => return Err(err.into()),
         };
         let local_next_block_height = self.chain_info().await?.next_block_height;
@@ -3232,6 +3233,27 @@ impl<Env: Environment> ChainClient<Env> {
                         .flatten()
                         .collect();
                     remote_node.upload_blobs(missing_blobs).await?;
+                    remote_node
+                        .handle_confirmed_certificate(
+                            certificate,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
+                }
+                Err(NodeError::InactiveChain(chain_id)) => {
+                    // The validator doesn't have this chain initialized yet
+                    // (it was offline when the chain was created). Upload its
+                    // description blob and retry.
+                    let desc_blob_id = BlobId::new(chain_id.0, BlobType::ChainDescription);
+                    let blobs: Vec<_> = self
+                        .client
+                        .storage_client()
+                        .read_blobs(&[desc_blob_id])
+                        .await?
+                        .into_iter()
+                        .flatten()
+                        .collect();
+                    remote_node.upload_blobs(blobs).await?;
                     remote_node
                         .handle_confirmed_certificate(
                             certificate,
