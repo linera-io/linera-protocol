@@ -597,6 +597,8 @@ fn decode_log(data: &mut &[u8]) -> Result<ReceiptLog> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::cast_possible_truncation)]
+
     use std::str::FromStr;
 
     use super::{

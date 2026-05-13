@@ -8,6 +8,7 @@
 //! Run: `cargo test -p linera-bridge -- --ignored test_deposit_proof`
 
 #![cfg(all(not(target_arch = "wasm32"), feature = "offchain"))]
+#![allow(clippy::cast_possible_truncation)]
 
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},

@@ -202,6 +202,8 @@ impl DepositProofClient for HttpDepositProofClient {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::cast_possible_truncation)]
+
     use alloy_primitives::{Address, B256, U256};
 
     use crate::proof::{

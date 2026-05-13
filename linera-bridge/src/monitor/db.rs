@@ -2,6 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! SQLite persistent storage for bridge relayer deposit/burn requests.
+
+// SQLite (via sqlx) has no native unsigned integer types, so this module
+// routinely casts `u64` to/from `i64` when binding parameters and reading
+// rows. The casts are by design at the SQL boundary.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 //!
 //! This is a write-through layer alongside the in-memory `MonitorState`.
 //! It persists request metadata and raw operation bytes so they can be
