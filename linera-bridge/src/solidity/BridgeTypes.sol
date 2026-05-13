@@ -1874,7 +1874,6 @@ library BridgeTypes {
         Amount grant;
         opt_Account refund_grant_to;
         MessageKind kind;
-        uint32 index;
         Message message;
     }
 
@@ -1883,7 +1882,6 @@ library BridgeTypes {
         result = abi.encodePacked(result, bcs_serialize_Amount(input.grant));
         result = abi.encodePacked(result, bcs_serialize_opt_Account(input.refund_grant_to));
         result = abi.encodePacked(result, bcs_serialize_MessageKind(input.kind));
-        result = abi.encodePacked(result, bcs_serialize_uint32(input.index));
         return abi.encodePacked(result, bcs_serialize_Message(input.message));
     }
 
@@ -1901,11 +1899,9 @@ library BridgeTypes {
         (new_pos, refund_grant_to) = bcs_deserialize_offset_opt_Account(new_pos, input);
         MessageKind kind;
         (new_pos, kind) = bcs_deserialize_offset_MessageKind(new_pos, input);
-        uint32 index;
-        (new_pos, index) = bcs_deserialize_offset_uint32(new_pos, input);
         Message memory message;
         (new_pos, message) = bcs_deserialize_offset_Message(new_pos, input);
-        return (new_pos, PostedMessage(authenticated_owner, grant, refund_grant_to, kind, index, message));
+        return (new_pos, PostedMessage(authenticated_owner, grant, refund_grant_to, kind, message));
     }
 
     function bcs_deserialize_PostedMessage(bytes memory input) internal pure returns (PostedMessage memory) {

@@ -2872,8 +2872,9 @@ where
                 height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
-                messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(MessageKind::Tracked)],
+                messages: vec![
+                    system_credit_message(Amount::from_tokens(2)).to_posted(MessageKind::Tracked)
+                ],
             },
             action: MessageAction::Accept,
         })
@@ -3165,9 +3166,7 @@ where
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![
-                    system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
-                ],
+                messages: vec![system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         });
@@ -4486,8 +4485,9 @@ where
                 height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
-                messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(MessageKind::Tracked)],
+                messages: vec![
+                    system_credit_message(Amount::from_tokens(2)).to_posted(MessageKind::Tracked)
+                ],
             },
             action: MessageAction::Accept,
         });
