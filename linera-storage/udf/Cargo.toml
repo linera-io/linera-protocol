@@ -1,0 +1,25 @@
+[package]
+name = "linera-storage-udf"
+description = "ScyllaDB Wasm UDFs to decode and encode Linera RootKey partition keys."
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bcs.workspace = true
+hex.workspace = true
+linera-base.workspace = true
+scylla-udf.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+linera-base = { workspace = true, features = ["test"] }

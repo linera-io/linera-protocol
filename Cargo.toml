@@ -26,6 +26,7 @@ members = [
     "linera-storage",
     "linera-storage-runtime",
     "linera-storage-service",
+    "linera-storage/udf",
     "linera-summary",
     "linera-views",
     "linera-views-derive",
@@ -240,6 +241,7 @@ rocksdb = "0.24.0"
 # https://github.com/linera-io/linera-protocol/issues/4742 is resolved.
 ruzstd = "=0.8.1"
 scylla = "~1.1.0"
+scylla-udf = "0.1.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
 serde-command-opts = "0.1.1"
@@ -381,6 +383,18 @@ version = "1.88.0"
 [profile.release]
 lto = "thin"
 debug = true
+
+# Used by `linera-storage-udf` when building the Scylla Wasm UDF binary, where every kilobyte
+# counts because the WAT source is embedded as a string literal inside a CQL CREATE FUNCTION
+# statement.
+[profile.wasm-udf]
+inherits = "release"
+debug = false
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
 
 [profile.bench]
 debug = true

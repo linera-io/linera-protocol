@@ -129,7 +129,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4195a29a4b87137b2bb02105e746102873bc03561805cf45c0e510c961f160e6"
 dependencies = [
  "alloy-primitives",
- "num_enum",
+ "num_enum 0.7.4",
  "strum 0.27.2",
 ]
 
@@ -1811,6 +1811,17 @@ checksum = "85b6598a2f5d564fb7855dc6b06fd1c38cff5a72bd8b863a4d021938497b440a"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "bigdecimal"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1e50562e37200edf7c6c43e54a08e64a5553bfb59d9c297d5572512aa517256"
+dependencies = [
+ "num-bigint 0.3.3",
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]
@@ -6291,6 +6302,7 @@ dependencies = [
  "linera-chain",
  "linera-execution",
  "linera-storage",
+ "linera-storage-udf",
  "linera-views",
  "papaya",
  "prometheus",
@@ -6348,6 +6360,17 @@ dependencies = [
  "tonic-prost-build",
  "tracing",
  "tracing-subscriber 0.3.19",
+]
+
+[[package]]
+name = "linera-storage-udf"
+version = "0.16.0"
+dependencies = [
+ "bcs",
+ "hex",
+ "linera-base",
+ "scylla-udf",
+ "serde",
 ]
 
 [[package]]
@@ -6747,11 +6770,20 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a8cbbb2831780bc3b9c15a41f5b49222ef756b6730a95f3decfdd15903eb5a3"
+dependencies = [
+ "twox-hash 1.6.3",
+]
+
+[[package]]
+name = "lz4_flex"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08ab2867e3eeeca90e844d1940eab391c9dc5228783db2ed999acbc0a9ed375a"
 dependencies = [
- "twox-hash",
+ "twox-hash 2.1.1",
 ]
 
 [[package]]
@@ -7165,12 +7197,33 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
+dependencies = [
+ "num_enum_derive 0.5.11",
+]
+
+[[package]]
+name = "num_enum"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a973b4e44ce6cad84ce69d797acf9a044532e4184c4f267913d1b546a0727b7a"
 dependencies = [
- "num_enum_derive",
+ "num_enum_derive 0.7.4",
  "rustversion",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
+dependencies = [
+ "proc-macro-crate 1.3.1",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -8913,7 +8966,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c1588093530ec4442461163be49c433c07a3235d1ca6f6799fef338dacc50d3"
 dependencies = [
  "alloy-primitives",
- "num_enum",
+ "num_enum 0.7.4",
  "serde",
 ]
 
@@ -9259,7 +9312,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3640bec8aad418d7d03c72ea2de10d5c646a598f9883c7babc160d91e3c1b26c"
 dependencies = [
- "twox-hash",
+ "twox-hash 2.1.1",
 ]
 
 [[package]]
@@ -9348,16 +9401,37 @@ dependencies = [
  "hashbrown 0.14.5",
  "itertools 0.14.0",
  "lazy_static",
- "lz4_flex",
+ "lz4_flex 0.11.5",
  "rand 0.9.2",
  "rand_pcg",
- "scylla-cql",
+ "scylla-cql 1.3.1",
  "smallvec",
  "snap",
  "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "scylla-cql"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d6615b8ff55a3bd86c8ad259560a05548f2b73cc0cf610564369dcea7aff91c"
+dependencies = [
+ "async-trait",
+ "bigdecimal",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "lz4_flex 0.9.5",
+ "num-bigint 0.3.3",
+ "num_enum 0.5.11",
+ "scylla-macros 0.2.3",
+ "snap",
+ "thiserror 1.0.69",
+ "tokio",
  "uuid",
 ]
 
@@ -9371,14 +9445,25 @@ dependencies = [
  "bytes",
  "chrono",
  "itertools 0.14.0",
- "lz4_flex",
- "scylla-macros",
+ "lz4_flex 0.11.5",
+ "scylla-macros 1.3.1",
  "snap",
  "stable_deref_trait",
  "thiserror 2.0.17",
  "tokio",
  "uuid",
  "yoke",
+]
+
+[[package]]
+name = "scylla-macros"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66bbac3874ee838894b5a82c5833c2b0b29d39ca5ad486d982ee434177b2cc57"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.105",
 ]
 
 [[package]]
@@ -9391,6 +9476,33 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.105",
+]
+
+[[package]]
+name = "scylla-udf"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd3106371ad805ed4a23a0957076c427c5e0f48bfd0f11bc4c118833490e88a5"
+dependencies = [
+ "bigdecimal",
+ "bytes",
+ "chrono",
+ "libc",
+ "num-bigint 0.3.3",
+ "scylla-cql 0.0.4",
+ "scylla-udf-macros",
+ "uuid",
+]
+
+[[package]]
+name = "scylla-udf-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4522f3a23a979a6e26a4bcad36342fb1007c437ba4b11b34415cd663721d08"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -11464,6 +11576,16 @@ dependencies = [
  "sha1",
  "thiserror 2.0.17",
  "utf-8",
+]
+
+[[package]]
+name = "twox-hash"
+version = "1.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
+dependencies = [
+ "cfg-if",
+ "static_assertions",
 ]
 
 [[package]]
