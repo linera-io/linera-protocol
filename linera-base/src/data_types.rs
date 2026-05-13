@@ -741,7 +741,10 @@ impl Amount {
     }
 
     /// Helper function to obtain the 64 least significant bits of the balance.
-    #[expect(clippy::cast_possible_truncation, reason = "intentional: returns the low 64 bits")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "intentional: returns the low 64 bits"
+    )]
     pub const fn lower_half(self) -> u64 {
         self.0 as u64
     }

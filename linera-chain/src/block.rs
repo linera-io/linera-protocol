@@ -475,7 +475,8 @@ impl Block {
                     .filter(|(_, message)| message.destination == recipient)
                     .map(|(idx, message)| message.clone().into_posted(idx))
                     .collect::<Vec<_>>();
-                #[expect(clippy::cast_possible_truncation)] // block size limits cap total messages well below u32::MAX
+                #[expect(clippy::cast_possible_truncation)]
+                // block size limits cap total messages well below u32::MAX
                 {
                     index += txn_messages.len() as u32;
                 }

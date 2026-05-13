@@ -64,11 +64,8 @@ impl Exporter {
             reason = "destination height is a block index bounded by storage size"
         )]
         let start = destination_state.load(Ordering::Acquire) as usize;
-        let (task_queue, task_receiver) = TaskQueue::new(
-            self.work_queue_size,
-            start,
-            storage.clone()?,
-        );
+        let (task_queue, task_receiver) =
+            TaskQueue::new(self.work_queue_size, start, storage.clone()?);
 
         let export_task = ExportTask::new(node, storage.clone()?, destination_state);
 
@@ -119,6 +116,10 @@ where
     ) -> anyhow::Result<()> {
         while let Some((block, blobs_ids)) = receiver.recv().await {
             #[cfg(with_metrics)]
+            #[expect(
+                clippy::cast_possible_wrap,
+                reason = "queue length fits in i64 for any realistic queue size"
+            )]
             crate::metrics::VALIDATOR_EXPORTER_QUEUE_LENGTH
                 .with_label_values(&[self.node.address()])
                 .set(receiver.len() as i64);

@@ -809,6 +809,10 @@ where
         let balance = self.client.local_balance().await?;
 
         #[cfg(with_metrics)]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "faucet balance metric — i64 is the prometheus gauge type"
+        )]
         metrics::FAUCET_BALANCE
             .with_label_values(&[])
             .set(u128::from(balance) as i64);

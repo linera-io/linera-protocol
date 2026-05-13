@@ -590,8 +590,8 @@ where
         &mut self,
         description: &ApplicationDescription,
     ) -> Result<(), ExecutionError> {
-        let parameters_size = u32::try_from(description.parameters.len())
-            .map_err(|_| ArithmeticError::Overflow)?;
+        let parameters_size =
+            u32::try_from(description.parameters.len()).map_err(|_| ArithmeticError::Overflow)?;
         let required_apps_count = u32::try_from(description.required_application_ids.len())
             .map_err(|_| ArithmeticError::Overflow)?;
         let required_apps_size = required_apps_count
