@@ -48,7 +48,9 @@ use linera_client::{
         BenchmarkConfig, FungibleTransferGenerator, NativeFungibleTransferGenerator,
         OperationGenerator,
     },
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _, ClientContextExt as _},
+    chain_listener::{
+        ChainListener, ChainListenerConfig, ClientContext as _, ClientContextExt as _,
+    },
     config::{CommitteeConfig, GenesisConfig},
 };
 use linera_core::{
