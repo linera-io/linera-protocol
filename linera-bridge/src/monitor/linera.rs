@@ -16,6 +16,7 @@ use crate::relay::{
     self,
     evm::EvmClient,
     linera::{find_burn_events, LineraClient},
+    settlement::estimate_fits,
 };
 
 /// Background task that scans Linera block history for BurnEvent stream
@@ -53,8 +54,9 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
     }
 }
 
-/// Drains `MonitorState.burns` for items ready for retry, processing one at a
-/// time. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
+/// Batches pending burns per height, dry-runs `addBlock(cert)`, and falls back
+/// to per-tx chunked `processBurns(cert, tx_index, positions)` when it doesn't
+/// fit. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
 /// (whichever comes first) when nothing is ready.
 pub(crate) async fn process_pending_burns<E: linera_core::environment::Environment + 'static>(
     monitor: &RwLock<MonitorState>,
@@ -65,8 +67,11 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
     max_retries: u32,
 ) -> anyhow::Result<()> {
     loop {
-        let pending = monitor.read().await.next_burn_for_retry(max_retries);
-        let Some(pending) = pending else {
+        let groups = monitor
+            .read()
+            .await
+            .pending_burns_by_height_and_tx(max_retries);
+        if groups.is_empty() {
             tracing::trace!(
                 ?poll_interval,
                 "Linera burns processor sleeping until notified or poll interval elapses"
@@ -78,86 +83,158 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                 _ = tokio::time::sleep(poll_interval) => {}
             }
             continue;
-        };
-
-        let credit_height = pending.height;
-        let event_index = pending.event_index;
-        tracing::info!(?credit_height, event_index, "Processing burn...");
-
-        // Read the certificate at the burn's block height (already contains the auto-burn).
-        let cert = match async {
-            linera_client.sync().await?;
-            let info = linera_client.chain_info().await?;
-            let mut hash = info.block_hash;
-            loop {
-                let Some(h) = hash else {
-                    anyhow::bail!("Block at height {credit_height} not found");
-                };
-                let c = linera_client.read_certificate(h).await?;
-                if c.block().header.height == credit_height {
-                    break Ok(c);
-                }
-                hash = c.block().header.previous_block_hash;
-            }
         }
-        .await
-        {
-            Ok(cert) => cert,
-            Err(e) => {
-                tracing::warn!(
-                    ?credit_height,
-                    event_index,
-                    "Failed to read certificate: {e:#}"
-                );
-                monitor
-                    .write()
-                    .await
-                    .mark_burn_retried(credit_height, event_index);
-                continue;
-            }
-        };
 
-        // Persist raw BCS cert bytes so burns can be replayed without the relayer.
-        let cert_bytes =
-            bcs::to_bytes(&cert).expect("failed to BCS-serialize ConfirmedBlockCertificate");
-        if let Some(db) = monitor.read().await.db() {
-            if let Err(e) = db
-                .store_burn_raw(credit_height, event_index, &cert_bytes)
+        for (height, by_tx) in groups {
+            // `event_index` (stream-index) values for every pending burn at this
+            // height. `mark_burn_retried` and `store_burn_raw` key on event_index;
+            // the per-tx chunking driven below uses (tx_index, pos_in_tx).
+            let event_indices_at_height: Vec<u32> = monitor
+                .read()
                 .await
-            {
-                tracing::warn!(
-                    ?credit_height,
-                    event_index,
-                    "Failed to store burn raw bytes: {e:#}"
-                );
-            }
-        }
+                .pending_burns()
+                .iter()
+                .filter(|t| t.value.height == height)
+                .map(|t| t.value.event_index)
+                .collect();
 
-        // Forward cert to EVM. `addBlock` returning Ok only proves the
-        // EVM tx didn't revert; it does NOT prove that this specific
-        // burn's `token.transfer` ran inside `_onBlock` (e.g. if the
-        // event match silently rejects the burn event). Per-burn
-        // completion is decided by `check_burn_completion` polling
-        // on-chain state. Here we only forward and retry.
-        match evm_client.forward_cert(&cert).await {
-            Ok(()) => {
-                tracing::info!(?credit_height, event_index, "Burn forwarded to EVM");
-                relay::update_balance_metrics(evm_client, linera_client).await;
-            }
-            Err(e) => {
-                let msg = format!("{e:#}");
-                if msg.contains("already verified") {
-                    tracing::trace!(?credit_height, event_index, "Block already verified on EVM");
-                } else {
-                    tracing::warn!(?credit_height, event_index, "EVM forwarding failed: {e:#}");
+            let cert = match fetch_cert_at_height(linera_client, height).await {
+                Ok(cert) => cert,
+                Err(e) => {
+                    tracing::warn!(?height, "Failed to read certificate: {e:#}");
+                    let mut state = monitor.write().await;
+                    for ei in &event_indices_at_height {
+                        state.mark_burn_retried(height, *ei);
+                    }
+                    continue;
+                }
+            };
+
+            persist_cert_bytes(monitor, height, &event_indices_at_height, &cert).await;
+
+            // Dry-run addBlock. If it fits, one tx settles everything in the block.
+            match estimate_fits(evm_client.estimate_add_block_gas(&cert).await) {
+                Ok(true) => match evm_client.forward_cert(&cert).await {
+                    Ok(()) => {
+                        tracing::info!(
+                            ?height,
+                            count = event_indices_at_height.len(),
+                            "Burns forwarded via addBlock"
+                        );
+                        relay::update_balance_metrics(evm_client, linera_client).await;
+                    }
+                    Err(e) => {
+                        let msg = format!("{e:#}");
+                        if msg.contains("already verified") {
+                            tracing::trace!(?height, "Block already verified on EVM");
+                        } else {
+                            tracing::warn!(?height, "addBlock submission failed: {e:#}");
+                        }
+                    }
+                },
+                Ok(false) => {
+                    'tx_loop: for (tx_index, positions) in &by_tx {
+                        // Iterative LIFO split-to-fit per tx group. Mirrors
+                        // `relay::settlement::split_to_fit` but inlined to
+                        // avoid the `AsyncFn` predicate's HRTB Send issue when
+                        // the future captures `&EvmClient` across awaits.
+                        let mut stack: Vec<Vec<u32>> = vec![positions.clone()];
+                        let mut chunks: Vec<Vec<u32>> = Vec::new();
+                        let mut single_too_large: Option<u32> = None;
+                        while let Some(slice) = stack.pop() {
+                            let est = evm_client
+                                .estimate_process_burns_gas(&cert, *tx_index, &slice)
+                                .await;
+                            let fits = estimate_fits(est).unwrap_or(false);
+                            if fits {
+                                chunks.push(slice);
+                                continue;
+                            }
+                            if slice.len() == 1 {
+                                single_too_large = Some(slice[0]);
+                                break;
+                            }
+                            let mid = slice.len() / 2;
+                            let (left, right) = slice.split_at(mid);
+                            stack.push(right.to_vec());
+                            stack.push(left.to_vec());
+                        }
+                        if let Some(pos) = single_too_large {
+                            tracing::error!(
+                                tx_index,
+                                pos_in_tx = pos,
+                                "single burn does not fit under the EVM block gas limit"
+                            );
+                            continue 'tx_loop;
+                        }
+                        // Pop-order yields input order because we push right then left.
+                        for chunk in chunks {
+                            if let Err(e) = evm_client.process_burns(&cert, *tx_index, &chunk).await
+                            {
+                                tracing::warn!(
+                                    tx_index,
+                                    ?chunk,
+                                    "processBurns submission failed: {e:#}"
+                                );
+                                continue 'tx_loop;
+                            }
+                        }
+                    }
+                    relay::update_balance_metrics(evm_client, linera_client).await;
+                }
+                Err(e) => {
+                    tracing::warn!(?height, "estimate_add_block_gas failed: {e:#}");
                 }
             }
-        }
 
-        monitor
-            .write()
-            .await
-            .mark_burn_retried(credit_height, event_index);
+            let mut state = monitor.write().await;
+            for ei in &event_indices_at_height {
+                state.mark_burn_retried(height, *ei);
+            }
+        }
+    }
+}
+
+/// Walks the chain history backwards from the head until the certificate at
+/// `target_height` is found. Extracted from the prior per-burn body so all
+/// burns at a height share one fetch.
+async fn fetch_cert_at_height<E: linera_core::environment::Environment>(
+    linera_client: &LineraClient<E>,
+    target_height: BlockHeight,
+) -> anyhow::Result<Arc<linera_chain::types::ConfirmedBlockCertificate>> {
+    linera_client.sync().await?;
+    let info = linera_client.chain_info().await?;
+    let mut hash = info.block_hash;
+    loop {
+        let Some(h) = hash else {
+            anyhow::bail!("Block at height {} not found", target_height);
+        };
+        let c = linera_client.read_certificate(h).await?;
+        if c.block().header.height == target_height {
+            return Ok(c);
+        }
+        hash = c.block().header.previous_block_hash;
+    }
+}
+
+/// Stores BCS cert bytes for every pending burn at `height`.
+async fn persist_cert_bytes(
+    monitor: &RwLock<MonitorState>,
+    height: BlockHeight,
+    event_indices: &[u32],
+    cert: &linera_chain::types::ConfirmedBlockCertificate,
+) {
+    let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+    let state = monitor.read().await;
+    let Some(db) = state.db() else { return };
+    for ei in event_indices {
+        if let Err(e) = db.store_burn_raw(height, *ei, &cert_bytes).await {
+            tracing::warn!(
+                ?height,
+                event_index = ei,
+                "Failed to store burn raw bytes: {e:#}"
+            );
+        }
     }
 }
 
