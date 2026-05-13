@@ -141,23 +141,35 @@ pub trait ClientContextExt: ClientContext {
             .await
     }
 
+    /// Returns the subset of `owners` for which we have a key pair in the wallet.
+    ///
+    /// Duplicate inputs are treated as one.
+    async fn owners_with_key(
+        &self,
+        owners: impl IntoIterator<Item = AccountOwner>,
+    ) -> Result<BTreeSet<AccountOwner>, Error> {
+        let mut result = BTreeSet::new();
+        for owner in owners.into_iter().collect::<BTreeSet<_>>() {
+            if self.client().has_key_for(&owner).await? {
+                result.insert(owner);
+            }
+        }
+        Ok(result)
+    }
+
     /// Returns the unique owner from `owners` for which we have a key pair in the wallet.
     ///
-    /// Returns `None` when zero or multiple owners match.
+    /// Returns `None` when zero or multiple distinct owners match.
     async fn unique_owner_with_key(
         &self,
         owners: impl IntoIterator<Item = AccountOwner>,
     ) -> Result<Option<AccountOwner>, Error> {
-        let mut found = None;
-        for owner in owners {
-            if self.client().has_key_for(&owner).await? {
-                if found.is_some() {
-                    return Ok(None);
-                }
-                found = Some(owner);
-            }
-        }
-        Ok(found)
+        let with_key = self.owners_with_key(owners).await?;
+        Ok(if with_key.len() == 1 {
+            with_key.into_iter().next()
+        } else {
+            None
+        })
     }
 
     /// Sets the preferred owner of `chain_client`'s chain if the current one is no longer
@@ -454,9 +466,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         Ok(())
     }
 
-    /// If any new chains were created by the given block, and we have a key pair for them,
-    /// add them to the wallet and start listening for notifications. (This is not done for
-    /// fallback owners, as those would have to monitor all chains anyway.)
+    /// If any new chains were created by the given block, and we have a key pair for at
+    /// least one of their owners, add them to the wallet and start listening for
+    /// notifications. The preferred owner is assigned only when we hold a key pair for
+    /// exactly one of the chain's owners. (Fallback owners are ignored, as those would
+    /// have to monitor all chains anyway.)
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
         let block = Arc::unwrap_or_clone(
             self.storage
@@ -484,22 +498,29 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         let mut new_ids = BTreeMap::new();
         let mut context_guard = self.context.lock().await;
         for (new_chain_id, chain_desc) in new_chains {
-            for chain_owner in chain_desc.config().ownership.all_owners() {
-                if context_guard.client().has_key_for(chain_owner).await? {
-                    context_guard
-                        .update_wallet_for_new_chain(
-                            new_chain_id,
-                            Some(*chain_owner),
-                            block.header.timestamp,
-                            block.header.epoch,
-                        )
-                        .await?;
-                    context_guard
-                        .client()
-                        .extend_chain_mode(new_chain_id, ListeningMode::FullChain);
-                    new_ids.insert(new_chain_id, ListeningMode::FullChain);
-                }
+            let with_key = context_guard
+                .owners_with_key(chain_desc.config().ownership.all_owners().copied())
+                .await?;
+            if with_key.is_empty() {
+                continue;
             }
+            let owner = if with_key.len() == 1 {
+                with_key.into_iter().next()
+            } else {
+                None
+            };
+            context_guard
+                .update_wallet_for_new_chain(
+                    new_chain_id,
+                    owner,
+                    block.header.timestamp,
+                    block.header.epoch,
+                )
+                .await?;
+            context_guard
+                .client()
+                .extend_chain_mode(new_chain_id, ListeningMode::FullChain);
+            new_ids.insert(new_chain_id, ListeningMode::FullChain);
         }
         // Re-process the parent chain's outboxes now that the new chains are tracked.
         // This ensures cross-chain messages to newly created chains are delivered.
