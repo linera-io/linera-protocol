@@ -369,6 +369,7 @@ impl Options {
             max_concurrent_batch_downloads: self.max_concurrent_batch_downloads,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
+            multi_leader_jitter: true,
             notification_circuit_breaker_initial_probe_interval: self
                 .notification_circuit_breaker_initial_probe_interval,
             notification_circuit_breaker_max_probe_interval: self
