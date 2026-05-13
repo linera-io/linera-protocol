@@ -530,7 +530,8 @@ where
         &mut self,
         parameters: &[u8],
     ) -> Result<(), ExecutionError> {
-        let parameters_len = parameters.len() as u32;
+        let parameters_len =
+            u32::try_from(parameters.len()).map_err(|_| ArithmeticError::Overflow)?;
         self.track_size_runtime_operations(parameters_len)
     }
 
@@ -589,11 +590,17 @@ where
         &mut self,
         description: &ApplicationDescription,
     ) -> Result<(), ExecutionError> {
-        let parameters_size = description.parameters.len() as u32;
-        let required_apps_size =
-            description.required_application_ids.len() as u32 * RUNTIME_APPLICATION_ID_SIZE;
-        let size =
-            RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE + parameters_size + required_apps_size;
+        let parameters_size = u32::try_from(description.parameters.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
+        let required_apps_count = u32::try_from(description.required_application_ids.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
+        let required_apps_size = required_apps_count
+            .checked_mul(RUNTIME_APPLICATION_ID_SIZE)
+            .ok_or(ArithmeticError::Overflow)?;
+        let size = RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE
+            .checked_add(parameters_size)
+            .and_then(|s| s.checked_add(required_apps_size))
+            .ok_or(ArithmeticError::Overflow)?;
         self.track_size_runtime_operations(size)
     }
 

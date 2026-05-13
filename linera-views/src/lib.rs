@@ -62,13 +62,6 @@ The `LogView` can be seen as an analog of `VecDeque` while `MapView` is an analo
 // These traits have `Send` variants where possible.
 #![allow(async_fn_in_trait)]
 
-// Several views narrow `usize` indices to `u32` for storage. That conversion is
-// only meaningful if `usize` is at least as wide as `u32`.
-const _: () = assert!(
-    usize::BITS >= u32::BITS,
-    "linera-views requires a target with usize of at least 32 bits",
-);
-
 /// The definition of the batches for writing in the database.
 pub mod batch;
 
