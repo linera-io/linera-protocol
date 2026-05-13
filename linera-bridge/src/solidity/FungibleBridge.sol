@@ -125,6 +125,63 @@ contract FungibleBridge is Microchain {
         }
     }
 
+    /// Processes burns at the requested `eventPositionsInTx` positions
+    /// within transaction `txIndex` of `cert`. Verifies the cert once
+    /// and uses direct array access (`body.events[txIndex][pos]`) for
+    /// every burn — no nested-loop scan. The off-chain relayer uses
+    /// this when `addBlock(cert)` would not fit in a single EVM tx,
+    /// chunking burns per-tx-then-by-gas.
+    ///
+    /// Reverts (atomically — no `processedBurns` flag is set if the call
+    /// reverts) on:
+    /// - `txIndex` out of range (`"txIndex out of range"`)
+    /// - any position out of range (`"eventPos out of range"`)
+    /// - any position whose event is not a matching burn for this app
+    ///   (`"not a matching burn"`)
+    /// - any burn already processed (`"burn already processed"`)
+    /// - any failed `token.transfer` (`"token transfer failed"`)
+    function processBurns(
+        bytes calldata data,
+        uint32 txIndex,
+        uint32[] calldata eventPositionsInTx
+    ) external {
+        (BridgeTypes.Block memory blockValue, ) = lightClient.verifyBlock(data);
+        require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
+        require(txIndex < blockValue.body.events.length, "txIndex out of range");
+
+        uint64 height = blockValue.header.height.value;
+        bytes32 burnsHash = keccak256("burns");
+        BridgeTypes.Event[] memory txEvents = blockValue.body.events[txIndex];
+
+        for (uint256 k = 0; k < eventPositionsInTx.length; k++) {
+            uint32 pos = eventPositionsInTx[k];
+            require(pos < txEvents.length, "eventPos out of range");
+            BridgeTypes.Event memory evt = txEvents[pos];
+
+            if (evt.stream_id.application_id.choice != 1) {
+                revert("not a matching burn");
+            }
+            if (evt.stream_id.application_id.user.application_description_hash.value
+                    != fungibleApplicationId) {
+                revert("not a matching burn");
+            }
+            if (keccak256(evt.stream_id.stream_name.value) != burnsHash) {
+                revert("not a matching burn");
+            }
+
+            bytes32 key = keccak256(abi.encode(height, evt.index));
+            require(!processedBurns[key], "burn already processed");
+
+            WrappedFungibleTypes.BurnEvent memory burnEvt =
+                WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
+            require(
+                token.transfer(address(burnEvt.target), burnEvt.amount.value),
+                "token transfer failed"
+            );
+            processedBurns[key] = true;
+        }
+    }
+
     /// @dev Calls transferFrom and handles tokens that don't return a boolean.
     function _safeTransferFrom(address from, address to, uint256 amount_) internal {
         (bool success, bytes memory data) =
