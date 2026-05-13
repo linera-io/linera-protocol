@@ -785,20 +785,19 @@ async fn test_chain_listener_auto_assigns_on_new_chains() -> anyhow::Result<()> 
 
     // Wait for the listener to record a wallet entry for the given chain, matching
     // `expected_owner`. Polls for ~1 second.
-    let wait_for_owner =
-        async |chain_id: ChainId, expected_owner: Option<AccountOwner>| -> wallet::Chain {
-            for _ in 0..200 {
-                if let Some(chain) = context.lock().await.wallet().get(chain_id) {
-                    if chain.owner == expected_owner {
-                        return chain;
-                    }
+    let wait_for_owner = async |chain_id: ChainId,
+                                expected_owner: Option<AccountOwner>|
+           -> wallet::Chain {
+        for _ in 0..200 {
+            if let Some(chain) = context.lock().await.wallet().get(chain_id) {
+                if chain.owner == expected_owner {
+                    return chain;
                 }
-                tokio::task::yield_now().await;
             }
-            panic!(
-                "Listener did not record chain {chain_id} with owner {expected_owner:?} in time",
-            );
-        };
+            tokio::task::yield_now().await;
+        }
+        panic!("Listener did not record chain {chain_id} with owner {expected_owner:?} in time",);
+    };
 
     // 1) Unique key match: wallet has a key for exactly one of the new owners.
     let chain_unique = open(ChainOwnership::multiple(
@@ -828,10 +827,8 @@ async fn test_chain_listener_auto_assigns_on_new_chains() -> anyhow::Result<()> 
 
     // 4) Same owner listed as both super and regular owner. The dedup in
     //    `owners_with_key` means this still counts as a single match.
-    let chain_dedup = open(
-        ChainOwnership::single_super(owner_a).with_regular_owner(owner_a, 100),
-    )
-    .await?;
+    let chain_dedup =
+        open(ChainOwnership::single_super(owner_a).with_regular_owner(owner_a, 100)).await?;
     wait_for_owner(chain_dedup, Some(owner_a)).await;
 
     // Notifications are processed in FIFO order, so once chain_dedup is in the wallet
