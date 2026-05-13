@@ -124,12 +124,7 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                         relay::update_balance_metrics(evm_client, linera_client).await;
                     }
                     Err(e) => {
-                        let msg = format!("{e:#}");
-                        if msg.contains("already verified") {
-                            tracing::trace!(?height, "Block already verified on EVM");
-                        } else {
-                            tracing::warn!(?height, "addBlock submission failed: {e:#}");
-                        }
+                        tracing::warn!(?height, "addBlock submission failed: {e:#}");
                     }
                 },
                 Ok(false) => {
