@@ -999,7 +999,8 @@ mod graphql {
 
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.iterative_count().await? as u32)
+            let count = self.iterative_count().await?;
+            u32::try_from(count).map_err(|_| async_graphql::Error::new("count exceeds u32"))
         }
     }
 
@@ -1030,7 +1031,8 @@ mod graphql {
 
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.iterative_count().await? as u32)
+            let count = self.iterative_count().await?;
+            u32::try_from(count).map_err(|_| async_graphql::Error::new("count exceeds u32"))
         }
     }
 }
@@ -1934,7 +1936,8 @@ mod tests {
             }
 
             async fn count(&self) -> Result<u32, async_graphql::Error> {
-                Ok(self.set.iterative_count().await? as u32)
+                let count = self.set.iterative_count().await?;
+                u32::try_from(count).map_err(|_| async_graphql::Error::new("count exceeds u32"))
             }
         }
 

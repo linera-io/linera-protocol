@@ -530,7 +530,8 @@ where
         &mut self,
         parameters: &[u8],
     ) -> Result<(), ExecutionError> {
-        let parameters_len = parameters.len() as u32;
+        let parameters_len =
+            u32::try_from(parameters.len()).map_err(|_| ArithmeticError::Overflow)?;
         self.track_size_runtime_operations(parameters_len)
     }
 
@@ -549,9 +550,12 @@ where
         &mut self,
         owner_balances: &[(AccountOwner, Amount)],
     ) -> Result<(), ExecutionError> {
-        let mut size = 0;
+        let mut size: u32 = 0;
         for (account_owner, _) in owner_balances {
-            size += account_owner.size() + RUNTIME_AMOUNT_SIZE;
+            size = size
+                .checked_add(account_owner.size())
+                .and_then(|s| s.checked_add(RUNTIME_AMOUNT_SIZE))
+                .ok_or(ArithmeticError::Overflow)?;
         }
         self.track_size_runtime_operations(size)
     }
@@ -561,9 +565,11 @@ where
         &mut self,
         owners: &[AccountOwner],
     ) -> Result<(), ExecutionError> {
-        let mut size = 0;
+        let mut size: u32 = 0;
         for owner in owners {
-            size += owner.size();
+            size = size
+                .checked_add(owner.size())
+                .ok_or(ArithmeticError::Overflow)?;
         }
         self.track_size_runtime_operations(size)
     }
@@ -573,14 +579,21 @@ where
         &mut self,
         chain_ownership: &ChainOwnership,
     ) -> Result<(), ExecutionError> {
-        let mut size = 0;
+        let mut size: u32 = 0;
         for account_owner in &chain_ownership.super_owners {
-            size += account_owner.size();
+            size = size
+                .checked_add(account_owner.size())
+                .ok_or(ArithmeticError::Overflow)?;
         }
         for account_owner in chain_ownership.owners.keys() {
-            size += account_owner.size() + RUNTIME_OWNER_WEIGHT_SIZE;
+            size = size
+                .checked_add(account_owner.size())
+                .and_then(|s| s.checked_add(RUNTIME_OWNER_WEIGHT_SIZE))
+                .ok_or(ArithmeticError::Overflow)?;
         }
-        size += RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE;
+        size = size
+            .checked_add(RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE)
+            .ok_or(ArithmeticError::Overflow)?;
         self.track_size_runtime_operations(size)
     }
 
@@ -589,11 +602,17 @@ where
         &mut self,
         description: &ApplicationDescription,
     ) -> Result<(), ExecutionError> {
-        let parameters_size = description.parameters.len() as u32;
-        let required_apps_size =
-            description.required_application_ids.len() as u32 * RUNTIME_APPLICATION_ID_SIZE;
-        let size =
-            RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE + parameters_size + required_apps_size;
+        let parameters_size =
+            u32::try_from(description.parameters.len()).map_err(|_| ArithmeticError::Overflow)?;
+        let required_apps_count = u32::try_from(description.required_application_ids.len())
+            .map_err(|_| ArithmeticError::Overflow)?;
+        let required_apps_size = required_apps_count
+            .checked_mul(RUNTIME_APPLICATION_ID_SIZE)
+            .ok_or(ArithmeticError::Overflow)?;
+        let size = RUNTIME_CONSTANT_APPLICATION_DESCRIPTION_SIZE
+            .checked_add(parameters_size)
+            .and_then(|s| s.checked_add(required_apps_size))
+            .ok_or(ArithmeticError::Overflow)?;
         self.track_size_runtime_operations(size)
     }
 

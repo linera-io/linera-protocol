@@ -3,6 +3,9 @@
 
 //! Implements [`crate::store::KeyValueStore`] for the IndexedDB Web database.
 
+// JS `Uint8Array` indices are `u32`; casts at this FFI boundary are by design.
+#![allow(clippy::cast_possible_truncation)]
+
 use std::{convert::Infallible, future::Future, ops::Bound, rc::Rc};
 
 use futures::future;

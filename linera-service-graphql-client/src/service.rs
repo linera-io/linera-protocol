@@ -1,6 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// The GraphQL spec only has signed integer scalars; this module casts at
+// the API boundary between Rust's unsigned types and GraphQL's `Int`/`BigInt`.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 use graphql_client::GraphQLQuery;
 use linera_base::{
     crypto::CryptoHash,

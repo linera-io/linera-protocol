@@ -154,6 +154,11 @@ pub fn register_int_gauge_vec_with_subsystem(
 }
 
 /// Construct the bucket interval exponentially starting from a value and an ending value.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "histogram bucket count; loss of precision is acceptable"
+)]
 pub fn exponential_bucket_interval(start_value: f64, end_value: f64) -> Option<Vec<f64>> {
     let quot = end_value / start_value;
     let factor = 3.0_f64;
@@ -175,6 +180,11 @@ pub fn exponential_bucket_latencies(max_latency: f64) -> Option<Vec<f64>> {
 }
 
 /// Construct the bucket interval linearly starting from a value and an ending value.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "histogram bucket count; loss of precision is acceptable"
+)]
 pub fn linear_bucket_interval(start_value: f64, width: f64, end_value: f64) -> Option<Vec<f64>> {
     let count = (end_value - start_value) / width;
     let count = count.round() as usize;

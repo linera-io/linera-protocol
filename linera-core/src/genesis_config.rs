@@ -77,7 +77,7 @@ impl GenesisConfig {
         balance: Amount,
     ) -> ChainDescription {
         let description = make_chain(
-            self.chains.len() as u32,
+            u32::try_from(self.chains.len()).expect("more than u32::MAX genesis chains"),
             public_key,
             balance,
             self.timestamp,

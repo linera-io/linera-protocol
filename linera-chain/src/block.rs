@@ -475,7 +475,11 @@ impl Block {
                     .filter(|(_, message)| message.destination == recipient)
                     .map(|(idx, message)| message.clone().into_posted(idx))
                     .collect::<Vec<_>>();
-                index += txn_messages.len() as u32;
+                #[expect(clippy::cast_possible_truncation)]
+                // block size limits cap total messages well below u32::MAX
+                {
+                    index += txn_messages.len() as u32;
+                }
                 (!messages.is_empty()).then(|| {
                     let bundle = MessageBundle {
                         height: block_height,

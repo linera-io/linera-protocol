@@ -11,6 +11,10 @@ use tokio_util::codec::{Decoder, Encoder};
 use crate::RpcMessage;
 
 /// The size of the frame prefix that contains the payload size.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "size_of::<u32>() is always 4"
+)]
 const PREFIX_SIZE: u8 = mem::size_of::<u32>() as u8;
 
 /// An encoder/decoder of [`RpcMessage`]s for the RPC protocol.
@@ -117,6 +121,8 @@ impl From<Error> for NodeError {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::cast_possible_truncation)]
+
     use bytes::{BufMut, BytesMut};
     use linera_core::data_types::ChainInfoQuery;
     use test_strategy::proptest;
