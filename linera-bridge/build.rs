@@ -16,8 +16,26 @@ mod codegen {
     pub fn generate() {
         generate_bridge_types();
         generate_fungible_types();
+        // The bytes20/bytes32 helpers in the generated output use plain `assembly { ... }`
+        // for a single mload. Mark them memory-safe so the IR optimizer can spill freely;
+        // without this LightClient.sol hits "stack too deep" when the deserializer tree
+        // is inlined into verifyCertificate.
+        mark_assembly_memory_safe(&PathBuf::from("src/solidity/BridgeTypes.sol"));
         forge_fmt(&PathBuf::from("src/solidity/BridgeTypes.sol"));
         forge_fmt(&PathBuf::from("src/solidity/WrappedFungibleTypes.sol"));
+    }
+
+    /// Rewrites `assembly { ... }` to `assembly ("memory-safe") { ... }` in a generated
+    /// Solidity file. Called after `serde-generate` produces the file.
+    fn mark_assembly_memory_safe(path: &PathBuf) {
+        if !path.exists() {
+            return;
+        }
+        let content = std::fs::read_to_string(path).expect("failed to read generated Solidity");
+        let patched = content.replace("assembly {", "assembly (\"memory-safe\") {");
+        if patched != content {
+            std::fs::write(path, patched).expect("failed to write patched Solidity");
+        }
     }
 
     /// Reformats a freshly generated Solidity file with `forge fmt` so the

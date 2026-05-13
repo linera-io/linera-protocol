@@ -115,7 +115,7 @@ contract LightClient {
             }
             bytes32 r;
             bytes32 s;
-            assembly {
+            assembly ("memory-safe") {
                 r := mload(add(sigBytes, 32))
                 s := mload(add(sigBytes, 64))
             }
