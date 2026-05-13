@@ -235,7 +235,7 @@ function pendingBundleCount(): number {
                               </thead>
                               <tbody>
                                 <tr v-for="(msg, mi) in bundle.messages" :key="mi">
-                                  <td>{{ displayValue(msg.index) }}</td>
+                                  <td>{{ mi }}</td>
                                   <td>{{ displayValue(msg.kind) }}</td>
                                   <td>
                                     <span v-if="msg.messageMetadata?.messageType">{{ msg.messageMetadata.messageType }}</span>
@@ -288,7 +288,7 @@ function pendingBundleCount(): number {
                               </thead>
                               <tbody>
                                 <tr v-for="(msg, mi) in bundle.messages" :key="mi">
-                                  <td>{{ displayValue(msg.index) }}</td>
+                                  <td>{{ mi }}</td>
                                   <td>{{ displayValue(msg.kind) }}</td>
                                   <td>
                                     <span v-if="msg.messageMetadata?.messageType">{{ msg.messageMetadata.messageType }}</span>
