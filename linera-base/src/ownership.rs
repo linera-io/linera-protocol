@@ -234,7 +234,7 @@ impl ChainOwnership {
     /// of proposers is unbounded.
     ///
     /// This is a gentle-clients convention; it is not enforced by the protocol.
-    pub fn is_preferred_multi_leader_proposer(
+    fn is_preferred_multi_leader_proposer(
         &self,
         owner: &AccountOwner,
         round_index: u32,
