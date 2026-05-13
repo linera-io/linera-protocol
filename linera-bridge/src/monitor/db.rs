@@ -100,7 +100,9 @@ impl BridgeDb {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS pending_burns (
                 linera_height     INTEGER NOT NULL,
-                event_index        INTEGER NOT NULL,
+                tx_index          INTEGER NOT NULL,
+                event_pos_in_tx   INTEGER NOT NULL,
+                event_index       INTEGER NOT NULL,
                 evm_recipient     TEXT NOT NULL,
                 amount            TEXT NOT NULL,
                 raw_cert          BLOB,
@@ -114,7 +116,9 @@ impl BridgeDb {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS finished_burns (
                 linera_height     INTEGER NOT NULL,
-                event_index        INTEGER NOT NULL,
+                tx_index          INTEGER NOT NULL,
+                event_pos_in_tx   INTEGER NOT NULL,
+                event_index       INTEGER NOT NULL,
                 evm_recipient     TEXT NOT NULL,
                 amount            TEXT NOT NULL,
                 raw_cert          BLOB,
@@ -217,10 +221,13 @@ impl BridgeDb {
     /// Inserts a new pending burn. Ignores duplicates (idempotent).
     pub async fn insert_burn(&self, burn: &PendingBurn) -> Result<()> {
         sqlx::query(
-            "INSERT OR IGNORE INTO pending_burns (linera_height, event_index, evm_recipient, amount)
-             VALUES (?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO pending_burns
+                (linera_height, tx_index, event_pos_in_tx, event_index, evm_recipient, amount)
+             VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(burn.height.0 as i64)
+        .bind(burn.tx_index as i64)
+        .bind(burn.event_pos_in_tx as i64)
         .bind(burn.event_index as i64)
         .bind(format!("{:#x}", burn.evm_recipient))
         .bind(burn.amount.to_string())
@@ -244,10 +251,10 @@ impl BridgeDb {
         let mut tx = self.pool.begin().await?;
         let inserted = sqlx::query(
             "INSERT OR IGNORE INTO finished_burns
-                (linera_height, event_index, evm_recipient, amount, raw_cert,
-                 status, created_at)
-             SELECT linera_height, event_index, evm_recipient, amount, raw_cert,
-                    ?, created_at
+                (linera_height, tx_index, event_pos_in_tx, event_index,
+                 evm_recipient, amount, raw_cert, status, created_at)
+             SELECT linera_height, tx_index, event_pos_in_tx, event_index,
+                    evm_recipient, amount, raw_cert, ?, created_at
              FROM pending_burns
              WHERE linera_height = ? AND event_index = ?",
         )
@@ -321,7 +328,7 @@ impl BridgeDb {
     /// in-memory `MonitorState`.
     pub async fn load_pending_burns(&self) -> Result<Vec<PendingBurn>> {
         let rows = sqlx::query(
-            "SELECT linera_height, event_index, evm_recipient, amount
+            "SELECT linera_height, tx_index, event_pos_in_tx, event_index, evm_recipient, amount
              FROM pending_burns",
         )
         .fetch_all(&self.pool)
@@ -330,12 +337,16 @@ impl BridgeDb {
         let mut out = Vec::with_capacity(rows.len());
         for row in rows {
             let height: i64 = row.get(0);
-            let event_index: i64 = row.get(1);
-            let evm_recipient: String = row.get(2);
-            let amount: String = row.get(3);
+            let tx_index: i64 = row.get(1);
+            let event_pos_in_tx: i64 = row.get(2);
+            let event_index: i64 = row.get(3);
+            let evm_recipient: String = row.get(4);
+            let amount: String = row.get(5);
 
             out.push(PendingBurn {
                 height: BlockHeight(height as u64),
+                tx_index: tx_index as u32,
+                event_pos_in_tx: event_pos_in_tx as u32,
                 event_index: event_index as u32,
                 evm_recipient: evm_recipient
                     .parse()
@@ -422,6 +433,8 @@ mod tests {
     fn test_burn() -> PendingBurn {
         PendingBurn {
             height: BlockHeight(100),
+            tx_index: 0,
+            event_pos_in_tx: 0,
             event_index: 0,
             evm_recipient: "0xabcdef1234567890abcdef1234567890abcdef12"
                 .parse()

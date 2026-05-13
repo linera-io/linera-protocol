@@ -194,9 +194,11 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     for block in &blocks {
         let height = block.block().header.height;
         let burn_events = find_burn_events(&block.block().body.events, fungible_app_id);
-        for (event_index, burn_event) in burn_events {
+        for (tx_index, event_pos_in_tx, event_index, burn_event) in burn_events {
             new_burns.push((
                 height,
+                tx_index,
+                event_pos_in_tx,
                 event_index,
                 Address::from(burn_event.target),
                 burn_event.amount,
@@ -205,13 +207,15 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     }
 
     let mut tracked_any = false;
-    for (height, event_index, recipient, amount) in &new_burns {
-        tracing::info!(?height, event_index, %recipient, %amount, "Discovered burn");
+    for (height, tx_index, event_pos_in_tx, event_index, recipient, amount) in &new_burns {
+        tracing::info!(?height, tx_index, event_pos_in_tx, event_index, %recipient, %amount, "Discovered burn");
         let was_new = monitor
             .write()
             .await
             .track_burn(PendingBurn {
                 height: *height,
+                tx_index: *tx_index,
+                event_pos_in_tx: *event_pos_in_tx,
                 event_index: *event_index,
                 evm_recipient: *recipient,
                 amount: *amount,

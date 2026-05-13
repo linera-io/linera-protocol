@@ -65,6 +65,14 @@ pub struct PendingDeposit {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingBurn {
     pub height: BlockHeight,
+    /// Position of this burn's transaction within `body.events`.
+    /// Used by `processBurns(cert, tx_index, ...)`.
+    pub tx_index: u32,
+    /// Position of this burn within `body.events[tx_index]`.
+    /// Used by `processBurns(cert, tx_index, [event_pos_in_tx, ...])`.
+    pub event_pos_in_tx: u32,
+    /// `Event.index` — the stream index of this burn, unique within
+    /// `(stream, height)`. Off-chain and on-chain dedup key.
     pub event_index: u32,
     pub evm_recipient: Address,
     pub amount: Amount,
@@ -224,6 +232,39 @@ impl MonitorState {
 
     pub fn completed_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().filter(|b| b.forwarded).collect()
+    }
+
+    /// Returns pending burns grouped by `(height, tx_index)`. Outer Vec
+    /// is in ascending height order; inner Vec is in ascending tx-index
+    /// order; positions within each (height, tx) group are sorted by
+    /// `event_pos_in_tx`. Burns that have exceeded `max_retries` are
+    /// skipped. Used by `process_pending_burns` to batch all burns at a
+    /// height through `addBlock` first, then chunked `processBurns` per
+    /// (tx) group on no-fit.
+    pub fn pending_burns_by_height_and_tx(
+        &self,
+        max_retries: u32,
+    ) -> Vec<(BlockHeight, Vec<(u32, Vec<u32>)>)> {
+        use std::collections::BTreeMap;
+        let mut tree: BTreeMap<BlockHeight, BTreeMap<u32, Vec<u32>>> = BTreeMap::new();
+        for tracked in self.pending_burns() {
+            if tracked.retry_count >= max_retries {
+                continue;
+            }
+            tree.entry(tracked.value.height)
+                .or_default()
+                .entry(tracked.value.tx_index)
+                .or_default()
+                .push(tracked.value.event_pos_in_tx);
+        }
+        for by_tx in tree.values_mut() {
+            for positions in by_tx.values_mut() {
+                positions.sort_unstable();
+            }
+        }
+        tree.into_iter()
+            .map(|(h, by_tx)| (h, by_tx.into_iter().collect()))
+            .collect()
     }
 
     pub fn deposits_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedDeposit> {
@@ -482,6 +523,8 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(10),
+                tx_index: 0,
+                event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
                 amount: Amount::from_attos(500),
@@ -519,6 +562,8 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
+                tx_index: 0,
+                event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0x12; 20]),
                 amount: Amount::from_attos(100),
@@ -671,6 +716,8 @@ mod tests {
         .unwrap();
         db.insert_burn(&PendingBurn {
             height: BlockHeight(99),
+            tx_index: 0,
+            event_pos_in_tx: 0,
             event_index: 2,
             evm_recipient: Address::from([0xDD; 20]),
             amount: Amount::from_attos(7),
@@ -697,6 +744,8 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height,
+                tx_index: 0,
+                event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
                 amount: Amount::from_attos(500),
@@ -710,5 +759,62 @@ mod tests {
         // Once forwarded, the item is no longer offered for retry.
         state.complete_burn(height, 0).await;
         assert!(state.next_burn_for_retry(10).is_none());
+    }
+
+    #[tokio::test]
+    async fn pending_burns_by_height_and_tx_groups_and_sorts() {
+        let mut state = MonitorState::new(0);
+        let burns = [
+            // Two burns at height 5: tx 0 has positions 1 then 0 (out of
+            // order so the helper's sort is tested); tx 1 has one burn.
+            PendingBurn {
+                height: BlockHeight(5),
+                tx_index: 0,
+                event_pos_in_tx: 1,
+                event_index: 11,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+            PendingBurn {
+                height: BlockHeight(5),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+            PendingBurn {
+                height: BlockHeight(5),
+                tx_index: 1,
+                event_pos_in_tx: 0,
+                event_index: 12,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+            // One burn at a later height.
+            PendingBurn {
+                height: BlockHeight(7),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 0,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+        ];
+        for b in burns {
+            state.track_burn(b).await;
+        }
+
+        let groups = state.pending_burns_by_height_and_tx(/* max_retries */ 10);
+        assert_eq!(
+            groups,
+            vec![
+                (
+                    BlockHeight(5),
+                    vec![(0u32, vec![0u32, 1]), (1u32, vec![0u32]),]
+                ),
+                (BlockHeight(7), vec![(0u32, vec![0u32]),]),
+            ],
+        );
     }
 }
