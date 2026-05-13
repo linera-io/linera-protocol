@@ -19,7 +19,7 @@ abstract contract Microchain {
     /// relies on that idempotency to safely re-submit `addBlock(cert)`
     /// after partial settlement.
     function addBlock(bytes calldata data) external {
-        (BridgeTypes.Block memory blockValue, ) = lightClient.verifyBlock(data);
+        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
         _onBlock(blockValue);
     }

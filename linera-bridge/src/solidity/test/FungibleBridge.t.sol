@@ -12,13 +12,13 @@ import {LineraToken} from "../LineraToken.sol";
 // ------------------------------------------------------------------
 
 bytes32 constant CHAIN_ID = bytes32(uint256(0xC1));
-uint64  constant HEIGHT   = 42;
-uint32  constant TX       = 0;
-uint128 constant AMOUNT   = 1_000_000_000_000_000_000; // 1e18
-address constant RECIP_0  = address(0xA0);
-address constant RECIP_1  = address(0xA1);
-address constant RECIP_2  = address(0xA2);
-bytes32 constant APP_ID   = bytes32(uint256(0xF00D));
+uint64 constant HEIGHT = 42;
+uint32 constant TX = 0;
+uint128 constant AMOUNT = 1_000_000_000_000_000_000; // 1e18
+address constant RECIP_0 = address(0xA0);
+address constant RECIP_1 = address(0xA1);
+address constant RECIP_2 = address(0xA2);
+bytes32 constant APP_ID = bytes32(uint256(0xF00D));
 
 // ------------------------------------------------------------------
 // MockLightClientForBurns
@@ -29,38 +29,34 @@ bytes32 constant APP_ID   = bytes32(uint256(0xF00D));
 // ------------------------------------------------------------------
 contract MockLightClientForBurns {
     bytes32 public immutable chainIdRet;
-    uint64  public immutable heightRet;
-    uint32  public immutable txIndexUsed;
+    uint64 public immutable heightRet;
+    uint32 public immutable txIndexUsed;
     bytes32 public immutable fungibleAppIdRet;
-    uint32  public immutable numBurns;
+    uint32 public immutable numBurns;
     uint128 public immutable amountPerBurn;
     address public immutable recipBase;
 
     constructor(
         bytes32 _chainId,
-        uint64  _height,
-        uint32  _txIndex,
+        uint64 _height,
+        uint32 _txIndex,
         bytes32 _fungibleAppId,
-        uint32  _numBurns,
+        uint32 _numBurns,
         uint128 _amountPerBurn,
         address _recipBase
     ) {
-        chainIdRet      = _chainId;
-        heightRet       = _height;
-        txIndexUsed     = _txIndex;
+        chainIdRet = _chainId;
+        heightRet = _height;
+        txIndexUsed = _txIndex;
         fungibleAppIdRet = _fungibleAppId;
-        numBurns        = _numBurns;
-        amountPerBurn   = _amountPerBurn;
-        recipBase       = _recipBase;
+        numBurns = _numBurns;
+        amountPerBurn = _amountPerBurn;
+        recipBase = _recipBase;
     }
 
-    function verifyBlock(bytes calldata)
-        external
-        view
-        returns (BridgeTypes.Block memory b, bytes32 sigHash)
-    {
+    function verifyBlock(bytes calldata) external view returns (BridgeTypes.Block memory b, bytes32 sigHash) {
         b.header.chain_id.value.value = chainIdRet;
-        b.header.height.value         = heightRet;
+        b.header.height.value = heightRet;
 
         // Allocate txIndexUsed + 1 tx-slots; all before txIndexUsed are empty.
         b.body.events = new BridgeTypes.Event[][](uint256(txIndexUsed) + 1);
@@ -95,32 +91,22 @@ contract MockLightClientForBurns {
 // ------------------------------------------------------------------
 contract MockLightClientForNonBurn {
     bytes32 public immutable chainIdRet;
-    uint64  public immutable heightRet;
+    uint64 public immutable heightRet;
     bytes32 public immutable fungibleAppIdRet;
     uint128 public immutable amountPerBurn;
     address public immutable recipBase;
 
-    constructor(
-        bytes32 _chainId,
-        uint64  _height,
-        bytes32 _fungibleAppId,
-        uint128 _amountPerBurn,
-        address _recipBase
-    ) {
-        chainIdRet       = _chainId;
-        heightRet        = _height;
+    constructor(bytes32 _chainId, uint64 _height, bytes32 _fungibleAppId, uint128 _amountPerBurn, address _recipBase) {
+        chainIdRet = _chainId;
+        heightRet = _height;
         fungibleAppIdRet = _fungibleAppId;
-        amountPerBurn    = _amountPerBurn;
-        recipBase        = _recipBase;
+        amountPerBurn = _amountPerBurn;
+        recipBase = _recipBase;
     }
 
-    function verifyBlock(bytes calldata)
-        external
-        view
-        returns (BridgeTypes.Block memory b, bytes32 sigHash)
-    {
+    function verifyBlock(bytes calldata) external view returns (BridgeTypes.Block memory b, bytes32 sigHash) {
         b.header.chain_id.value.value = chainIdRet;
-        b.header.height.value         = heightRet;
+        b.header.height.value = heightRet;
 
         b.body.events = new BridgeTypes.Event[][](1);
         b.body.events[0] = new BridgeTypes.Event[](1);
@@ -165,11 +151,8 @@ function _u32s_single(uint32 a) pure returns (uint32[] memory) {
 contract FungibleBridgeProcessBurnsTest is Test {
     // Deploy a bridge backed by `lc`, with a LineraToken that has
     // `supply` tokens pre-minted to the bridge.
-    function _deployBridge(address lc, uint256 supply)
-        internal
-        returns (FungibleBridge bridge, LineraToken tok)
-    {
-        tok    = new LineraToken("Test", "TST", supply);
+    function _deployBridge(address lc, uint256 supply) internal returns (FungibleBridge bridge, LineraToken tok) {
+        tok = new LineraToken("Test", "TST", supply);
         bridge = new FungibleBridge(lc, CHAIN_ID, address(tok), APP_ID);
         // Send all tokens to the bridge so transfer() calls succeed.
         tok.transfer(address(bridge), supply);
@@ -180,20 +163,18 @@ contract FungibleBridgeProcessBurnsTest is Test {
     function test_processBurns_single_position_marks_processed() public {
         // 2 burns in tx TX at positions 0 and 1 with stream indices 5 and 6.
         // Settle only position 0; assert (HEIGHT, 5) is flipped, (HEIGHT, 6) stays false.
-        MockLightClientForBurns lc =
-            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
 
-        assertTrue( bridge.isBurnProcessed(HEIGHT, 5), "stream index 5 should be processed");
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "stream index 5 should be processed");
         assertFalse(bridge.isBurnProcessed(HEIGHT, 6), "stream index 6 should not be processed yet");
     }
 
     function test_processBurns_multi_position_marks_both_processed() public {
         // 2 burns; settle both positions; both flags true.
-        MockLightClientForBurns lc =
-            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s(0, 1));
@@ -204,8 +185,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
 
     function test_processBurns_already_processed_reverts() public {
         // 1 burn; settle; settle again → revert "burn already processed".
-        MockLightClientForBurns lc =
-            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
@@ -216,8 +196,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
 
     function test_processBurns_tx_index_out_of_range_reverts() public {
         // Block has 1 tx; processBurns with txIndex=99 → revert "txIndex out of range".
-        MockLightClientForBurns lc =
-            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("txIndex out of range"));
@@ -226,8 +205,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
 
     function test_processBurns_event_pos_out_of_range_reverts() public {
         // 2 burns at positions 0,1; processBurns with position=99 → revert "eventPos out of range".
-        MockLightClientForBurns lc =
-            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("eventPos out of range"));
@@ -237,8 +215,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
     function test_processBurns_non_burn_event_reverts() public {
         // MockLightClient returns a Block whose only event has the wrong
         // stream_name ("deposits") → processBurns(tx=0, [0]) → revert "not a matching burn".
-        MockLightClientForNonBurn lc =
-            new MockLightClientForNonBurn(CHAIN_ID, HEIGHT, APP_ID, AMOUNT, RECIP_0);
+        MockLightClientForNonBurn lc = new MockLightClientForNonBurn(CHAIN_ID, HEIGHT, APP_ID, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("not a matching burn"));
@@ -250,8 +227,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
         // Step 1: settle position 1 alone (succeeds).
         // Step 2: settle [0, 1] → reverts on position 1 ("burn already processed").
         // Assert (HEIGHT, stream-index-of-pos-0) is STILL false (revert rolled back pos-0 update).
-        MockLightClientForBurns lc =
-            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         // Settle position 1 (stream index 6).

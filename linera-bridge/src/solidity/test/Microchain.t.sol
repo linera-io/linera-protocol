@@ -16,11 +16,7 @@ contract MockLightClient {
         expectedChainId = _chainId;
     }
 
-    function verifyBlock(bytes calldata)
-        external
-        view
-        returns (BridgeTypes.Block memory b, bytes32 sigHash)
-    {
+    function verifyBlock(bytes calldata) external view returns (BridgeTypes.Block memory b, bytes32 sigHash) {
         b.header.chain_id.value.value = expectedChainId;
         sigHash = bytes32(uint256(0x1234));
     }
