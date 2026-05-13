@@ -550,9 +550,12 @@ where
         &mut self,
         owner_balances: &[(AccountOwner, Amount)],
     ) -> Result<(), ExecutionError> {
-        let mut size = 0;
+        let mut size: u32 = 0;
         for (account_owner, _) in owner_balances {
-            size += account_owner.size() + RUNTIME_AMOUNT_SIZE;
+            size = size
+                .checked_add(account_owner.size())
+                .and_then(|s| s.checked_add(RUNTIME_AMOUNT_SIZE))
+                .ok_or(ArithmeticError::Overflow)?;
         }
         self.track_size_runtime_operations(size)
     }
@@ -562,9 +565,11 @@ where
         &mut self,
         owners: &[AccountOwner],
     ) -> Result<(), ExecutionError> {
-        let mut size = 0;
+        let mut size: u32 = 0;
         for owner in owners {
-            size += owner.size();
+            size = size
+                .checked_add(owner.size())
+                .ok_or(ArithmeticError::Overflow)?;
         }
         self.track_size_runtime_operations(size)
     }
@@ -574,14 +579,21 @@ where
         &mut self,
         chain_ownership: &ChainOwnership,
     ) -> Result<(), ExecutionError> {
-        let mut size = 0;
+        let mut size: u32 = 0;
         for account_owner in &chain_ownership.super_owners {
-            size += account_owner.size();
+            size = size
+                .checked_add(account_owner.size())
+                .ok_or(ArithmeticError::Overflow)?;
         }
         for account_owner in chain_ownership.owners.keys() {
-            size += account_owner.size() + RUNTIME_OWNER_WEIGHT_SIZE;
+            size = size
+                .checked_add(account_owner.size())
+                .and_then(|s| s.checked_add(RUNTIME_OWNER_WEIGHT_SIZE))
+                .ok_or(ArithmeticError::Overflow)?;
         }
-        size += RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE;
+        size = size
+            .checked_add(RUNTIME_CONSTANT_CHAIN_OWNERSHIP_SIZE)
+            .ok_or(ArithmeticError::Overflow)?;
         self.track_size_runtime_operations(size)
     }
 
