@@ -381,7 +381,6 @@ PostedMessage:
           TYPENAME: Account
     - kind:
         TYPENAME: MessageKind
-    - index: U32
     - message:
         TYPENAME: Message
 Response:

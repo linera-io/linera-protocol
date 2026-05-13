@@ -462,7 +462,6 @@ impl Block {
         recipient: ChainId,
         certificate_hash: CryptoHash,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + '_ {
-        let mut index = 0u32;
         let block_height = self.header.height;
         let block_timestamp = self.header.timestamp;
         let block_epoch = self.header.epoch;
@@ -470,12 +469,11 @@ impl Block {
         (0u32..)
             .zip(self.messages())
             .filter_map(move |(transaction_index, txn_messages)| {
-                let messages = (index..)
-                    .zip(txn_messages)
-                    .filter(|(_, message)| message.destination == recipient)
-                    .map(|(idx, message)| message.clone().into_posted(idx))
+                let messages = txn_messages
+                    .iter()
+                    .filter(|message| message.destination == recipient)
+                    .map(|message| message.clone().into_posted())
                     .collect::<Vec<_>>();
-                index += txn_messages.len() as u32;
                 (!messages.is_empty()).then(|| {
                     let bundle = MessageBundle {
                         height: block_height,

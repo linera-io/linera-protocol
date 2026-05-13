@@ -431,20 +431,18 @@ pub struct PostedMessage {
     pub refund_grant_to: Option<Account>,
     /// The kind of message being sent.
     pub kind: MessageKind,
-    /// The index of the message in the sending block.
-    pub index: u32,
     /// The message itself.
     pub message: Message,
 }
 
 pub trait OutgoingMessageExt {
     /// Returns the posted message, i.e. the outgoing message without the destination.
-    fn into_posted(self, index: u32) -> PostedMessage;
+    fn into_posted(self) -> PostedMessage;
 }
 
 impl OutgoingMessageExt for OutgoingMessage {
     /// Returns the posted message, i.e. the outgoing message without the destination.
-    fn into_posted(self, index: u32) -> PostedMessage {
+    fn into_posted(self) -> PostedMessage {
         let OutgoingMessage {
             destination: _,
             authenticated_owner,
@@ -458,7 +456,6 @@ impl OutgoingMessageExt for OutgoingMessage {
             grant,
             refund_grant_to,
             kind,
-            index,
             message,
         }
     }
@@ -626,8 +623,8 @@ impl MessageBundle {
 impl PostedMessage {
     /// Returns a rough estimate of the serialized size in bytes.
     pub fn estimated_size(&self) -> usize {
-        // Fixed: signer option (33) + grant (16) + refund option (34) + kind (1) + index (4) + enum tag (8)
-        let overhead = 96;
+        // Fixed: signer option (33) + grant (16) + refund option (34) + kind (1) + enum tag (8)
+        let overhead = 92;
         let message_size = match &self.message {
             Message::System(_) => 256, // conservative estimate for system messages
             Message::User { bytes, .. } => 64 + bytes.len(),

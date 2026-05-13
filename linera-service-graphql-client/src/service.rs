@@ -521,7 +521,6 @@ mod from {
                                     owner: rgt.owner,
                                 }),
                                 kind: msg.kind,
-                                index: msg.index as u32,
                                 message: msg.message,
                             })
                             .collect(),

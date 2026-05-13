@@ -1311,10 +1311,6 @@ type PostedMessage {
 	"""
 	kind: MessageKind!
 	"""
-	The index of the message in the sending block.
-	"""
-	index: Int!
-	"""
 	The message itself.
 	"""
 	message: Message!

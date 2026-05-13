@@ -216,8 +216,8 @@ impl SqliteDatabase {
                         .insert_incoming_bundle_tx(tx, hash, index, bundle)
                         .await?;
 
-                    for message in &bundle.bundle.messages {
-                        self.insert_bundle_message_tx(tx, bundle_id, message)
+                    for (message_index, message) in bundle.bundle.messages.iter().enumerate() {
+                        self.insert_bundle_message_tx(tx, bundle_id, message_index, message)
                             .await?;
                     }
                 }
@@ -499,6 +499,7 @@ impl SqliteDatabase {
         &self,
         tx: &mut Transaction<'_, Sqlite>,
         bundle_id: i64,
+        message_index: usize,
         message: &PostedMessage,
     ) -> Result<(), SqliteError> {
         let authenticated_owner_str = message.authenticated_owner.map(|s| s.to_string());
@@ -518,7 +519,7 @@ impl SqliteDatabase {
             "#
         )
         .bind(bundle_id)
-        .bind(message.index as i64)
+        .bind(message_index as i64)
         .bind(authenticated_owner_str)
         .bind(message.grant.to_string())
         .bind(refund_grant_to)

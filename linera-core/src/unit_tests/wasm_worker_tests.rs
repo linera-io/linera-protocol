@@ -423,8 +423,7 @@ where
     );
     let posted_messages: Vec<_> = outgoing_messages
         .iter()
-        .enumerate()
-        .map(|(i, msg)| msg.clone().into_posted(i as u32))
+        .map(|msg| msg.clone().into_posted())
         .collect();
 
     // Build a proposed block for the receiver with the incoming message bundle.

@@ -1431,7 +1431,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![
-                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                        system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1444,7 +1444,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1457,7 +1457,7 @@ where
                     transaction_index: 0,
                     messages: vec![
                         system_credit_message(Amount::from_tokens(2)) // wrong amount
-                            .to_posted(0, MessageKind::Tracked),
+                            .to_posted(MessageKind::Tracked),
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1484,7 +1484,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(1, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1510,7 +1510,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(3))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1522,7 +1522,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![
-                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                        system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1535,7 +1535,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(1, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1560,7 +1560,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![
-                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                        system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1606,7 +1606,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(1, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1618,7 +1618,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(3))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1906,7 +1906,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(995))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             }],
@@ -1950,7 +1950,6 @@ where
                 grant: Amount::ZERO,
                 refund_grant_to: None,
                 kind: MessageKind::Tracked,
-                index: 0,
                 message: Message::System(SystemMessage::Credit { amount, .. }),
             }] if amount == Amount::from_tokens(995)),
         "Unexpected bundle",
@@ -2136,7 +2135,6 @@ where
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
         }] if amount == Amount::ONE),
         "Unexpected bundle",
@@ -2220,7 +2218,6 @@ where
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
         }] if amount == Amount::from_tokens(10)),
         "Unexpected bundle",
@@ -2425,7 +2422,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(5))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             }],
@@ -2642,7 +2639,7 @@ where
                             target: recipient,
                             amount: Amount::from_tokens(3),
                         })
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                     },
                     action: MessageAction::Reject,
                 },
@@ -2658,7 +2655,7 @@ where
                             target: recipient,
                             amount: Amount::from_tokens(2),
                         })
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                     },
                     action: MessageAction::Accept,
                 },
@@ -2697,7 +2694,7 @@ where
                         target: recipient,
                         amount: Amount::from_tokens(3),
                     })
-                    .to_posted(0, MessageKind::Bouncing)],
+                    .to_posted(MessageKind::Bouncing)],
                 },
                 action: MessageAction::Accept,
             }],
@@ -2876,7 +2873,7 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
                 messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(0, MessageKind::Tracked)],
+                    .to_posted(MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         })
@@ -3169,7 +3166,7 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
                 messages: vec![
-                    system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
                 ],
             },
             action: MessageAction::Accept,
@@ -4453,7 +4450,7 @@ where
                         target: owner,
                         amount: Amount::from_tokens(2),
                     })
-                    .to_posted(0, MessageKind::Tracked)],
+                    .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             }),
@@ -4490,7 +4487,7 @@ where
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
                 messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(1, MessageKind::Tracked)],
+                    .to_posted(MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         });
@@ -4527,7 +4524,7 @@ where
                     recipient: Account::chain(chain_2),
                     amount: Amount::from_tokens(2),
                 })
-                .to_posted(0, MessageKind::Simple)],
+                .to_posted(MessageKind::Simple)],
             },
             action: MessageAction::Accept,
         });
