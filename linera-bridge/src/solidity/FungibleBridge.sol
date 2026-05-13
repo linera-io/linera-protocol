@@ -119,8 +119,12 @@ contract FungibleBridge is Microchain {
                 WrappedFungibleTypes.BurnEvent memory burnEvt =
                     WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
                 address target = address(burnEvt.target);
-                require(token.transfer(target, burnEvt.amount.value), "token transfer failed");
+                // Checks-effects-interactions: flip the dedup flag BEFORE
+                // the external `token.transfer` call so a malicious token
+                // that re-enters `addBlock` / `processBurns` cannot trigger
+                // a second release for the same burn.
                 processedBurns[key] = true;
+                require(token.transfer(target, burnEvt.amount.value), "token transfer failed");
             }
         }
     }
@@ -174,11 +178,15 @@ contract FungibleBridge is Microchain {
 
             WrappedFungibleTypes.BurnEvent memory burnEvt =
                 WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
+            // Checks-effects-interactions: flip the dedup flag BEFORE the
+            // external `token.transfer` call so a malicious token that
+            // re-enters `processBurns` / `addBlock` cannot trigger a
+            // second release for the same burn.
+            processedBurns[key] = true;
             require(
                 token.transfer(address(burnEvt.target), burnEvt.amount.value),
                 "token transfer failed"
             );
-            processedBurns[key] = true;
         }
     }
 
