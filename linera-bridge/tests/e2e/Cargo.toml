@@ -49,6 +49,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serial_test = "3"
 tempfile = "3"
 test-case = "3.3.1"
 testcontainers = { version = "0.27", features = ["docker-compose"] }
