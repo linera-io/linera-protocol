@@ -6,12 +6,13 @@ use std::{sync::Arc, time::Duration};
 use futures::{lock::Mutex, FutureExt as _};
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner},
-    data_types::{Amount, BlockHeight, Epoch, TimeDelta, Timestamp},
+    data_types::{Amount, ApplicationPermissions, BlockHeight, Epoch, TimeDelta, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
 };
 use linera_core::{
     client::{chain_client, ChainClient, Client, ListeningMode},
+    data_types::ClientOutcome,
     environment,
     test_utils::{MemoryStorageBuilder, StorageBuilder as _, TestBuilder},
     wallet,
@@ -704,6 +705,144 @@ async fn test_listener_uses_autosigner_for_incoming_messages() -> anyhow::Result
         Some(dynamic_owner),
         "User-initiated blocks should be signed by the dynamic signer"
     );
+
+    Ok(())
+}
+
+/// Tests that the chain listener auto-assigns the preferred owner for newly created chains
+/// only when the wallet holds a key pair for exactly one of the chain's owners.
+#[test_log::test(tokio::test)]
+async fn test_chain_listener_auto_assigns_on_new_chains() -> anyhow::Result<()> {
+    let mut signer = InMemorySigner::new(Some(42));
+    // Keys held by the listener's wallet.
+    let owner_a: AccountOwner = signer.generate_new().into();
+    let owner_b: AccountOwner = signer.generate_new().into();
+    // Stand-in owners for which the wallet has no key pair.
+    let owner_x: AccountOwner = AccountPublicKey::test_key(101).into();
+    let owner_y: AccountOwner = AccountPublicKey::test_key(102).into();
+
+    let config = ChainListenerConfig::default();
+    let storage_builder = MemoryStorageBuilder::default();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer.clone()).await?;
+    let client0 = builder.add_root_chain(0, Amount::from_tokens(10)).await?;
+    let chain_id0 = client0.chain_id();
+
+    let genesis_config = GenesisConfig::new_for_testing(&builder);
+    let admin_chain_id = genesis_config.admin_chain_id();
+    let storage = builder.make_storage().await?;
+    let epoch0 = client0.chain_info().await?.epoch;
+
+    let mut context = ClientContext {
+        client: Arc::new(Client::new(
+            environment::Impl {
+                storage: storage.clone(),
+                network: builder.make_node_provider(),
+                signer,
+                wallet: environment::TestWallet::default(),
+            },
+            admin_chain_id,
+            false,
+            [(chain_id0, ListeningMode::FullChain)],
+            format!("Listener for {chain_id0:.8}"),
+            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(1)),
+            1000,
+            chain_client::Options::test_default(),
+            DEFAULT_BLOCK_CACHE_SIZE,
+            DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+            &linera_core::client::RequestsSchedulerConfig::default(),
+        )),
+    };
+    // Track chain0 as follow-only so the listener picks up its blocks.
+    context
+        .update_wallet_for_new_chain(chain_id0, None, Timestamp::default(), epoch0)
+        .await?;
+
+    let context = Arc::new(Mutex::new(context));
+    let cancellation_token = CancellationToken::new();
+    let chain_listener = ChainListener::new(
+        config,
+        context.clone(),
+        storage,
+        cancellation_token.child_token(),
+        tokio::sync::mpsc::unbounded_channel().1,
+        false,
+    )
+    .run()
+    .await
+    .unwrap();
+    let handle = linera_base::Task::spawn(async move { chain_listener.await.unwrap() });
+
+    let open = async |ownership: ChainOwnership| -> anyhow::Result<ChainId> {
+        match client0
+            .open_chain(ownership, ApplicationPermissions::default(), Amount::ZERO)
+            .await?
+        {
+            ClientOutcome::Committed((description, _)) => Ok(description.id()),
+            other => panic!("open_chain did not commit: {other:?}"),
+        }
+    };
+
+    // Wait for the listener to record a wallet entry for the given chain, matching
+    // `expected_owner`. Polls for ~1 second.
+    let wait_for_owner =
+        async |chain_id: ChainId, expected_owner: Option<AccountOwner>| -> wallet::Chain {
+            for _ in 0..200 {
+                if let Some(chain) = context.lock().await.wallet().get(chain_id) {
+                    if chain.owner == expected_owner {
+                        return chain;
+                    }
+                }
+                tokio::task::yield_now().await;
+            }
+            panic!(
+                "Listener did not record chain {chain_id} with owner {expected_owner:?} in time",
+            );
+        };
+
+    // 1) Unique key match: wallet has a key for exactly one of the new owners.
+    let chain_unique = open(ChainOwnership::multiple(
+        [(owner_a, 100), (owner_x, 100)],
+        0,
+        TimeoutConfig::default(),
+    ))
+    .await?;
+    wait_for_owner(chain_unique, Some(owner_a)).await;
+
+    // 2) Multiple key matches: wallet has keys for two of the new owners.
+    let chain_ambiguous = open(ChainOwnership::multiple(
+        [(owner_a, 100), (owner_b, 100)],
+        0,
+        TimeoutConfig::default(),
+    ))
+    .await?;
+    wait_for_owner(chain_ambiguous, None).await;
+
+    // 3) No key match: wallet holds no key for any of the new owners.
+    let chain_unknown = open(ChainOwnership::multiple(
+        [(owner_x, 100), (owner_y, 100)],
+        0,
+        TimeoutConfig::default(),
+    ))
+    .await?;
+
+    // 4) Same owner listed as both super and regular owner. The dedup in
+    //    `owners_with_key` means this still counts as a single match.
+    let chain_dedup = open(
+        ChainOwnership::single_super(owner_a).with_regular_owner(owner_a, 100),
+    )
+    .await?;
+    wait_for_owner(chain_dedup, Some(owner_a)).await;
+
+    // Notifications are processed in FIFO order, so once chain_dedup is in the wallet
+    // chain_unknown has been processed as well and should NOT have been tracked.
+    assert!(
+        context.lock().await.wallet().get(chain_unknown).is_none(),
+        "Listener should not have tracked a chain with no matching key",
+    );
+
+    cancellation_token.cancel();
+    handle.await;
 
     Ok(())
 }
