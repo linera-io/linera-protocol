@@ -1061,6 +1061,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
+        #[expect(clippy::cast_possible_truncation)] // single-view key count fits in u32
         let count = keys.len() as u32;
         hasher.update_with_bcs_bytes(&count)?;
         for key in keys {
@@ -1092,6 +1093,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
+        #[expect(clippy::cast_possible_truncation)] // single-view key count fits in u32
         let count = keys.len() as u32;
         hasher.update_with_bcs_bytes(&count)?;
         for key in keys {
@@ -2349,6 +2351,7 @@ mod graphql {
         }
 
         #[graphql(derived(name = "count"))]
+        #[expect(clippy::cast_possible_truncation)] // GraphQL count fits in u32
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
             Ok(self.iterative_count().await? as u32)
         }

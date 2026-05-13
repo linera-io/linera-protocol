@@ -3,6 +3,10 @@
 
 //! SQLite database module for storing chain assignments and daily claim tracking.
 
+// SQLite (via sqlx) has no native unsigned integer types; casts between
+// `u64` and `i64` at the SQL boundary are by design.
+#![allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+
 use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::Context as _;

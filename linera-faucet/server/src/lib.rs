@@ -578,6 +578,10 @@ where
     }
 }
 /// Multiplies a `u128` with a `u64` and returns the result as a 192-bit number.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "intentional: each cast extracts a 64-bit chunk of the 192-bit result"
+)]
 fn multiply(a: u128, b: u64) -> [u64; 3] {
     let lower = u128::from(u64::MAX);
     let b = u128::from(b);

@@ -1,6 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// gRPC's wire types use `i32` for sizes/counts; casts at this boundary are
+// by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_lock::RwLock;

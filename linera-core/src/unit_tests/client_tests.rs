@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::cast_possible_truncation)]
+
 mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;

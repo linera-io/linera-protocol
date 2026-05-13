@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 use std::collections::HashSet;
 
 use criterion::measurement::{Measurement, ValueFormatter};

@@ -507,11 +507,18 @@ impl From<WorkerError> for NodeError {
                 block_timestamp,
                 local_time,
                 block_time_grace_period,
-            } => NodeError::InvalidTimestamp {
-                block_timestamp,
-                local_time,
-                block_time_grace_period_ms: block_time_grace_period.as_millis() as u64,
-            },
+            } => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "config grace period fits in u64 milliseconds"
+                )]
+                let block_time_grace_period_ms = block_time_grace_period.as_millis() as u64;
+                NodeError::InvalidTimestamp {
+                    block_timestamp,
+                    local_time,
+                    block_time_grace_period_ms,
+                }
+            }
             error => Self::WorkerError {
                 error: error.to_string(),
             },

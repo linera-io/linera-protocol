@@ -296,6 +296,7 @@ mod tests {
     #[tokio::test]
     async fn test_eviction_when_exceeding_max_size() {
         let cache_size = 3u64;
+        #[expect(clippy::cast_possible_truncation, reason = "test constant")]
         let cache = RequestsCache::new(Duration::from_millis(50), cache_size as usize);
 
         // Fill cache to max size

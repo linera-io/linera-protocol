@@ -278,6 +278,11 @@ impl From<u64> for Timestamp {
 }
 
 impl Display for Timestamp {
+    #[expect(
+        clippy::cast_possible_wrap,
+        clippy::cast_possible_truncation,
+        reason = "seconds fit in i64 for realistic timestamps; nanos value is bounded by `% 1_000_000`"
+    )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(date_time) = chrono::DateTime::from_timestamp(
             (self.0 / 1_000_000) as i64,
@@ -736,6 +741,7 @@ impl Amount {
     }
 
     /// Helper function to obtain the 64 least significant bits of the balance.
+    #[expect(clippy::cast_possible_truncation, reason = "intentional: returns the low 64 bits")]
     pub const fn lower_half(self) -> u64 {
         self.0 as u64
     }

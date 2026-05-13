@@ -3,6 +3,8 @@
 
 //! Runtime types to simulate interfacing with the host executing the contract.
 
+#![allow(clippy::cast_possible_truncation)]
+
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
     sync::{Arc, Mutex, MutexGuard},

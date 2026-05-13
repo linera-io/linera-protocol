@@ -770,6 +770,10 @@ where
             return Ok(info);
         }
 
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "config-bounded batch size fits in usize on any supported target"
+        )]
         let batch_size = self.client.options().certificate_upload_batch_size as usize;
         for chunk in heights.chunks(batch_size) {
             let certificates = self

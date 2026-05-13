@@ -163,6 +163,11 @@ impl ClientMetrics {
         }
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "quantile is a fixed small positive value used for display"
+    )]
     fn print_timing_report(histograms: &BlockTimingsHistograms) {
         for quantile in [0.99, 0.95, 0.90, 0.50] {
             let formatted_quantile = (quantile * 100.0) as usize;

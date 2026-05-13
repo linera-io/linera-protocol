@@ -59,9 +59,14 @@ impl Exporter {
 
         let node = self.node_provider.make_node(&address)?;
 
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "destination height is a block index bounded by storage size"
+        )]
+        let start = destination_state.load(Ordering::Acquire) as usize;
         let (task_queue, task_receiver) = TaskQueue::new(
             self.work_queue_size,
-            destination_state.load(Ordering::Acquire) as usize,
+            start,
             storage.clone()?,
         );
 

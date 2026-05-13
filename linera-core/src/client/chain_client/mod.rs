@@ -2044,6 +2044,10 @@ impl<Env: Environment> ChainClient<Env> {
         ))))
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "elapsed millis fits in u64 for any realistic measurement window"
+    )]
     fn send_timing(&self, start: Instant, timing_type: TimingType) {
         let Some(sender) = &self.timing_sender else {
             return;
