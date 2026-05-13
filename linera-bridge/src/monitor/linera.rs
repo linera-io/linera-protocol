@@ -129,10 +129,11 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                 },
                 Ok(false) => {
                     'tx_loop: for (tx_index, positions) in &by_tx {
-                        // Iterative LIFO split-to-fit per tx group. Mirrors
-                        // `relay::settlement::split_to_fit` but inlined to
-                        // avoid the `AsyncFn` predicate's HRTB Send issue when
-                        // the future captures `&EvmClient` across awaits.
+                        // Iterative LIFO split-to-fit per tx group. The
+                        // algorithm is inlined (rather than factored into a
+                        // pure helper that takes an async predicate) because
+                        // an `AsyncFn` closure capturing `&EvmClient` across
+                        // awaits trips an HRTB Send bound under `tokio::spawn`.
                         let mut stack: Vec<Vec<u32>> = vec![positions.clone()];
                         let mut chunks: Vec<Vec<u32>> = Vec::new();
                         let mut single_too_large: Option<u32> = None;
@@ -191,8 +192,7 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 }
 
 /// Walks the chain history backwards from the head until the certificate at
-/// `target_height` is found. Extracted from the prior per-burn body so all
-/// burns at a height share one fetch.
+/// `target_height` is found.
 async fn fetch_cert_at_height<E: linera_core::environment::Environment>(
     linera_client: &LineraClient<E>,
     target_height: BlockHeight,

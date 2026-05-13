@@ -15,9 +15,9 @@ abstract contract Microchain {
 
     /// Verifies a certificate and dispatches to the subclass. Subclasses
     /// MUST be idempotent under repeated calls for the same block: this
-    /// contract no longer prevents re-entry on the same `signedHash`.
-    /// The off-chain relayer relies on this idempotency to safely
-    /// re-submit `addBlock(cert)` after partial settlement.
+    /// contract does not gate on `signedHash`. The off-chain relayer
+    /// relies on that idempotency to safely re-submit `addBlock(cert)`
+    /// after partial settlement.
     function addBlock(bytes calldata data) external {
         (BridgeTypes.Block memory blockValue, ) = lightClient.verifyBlock(data);
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
