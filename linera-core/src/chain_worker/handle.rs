@@ -39,14 +39,10 @@ impl AtomicTimestamp {
         Duration::from_micros(now.saturating_sub(last))
     }
 
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "Duration::as_micros fits in u64 for any realistic wall-clock time"
-    )]
     fn current_micros() -> u64 {
         linera_base::time::SystemTime::now()
             .duration_since(linera_base::time::UNIX_EPOCH)
-            .map(|d| d.as_micros() as u64)
+            .map(|d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
             .unwrap_or(0)
     }
 }

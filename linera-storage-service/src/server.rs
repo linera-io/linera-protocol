@@ -1,14 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// gRPC's wire types use `i32` for sizes/counts; casts at this boundary are
-// by design.
-#![allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
-)]
-
 use std::{collections::BTreeMap, sync::Arc};
 
 use async_lock::RwLock;
@@ -241,7 +233,8 @@ impl StorageServer {
             .chunks(MAX_PAYLOAD_SIZE)
             .map(|x| x.to_vec())
             .collect::<Vec<_>>();
-        let num_chunks = chunks.len() as i32;
+        let num_chunks = i32::try_from(chunks.len())
+            .expect("number of chunks fits in i32 (each chunk is `MAX_PAYLOAD_SIZE` bytes)");
         let mut pending_big_reads = self.pending_big_reads.write().await;
         let message_index = pending_big_reads.index;
         pending_big_reads.index += 1;
@@ -526,7 +519,8 @@ impl StorageService for StorageServer {
         let Some(entry) = pending_big_reads.big_reads.get_mut(&message_index) else {
             return Err(Status::not_found("process_specific_chunk"));
         };
-        let index = index as usize;
+        let index =
+            usize::try_from(index).map_err(|_| Status::invalid_argument("negative chunk index"))?;
         let chunk = entry.chunks[index].clone();
         entry.num_processed_chunks += 1;
         if entry.chunks.len() == entry.num_processed_chunks {

@@ -278,16 +278,12 @@ impl From<u64> for Timestamp {
 }
 
 impl Display for Timestamp {
-    #[expect(
-        clippy::cast_possible_wrap,
-        clippy::cast_possible_truncation,
-        reason = "seconds fit in i64 for realistic timestamps; nanos value is bounded by `% 1_000_000`"
-    )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(date_time) = chrono::DateTime::from_timestamp(
-            (self.0 / 1_000_000) as i64,
-            ((self.0 % 1_000_000) * 1_000) as u32,
-        ) {
+        let seconds = i64::try_from(self.0 / 1_000_000).unwrap_or(i64::MAX);
+        // `% 1_000_000` keeps the value below 10^9, which fits in `u32`.
+        let nanos = u32::try_from((self.0 % 1_000_000) * 1_000)
+            .expect("microseconds modulo 1_000_000 multiplied by 1_000 fits in u32");
+        if let Some(date_time) = chrono::DateTime::from_timestamp(seconds, nanos) {
             return date_time.naive_utc().fmt(f);
         }
         self.0.fmt(f)

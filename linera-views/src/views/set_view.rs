@@ -998,9 +998,9 @@ mod graphql {
         }
 
         #[graphql(derived(name = "count"))]
-        #[expect(clippy::cast_possible_truncation)] // GraphQL count fits in u32
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.iterative_count().await? as u32)
+            let count = self.iterative_count().await?;
+            u32::try_from(count).map_err(|_| async_graphql::Error::new("count exceeds u32"))
         }
     }
 
@@ -1030,9 +1030,9 @@ mod graphql {
         }
 
         #[graphql(derived(name = "count"))]
-        #[expect(clippy::cast_possible_truncation)] // GraphQL count fits in u32
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.iterative_count().await? as u32)
+            let count = self.iterative_count().await?;
+            u32::try_from(count).map_err(|_| async_graphql::Error::new("count exceeds u32"))
         }
     }
 }
@@ -1935,9 +1935,9 @@ mod tests {
                 Ok(indices)
             }
 
-            #[expect(clippy::cast_possible_truncation)] // GraphQL count fits in u32
             async fn count(&self) -> Result<u32, async_graphql::Error> {
-                Ok(self.set.iterative_count().await? as u32)
+                let count = self.set.iterative_count().await?;
+                u32::try_from(count).map_err(|_| async_graphql::Error::new("count exceeds u32"))
             }
         }
 

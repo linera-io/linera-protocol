@@ -109,7 +109,7 @@ pub struct Options {
     pub certificate_download_batch_size: u64,
     /// Maximum number of certificates read from local storage and uploaded to a validator
     /// at a time when synchronizing a chain.
-    pub certificate_upload_batch_size: u64,
+    pub certificate_upload_batch_size: usize,
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.
     pub sender_certificate_download_batch_size: usize,
