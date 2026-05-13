@@ -36,10 +36,13 @@ web = [
 ]
 
 [dependencies]
+anyhow.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 cfg-if.workspace = true
+clap.workspace = true
 futures.workspace = true
+hex.workspace = true
 itertools.workspace = true
 linera-base.workspace = true
 linera-cache.workspace = true
@@ -53,7 +56,6 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-anyhow.workspace = true
 linera-storage = { path = ".", default-features = false, features = ["test"] }
 rand.workspace = true
 test-case.workspace = true
@@ -61,3 +63,7 @@ test-log = { workspace = true, features = ["trace"] }
 
 [build-dependencies]
 cfg_aliases.workspace = true
+
+[[bin]]
+name = "linera-storage-decode-key"
+path = "src/decode_key.rs"
