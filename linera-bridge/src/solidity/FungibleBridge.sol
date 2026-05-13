@@ -55,7 +55,7 @@ contract FungibleBridge is Microchain {
     /// `Event.index` from the Linera block body — the same value the
     /// off-chain relayer pulls from the certificate.
     function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool) {
-        return processedBurns[keccak256(abi.encode(height, eventIndex))];
+        return processedBurns[_burnKey(height, eventIndex)];
     }
 
     /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
@@ -103,28 +103,12 @@ contract FungibleBridge is Microchain {
             BridgeTypes.Event[] memory txEvents = blockValue.body.events[i];
             for (uint256 j = 0; j < txEvents.length; j++) {
                 BridgeTypes.Event memory evt = txEvents[j];
+                if (!_isMatchingBurn(evt, burnsHash)) continue;
 
-                // choice==1 is User application
-                if (evt.stream_id.application_id.choice != 1) continue;
-                if (evt.stream_id.application_id.user.application_description_hash.value != fungibleApplicationId) {
-                    continue;
-                }
-
-                // Check stream name is "burns"
-                if (keccak256(evt.stream_id.stream_name.value) != burnsHash) continue;
-
-                bytes32 key = keccak256(abi.encode(height, evt.index));
+                bytes32 key = _burnKey(height, evt.index);
                 if (processedBurns[key]) continue;
 
-                WrappedFungibleTypes.BurnEvent memory burnEvt =
-                    WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
-                address target = address(burnEvt.target);
-                // Checks-effects-interactions: flip the dedup flag BEFORE
-                // the external `token.transfer` call so a malicious token
-                // that re-enters `addBlock` / `processBurns` cannot trigger
-                // a second release for the same burn.
-                processedBurns[key] = true;
-                require(token.transfer(target, burnEvt.amount.value), "token transfer failed");
+                _releaseBurn(evt, key);
             }
         }
     }
@@ -161,33 +145,48 @@ contract FungibleBridge is Microchain {
             uint32 pos = eventPositionsInTx[k];
             require(pos < txEvents.length, "eventPos out of range");
             BridgeTypes.Event memory evt = txEvents[pos];
+            require(_isMatchingBurn(evt, burnsHash), "not a matching burn");
 
-            if (evt.stream_id.application_id.choice != 1) {
-                revert("not a matching burn");
-            }
-            if (evt.stream_id.application_id.user.application_description_hash.value
-                    != fungibleApplicationId) {
-                revert("not a matching burn");
-            }
-            if (keccak256(evt.stream_id.stream_name.value) != burnsHash) {
-                revert("not a matching burn");
-            }
-
-            bytes32 key = keccak256(abi.encode(height, evt.index));
+            bytes32 key = _burnKey(height, evt.index);
             require(!processedBurns[key], "burn already processed");
 
-            WrappedFungibleTypes.BurnEvent memory burnEvt =
-                WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
-            // Checks-effects-interactions: flip the dedup flag BEFORE the
-            // external `token.transfer` call so a malicious token that
-            // re-enters `processBurns` / `addBlock` cannot trigger a
-            // second release for the same burn.
-            processedBurns[key] = true;
-            require(
-                token.transfer(address(burnEvt.target), burnEvt.amount.value),
-                "token transfer failed"
-            );
+            _releaseBurn(evt, key);
         }
+    }
+
+    /// Dedup key for a burn at `(height, eventIndex)`. `eventIndex` is the
+    /// underlying Linera `Event.index`.
+    function _burnKey(uint64 height, uint32 eventIndex) private pure returns (bytes32) {
+        return keccak256(abi.encode(height, eventIndex));
+    }
+
+    /// Returns true if `evt` belongs to the configured wrapped-fungible
+    /// application's "burns" stream.
+    function _isMatchingBurn(BridgeTypes.Event memory evt, bytes32 burnsHash)
+        private view returns (bool)
+    {
+        // choice == 1 is User application
+        if (evt.stream_id.application_id.choice != 1) return false;
+        if (evt.stream_id.application_id.user.application_description_hash.value
+                != fungibleApplicationId) {
+            return false;
+        }
+        if (keccak256(evt.stream_id.stream_name.value) != burnsHash) return false;
+        return true;
+    }
+
+    /// Releases the ERC-20 tokens for the burn described by `evt`. Sets
+    /// the dedup flag BEFORE the external `token.transfer` call
+    /// (checks-effects-interactions) so a malicious token that re-enters
+    /// `addBlock` / `processBurns` cannot trigger a second release.
+    function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key) private {
+        WrappedFungibleTypes.BurnEvent memory burnEvt =
+            WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
+        processedBurns[key] = true;
+        require(
+            token.transfer(address(burnEvt.target), burnEvt.amount.value),
+            "token transfer failed"
+        );
     }
 
     /// @dev Calls transferFrom and handles tokens that don't return a boolean.
