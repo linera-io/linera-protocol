@@ -2362,18 +2362,20 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
     app2.assert_balances(expected_balances).await;
     app3.assert_balances(expected_balances).await;
 
-    // Approving a transfer.
+    // Approving a transfer. The second call should overwrite, not add.
     app1.approve(&owner1, &owner2, Amount::from_tokens(93))
         .await;
+    app1.approve(&owner1, &owner2, Amount::from_tokens(17))
+        .await;
 
-    app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(93))
+    app1.assert_allowance(&owner1, &owner2, Amount::from_tokens(17))
         .await;
 
     let (_, height) = node_service1.chain_tip(chain2).await?.unwrap();
     notifications2.wait_for_block(height).await?;
     assert_eq!(
         app2.get_allowance(&owner1, &owner2).await,
-        Amount::from_tokens(93)
+        Amount::from_tokens(17)
     );
 
     // Doing the transfer from owner 1.
@@ -2396,8 +2398,16 @@ async fn test_wasm_end_to_end_allowances_fungible(config: impl LineraNetConfig) 
         (owner3, Amount::from_tokens(2)),
     ];
     app2.assert_balances(expected_balances).await;
-    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(91))
+    app2.assert_allowance(&owner1, &owner2, Amount::from_tokens(15))
         .await;
+
+    // Clearing the allowance should remove it entirely.
+    app1.approve(&owner1, &owner2, Amount::ZERO).await;
+    app1.assert_allowance(&owner1, &owner2, Amount::ZERO).await;
+
+    let (_, height) = node_service1.chain_tip(chain2).await?.unwrap();
+    notifications2.wait_for_block(height).await?;
+    app2.assert_allowance(&owner1, &owner2, Amount::ZERO).await;
 
     // Winding down the system
 

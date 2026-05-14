@@ -42,18 +42,22 @@ impl FungibleTokenState {
         self.balance(account).await.unwrap_or_default()
     }
 
-    /// Credits an `account` with the provided `amount`.
+    /// Sets the `spender`'s allowance over the `owner`'s tokens to `allowance`,
+    /// overwriting any previous value. Passing `Amount::ZERO` revokes the allowance.
     pub async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: Amount) {
+        let owner_spender = OwnerSpender::new(owner, spender);
         if allowance == Amount::ZERO {
+            self.allowances
+                .remove(&owner_spender)
+                .expect("Failed to remove allowance");
             return;
         }
-        let owner_spender = OwnerSpender::new(owner, spender);
         let total_allowance = self
             .allowances
             .get_mut_or_default(&owner_spender)
             .await
             .expect("Failed allowance access");
-        total_allowance.saturating_add_assign(allowance);
+        *total_allowance = allowance;
     }
 
     pub async fn debit_for_transfer_from(
