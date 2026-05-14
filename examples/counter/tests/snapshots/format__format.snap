@@ -5,7 +5,7 @@ expression: "CounterApplication::formats().unwrap()"
 REGISTRY:
   CounterOperation:
     ENUM:
-      0:
+      186772159:
         Increment:
           STRUCT:
             - value: U64
