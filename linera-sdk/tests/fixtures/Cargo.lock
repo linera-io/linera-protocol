@@ -706,7 +706,6 @@ dependencies = [
  "async-graphql",
  "futures",
  "linera-sdk",
- "serde",
  "serde-reflection",
  "serde_json",
 ]
