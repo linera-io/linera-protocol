@@ -24,11 +24,11 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_bridge::{
-    abi::{BridgeOperation, BridgeParameters},
+    abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
     proof::gen::{DepositProofClient as _, HttpDepositProofClient},
 };
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_mock_erc20, light_client_address,
+    compose_file_path, deploy_fungible_bridge, deploy_linera_token, light_client_address,
     start_compose, wait_for_light_client,
     ANVIL_PRIVATE_KEY,
 };
@@ -122,10 +122,10 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     cc.synchronize_from_validators().await?;
     tracing::info!(%chain_id, %owner, "Chain claimed");
 
-    // ── Phase 3: Deploy MockERC20 on Anvil ──
-    tracing::info!("Deploying MockERC20 via forge script...");
-    let erc20_addr = deploy_mock_erc20(&compose, project_name, &compose_file).await?;
-    tracing::info!(%erc20_addr, "MockERC20 deployed");
+    // ── Phase 3: Deploy LineraToken on Anvil ──
+    tracing::info!("Deploying LineraToken via forge script...");
+    let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
+    tracing::info!(%erc20_addr, "LineraToken deployed");
 
     let chain_id_bytes32 = format!("0x{chain_id}");
 
@@ -135,6 +135,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         .nth(3)
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
+    let evm_bridge_wasm_dir = repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
 
     // 4a. Publish and create wrapped-fungible app
@@ -152,8 +153,10 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // 4b. Publish and create evm-bridge app first (so wrapped-fungible can reference it)
     tracing::info!("Publishing evm-bridge module...");
-    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
-    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
+    let eb_contract =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_service.wasm")).await?;
 
     let (eb_module_id, _) = cc
         .publish_module(eb_contract, eb_service, VmRuntime::Wasm, None)
@@ -167,13 +170,14 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let bridge_params = BridgeParameters {
         source_chain_id: 31337,
         token_address: erc20_addr.0 .0,
-        rpc_endpoint: String::new(),
     };
     let (bridge_app_id, _) = cc
         .create_application_untyped(
             eb_module_id,
             serde_json::to_vec(&bridge_params)?,
-            serde_json::to_vec(&())?,
+            serde_json::to_vec(&BridgeInstantiationArgument {
+                rpc_endpoint: String::new(),
+            })?,
             vec![],
         )
         .await?
