@@ -17,9 +17,7 @@
 use std::time::Duration;
 
 use alloy::{primitives::U256, providers::ProviderBuilder, sol};
-use linera_base::{
-    crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner,
-};
+use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
@@ -274,13 +272,13 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
 
     // Each occurrence in `recipients` is one expected transfer. A
     // recipient listed twice should accumulate two transfers, etc.
-    let mut expected_per_recipient: std::collections::BTreeMap<
-        alloy::primitives::Address,
-        U256,
-    > = std::collections::BTreeMap::new();
+    let mut expected_per_recipient: std::collections::BTreeMap<alloy::primitives::Address, U256> =
+        std::collections::BTreeMap::new();
     let one_burn = U256::from(BURN_AMOUNT_TOKENS) * U256::from(10u128.pow(18));
     for recipient in &recipients {
-        *expected_per_recipient.entry(*recipient).or_insert(U256::ZERO) += one_burn;
+        *expected_per_recipient
+            .entry(*recipient)
+            .or_insert(U256::ZERO) += one_burn;
     }
 
     let mut observed_balances = Vec::with_capacity(expected_per_recipient.len());
