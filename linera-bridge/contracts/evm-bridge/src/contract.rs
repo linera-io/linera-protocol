@@ -4,7 +4,6 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use alloy_primitives::Bytes;
-use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
 use evm_bridge::{
     BridgeInstantiationArgument, BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi,
 };
@@ -123,7 +122,7 @@ impl Contract for EvmBridgeContract {
             }
             BridgeOperation::SetRpcEndpoint { rpc_endpoint } => {
                 self.runtime
-                    .authenticated_signer()
+                    .authenticated_owner()
                     .expect("SetRpcEndpoint requires an authenticated signer");
                 self.state.rpc_endpoint.set(rpc_endpoint);
             }
