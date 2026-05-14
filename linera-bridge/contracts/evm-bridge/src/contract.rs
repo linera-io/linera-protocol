@@ -262,10 +262,10 @@ impl EvmBridgeContract {
                 .expect("failed to cache verified block hash");
         }
 
-        // 6. Convert deposit fields to Linera types and call Mint
+        // 6. Convert deposit fields to Linera types and call MintAndTransfer
         let amount = Amount::try_from(deposit.amount).expect("deposit amount exceeds u128");
 
-        let mint_op = WrappedFungibleOperation::Mint {
+        let mint_op = WrappedFungibleOperation::MintAndTransfer {
             target_account: Account {
                 chain_id: deposit.target_chain_id,
                 owner: deposit.target_account_owner,

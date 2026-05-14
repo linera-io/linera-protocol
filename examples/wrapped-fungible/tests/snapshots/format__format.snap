@@ -126,7 +126,7 @@ REGISTRY:
             - target_account:
                 TYPENAME: Account
       6:
-        Mint:
+        MintAndTransfer:
           STRUCT:
             - target_account:
                 TYPENAME: Account
