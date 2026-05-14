@@ -48,8 +48,9 @@ fn variant_tags(input: &ItemEnum) -> Result<Vec<(String, u32, &Variant)>> {
     for variant in &input.variants {
         let name = variant.ident.to_string();
         let tag = compute_tag(&name);
-        if let Some((other_name, _, _)) =
-            out.iter().find(|(_, t, _): &&(String, u32, &Variant)| *t == tag)
+        if let Some((other_name, _, _)) = out
+            .iter()
+            .find(|(_, t, _): &&(String, u32, &Variant)| *t == tag)
         {
             return Err(Error::new(
                 variant.span(),
