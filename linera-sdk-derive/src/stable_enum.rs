@@ -33,6 +33,25 @@ impl CrateRoot {
             CrateRoot::Crate => quote! { crate::formats::StableEnumTrace },
         }
     }
+
+    /// Path to `serde`, routed through `linera_sdk`'s private re-export so
+    /// downstream crates don't need a direct `serde` dependency.
+    fn serde_path(&self) -> TokenStream2 {
+        match self {
+            CrateRoot::LineraSdk => quote! { ::linera_sdk::formats::__private::serde },
+            CrateRoot::Crate => quote! { crate::formats::__private::serde },
+        }
+    }
+
+    /// Path to `serde_reflection`, routed through `linera_sdk`'s private
+    /// re-export so downstream crates don't need a direct `serde-reflection`
+    /// dependency just to use `#[derive(StableEnum)]`.
+    fn serde_reflection_path(&self) -> TokenStream2 {
+        match self {
+            CrateRoot::LineraSdk => quote! { ::linera_sdk::formats::__private::serde_reflection },
+            CrateRoot::Crate => quote! { crate::formats::__private::serde_reflection },
+        }
+    }
 }
 
 /// Compute the stable tag for a variant name.
@@ -77,9 +96,9 @@ fn reject_generics(input: &ItemEnum) -> Result<()> {
 
 /// Emit the combined `Serialize` + `Deserialize` + `StableEnumTrace` impls.
 pub fn generate_all(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenStream2> {
-    let ser = generate_serialize(input)?;
-    let de = generate_deserialize(input)?;
-    let tr = generate_trace(input, crate_root)?;
+    let ser = generate_serialize(input, &crate_root)?;
+    let de = generate_deserialize(input, &crate_root)?;
+    let tr = generate_trace(input, &crate_root)?;
     Ok(quote! {
         #ser
         #de
@@ -87,23 +106,24 @@ pub fn generate_all(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenStre
     })
 }
 
-pub fn generate_serialize(input: &ItemEnum) -> Result<TokenStream2> {
+pub fn generate_serialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenStream2> {
     reject_generics(input)?;
     let enum_ident = &input.ident;
     let enum_name_str = enum_ident.to_string();
     let tagged = variant_tags(input)?;
+    let serde = crate_root.serde_path();
 
     let arms = tagged.iter().map(|(name, tag, variant)| {
         let variant_ident = &variant.ident;
         let name_lit = name.as_str();
         match &variant.fields {
             Fields::Unit => quote! {
-                Self::#variant_ident => ::serde::Serializer::serialize_unit_variant(
+                Self::#variant_ident => #serde::Serializer::serialize_unit_variant(
                     __serializer, #enum_name_str, #tag, #name_lit,
                 ),
             },
             Fields::Unnamed(fields) if fields.unnamed.len() == 1 => quote! {
-                Self::#variant_ident(__f0) => ::serde::Serializer::serialize_newtype_variant(
+                Self::#variant_ident(__f0) => #serde::Serializer::serialize_newtype_variant(
                     __serializer, #enum_name_str, #tag, #name_lit, __f0,
                 ),
             },
@@ -114,13 +134,13 @@ pub fn generate_serialize(input: &ItemEnum) -> Result<TokenStream2> {
                     .collect();
                 quote! {
                     Self::#variant_ident(#(#idents),*) => {
-                        let mut __tv = ::serde::Serializer::serialize_tuple_variant(
+                        let mut __tv = #serde::Serializer::serialize_tuple_variant(
                             __serializer, #enum_name_str, #tag, #name_lit, #len,
                         )?;
                         #(
-                            ::serde::ser::SerializeTupleVariant::serialize_field(&mut __tv, #idents)?;
+                            #serde::ser::SerializeTupleVariant::serialize_field(&mut __tv, #idents)?;
                         )*
-                        ::serde::ser::SerializeTupleVariant::end(__tv)
+                        #serde::ser::SerializeTupleVariant::end(__tv)
                     }
                 }
             }
@@ -134,15 +154,15 @@ pub fn generate_serialize(input: &ItemEnum) -> Result<TokenStream2> {
                 let field_strs: Vec<String> = field_idents.iter().map(|i| i.to_string()).collect();
                 quote! {
                     Self::#variant_ident { #(#field_idents),* } => {
-                        let mut __sv = ::serde::Serializer::serialize_struct_variant(
+                        let mut __sv = #serde::Serializer::serialize_struct_variant(
                             __serializer, #enum_name_str, #tag, #name_lit, #len,
                         )?;
                         #(
-                            ::serde::ser::SerializeStructVariant::serialize_field(
+                            #serde::ser::SerializeStructVariant::serialize_field(
                                 &mut __sv, #field_strs, #field_idents,
                             )?;
                         )*
-                        ::serde::ser::SerializeStructVariant::end(__sv)
+                        #serde::ser::SerializeStructVariant::end(__sv)
                     }
                 }
             }
@@ -151,10 +171,10 @@ pub fn generate_serialize(input: &ItemEnum) -> Result<TokenStream2> {
 
     Ok(quote! {
         #[automatically_derived]
-        impl ::serde::Serialize for #enum_ident {
+        impl #serde::Serialize for #enum_ident {
             fn serialize<__S>(&self, __serializer: __S) -> ::core::result::Result<__S::Ok, __S::Error>
             where
-                __S: ::serde::Serializer,
+                __S: #serde::Serializer,
             {
                 match self {
                     #(#arms)*
@@ -164,11 +184,12 @@ pub fn generate_serialize(input: &ItemEnum) -> Result<TokenStream2> {
     })
 }
 
-pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
+pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenStream2> {
     reject_generics(input)?;
     let enum_ident = &input.ident;
     let enum_name_str = enum_ident.to_string();
     let tagged = variant_tags(input)?;
+    let serde = crate_root.serde_path();
 
     let variant_name_lits: Vec<String> = tagged.iter().map(|(n, _, _)| n.clone()).collect();
 
@@ -178,7 +199,7 @@ pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
         match &variant.fields {
             Fields::Unit => quote! {
                 #tag => {
-                    ::serde::de::VariantAccess::unit_variant(__variant)?;
+                    #serde::de::VariantAccess::unit_variant(__variant)?;
                     ::core::result::Result::Ok(#enum_ident::#variant_ident)
                 }
             },
@@ -186,7 +207,7 @@ pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
                 let ty = &fields.unnamed.first().unwrap().ty;
                 quote! {
                     #tag => {
-                        let __inner = ::serde::de::VariantAccess::newtype_variant::<#ty>(__variant)?;
+                        let __inner = #serde::de::VariantAccess::newtype_variant::<#ty>(__variant)?;
                         ::core::result::Result::Ok(#enum_ident::#variant_ident(__inner))
                     }
                 }
@@ -200,28 +221,28 @@ pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
                 let next_elements = bindings.iter().zip(types.iter()).enumerate().map(|(i, (b, t))| {
                     let expected = format!("tuple variant `{name_lit}` with {len} elements");
                     quote! {
-                        let #b: #t = ::serde::de::SeqAccess::next_element::<#t>(&mut __seq)?
-                            .ok_or_else(|| ::serde::de::Error::invalid_length(#i, &#expected))?;
+                        let #b: #t = #serde::de::SeqAccess::next_element::<#t>(&mut __seq)?
+                            .ok_or_else(|| <__A::Error as #serde::de::Error>::invalid_length(#i, &#expected))?;
                     }
                 });
                 let expecting_msg = format!("tuple variant `{name_lit}`");
                 quote! {
                     #tag => {
                         struct __TupleVisitor;
-                        impl<'de> ::serde::de::Visitor<'de> for __TupleVisitor {
+                        impl<'de> #serde::de::Visitor<'de> for __TupleVisitor {
                             type Value = (#(#types,)*);
                             fn expecting(&self, __f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                                 __f.write_str(#expecting_msg)
                             }
                             fn visit_seq<__A>(self, mut __seq: __A) -> ::core::result::Result<Self::Value, __A::Error>
                             where
-                                __A: ::serde::de::SeqAccess<'de>,
+                                __A: #serde::de::SeqAccess<'de>,
                             {
                                 #(#next_elements)*
                                 ::core::result::Result::Ok((#(#bindings,)*))
                             }
                         }
-                        let (#(#bindings,)*) = ::serde::de::VariantAccess::tuple_variant(
+                        let (#(#bindings,)*) = #serde::de::VariantAccess::tuple_variant(
                             __variant, #len, __TupleVisitor,
                         )?;
                         ::core::result::Result::Ok(#enum_ident::#variant_ident(#(#bindings,)*))
@@ -244,29 +265,29 @@ pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
                     .map(|(i, (b, t))| {
                         let expected = format!("struct variant `{name_lit}` with {len} fields");
                         quote! {
-                            let #b: #t = ::serde::de::SeqAccess::next_element::<#t>(&mut __seq)?
-                                .ok_or_else(|| ::serde::de::Error::invalid_length(#i, &#expected))?;
+                            let #b: #t = #serde::de::SeqAccess::next_element::<#t>(&mut __seq)?
+                                .ok_or_else(|| <__A::Error as #serde::de::Error>::invalid_length(#i, &#expected))?;
                         }
                     });
                 let expecting_msg = format!("struct variant `{name_lit}`");
                 quote! {
                     #tag => {
                         struct __StructVisitor;
-                        impl<'de> ::serde::de::Visitor<'de> for __StructVisitor {
+                        impl<'de> #serde::de::Visitor<'de> for __StructVisitor {
                             type Value = (#(#types,)*);
                             fn expecting(&self, __f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                                 __f.write_str(#expecting_msg)
                             }
                             fn visit_seq<__A>(self, mut __seq: __A) -> ::core::result::Result<Self::Value, __A::Error>
                             where
-                                __A: ::serde::de::SeqAccess<'de>,
+                                __A: #serde::de::SeqAccess<'de>,
                             {
                                 #(#next_elements)*
                                 ::core::result::Result::Ok((#(#field_idents,)*))
                             }
                         }
                         const __FIELDS: &[&::core::primitive::str] = &[#(#field_strs),*];
-                        let (#(#field_idents,)*) = ::serde::de::VariantAccess::struct_variant(
+                        let (#(#field_idents,)*) = #serde::de::VariantAccess::struct_variant(
                             __variant, __FIELDS, __StructVisitor,
                         )?;
                         ::core::result::Result::Ok(#enum_ident::#variant_ident { #(#field_idents,)* })
@@ -280,27 +301,27 @@ pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
 
     Ok(quote! {
         #[automatically_derived]
-        impl<'de> ::serde::Deserialize<'de> for #enum_ident {
+        impl<'de> #serde::Deserialize<'de> for #enum_ident {
             fn deserialize<__D>(__deserializer: __D) -> ::core::result::Result<Self, __D::Error>
             where
-                __D: ::serde::Deserializer<'de>,
+                __D: #serde::Deserializer<'de>,
             {
                 struct __OuterVisitor;
-                impl<'de> ::serde::de::Visitor<'de> for __OuterVisitor {
+                impl<'de> #serde::de::Visitor<'de> for __OuterVisitor {
                     type Value = #enum_ident;
                     fn expecting(&self, __f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                         __f.write_str(#expecting_msg)
                     }
                     fn visit_enum<__A>(self, __access: __A) -> ::core::result::Result<Self::Value, __A::Error>
                     where
-                        __A: ::serde::de::EnumAccess<'de>,
+                        __A: #serde::de::EnumAccess<'de>,
                     {
                         let (__tag, __variant) =
-                            ::serde::de::EnumAccess::variant::<::core::primitive::u32>(__access)?;
+                            #serde::de::EnumAccess::variant::<::core::primitive::u32>(__access)?;
                         match __tag {
                             #(#arms)*
                             __unknown => ::core::result::Result::Err(
-                                <__A::Error as ::serde::de::Error>::custom(::std::format!(
+                                <__A::Error as #serde::de::Error>::custom(::std::format!(
                                     "unknown stable variant tag for `{}`: {:#010x}",
                                     #enum_name_str, __unknown,
                                 )),
@@ -309,7 +330,7 @@ pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
                     }
                 }
                 const __VARIANTS: &[&::core::primitive::str] = &[#(#variant_name_lits),*];
-                ::serde::Deserializer::deserialize_enum(
+                #serde::Deserializer::deserialize_enum(
                     __deserializer,
                     #enum_name_str,
                     __VARIANTS,
@@ -320,12 +341,13 @@ pub fn generate_deserialize(input: &ItemEnum) -> Result<TokenStream2> {
     })
 }
 
-pub fn generate_trace(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenStream2> {
+pub fn generate_trace(input: &ItemEnum, crate_root: &CrateRoot) -> Result<TokenStream2> {
     reject_generics(input)?;
     let enum_ident = &input.ident;
     let enum_name_str = enum_ident.to_string();
     let tagged = variant_tags(input)?;
     let trait_path = crate_root.trait_path();
+    let sr = crate_root.serde_reflection_path();
 
     let variants_const_entries = tagged.iter().map(|(name, tag, _)| {
         let n = name.as_str();
@@ -339,7 +361,7 @@ pub fn generate_trace(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenSt
         let variant_ident = &variant.ident;
         match &variant.fields {
             Fields::Unit => quote! {
-                let (__fmt, _) = ::serde_reflection::Tracer::trace_value(
+                let (__fmt, _) = #sr::Tracer::trace_value(
                     __tracer,
                     &mut __scratch,
                     &#enum_ident::#variant_ident,
@@ -354,12 +376,12 @@ pub fn generate_trace(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenSt
                     let ty = &f.ty;
                     quote! {
                         let (_, #b): (_, #ty) =
-                            ::serde_reflection::Tracer::trace_type_once(__tracer, __samples)?;
+                            #sr::Tracer::trace_type_once(__tracer, __samples)?;
                     }
                 });
                 quote! {
                     #(#traces)*
-                    let (__fmt, _) = ::serde_reflection::Tracer::trace_value(
+                    let (__fmt, _) = #sr::Tracer::trace_value(
                         __tracer,
                         &mut __scratch,
                         &#enum_ident::#variant_ident(#(#bindings),*),
@@ -381,12 +403,12 @@ pub fn generate_trace(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenSt
                     let ty = &f.ty;
                     quote! {
                         let (_, #b): (_, #ty) =
-                            ::serde_reflection::Tracer::trace_type_once(__tracer, __samples)?;
+                            #sr::Tracer::trace_type_once(__tracer, __samples)?;
                     }
                 });
                 quote! {
                     #(#traces)*
-                    let (__fmt, _) = ::serde_reflection::Tracer::trace_value(
+                    let (__fmt, _) = #sr::Tracer::trace_value(
                         __tracer,
                         &mut __scratch,
                         &#enum_ident::#variant_ident {
@@ -410,17 +432,17 @@ pub fn generate_trace(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenSt
             ];
 
             fn trace_all_variants(
-                __tracer: &mut ::serde_reflection::Tracer,
-                __samples: &::serde_reflection::Samples,
-            ) -> ::serde_reflection::Result<::serde_reflection::Format> {
+                __tracer: &mut #sr::Tracer,
+                __samples: &#sr::Samples,
+            ) -> #sr::Result<#sr::Format> {
                 // `trace_value` requires `&mut Samples` even though we have no
                 // need to feed its recordings back to the caller, so we use a
                 // scratch instance here.
-                let mut __scratch = ::serde_reflection::Samples::default();
-                let mut __format: ::core::option::Option<::serde_reflection::Format> =
+                let mut __scratch = #sr::Samples::default();
+                let mut __format: ::core::option::Option<#sr::Format> =
                     ::core::option::Option::None;
                 #({ #blocks })*
-                __format.ok_or_else(|| ::serde_reflection::Error::Custom(
+                __format.ok_or_else(|| #sr::Error::Custom(
                     ::std::format!(
                         "stable enum `{}` has no variants",
                         #enum_name_str,

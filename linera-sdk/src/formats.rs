@@ -6,6 +6,16 @@
 /// Re-exports the `#[derive(StableEnum)]` macro for stable-tagged enums.
 pub use linera_sdk_derive::StableEnum;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+/// Private re-exports of crates referenced by the macros in `linera-sdk-derive`.
+/// Lets downstream crates use the macros without taking direct dependencies on
+/// the crates being re-exported. Not part of the public API; do not use
+/// directly.
+#[doc(hidden)]
+pub mod __private {
+    pub use serde;
+    pub use serde_reflection;
+}
 use serde_reflection::{
     json_converter::{DeserializationContext, EmptyEnvironment},
     Format, Registry, Samples, Tracer,
