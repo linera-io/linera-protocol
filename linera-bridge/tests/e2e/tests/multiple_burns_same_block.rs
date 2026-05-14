@@ -220,7 +220,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
-            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
+            linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             Duration::from_secs(2),
             0,
             5,
