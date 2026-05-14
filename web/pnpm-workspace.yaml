@@ -1,3 +1,5 @@
 packages:
-- '@linera/client'
-- '@linera/metamask'
+  - '@linera/client'
+  - '@linera/metamask'
+allowBuilds:
+  esbuild: true
