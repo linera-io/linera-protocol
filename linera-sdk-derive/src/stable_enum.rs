@@ -55,9 +55,8 @@ fn variant_tags(input: &ItemEnum) -> Result<Vec<(String, u32, &Variant)>> {
             return Err(Error::new(
                 variant.span(),
                 format!(
-                    "Keccak-256 tag collision between variants `{}` and `{}` (tag = {:#010x}). \
-                     Rename one of the variants.",
-                    other_name, name, tag
+                    "Keccak-256 tag collision between variants `{other_name}` and `{name}` \
+                     (tag = {tag:#010x}). Rename one of the variants."
                 ),
             ));
         }
