@@ -3101,17 +3101,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "is-terminal"
-version = "0.4.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
-dependencies = [
- "hermit-abi",
- "libc",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3220,7 +3209,7 @@ checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "linera-base"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "allocative",
  "alloy-primitives",
@@ -3238,11 +3227,8 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "hex",
- "is-terminal",
  "k256",
  "linera-witty",
- "opentelemetry",
- "opentelemetry_sdk",
  "port-selector",
  "prometheus",
  "proptest",
@@ -3260,9 +3246,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "tracing-chrome",
- "tracing-opentelemetry",
- "tracing-subscriber",
  "trait-set",
  "trait-variant",
  "tsify",
@@ -3272,7 +3255,7 @@ dependencies = [
 
 [[package]]
 name = "linera-bridge"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
@@ -3284,7 +3267,7 @@ dependencies = [
 
 [[package]]
 name = "linera-cache"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "cfg_aliases",
  "linera-base",
@@ -3297,7 +3280,7 @@ dependencies = [
 
 [[package]]
 name = "linera-chain"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "allocative",
  "anyhow",
@@ -3323,7 +3306,7 @@ dependencies = [
 
 [[package]]
 name = "linera-core"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3364,11 +3347,10 @@ dependencies = [
 
 [[package]]
 name = "linera-ethereum"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "alloy",
  "alloy-primitives",
- "alloy-sol-types",
  "anyhow",
  "async-lock",
  "async-trait",
@@ -3385,7 +3367,7 @@ dependencies = [
 
 [[package]]
 name = "linera-execution"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "allocative",
  "anyhow",
@@ -3401,7 +3383,6 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-views",
- "linera-views-derive",
  "linera-wasm-instrument",
  "linera-wasmer",
  "linera-wasmer-compiler-singlepass",
@@ -3432,7 +3413,7 @@ checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-sdk"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3462,7 +3443,7 @@ dependencies = [
 
 [[package]]
 name = "linera-sdk-derive"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -3471,13 +3452,16 @@ dependencies = [
 
 [[package]]
 name = "linera-storage"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bcs",
  "cfg-if",
  "cfg_aliases",
+ "clap",
  "futures",
+ "hex",
  "itertools 0.14.0",
  "linera-base",
  "linera-cache",
@@ -3487,13 +3471,12 @@ dependencies = [
  "papaya",
  "prometheus",
  "serde",
- "tokio",
  "tracing",
 ]
 
 [[package]]
 name = "linera-storage-service"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-lock",
@@ -3517,7 +3500,7 @@ dependencies = [
 
 [[package]]
 name = "linera-version"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -3537,7 +3520,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "allocative",
  "anyhow",
@@ -3573,7 +3556,7 @@ dependencies = [
 
 [[package]]
 name = "linera-views-derive"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "cfg_aliases",
  "deluxe",
@@ -3721,7 +3704,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "anyhow",
  "cfg_aliases",
@@ -3735,7 +3718,7 @@ dependencies = [
 
 [[package]]
 name = "linera-witty-macros"
-version = "0.15.17"
+version = "0.16.0"
 dependencies = [
  "cfg_aliases",
  "heck 0.4.1",
@@ -3942,16 +3925,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nu-ansi-term"
-version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
-dependencies = [
- "overload",
- "winapi",
-]
-
-[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4057,44 +4030,6 @@ name = "oneshot"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4ce411919553d3f9fa53a0880544cda985a112117a0444d5ff1e870a893d6ea"
-
-[[package]]
-name = "opentelemetry"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf416e4cb72756655126f7dd7bb0af49c674f4c1b9903e80c009e0c37e552e6"
-dependencies = [
- "futures-core",
- "futures-sink",
- "js-sys",
- "pin-project-lite",
- "thiserror 2.0.17",
- "tracing",
-]
-
-[[package]]
-name = "opentelemetry_sdk"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11f644aa9e5e31d11896e024305d7e3c98a88884d9f8919dbf37a9991bc47a4b"
-dependencies = [
- "futures-channel",
- "futures-executor",
- "futures-util",
- "opentelemetry",
- "percent-encoding",
- "rand 0.9.2",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tokio-stream",
-]
-
-[[package]]
-name = "overload"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "papaya"
@@ -6153,63 +6088,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-chrome"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf0a738ed5d6450a9fb96e86a23ad808de2b727fd1394585da5cdd6788ffe724"
-dependencies = [
- "serde_json",
- "tracing-core",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "tracing-core"
 version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9d12581f227e93f094d3af2ae690a574abb8a2b9b7a96e7cfe9647b2b617678"
 dependencies = [
  "once_cell",
- "valuable",
-]
-
-[[package]]
-name = "tracing-log"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
-dependencies = [
- "log",
- "once_cell",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-opentelemetry"
-version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddcf5959f39507d0d04d6413119c04f33b623f4f951ebcbdddddfad2d0623a9c"
-dependencies = [
- "js-sys",
- "once_cell",
- "opentelemetry",
- "opentelemetry_sdk",
- "smallvec",
- "tracing",
- "tracing-core",
- "tracing-log",
- "tracing-subscriber",
- "web-time",
-]
-
-[[package]]
-name = "tracing-serde"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704b1aeb7be0d0a84fc9828cae51dab5970fee5088f83d1dd7ee6f6246fc6ff1"
-dependencies = [
- "serde",
- "tracing-core",
 ]
 
 [[package]]
@@ -6219,18 +6103,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
 dependencies = [
  "matchers",
- "nu-ansi-term",
  "once_cell",
  "regex",
- "serde",
- "serde_json",
  "sharded-slab",
- "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
- "tracing-log",
- "tracing-serde",
 ]
 
 [[package]]
@@ -6647,16 +6525,6 @@ checksum = "535507b55b73bb78d37bbc732c8bf8ebbc7b26902ab06fbf356fc3b46ad4b06c"
 dependencies = [
  "futures",
  "thiserror 2.0.17",
-]
-
-[[package]]
-name = "web-time"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
-dependencies = [
- "js-sys",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -7150,6 +7018,7 @@ dependencies = [
  "fungible",
  "hex",
  "linera-sdk",
+ "serde-reflection",
 ]
 
 [[package]]
