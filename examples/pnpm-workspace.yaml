@@ -6,3 +6,5 @@ packages:
 - counter/metamask
 - native-fungible
 - native-fungible/metamask
+allowBuilds:
+  esbuild: true
