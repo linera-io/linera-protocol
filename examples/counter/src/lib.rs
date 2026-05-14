@@ -5,13 +5,13 @@
 
 use async_graphql::{Request, Response};
 use linera_sdk::{
-    formats::{StableEnumDeserialize, StableEnumSerialize, StableEnumTrace},
+    formats::StableEnum,
     linera_base_types::{ContractAbi, ServiceAbi},
 };
 
 pub struct CounterAbi;
 
-#[derive(Debug, StableEnumSerialize, StableEnumDeserialize, StableEnumTrace)]
+#[derive(Debug, StableEnum)]
 pub enum CounterOperation {
     /// Increment the counter by the given value
     Increment { value: u64 },

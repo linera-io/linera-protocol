@@ -1,8 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Code generation for the `StableEnumSerialize`, `StableEnumDeserialize`,
-//! and `StableEnumTrace` derive macros.
+//! Code generation for the `StableEnum` derive macro.
 //!
 //! Each variant of the input enum is assigned a `u32` "stable tag" computed at
 //! macro-expansion time from the variant's name:
@@ -70,10 +69,22 @@ fn reject_generics(input: &ItemEnum) -> Result<()> {
     if !input.generics.params.is_empty() || input.generics.where_clause.is_some() {
         return Err(Error::new(
             input.generics.span(),
-            "StableEnumSerialize / StableEnumDeserialize do not yet support generic enums",
+            "#[derive(StableEnum)] does not yet support generic enums",
         ));
     }
     Ok(())
+}
+
+/// Emit the combined `Serialize` + `Deserialize` + `StableEnumTrace` impls.
+pub fn generate_all(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenStream2> {
+    let ser = generate_serialize(input)?;
+    let de = generate_deserialize(input)?;
+    let tr = generate_trace(input, crate_root)?;
+    Ok(quote! {
+        #ser
+        #de
+        #tr
+    })
 }
 
 pub fn generate_serialize(input: &ItemEnum) -> Result<TokenStream2> {

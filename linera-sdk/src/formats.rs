@@ -3,9 +3,9 @@
 
 //! Support the declaration of the binary formats used by an application.
 
-/// Re-exports the derive macros for the stable-enum tag scheme.
-pub use linera_sdk_derive::{StableEnumDeserialize, StableEnumSerialize, StableEnumTrace};
-use serde::{Deserialize, Serialize};
+/// Re-exports the `#[derive(StableEnum)]` macro for stable-tagged enums.
+pub use linera_sdk_derive::StableEnum;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_reflection::{
     json_converter::{DeserializationContext, EmptyEnvironment},
     Format, Registry, Samples, Tracer,
@@ -37,13 +37,10 @@ pub trait BcsApplication {
     fn formats() -> serde_reflection::Result<Formats>;
 }
 
-/// An enum whose variant tags are computed at compile time from
-/// `Keccak-256(variant_name)` (see
-/// [`linera_sdk_derive::StableEnumSerialize`] /
-/// [`linera_sdk_derive::StableEnumDeserialize`]).
-///
-/// Derive this trait with `#[derive(StableEnumTrace)]` to make the enum
-/// usable with [`TracerExt::trace_stable_enum_type`].
+/// Companion trait of [`StableEnum`]: exposes each variant's stable tag and
+/// provides the implementation backing
+/// [`TracerExt::trace_stable_enum_type`]. Implemented by the
+/// `#[derive(StableEnum)]` macro.
 ///
 /// The derive auto-generates `trace_all_variants` by calling
 /// [`Tracer::trace_type_once`] for each field type to obtain a sample value,
@@ -63,6 +60,16 @@ pub trait StableEnumTrace: Sized + Serialize {
         samples: &Samples,
     ) -> serde_reflection::Result<Format>;
 }
+
+/// Marker trait for enums whose variant tags on the wire are derived from
+/// `Keccak-256(variant_name)`. Apply with `#[derive(StableEnum)]`.
+///
+/// The blanket impl below covers every type for which all three of
+/// [`Serialize`], [`DeserializeOwned`], and [`StableEnumTrace`] are
+/// implemented — `#[derive(StableEnum)]` emits all three at once.
+pub trait StableEnum: StableEnumTrace + Serialize + DeserializeOwned {}
+
+impl<T> StableEnum for T where T: StableEnumTrace + Serialize + DeserializeOwned {}
 
 /// Extension methods on [`Tracer`] for tracing enums whose variant tags are
 /// not contiguous starting at zero.
@@ -277,11 +284,9 @@ mod tests {
 
     #[test]
     fn stable_enum_round_trip() {
-        use linera_sdk_derive::StableEnumTraceInCrate;
+        use linera_sdk_derive::StableEnumInCrate;
 
-        #[derive(
-            Debug, PartialEq, StableEnumSerialize, StableEnumDeserialize, StableEnumTraceInCrate,
-        )]
+        #[derive(Debug, PartialEq, StableEnumInCrate)]
         enum Op {
             Increment,
             Set { value: u64 },
