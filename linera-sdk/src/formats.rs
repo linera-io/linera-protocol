@@ -312,7 +312,7 @@ mod tests {
             Op::Echo("hi".into()),
         ] {
             let bytes = bcs::to_bytes(&c).unwrap();
-            assert!(bytes.len() >= 4, "tag must be at least 4 bytes: {:?}", c);
+            assert!(bytes.len() >= 4, "tag must be at least 4 bytes: {c:?}");
             // 4-byte ULEB128: first 3 bytes have continuation bit, 4th doesn't.
             assert_eq!(bytes[0] & 0x80, 0x80, "byte 0 has continuation");
             assert_eq!(bytes[1] & 0x80, 0x80, "byte 1 has continuation");

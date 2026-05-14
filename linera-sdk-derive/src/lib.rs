@@ -29,10 +29,10 @@ pub fn derive_mutation_root_in_crate(input: TokenStream) -> TokenStream {
 
 /// Derive `linera_sdk::formats::StableEnum` for an `enum`. Expands to:
 ///
-/// * [`serde::Serialize`] / [`serde::Deserialize`] impls in which the variant
-///   tag is the first 4 bytes of `Keccak-256(variant_name)` (read big-endian
-///   as `u32`), with the top 5 bits masked to `00001` so the ULEB128 encoding
-///   is always exactly 4 bytes; and
+/// * `serde::Serialize` / `serde::Deserialize` impls in which the variant tag
+///   is the first 4 bytes of `Keccak-256(variant_name)` (read big-endian as
+///   `u32`), with the top 5 bits masked to `00001` so the ULEB128 encoding is
+///   always exactly 4 bytes; and
 /// * a `linera_sdk::formats::StableEnumTrace` impl exposing the per-variant
 ///   tags and a `trace_all_variants` method that drives
 ///   `serde_reflection::Tracer` without caller-supplied samples.
