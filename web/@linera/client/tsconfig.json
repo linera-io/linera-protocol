@@ -1,7 +1,6 @@
 {
     "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.mjs"],
     "compilerOptions": {
-        "baseUrl": "./",
         "target": "es2022",
         "module": "Node16",
         "moduleResolution": "node16",
