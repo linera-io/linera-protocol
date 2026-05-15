@@ -16,6 +16,8 @@ on:
       - 'docker_scylla/**'
       - 'configuration/**'
       - 'kubernetes/**'
+      - 'docker/dashboards/**'
+      - '.github/workflows/**'
       - 'scripts/**'
 
   workflow_dispatch:

@@ -45,6 +45,7 @@ jobs:
               - '!INSTALL.md'
               - '!docs/**'
               - '!mdbook/**'
+              - '!.github/workflows/**'
 
   test:
     needs: changed-files

@@ -8,12 +8,14 @@ on:
       - 'mdbook/**'
       - 'kubernetes/**'
       - 'docker/dashboards/**'
+      - '.github/workflows/**'
   pull_request:
     paths-ignore:
       - 'docs/**'
       - 'mdbook/**'
       - 'kubernetes/**'
       - 'docker/dashboards/**'
+      - '.github/workflows/**'
   merge_group:
   workflow_dispatch:
 
