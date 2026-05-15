@@ -6,6 +6,8 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
   pull_request:
     branches:
       - "**"
