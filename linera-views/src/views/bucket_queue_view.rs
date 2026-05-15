@@ -1162,6 +1162,109 @@ mod tests {
         Ok(())
     }
 
+    /// Build a view that hits each `SaveCase` variant and verify dispatch +
+    /// roundtrip. Pinning each case to a concrete scenario means a refactor
+    /// that silently drops a branch fails loudly instead of relying on the
+    /// random fuzz to catch it eventually.
+    #[tokio::test]
+    async fn save_plan_covers_each_case() -> Result<(), ViewError> {
+        const N: usize = 3;
+
+        // Empty: a freshly-loaded view with no pending changes.
+        let context = MemoryContext::new_for_testing(());
+        let view = BucketQueueView::<_, u32, N>::load(context).await?;
+        assert!(matches!(view.save_plan()?.case, SaveCase::Empty));
+
+        // MetadataOnly: a single stored bucket with the cursor advanced inside it.
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        view.push_back(10);
+        view.push_back(20);
+        save(&context, &mut view).await?;
+        let mut view = BucketQueueView::<_, u32, N>::load(context).await?;
+        view.delete_front().await?;
+        assert!(matches!(view.save_plan()?.case, SaveCase::MetadataOnly));
+
+        // Rewrite: <= 1 bucket survives but there is a structural change
+        // (consumed past the front bucket; only the back remains).
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        for i in 0..5u32 {
+            view.push_back(i);
+        }
+        save(&context, &mut view).await?;
+        let mut view = BucketQueueView::<_, u32, N>::load(context).await?;
+        for _ in 0..N {
+            view.delete_front().await?;
+        }
+        assert!(matches!(view.save_plan()?.case, SaveCase::Rewrite));
+
+        // Patch: >= 2 buckets survive (here: front + middle + back, with a
+        // pending new value to force the re-chunk path).
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        for i in 0..7u32 {
+            view.push_back(i);
+        }
+        save(&context, &mut view).await?;
+        let mut view = BucketQueueView::<_, u32, N>::load(context).await?;
+        view.push_back(100);
+        assert!(matches!(view.save_plan()?.case, SaveCase::Patch { .. }));
+
+        Ok(())
+    }
+
+    /// N=1 is degenerate: every bucket holds exactly one element, the front
+    /// and back can't share a bucket, and every middle is also a single
+    /// element. Exercise enough operations to cross several bucket boundaries.
+    #[tokio::test]
+    async fn n_equals_one_roundtrip() -> Result<(), ViewError> {
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, 1>::load(context.clone()).await?;
+        for i in 0..5u32 {
+            view.push_back(i);
+        }
+        save(&context, &mut view).await?;
+
+        let mut view = BucketQueueView::<_, u32, 1>::load(context.clone()).await?;
+        assert_eq!(view.elements().await?, vec![0, 1, 2, 3, 4]);
+        view.delete_front().await?;
+        view.delete_front().await?;
+        view.push_back(99);
+        save(&context, &mut view).await?;
+
+        let view = BucketQueueView::<_, u32, 1>::load(context).await?;
+        assert_eq!(view.elements().await?, vec![2, 3, 4, 99]);
+        Ok(())
+    }
+
+    /// `rollback` must wipe in-memory edits and restore the cursor / state
+    /// to whatever was last saved.
+    #[tokio::test]
+    async fn rollback_restores_saved_state() -> Result<(), ViewError> {
+        const N: usize = 3;
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        for i in 0..5u32 {
+            view.push_back(i);
+        }
+        save(&context, &mut view).await?;
+
+        let mut view = BucketQueueView::<_, u32, N>::load(context).await?;
+        view.delete_front().await?;
+        view.delete_front().await?;
+        view.push_back(100);
+        view.push_back(101);
+        assert_eq!(view.elements().await?, vec![2, 3, 4, 100, 101]);
+
+        view.rollback();
+        assert_eq!(view.elements().await?, vec![0, 1, 2, 3, 4]);
+
+        // After rollback, has_pending_changes must be false again.
+        assert!(!view.has_pending_changes().await);
+        Ok(())
+    }
+
     async fn save<V: View>(context: &V::Context, view: &mut V) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         view.pre_save(&mut batch)?;
