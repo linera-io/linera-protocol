@@ -59,10 +59,14 @@ jobs:
     - name: Start validators with Kubernetes
       run: |
         mkdir /tmp/local-linera-net
+        # Copy pre-built debug binaries to a path accessible within the Docker build context.
+        # target/ is excluded by .dockerignore, so we stage binaries in docker/bins/ instead.
+        mkdir -p docker/bins
+        cp target/debug/linera target/debug/linera-server target/debug/linera-proxy docker/bins/
         LOG_FILE="/tmp/linera-net-up-kubernetes.log"
         cargo run --bin linera --features kubernetes,storage-service,opentelemetry -- net up --kubernetes \
           --policy-config testnet --path /tmp/local-linera-net --validators 1 --shards 2 \
-          --binaries \
+          --binaries docker/bins \
           > "$LOG_FILE" 2>&1 &
         NETWORK_PID=$!
 
