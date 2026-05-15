@@ -403,10 +403,12 @@ where
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
-    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
-    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
+    let wf_contract =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
+    let wf_service =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
     let (wf_module_id, _) = chain_client
-        .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
+        .publish_module(wf_contract, wf_service, VmRuntime::Wasm, None)
         .await?
         .expect("publish wrapped-fungible module committed");
     chain_client.synchronize_from_validators().await?;
@@ -543,7 +545,7 @@ pub async fn set_anvil_block_gas_limit(
 /// to the head block (no per-height search loop needed in tests).
 pub async fn fetch_latest_cert<E>(
     chain_client: &linera_core::client::ChainClient<E>,
-) -> anyhow::Result<linera_chain::types::ConfirmedBlockCertificate>
+) -> anyhow::Result<std::sync::Arc<linera_chain::types::ConfirmedBlockCertificate>>
 where
     E: linera_core::environment::Environment,
 {

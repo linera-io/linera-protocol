@@ -16,11 +16,7 @@
 
 #![recursion_limit = "512"]
 
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use alloy::{
     primitives::U256,
@@ -28,7 +24,6 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
-use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner,
 };
@@ -210,7 +205,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
-            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
+            linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             Duration::from_secs(2),
             0,
             5,
