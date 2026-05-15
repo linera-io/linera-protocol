@@ -7,6 +7,7 @@ use std::iter;
 
 use async_graphql::{Enum, InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
+    formats::StableEnum,
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi, TimeDelta, Timestamp},
 };
@@ -14,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct HexAbi;
 
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+#[derive(Debug, StableEnum, GraphQLMutationRoot)]
 pub enum Operation {
     /// Make a move, and place a stone onto cell `(x, y)`.
     MakeMove { x: u16, y: u16 },
@@ -107,7 +108,7 @@ impl Clock {
 }
 
 /// The outcome of a valid move.
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, StableEnum)]
 pub enum HexOutcome {
     /// A player wins the game.
     Winner(Player),
@@ -299,7 +300,7 @@ pub enum Message {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use linera_sdk::{
-        formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats, TracerExt},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
@@ -321,8 +322,8 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
-            let (response, _) = tracer.trace_type::<HexOutcome>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<Operation>(&samples)?;
+            let response = tracer.trace_stable_enum_type::<HexOutcome>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
 

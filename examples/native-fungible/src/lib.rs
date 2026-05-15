@@ -31,7 +31,7 @@ pub enum Message {
 pub mod formats {
     use linera_sdk::{
         abis::fungible::{FungibleOperation, FungibleResponse, FungibleTokenAbi},
-        formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats, TracerExt},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
@@ -53,8 +53,8 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<FungibleOperation>(&samples)?;
-            let (response, _) = tracer.trace_type::<FungibleResponse>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<FungibleOperation>(&samples)?;
+            let response = tracer.trace_stable_enum_type::<FungibleResponse>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
 

@@ -57,33 +57,33 @@ REGISTRY:
             - comment: STR
   Operation:
     ENUM:
-      0:
-        Subscribe:
-          STRUCT:
-            - chain_id:
-                TYPENAME: ChainId
-      1:
-        Unsubscribe:
-          STRUCT:
-            - chain_id:
-                TYPENAME: ChainId
-      2:
-        Post:
-          STRUCT:
-            - text: STR
-            - image_url:
-                OPTION: STR
-      3:
-        Like:
-          STRUCT:
-            - key:
-                TYPENAME: Key
-      4:
+      140916013:
         Comment:
           STRUCT:
             - key:
                 TYPENAME: Key
             - comment: STR
+      148112598:
+        Subscribe:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+      154387661:
+        Post:
+          STRUCT:
+            - text: STR
+            - image_url:
+                OPTION: STR
+      225557282:
+        Unsubscribe:
+          STRUCT:
+            - chain_id:
+                TYPENAME: ChainId
+      247818788:
+        Like:
+          STRUCT:
+            - key:
+                TYPENAME: Key
   OwnPost:
     STRUCT:
       - timestamp:

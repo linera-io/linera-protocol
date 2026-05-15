@@ -5,7 +5,10 @@
 
 use std::fmt::Debug;
 
-use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
+use linera_sdk::{
+    formats::StableEnum,
+    linera_base_types::{ContractAbi, ServiceAbi},
+};
 use serde::{Deserialize, Serialize};
 
 pub struct CreateAndCallAbi;
@@ -26,7 +29,7 @@ pub enum CreateAndCallRequest {
     CreateAndCall(Vec<u8>, Vec<u8>, u64, u64),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(StableEnum)]
 pub enum CreateAndCallOperation {
     CreateAndCall(Vec<u8>, Vec<u8>, u64, u64),
 }

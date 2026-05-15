@@ -1,6 +1,5 @@
 ---
 source: controller/tests/format.rs
-assertion_line: 13
 expression: "ControllerApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -167,21 +166,21 @@ REGISTRY:
                 TYPENAME: BlockHeight
   Operation:
     ENUM:
-      0:
-        ExecuteWorkerCommand:
-          STRUCT:
-            - owner:
-                TYPENAME: AccountOwner
-            - command:
-                TYPENAME: WorkerCommand
-      1:
+      202041128:
         ExecuteControllerCommand:
           STRUCT:
             - admin:
                 TYPENAME: AccountOwner
             - command:
                 TYPENAME: ControllerCommand
-      2:
+      227285916:
+        ExecuteWorkerCommand:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - command:
+                TYPENAME: WorkerCommand
+      260778573:
         StartLocalService:
           STRUCT:
             - service_id:

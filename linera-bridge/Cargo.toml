@@ -66,6 +66,7 @@ alloy-rlp.workspace = true
 alloy-trie.workspace = true
 anyhow.workspace = true
 linera-base.workspace = true
+linera-sdk.workspace = true
 serde.workspace = true
 thiserror = { workspace = true, optional = true }
 

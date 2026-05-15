@@ -10,7 +10,7 @@ use linera_base::{
     data_types::Amount,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
-use linera_sdk_derive::GraphQLMutationRootInCrate;
+use linera_sdk_derive::{GraphQLMutationRootInCrate, StableEnumInCrate};
 use serde::{Deserialize, Serialize};
 
 pub use super::fungible::{FungibleResponse, InitialState, InitialStateBuilder};
@@ -44,7 +44,7 @@ pub struct BurnEvent {
 }
 
 /// Operations for the wrapped fungible token application.
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+#[derive(Debug, StableEnumInCrate, GraphQLMutationRootInCrate)]
 pub enum WrappedFungibleOperation {
     /// Requests an account balance.
     Balance {

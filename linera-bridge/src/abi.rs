@@ -11,6 +11,7 @@
 //! Hosting them here ensures all three sites stay in lockstep without manual copying.
 
 use linera_base::identifiers::ApplicationId;
+use linera_sdk::formats::StableEnum;
 use serde::{Deserialize, Serialize};
 
 /// Parameters for a deployed bridge instance.
@@ -23,7 +24,7 @@ pub struct BridgeParameters {
 }
 
 /// Operations accepted by the bridge contract.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, StableEnum)]
 pub enum BridgeOperation {
     /// Register the wrapped-fungible token application.
     /// Can only be called once, by the chain owner.
