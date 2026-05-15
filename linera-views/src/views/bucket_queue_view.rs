@@ -1058,6 +1058,98 @@ mod tests {
         Ok(())
     }
 
+    /// Roundtrip a queue through save/reload at several sizes around `N` to
+    /// exercise the front/middle/back layout: empty, partial-front-only,
+    /// exactly-one-bucket, front+back without middles, and several layouts with
+    /// middle buckets.
+    #[tokio::test]
+    async fn save_load_roundtrip_across_sizes() -> Result<(), ViewError> {
+        const N: usize = 3;
+        for size in [0usize, 1, 2, N, N + 1, 2 * N, 2 * N + 1, 5 * N, 5 * N - 1] {
+            let context = MemoryContext::new_for_testing(());
+            let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+            for i in 0..u32::try_from(size).unwrap() {
+                view.push_back(i);
+            }
+            save(&context, &mut view).await?;
+
+            let reloaded = BucketQueueView::<_, u32, N>::load(context).await?;
+            let elements = reloaded.elements().await?;
+            let expected: Vec<u32> = (0..u32::try_from(size).unwrap()).collect();
+            assert_eq!(elements, expected, "size = {size}");
+            assert_eq!(reloaded.count(), size, "count for size = {size}");
+        }
+        Ok(())
+    }
+
+    /// Middle buckets must always contain exactly `N` elements after save —
+    /// this is the invariant that makes the new `BucketStore` metadata O(1).
+    /// Verify the in-memory state directly after several save patterns.
+    #[tokio::test]
+    async fn middle_buckets_are_always_full() -> Result<(), ViewError> {
+        const N: usize = 4;
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        // Push enough to create several middles, then save.
+        for i in 0..u32::try_from(5 * N + 2).unwrap() {
+            view.push_back(i);
+        }
+        save(&context, &mut view).await?;
+
+        // Push a partial back to verify the next save merges and re-chunks correctly.
+        view.push_back(1000);
+        view.push_back(1001);
+        save(&context, &mut view).await?;
+
+        // Drop a few front elements (less than N), save, and check again.
+        for _ in 0..(N - 1) {
+            view.delete_front().await?;
+        }
+        save(&context, &mut view).await?;
+
+        // After all this, every middle bucket in storage must have exactly N
+        // elements. Reload and inspect the in-memory state.
+        let view = BucketQueueView::<_, u32, N>::load(context).await?;
+        let len = view.stored_buckets.len();
+        for (offset, bucket) in view.stored_buckets.iter().enumerate() {
+            let is_endpoint = offset == 0 || offset == len - 1;
+            if !is_endpoint {
+                let State::NotLoaded { length } = bucket.state else {
+                    panic!("middle bucket at offset {offset} should be NotLoaded");
+                };
+                assert_eq!(
+                    length, N,
+                    "middle at offset {offset} should hold N elements"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// `stored_count` must be exact across the partial-front and partial-back
+    /// edge cases, even when the cursor has advanced inside the front bucket.
+    #[tokio::test]
+    async fn stored_count_is_exact() -> Result<(), ViewError> {
+        const N: usize = 3;
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        // 7 elements -> front [0,1,2], middle [3,4,5], back [6].
+        for i in 0..7u32 {
+            view.push_back(i);
+        }
+        save(&context, &mut view).await?;
+
+        let mut view = BucketQueueView::<_, u32, N>::load(context).await?;
+        assert_eq!(view.stored_count(), 7);
+        view.delete_front().await?; // drop 0
+        assert_eq!(view.stored_count(), 6);
+        view.delete_front().await?; // drop 1
+        assert_eq!(view.stored_count(), 5);
+        view.delete_front().await?; // drop 2, crosses into middle bucket
+        assert_eq!(view.stored_count(), 4);
+        Ok(())
+    }
+
     async fn save<V: View>(context: &V::Context, view: &mut V) -> Result<(), ViewError> {
         let mut batch = Batch::new();
         view.pre_save(&mut batch)?;
