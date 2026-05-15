@@ -1,6 +1,7 @@
 name: Bridge E2E
 
 on:
+  pull_request:
   merge_group:
   workflow_dispatch:
   push:
@@ -26,6 +27,7 @@ permissions:
 
 jobs:
   bridge-e2e:
+    if: ${{ github.event_name == 'merge_group' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 60
 
