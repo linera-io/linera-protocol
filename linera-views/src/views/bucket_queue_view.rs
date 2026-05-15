@@ -424,8 +424,7 @@ where
         }
 
         // Bounded by `N` and validated in `pre_save`.
-        let cursor_position_u32 =
-            u32::try_from(cursor_position).expect("verified in pre_save");
+        let cursor_position_u32 = u32::try_from(cursor_position).expect("verified in pre_save");
 
         // Single bucket, front didn't move, no new values: just update position.
         if remaining_count == 1 && remaining_start == 0 && self.new_back_values.is_empty() {
