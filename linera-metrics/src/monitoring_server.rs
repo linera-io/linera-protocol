@@ -81,6 +81,7 @@ pub fn start_metrics(
     shutdown_signal: CancellationToken,
     memory_profiling: MemoryProfiling,
 ) {
+    crate::runtime_metrics::register();
     let app = metrics_router(memory_profiling);
 
     tokio::spawn(async move {
