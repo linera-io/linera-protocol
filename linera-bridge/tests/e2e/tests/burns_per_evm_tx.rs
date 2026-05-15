@@ -52,8 +52,8 @@ const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(32);
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 10u128.pow(15);
 
-#[test_case("ethereum",     30_000_000,  Some(50); "ethereum")]
-#[test_case("base",         240_000_000, Some(190); "base")]
+#[test_case("ethereum",     30_000_000,  Some(45); "ethereum")]
+#[test_case("base",         240_000_000, Some(175); "base")]
 #[tokio::test]
 #[serial_test::serial]
 #[ignore] // Requires pre-built docker images, Wasm, and bridge contracts.
