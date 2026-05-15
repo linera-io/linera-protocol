@@ -9,6 +9,7 @@ on:
       - 'mdbook/**'
       - 'kubernetes/**'
       - 'docker/dashboards/**'
+      - '.github/workflows/**'
   merge_group:
   workflow_dispatch:
 
