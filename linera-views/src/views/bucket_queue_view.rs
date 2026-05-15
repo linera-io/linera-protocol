@@ -58,12 +58,12 @@ enum KeyTag {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct BucketStore {
     /// The position of the front value in the front bucket.
-    front_position: usize,
+    front_position: u32,
     /// The total number of stored buckets.
-    num_buckets: usize,
+    num_buckets: u32,
     /// The logical index of the front bucket. Middle bucket at position `p` (1-indexed
     /// from front) has storage key `KeyTag::Index + (first_index + p)`.
-    first_index: usize,
+    first_index: u32,
 }
 
 /// The position of a value in the stored bucket.
@@ -251,7 +251,8 @@ where
         // Just update the metadata (front_position).
         if remaining_count == 1 && remaining_start == 0 && self.new_back_values.is_empty() {
             let store = BucketStore {
-                front_position: cursor_position,
+                front_position: u32::try_from(cursor_position)
+                    .map_err(|_| ArithmeticError::Overflow)?,
                 num_buckets: 1,
                 first_index: self.stored_buckets[0].index,
             };
@@ -260,8 +261,8 @@ where
             return Ok(false);
         }
 
-        // Case 3: At most 1 stored bucket remains with structural changes.
-        // Delete everything and rewrite from scratch.
+        // Case 3: At most 1 stored bucket remains, with new values or with front
+        // advanced past a previous bucket. Delete everything and rewrite from scratch.
         if remaining_count <= 1 {
             if !self.stored_buckets.is_empty() || self.delete_storage_first {
                 batch.delete_key_prefix(self.context.base_key().bytes.clone());
@@ -284,8 +285,8 @@ where
 
             // Chunk into buckets and write.
             let chunks: Vec<&[T]> = all_data.chunks(N).collect();
-            let num_buckets = chunks.len();
-            let first_index = 0usize;
+            let num_buckets = u32::try_from(chunks.len()).map_err(|_| ArithmeticError::Overflow)?;
+            let first_index: u32 = 0;
 
             // Front bucket.
             let front_key = self.context.base_key().base_tag(KeyTag::Front as u8);
@@ -296,8 +297,9 @@ where
                 .iter()
                 .enumerate()
                 .skip(1)
-                .take(num_buckets.saturating_sub(2))
+                .take(chunks.len().saturating_sub(2))
             {
+                let i = u32::try_from(i).map_err(|_| ArithmeticError::Overflow)?;
                 let key = self.get_middle_key(first_index + i)?;
                 batch.put_key_value(key, &chunk.to_vec())?;
             }
@@ -305,7 +307,7 @@ where
             // Back bucket (if more than 1 chunk).
             if num_buckets >= 2 {
                 let back_key = self.context.base_key().base_tag(KeyTag::Back as u8);
-                batch.put_key_value(back_key, &chunks[num_buckets - 1].to_vec())?;
+                batch.put_key_value(back_key, &chunks[chunks.len() - 1].to_vec())?;
             }
 
             let store = BucketStore {
@@ -318,9 +320,13 @@ where
             return Ok(false);
         }
 
-        // Case 3: remaining_count >= 2 (middle buckets exist, can't delete everything).
+        // Case 4: remaining_count >= 2. Preserve the back bucket in storage and patch
+        // only what changed (consumed middles, front bucket, optional new values).
         let new_first_index = self.stored_buckets[remaining_start].index;
-        let new_front_position = cursor_position;
+        let new_front_position =
+            u32::try_from(cursor_position).map_err(|_| ArithmeticError::Overflow)?;
+        let remaining_count_u32 =
+            u32::try_from(remaining_count).map_err(|_| ArithmeticError::Overflow)?;
 
         // Delete consumed buckets: positions 0..remaining_start.
         // Position 0 was at KeyTag::Front (will be overwritten if front moved).
@@ -348,7 +354,7 @@ where
             // No new values: back stays at KeyTag::Back. Just update metadata.
             let store = BucketStore {
                 front_position: new_front_position,
-                num_buckets: remaining_count,
+                num_buckets: remaining_count_u32,
                 first_index: new_first_index,
             };
             let store_key = self.context.base_key().base_tag(KeyTag::Store as u8);
@@ -364,24 +370,25 @@ where
             merged.extend(self.new_back_values.iter().cloned());
 
             let chunks: Vec<&[T]> = merged.chunks(N).collect();
-            let num_new_chunks = chunks.len();
+            let num_new_chunks =
+                u32::try_from(chunks.len()).map_err(|_| ArithmeticError::Overflow)?;
 
             // New middle bucket indices start at the old back's logical position.
-            let new_middle_start_index = new_first_index + remaining_count - 1;
+            let new_middle_start_index = new_first_index + remaining_count_u32 - 1;
 
             // Write new middle buckets (all chunks except the last).
-            for (i, chunk) in chunks.iter().enumerate().take(num_new_chunks - 1) {
-                let index = new_middle_start_index + i;
-                let key = self.get_middle_key(index)?;
+            for (i, chunk) in chunks.iter().enumerate().take(chunks.len() - 1) {
+                let i = u32::try_from(i).map_err(|_| ArithmeticError::Overflow)?;
+                let key = self.get_middle_key(new_middle_start_index + i)?;
                 batch.put_key_value(key, &chunk.to_vec())?;
             }
 
             // Write new back bucket (last chunk, overwrites old KeyTag::Back).
             let back_key = self.context.base_key().base_tag(KeyTag::Back as u8);
-            batch.put_key_value(back_key, &chunks[num_new_chunks - 1].to_vec())?;
+            batch.put_key_value(back_key, &chunks[chunks.len() - 1].to_vec())?;
 
             // Total buckets: (remaining - 1 for the old back) + num_new_chunks.
-            let new_num_buckets = (remaining_count - 1) + num_new_chunks;
+            let new_num_buckets = (remaining_count_u32 - 1) + num_new_chunks;
 
             let store = BucketStore {
                 front_position: new_front_position,
@@ -416,13 +423,17 @@ where
             return;
         }
 
+        // Bounded by `N` and validated in `pre_save`.
+        let cursor_position_u32 =
+            u32::try_from(cursor_position).expect("verified in pre_save");
+
         // Single bucket, front didn't move, no new values: just update position.
         if remaining_count == 1 && remaining_start == 0 && self.new_back_values.is_empty() {
             self.cursor = Some(Cursor {
                 offset: 0,
                 position: cursor_position,
             });
-            self.stored_front_position = cursor_position;
+            self.stored_front_position = cursor_position_u32;
             self.delete_storage_first = false;
             return;
         }
@@ -441,6 +452,7 @@ where
 
             self.stored_buckets.clear();
             for (i, chunk) in all_data.chunks(N).enumerate() {
+                let i = u32::try_from(i).expect("verified in pre_save");
                 self.stored_buckets.push_back(Bucket {
                     index: i,
                     state: State::Loaded {
@@ -472,7 +484,7 @@ where
                 offset: 0,
                 position: cursor_position,
             });
-            self.stored_front_position = cursor_position;
+            self.stored_front_position = cursor_position_u32;
         } else {
             // Merge back with new values.
             let back = self.stored_buckets.pop_back().unwrap();
@@ -480,13 +492,15 @@ where
                 unreachable!();
             };
             let first_index = self.stored_buckets[0].index;
-            let old_remaining_without_back = self.stored_buckets.len();
+            let old_remaining_without_back =
+                u32::try_from(self.stored_buckets.len()).expect("verified in pre_save");
 
             let mut merged: Vec<T> = back_data;
             merged.extend(std::mem::take(&mut self.new_back_values));
 
             let new_start_index = first_index + old_remaining_without_back;
             for (i, chunk) in merged.chunks(N).enumerate() {
+                let i = u32::try_from(i).expect("verified in pre_save");
                 self.stored_buckets.push_back(Bucket {
                     index: new_start_index + i,
                     state: State::Loaded {
@@ -498,7 +512,7 @@ where
                 offset: 0,
                 position: cursor_position,
             });
-            self.stored_front_position = cursor_position;
+            self.stored_front_position = cursor_position_u32;
         }
         self.delete_storage_first = false;
     }
@@ -528,7 +542,7 @@ where
 
 impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     /// Gets the key for a middle bucket with the given storage index.
-    fn get_middle_key(&self, index: usize) -> Result<Vec<u8>, ViewError> {
+    fn get_middle_key(&self, index: u32) -> Result<Vec<u8>, ViewError> {
         Ok(self
             .context
             .base_key()
@@ -674,20 +688,22 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 if offset == self.stored_buckets.len() {
                     self.cursor = None;
                 } else {
-                    self.cursor = Some(Cursor { offset, position });
-                    let bucket = self.stored_buckets.get_mut(offset).unwrap();
-                    let index = bucket.index;
+                    // Ensure the bucket at the new cursor is loaded BEFORE advancing the
+                    // cursor: a failed load must leave the view's invariant intact (the
+                    // bucket at `cursor.offset` is always `Loaded`).
+                    let bucket = &self.stored_buckets[offset];
                     if !bucket.is_loaded() {
-                        let key = self.get_middle_key(index)?;
-                        let data = self.context.store().read_value(&key).await?;
-                        let data = match data {
-                            Some(value) => value,
-                            None => {
-                                return Err(ViewError::MissingEntries(
-                                    "BucketQueueView::delete_front".into(),
-                                ));
-                            }
-                        };
+                        let key = self.get_middle_key(bucket.index)?;
+                        let data =
+                            self.context
+                                .store()
+                                .read_value(&key)
+                                .await?
+                                .ok_or_else(|| {
+                                    ViewError::MissingEntries(
+                                        "BucketQueueView::delete_front".into(),
+                                    )
+                                })?;
                         self.stored_buckets[offset].state = State::Loaded { data };
                     }
                     self.cursor = Some(Cursor { offset, position });
@@ -1019,16 +1035,18 @@ mod tests {
     async fn delete_front_load_failure_preserves_invariant() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
         let mut view = BucketQueueView::<_, u8, 2>::load(context.clone()).await?;
-        for value in [1u8, 2, 3, 4] {
+        // Six elements -> front=[1,2], middle=[3,4] at index 1, back=[5,6].
+        for value in [1u8, 2, 3, 4, 5, 6] {
             view.push_back(value);
         }
         save(&context, &mut view).await?;
 
         let mut view = BucketQueueView::<_, u8, 2>::load(context.clone()).await?;
 
-        let bucket1_key = view.get_bucket_key(1)?;
+        // Delete the middle bucket so that loading it during `delete_front` fails.
+        let middle_key = view.get_middle_key(1)?;
         let mut batch = Batch::new();
-        batch.delete_key(bucket1_key);
+        batch.delete_key(middle_key);
         context.store().write_batch(batch).await?;
 
         view.delete_front().await?;
