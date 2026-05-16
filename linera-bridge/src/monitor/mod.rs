@@ -257,7 +257,9 @@ impl MonitorState {
         }
         let mut tree: BTreeMap<BlockHeight, HeightAccum> = BTreeMap::new();
         for tracked in self.pending_burns() {
-            if tracked.retry_count >= max_retries {
+            // Failed burns (e.g. permanently oversized) and burns past the
+            // retry budget are no longer eligible for processing.
+            if tracked.failed || tracked.retry_count >= max_retries {
                 continue;
             }
             let entry = tree.entry(tracked.value.height).or_default();
@@ -371,6 +373,24 @@ impl MonitorState {
                 }
             }
         }
+    }
+
+    /// Looks up the `event_index` of the pending burn at
+    /// `(height, tx_index, pos_in_tx)`. Used by `process_pending_burns`
+    /// to map per-chunk positions back to the stream-index keys that
+    /// `mark_burn_retried` / `mark_burn_failed` expect.
+    pub fn event_index_for_pos(
+        &self,
+        height: BlockHeight,
+        tx_index: u32,
+        pos_in_tx: u32,
+    ) -> Option<u32> {
+        self.burns.values().find_map(|b| {
+            (b.value.height == height
+                && b.value.tx_index == tx_index
+                && b.value.event_pos_in_tx == pos_in_tx)
+                .then_some(b.value.event_index)
+        })
     }
 
     pub fn mark_burn_retried(&mut self, height: BlockHeight, event_index: u32) {
@@ -832,5 +852,62 @@ mod tests {
                 (BlockHeight(7), vec![0u32], vec![(0u32, vec![0u32])]),
             ],
         );
+    }
+
+    #[tokio::test]
+    async fn pending_burns_by_height_and_tx_excludes_failed_burns() {
+        // After a burn is marked `failed` (e.g. oversized in the chunked
+        // `processBurns` path), it must not reappear in subsequent retry
+        // snapshots — otherwise the chunking loop would keep re-discovering
+        // it as oversized and burn estimate-RPC budget on every pass.
+        let mut state = MonitorState::new(0);
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            })
+            .await;
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                tx_index: 0,
+                event_pos_in_tx: 1,
+                event_index: 11,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            })
+            .await;
+
+        state.mark_burn_failed(BlockHeight(5), 10).await;
+
+        let groups = state.pending_burns_by_height_and_tx(/* max_retries */ 10);
+        assert_eq!(
+            groups,
+            vec![(BlockHeight(5), vec![11u32], vec![(0u32, vec![1u32])])],
+        );
+    }
+
+    #[tokio::test]
+    async fn event_index_for_pos_matches_tracked_burn() {
+        let mut state = MonitorState::new(0);
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                tx_index: 2,
+                event_pos_in_tx: 1,
+                event_index: 42,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            })
+            .await;
+
+        assert_eq!(state.event_index_for_pos(BlockHeight(5), 2, 1), Some(42));
+        assert_eq!(state.event_index_for_pos(BlockHeight(5), 2, 0), None);
+        assert_eq!(state.event_index_for_pos(BlockHeight(5), 0, 1), None);
+        assert_eq!(state.event_index_for_pos(BlockHeight(6), 2, 1), None);
     }
 }
