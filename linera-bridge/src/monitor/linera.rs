@@ -85,7 +85,12 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             continue;
         }
 
-        for (height, event_indices_at_height, by_tx) in groups {
+        for super::PendingBurnsAtHeight {
+            height,
+            event_indices: event_indices_at_height,
+            by_tx,
+        } in groups
+        {
             // `event_indices_at_height` are the stream-index values for every
             // pending burn at this height under the same `max_retries`
             // snapshot as `by_tx`. `mark_burn_retried` / `mark_burn_failed`

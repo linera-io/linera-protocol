@@ -13,7 +13,7 @@ pub mod evm;
 pub mod linera;
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -106,10 +106,38 @@ impl<T: Clone> Tracked<T> {
 pub type TrackedDeposit = Tracked<PendingDeposit>;
 pub type TrackedBurn = Tracked<PendingBurn>;
 
-/// One height's slice of `pending_burns_by_height_and_tx`: the block height,
-/// sorted `event_index` values at that height, and per-`tx_index` sorted
-/// positions for the chunked `processBurns` fallback.
-pub type PendingBurnsAtHeight = (BlockHeight, Vec<u32>, Vec<(u32, Vec<u32>)>);
+/// One height's slice of `pending_burns_by_height_and_tx`. The two views
+/// (`event_indices` and `by_tx`) describe the same set of burns under one
+/// retry-filter snapshot.
+///
+/// `Ord` is keyed solely on `height`, so a `BTreeSet<PendingBurnsAtHeight>`
+/// is naturally height-sorted and structurally rejects a second entry for
+/// the same height (which never happens in practice — there is at most one
+/// entry per height).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingBurnsAtHeight {
+    pub height: BlockHeight,
+    /// Stream indices (`Event.index`) of every pending burn at this height,
+    /// sorted ascending. Used for retry accounting and cert persistence.
+    pub event_indices: Vec<u32>,
+    /// Pending burns grouped by `tx_index`, in ascending `tx_index` order;
+    /// the `Vec<u32>` inside each entry is the sorted `event_pos_in_tx`
+    /// positions for that tx — input to the chunked `processBurns`
+    /// fallback when `addBlock` would not fit.
+    pub by_tx: Vec<(u32, Vec<u32>)>,
+}
+
+impl Ord for PendingBurnsAtHeight {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.height.cmp(&other.height)
+    }
+}
+
+impl PartialOrd for PendingBurnsAtHeight {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 /// In-memory monitoring state shared across scan loops and HTTP handlers.
 pub struct MonitorState {
@@ -239,17 +267,13 @@ impl MonitorState {
         self.burns.values().filter(|b| b.forwarded).collect()
     }
 
-    /// Returns pending burns grouped by `(height, tx_index)`, plus the
-    /// sorted list of `event_index` values at each height. Outer Vec is in
-    /// ascending height order; inner Vec is in ascending tx-index order;
-    /// positions within each (height, tx) group are sorted by
-    /// `event_pos_in_tx`; the per-height event_indices are sorted ascending.
-    /// Burns that have exceeded `max_retries` are skipped. Both views derive
-    /// from the same snapshot under one read so `process_pending_burns` can
-    /// drive both the addBlock/processBurns chunking and retry/cert
-    /// persistence consistently.
-    pub fn pending_burns_by_height_and_tx(&self, max_retries: u32) -> Vec<PendingBurnsAtHeight> {
-        use std::collections::BTreeMap;
+    /// Returns one `PendingBurnsAtHeight` per height with pending burns,
+    /// in ascending height order. Burns are skipped if they are `failed`
+    /// (e.g. permanently oversized) or have exceeded `max_retries`.
+    pub fn pending_burns_by_height_and_tx(
+        &self,
+        max_retries: u32,
+    ) -> BTreeSet<PendingBurnsAtHeight> {
         #[derive(Default)]
         struct HeightAccum {
             by_tx: BTreeMap<u32, Vec<u32>>,
@@ -276,7 +300,11 @@ impl MonitorState {
                     positions.sort_unstable();
                 }
                 accum.event_indices.sort_unstable();
-                (h, accum.event_indices, accum.by_tx.into_iter().collect())
+                PendingBurnsAtHeight {
+                    height: h,
+                    event_indices: accum.event_indices,
+                    by_tx: accum.by_tx.into_iter().collect(),
+                }
             })
             .collect()
     }
@@ -841,17 +869,21 @@ mod tests {
         // Same retry filter applies to both views — event_indices is the
         // sorted list of `event_index` values at each height, used by
         // `process_pending_burns` for retry accounting and cert persistence.
-        assert_eq!(
-            groups,
-            vec![
-                (
-                    BlockHeight(5),
-                    vec![10u32, 11, 12],
-                    vec![(0u32, vec![0u32, 1]), (1u32, vec![0u32])],
-                ),
-                (BlockHeight(7), vec![0u32], vec![(0u32, vec![0u32])]),
-            ],
-        );
+        let expected: BTreeSet<PendingBurnsAtHeight> = [
+            PendingBurnsAtHeight {
+                height: BlockHeight(5),
+                event_indices: vec![10u32, 11, 12],
+                by_tx: vec![(0u32, vec![0u32, 1]), (1u32, vec![0u32])],
+            },
+            PendingBurnsAtHeight {
+                height: BlockHeight(7),
+                event_indices: vec![0u32],
+                by_tx: vec![(0u32, vec![0u32])],
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(groups, expected);
     }
 
     #[tokio::test]
@@ -885,10 +917,14 @@ mod tests {
         state.mark_burn_failed(BlockHeight(5), 10).await;
 
         let groups = state.pending_burns_by_height_and_tx(/* max_retries */ 10);
-        assert_eq!(
-            groups,
-            vec![(BlockHeight(5), vec![11u32], vec![(0u32, vec![1u32])])],
-        );
+        let expected: BTreeSet<PendingBurnsAtHeight> = [PendingBurnsAtHeight {
+            height: BlockHeight(5),
+            event_indices: vec![11u32],
+            by_tx: vec![(0u32, vec![1u32])],
+        }]
+        .into_iter()
+        .collect();
+        assert_eq!(groups, expected);
     }
 
     #[tokio::test]
