@@ -255,7 +255,16 @@ where
                 if all_data.is_empty() {
                     return Ok(true);
                 }
-                self.write_chunks(batch, &all_data, /* first_index */ 0)?;
+                let first_index = 0;
+                let num_buckets = self.write_chunks(batch, &all_data, first_index)?;
+                batch.put_key_value(
+                    self.layout_key(),
+                    &BucketLayout {
+                        front_position: 0,
+                        num_buckets,
+                        first_index,
+                    },
+                )?;
                 Ok(false)
             }
             SaveCase::Patch {
@@ -526,9 +535,10 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     }
 
     /// Splits `data` into N-sized chunks and writes them as front (KeyTag::Front),
-    /// middles (KeyTag::Index, starting at `first_index`+1), and back (KeyTag::Back),
-    /// then writes the `BucketLayout` metadata at KeyTag::Layout. Used by `Rewrite`.
-    fn write_chunks(&self, batch: &mut Batch, data: &[T], first_index: u32) -> Result<(), ViewError>
+    /// middles (KeyTag::Index, starting at `first_index`+1), and back (KeyTag::Back).
+    /// Returns the total number of buckets written. The caller is responsible for
+    /// writing the matching `BucketLayout` entry. Used by `Rewrite`.
+    fn write_chunks(&self, batch: &mut Batch, data: &[T], first_index: u32) -> Result<u32, ViewError>
     where
         T: Serialize + Clone,
     {
@@ -548,15 +558,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
         if num_buckets >= 2 {
             batch.put_key_value(self.back_key(), &chunks.last().unwrap().to_vec())?;
         }
-        batch.put_key_value(
-            self.layout_key(),
-            &BucketLayout {
-                front_position: 0,
-                num_buckets,
-                first_index,
-            },
-        )?;
-        Ok(())
+        Ok(num_buckets)
     }
 
     /// Gets the number of entries in the container that are stored
