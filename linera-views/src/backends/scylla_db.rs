@@ -11,11 +11,13 @@ use std::{
     collections::{BTreeSet, HashMap},
     ops::Deref,
     sync::Arc,
+    time::Duration,
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
 use futures::{future::join_all, StreamExt as _};
 use linera_base::{ensure, util::future::FutureSyncExt as _};
+use rand::Rng as _;
 use scylla::{
     client::{
         execution_profile::{ExecutionProfile, ExecutionProfileHandle},
@@ -36,6 +38,25 @@ use scylla::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter;
+    use prometheus::IntCounter;
+
+    /// Total retries triggered by transient ScyllaDB read errors.
+    /// Spikes here correlate with chain worker save failures (and previously,
+    /// poisoning storms) — a non-zero baseline is normal under load; rapid
+    /// growth means the cluster is past its read budget.
+    pub static SCYLLA_READ_RETRY_COUNT: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "scylla_read_retry_count",
+            "Number of ScyllaDB read operations retried due to transient overload",
+        )
+    });
+}
 
 #[cfg(with_metrics)]
 use crate::metering::MeteredDatabase;
@@ -115,6 +136,92 @@ struct ScyllaDbClient {
     find_key_values_by_prefix_bounded: PreparedStatement,
     multi_key_values: papaya::HashMap<usize, PreparedStatement>,
     multi_keys: papaya::HashMap<usize, PreparedStatement>,
+}
+
+/// Maximum number of attempts (initial + retries) before propagating a transient
+/// ScyllaDB read error. Reads are idempotent and safe to retry; the driver's
+/// `DefaultRetryPolicy` already retries once at the coordinator level, so this
+/// counts attempts *we* perform, with our own exponential backoff and jitter.
+const READ_MAX_ATTEMPTS: u32 = 6;
+/// Base delay (milliseconds) for the first retry. Each subsequent retry doubles
+/// the base until `READ_BACKOFF_MAX_MS`; the actual delay is uniformly sampled
+/// from `[0, base]` (full jitter) to avoid thundering-herd reconvergence after a
+/// shared overload event.
+const READ_BACKOFF_BASE_MS: u64 = 50;
+/// Cap on the per-retry backoff. With six attempts and a 50ms base, total
+/// worst-case wait is bounded near a few seconds — well above the proxy timeout,
+/// but far below the multi-minute poisoning loops that prompted this retry.
+const READ_BACKOFF_MAX_MS: u64 = 1600;
+
+/// Walks the error's `source()` chain and returns the first `DbError` found, if any.
+/// Errors from the ScyllaDB driver layer nest the `DbError` several levels deep
+/// (e.g. `PagerExecutionError → NextPageError → RequestFailure → LastAttemptError → DbError`),
+/// and the exact nesting varies by call site (`execute_iter` vs `execute_single_page`).
+/// Walking the chain is more robust than matching every possible enum path.
+fn extract_db_error<'a>(error: &'a (dyn std::error::Error + 'static)) -> Option<&'a DbError> {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+    while let Some(err) = current {
+        if let Some(db_error) = err.downcast_ref::<DbError>() {
+            return Some(db_error);
+        }
+        current = err.source();
+    }
+    None
+}
+
+/// True if this error indicates transient ScyllaDB overload that is safe to retry
+/// for a read operation. Reads have no observable side effects, so retrying on
+/// any timeout / overload signal is sound.
+fn is_retryable_read_error(error: &ScyllaDbStoreInternalError) -> bool {
+    let Some(db_error) = extract_db_error(error) else {
+        return false;
+    };
+    matches!(
+        db_error,
+        DbError::ReadTimeout { .. }
+            | DbError::Overloaded
+            | DbError::ServerError
+            | DbError::IsBootstrapping
+            | DbError::TruncateError,
+    )
+}
+
+/// Runs `operation` with retries on transient ScyllaDB overload signals. Each
+/// retry waits a uniformly-sampled delay in `[0, base]` milliseconds (full
+/// jitter) where `base` doubles per attempt, capped at `READ_BACKOFF_MAX_MS`.
+/// Non-retryable errors and successful results are returned immediately.
+async fn retry_read<F, Fut, T>(mut operation: F) -> Result<T, ScyllaDbStoreInternalError>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, ScyllaDbStoreInternalError>>,
+{
+    let mut attempt: u32 = 0;
+    loop {
+        attempt += 1;
+        match operation().await {
+            Ok(value) => return Ok(value),
+            Err(error) => {
+                if attempt >= READ_MAX_ATTEMPTS || !is_retryable_read_error(&error) {
+                    return Err(error);
+                }
+                let exponent = attempt - 1;
+                let base_ms = READ_BACKOFF_BASE_MS
+                    .saturating_mul(1u64 << exponent.min(16))
+                    .min(READ_BACKOFF_MAX_MS);
+                let jittered_ms = rand::thread_rng().gen_range(0..=base_ms);
+                #[cfg(with_metrics)]
+                metrics::SCYLLA_READ_RETRY_COUNT.inc();
+                tracing::warn!(
+                    attempt,
+                    max_attempts = READ_MAX_ATTEMPTS,
+                    delay_ms = jittered_ms,
+                    error = %error,
+                    "Retrying transient ScyllaDB read error",
+                );
+                linera_base::time::timer::sleep(Duration::from_millis(jittered_ms)).await;
+            }
+        }
+    }
 }
 
 impl ScyllaDbClient {
@@ -303,19 +410,20 @@ impl ScyllaDbClient {
         key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, ScyllaDbStoreInternalError> {
         Self::check_key_size(&key)?;
-        let session = &self.session;
-        // Read the value of a key
         let values = (root_key.to_vec(), key);
-
-        let (result, _) = session
-            .execute_single_page(&self.read_value, &values, PagingState::start())
-            .await?;
-        let rows = result.into_rows_result()?;
-        let mut rows = rows.rows::<(Vec<u8>,)>()?;
-        Ok(match rows.next() {
-            Some(row) => Some(row?.0),
-            None => None,
+        retry_read(|| async {
+            let (result, _) = self
+                .session
+                .execute_single_page(&self.read_value, &values, PagingState::start())
+                .await?;
+            let rows = result.into_rows_result()?;
+            let mut rows = rows.rows::<(Vec<u8>,)>()?;
+            Ok(match rows.next() {
+                Some(row) => Some(row?.0),
+                None => None,
+            })
         })
+        .await
     }
 
     fn get_occurrences_map(
@@ -334,25 +442,28 @@ impl ScyllaDbClient {
         root_key: &[u8],
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Option<Vec<u8>>>, ScyllaDbStoreInternalError> {
-        let mut values = vec![None; keys.len()];
+        let num_keys = keys.len();
         let map = Self::get_occurrences_map(keys)?;
         let statement = self.get_multi_key_values_statement(map.len()).await?;
         let mut inputs = vec![root_key.to_vec()];
         inputs.extend(map.keys().cloned());
-        let mut rows = Box::pin(self.session.execute_iter(statement, &inputs))
-            .await?
-            .rows_stream::<(Vec<u8>, Vec<u8>)>()?;
-
-        while let Some(row) = rows.next().await {
-            let (key, value) = row?;
-            if let Some((&last, rest)) = map[&key].split_last() {
-                for position in rest {
-                    values[*position] = Some(value.clone());
+        retry_read(|| async {
+            let mut values = vec![None; num_keys];
+            let mut rows = Box::pin(self.session.execute_iter(statement.clone(), &inputs))
+                .await?
+                .rows_stream::<(Vec<u8>, Vec<u8>)>()?;
+            while let Some(row) = rows.next().await {
+                let (key, value) = row?;
+                if let Some((&last, rest)) = map[&key].split_last() {
+                    for position in rest {
+                        values[*position] = Some(value.clone());
+                    }
+                    values[last] = Some(value);
                 }
-                values[last] = Some(value);
             }
-        }
-        Ok(values)
+            Ok(values)
+        })
+        .await
     }
 
     async fn contains_keys_internal(
@@ -360,23 +471,25 @@ impl ScyllaDbClient {
         root_key: &[u8],
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<bool>, ScyllaDbStoreInternalError> {
-        let mut values = vec![false; keys.len()];
+        let num_keys = keys.len();
         let map = Self::get_occurrences_map(keys)?;
         let statement = self.get_multi_keys_statement(map.len()).await?;
         let mut inputs = vec![root_key.to_vec()];
         inputs.extend(map.keys().cloned());
-        let mut rows = Box::pin(self.session.execute_iter(statement, &inputs))
-            .await?
-            .rows_stream::<(Vec<u8>,)>()?;
-
-        while let Some(row) = rows.next().await {
-            let (key,) = row?;
-            for i_key in &map[&key] {
-                values[*i_key] = true;
+        retry_read(|| async {
+            let mut values = vec![false; num_keys];
+            let mut rows = Box::pin(self.session.execute_iter(statement.clone(), &inputs))
+                .await?
+                .rows_stream::<(Vec<u8>,)>()?;
+            while let Some(row) = rows.next().await {
+                let (key,) = row?;
+                for i_key in &map[&key] {
+                    values[*i_key] = true;
+                }
             }
-        }
-
-        Ok(values)
+            Ok(values)
+        })
+        .await
     }
 
     async fn contains_key_internal(
@@ -385,16 +498,17 @@ impl ScyllaDbClient {
         key: Vec<u8>,
     ) -> Result<bool, ScyllaDbStoreInternalError> {
         Self::check_key_size(&key)?;
-        let session = &self.session;
-        // Read the value of a key
         let values = (root_key.to_vec(), key);
-
-        let (result, _) = session
-            .execute_single_page(&self.contains_key, &values, PagingState::start())
-            .await?;
-        let rows = result.into_rows_result()?;
-        let mut rows = rows.rows::<(Vec<u8>,)>()?;
-        Ok(rows.next().is_some())
+        retry_read(|| async {
+            let (result, _) = self
+                .session
+                .execute_single_page(&self.contains_key, &values, PagingState::start())
+                .await?;
+            let rows = result.into_rows_result()?;
+            let mut rows = rows.rows::<(Vec<u8>,)>()?;
+            Ok(rows.next().is_some())
+        })
+        .await
     }
 
     async fn write_batch_internal(
@@ -448,29 +562,37 @@ impl ScyllaDbClient {
         key_prefix: Vec<u8>,
     ) -> Result<Vec<Vec<u8>>, ScyllaDbStoreInternalError> {
         Self::check_key_size(&key_prefix)?;
-        let session = &self.session;
-        // Read the value of a key
         let len = key_prefix.len();
-        let query_unbounded = &self.find_keys_by_prefix_unbounded;
-        let query_bounded = &self.find_keys_by_prefix_bounded;
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (root_key.to_vec(), key_prefix.clone());
-                Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+        let upper_bound = get_upper_bound_option(&key_prefix);
+        retry_read(|| async {
+            let rows = match &upper_bound {
+                None => {
+                    let values = (root_key.to_vec(), key_prefix.clone());
+                    Box::pin(
+                        self.session
+                            .execute_iter(self.find_keys_by_prefix_unbounded.clone(), values),
+                    )
+                    .await?
+                }
+                Some(upper_bound) => {
+                    let values = (root_key.to_vec(), key_prefix.clone(), upper_bound.clone());
+                    Box::pin(
+                        self.session
+                            .execute_iter(self.find_keys_by_prefix_bounded.clone(), values),
+                    )
+                    .await?
+                }
+            };
+            let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
+            let mut keys = Vec::new();
+            while let Some(row) = rows.next().await {
+                let (key,) = row?;
+                let short_key = key[len..].to_vec();
+                keys.push(short_key);
             }
-            Some(upper_bound) => {
-                let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
-            }
-        };
-        let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
-        let mut keys = Vec::new();
-        while let Some(row) = rows.next().await {
-            let (key,) = row?;
-            let short_key = key[len..].to_vec();
-            keys.push(short_key);
-        }
-        Ok(keys)
+            Ok(keys)
+        })
+        .await
     }
 
     async fn find_key_values_by_prefix_internal(
@@ -479,29 +601,37 @@ impl ScyllaDbClient {
         key_prefix: Vec<u8>,
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, ScyllaDbStoreInternalError> {
         Self::check_key_size(&key_prefix)?;
-        let session = &self.session;
-        // Read the value of a key
         let len = key_prefix.len();
-        let query_unbounded = &self.find_key_values_by_prefix_unbounded;
-        let query_bounded = &self.find_key_values_by_prefix_bounded;
-        let rows = match get_upper_bound_option(&key_prefix) {
-            None => {
-                let values = (root_key.to_vec(), key_prefix.clone());
-                Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+        let upper_bound = get_upper_bound_option(&key_prefix);
+        retry_read(|| async {
+            let rows = match &upper_bound {
+                None => {
+                    let values = (root_key.to_vec(), key_prefix.clone());
+                    Box::pin(
+                        self.session
+                            .execute_iter(self.find_key_values_by_prefix_unbounded.clone(), values),
+                    )
+                    .await?
+                }
+                Some(upper_bound) => {
+                    let values = (root_key.to_vec(), key_prefix.clone(), upper_bound.clone());
+                    Box::pin(
+                        self.session
+                            .execute_iter(self.find_key_values_by_prefix_bounded.clone(), values),
+                    )
+                    .await?
+                }
+            };
+            let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
+            let mut key_values = Vec::new();
+            while let Some(row) = rows.next().await {
+                let (key, value) = row?;
+                let short_key = key[len..].to_vec();
+                key_values.push((short_key, value));
             }
-            Some(upper_bound) => {
-                let values = (root_key.to_vec(), key_prefix.clone(), upper_bound);
-                Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
-            }
-        };
-        let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
-        let mut key_values = Vec::new();
-        while let Some(row) = rows.next().await {
-            let (key, value) = row?;
-            let short_key = key[len..].to_vec();
-            key_values.push((short_key, value));
-        }
-        Ok(key_values)
+            Ok(key_values)
+        })
+        .await
     }
 }
 
