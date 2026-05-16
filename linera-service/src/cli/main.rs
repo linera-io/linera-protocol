@@ -2448,58 +2448,6 @@ async fn run(options: &Options) -> Result<i32, Error> {
         }
 
         ClientCommand::Net(net_command) => match net_command {
-            #[cfg(feature = "kubernetes")]
-            NetCommand::Up {
-                other_initial_chains,
-                initial_amount,
-                validators,
-                proxies,
-                shards,
-                testing_prng_seed,
-                policy_config,
-                kubernetes: true,
-                binaries,
-                no_build,
-                docker_image_name,
-                build_mode,
-                with_faucet,
-                faucet_port,
-                faucet_amount,
-                with_block_exporter,
-                num_block_exporters,
-                indexer_image_name,
-                explorer_image_name,
-                dual_store,
-                path,
-                ..
-            } => {
-                net_up_utils::handle_net_up_kubernetes(
-                    *other_initial_chains,
-                    *initial_amount,
-                    *validators,
-                    *proxies,
-                    *shards,
-                    *testing_prng_seed,
-                    binaries,
-                    *no_build,
-                    docker_image_name.clone(),
-                    build_mode.clone(),
-                    *policy_config,
-                    *with_faucet,
-                    *faucet_port,
-                    *faucet_amount,
-                    *with_block_exporter,
-                    *num_block_exporters,
-                    indexer_image_name.clone(),
-                    explorer_image_name.clone(),
-                    *dual_store,
-                    path,
-                )
-                .boxed()
-                .await?;
-                Ok(0)
-            }
-
             NetCommand::Up {
                 other_initial_chains,
                 initial_amount,

@@ -23,9 +23,6 @@ The directory is split into a few key parts:
 
 ## Usage
 
-To deploy a Linera validator, you can use the `linera net up --kubernetes` to
-run a validator locally on `kind`.
+To deploy a Linera validator, use the Helm chart with `helmfile` and `kubectl`
+directly against your target cluster.
 
-This will deploy a network with a single validator - the script also provides
-the subsequent requisite commands to configure your `linera` binary against the
-newly deployed network 
