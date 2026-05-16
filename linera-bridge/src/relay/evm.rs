@@ -265,26 +265,28 @@ impl<P: Provider> EvmClient<P> {
     }
 }
 
-/// Returns true if the `alloy::contract::Error` reports that the call would not
-/// fit under the node's block gas limit — i.e. the node refused to estimate
-/// because the work required more gas than a single block can hold.
-/// Substring-matches on the node's error message; pinned to the known wordings
-/// for anvil, geth, and reth as of writing.
+/// Returns true if the error is a JSON-RPC error reporting that the call
+/// would not fit under the node's block gas limit — i.e. the node refused to
+/// estimate because the work required more gas than a single block can hold.
 ///
-/// Anvil's `eth_estimateGas` caps execution at the block gas limit. When the
-/// call would exceed it, anvil returns `execution reverted, data: "0x"` (the
-/// EVM hit OOG mid-call) rather than the canonical `"gas required exceeds"`.
-/// We treat that combination as the same fit-doesn't-fit signal here.
+/// Structurally pattern-matches `RpcError::ErrorResp` and substring-checks
+/// the `ErrorPayload`'s `message` against node-specific wordings observed
+/// from geth, erigon, alchemy, reth, and anvil (1.6, both calldata-too-big
+/// and infinite-loop constructors). Transport-level failures (HTTP,
+/// timeouts) and non-RPC errors return `false`.
+///
+/// We deliberately do NOT match a bare `"out of gas"` — a regular tx can OOG
+/// for reasons unrelated to the block gas limit (e.g. a too-low tx gas cap, or
+/// contract state consuming more gas than estimated). Treating those as
+/// "doesn't fit" would mask real misconfigurations behind retry churn down
+/// the chunking path.
 pub fn is_gas_exceeded_error(error: &alloy::contract::Error) -> bool {
-    let msg = error.to_string().to_lowercase();
-    if msg.contains("execution reverted") && msg.contains("data: \"0x\"") {
-        return true;
-    }
-    [
-        "gas required exceeds",    // anvil / geth
-        "exceeds block gas limit", // reth, foundry forks
-        "out of gas",              // generic fallback
-    ]
-    .iter()
-    .any(|needle| msg.contains(needle))
+    let alloy::contract::Error::TransportError(transport_err) = error else {
+        return false;
+    };
+    let Some(payload) = transport_err.as_error_resp() else {
+        return false;
+    };
+    let msg = payload.message.to_lowercase();
+    msg.contains("gas required exceeds") || msg.contains("exceeds block gas limit")
 }
