@@ -251,7 +251,14 @@ where
                 if plan.has_storage {
                     batch.delete_key_prefix(self.context.base_key().bytes.clone());
                 }
-                let all_data = self.gather_for_rewrite(&plan);
+                let mut all_data: Vec<T> = Vec::new();
+                if let Some(bucket) = self.stored_buckets.get(plan.remaining_start) {
+                    let State::Loaded { data } = &bucket.state else {
+                        unreachable!("front bucket is always loaded");
+                    };
+                    all_data.extend(data[plan.cursor_position..].iter().cloned());
+                }
+                all_data.extend(self.new_back_values.iter().cloned());
                 if all_data.is_empty() {
                     return Ok(true);
                 }
@@ -515,23 +522,6 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
             cursor_position_u32,
             has_storage,
         })
-    }
-
-    /// Collects the remaining front data (after `cursor_position`) followed by
-    /// `new_back_values`. Used by the `Rewrite` case in `pre_save`.
-    fn gather_for_rewrite(&self, plan: &SavePlan) -> Vec<T>
-    where
-        T: Clone,
-    {
-        let mut data = Vec::new();
-        if let Some(bucket) = self.stored_buckets.get(plan.remaining_start) {
-            let State::Loaded { data: front } = &bucket.state else {
-                unreachable!("front bucket is always loaded");
-            };
-            data.extend(front[plan.cursor_position..].iter().cloned());
-        }
-        data.extend(self.new_back_values.iter().cloned());
-        data
     }
 
     /// Splits `data` into N-sized chunks and writes them as front (KeyTag::Front),
