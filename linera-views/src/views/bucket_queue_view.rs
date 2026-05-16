@@ -42,8 +42,8 @@ mod metrics {
 enum KeyTag {
     /// Key tag for the front bucket.
     Front = MIN_VIEW_TAG,
-    /// Key tag for the `BucketStore`.
-    Store,
+    /// Key tag for the `BucketLayout`.
+    Layout,
     /// Key tag for the content of middle buckets.
     Index,
     /// Key tag for the back bucket.
@@ -56,7 +56,7 @@ enum KeyTag {
 /// all middle buckets (i.e. neither front nor back) have exactly N elements. Only
 /// the front bucket (tracked by `front_position`) and back bucket can be partial.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct BucketStore {
+struct BucketLayout {
     /// The position of the front value in the front bucket.
     front_position: u32,
     /// The total number of stored buckets.
@@ -146,53 +146,53 @@ where
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
         let key1 = context.base_key().base_tag(KeyTag::Front as u8);
-        let key2 = context.base_key().base_tag(KeyTag::Store as u8);
+        let key2 = context.base_key().base_tag(KeyTag::Layout as u8);
         let key3 = context.base_key().base_tag(KeyTag::Back as u8);
         Ok(vec![key1, key2, key3])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
         let value_front = values.first().ok_or(ViewError::PostLoadValuesError)?;
-        let value_store = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
+        let value_layout = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
         let value_back = values.get(2).ok_or(ViewError::PostLoadValuesError)?;
         let front = from_bytes_option::<Vec<T>>(value_front)?;
         let back = from_bytes_option::<Vec<T>>(value_back)?;
-        let bucket_store = from_bytes_option_or_default::<BucketStore>(value_store)?;
+        let layout = from_bytes_option_or_default::<BucketLayout>(value_layout)?;
         let mut stored_buckets = VecDeque::new();
         if let Some(front_data) = front {
             // Front bucket (always loaded).
             stored_buckets.push_back(Bucket {
-                index: bucket_store.first_index,
+                index: layout.first_index,
                 state: State::Loaded { data: front_data },
             });
             // Middle buckets (NotLoaded, all have exactly N elements).
-            let num_middles = bucket_store.num_buckets.saturating_sub(2);
+            let num_middles = layout.num_buckets.saturating_sub(2);
             for p in 1..=num_middles {
                 stored_buckets.push_back(Bucket {
-                    index: bucket_store.first_index + p,
+                    index: layout.first_index + p,
                     state: State::NotLoaded { length: N },
                 });
             }
             // Back bucket (always loaded, separate from front if num_buckets >= 2).
             if let Some(back_data) = back {
                 stored_buckets.push_back(Bucket {
-                    index: bucket_store.first_index + bucket_store.num_buckets - 1,
+                    index: layout.first_index + layout.num_buckets - 1,
                     state: State::Loaded { data: back_data },
                 });
             }
         }
-        let cursor = if bucket_store.num_buckets == 0 {
+        let cursor = if layout.num_buckets == 0 {
             None
         } else {
             Some(Cursor {
                 offset: 0,
-                position: bucket_store.front_position as usize,
+                position: layout.front_position as usize,
             })
         };
         Ok(Self {
             context,
             stored_buckets,
-            stored_front_position: bucket_store.front_position,
+            stored_front_position: layout.front_position,
             new_back_values: VecDeque::new(),
             cursor,
             delete_storage_first: false,
@@ -238,8 +238,8 @@ where
             }
             SaveCase::MetadataOnly => {
                 batch.put_key_value(
-                    self.store_key(),
-                    &BucketStore {
+                    self.layout_key(),
+                    &BucketLayout {
                         front_position: plan.cursor_position_u32,
                         num_buckets: 1,
                         first_index: self.stored_buckets[0].index,
@@ -304,8 +304,8 @@ where
                 };
 
                 batch.put_key_value(
-                    self.store_key(),
-                    &BucketStore {
+                    self.layout_key(),
+                    &BucketLayout {
                         front_position: plan.cursor_position_u32,
                         num_buckets,
                         first_index: new_first_index,
@@ -455,8 +455,8 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
         self.context.base_key().base_tag(KeyTag::Back as u8)
     }
 
-    fn store_key(&self) -> Vec<u8> {
-        self.context.base_key().base_tag(KeyTag::Store as u8)
+    fn layout_key(&self) -> Vec<u8> {
+        self.context.base_key().base_tag(KeyTag::Layout as u8)
     }
 
     /// Gets the key for a middle bucket with the given storage index.
@@ -524,7 +524,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
 
     /// Splits `data` into N-sized chunks and writes them as front (KeyTag::Front),
     /// middles (KeyTag::Index, starting at `first_index`+1), and back (KeyTag::Back),
-    /// then writes the `BucketStore` metadata at KeyTag::Store. Used by `Rewrite`.
+    /// then writes the `BucketLayout` metadata at KeyTag::Layout. Used by `Rewrite`.
     fn write_chunks(
         &self,
         batch: &mut Batch,
@@ -551,8 +551,8 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
             batch.put_key_value(self.back_key(), &chunks.last().unwrap().to_vec())?;
         }
         batch.put_key_value(
-            self.store_key(),
-            &BucketStore {
+            self.layout_key(),
+            &BucketLayout {
                 front_position: 0,
                 num_buckets,
                 first_index,
@@ -1095,7 +1095,7 @@ mod tests {
     }
 
     /// Middle buckets must always contain exactly `N` elements after save —
-    /// this is the invariant that makes the new `BucketStore` metadata O(1).
+    /// this is the invariant that makes the new `BucketLayout` metadata O(1).
     /// Verify the in-memory state directly after several save patterns.
     #[tokio::test]
     async fn middle_buckets_are_always_full() -> Result<(), ViewError> {
