@@ -120,6 +120,12 @@ contract FungibleBridge is Microchain {
     /// this when `addBlock(cert)` would not fit in a single EVM tx,
     /// chunking burns per-tx-then-by-gas.
     ///
+    /// Idempotent like `_onBlock`: positions already in `processedBurns`
+    /// are skipped silently rather than reverted. Lets the relayer recover
+    /// from overlap with a prior `addBlock` (or a racing/retrying
+    /// `processBurns`) instead of losing the whole chunk to a single
+    /// duplicate.
+    ///
     /// Reverts (atomically — no `processedBurns` flag is set if the call
     /// reverts) on:
     /// - empty `eventPositionsInTx` (`"empty positions"`)
@@ -127,7 +133,6 @@ contract FungibleBridge is Microchain {
     /// - any position out of range (`"eventPos out of range"`)
     /// - any position whose event is not a matching burn for this app
     ///   (`"not a matching burn"`)
-    /// - any burn already processed (`"burn already processed"`)
     /// - any failed `token.transfer` (`"token transfer failed"`)
     function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
         require(eventPositionsInTx.length > 0, "empty positions");
@@ -146,7 +151,7 @@ contract FungibleBridge is Microchain {
             require(_isMatchingBurn(evt, burnsHash), "not a matching burn");
 
             bytes32 key = _burnKey(height, evt.index);
-            require(!processedBurns[key], "burn already processed");
+            if (processedBurns[key]) continue;
 
             _releaseBurn(evt, key);
         }

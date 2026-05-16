@@ -183,15 +183,22 @@ contract FungibleBridgeProcessBurnsTest is Test {
         assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "stream index 6 should be processed");
     }
 
-    function test_processBurns_already_processed_reverts() public {
-        // 1 burn; settle; settle again → revert "burn already processed".
+    function test_processBurns_already_processed_skips() public {
+        // Idempotent like `_onBlock`: re-processing the same burn must be a
+        // no-op, not a revert. Keeps the relayer robust to overlap between
+        // an addBlock-path settlement and a racing/retrying processBurns
+        // call covering the same (height, tx, pos).
         MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
-        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+        (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
+        uint256 firstBal = tok.balanceOf(RECIP_0);
+        assertEq(firstBal, AMOUNT, "first call should have released to recipient");
 
-        vm.expectRevert(bytes("burn already processed"));
+        // Second call: must not revert and must not double-release.
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
+        assertEq(tok.balanceOf(RECIP_0), firstBal, "second call must not double-release");
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "burn stays marked processed");
     }
 
     function test_processBurns_tx_index_out_of_range_reverts() public {
@@ -233,23 +240,24 @@ contract FungibleBridgeProcessBurnsTest is Test {
         bridge.processBurns(hex"deadbeef", TX, empty);
     }
 
-    function test_processBurns_partial_revert_is_atomic() public {
-        // 2 burns at positions 0,1.
-        // Step 1: settle position 1 alone (succeeds).
-        // Step 2: settle [0, 1] → reverts on position 1 ("burn already processed").
-        // Assert (HEIGHT, stream-index-of-pos-0) is STILL false (revert rolled back pos-0 update).
+    function test_processBurns_partial_overlap_releases_remaining() public {
+        // 2 burns at positions 0,1. Settle pos 1 first; then call
+        // processBurns([0, 1]). Under skip-on-duplicate semantics pos 0 must
+        // be released and pos 1 silently skipped — no revert, no double-release.
         MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
-        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+        (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
 
-        // Settle position 1 (stream index 6).
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(1));
         assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "pos 1 should now be processed");
+        address recip1 = address(uint160(RECIP_0) + 1);
+        assertEq(tok.balanceOf(recip1), AMOUNT, "pos 1 recipient should hold released amount");
 
-        // Attempt to settle [0, 1] — position 1 will revert.
-        vm.expectRevert(bytes("burn already processed"));
+        // Overlapping call — pos 0 settles, pos 1 silently skipped.
         bridge.processBurns(hex"deadbeef", TX, _u32s(0, 1));
 
-        // Position 0 (stream index 5) must be rolled back.
-        assertFalse(bridge.isBurnProcessed(HEIGHT, 5), "pos 0 must be rolled back by the revert");
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "pos 0 should now be processed");
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "pos 1 stays processed");
+        assertEq(tok.balanceOf(RECIP_0), AMOUNT, "pos 0 released once to its recipient");
+        assertEq(tok.balanceOf(recip1), AMOUNT, "pos 1 not double-released");
     }
 }
