@@ -142,15 +142,20 @@ struct ScyllaDbClient {
 /// ScyllaDB read error. Reads are idempotent and safe to retry; the driver's
 /// `DefaultRetryPolicy` already retries once at the coordinator level, so this
 /// counts attempts *we* perform, with our own exponential backoff and jitter.
-const READ_MAX_ATTEMPTS: u32 = 6;
+/// Eight attempts give the last retry ceiling up to 640ms, which covers most
+/// short-to-medium overload patterns (compaction blips, queue saturation, GC
+/// pauses across replicas) while keeping total worst-case wait (~1.3s) well
+/// below the upstream proxy timeout.
+const READ_MAX_ATTEMPTS: u32 = 8;
 /// Base delay (milliseconds) for the first retry. Each subsequent retry doubles
 /// the base until `READ_BACKOFF_MAX_MS`; the actual delay is uniformly sampled
 /// from `[0, base]` (full jitter) to avoid thundering-herd reconvergence after a
-/// shared overload event.
-const READ_BACKOFF_BASE_MS: u64 = 50;
-/// Cap on the per-retry backoff. With six attempts and a 50ms base, total
-/// worst-case wait is bounded near a few seconds — well above the proxy timeout,
-/// but far below the multi-minute poisoning loops that prompted this retry.
+/// shared overload event. Kept small so the first retries fire quickly on brief
+/// blips and we don't eat into the upstream proxy timeout budget unnecessarily.
+const READ_BACKOFF_BASE_MS: u64 = 10;
+/// Cap on the per-retry backoff. Eight attempts at a 10ms base never hit this
+/// cap (640ms ceiling on the last retry), but the constant is preserved as a
+/// safety net for future bumps to `READ_MAX_ATTEMPTS`.
 const READ_BACKOFF_MAX_MS: u64 = 1600;
 
 /// Walks the error's `source()` chain and returns the first `DbError` found, if any.
