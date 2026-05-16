@@ -106,6 +106,11 @@ impl<T: Clone> Tracked<T> {
 pub type TrackedDeposit = Tracked<PendingDeposit>;
 pub type TrackedBurn = Tracked<PendingBurn>;
 
+/// One height's slice of `pending_burns_by_height_and_tx`: the block height,
+/// sorted `event_index` values at that height, and per-`tx_index` sorted
+/// positions for the chunked `processBurns` fallback.
+pub type PendingBurnsAtHeight = (BlockHeight, Vec<u32>, Vec<(u32, Vec<u32>)>);
+
 /// In-memory monitoring state shared across scan loops and HTTP handlers.
 pub struct MonitorState {
     pub(crate) deposits: HashMap<DepositKey, TrackedDeposit>,
@@ -234,36 +239,43 @@ impl MonitorState {
         self.burns.values().filter(|b| b.forwarded).collect()
     }
 
-    /// Returns pending burns grouped by `(height, tx_index)`. Outer Vec
-    /// is in ascending height order; inner Vec is in ascending tx-index
-    /// order; positions within each (height, tx) group are sorted by
-    /// `event_pos_in_tx`. Burns that have exceeded `max_retries` are
-    /// skipped. Used by `process_pending_burns` to batch all burns at a
-    /// height through `addBlock` first, then chunked `processBurns` per
-    /// (tx) group on no-fit.
-    pub fn pending_burns_by_height_and_tx(
-        &self,
-        max_retries: u32,
-    ) -> Vec<(BlockHeight, Vec<(u32, Vec<u32>)>)> {
+    /// Returns pending burns grouped by `(height, tx_index)`, plus the
+    /// sorted list of `event_index` values at each height. Outer Vec is in
+    /// ascending height order; inner Vec is in ascending tx-index order;
+    /// positions within each (height, tx) group are sorted by
+    /// `event_pos_in_tx`; the per-height event_indices are sorted ascending.
+    /// Burns that have exceeded `max_retries` are skipped. Both views derive
+    /// from the same snapshot under one read so `process_pending_burns` can
+    /// drive both the addBlock/processBurns chunking and retry/cert
+    /// persistence consistently.
+    pub fn pending_burns_by_height_and_tx(&self, max_retries: u32) -> Vec<PendingBurnsAtHeight> {
         use std::collections::BTreeMap;
-        let mut tree: BTreeMap<BlockHeight, BTreeMap<u32, Vec<u32>>> = BTreeMap::new();
+        #[derive(Default)]
+        struct HeightAccum {
+            by_tx: BTreeMap<u32, Vec<u32>>,
+            event_indices: Vec<u32>,
+        }
+        let mut tree: BTreeMap<BlockHeight, HeightAccum> = BTreeMap::new();
         for tracked in self.pending_burns() {
             if tracked.retry_count >= max_retries {
                 continue;
             }
-            tree.entry(tracked.value.height)
-                .or_default()
+            let entry = tree.entry(tracked.value.height).or_default();
+            entry
+                .by_tx
                 .entry(tracked.value.tx_index)
                 .or_default()
                 .push(tracked.value.event_pos_in_tx);
-        }
-        for by_tx in tree.values_mut() {
-            for positions in by_tx.values_mut() {
-                positions.sort_unstable();
-            }
+            entry.event_indices.push(tracked.value.event_index);
         }
         tree.into_iter()
-            .map(|(h, by_tx)| (h, by_tx.into_iter().collect()))
+            .map(|(h, mut accum)| {
+                for positions in accum.by_tx.values_mut() {
+                    positions.sort_unstable();
+                }
+                accum.event_indices.sort_unstable();
+                (h, accum.event_indices, accum.by_tx.into_iter().collect())
+            })
             .collect()
     }
 
@@ -806,14 +818,18 @@ mod tests {
         }
 
         let groups = state.pending_burns_by_height_and_tx(/* max_retries */ 10);
+        // Same retry filter applies to both views — event_indices is the
+        // sorted list of `event_index` values at each height, used by
+        // `process_pending_burns` for retry accounting and cert persistence.
         assert_eq!(
             groups,
             vec![
                 (
                     BlockHeight(5),
-                    vec![(0u32, vec![0u32, 1]), (1u32, vec![0u32]),]
+                    vec![10u32, 11, 12],
+                    vec![(0u32, vec![0u32, 1]), (1u32, vec![0u32])],
                 ),
-                (BlockHeight(7), vec![(0u32, vec![0u32]),]),
+                (BlockHeight(7), vec![0u32], vec![(0u32, vec![0u32])]),
             ],
         );
     }

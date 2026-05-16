@@ -85,18 +85,12 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             continue;
         }
 
-        for (height, by_tx) in groups {
-            // `event_index` (stream-index) values for every pending burn at this
-            // height. `mark_burn_retried` and `store_burn_raw` key on event_index;
-            // the per-tx chunking driven below uses (tx_index, pos_in_tx).
-            let event_indices_at_height: Vec<u32> = monitor
-                .read()
-                .await
-                .pending_burns()
-                .iter()
-                .filter(|t| t.value.height == height)
-                .map(|t| t.value.event_index)
-                .collect();
+        for (height, event_indices_at_height, by_tx) in groups {
+            // `event_indices_at_height` are the stream-index values for every
+            // pending burn at this height under the same `max_retries` snapshot
+            // as `by_tx`. `mark_burn_retried` and `store_burn_raw` key on
+            // event_index; the per-tx chunking driven below uses
+            // (tx_index, pos_in_tx).
 
             let cert = match fetch_cert_at_height(linera_client, height).await {
                 Ok(cert) => cert,
