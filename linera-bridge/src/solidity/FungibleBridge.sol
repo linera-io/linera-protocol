@@ -122,6 +122,7 @@ contract FungibleBridge is Microchain {
     ///
     /// Reverts (atomically — no `processedBurns` flag is set if the call
     /// reverts) on:
+    /// - empty `eventPositionsInTx` (`"empty positions"`)
     /// - `txIndex` out of range (`"txIndex out of range"`)
     /// - any position out of range (`"eventPos out of range"`)
     /// - any position whose event is not a matching burn for this app
@@ -129,6 +130,7 @@ contract FungibleBridge is Microchain {
     /// - any burn already processed (`"burn already processed"`)
     /// - any failed `token.transfer` (`"token transfer failed"`)
     function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
+        require(eventPositionsInTx.length > 0, "empty positions");
         (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
         require(txIndex < blockValue.body.events.length, "txIndex out of range");

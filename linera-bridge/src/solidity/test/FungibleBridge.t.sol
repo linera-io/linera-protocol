@@ -222,6 +222,17 @@ contract FungibleBridgeProcessBurnsTest is Test {
         bridge.processBurns(hex"deadbeef", 0, _u32s_single(0));
     }
 
+    function test_processBurns_empty_positions_reverts() public {
+        // An empty positions array would silently pay for cert verification
+        // with no work to do. Reject it eagerly so caller bugs surface.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+
+        uint32[] memory empty = new uint32[](0);
+        vm.expectRevert(bytes("empty positions"));
+        bridge.processBurns(hex"deadbeef", TX, empty);
+    }
+
     function test_processBurns_partial_revert_is_atomic() public {
         // 2 burns at positions 0,1.
         // Step 1: settle position 1 alone (succeeds).
