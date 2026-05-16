@@ -430,7 +430,10 @@ enum SaveCase {
     /// Two or more stored buckets survive. Delete consumed middles, promote a
     /// surviving middle to front if the cursor crossed buckets, and — if there
     /// are new values — merge them into the back and re-chunk.
-    Patch { new_first_index: u32, remaining_count: u32 },
+    Patch {
+        new_first_index: u32,
+        remaining_count: u32,
+    },
 }
 
 #[derive(Debug)]
@@ -525,12 +528,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     /// Splits `data` into N-sized chunks and writes them as front (KeyTag::Front),
     /// middles (KeyTag::Index, starting at `first_index`+1), and back (KeyTag::Back),
     /// then writes the `BucketLayout` metadata at KeyTag::Layout. Used by `Rewrite`.
-    fn write_chunks(
-        &self,
-        batch: &mut Batch,
-        data: &[T],
-        first_index: u32,
-    ) -> Result<(), ViewError>
+    fn write_chunks(&self, batch: &mut Batch, data: &[T], first_index: u32) -> Result<(), ViewError>
     where
         T: Serialize + Clone,
     {
