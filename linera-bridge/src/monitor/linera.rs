@@ -87,19 +87,19 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 
         for (height, event_indices_at_height, by_tx) in groups {
             // `event_indices_at_height` are the stream-index values for every
-            // pending burn at this height under the same `max_retries` snapshot
-            // as `by_tx`. `mark_burn_retried` and `store_burn_raw` key on
-            // event_index; the per-tx chunking driven below uses
-            // (tx_index, pos_in_tx).
+            // pending burn at this height under the same `max_retries`
+            // snapshot as `by_tx`. `mark_burn_retried` / `mark_burn_failed`
+            // key on event_index; the per-tx chunking driven below uses
+            // (tx_index, pos_in_tx) and maps back through
+            // `MonitorState::event_index_for_pos` only on failure paths.
 
             let cert = match fetch_cert_at_height(linera_client, height).await {
                 Ok(cert) => cert,
                 Err(e) => {
+                    // Cert fetch is an infrastructure-level failure (e.g. node
+                    // sync). Skip the height — no burn was attempted, so don't
+                    // consume any retry budget.
                     tracing::warn!(?height, "Failed to read certificate: {e:#}");
-                    let mut state = monitor.write().await;
-                    for ei in &event_indices_at_height {
-                        state.mark_burn_retried(height, *ei);
-                    }
                     continue;
                 }
             };
@@ -110,6 +110,9 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             match estimate_fits(evm_client.estimate_add_block_gas(&cert).await) {
                 Ok(true) => match evm_client.forward_cert(&cert).await {
                     Ok(()) => {
+                        // Completion is async via `check_burn_completion`, so
+                        // we don't mark the burns completed here — and don't
+                        // bump retry either, because the call succeeded.
                         tracing::info!(
                             ?height,
                             count = event_indices_at_height.len(),
@@ -118,11 +121,18 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                         relay::update_balance_metrics(evm_client, linera_client).await;
                     }
                     Err(e) => {
+                        // addBlock attempted every burn at this height — all of
+                        // them just took a failed attempt, so bump retry once
+                        // per burn.
                         tracing::warn!(?height, "addBlock submission failed: {e:#}");
+                        let mut state = monitor.write().await;
+                        for ei in &event_indices_at_height {
+                            state.mark_burn_retried(height, *ei);
+                        }
                     }
                 },
                 Ok(false) => {
-                    'tx_loop: for (tx_index, positions) in &by_tx {
+                    for (tx_index, positions) in &by_tx {
                         // Iterative LIFO split-to-fit per tx group. The
                         // algorithm is inlined (rather than factored into a
                         // pure helper that takes an async predicate) because
@@ -130,7 +140,11 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                         // awaits trips an HRTB Send bound under `tokio::spawn`.
                         let mut stack: Vec<Vec<u32>> = vec![positions.clone()];
                         let mut chunks: Vec<Vec<u32>> = Vec::new();
-                        let mut single_too_large: Option<u32> = None;
+                        // Positions that cannot fit even on their own — these
+                        // get marked `failed` so they drop out of subsequent
+                        // `pending_burns_by_height_and_tx` snapshots instead
+                        // of poisoning their tx group forever.
+                        let mut oversized: Vec<u32> = Vec::new();
                         while let Some(slice) = stack.pop() {
                             let est = evm_client
                                 .estimate_process_burns_gas(&cert, *tx_index, &slice)
@@ -141,23 +155,41 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                                 continue;
                             }
                             if slice.len() == 1 {
-                                single_too_large = Some(slice[0]);
-                                break;
+                                oversized.push(slice[0]);
+                                continue;
                             }
                             let mid = slice.len() / 2;
                             let (left, right) = slice.split_at(mid);
                             stack.push(right.to_vec());
                             stack.push(left.to_vec());
                         }
-                        if let Some(pos) = single_too_large {
-                            tracing::error!(
-                                tx_index,
-                                pos_in_tx = pos,
-                                "single burn does not fit under the EVM block gas limit"
-                            );
-                            continue 'tx_loop;
+
+                        if !oversized.is_empty() {
+                            let to_fail: Vec<u32> = {
+                                let state = monitor.read().await;
+                                oversized
+                                    .iter()
+                                    .filter_map(|&pos| {
+                                        state.event_index_for_pos(height, *tx_index, pos)
+                                    })
+                                    .collect()
+                            };
+                            let mut state = monitor.write().await;
+                            for ei in to_fail {
+                                tracing::error!(
+                                    ?height,
+                                    tx_index,
+                                    event_index = ei,
+                                    "single burn does not fit under the EVM block gas limit; marking failed"
+                                );
+                                state.mark_burn_failed(height, ei).await;
+                            }
                         }
+
                         // Pop-order yields input order because we push right then left.
+                        // Each chunk is an independent processBurns tx, so a failure
+                        // on one does not block the rest — only that chunk's burns
+                        // consume retry budget.
                         for chunk in chunks {
                             if let Err(e) = evm_client.process_burns(&cert, *tx_index, &chunk).await
                             {
@@ -166,20 +198,29 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                                     ?chunk,
                                     "processBurns submission failed: {e:#}"
                                 );
-                                continue 'tx_loop;
+                                let to_bump: Vec<u32> = {
+                                    let state = monitor.read().await;
+                                    chunk
+                                        .iter()
+                                        .filter_map(|&pos| {
+                                            state.event_index_for_pos(height, *tx_index, pos)
+                                        })
+                                        .collect()
+                                };
+                                let mut state = monitor.write().await;
+                                for ei in to_bump {
+                                    state.mark_burn_retried(height, ei);
+                                }
                             }
                         }
                     }
                     relay::update_balance_metrics(evm_client, linera_client).await;
                 }
                 Err(e) => {
+                    // Like cert-fetch, estimate-gas is infrastructure-level —
+                    // no burn was attempted, so don't bump retry.
                     tracing::warn!(?height, "estimate_add_block_gas failed: {e:#}");
                 }
-            }
-
-            let mut state = monitor.write().await;
-            for ei in &event_indices_at_height {
-                state.mark_burn_retried(height, *ei);
             }
         }
     }
