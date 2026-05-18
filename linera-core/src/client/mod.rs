@@ -845,14 +845,11 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let local_next = match self.local_node.chain_info(chain_id).await {
             Ok(info) => info.next_block_height,
-            // A freshly-created follower has no chain state yet; treat that as
-            // height 0 and let the checkpoint cert install the snapshot. The
-            // chain description may either be in storage but not yet initialized
-            // (`InactiveChain`) or missing entirely (`BlobsNotFound` — the only
-            // blob `chain_info` ever needs is the chain description itself).
-            Err(LocalNodeError::InactiveChain(_) | LocalNodeError::BlobsNotFound(_)) => {
-                BlockHeight::ZERO
-            }
+            // A freshly-created follower whose storage doesn't yet hold this
+            // chain's description blob: treat as height 0 and let the
+            // checkpoint cert install the snapshot. The chain description is
+            // the only blob `chain_info` ever needs.
+            Err(LocalNodeError::BlobsNotFound(_)) => BlockHeight::ZERO,
             Err(err) => return Err(err.into()),
         };
         if local_next > checkpoint_height {
