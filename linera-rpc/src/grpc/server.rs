@@ -829,7 +829,7 @@ where
         match self
             .state
             .clone()
-            .handle_confirmed_certificate(certificate, ProcessConfirmedBlockMode::Auto, sender)
+            .handle_confirmed_certificate(certificate, ProcessConfirmedBlockMode::Execute, sender)
             .await
         {
             Ok((info, actions)) => {

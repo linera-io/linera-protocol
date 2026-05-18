@@ -137,20 +137,15 @@ pub enum BlockOutcome {
     Skipped,
 }
 
-/// How to handle a confirmed block depending on whether it is contiguous with the
-/// current tip.
+/// How to handle a confirmed block.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessConfirmedBlockMode {
-    /// Execute if contiguous; preprocess if there is a gap. This is what validators
-    /// always use, and is also the default for paths that don't care.
-    Auto,
-    /// Execute the block. Fails with [`WorkerError::UnexpectedBlockHeight`] if the
-    /// block is not contiguous with the current tip. Used by the client for blocks
-    /// of its own chain, where contiguity is a correctness invariant.
+    /// Execute the block if it is contiguous with the local tip; otherwise
+    /// preprocess it (update outboxes and event streams without executing).
     Execute,
-    /// Only preprocess the block (update outboxes and event streams), never execute
-    /// it — even if it would be contiguous. Used by the client for sender-chain
-    /// blocks, since their execution state is irrelevant to the receiver.
+    /// Only preprocess the block, never execute it — even if it would be
+    /// contiguous. Used by the client for sender-chain blocks it is not
+    /// otherwise tracking, since their execution state is irrelevant.
     Preprocess,
 }
 
@@ -919,24 +914,10 @@ where
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
 
-        // Decide whether to fully execute or only preprocess this block. We preprocess
-        // when there's a gap (`tip.next_block_height < height`) under `Auto`, or
-        // whenever the caller explicitly asked for `Preprocess`. Under `Execute`, a
-        // gap is an error: the caller asserted that the block must be contiguous.
-        let must_preprocess = match mode {
-            ProcessConfirmedBlockMode::Auto => tip.next_block_height < height,
-            ProcessConfirmedBlockMode::Preprocess => true,
-            ProcessConfirmedBlockMode::Execute => {
-                ensure!(
-                    tip.next_block_height == height,
-                    WorkerError::UnexpectedBlockHeight {
-                        expected_block_height: tip.next_block_height,
-                        found_block_height: height,
-                    }
-                );
-                false
-            }
-        };
+        // Preprocess when there's a gap (`tip.next_block_height < height`) or when
+        // the caller explicitly asked for `Preprocess`.
+        let must_preprocess = matches!(mode, ProcessConfirmedBlockMode::Preprocess)
+            || tip.next_block_height < height;
         if must_preprocess {
             // Update the outboxes and event streams.
             let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
@@ -1493,7 +1474,7 @@ where
                 .await?
                 .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
-            Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Auto, None))
+            Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Execute, None))
                 .await?;
         }
 

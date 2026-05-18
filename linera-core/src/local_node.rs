@@ -131,7 +131,7 @@ where
 
     /// Same as [`Self::handle_certificate`] but for a confirmed block certificate
     /// and with an explicit [`ProcessConfirmedBlockMode`]. The generic variant
-    /// always uses [`ProcessConfirmedBlockMode::Auto`].
+    /// always uses [`ProcessConfirmedBlockMode::Execute`].
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_confirmed_certificate(
         &self,

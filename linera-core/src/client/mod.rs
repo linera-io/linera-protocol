@@ -872,9 +872,6 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            // This helper is only called when downloading our own chain's history
-            // (sender-chain certificates flow through `receive_sender_certificate`),
-            // so we know each certificate is contiguous with the local tip.
             let response = self
                 .handle_certificate_with_retry(
                     &certificate,
@@ -890,8 +887,7 @@ impl<Env: Environment> Client<Env> {
 
     /// Calls `handle_confirmed_certificate`, retrying with any missing blobs (downloaded
     /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators). The `mode` selects whether the local
-    /// worker should execute or only preprocess this block.
+    /// chains via the current validators).
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
@@ -1201,22 +1197,17 @@ impl<Env: Environment> Client<Env> {
         self.download_certificates(block.header.chain_id, block.header.height)
             .await?;
         // Process the received operations. Download required hashed certificate values if
-        // necessary. This is an own-chain certificate, contiguous with the local tip
-        // after the history recovery above, so require full execution.
+        // necessary.
         let nodes = self.validator_nodes().await?;
-        self.handle_certificate_with_retry(
-            &certificate,
-            &nodes,
-            ProcessConfirmedBlockMode::Execute,
-        )
-        .await?;
+        self.handle_certificate_with_retry(&certificate, &nodes, ProcessConfirmedBlockMode::Execute)
+            .await?;
         Ok(())
     }
 
     /// Preprocesses the confirmed block in the local node — never executes it.
     /// Used to ingest sender-chain blocks: only the outboxes and event streams
-    /// matter to the receiver chain, so executing them would be wasteful even if
-    /// they happen to be contiguous with the sender chain's local tip.
+    /// matter to the receiver chain, so executing them would be wasteful even
+    /// if they happen to be contiguous with the sender chain's local tip.
     #[instrument(level = "trace", skip_all)]
     async fn receive_sender_certificate(
         &self,

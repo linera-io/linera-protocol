@@ -810,7 +810,7 @@ impl ProcessableCertificate for ConfirmedBlock {
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         Box::pin(worker.handle_confirmed_certificate(
             certificate,
-            ProcessConfirmedBlockMode::Auto,
+            ProcessConfirmedBlockMode::Execute,
             None,
         ))
         .await
@@ -912,7 +912,7 @@ where
 
     /// Same as [`Self::fully_handle_certificate_with_notifications`] but for a
     /// confirmed block certificate and with an explicit [`ProcessConfirmedBlockMode`].
-    /// The generic variant always uses [`ProcessConfirmedBlockMode::Auto`].
+    /// The generic variant always uses [`ProcessConfirmedBlockMode::Execute`].
     #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]
     pub async fn fully_handle_confirmed_certificate_with_notifications(
@@ -1563,7 +1563,7 @@ where
             Either::Left(confirmed) => {
                 Box::pin(self.handle_confirmed_certificate(
                     confirmed,
-                    ProcessConfirmedBlockMode::Auto,
+                    ProcessConfirmedBlockMode::Execute,
                     notify_when_messages_are_delivered,
                 ))
                 .await

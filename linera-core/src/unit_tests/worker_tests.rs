@@ -1141,7 +1141,7 @@ where
     drop(chain);
 
     env.worker()
-        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Auto, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     drop(chain);
@@ -1231,11 +1231,11 @@ where
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
     env.worker()
-        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Auto, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     env.worker()
-        .handle_confirmed_certificate(certificate2.clone(), ProcessConfirmedBlockMode::Auto, None)
+        .handle_confirmed_certificate(certificate2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1260,7 +1260,7 @@ where
 
     // Handle the certificate in the gap.
     env.worker()
-        .handle_confirmed_certificate(certificate1, ProcessConfirmedBlockMode::Auto, None)
+        .handle_confirmed_certificate(certificate1, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1272,7 +1272,7 @@ where
     // ...and the one that has been preprocessed before, again, as it is not automatically
     // re-processed.
     env.worker()
-        .handle_confirmed_certificate(certificate2, ProcessConfirmedBlockMode::Auto, None)
+        .handle_confirmed_certificate(certificate2, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1359,7 +1359,7 @@ where
         env.worker()
             .handle_confirmed_certificate(
                 certificate1.clone(),
-                ProcessConfirmedBlockMode::Auto,
+                ProcessConfirmedBlockMode::Execute,
                 None
             )
             .await,
@@ -1599,7 +1599,7 @@ where
         env.worker()
             .handle_confirmed_certificate(
                 certificate.clone(),
-                ProcessConfirmedBlockMode::Auto,
+                ProcessConfirmedBlockMode::Execute,
                 None,
             )
             .await?;
@@ -4616,10 +4616,10 @@ where
 
     // Step 2: Process both certs on chain_1 (adds heights 0, 1 to outbox for chain_2).
     env.worker()
-        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
     env.worker()
-        .process_confirmed_block(cert_1.clone(), ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_1.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Step 3: Deliver height 0 to chain_2 and confirm it on chain_1.
@@ -4672,7 +4672,7 @@ where
         .await;
     // Process cert_2 on chain_1 so the block is in block_hashes.
     env.worker()
-        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Now manually deliver height 2's cross-chain update to chain_2.
@@ -5002,14 +5002,14 @@ where
 
     // Process all three blocks on chain_1.
     env.worker()
-        .process_confirmed_block(cert_0, ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
     env.worker()
-        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
         .await?;
     let (_, actions, _) = env
         .worker()
-        .process_confirmed_block(cert_2, ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_2, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // With chunk_limit=1, only the first chunk (height 0) should be returned.
@@ -5123,13 +5123,13 @@ where
 
     // Process all three blocks on chain_1.
     env.worker()
-        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
     env.worker()
-        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
         .await?;
     env.worker()
-        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Auto, None)
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Deliver height 0 to chain_2 and confirm it.
