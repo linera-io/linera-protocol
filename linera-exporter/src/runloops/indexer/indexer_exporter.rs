@@ -70,9 +70,14 @@ impl Exporter {
             let (outgoing_stream, incoming_stream) =
                 client.setup_indexer_client(self.work_queue_size).await?;
 
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "destination height is a block index bounded by storage size"
+            )]
+            let start = destination_state.load(Ordering::Acquire) as usize;
             let streamer = ExportTaskQueue::new(
                 self.work_queue_size,
-                destination_state.load(Ordering::Acquire) as usize,
+                start,
                 outgoing_stream,
                 storage.clone()?,
             );

@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 //! Instruction-count benchmarks for linera-views using Gungraun.
 //!
 //! These benchmarks use Valgrind's Callgrind to count CPU instructions,

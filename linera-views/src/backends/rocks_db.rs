@@ -3,6 +3,14 @@
 
 //! Implements [`crate::store::KeyValueStore`] for the RocksDB database.
 
+// RocksDB's C API uses `i32` and signed sizes; casts at this boundary are
+// by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 use std::{
     ffi::OsString,
     fmt::Display,

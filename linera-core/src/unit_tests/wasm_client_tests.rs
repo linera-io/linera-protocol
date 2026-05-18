@@ -6,10 +6,10 @@
 //! These tests only run if a Wasm runtime has been configured by enabling either the `wasmer` or
 //! the `wasmtime` feature flags.
 
+#![allow(clippy::cast_possible_truncation)]
 // Tests for `RocksDb`, `DynamoDb`, `ScyllaDb` and `Service` are currently disabled
 // because they are slow and their behavior appears to be correctly check by the
 // test with memory.
-
 #![expect(clippy::large_futures)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 

@@ -178,10 +178,9 @@ pub async fn parse_broadcast_address(
     Ok(output.trim().parse()?)
 }
 
-/// Deploys MockERC20 via the `DeployMockERC20.s.sol` forge script and
-/// returns the deployed contract address. Constructor args are hardcoded
-/// to the local-dev defaults (TestToken / TT / 1e21 supply).
-pub async fn deploy_mock_erc20(
+/// Deploys LineraToken via the `DeployLineraToken.s.sol` forge script and
+/// returns its deployed address (parsed from the broadcast artifact).
+pub async fn deploy_linera_token(
     compose: &DockerCompose,
     project_name: &str,
     compose_file: &std::path::Path,
@@ -190,8 +189,7 @@ pub async fn deploy_mock_erc20(
         compose,
         "foundry-tools",
         &format!(
-            "env TOKEN_NAME=TestToken TOKEN_SYMBOL=TT TOKEN_SUPPLY=1000000000000000000000 \
-             forge script /contracts/script/DeployMockERC20.s.sol \
+            "forge script /contracts/script/DeployLineraToken.s.sol \
              --root /contracts \
              --rpc-url http://anvil:8545 \
              --private-key {ANVIL_PRIVATE_KEY} \
@@ -201,7 +199,35 @@ pub async fn deploy_mock_erc20(
         compose_file,
     )
     .await;
-    parse_broadcast_address(compose, project_name, compose_file, "DeployMockERC20.s.sol").await
+    parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
+}
+
+/// Same as [`deploy_linera_token`] but overrides the initial token supply
+/// minted to the anvil deployer via the script's `TOKEN_SUPPLY` env var.
+/// `supply_attos` is the raw atto amount — pass `tokens * 10u128.pow(18)`
+/// for whole-token amounts.
+pub async fn deploy_linera_token_with_supply(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    supply_attos: u128,
+) -> anyhow::Result<Address> {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "env TOKEN_SUPPLY={supply_attos} \
+             forge script /contracts/script/DeployLineraToken.s.sol \
+             --root /contracts \
+             --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             --broadcast"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
 }
 
 /// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge
@@ -332,4 +358,200 @@ pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -
     }
 
     compose
+}
+
+/// Parses a Prometheus text-format response and returns the integer
+/// value of the metric named `name`. Returns 0 if the metric is absent
+/// (a counter never incremented).
+pub fn parse_metric_value(body: &str, name: &str) -> i64 {
+    for line in body.lines() {
+        if line.starts_with('#') {
+            continue;
+        }
+        let Some((metric, value)) = line.split_once(' ') else {
+            continue;
+        };
+        if metric.trim() == name {
+            return value.trim().parse::<f64>().unwrap_or(0.0) as i64;
+        }
+    }
+    0
+}
+
+/// Publishes the wrapped-fungible Wasm module on `chain_client` and
+/// creates an application instance with the given `mint_chain_id` and
+/// an initial `initial_balance_tokens` balance for `initial_holder`.
+/// Returns the resulting `application_id`. The Wasm artifacts are
+/// loaded from `examples/target/wasm32-unknown-unknown/release/` —
+/// bridge tests must build the examples crate before invoking this.
+pub async fn publish_and_create_wrapped_fungible<E>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    initial_holder: linera_base::identifiers::AccountOwner,
+    mint_chain_id: linera_base::identifiers::ChainId,
+    erc20_addr: Address,
+    initial_balance_tokens: u128,
+) -> anyhow::Result<linera_base::identifiers::ApplicationId>
+where
+    E: linera_core::environment::Environment,
+{
+    use anyhow::Context as _;
+    use linera_base::{data_types::Bytecode, vm::VmRuntime};
+
+    let repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .context("manifest dir has fewer than 3 ancestors")?
+        .to_path_buf();
+    let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
+    let wf_contract =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
+    let wf_service =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
+    let (wf_module_id, _) = chain_client
+        .publish_module(wf_contract, wf_service, VmRuntime::Wasm, None)
+        .await?
+        .expect("publish wrapped-fungible module committed");
+    chain_client.synchronize_from_validators().await?;
+    chain_client.process_inbox().await?;
+
+    let initial_balance = linera_base::data_types::Amount::from_tokens(initial_balance_tokens);
+    let (fungible_app_id, _) = chain_client
+        .create_application_untyped(
+            wf_module_id,
+            serde_json::to_vec(&wrapped_fungible::WrappedParameters {
+                ticker_symbol: "wTEST".to_string(),
+                minter: None,
+                mint_chain_id: Some(mint_chain_id),
+                evm_token_address: erc20_addr.0 .0,
+                evm_source_chain_id: 31337,
+                bridge_app_id: None,
+            })?,
+            serde_json::to_vec(&wrapped_fungible::InitialState {
+                accounts: std::collections::BTreeMap::from([(initial_holder, initial_balance)]),
+            })?,
+            vec![],
+        )
+        .await?
+        .expect("create wrapped-fungible app committed");
+    Ok(fungible_app_id)
+}
+
+/// Transfers `amount` ERC-20 attos from the deployer (Anvil account 0)
+/// to the bridge contract via `cast send` inside the foundry-tools
+/// service. Used to seed the bridge with enough liquidity to release
+/// burned tokens.
+pub async fn fund_bridge_erc20(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    erc20: Address,
+    bridge: Address,
+    amount: u128,
+) {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "cast send --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             {erc20} \
+             'transfer(address,uint256)(bool)' \
+             {bridge} \
+             {amount}"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+}
+
+/// Polls the relayer's `/metrics` endpoint until it responds (any HTTP
+/// status), indicating the embedded server is up and the spawned relay
+/// task is past its boot phase. Bails on `timeout`. Call after
+/// `tokio::spawn`-ing `relay::run` to gate test traffic on readiness.
+pub async fn wait_for_relay_http_ready(
+    http: &reqwest::Client,
+    relay_url: &str,
+    timeout: std::time::Duration,
+) -> anyhow::Result<()> {
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        if http
+            .get(format!("{relay_url}/metrics"))
+            .send()
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+    }
+    anyhow::bail!("relay did not become ready within {timeout:?}")
+}
+
+/// Polls the relayer's `/metrics` endpoint every 2s and returns
+/// `Ok(())` once `predicate(detected, completed, pending, failed)`
+/// returns true. Bails on `timeout`. The poll interval matches the
+/// relayer's own scan loop so callers don't redundantly hammer the
+/// endpoint between iterations.
+pub async fn wait_for_relay_metrics<F>(
+    http: &reqwest::Client,
+    relay_url: &str,
+    mut predicate: F,
+    timeout: std::time::Duration,
+) -> anyhow::Result<()>
+where
+    F: FnMut(i64, i64, i64, i64) -> bool,
+{
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        let body = http
+            .get(format!("{relay_url}/metrics"))
+            .send()
+            .await?
+            .text()
+            .await?;
+        let detected = parse_metric_value(&body, "linera_bridge_burns_detected");
+        let completed = parse_metric_value(&body, "linera_bridge_burns_completed");
+        let pending = parse_metric_value(&body, "linera_bridge_burns_pending");
+        let failed = parse_metric_value(&body, "linera_bridge_burns_failed");
+        if predicate(detected, completed, pending, failed) {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+    anyhow::bail!("wait_for_relay_metrics timed out after {timeout:?}")
+}
+
+/// Sets the anvil block gas limit via the `evm_setBlockGasLimit` JSON-RPC
+/// method. Lets the test choose a ceiling well above the chain spec being
+/// measured so `eth_estimateGas` never aborts on anvil's own limit — the
+/// numeric comparison happens in Rust against `ChainSpec::block_gas_limit`.
+pub async fn set_anvil_block_gas_limit(
+    provider: &impl alloy::providers::Provider,
+    limit: u64,
+) -> anyhow::Result<()> {
+    use std::borrow::Cow;
+    let hex_limit = format!("0x{limit:x}");
+    let _: bool = provider
+        .raw_request(Cow::Borrowed("evm_setBlockGasLimit"), (hex_limit,))
+        .await?;
+    Ok(())
+}
+
+/// Fetches the `ConfirmedBlockCertificate` for the chain's current head
+/// block. Mirrors the `sync -> chain_info -> read_certificate` walk in
+/// `linera-bridge/src/monitor/linera.rs::process_pending_burns` but specialised
+/// to the head block (no per-height search loop needed in tests).
+pub async fn fetch_latest_cert<E>(
+    chain_client: &linera_core::client::ChainClient<E>,
+) -> anyhow::Result<std::sync::Arc<linera_chain::types::ConfirmedBlockCertificate>>
+where
+    E: linera_core::environment::Environment,
+{
+    use anyhow::Context as _;
+    chain_client.synchronize_from_validators().await?;
+    let info = chain_client.chain_info().await?;
+    let hash = info.block_hash.context("chain has no blocks yet")?;
+    Ok(chain_client.read_certificate(hash).await?)
 }

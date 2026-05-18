@@ -60,6 +60,10 @@ impl LoggingExporter {
         S: linera_storage::Storage + Clone + Send + Sync + 'static,
     {
         let destination_state = storage.load_destination_state(&self.id);
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "destination height is a block index bounded by storage size"
+        )]
         let mut destination_height = destination_state.load(Ordering::Acquire) as usize;
         tracing::info!("starting logging exporter at height {}", destination_height);
 

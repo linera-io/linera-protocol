@@ -243,7 +243,7 @@ pub struct Options {
         long,
         default_value_t = DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
     )]
-    pub certificate_upload_batch_size: u64,
+    pub certificate_upload_batch_size: usize,
 
     /// Maximum number of sender certificates we try to download and receive in one go
     /// when syncing sender chains.

@@ -70,7 +70,12 @@ default-members = [
     "linera-witty-macros",
     "linera-witty/test-modules",
 ]
-exclude = ["examples", "scripts", "linera-bridge/tests/e2e"]
+exclude = [
+    "examples",
+    "scripts",
+    "linera-bridge/contracts/evm-bridge",
+    "linera-bridge/tests/e2e",
+]
 resolver = "2"
 
 [workspace.package]
@@ -396,6 +401,9 @@ opt-level = 3
 config = "spellcheck-cfg.toml"
 
 [workspace.lints.clippy]
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
 checked_conversions = "deny"
 doc_link_with_quotes = "deny"
 filter_map_next = "deny"

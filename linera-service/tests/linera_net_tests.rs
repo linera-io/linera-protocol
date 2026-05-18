@@ -8,6 +8,7 @@
     feature = "storage-service",
     feature = "remote-net"
 ))]
+#![allow(clippy::cast_possible_truncation)]
 
 mod guard;
 

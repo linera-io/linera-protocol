@@ -1202,7 +1202,12 @@ impl QueryResponseCache {
             );
             #[cfg(with_metrics)]
             {
-                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                #[expect(
+                    clippy::cast_possible_wrap,
+                    reason = "LRU cache size fits in i64 for any realistic cache"
+                )]
+                let cache_len = cache.lru.len() as i64;
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache_len);
                 query_cache_metrics::QUERY_CACHE_INVALIDATION
                     .with_label_values(&[])
                     .inc();
@@ -1234,7 +1239,12 @@ impl QueryResponseCache {
         if next_block_height > cache.next_block_height {
             #[cfg(with_metrics)]
             {
-                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache.lru.len() as i64);
+                #[expect(
+                    clippy::cast_possible_wrap,
+                    reason = "LRU cache size fits in i64 for any realistic cache"
+                )]
+                let cache_len = cache.lru.len() as i64;
+                query_cache_metrics::QUERY_CACHE_ENTRIES.sub(cache_len);
                 query_cache_metrics::QUERY_CACHE_INVALIDATION
                     .with_label_values(&[])
                     .inc();

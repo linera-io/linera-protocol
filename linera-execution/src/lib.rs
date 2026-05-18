@@ -68,7 +68,7 @@ pub use crate::{
     committee::{Committee, SharedCommittees},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
-    policy::ResourceControlPolicy,
+    policy::{ProtocolFlag, ResourceControlPolicy},
     resources::{BalanceHolder, ResourceController, ResourceTracker},
     runtime::{
         ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,
@@ -314,8 +314,6 @@ pub enum ExecutionError {
     InvalidUrlForHttpRequest(#[from] url::ParseError),
     #[error("Worker thread failure: {0:?}")]
     Thread(#[from] web_thread::Error),
-    #[error("The chain being queried is not active {0}")]
-    InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     #[error("Events not found: {0:?}")]
@@ -402,7 +400,6 @@ impl ExecutionError {
             | ExecutionError::BytecodeTooLarge
             | ExecutionError::UnauthorizedHttpRequest(_)
             | ExecutionError::InvalidUrlForHttpRequest(_)
-            | ExecutionError::InactiveChain(_)
             | ExecutionError::BlobsNotFound(_)
             | ExecutionError::EventsNotFound(_)
             | ExecutionError::InvalidHeaderName(_)

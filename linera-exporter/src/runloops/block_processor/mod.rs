@@ -189,6 +189,8 @@ where
 
 #[cfg(test)]
 mod test {
+    #![allow(clippy::cast_sign_loss)]
+
     use std::{
         collections::HashSet,
         sync::{atomic::AtomicBool, Arc},

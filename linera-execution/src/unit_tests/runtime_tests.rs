@@ -4,6 +4,7 @@
 //! Resource consumption unit tests.
 
 #![cfg(with_tokio_multi_thread)]
+#![allow(clippy::cast_possible_truncation)]
 
 use std::{
     any::Any,

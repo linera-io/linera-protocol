@@ -2,6 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! SQLite persistent storage for bridge relayer deposit/burn requests.
+
+// SQLite (via sqlx) has no native unsigned integer types, so this module
+// routinely casts `u64` to/from `i64` when binding parameters and reading
+// rows. The casts are by design at the SQL boundary.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 //!
 //! This is a write-through layer alongside the in-memory `MonitorState`.
 //! It persists request metadata and raw operation bytes so they can be
@@ -100,12 +109,12 @@ impl BridgeDb {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS pending_burns (
                 linera_height     INTEGER NOT NULL,
-                burn_index        INTEGER NOT NULL,
+                event_index        INTEGER NOT NULL,
                 evm_recipient     TEXT NOT NULL,
                 amount            TEXT NOT NULL,
                 raw_cert          BLOB,
                 created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                PRIMARY KEY (linera_height, burn_index)
+                PRIMARY KEY (linera_height, event_index)
             )",
         )
         .execute(&self.pool)
@@ -114,14 +123,14 @@ impl BridgeDb {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS finished_burns (
                 linera_height     INTEGER NOT NULL,
-                burn_index        INTEGER NOT NULL,
+                event_index        INTEGER NOT NULL,
                 evm_recipient     TEXT NOT NULL,
                 amount            TEXT NOT NULL,
                 raw_cert          BLOB,
                 status            TEXT NOT NULL,
                 created_at        TEXT NOT NULL,
                 finished_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                PRIMARY KEY (linera_height, burn_index)
+                PRIMARY KEY (linera_height, event_index)
             )",
         )
         .execute(&self.pool)
@@ -217,11 +226,11 @@ impl BridgeDb {
     /// Inserts a new pending burn. Ignores duplicates (idempotent).
     pub async fn insert_burn(&self, burn: &PendingBurn) -> Result<()> {
         sqlx::query(
-            "INSERT OR IGNORE INTO pending_burns (linera_height, burn_index, evm_recipient, amount)
+            "INSERT OR IGNORE INTO pending_burns (linera_height, event_index, evm_recipient, amount)
              VALUES (?, ?, ?, ?)",
         )
         .bind(burn.height.0 as i64)
-        .bind(burn.burn_index as i64)
+        .bind(burn.event_index as i64)
         .bind(format!("{:#x}", burn.evm_recipient))
         .bind(burn.amount.to_string())
         .execute(&self.pool)
@@ -238,18 +247,18 @@ impl BridgeDb {
     pub async fn update_burn_status(
         &self,
         height: BlockHeight,
-        index: usize,
+        index: u32,
         status: &str,
     ) -> Result<()> {
         let mut tx = self.pool.begin().await?;
         let inserted = sqlx::query(
             "INSERT OR IGNORE INTO finished_burns
-                (linera_height, burn_index, evm_recipient, amount, raw_cert,
+                (linera_height, event_index, evm_recipient, amount, raw_cert,
                  status, created_at)
-             SELECT linera_height, burn_index, evm_recipient, amount, raw_cert,
+             SELECT linera_height, event_index, evm_recipient, amount, raw_cert,
                     ?, created_at
              FROM pending_burns
-             WHERE linera_height = ? AND burn_index = ?",
+             WHERE linera_height = ? AND event_index = ?",
         )
         .bind(status)
         .bind(height.0 as i64)
@@ -258,7 +267,7 @@ impl BridgeDb {
         .await?
         .rows_affected();
         let deleted =
-            sqlx::query("DELETE FROM pending_burns WHERE linera_height = ? AND burn_index = ?")
+            sqlx::query("DELETE FROM pending_burns WHERE linera_height = ? AND event_index = ?")
                 .bind(height.0 as i64)
                 .bind(index as i64)
                 .execute(&mut *tx)
@@ -268,7 +277,7 @@ impl BridgeDb {
         if deleted > 0 && inserted == 0 {
             tracing::warn!(
                 ?height,
-                burn_index = index,
+                event_index = index,
                 "Replay detected: burn already in finished_burns, original record kept"
             );
         }
@@ -321,7 +330,7 @@ impl BridgeDb {
     /// in-memory `MonitorState`.
     pub async fn load_pending_burns(&self) -> Result<Vec<PendingBurn>> {
         let rows = sqlx::query(
-            "SELECT linera_height, burn_index, evm_recipient, amount
+            "SELECT linera_height, event_index, evm_recipient, amount
              FROM pending_burns",
         )
         .fetch_all(&self.pool)
@@ -330,13 +339,13 @@ impl BridgeDb {
         let mut out = Vec::with_capacity(rows.len());
         for row in rows {
             let height: i64 = row.get(0);
-            let burn_index: i64 = row.get(1);
+            let event_index: i64 = row.get(1);
             let evm_recipient: String = row.get(2);
             let amount: String = row.get(3);
 
             out.push(PendingBurn {
                 height: BlockHeight(height as u64),
-                burn_index: burn_index as usize,
+                event_index: event_index as u32,
                 evm_recipient: evm_recipient
                     .parse()
                     .context("invalid evm_recipient in burns row")?,
@@ -363,15 +372,10 @@ impl BridgeDb {
     }
 
     /// Stores raw BCS-serialized certificate bytes on the pending burn row.
-    pub async fn store_burn_raw(
-        &self,
-        height: BlockHeight,
-        index: usize,
-        raw: &[u8],
-    ) -> Result<()> {
+    pub async fn store_burn_raw(&self, height: BlockHeight, index: u32, raw: &[u8]) -> Result<()> {
         sqlx::query(
             "UPDATE pending_burns SET raw_cert = ?
-             WHERE linera_height = ? AND burn_index = ?",
+             WHERE linera_height = ? AND event_index = ?",
         )
         .bind(raw)
         .bind(height.0 as i64)
@@ -427,7 +431,7 @@ mod tests {
     fn test_burn() -> PendingBurn {
         PendingBurn {
             height: BlockHeight(100),
-            burn_index: 0,
+            event_index: 0,
             evm_recipient: "0xabcdef1234567890abcdef1234567890abcdef12"
                 .parse()
                 .unwrap(),
@@ -713,7 +717,7 @@ mod tests {
     async fn test_load_pending_excludes_finished_burns(use_file: bool) -> Result<()> {
         let db = open_db(use_file).await?;
         let mut second = test_burn();
-        second.burn_index = 1;
+        second.event_index = 1;
         db.insert_burn(&test_burn()).await?;
         db.insert_burn(&second).await?;
         db.update_burn_status(BlockHeight(100), 0, "completed")
@@ -721,7 +725,7 @@ mod tests {
 
         let pending = db.load_pending_burns().await?;
         assert_eq!(pending.len(), 1);
-        assert_eq!(pending[0].burn_index, 1);
+        assert_eq!(pending[0].event_index, 1);
         Ok(())
     }
 
