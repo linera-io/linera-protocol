@@ -214,7 +214,7 @@ pub fn generate_deserialize(input: &ItemEnum, crate_root: &CrateRoot) -> Result<
             }
             Fields::Unnamed(fields) => {
                 let len = fields.unnamed.len();
-                let types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
+                let types = fields.unnamed.iter().map(|f| &f.ty).collect::<Vec<_>>();
                 let bindings: Vec<Ident> = (0..len)
                     .map(|i| Ident::new(&format!("__f{i}"), Span::call_site()))
                     .collect();
