@@ -249,7 +249,9 @@ semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
 serde-command-opts = "0.1.1"
 serde-name = "0.2.1"
-serde-reflection = "0.5.2"
+# TODO: switch back to a crates.io release once upstream serde-generate ships
+# the memory-safe assembly annotation for its Solidity backend.
+serde-reflection = { git = "https://github.com/afck/serde-reflection", branch = "solidity-memory-safe-assembly" }
 serde-wasm-bindgen = "0.6.5"
 serde_bytes = "0.11.14"
 serde_json = "1.0.114"

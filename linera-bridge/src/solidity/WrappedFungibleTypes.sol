@@ -697,7 +697,7 @@ library WrappedFungibleTypes {
 
     function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input) internal pure returns (uint256, bytes20) {
         bytes20 dest;
-        assembly {
+        assembly ("memory-safe") {
             dest := mload(add(add(input, 0x20), pos))
         }
         return (pos + 20, dest);
