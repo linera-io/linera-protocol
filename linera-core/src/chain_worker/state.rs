@@ -1769,7 +1769,7 @@ where
     pub(crate) async fn read_certificate(
         &self,
         height: BlockHeight,
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, WorkerError> {
         let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
