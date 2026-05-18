@@ -13,12 +13,37 @@
 /// `Ok(_)` means the node already accepted the estimate. A gas-exceeded
 /// RPC error means the call wouldn't fit. Other errors bubble up.
 pub fn estimate_fits(r: Result<u64, alloy::contract::Error>) -> anyhow::Result<bool> {
-    use crate::relay::evm::is_gas_exceeded_error;
     match r {
         Ok(_) => Ok(true),
         Err(e) if is_gas_exceeded_error(&e) => Ok(false),
         Err(e) => Err(e.into()),
     }
+}
+
+/// Returns true if the error is a JSON-RPC error reporting that the call
+/// would not fit under the node's block gas limit — i.e. the node refused to
+/// estimate because the work required more gas than a single block can hold.
+///
+/// Structurally pattern-matches `RpcError::ErrorResp` and substring-checks
+/// the `ErrorPayload`'s `message` against node-specific wordings observed
+/// from geth, erigon, alchemy, reth, and anvil (1.6, both calldata-too-big
+/// and infinite-loop constructors). Transport-level failures (HTTP,
+/// timeouts) and non-RPC errors return `false`.
+///
+/// We deliberately do NOT match a bare `"out of gas"` — a regular tx can OOG
+/// for reasons unrelated to the block gas limit (e.g. a too-low tx gas cap, or
+/// contract state consuming more gas than estimated). Treating those as
+/// "doesn't fit" would mask real misconfigurations behind retry churn down
+/// the chunking path.
+fn is_gas_exceeded_error(error: &alloy::contract::Error) -> bool {
+    let alloy::contract::Error::TransportError(transport_err) = error else {
+        return false;
+    };
+    let Some(payload) = transport_err.as_error_resp() else {
+        return false;
+    };
+    let msg = payload.message.to_lowercase();
+    msg.contains("gas required exceeds") || msg.contains("exceeds block gas limit")
 }
 
 #[cfg(test)]

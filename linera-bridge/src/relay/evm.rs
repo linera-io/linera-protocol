@@ -141,8 +141,8 @@ impl<P: Provider> EvmClient<P> {
     /// Dry-runs `addBlock(cert)` against the EVM to estimate the gas it
     /// would consume. `Ok(g)` means the call would fit under the node's
     /// current block gas limit (the value is the estimate); a gas-exceeded
-    /// RPC error indicates the call would not fit — see `is_gas_exceeded_error`.
-    /// Other RPC errors bubble up.
+    /// RPC error indicates the call would not fit. Other RPC errors bubble
+    /// up. Classification is done by `relay::settlement::estimate_fits`.
     pub async fn estimate_add_block_gas(
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
@@ -263,30 +263,4 @@ impl<P: Provider> EvmClient<P> {
             .context("addCommittee receipt failed")?;
         Ok(receipt.transaction_hash)
     }
-}
-
-/// Returns true if the error is a JSON-RPC error reporting that the call
-/// would not fit under the node's block gas limit — i.e. the node refused to
-/// estimate because the work required more gas than a single block can hold.
-///
-/// Structurally pattern-matches `RpcError::ErrorResp` and substring-checks
-/// the `ErrorPayload`'s `message` against node-specific wordings observed
-/// from geth, erigon, alchemy, reth, and anvil (1.6, both calldata-too-big
-/// and infinite-loop constructors). Transport-level failures (HTTP,
-/// timeouts) and non-RPC errors return `false`.
-///
-/// We deliberately do NOT match a bare `"out of gas"` — a regular tx can OOG
-/// for reasons unrelated to the block gas limit (e.g. a too-low tx gas cap, or
-/// contract state consuming more gas than estimated). Treating those as
-/// "doesn't fit" would mask real misconfigurations behind retry churn down
-/// the chunking path.
-pub fn is_gas_exceeded_error(error: &alloy::contract::Error) -> bool {
-    let alloy::contract::Error::TransportError(transport_err) = error else {
-        return false;
-    };
-    let Some(payload) = transport_err.as_error_resp() else {
-        return false;
-    };
-    let msg = payload.message.to_lowercase();
-    msg.contains("gas required exceeds") || msg.contains("exceeds block gas limit")
 }
