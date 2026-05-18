@@ -6,7 +6,7 @@
 mod db_storage;
 mod migration;
 
-use std::sync::Arc;
+use std::sync::Arc as StdArc;
 
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -19,7 +19,7 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
-pub use linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS;
+pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
@@ -65,7 +65,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool>;
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool>;
 
     /// Loads the view of a chain state.
     ///
@@ -138,6 +138,33 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
 
     /// Tests existence of the certificate with the given hash.
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError>;
+
+    /// Inserts a certificate into the in-memory dedup cache and returns the
+    /// canonical [`Arc`]. If the cache already holds an `Arc` for this hash,
+    /// the passed-in `certificate` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlockCertificate`] that should
+    /// participate in the "one allocation per content" invariant.
+    fn cache_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> Arc<ConfirmedBlockCertificate>;
+
+    /// Inserts a blob into the in-memory dedup cache and returns the canonical
+    /// [`Arc`]. If the cache already holds an `Arc` for this blob ID, the
+    /// passed-in `blob` is dropped and the existing `Arc` is returned. This
+    /// must be used (rather than `Arc::new`) for any freshly-constructed
+    /// [`Blob`] that should participate in the "one allocation per content"
+    /// invariant.
+    fn cache_blob(&self, blob: Blob) -> Arc<Blob>;
+
+    /// Inserts a confirmed block into the in-memory dedup cache and returns
+    /// the canonical [`Arc`]. If the cache already holds an `Arc` for this
+    /// hash, the passed-in `block` is dropped and the existing `Arc` is
+    /// returned. This must be used (rather than `Arc::new`) for any
+    /// freshly-constructed [`ConfirmedBlock`] that should participate in the
+    /// "one allocation per content" invariant.
+    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> Arc<ConfirmedBlock>;
 
     /// Reads the certificate with the given hash.
     async fn read_certificate(
@@ -238,7 +265,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn get_or_load_committee(
         &self,
         epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ViewError> {
+    ) -> Result<Option<StdArc<Committee>>, ViewError> {
         if let Some(committee) = self.shared_committees().get(epoch) {
             return Ok(Some(committee));
         }
@@ -280,7 +307,8 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         };
         let committee: Committee = bcs::from_bytes(blob.bytes())?;
         Ok(Some(
-            self.shared_committees().insert(epoch, Arc::new(committee)),
+            self.shared_committees()
+                .insert(epoch, StdArc::new(committee)),
         ))
     }
 
@@ -323,10 +351,14 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let contract_bytecode_blob_id = application_description.contract_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&contract_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => Arc::unwrap_or_clone(self.read_blob(contract_bytecode_blob_id).await?.ok_or(
-                ExecutionError::BlobsNotFound(vec![contract_bytecode_blob_id]),
-            )?)
-            .into_content(),
+            None => self
+                .read_blob(contract_bytecode_blob_id)
+                .await?
+                .ok_or(ExecutionError::BlobsNotFound(vec![
+                    contract_bytecode_blob_id,
+                ]))?
+                .content()
+                .clone(),
         };
         let compressed_contract_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -386,10 +418,14 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         let service_bytecode_blob_id = application_description.service_bytecode_blob_id();
         let content = match txn_tracker.get_blob_content(&service_bytecode_blob_id) {
             Some(content) => content.clone(),
-            None => Arc::unwrap_or_clone(self.read_blob(service_bytecode_blob_id).await?.ok_or(
-                ExecutionError::BlobsNotFound(vec![service_bytecode_blob_id]),
-            )?)
-            .into_content(),
+            None => self
+                .read_blob(service_bytecode_blob_id)
+                .await?
+                .ok_or(ExecutionError::BlobsNotFound(vec![
+                    service_bytecode_blob_id,
+                ]))?
+                .content()
+                .clone(),
         };
         let compressed_service_bytecode = CompressedBytecode {
             compressed_bytes: content.into_arc_bytes(),
@@ -477,10 +513,10 @@ impl ResultReadCertificates {
 pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
-    thread_pool: Arc<linera_execution::ThreadPool>,
+    thread_pool: StdArc<linera_execution::ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
-    user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    user_contracts: StdArc<papaya::HashMap<ApplicationId, UserContractCode>>,
+    user_services: StdArc<papaya::HashMap<ApplicationId, UserServiceCode>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -490,7 +526,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.chain_id
     }
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool> {
         &self.thread_pool
     }
 
@@ -498,11 +534,11 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
@@ -536,12 +572,12 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         Ok(service)
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
-        self.storage.read_blob(blob_id).await
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<StdArc<Blob>>, ViewError> {
+        Ok(self.storage.read_blob(blob_id).await?.map(Arc::into_std))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
-        self.storage.read_event(event_id).await
+    async fn get_event(&self, event_id: EventId) -> Result<Option<StdArc<Vec<u8>>>, ViewError> {
+        Ok(self.storage.read_event(event_id).await?.map(Arc::into_std))
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -551,7 +587,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
     async fn get_or_load_committee(
         &self,
         epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ViewError> {
+    ) -> Result<Option<StdArc<Committee>>, ViewError> {
         self.storage.get_or_load_committee(epoch).await
     }
 

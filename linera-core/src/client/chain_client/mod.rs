@@ -40,8 +40,8 @@ use linera_chain::{
     },
     manager::LockingBlock,
     types::{
-        Block, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate, Timeout,
-        TimeoutCertificate, ValidatedBlock,
+        Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
+        ValidatedBlock,
     },
     ChainError, ChainExecutionContext,
 };
@@ -53,7 +53,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome,
 };
-use linera_storage::{Clock as _, Storage as _};
+use linera_storage::{Arc as CacheArc, Clock as _, Storage as _};
 use linera_views::ViewError;
 use serde::Serialize;
 pub(crate) use state::State;
@@ -848,7 +848,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn update_validators(
         &self,
         old_committee: Option<&Committee>,
-        latest_certificate: Option<ConfirmedBlockCertificate>,
+        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
@@ -883,7 +883,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
-        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let delivery = self.options.cross_chain_message_delivery;
         let height = self.chain_info().await?.next_block_height;
@@ -2116,7 +2116,9 @@ impl<Env: Environment> ChainClient<Env> {
         self.send_timing(submit_block_proposal_start, TimingType::SubmitBlockProposal);
         debug!(round = %certificate.round, "Sending confirmed block to validators");
         let update_start = linera_base::time::Instant::now();
-        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
+        let certificate = self.client.storage_client().cache_certificate(certificate);
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.as_std().clone())))
+            .await?;
         tracing::debug!(
             update_validators_ms = update_start.elapsed().as_millis(),
             total_process_ms = process_start.elapsed().as_millis(),
@@ -2124,7 +2126,9 @@ impl<Env: Environment> ChainClient<Env> {
         );
         // Clear the pending proposal now that the block has been committed.
         *proposal_guard = None;
-        Ok(ClientOutcome::Committed(Some(certificate)))
+        Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
+            certificate,
+        ))))
     }
 
     fn send_timing(&self, start: Instant, timing_type: TimingType) {
@@ -2175,8 +2179,12 @@ impl<Env: Environment> ChainClient<Env> {
         let committee = self.local_committee().await?;
         let certificate =
             Box::pin(self.client.finalize_block(&committee, certificate.clone())).await?;
-        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
-        Ok(ClientOutcome::Committed(Some(certificate)))
+        let certificate = self.client.storage_client().cache_certificate(certificate);
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.as_std().clone())))
+            .await?;
+        Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
+            certificate,
+        ))))
     }
 
     /// Returns the number for the round number oracle to use when staging a block proposal.
@@ -2819,26 +2827,29 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     #[instrument(level = "trace", skip(hash))]
-    pub async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<ConfirmedBlock, Error> {
-        let block = self
-            .client
+    pub async fn read_confirmed_block(
+        &self,
+        hash: CryptoHash,
+    ) -> Result<Arc<ConfirmedBlock>, Error> {
+        self.client
             .storage_client()
             .read_confirmed_block(hash)
-            .await?;
-        block
-            .map(Arc::unwrap_or_clone)
+            .await?
             .ok_or(Error::MissingConfirmedBlock(hash))
+            .map(|b| b.into_std())
     }
 
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<ConfirmedBlockCertificate, Error> {
-        let certificate = self.client.storage_client().read_certificate(hash).await?;
-        certificate
-            .map(Arc::unwrap_or_clone)
+    ) -> Result<Arc<ConfirmedBlockCertificate>, Error> {
+        self.client
+            .storage_client()
+            .read_certificate(hash)
+            .await?
             .ok_or(Error::ReadCertificatesError(vec![hash]))
+            .map(|c| c.into_std())
     }
 
     /// Handles any cross-chain requests for any pending outgoing messages.
@@ -3349,13 +3360,12 @@ impl<Env: Environment> ChainClient<Env> {
             .read_certificates_by_heights(self.chain_id, &heights)
             .await?
             .into_iter()
-            .flatten()
-            .map(Arc::unwrap_or_clone);
+            .flatten();
 
         for certificate in certificates {
             let missing_blob_ids = match remote_node
                 .handle_confirmed_certificate(
-                    certificate.clone(),
+                    certificate.as_std().clone(),
                     CrossChainMessageDelivery::NonBlocking,
                 )
                 .await
@@ -3373,11 +3383,14 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?
                 .into_iter()
                 .flatten()
-                .map(Arc::unwrap_or_clone)
+                .map(|b| b.into_std())
                 .collect();
             remote_node.upload_blobs(missing_blobs).await?;
             remote_node
-                .handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
+                .handle_confirmed_certificate(
+                    certificate.into_std(),
+                    CrossChainMessageDelivery::NonBlocking,
+                )
                 .await?;
         }
 

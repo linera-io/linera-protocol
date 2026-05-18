@@ -27,7 +27,7 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{Clock, ResultReadCertificates, Storage};
+use linera_storage::{Arc as CacheArc, Clock, ResultReadCertificates, Storage};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{instrument, Level};
@@ -265,12 +265,12 @@ where
     )]
     async fn send_confirmed_certificate(
         &mut self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: &Arc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
             .remote_node
-            .handle_optimized_confirmed_certificate(&certificate, delivery)
+            .handle_optimized_confirmed_certificate(certificate, delivery)
             .await;
 
         let mut sent_admin_chain = false;
@@ -292,7 +292,7 @@ where
                 Err(NodeError::BlobsNotFound(blob_ids)) if !sent_blobs => {
                     // The validator is missing the blobs required by the certificate.
                     self.remote_node
-                        .check_blobs_not_found(&certificate, &blob_ids)?;
+                        .check_blobs_not_found(certificate, &blob_ids)?;
                     // The certificate is confirmed, so the blobs must be in storage.
                     let maybe_blobs = self
                         .client
@@ -300,7 +300,10 @@ where
                         .read_blobs_from_storage(&blob_ids)
                         .await?;
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
-                    self.remote_node.node.upload_blobs(blobs).await?;
+                    self.remote_node
+                        .node
+                        .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
+                        .await?;
                     sent_blobs = true;
                 }
                 result => {
@@ -696,7 +699,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<(), chain_client::Error> {
         // Phase 1: Height synchronization
         let info = if target_block_height.0 > 0 {
@@ -742,7 +745,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<GenericCertificate<ConfirmedBlock>>,
+        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let height = target_block_height.try_sub_one()?;
 
@@ -759,10 +762,14 @@ where
                         "failed to read latest certificate for height sync",
                     )
                 })?
+                .into_std()
         };
 
         // Optimistically try sending just the last certificate
-        let info = match self.send_confirmed_certificate(certificate, delivery).await {
+        let info = match self
+            .send_confirmed_certificate(&certificate, delivery)
+            .await
+        {
             Ok(info) => info,
             Err(error) => {
                 tracing::debug!(
@@ -790,7 +797,7 @@ where
                 .await?;
 
             for certificate in certificates {
-                self.send_confirmed_certificate(certificate, delivery)
+                self.send_confirmed_certificate(certificate.as_std(), delivery)
                     .await?;
             }
         }
@@ -810,7 +817,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<GenericCertificate<ConfirmedBlock>>, chain_client::Error> {
+    ) -> Result<Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
 
         // First, try the direct height-based lookup
@@ -823,11 +830,7 @@ where
             && certificates_by_height.iter().all(|c| c.is_some());
 
         if all_found {
-            return Ok(certificates_by_height
-                .into_iter()
-                .flatten()
-                .map(Arc::unwrap_or_clone)
-                .collect());
+            return Ok(certificates_by_height.into_iter().flatten().collect());
         }
 
         // Fallback to the traditional approach
@@ -846,7 +849,10 @@ where
                 storage
                     .write_certificate_height_indices(chain_id, &indices)
                     .await?;
-                Ok(certs)
+                Ok(certs
+                    .into_iter()
+                    .map(|c| storage.cache_certificate(c))
+                    .collect())
             }
             ResultReadCertificates::InvalidHashes(hashes) => {
                 Err(chain_client::Error::ReadCertificatesError(hashes))
@@ -1026,13 +1032,12 @@ where
                         .await?
                         .into_iter()
                         .flatten()
-                        .map(Arc::unwrap_or_clone)
                         .collect::<Vec<_>>();
 
                     // Send each certificate
                     for certificate in certificates {
                         updater
-                            .send_confirmed_certificate(certificate, delivery)
+                            .send_confirmed_certificate(certificate.as_std(), delivery)
                             .await?;
                     }
 
