@@ -27,7 +27,7 @@ use linera_base::{
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
 use reqwest::{header::HeaderMap, Client, Url};
-use tracing::{info_span, instrument, Instrument as _};
+use tracing::instrument;
 
 use crate::{
     execution::UserAction,
@@ -35,16 +35,70 @@ use crate::{
     system::{CreateApplicationResult, OpenChainConfig},
     util::{OracleResponseExt as _, RespondExt as _},
     ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext,
-    ExecutionStateView, JsVec, Message, MessageContext, MessageKind, ModuleId, Operation,
-    OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext, QueryOutcome,
-    ResourceController, SystemMessage, TransactionTracker, UserContractCode, UserServiceCode,
+    ExecutionStateView, FinalizeContext, JsVec, Message, MessageContext, MessageKind, ModuleId,
+    Operation, OperationContext, OutgoingMessage, ProcessStreamsContext, QueryContext,
+    QueryOutcome, ResourceController, ResourceTracker, SystemMessage, TransactionTracker,
+    UserContractCode, UserServiceCode,
 };
+
+/// Commands sent from the async side to the contract runtime thread.
+pub enum RuntimeCommand {
+    /// Execute a user action (operation, message, instantiate, or stream processing).
+    Execute(Box<ExecuteCommand>),
+    /// Finalize all loaded contract instances and shut down the runtime thread.
+    FinalizeAll {
+        context: FinalizeContext,
+        /// Snapshot of the main resource controller's tracker, used as the starting point
+        /// for tracker accumulation during finalize calls.
+        tracker: Box<ResourceTracker>,
+        /// Balance available to the runtime controller for finalization (fuel costs
+        /// are deducted from this). This is the chain's balance at finalization time.
+        initial_balance: Amount,
+    },
+    /// Snapshot the mutable state of all loaded contract instances. The contents of
+    /// each snapshot are defined by the backend running the instance (e.g. memory +
+    /// globals for Wasm; a no-op for backends that don't support checkpointing).
+    SnapshotAllInstances,
+    /// Restore all loaded contract instances from their previously taken snapshots.
+    RestoreAllInstances,
+}
+
+/// Payload for `RuntimeCommand::Execute`.
+pub struct ExecuteCommand {
+    pub application_id: ApplicationId,
+    pub action: UserAction,
+    pub refund_grant_to: Option<Account>,
+    pub codes: Vec<(UserContractCode, ApplicationDescription)>,
+    /// Balance available to the runtime controller for this action (with grant applied).
+    pub initial_balance: Amount,
+    /// Whether this action should skip balance deductions.
+    pub is_free: bool,
+    /// Snapshot of the main controller's tracker; the runtime resumes from this state.
+    pub tracker: ResourceTracker,
+}
 
 /// Actor for handling requests to the execution state.
 pub struct ExecutionStateActor<'a, C> {
     state: &'a mut ExecutionStateView<C>,
     txn_tracker: &'a mut TransactionTracker,
     resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
+    /// Channels to the block-level contract runtime thread.
+    /// When `Some`, actions take the threaded shared-memory path: each action is
+    /// dispatched to the long-lived block worker over the mpsc channel.
+    runtime_channels: Option<RuntimeChannels<'a>>,
+    /// Block-level snapshot map borrowed from the [`BlockExecutionTracker`].
+    /// When `Some`, actions take the snapshot-based per-action path: each action
+    /// spawns a fresh worker, restores from the snapshots in this map, runs, and
+    /// updates the map with the post-action snapshots.
+    block_snapshots: Option<&'a mut BTreeMap<ApplicationId, Vec<u8>>>,
+}
+
+/// Channels for communicating with the block-level contract runtime thread.
+pub struct RuntimeChannels<'a> {
+    /// Sender to send commands (Execute, FinalizeAll, etc.) to the runtime thread.
+    pub command_tx: &'a std::sync::mpsc::Sender<RuntimeCommand>,
+    /// Receiver for state requests and action completions from the runtime thread.
+    pub execution_state_receiver: &'a mut mpsc::UnboundedReceiver<ExecutionRequest>,
 }
 
 #[cfg(with_metrics)]
@@ -82,7 +136,9 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
-    /// Creates a new execution state actor.
+    /// Creates a new execution state actor without a shared runtime.
+    ///
+    /// Used for service queries and other cases that don't need the block-level runtime.
     pub fn new(
         state: &'a mut ExecutionStateView<C>,
         txn_tracker: &'a mut TransactionTracker,
@@ -92,6 +148,44 @@ where
             state,
             txn_tracker,
             resource_controller,
+            runtime_channels: None,
+            block_snapshots: None,
+        }
+    }
+
+    /// Creates a new execution state actor connected to a block-level runtime.
+    /// Selects the threaded shared-memory execution path.
+    pub fn with_runtime(
+        state: &'a mut ExecutionStateView<C>,
+        txn_tracker: &'a mut TransactionTracker,
+        resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
+        runtime_channels: RuntimeChannels<'a>,
+    ) -> Self {
+        Self {
+            state,
+            txn_tracker,
+            resource_controller,
+            runtime_channels: Some(runtime_channels),
+            block_snapshots: None,
+        }
+    }
+
+    /// Creates a new execution state actor that takes the snapshot-based per-action
+    /// execution path. The supplied map is borrowed mutably for the actor's lifetime
+    /// and updated in place after every action — input snapshots are consumed during
+    /// instantiation, fresh snapshots are written back for every loaded contract.
+    pub fn with_block_snapshots(
+        state: &'a mut ExecutionStateView<C>,
+        txn_tracker: &'a mut TransactionTracker,
+        resource_controller: &'a mut ResourceController<Option<AccountOwner>>,
+        block_snapshots: &'a mut BTreeMap<ApplicationId, Vec<u8>>,
+    ) -> Self {
+        Self {
+            state,
+            txn_tracker,
+            resource_controller,
+            runtime_channels: None,
+            block_snapshots: Some(block_snapshots),
         }
     }
 
@@ -151,7 +245,7 @@ where
         skip_all,
         fields(request_type = %request.as_ref())
     )]
-    pub(crate) async fn handle_request(
+    pub async fn handle_request(
         &mut self,
         request: ExecutionRequest,
     ) -> Result<(), ExecutionError> {
@@ -832,6 +926,10 @@ where
                 callback.respond(allow);
             }
 
+            ActionComplete { .. } => {
+                panic!("ActionComplete should be handled by the request loop, not handle_request");
+            }
+
             #[cfg(web)]
             Log { message, level } => match level {
                 tracing::log::Level::Trace | tracing::log::Level::Debug => {
@@ -909,8 +1007,253 @@ where
         refund_grant_to: Option<Account>,
         grant: Option<&mut Amount>,
     ) -> Result<(), ExecutionError> {
-        self.run_user_action_with_runtime(application_id, action, refund_grant_to, grant)
+        if self.runtime_channels.is_some() {
+            self.run_user_action_threaded_shared_memory(
+                application_id,
+                action,
+                refund_grant_to,
+                grant,
+            )
             .await
+        } else {
+            self.run_user_action_non_threaded_not_shared_memory(
+                application_id,
+                action,
+                refund_grant_to,
+                grant,
+            )
+            .await
+        }
+    }
+
+    /// Snapshot-based per-action execution path. Spawns a fresh worker for the
+    /// action; the contract codes and the current per-application snapshots are
+    /// `Post`ed at spawn time. The worker compiles + instantiates the contracts,
+    /// restores any provided snapshot (so `Contract::load` is skipped via the
+    /// SDK's `Option<Contract>` global), runs the action, captures fresh
+    /// snapshots for every loaded application, and returns them. The actor
+    /// merges the returned map back into the block-level snapshot map borrowed
+    /// from the [`BlockExecutionTracker`].
+    #[instrument(skip_all, fields(application_id = %application_id))]
+    async fn run_user_action_non_threaded_not_shared_memory(
+        &mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
+    ) -> Result<(), ExecutionError> {
+        let chain_id = self.state.context().extra().chain_id();
+        let mut cloned_grant = grant.as_ref().map(|x| **x);
+        let initial_balance = self
+            .resource_controller
+            .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
+            .await?
+            .balance()?;
+        let mut runtime_controller = ResourceController::new(
+            self.resource_controller.policy().clone(),
+            self.resource_controller.tracker,
+            initial_balance,
+        );
+        let is_free = matches!(
+            &action,
+            UserAction::Message(..) | UserAction::ProcessStreams(..)
+        ) && self
+            .resource_controller
+            .policy()
+            .is_free_app(&application_id);
+        runtime_controller.is_free = is_free;
+        self.resource_controller.is_free = is_free;
+
+        let (execution_state_sender, mut execution_state_receiver) =
+            futures::channel::mpsc::unbounded();
+
+        let (codes, descriptions): (Vec<_>, Vec<_>) =
+            self.contract_and_dependencies(application_id).await?;
+
+        let allow_application_logs = self
+            .state
+            .context()
+            .extra()
+            .execution_runtime_config()
+            .allow_application_logs;
+
+        // Move the block-level snapshot map out of the borrowed reference; we'll
+        // put it back updated after the worker returns.
+        let snapshots_in: BTreeMap<ApplicationId, Vec<u8>> = std::mem::take(
+            *self
+                .block_snapshots
+                .as_mut()
+                .expect("block_snapshots must be set on the snapshot-based execution path"),
+        );
+
+        let height = action.height();
+        let round = action.round();
+        let timestamp = action.timestamp();
+
+        let contract_runtime_task = self
+            .state
+            .context()
+            .extra()
+            .thread_pool()
+            .run_send(JsVec(codes), move |codes| async move {
+                let runtime = ContractSyncRuntime::new_for_block(
+                    execution_state_sender,
+                    chain_id,
+                    height,
+                    round,
+                    timestamp,
+                    runtime_controller,
+                    allow_application_logs,
+                );
+                for (code, description) in codes.0.into_iter().zip(descriptions) {
+                    runtime.preload_contract(ApplicationId::from(&description), code, description);
+                }
+                runtime.execute_action_with_snapshots(
+                    application_id,
+                    action,
+                    refund_grant_to,
+                    snapshots_in,
+                )
+            })
+            .await;
+
+        while let Some(request) = execution_state_receiver.next().await {
+            self.handle_request(request).await?;
+        }
+
+        let outcome = contract_runtime_task.await??;
+
+        // Put the updated snapshots back into the actor's borrowed map.
+        **self
+            .block_snapshots
+            .as_mut()
+            .expect("block_snapshots must still be set") = outcome.snapshots;
+
+        self.resource_controller.is_free = false;
+        self.txn_tracker.add_operation_result(outcome.result);
+
+        self.resource_controller
+            .with_state_and_grant(&mut self.state.system, grant)
+            .await?
+            .merge_balance(initial_balance, outcome.controller.balance()?)?;
+        self.resource_controller.tracker = outcome.controller.tracker;
+
+        Ok(())
+    }
+
+    /// Threaded shared-memory path: dispatches the user action to the long-lived
+    /// block-level runtime worker via the mpsc channel.
+    ///
+    /// Loads contract code and dependencies, sends the action via the command channel,
+    /// then handles state requests until `ActionComplete` is received. The main
+    /// resource controller's balance, `is_free` flag, and tracker are synchronized
+    /// with the runtime thread's controller before and after execution so that
+    /// policy-driven limits (e.g. `maximum_wasm_fuel_per_block`) are enforced across
+    /// all actions in the block.
+    #[instrument(skip_all, fields(application_id = %application_id))]
+    async fn run_user_action_threaded_shared_memory(
+        &mut self,
+        application_id: ApplicationId,
+        action: UserAction,
+        refund_grant_to: Option<Account>,
+        grant: Option<&mut Amount>,
+    ) -> Result<(), ExecutionError> {
+        // Load contract code and dependencies.
+        let (codes, descriptions) = self.contract_and_dependencies(application_id).await?;
+        let codes = codes.into_iter().zip(descriptions).collect::<Vec<_>>();
+
+        // Compute the initial balance available to this action (with grant as a funding
+        // source for messages).
+        let mut cloned_grant = grant.as_ref().map(|x| **x);
+        let initial_balance = self
+            .resource_controller
+            .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
+            .await?
+            .balance()?;
+
+        // Messages and stream-processing to free apps skip balance deductions.
+        let is_free = matches!(
+            &action,
+            UserAction::Message(..) | UserAction::ProcessStreams(..)
+        ) && self
+            .resource_controller
+            .policy()
+            .is_free_app(&application_id);
+        self.resource_controller.is_free = is_free;
+
+        // Snapshot the tracker so the runtime resumes from the main controller's state.
+        let tracker = self.resource_controller.tracker;
+
+        // Take the channels out temporarily to avoid borrow conflicts with handle_request.
+        let channels = self
+            .runtime_channels
+            .take()
+            .expect("runtime_channels should be set");
+
+        // Send the execute command to the runtime thread.
+        channels
+            .command_tx
+            .send(RuntimeCommand::Execute(Box::new(ExecuteCommand {
+                application_id,
+                action,
+                refund_grant_to,
+                codes,
+                initial_balance,
+                is_free,
+                tracker,
+            })))
+            .map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+
+        // Handle state requests until the action completes.
+        let (result, final_balance, final_tracker) = loop {
+            let Some(request) = channels.execution_state_receiver.next().await else {
+                self.runtime_channels = Some(channels);
+                return Err(ExecutionError::MissingRuntimeResponse);
+            };
+            if let ExecutionRequest::ActionComplete {
+                result,
+                final_balance,
+                tracker,
+            } = request
+            {
+                break (result, final_balance, tracker);
+            }
+            match self.handle_request(request).await {
+                Ok(()) => {}
+                Err(error) => {
+                    // Drain remaining messages until ActionComplete so the runtime
+                    // thread is unblocked and can proceed to the next command.
+                    // Without this, the runtime thread would hang forever waiting
+                    // for a callback response that will never come.
+                    while let Some(req) = channels.execution_state_receiver.next().await {
+                        if matches!(req, ExecutionRequest::ActionComplete { .. }) {
+                            break;
+                        }
+                    }
+                    self.runtime_channels = Some(channels);
+                    return Err(error);
+                }
+            }
+        };
+
+        // Put the channels back.
+        self.runtime_channels = Some(channels);
+
+        self.resource_controller.is_free = false;
+        let result = result?;
+        self.txn_tracker.add_operation_result(result);
+
+        // Copy the runtime's tracker back so later actions see accumulated fuel and
+        // read/write counts.
+        self.resource_controller.tracker = final_tracker;
+
+        // Merge the balance delta back into the main controller.
+        self.resource_controller
+            .with_state_and_grant(&mut self.state.system, grant)
+            .await?
+            .merge_balance(initial_balance, final_balance)?;
+
+        Ok(())
     }
 
     // TODO(#5034): unify with `contract_and_dependencies`
@@ -960,95 +1303,6 @@ where
         descriptions.reverse();
 
         Ok((codes, descriptions))
-    }
-
-    #[instrument(skip_all, fields(application_id = %application_id))]
-    async fn run_user_action_with_runtime(
-        &mut self,
-        application_id: ApplicationId,
-        action: UserAction,
-        refund_grant_to: Option<Account>,
-        grant: Option<&mut Amount>,
-    ) -> Result<(), ExecutionError> {
-        let chain_id = self.state.context().extra().chain_id();
-        let mut cloned_grant = grant.as_ref().map(|x| **x);
-        let initial_balance = self
-            .resource_controller
-            .with_state_and_grant(&mut self.state.system, cloned_grant.as_mut())
-            .await?
-            .balance()?;
-        let mut controller = ResourceController::new(
-            self.resource_controller.policy().clone(),
-            self.resource_controller.tracker,
-            initial_balance,
-        );
-        let is_free = matches!(
-            &action,
-            UserAction::Message(..) | UserAction::ProcessStreams(..)
-        ) && self
-            .resource_controller
-            .policy()
-            .is_free_app(&application_id);
-        controller.is_free = is_free;
-        self.resource_controller.is_free = is_free;
-        let (execution_state_sender, mut execution_state_receiver) =
-            futures::channel::mpsc::unbounded();
-
-        let (codes, descriptions): (Vec<_>, Vec<_>) =
-            self.contract_and_dependencies(application_id).await?;
-
-        let allow_application_logs = self
-            .state
-            .context()
-            .extra()
-            .execution_runtime_config()
-            .allow_application_logs;
-
-        let contract_runtime_task = self
-            .state
-            .context()
-            .extra()
-            .thread_pool()
-            .run_send(JsVec(codes), move |codes| async move {
-                let runtime = ContractSyncRuntime::new(
-                    execution_state_sender,
-                    chain_id,
-                    refund_grant_to,
-                    controller,
-                    &action,
-                    allow_application_logs,
-                );
-
-                for (code, description) in codes.0.into_iter().zip(descriptions) {
-                    runtime.preload_contract(ApplicationId::from(&description), code, description);
-                }
-
-                runtime.run_action(application_id, chain_id, action)
-            })
-            .await;
-
-        async {
-            while let Some(request) = execution_state_receiver.next().await {
-                self.handle_request(request).await?;
-            }
-            Ok::<(), ExecutionError>(())
-        }
-        .instrument(info_span!("handle_runtime_requests"))
-        .await?;
-
-        let (result, controller) = contract_runtime_task.await??;
-
-        self.resource_controller.is_free = false;
-
-        self.txn_tracker.add_operation_result(result);
-
-        self.resource_controller
-            .with_state_and_grant(&mut self.state.system, grant)
-            .await?
-            .merge_balance(initial_balance, controller.balance()?)?;
-        self.resource_controller.tracker = controller.tracker;
-
-        Ok(())
     }
 
     #[instrument(skip_all, fields(
@@ -1561,5 +1815,14 @@ pub enum ExecutionRequest {
     Log {
         message: String,
         level: tracing::log::Level,
+    },
+
+    /// Signals that a user action has completed on the runtime thread.
+    ActionComplete {
+        result: Result<Option<Vec<u8>>, ExecutionError>,
+        /// Balance held by the runtime controller after executing the action.
+        final_balance: Amount,
+        /// Tracker accumulated by the runtime controller after executing the action.
+        tracker: ResourceTracker,
     },
 }

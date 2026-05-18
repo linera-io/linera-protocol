@@ -9,16 +9,44 @@ mod memory;
 mod parameters;
 mod results;
 
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex, MutexGuard, OnceLock},
+};
 
+use serde::{Deserialize, Serialize};
 pub use wasmer::FunctionEnvMut;
 use wasmer::{
     AsStoreMut, AsStoreRef, Engine, Extern, FunctionEnv, Imports, InstantiationError, Memory,
-    Module, Store, StoreMut, StoreObjects, StoreRef,
+    Module, Mutability, Store, StoreMut, StoreObjects, StoreRef,
 };
 
 pub use self::{parameters::WasmerParameters, results::WasmerResults};
-use super::traits::{Instance, Runtime};
+use super::{
+    snapshot::{NumericVal, SnapshotError},
+    traits::{Instance, Runtime},
+};
+
+fn wasmer_value_to_numeric(value: &wasmer::Value) -> Option<NumericVal> {
+    match value {
+        wasmer::Value::I32(v) => Some(NumericVal::I32(*v)),
+        wasmer::Value::I64(v) => Some(NumericVal::I64(*v)),
+        wasmer::Value::F32(v) => Some(NumericVal::F32(v.to_bits())),
+        wasmer::Value::F64(v) => Some(NumericVal::F64(v.to_bits())),
+        wasmer::Value::V128(v) => Some(NumericVal::V128(*v)),
+        wasmer::Value::FuncRef(_) | wasmer::Value::ExternRef(_) => None,
+    }
+}
+
+fn numeric_to_wasmer_value(val: &NumericVal) -> wasmer::Value {
+    match val {
+        NumericVal::I32(v) => wasmer::Value::I32(*v),
+        NumericVal::I64(v) => wasmer::Value::I64(*v),
+        NumericVal::F32(bits) => wasmer::Value::F32(f32::from_bits(*bits)),
+        NumericVal::F64(bits) => wasmer::Value::F64(f64::from_bits(*bits)),
+        NumericVal::V128(v) => wasmer::Value::V128(*v),
+    }
+}
 
 /// Representation of the [Wasmer](https://wasmer.io) runtime.
 pub struct Wasmer;
@@ -120,11 +148,151 @@ impl<UserData> AsStoreMut for EntrypointInstance<UserData> {
     }
 }
 
+/// Snapshot of a Wasmer instance's mutable state.
+///
+/// Captures the data that can change at runtime for each kind of [`Extern`]:
+///
+/// - [`Extern::Memory`]: the bytes of every exported linear memory, by
+///   export name. Standard Linera modules export a single memory, but the
+///   data type permits the Wasm `multi-memory` proposal.
+/// - [`Extern::Global`]: the value of every exported mutable global.
+/// - [`Extern::Table`]: the element count of every exported table. Tables
+///   are initialised from the module's `elem` section and Linera contracts
+///   do not mutate them after instantiation, so only the size is tracked
+///   and the same size is required of the instance at restore time.
+///
+/// The remaining variant carries no snapshottable state:
+///
+/// - [`Extern::Function`] holds an immutable reference to compiled code.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WasmInstanceSnapshot {
+    memories: BTreeMap<String, Vec<u8>>,
+    globals: BTreeMap<String, NumericVal>,
+    table_sizes: BTreeMap<String, u64>,
+}
+
 impl<UserData> EntrypointInstance<UserData> {
     /// Returns mutable references to the [`Store`] and the [`wasmer::Instance`] stored inside this
     /// [`EntrypointInstance`].
     pub fn as_store_and_instance_mut(&mut self) -> (StoreMut<'_>, &mut wasmer::Instance) {
         (self.store.as_store_mut(), &mut self.instance)
+    }
+
+    /// Creates a snapshot of the Wasm instance's mutable state (memories, globals,
+    /// table sizes).
+    pub fn create_snapshot(&mut self) -> Result<WasmInstanceSnapshot, SnapshotError> {
+        let mut memories = BTreeMap::new();
+        let mut globals = BTreeMap::new();
+        let mut table_sizes = BTreeMap::new();
+
+        let exports: Vec<(String, Extern)> = self
+            .instance
+            .exports
+            .iter()
+            .map(|(name, ext)| (name.clone(), ext.clone()))
+            .collect();
+
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(memory) => {
+                    let bytes = memory.view(&self.store).copy_to_vec().map_err(|e| {
+                        SnapshotError::MemoryCopy {
+                            name: name.clone(),
+                            message: e.to_string(),
+                        }
+                    })?;
+                    memories.insert(name, bytes);
+                }
+                Extern::Global(global) => {
+                    // Const globals are part of the module and need no snapshot.
+                    if global.ty(&self.store).mutability == Mutability::Var {
+                        let val = wasmer_value_to_numeric(&global.get(&mut self.store))
+                            .ok_or_else(|| SnapshotError::ReferenceTypedGlobal {
+                                name: name.clone(),
+                            })?;
+                        globals.insert(name, val);
+                    }
+                }
+                Extern::Table(table) => {
+                    table_sizes.insert(name, u64::from(table.size(&self.store)));
+                }
+                // Functions are immutable code references; nothing to snapshot.
+                Extern::Function(_) => {}
+            }
+        }
+
+        Ok(WasmInstanceSnapshot {
+            memories,
+            globals,
+            table_sizes,
+        })
+    }
+
+    /// Restores the Wasm instance's mutable state from a snapshot.
+    pub fn restore_snapshot(
+        &mut self,
+        snapshot: &WasmInstanceSnapshot,
+    ) -> Result<(), SnapshotError> {
+        let exports: Vec<(String, Extern)> = self
+            .instance
+            .exports
+            .iter()
+            .map(|(name, ext)| (name.clone(), ext.clone()))
+            .collect();
+
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(memory) => {
+                    if let Some(bytes) = snapshot.memories.get(&name) {
+                        // Grow the live memory to fit the snapshot if the snapshot
+                        // was captured after a `memory.grow`.
+                        let needed = bytes.len() as u64;
+                        let current = memory.view(&self.store).data_size();
+                        if needed > current {
+                            let page_size = wasmer::WASM_PAGE_SIZE as u64;
+                            let extra_pages = needed.div_ceil(page_size) - current / page_size;
+                            memory
+                                .grow(&mut self.store, extra_pages as u32)
+                                .map_err(|e| SnapshotError::MemoryGrow {
+                                    name: name.clone(),
+                                    message: e.to_string(),
+                                })?;
+                        }
+                        memory.view(&self.store).write(0, bytes).map_err(|e| {
+                            SnapshotError::MemoryWrite {
+                                name: name.clone(),
+                                message: e.to_string(),
+                            }
+                        })?;
+                    }
+                }
+                Extern::Global(global) => {
+                    if let Some(value) = snapshot.globals.get(&name) {
+                        global
+                            .set(&mut self.store, numeric_to_wasmer_value(value))
+                            .map_err(|e| SnapshotError::GlobalSet {
+                                name: name.clone(),
+                                message: e.to_string(),
+                            })?;
+                    }
+                }
+                Extern::Table(table) => {
+                    if let Some(size) = snapshot.table_sizes.get(&name) {
+                        let current = u64::from(table.size(&self.store));
+                        if current != *size {
+                            return Err(SnapshotError::TableSizeMismatch {
+                                name,
+                                snapshot: *size,
+                                current,
+                            });
+                        }
+                    }
+                }
+                // Functions are immutable code references; nothing to restore.
+                Extern::Function(_) => {}
+            }
+        }
+        Ok(())
     }
 }
 

@@ -1936,6 +1936,183 @@ async fn test_wasm_end_to_end_counter(config: impl LineraNetConfig) -> Result<()
     Ok(())
 }
 
+/// Round configuration for the receiver chain in the checkpoint/rollback consensus test.
+#[derive(Clone, Copy, Debug)]
+enum ReceiverRoundMode {
+    /// Multi-owner chain with `0` multi-leader rounds: blocks proceed via single-leader
+    /// rounds, so the proposer's outcome is compared against an independent validator
+    /// re-execution under full BFT consensus.
+    MultiOwnerSingleLeader,
+    /// Single-owner chain owned by client2: round 0 is a fast round, so the block can
+    /// be confirmed from a single proposal — but validators still re-execute to verify
+    /// the state hash, so a proposer/validator divergence is still caught.
+    SingleOwnerFastRound,
+}
+
+/// Tests that checkpoint/rollback with rejected bundles produces the same execution
+/// on proposer and validators. This is a regression test for a potential consensus bug
+/// where the proposer drops all Wasm instances after a rollback (causing a reload from
+/// storage) while validators keep instances in memory (no rollback needed since the
+/// rejected bundle is already marked as Reject).
+///
+/// The test sends three cross-chain messages to a receiver chain:
+/// 1. Increment(+5) — succeeds, loads the counter contract
+/// 2. Fail — intentionally panics, gets rejected by auto-retry on proposer
+/// 3. Increment(+3) — succeeds, should produce the same fuel on proposer and validator
+///
+/// If there's a divergence, validators will produce a different state hash and the
+/// block won't get enough votes to form a certificate.
+async fn run_checkpoint_rollback_consensus_test(
+    config: impl LineraNetConfig,
+    mode: ReceiverRoundMode,
+) -> Result<()> {
+    use counter::CounterAbi;
+    use meta_counter::MetaCounterAbi;
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {} ({mode:?})", test_name!());
+
+    let (mut net, client1) = config.instantiate().await?;
+
+    let client2 = net.make_client().await;
+    client2.wallet_init(None).await?;
+
+    let chain_creator = client1.load_wallet()?.default_chain().unwrap();
+
+    let owner2 = client2.keygen().await?;
+    let chain_receiver = match mode {
+        ReceiverRoundMode::MultiOwnerSingleLeader => {
+            let owner1 = client1.keygen().await?;
+            let chain = client1
+                .open_multi_owner_chain(
+                    chain_creator,
+                    vec![(owner1, 100), (owner2, 100)].into_iter().collect(),
+                    0, // no multi-leader rounds: forces single-leader rounds (no fast round)
+                    Amount::from_tokens(10),
+                    10_000,
+                )
+                .await?;
+            client1.assign(owner1, chain).await?;
+            chain
+        }
+        ReceiverRoundMode::SingleOwnerFastRound => {
+            let (chain, _) = client1
+                .open_chain(chain_creator, Some(owner2), Amount::from_tokens(10))
+                .await?;
+            chain
+        }
+    };
+    client2.assign(owner2, chain_receiver).await?;
+    client2.sync(chain_receiver).await?;
+
+    // Build counter (example) and meta-counter (fixture).
+    let (counter_contract, counter_service) = client1.build_example("counter").await?;
+    let meta_counter_path = env::current_dir()?.join("../linera-sdk/tests/fixtures/meta-counter");
+    let (meta_counter_contract, meta_counter_service) = client1
+        .build_application(meta_counter_path.as_path(), "meta-counter", true)
+        .await?;
+
+    // Publish and create the counter application on the creator chain.
+    let initial_counter_value = 0;
+    let counter_app_id = client1
+        .publish_and_create::<CounterAbi, (), u64>(
+            counter_contract,
+            counter_service,
+            VmRuntime::Wasm,
+            &(),
+            &initial_counter_value,
+            &[],
+            None,
+        )
+        .await?;
+
+    // Publish and create the meta-counter application, parameterized with the counter app ID.
+    let meta_counter_app_id = client1
+        .publish_and_create::<MetaCounterAbi, ApplicationId<CounterAbi>, ()>(
+            meta_counter_contract,
+            meta_counter_service,
+            VmRuntime::Wasm,
+            &counter_app_id,
+            &(),
+            &[counter_app_id.forget_abi()],
+            None,
+        )
+        .await?;
+
+    // Start node services for both clients.
+    let port1 = get_node_port().await;
+    let port2 = get_node_port().await;
+    let mut node_service1 = client1.run_node_service(port1, ProcessInbox::Skip).await?;
+    let mut node_service2 = client2.run_node_service(port2, ProcessInbox::Skip).await?;
+    let mut notifications2 = node_service2.notifications(chain_receiver).await?;
+
+    let meta_counter_app = node_service1.make_application(&chain_creator, &meta_counter_app_id)?;
+
+    // Send first increment (+5) to the receiver chain.
+    meta_counter_app
+        .mutate(format!(
+            "increment(recipientId: \"{chain_receiver}\", value: 5, fuelGrant: 1000000)"
+        ))
+        .await?;
+
+    // Send a failing message to the receiver chain.
+    meta_counter_app
+        .mutate(format!(
+            "fail(recipientId: \"{chain_receiver}\", isTracked: false)"
+        ))
+        .await?;
+
+    // Send second increment (+3) to the receiver chain.
+    meta_counter_app
+        .mutate(format!(
+            "increment(recipientId: \"{chain_receiver}\", value: 3, fuelGrant: 1000000)"
+        ))
+        .await?;
+
+    // Wait for all bundles to arrive at the receiver chain, then process inbox.
+    // This is where the proposer builds the block with auto-retry (rejecting the
+    // failing bundle) and validators re-execute to verify. If there's a consensus
+    // divergence, process_inbox will fail because the block won't get certified.
+    notifications2.wait_for_bundle(chain_creator, None).await?;
+    assert!(!node_service2
+        .process_inbox(&chain_receiver)
+        .await?
+        .is_empty());
+
+    // Query the counter value on the receiver chain. Should be 5 + 3 = 8.
+    let counter_app2 = node_service2.make_application(&chain_receiver, &counter_app_id)?;
+    let response: serde_json::Value = counter_app2.query_json("value").await?;
+    let counter_value = response.as_u64().unwrap();
+    assert_eq!(counter_value, 8);
+
+    node_service1.ensure_is_running()?;
+    node_service2.ensure_is_running()?;
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_checkpoint_rollback_consensus(
+    config: impl LineraNetConfig,
+) -> Result<()> {
+    run_checkpoint_rollback_consensus_test(config, ReceiverRoundMode::MultiOwnerSingleLeader).await
+}
+
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_wasm_end_to_end_checkpoint_rollback_consensus_fast_rounds(
+    config: impl LineraNetConfig,
+) -> Result<()> {
+    run_checkpoint_rollback_consensus_test(config, ReceiverRoundMode::SingleOwnerFastRound).await
+}
+
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
@@ -3032,7 +3209,7 @@ async fn test_wasm_end_to_end_same_wallet_fungible(
 
     let app1 = NativeFungibleApp(node_service.make_application(&chain1, &application_id)?);
 
-    let expected_balances: Vec<(AccountOwner, Amount)> = state.accounts.into_iter().collect();
+    let expected_balances = state.accounts.into_iter().collect::<Vec<_>>();
 
     app1.assert_balances(expected_balances.clone()).await;
     app1.assert_entries(expected_balances).await;

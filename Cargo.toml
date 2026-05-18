@@ -362,6 +362,7 @@ crowd-funding = { path = "./examples/crowd-funding" }
 ethereum-tracker = { path = "./examples/ethereum-tracker" }
 event-emitter = { path = "./linera-sdk/tests/fixtures/event-emitter" }
 event-subscriber = { path = "./linera-sdk/tests/fixtures/event-subscriber" }
+flash-loan = { path = "./linera-sdk/tests/fixtures/flash-loan" }
 fungible = { path = "./examples/fungible" }
 hex-game = { path = "./examples/hex-game" }
 matching-engine = { path = "./examples/matching-engine" }

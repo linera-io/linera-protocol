@@ -763,9 +763,24 @@ impl<Env: Environment> Benchmark<Env> {
                     generator.generate_operations(owner, transactions_per_block),
                     vec![]
                 ) => {
-                    result
-                        .map_err(BenchmarkError::ChainClient)?
-                        .expect("should execute block with operations");
+                    match result.map_err(BenchmarkError::ChainClient)? {
+                        ClientOutcome::Committed(_) => {}
+                        ClientOutcome::Conflict(certificate) => {
+                            info!(
+                                "Conflict on chain {:?}: {}. Retrying...",
+                                chain_client.chain_id(),
+                                certificate.hash()
+                            );
+                            continue;
+                        }
+                        ClientOutcome::WaitForTimeout(timeout) => {
+                            info!(
+                                "Timeout on chain {:?}: {timeout}. Retrying...",
+                                chain_client.chain_id()
+                            );
+                            continue;
+                        }
+                    }
 
                     let current_bps_count = bps_count.fetch_add(1, Ordering::Relaxed) + 1;
                     if current_bps_count >= bps {
@@ -786,8 +801,9 @@ impl<Env: Environment> Benchmark<Env> {
         let start = Instant::now();
         loop {
             let result = chain_client
-                .execute_operation(Operation::system(SystemOperation::CloseChain))
-                .await?;
+                .close_chain()
+                .await
+                .map_err(BenchmarkError::ChainClient)?;
             match result {
                 ClientOutcome::Committed(_) => break,
                 ClientOutcome::Conflict(certificate) => {

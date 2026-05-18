@@ -17,8 +17,8 @@ use linera_execution::{
         blob_oracle_responses, dummy_chain_description, ExpectedCall, RegisterMockApplication,
         SystemExecutionState,
     },
-    BaseRuntime, ContractRuntime, ExecutionError, ExecutionStateActor, Message, MessageContext,
-    ResourceControlPolicy, ResourceController, ResourceTracker, TransactionTracker,
+    BaseRuntime, ContractRuntime, ExecutionError, Message, MessageContext, ResourceControlPolicy,
+    ResourceController, ResourceTracker, TransactionTracker,
 };
 use test_case::test_case;
 
@@ -288,20 +288,21 @@ async fn test_fee_consumption(
     };
     let mut grant = initial_grant.unwrap_or_default();
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_message(
-            context,
-            Message::User {
-                application_id,
-                bytes: vec![],
-            },
-            if initial_grant.is_some() {
-                Some(&mut grant)
-            } else {
-                None
-            },
-        )
-        .await?;
+    view.execute_message(
+        &mut txn_tracker,
+        &mut controller,
+        context,
+        Message::User {
+            application_id,
+            bytes: vec![],
+        },
+        if initial_grant.is_some() {
+            Some(&mut grant)
+        } else {
+            None
+        },
+    )
+    .await?;
 
     let txn_outcome = txn_tracker.into_outcome()?;
     assert!(txn_outcome.outgoing_messages.is_empty());
@@ -487,16 +488,17 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
         timestamp: Timestamp::default(),
     };
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_message(
-            context,
-            Message::User {
-                application_id,
-                bytes: vec![],
-            },
-            None,
-        )
-        .await?;
+    view.execute_message(
+        &mut txn_tracker,
+        &mut controller,
+        context,
+        Message::User {
+            application_id,
+            bytes: vec![],
+        },
+        None,
+    )
+    .await?;
 
     // Verify no fees were deducted: balances should remain exactly as set.
     assert_eq!(*view.system.balance.get(), chain_balance);
@@ -551,15 +553,16 @@ async fn test_free_app_operation_still_charged() -> anyhow::Result<()> {
         timestamp: Timestamp::default(),
     };
     let mut txn_tracker = TransactionTracker::new_replaying(oracle_responses);
-    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
-        .execute_operation(
-            context,
-            linera_execution::Operation::User {
-                application_id,
-                bytes: vec![],
-            },
-        )
-        .await?;
+    view.execute_operation(
+        &mut txn_tracker,
+        &mut controller,
+        context,
+        linera_execution::Operation::User {
+            application_id,
+            bytes: vec![],
+        },
+    )
+    .await?;
 
     // Verify that fees WERE deducted (operations are not free).
     // At minimum, 100 fuel units * 1 nano per unit = 100 nanos should have been charged.

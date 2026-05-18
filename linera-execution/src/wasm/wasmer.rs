@@ -187,6 +187,34 @@ where
             .map_err(WasmExecutionError::from)?;
         Ok(())
     }
+
+    fn create_snapshot(&mut self) -> Result<Option<Box<dyn crate::Snapshot>>, ExecutionError> {
+        let snapshot = self
+            .instance
+            .create_snapshot()
+            .map_err(WasmExecutionError::from)?;
+        Ok(Some(Box::new(snapshot)))
+    }
+
+    fn restore_snapshot(&mut self, snapshot: &dyn crate::Snapshot) -> Result<(), ExecutionError> {
+        if let Some(snapshot) = snapshot
+            .as_any()
+            .downcast_ref::<linera_witty::wasmer::WasmInstanceSnapshot>()
+        {
+            self.instance
+                .restore_snapshot(snapshot)
+                .map_err(WasmExecutionError::from)?;
+        }
+        Ok(())
+    }
+
+    fn restore_snapshot_from_bytes(&mut self, bytes: &[u8]) -> Result<(), ExecutionError> {
+        let snapshot: linera_witty::wasmer::WasmInstanceSnapshot = bcs::from_bytes(bytes)?;
+        self.instance
+            .restore_snapshot(&snapshot)
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
+    }
 }
 
 impl<Runtime: 'static> crate::UserService for WasmerServiceInstance<Runtime> {

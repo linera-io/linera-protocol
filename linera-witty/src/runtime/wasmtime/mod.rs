@@ -9,12 +9,20 @@ mod memory;
 mod parameters;
 mod results;
 
+use std::collections::BTreeMap;
+
 pub use anyhow;
-use wasmtime::{AsContext, AsContextMut, Extern, Memory, Store, StoreContext, StoreContextMut};
+use serde::{Deserialize, Serialize};
+use wasmtime::{
+    AsContext, AsContextMut, Extern, Memory, Mutability, Store, StoreContext, StoreContextMut,
+};
 pub use wasmtime::{Caller, Linker};
 
 pub use self::{parameters::WasmtimeParameters, results::WasmtimeResults};
-use super::traits::{Instance, Runtime};
+use super::{
+    snapshot::{NumericVal, SnapshotError},
+    traits::{Instance, Runtime},
+};
 
 /// Representation of the [Wasmtime](https://wasmtime.dev) runtime.
 pub struct Wasmtime;
@@ -30,11 +38,175 @@ pub struct EntrypointInstance<UserData> {
     store: Store<UserData>,
 }
 
+/// Snapshot of a Wasmtime instance's mutable state.
+///
+/// Captures the data that can change at runtime for each kind of [`Extern`]:
+///
+/// - [`Extern::Memory`]: the bytes of every exported linear memory, by
+///   export name. Standard Linera modules export a single memory, but the
+///   data type permits the Wasm `multi-memory` proposal.
+/// - [`Extern::Global`]: the value of every exported mutable global.
+/// - [`Extern::Table`]: the element count of every exported table. Tables
+///   are initialised from the module's `elem` section and Linera contracts
+///   do not mutate them after instantiation, so only the size is tracked
+///   and the same size is required of the instance at restore time.
+///
+/// The remaining variants carry no snapshottable state:
+///
+/// - [`Extern::Func`] holds an immutable reference to compiled code.
+/// - [`Extern::SharedMemory`] is rejected (Linera does not use the Wasm
+///   threading proposal); attempting to snapshot or restore one panics.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WasmInstanceSnapshot {
+    memories: BTreeMap<String, Vec<u8>>,
+    globals: BTreeMap<String, NumericVal>,
+    table_sizes: BTreeMap<String, u64>,
+}
+
+fn wasmtime_val_to_numeric(val: &wasmtime::Val) -> Option<NumericVal> {
+    match val {
+        wasmtime::Val::I32(v) => Some(NumericVal::I32(*v)),
+        wasmtime::Val::I64(v) => Some(NumericVal::I64(*v)),
+        wasmtime::Val::F32(bits) => Some(NumericVal::F32(*bits)),
+        wasmtime::Val::F64(bits) => Some(NumericVal::F64(*bits)),
+        wasmtime::Val::V128(v) => Some(NumericVal::V128(v.as_u128())),
+        wasmtime::Val::FuncRef(_) | wasmtime::Val::ExternRef(_) | wasmtime::Val::AnyRef(_) => None,
+    }
+}
+
+fn numeric_to_wasmtime_val(val: &NumericVal) -> wasmtime::Val {
+    match val {
+        NumericVal::I32(v) => wasmtime::Val::I32(*v),
+        NumericVal::I64(v) => wasmtime::Val::I64(*v),
+        NumericVal::F32(bits) => wasmtime::Val::F32(*bits),
+        NumericVal::F64(bits) => wasmtime::Val::F64(*bits),
+        NumericVal::V128(v) => wasmtime::Val::V128(wasmtime::V128::from(*v)),
+    }
+}
+
 impl<UserData> EntrypointInstance<UserData> {
     /// Creates a new [`EntrypointInstance`] with the guest module
     /// [`Instance`][`wasmtime::Instance`] and [`Store`].
     pub fn new(instance: wasmtime::Instance, store: Store<UserData>) -> Self {
         EntrypointInstance { instance, store }
+    }
+
+    /// Returns mutable references to the [`Store`] and the [`wasmtime::Instance`] stored
+    /// inside this [`EntrypointInstance`].
+    pub fn as_store_and_instance_mut(
+        &mut self,
+    ) -> (StoreContextMut<'_, UserData>, &mut wasmtime::Instance) {
+        (self.store.as_context_mut(), &mut self.instance)
+    }
+
+    /// Creates a snapshot of the Wasm instance's mutable state (memories, globals,
+    /// table sizes).
+    pub fn create_snapshot(&mut self) -> Result<WasmInstanceSnapshot, SnapshotError> {
+        let mut memories = BTreeMap::new();
+        let mut globals = BTreeMap::new();
+        let mut table_sizes = BTreeMap::new();
+
+        let exports = self
+            .instance
+            .exports(&mut self.store)
+            .map(|export| (export.name().to_string(), export.into_extern()))
+            .collect::<Vec<_>>();
+
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(mem) => {
+                    memories.insert(name, mem.data(&self.store).to_vec());
+                }
+                Extern::Global(global) => {
+                    // Const globals are part of the module and need no snapshot.
+                    if global.ty(&self.store).mutability() == Mutability::Var {
+                        let val = wasmtime_val_to_numeric(&global.get(&mut self.store))
+                            .ok_or_else(|| SnapshotError::ReferenceTypedGlobal {
+                                name: name.clone(),
+                            })?;
+                        globals.insert(name, val);
+                    }
+                }
+                Extern::Table(table) => {
+                    table_sizes.insert(name, u64::from(table.size(&self.store)));
+                }
+                Extern::SharedMemory(_) => {
+                    return Err(SnapshotError::SharedMemoryUnsupported { name });
+                }
+                // Functions are immutable code references; nothing to snapshot.
+                Extern::Func(_) => {}
+            }
+        }
+
+        Ok(WasmInstanceSnapshot {
+            memories,
+            globals,
+            table_sizes,
+        })
+    }
+
+    /// Restores the Wasm instance's mutable state from a snapshot.
+    pub fn restore_snapshot(
+        &mut self,
+        snapshot: &WasmInstanceSnapshot,
+    ) -> Result<(), SnapshotError> {
+        let exports = self
+            .instance
+            .exports(&mut self.store)
+            .map(|export| (export.name().to_string(), export.into_extern()))
+            .collect::<Vec<_>>();
+
+        for (name, ext) in exports {
+            match ext {
+                Extern::Memory(mem) => {
+                    if let Some(bytes) = snapshot.memories.get(&name) {
+                        // Grow the live memory to fit the snapshot if the snapshot
+                        // was captured after a `memory.grow`.
+                        let needed = bytes.len();
+                        let current = mem.data_size(&self.store);
+                        if needed > current {
+                            let page_size = mem.page_size(&self.store) as usize;
+                            let extra_pages = needed.div_ceil(page_size) - current / page_size;
+                            mem.grow(&mut self.store, extra_pages as u64).map_err(|e| {
+                                SnapshotError::MemoryGrow {
+                                    name: name.clone(),
+                                    message: e.to_string(),
+                                }
+                            })?;
+                        }
+                        mem.data_mut(&mut self.store)[..needed].copy_from_slice(bytes);
+                    }
+                }
+                Extern::Global(global) => {
+                    if let Some(val) = snapshot.globals.get(&name) {
+                        global
+                            .set(&mut self.store, numeric_to_wasmtime_val(val))
+                            .map_err(|e| SnapshotError::GlobalSet {
+                                name: name.clone(),
+                                message: e.to_string(),
+                            })?;
+                    }
+                }
+                Extern::Table(table) => {
+                    if let Some(size) = snapshot.table_sizes.get(&name) {
+                        let current = u64::from(table.size(&self.store));
+                        if current != *size {
+                            return Err(SnapshotError::TableSizeMismatch {
+                                name,
+                                snapshot: *size,
+                                current,
+                            });
+                        }
+                    }
+                }
+                Extern::SharedMemory(_) => {
+                    return Err(SnapshotError::SharedMemoryUnsupported { name });
+                }
+                // Functions are immutable code references; nothing to restore.
+                Extern::Func(_) => {}
+            }
+        }
+        Ok(())
     }
 }
 

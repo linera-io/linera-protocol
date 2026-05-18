@@ -1336,6 +1336,21 @@ where
     fn finalize(&mut self) -> Result<(), ExecutionError> {
         Ok(())
     }
+
+    fn create_snapshot(&mut self) -> Result<Option<Box<dyn crate::Snapshot>>, ExecutionError> {
+        // We do not have snapshots with the REVM blockchain.
+        Ok(None)
+    }
+
+    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) -> Result<(), ExecutionError> {
+        // Since no snapshot, the restoring is a noop.
+        Ok(())
+    }
+
+    fn restore_snapshot_from_bytes(&mut self, _bytes: &[u8]) -> Result<(), ExecutionError> {
+        // The EVM runtime does not produce snapshots, so there is nothing to restore.
+        Ok(())
+    }
 }
 
 fn process_execution_result(

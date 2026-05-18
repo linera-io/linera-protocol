@@ -59,7 +59,7 @@ pub struct TransactionTracker {
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct TransactionOutcome {
     #[debug(skip_if = Vec::is_empty)]
     pub oracle_responses: Vec<OracleResponse>,

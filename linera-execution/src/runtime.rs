@@ -28,8 +28,10 @@ use tracing::instrument;
 
 use crate::{
     execution::UserAction,
-    execution_state_actor::{ExecutionRequest, ExecutionStateSender},
-    resources::ResourceController,
+    execution_state_actor::{
+        ExecuteCommand, ExecutionRequest, ExecutionStateSender, RuntimeCommand,
+    },
+    resources::{ResourceController, ResourceTracker},
     system::CreateApplicationResult,
     util::{ReceiverExt, UnboundedSenderExt},
     ApplicationDescription, ApplicationId, BaseRuntime, ContractRuntime, DataBlobHash,
@@ -133,6 +135,23 @@ pub struct SyncRuntimeInternal<UserInstance: WithContext> {
     user_context: UserInstance::UserContext,
     /// Whether contract log messages should be output.
     allow_application_logs: bool,
+    /// Contract-instance snapshots for checkpoint/restore, keyed by application ID.
+    /// Each backend (Wasmer, Wasmtime, REVM, ...) is responsible for producing and
+    /// restoring its own snapshot type via the `UserContract` trait.
+    #[debug(skip)]
+    instance_snapshots: HashMap<ApplicationId, Box<dyn crate::Snapshot>>,
+    /// Snapshot of `applications_to_finalize` taken alongside instance snapshots, so that
+    /// applications loaded only during a failed execution are not finalized.
+    applications_to_finalize_snapshot: Option<Vec<ApplicationId>>,
+    /// Serialized snapshots tracked across actions in the snapshot-based per-action
+    /// execution path on web. Populated at the start of `execute_action_with_snapshots`
+    /// from the actor's block-level map; `load_contract_instance` consumes from this
+    /// map after instantiating each contract to restore the captured
+    /// post-`Contract::load` state. After the action runs, the runtime captures fresh
+    /// snapshots back into this map and the caller pulls it out to keep the block-level
+    /// map up to date — hence "current" rather than "initial".
+    #[debug(skip_if = BTreeMap::is_empty)]
+    current_snapshots: BTreeMap<ApplicationId, Vec<u8>>,
 }
 
 /// The runtime status of an application.
@@ -341,6 +360,9 @@ impl<UserInstance: WithContext> SyncRuntimeInternal<UserInstance> {
             scheduled_operations: Vec::new(),
             user_context,
             allow_application_logs,
+            instance_snapshots: HashMap::new(),
+            applications_to_finalize_snapshot: None,
+            current_snapshots: BTreeMap::new(),
         }
     }
 
@@ -429,7 +451,14 @@ impl SyncRuntimeInternal<UserContractInstance> {
                     }
                     hash_map::Entry::Occupied(entry) => entry.get().clone(),
                 };
-                let instance = code.instantiate(this)?;
+                let mut instance = code.instantiate(this)?;
+
+                // If the actor preloaded a snapshot for this application, restore it
+                // right after instantiation so the contract observes its post-`load`
+                // state and the SDK's `Contract::load` call is skipped on first use.
+                if let Some(snapshot_bytes) = self.current_snapshots.remove(&id) {
+                    instance.restore_snapshot_from_bytes(&snapshot_bytes)?;
+                }
 
                 self.applications_to_finalize.push(id);
                 Ok(entry
@@ -1039,30 +1068,45 @@ impl<UserInstance: WithContext> Clone for SyncRuntimeHandle<UserInstance> {
     }
 }
 
+/// Outcome of a per-action run on the snapshot-based execution path.
+///
+/// Returned by [`ContractSyncRuntime::execute_action_with_snapshots`] when the
+/// per-action worker on web finishes one action: the action's result (operation
+/// output bytes, if any), the runtime-side [`ResourceController`] (so the actor
+/// can merge balance/tracker back into the main controller), and the updated
+/// per-application snapshot map (so the actor can keep the block-level
+/// `block_snapshots` in sync).
+pub(crate) struct ActionWithSnapshotsOutcome {
+    pub result: Option<Vec<u8>>,
+    pub controller: ResourceController,
+    pub snapshots: BTreeMap<ApplicationId, Vec<u8>>,
+}
+
 impl ContractSyncRuntime {
-    pub(crate) fn new(
+    /// Creates a new `ContractSyncRuntime` for block-level execution.
+    ///
+    /// Unlike `new`, this does not take a specific action — the runtime will receive
+    /// actions via `run_block_loop`.
+    pub fn new_for_block(
         execution_state_sender: ExecutionStateSender,
         chain_id: ChainId,
-        refund_grant_to: Option<Account>,
+        height: BlockHeight,
+        round: Option<u32>,
+        timestamp: Timestamp,
         resource_controller: ResourceController,
-        action: &UserAction,
         allow_application_logs: bool,
     ) -> Self {
         SyncRuntime(Some(ContractSyncRuntimeHandle::from(
             SyncRuntimeInternal::new(
                 chain_id,
-                action.height(),
-                action.round(),
-                if let UserAction::Message(context, _) = action {
-                    Some(context.into())
-                } else {
-                    None
-                },
+                height,
+                round,
+                None, // executing_message: set per action
                 execution_state_sender,
-                None,
-                refund_grant_to,
+                None, // deadline
+                None, // refund_grant_to: set per action
                 resource_controller,
-                action.timestamp(),
+                timestamp,
                 allow_application_logs,
             ),
         )))
@@ -1086,62 +1130,320 @@ impl ContractSyncRuntime {
         }
     }
 
-    /// Main entry point to start executing a user action.
-    pub(crate) fn run_action(
+    /// Per-action entry point used by the snapshot-based execution path on web.
+    ///
+    /// Takes the actor's block-level snapshot map by value, runs the action,
+    /// captures fresh snapshots for every contract that was loaded during this
+    /// action, then finalizes (so `Contract::store` runs and chain views are
+    /// updated). Apps that were already in the input map but weren't loaded
+    /// during this action keep their original bytes and pass through.
+    ///
+    /// The snapshot is captured **before** finalize, so each entry holds the
+    /// post-action / pre-`Contract::store` Wasm state. That means the next
+    /// action's worker, when it restores, gets `CONTRACT = Some(...)` and the
+    /// SDK's `Contract::load` is skipped — preserving the "load once per
+    /// block per app" invariant. Finalize is then called per action: each
+    /// `Contract::store` is idempotent (writes the current Wasm memory to the
+    /// view), so calling it multiple times produces the same final state as
+    /// calling it once at end of block.
+    pub(crate) fn execute_action_with_snapshots(
         mut self,
         application_id: ApplicationId,
-        chain_id: ChainId,
         action: UserAction,
-    ) -> Result<(Option<Vec<u8>>, ResourceController), ExecutionError> {
+        refund_grant_to: Option<Account>,
+        snapshots: BTreeMap<ApplicationId, Vec<u8>>,
+    ) -> Result<ActionWithSnapshotsOutcome, ExecutionError> {
+        // Build the per-action `FinalizeContext` from the action's context
+        // before consuming `action`.
+        let finalize_context = FinalizeContext {
+            authenticated_owner: action.signer(),
+            chain_id: self.inner().chain_id,
+            height: action.height(),
+            round: action.round(),
+        };
+        // Move the input snapshots into the runtime; `load_contract_instance`
+        // consumes (`.remove()`) from this map on first use of each contract.
+        self.inner().current_snapshots = snapshots;
         let result = self
             .deref_mut()
-            .run_action(application_id, chain_id, action)?;
+            .execute_action(application_id, action, refund_grant_to)?;
+        // Capture a fresh snapshot for every loaded contract — *before*
+        // finalize, so `CONTRACT` is still `Some(...)` in the captured memory.
+        let app_ids: Vec<ApplicationId> =
+            self.inner().loaded_applications.keys().copied().collect();
+        for app_id in app_ids {
+            let snapshot = {
+                let inner = self.inner();
+                let loaded = inner
+                    .loaded_applications
+                    .get(&app_id)
+                    .expect("application present");
+                let mut instance = loaded.instance.try_lock().expect("instance not in use");
+                instance.create_snapshot()?
+            };
+            if let Some(snapshot) = snapshot {
+                self.inner()
+                    .current_snapshots
+                    .insert(app_id, snapshot.to_bytes());
+            }
+        }
+        // Finalize: each loaded contract's `Contract::store` runs, writing its
+        // Wasm-side state to the chain view. The threaded path does this once
+        // at end of block; doing it here per action gives the same final
+        // chain-view state because `store` is idempotent.
+        self.deref().finalize(finalize_context)?;
+        // Clear `loaded_applications` to release the `SyncRuntimeHandle` clones
+        // held inside each contract instance — otherwise `Arc::into_inner` below
+        // returns `None` because those clones keep the handle's `Arc` alive.
+        self.inner().loaded_applications.clear();
+        let runtime = self
+            .into_inner()
+            .expect("Runtime clones should have been freed by now");
+        Ok(ActionWithSnapshotsOutcome {
+            result,
+            controller: runtime.resource_controller,
+            snapshots: runtime.current_snapshots,
+        })
+    }
+
+    /// Runs a block-level loop, receiving commands from the async side.
+    ///
+    /// The runtime thread stays alive for the entire block, processing actions one at a
+    /// time. Contract instances are kept loaded across actions so that cross-action state
+    /// is visible without flushing to storage.
+    ///
+    /// Returns the `ResourceController` after all instances have been finalized.
+    pub fn run_block_loop(
+        self,
+        command_rx: &std::sync::mpsc::Receiver<RuntimeCommand>,
+    ) -> Result<ResourceController, ExecutionError> {
+        let handle = self.0.as_ref().expect("Runtime should be initialized");
+
+        loop {
+            let command = command_rx
+                .recv()
+                .map_err(|_| ExecutionError::MissingRuntimeResponse)?;
+
+            match command {
+                RuntimeCommand::Execute(cmd) => {
+                    let ExecuteCommand {
+                        application_id,
+                        action,
+                        refund_grant_to,
+                        codes,
+                        initial_balance,
+                        is_free,
+                        tracker,
+                    } = *cmd;
+                    // Preload any new contract codes.
+                    for (code, description) in codes {
+                        self.preload_contract(ApplicationId::from(&description), code, description);
+                    }
+
+                    // Sync the main controller's balance, is_free flag, and tracker into
+                    // the runtime controller before executing.
+                    {
+                        let mut inner = handle.inner();
+                        inner.resource_controller.account = initial_balance;
+                        inner.resource_controller.is_free = is_free;
+                        inner.resource_controller.tracker = tracker;
+                    }
+
+                    let result = handle.execute_action(application_id, action, refund_grant_to);
+
+                    // Read back the runtime controller's final state so the async side can
+                    // merge the balance delta and copy the tracker back.
+                    let (final_balance, final_tracker) = {
+                        let inner = handle.inner();
+                        (
+                            inner.resource_controller.account,
+                            inner.resource_controller.tracker,
+                        )
+                    };
+
+                    // Signal completion through the state request channel.
+                    let sender = handle.inner().execution_state_sender.clone();
+                    _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
+                        result,
+                        final_balance,
+                        tracker: final_tracker,
+                    });
+                }
+
+                RuntimeCommand::FinalizeAll {
+                    context,
+                    tracker,
+                    initial_balance,
+                } => {
+                    // Sync the main controller's tracker so finalize accumulates against
+                    // the block-wide fuel budget, and set the balance so fuel costs are
+                    // properly deducted from the chain's balance.
+                    {
+                        let mut inner = handle.inner();
+                        inner.resource_controller.tracker = *tracker;
+                        inner.resource_controller.is_free = false;
+                        inner.resource_controller.account = initial_balance;
+                    }
+                    let finalize_result = handle.finalize(context);
+                    // Clear all remaining loaded applications (including any that
+                    // were loaded during failed executions and then removed from
+                    // `applications_to_finalize` by a snapshot restore). This drops
+                    // the Arc<Mutex<Instance>> entries, releasing the handle clones
+                    // stored inside each Wasm instance, so that `Arc::into_inner`
+                    // succeeds below. Must happen even on finalize error to break
+                    // the reference cycle (instances hold Arc back to the runtime).
+                    handle.inner().loaded_applications.clear();
+                    finalize_result?;
+                    break;
+                }
+
+                RuntimeCommand::SnapshotAllInstances => {
+                    let result = handle.snapshot_all_instances().map(|()| None);
+
+                    let sender = handle.inner().execution_state_sender.clone();
+                    _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
+                        result,
+                        final_balance: Amount::ZERO,
+                        tracker: ResourceTracker::default(),
+                    });
+                }
+
+                RuntimeCommand::RestoreAllInstances => {
+                    let result = handle.restore_all_snapshots().map(|()| None);
+
+                    let sender = handle.inner().execution_state_sender.clone();
+                    _ = sender.unbounded_send(ExecutionRequest::ActionComplete {
+                        result,
+                        final_balance: Amount::ZERO,
+                        tracker: ResourceTracker::default(),
+                    });
+                }
+            }
+        }
+
+        // Consume self and return the resource controller.
         let runtime = self
             .into_inner()
             .expect("Runtime clones should have been freed by now");
 
-        Ok((result, runtime.resource_controller))
+        Ok(runtime.resource_controller)
     }
 }
 
 impl ContractSyncRuntimeHandle {
+    /// Executes a single user action without finalizing.
+    ///
+    /// Updates the runtime's `executing_message` and `refund_grant_to` context
+    /// based on the action, then executes the contract code.
     #[instrument(skip_all, fields(application_id = %application_id))]
-    fn run_action(
+    fn execute_action(
         &self,
         application_id: ApplicationId,
-        chain_id: ChainId,
         action: UserAction,
+        refund_grant_to: Option<Account>,
     ) -> Result<Option<Vec<u8>>, ExecutionError> {
-        let finalize_context = FinalizeContext {
-            authenticated_owner: action.signer(),
-            chain_id,
-            height: action.height(),
-            round: action.round(),
-        };
-
+        // Update per-action context on the runtime.
         {
-            let runtime = self.inner();
-            assert_eq!(runtime.chain_id, chain_id);
-            assert_eq!(runtime.height, action.height());
+            let mut runtime = self.inner();
+            runtime.executing_message = if let UserAction::Message(ref context, _) = action {
+                Some(context.into())
+            } else {
+                None
+            };
+            runtime.refund_grant_to = refund_grant_to;
         }
 
         let signer = action.signer();
-        let closure = move |code: &mut UserContractInstance| match action {
+        let closure = match action {
             UserAction::Instantiate(_context, argument) => {
-                code.instantiate(argument).map(|()| None)
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.instantiate(argument).map(|()| None)
+                })
+                    as Box<
+                        dyn FnOnce(
+                            &mut UserContractInstance,
+                        )
+                            -> Result<Option<Vec<u8>>, ExecutionError>,
+                    >
             }
             UserAction::Operation(_context, operation) => {
-                code.execute_operation(operation).map(Option::Some)
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.execute_operation(operation).map(Option::Some)
+                })
             }
-            UserAction::Message(_context, message) => code.execute_message(message).map(|()| None),
+            UserAction::Message(_context, message) => {
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.execute_message(message).map(|()| None)
+                })
+            }
             UserAction::ProcessStreams(_context, updates) => {
-                code.process_streams(updates).map(|()| None)
+                Box::new(move |code: &mut UserContractInstance| {
+                    code.process_streams(updates).map(|()| None)
+                })
             }
         };
 
-        let result = self.execute(application_id, signer, closure)?;
-        self.finalize(finalize_context)?;
-        Ok(result)
+        self.execute(application_id, signer, closure)
+    }
+
+    /// Snapshots the mutable state of all loaded contract instances.
+    ///
+    /// The exact contents of each snapshot are defined by the backend running the
+    /// instance (e.g. memory + globals for Wasm; a no-op for backends that don't
+    /// support checkpointing, such as the EVM runtime).
+    ///
+    /// Also saves the current `applications_to_finalize` list so that applications
+    /// loaded only during a failed execution are not finalized after a restore.
+    ///
+    /// The snapshots are stored internally and can be restored with `restore_all_snapshots`.
+    fn snapshot_all_instances(&self) -> Result<(), ExecutionError> {
+        let mut runtime = self.inner();
+        let mut snapshots = Vec::new();
+        for (app_id, loaded) in runtime.loaded_applications.iter() {
+            let mut instance = loaded.instance.try_lock().expect("instance not in use");
+            if let Some(snapshot) = instance.create_snapshot()? {
+                snapshots.push((*app_id, snapshot));
+            }
+        }
+        for (app_id, snapshot) in snapshots {
+            runtime.instance_snapshots.insert(app_id, snapshot);
+        }
+        runtime.applications_to_finalize_snapshot = Some(runtime.applications_to_finalize.clone());
+        Ok(())
+    }
+
+    /// Restores all loaded contract instances from their previously taken snapshots.
+    ///
+    /// This undoes any backend-level state changes (e.g. memory and globals for Wasm)
+    /// that occurred since the last `snapshot_all_instances` call. Also restores the
+    /// `applications_to_finalize` list so that applications loaded only during the
+    /// failed execution are not finalized. The snapshots are preserved so that a
+    /// subsequent restore still works correctly.
+    fn restore_all_snapshots(&self) -> Result<(), ExecutionError> {
+        let mut runtime = self.inner();
+        for (app_id, snapshot) in &runtime.instance_snapshots {
+            if let Some(loaded) = runtime.loaded_applications.get(app_id) {
+                let mut instance = loaded.instance.try_lock().expect("instance not in use");
+                instance.restore_snapshot(snapshot.as_ref())?;
+            }
+        }
+        // Remove applications that were loaded during the failed execution (after the
+        // snapshot was taken). They have no instance snapshot so their state is stale,
+        // and keeping them in `loaded_applications` would prevent `load_contract_instance`
+        // from re-loading them (the `Occupied` branch returns early without adding to
+        // `applications_to_finalize`).
+        let snapshot_keys = runtime
+            .instance_snapshots
+            .keys()
+            .copied()
+            .collect::<HashSet<_>>();
+        runtime
+            .loaded_applications
+            .retain(|app_id, _| snapshot_keys.contains(app_id));
+        if let Some(saved) = &runtime.applications_to_finalize_snapshot {
+            runtime.applications_to_finalize = saved.clone();
+        }
+        Ok(())
     }
 
     /// Notifies all loaded applications that execution is finalizing.
@@ -1192,7 +1494,7 @@ impl ContractSyncRuntimeHandle {
                 .instance
                 .try_lock()
                 .expect("Application should not be already executing"),
-        )?;
+        );
 
         let mut runtime = self.inner();
         let application_status = runtime.pop_application();
@@ -1202,7 +1504,7 @@ impl ContractSyncRuntimeHandle {
         assert_eq!(application_status.signer, signer);
         assert!(runtime.call_stack.is_empty());
 
-        Ok(result)
+        result
     }
 }
 
@@ -1417,14 +1719,14 @@ impl ContractRuntime for ContractSyncRuntimeHandle {
             .inner()
             .prepare_for_call(self.clone(), authenticated, callee_id)?;
 
-        let value = contract
+        let result = contract
             .try_lock()
             .expect("Applications should not have reentrant calls")
-            .execute_operation(argument)?;
+            .execute_operation(argument);
 
         self.inner().finish_call();
 
-        Ok(value)
+        result
     }
 
     fn emit(&mut self, stream_name: StreamName, value: Vec<u8>) -> Result<u32, ExecutionError> {

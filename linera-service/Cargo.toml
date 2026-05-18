@@ -202,6 +202,7 @@ linera-service = { path = ".", default-features = false, features = ["test"] }
 linera-storage = { workspace = true, features = ["test"] }
 linera-views = { workspace = true, features = ["test"] }
 matching-engine.workspace = true
+meta-counter.workspace = true
 native-fungible.workspace = true
 non-fungible.workspace = true
 prometheus.workspace = true

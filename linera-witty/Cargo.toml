@@ -24,10 +24,12 @@ wasmtime = ["dep:wasmtime", "linera-witty-macros?/wasmtime"]
 
 [dependencies]
 anyhow.workspace = true
+bcs.workspace = true
 either.workspace = true
 frunk.workspace = true
 linera-witty-macros = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 wasmer = { workspace = true, optional = true }
 wasmtime = { workspace = true, optional = true }
@@ -51,6 +53,7 @@ linera-witty = { path = ".", default-features = false, features = [
 ] }
 test-case.workspace = true
 tracing.workspace = true
+wat = "1.217"
 
 [build-dependencies]
 cfg_aliases.workspace = true

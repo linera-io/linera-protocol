@@ -154,7 +154,7 @@ mod tests {
 /// a specific execution flow. This could be the execution of a block,
 /// the processing of a single message, or a specific phase within these
 /// broader operations.
-#[derive(Copy, Debug, Clone, Default)]
+#[derive(Copy, Debug, Clone, Default, PartialEq, Eq)]
 pub struct ResourceTracker {
     /// The total size of the block so far.
     pub block_size: u64,

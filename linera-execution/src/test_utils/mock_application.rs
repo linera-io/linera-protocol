@@ -327,6 +327,18 @@ impl UserContract for MockApplicationInstance<ContractSyncRuntimeHandle> {
             None => panic!("Unexpected call to `finalize`"),
         }
     }
+
+    fn create_snapshot(&mut self) -> Result<Option<Box<dyn crate::Snapshot>>, ExecutionError> {
+        Ok(None)
+    }
+
+    fn restore_snapshot(&mut self, _snapshot: &dyn crate::Snapshot) -> Result<(), ExecutionError> {
+        Ok(())
+    }
+
+    fn restore_snapshot_from_bytes(&mut self, _bytes: &[u8]) -> Result<(), ExecutionError> {
+        Ok(())
+    }
 }
 
 impl UserService for MockApplicationInstance<ServiceSyncRuntimeHandle> {

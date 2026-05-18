@@ -12,7 +12,7 @@ pub mod execution_state_actor;
 mod graphql;
 mod policy;
 mod resources;
-mod runtime;
+pub mod runtime;
 pub mod system;
 #[cfg(with_testing)]
 pub mod test_utils;
@@ -469,6 +469,31 @@ impl ExecutionError {
     }
 }
 
+/// A backend-agnostic snapshot of a contract instance's mutable state.
+///
+/// Any type that is `Any + Send + Serialize + 'static` automatically implements this
+/// trait via the blanket `impl` below. Restoring requires knowing the concrete type,
+/// so backends downcast through [`Snapshot::as_any`].
+pub trait Snapshot: Send + 'static {
+    /// Serializes the snapshot to a self-describing byte buffer using BCS.
+    fn to_bytes(&self) -> Vec<u8>;
+    /// Borrows the snapshot as a `dyn Any` for backend-specific downcasting.
+    fn as_any(&self) -> &(dyn Any + Send);
+}
+
+impl<T> Snapshot for T
+where
+    T: Any + Send + serde::Serialize + 'static,
+{
+    fn to_bytes(&self) -> Vec<u8> {
+        bcs::to_bytes(self).expect("snapshot serialization should not fail")
+    }
+
+    fn as_any(&self) -> &(dyn Any + Send) {
+        self
+    }
+}
+
 /// The public entry points provided by the contract part of an application.
 pub trait UserContract {
     /// Instantiate the application state on the chain that owns the application.
@@ -485,6 +510,27 @@ pub trait UserContract {
 
     /// Finishes execution of the current transaction.
     fn finalize(&mut self) -> Result<(), ExecutionError>;
+
+    /// Creates a snapshot of the contract instance's mutable state.
+    ///
+    /// What constitutes the mutable state depends on the backend: for Wasm runtimes
+    /// it is the linear memory, mutable globals and table sizes; backends that do
+    /// not support checkpointing (such as the EVM runtime) return `Ok(None)`.
+    fn create_snapshot(&mut self) -> Result<Option<Box<dyn Snapshot>>, ExecutionError>;
+
+    /// Restores the contract instance's mutable state from a snapshot previously
+    /// produced by `create_snapshot`.
+    fn restore_snapshot(&mut self, snapshot: &dyn Snapshot) -> Result<(), ExecutionError>;
+
+    /// Restores the contract instance's mutable state from the BCS-encoded bytes
+    /// of a snapshot previously produced by `create_snapshot().to_bytes()`.
+    ///
+    /// Used by the snapshot-based per-action execution path on web, where a
+    /// snapshot has to cross the worker boundary as plain bytes (the `Box<dyn
+    /// Snapshot>` value can't be `Post`ed directly). Each Wasm backend deserializes
+    /// into its own `WasmInstanceSnapshot` type; backends without snapshots
+    /// (e.g. the EVM runtime) treat this as a no-op.
+    fn restore_snapshot_from_bytes(&mut self, bytes: &[u8]) -> Result<(), ExecutionError>;
 }
 
 /// The public entry points provided by the service part of an application.
@@ -493,18 +539,51 @@ pub trait UserService {
     fn handle_query(&mut self, argument: Vec<u8>) -> Result<Vec<u8>, ExecutionError>;
 }
 
+/// How block execution dispatches actions to the contract runtime.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockExecutionMode {
+    /// Use a long-lived block-level runtime worker; commands flow over an mpsc
+    /// channel that lives in shared memory. Requires a target where Wasm modules
+    /// can cross worker boundaries via shared memory (i.e. native).
+    ThreadedSharedMemory,
+    /// Spawn a fresh runtime worker per action; the contract codes and the
+    /// per-application instance snapshots are `Post`ed at spawn time. The
+    /// worker restores from any provided snapshot, runs the action, and returns
+    /// updated snapshots. Works on every target.
+    NonThreadedNotSharedMemory,
+}
+
+impl Default for BlockExecutionMode {
+    fn default() -> Self {
+        // Native targets share memory natively, so the threaded path is fine; on
+        // web, Wasm modules cannot cross the worker boundary via shared memory
+        // and we have to fall back to the snapshot-based per-action path.
+        #[cfg(not(web))]
+        {
+            Self::ThreadedSharedMemory
+        }
+        #[cfg(web)]
+        {
+            Self::NonThreadedNotSharedMemory
+        }
+    }
+}
+
 /// Configuration options for the execution runtime available to applications.
 #[derive(Clone, Copy)]
 pub struct ExecutionRuntimeConfig {
     /// Whether contract log messages should be output.
     /// This is typically enabled for clients but disabled for validators.
     pub allow_application_logs: bool,
+    /// How block execution dispatches actions to the contract runtime.
+    pub block_execution_mode: BlockExecutionMode,
 }
 
 impl Default for ExecutionRuntimeConfig {
     fn default() -> Self {
         Self {
             allow_application_logs: true,
+            block_execution_mode: BlockExecutionMode::default(),
         }
     }
 }
