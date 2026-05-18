@@ -1568,6 +1568,16 @@ where
 }
 
 #[cfg(with_testing)]
+impl<Database, C> DbStorage<Database, C>
+where
+    Database: linera_views::backends::DatabaseBackup,
+{
+    pub fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        self.database.backup_to(dir)
+    }
+}
+
+#[cfg(with_testing)]
 impl<Database> DbStorage<Database, TestClock>
 where
     Database: TestKeyValueDatabase + Clone + Send + Sync + 'static,
@@ -1594,6 +1604,21 @@ where
         clock: TestClock,
     ) -> Result<Self, Database::Error> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
+        Ok(Self::new(
+            database,
+            wasm_runtime,
+            DEFAULT_STORAGE_CACHE_CONFIG,
+            clock,
+        ))
+    }
+
+    pub async fn connect_for_testing(
+        config: Database::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
+    ) -> Result<Self, Database::Error> {
+        let database = Database::connect(&config, namespace).await?;
         Ok(Self::new(
             database,
             wasm_runtime,

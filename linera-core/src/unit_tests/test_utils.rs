@@ -823,7 +823,7 @@ pub struct TestBuilder<B: StorageBuilder> {
     network_description: Option<NetworkDescription>,
     genesis_storage_builder: GenesisStorageBuilder,
     node_provider: NodeProvider<B::Storage>,
-    validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
+    pub validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
     pub signer: TestSigner,

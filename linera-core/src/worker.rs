@@ -81,6 +81,10 @@ pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
 
+#[cfg(all(test, feature = "rocksdb"))]
+#[path = "unit_tests/worker_backup_tests.rs"]
+mod worker_backup_tests;
+
 /// Wraps a future in `SyncFuture` on non-web targets so that it satisfies `Sync` bounds.
 /// On web targets the future is returned as-is.
 #[cfg(not(web))]
