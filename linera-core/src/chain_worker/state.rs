@@ -2266,15 +2266,9 @@ where
             }
         }
         if query.request_latest_checkpoint_height {
-            info.requested_latest_checkpoint_height = self.find_latest_checkpoint_height().await?;
+            info.requested_latest_checkpoint_height = *self.chain.latest_checkpoint_height.get();
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
-    }
-
-    /// Returns the height of the most recent checkpoint block applied to this chain,
-    /// or `None` if no such block exists. Maintained by `apply_confirmed_block`.
-    async fn find_latest_checkpoint_height(&self) -> Result<Option<BlockHeight>, WorkerError> {
-        Ok(*self.chain.latest_checkpoint_height.get())
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
