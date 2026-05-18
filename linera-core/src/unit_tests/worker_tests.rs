@@ -1357,7 +1357,11 @@ where
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
         env.worker()
-            .handle_confirmed_certificate(certificate1.clone(), ProcessConfirmedBlockMode::Auto, None)
+            .handle_confirmed_certificate(
+                certificate1.clone(),
+                ProcessConfirmedBlockMode::Auto,
+                None
+            )
             .await,
         Ok(_)
     );
@@ -1593,7 +1597,11 @@ where
         );
 
         env.worker()
-            .handle_confirmed_certificate(certificate.clone(), ProcessConfirmedBlockMode::Auto, None)
+            .handle_confirmed_certificate(
+                certificate.clone(),
+                ProcessConfirmedBlockMode::Auto,
+                None,
+            )
             .await?;
 
         // Then receive the next two messages.

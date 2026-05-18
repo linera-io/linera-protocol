@@ -1204,8 +1204,12 @@ impl<Env: Environment> Client<Env> {
         // necessary. This is an own-chain certificate, contiguous with the local tip
         // after the history recovery above, so require full execution.
         let nodes = self.validator_nodes().await?;
-        self.handle_certificate_with_retry(&certificate, &nodes, ProcessConfirmedBlockMode::Execute)
-            .await?;
+        self.handle_certificate_with_retry(
+            &certificate,
+            &nodes,
+            ProcessConfirmedBlockMode::Execute,
+        )
+        .await?;
         Ok(())
     }
 

@@ -142,11 +142,7 @@ where
         Ok(Box::pin(
             self.node
                 .state
-                .fully_handle_confirmed_certificate_with_notifications(
-                    certificate,
-                    mode,
-                    notifier,
-                ),
+                .fully_handle_confirmed_certificate_with_notifications(certificate, mode, notifier),
         )
         .await?)
     }
