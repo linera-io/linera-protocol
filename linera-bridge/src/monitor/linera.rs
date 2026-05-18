@@ -84,7 +84,6 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             }
             continue;
         }
-
         for super::PendingBurnsAtHeight {
             height,
             event_indices,
@@ -245,14 +244,22 @@ async fn submit_chunks_with_retry<P: Provider>(
     cert: &linera_chain::types::ConfirmedBlockCertificate,
     height: BlockHeight,
     tx_index: u32,
-    chunks: Vec<Vec<u32>>,
+    events_chunks: Vec<Vec<u32>>,
 ) {
-    for chunk in chunks {
-        if let Err(e) = evm_client.process_burns(cert, tx_index, &chunk).await {
-            tracing::warn!(tx_index, ?chunk, "processBurns submission failed: {e:#}");
+    for events_chunk in events_chunks {
+        if let Err(error) = evm_client
+            .process_burns(cert, tx_index, &events_chunk)
+            .await
+        {
+            tracing::warn!(
+                tx_index,
+                ?events_chunk,
+                ?error,
+                "processBurns submission failed"
+            );
             let to_bump: Vec<u32> = {
                 let state = monitor.read().await;
-                chunk
+                events_chunk
                     .iter()
                     .filter_map(|&pos| state.event_index_for_pos(height, tx_index, pos))
                     .collect()

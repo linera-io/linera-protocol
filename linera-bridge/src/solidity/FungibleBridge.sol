@@ -120,11 +120,10 @@ contract FungibleBridge is Microchain {
     /// this when `addBlock(cert)` would not fit in a single EVM tx,
     /// chunking burns per-tx-then-by-gas.
     ///
-    /// Idempotent like `_onBlock`: positions already in `processedBurns`
-    /// are skipped silently rather than reverted. Lets the relayer recover
-    /// from overlap with a prior `addBlock` (or a racing/retrying
-    /// `processBurns`) instead of losing the whole chunk to a single
-    /// duplicate.
+    /// Idempotent like `_onBlock`: positions already in `processedBurns` are
+    /// skipped silently rather than reverted. Lets the relayer recover from
+    /// overlap with a prior `addBlock` (or a racing/retrying `processBurns`)
+    /// instead of losing the whole chunk to a single duplicate.
     ///
     /// Reverts (atomically — no `processedBurns` flag is set if the call
     /// reverts) on:

@@ -71,8 +71,11 @@ pub struct PendingBurn {
     /// Position of this burn within `body.events[tx_index]`.
     /// Used by `processBurns(cert, tx_index, [event_pos_in_tx, ...])`.
     pub event_pos_in_tx: u32,
-    /// `Event.index` — the stream index of this burn, unique within
-    /// `(stream, height)`. Off-chain and on-chain dedup key.
+    /// `Event.index` — sequential position of this burn within its stream
+    /// (the "burns" stream of the configured fungible app on the configured
+    /// Linera chain). Unique for the lifetime of that stream, so unique
+    /// across all heights within the relayer's scope. Off-chain and on-chain
+    /// dedup key.
     pub event_index: u32,
     pub evm_recipient: Address,
     pub amount: Amount,
