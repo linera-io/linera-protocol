@@ -20,13 +20,11 @@ use std::{
 /// A reference-counted pointer that can only be constructed through a
 /// [`crate::ValueCache`].
 ///
-/// `Arc<T>` is `#[repr(transparent)]` over [`std::sync::Arc<T>`] and
-/// implements `Deref<Target = T>`, `Clone`, `Debug`, `Display`, `PartialEq`,
-/// `Eq`, and `Hash` identically to [`std::sync::Arc<T>`].
+/// `Arc<T>` wraps [`std::sync::Arc<T>`] and implements `Deref<Target = T>`,
+/// `Clone`, `Debug`, `Display`, `PartialEq`, `Eq`, and `Hash` identically.
 ///
 /// Use [`Arc::into_std`] or [`Arc::as_std`] to interoperate with APIs that
 /// require [`std::sync::Arc<T>`] explicitly.
-#[repr(transparent)]
 pub struct Arc<T>(pub(crate) StdArc<T>);
 
 impl<T> Arc<T> {
