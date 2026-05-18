@@ -1376,7 +1376,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
         {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(ClientOutcome::Conflict(Box::new(certificate)))
+                return Ok(self.classify_committed(certificate, &operations));
             }
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ClientOutcome::WaitForTimeout(timeout))
@@ -1390,7 +1390,9 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect pending messages and epoch changes after acquiring the lock to avoid
         // race conditions where messages valid for one block height are proposed at a
         // different height.
-        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+        let transactions = self
+            .prepend_epochs_messages_and_events(operations.clone())
+            .await?;
 
         if transactions.is_empty() {
             return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
@@ -1398,19 +1400,15 @@ impl<Env: Environment> ChainClient<Env> {
             )));
         }
 
-        let block = self
-            .new_pending_block(transactions, blobs, &mut proposal_guard)
+        self.new_pending_block(transactions, blobs, &mut proposal_guard)
             .await?;
 
         match self
             .process_pending_block_without_prepare(&mut proposal_guard)
             .await?
         {
-            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
-                Ok(ClientOutcome::Committed(certificate))
-            }
             ClientOutcome::Committed(Some(certificate)) => {
-                Ok(ClientOutcome::Conflict(Box::new(certificate)))
+                Ok(self.classify_committed(certificate, &operations))
             }
             // Unreachable: We just set the pending proposal in the guard.
             ClientOutcome::Committed(None) => {
@@ -1418,6 +1416,43 @@ impl<Env: Environment> ChainClient<Env> {
             }
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
             ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
+        }
+    }
+
+    /// Returns `Committed` if the committed block reflects our request — same
+    /// authenticated owner, and our `operations` as a suffix of the block's
+    /// transactions. Any transactions before that suffix must be ones that
+    /// `prepend_epochs_messages_and_events` would have added: incoming messages,
+    /// `ProcessNewEpoch`, or `UpdateStream`. Otherwise returns `Conflict`.
+    fn classify_committed(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        operations: &[Operation],
+    ) -> ClientOutcome<ConfirmedBlockCertificate> {
+        let block = certificate.block();
+        let owner_matches = self.preferred_owner.is_some()
+            && block.header.authenticated_owner == self.preferred_owner;
+        let transactions = &block.body.transactions;
+        let suffix_matches = transactions
+            .len()
+            .checked_sub(operations.len())
+            .is_some_and(|start| {
+                transactions[..start].iter().all(|tx| match tx {
+                    Transaction::ReceiveMessages(_) => true,
+                    Transaction::ExecuteOperation(Operation::System(op)) => matches!(
+                        **op,
+                        SystemOperation::ProcessNewEpoch(_)
+                            | SystemOperation::UpdateStream { .. }
+                    ),
+                    Transaction::ExecuteOperation(_) => false,
+                }) && transactions[start..].iter().zip(operations).all(|(tx, op)| {
+                    matches!(tx, Transaction::ExecuteOperation(tx_op) if tx_op == op)
+                })
+            });
+        if owner_matches && suffix_matches {
+            ClientOutcome::Committed(certificate)
+        } else {
+            ClientOutcome::Conflict(Box::new(certificate))
         }
     }
 
