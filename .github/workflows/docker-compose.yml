@@ -4,6 +4,11 @@ on:
   push:
     branches: ["devnet_*", "testnet_*"]
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
   merge_group:
   workflow_dispatch:
 

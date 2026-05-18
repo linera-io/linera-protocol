@@ -4,6 +4,9 @@
 //! This module provides web files to run a block explorer from Linera service node and Linera indexer.
 
 #![recursion_limit = "256"]
+// UI-facing crate; floating-point/UI casts are intentional and not
+// protocol-relevant.
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 mod entrypoint;
 mod formats;

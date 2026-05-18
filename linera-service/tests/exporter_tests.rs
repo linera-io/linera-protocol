@@ -6,6 +6,8 @@
     feature = "scylladb",
     feature = "storage-service",
 ))]
+#![allow(clippy::cast_possible_truncation)]
+
 use anyhow::Result;
 use linera_base::time::Duration;
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};

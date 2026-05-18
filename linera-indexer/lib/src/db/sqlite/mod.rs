@@ -3,6 +3,15 @@
 
 //! SQLite database module for storing blocks and blobs.
 
+// SQLite (via sqlx) has no native unsigned integer types, so this module
+// routinely casts `u64`/`usize` to `i64`/`i32` when binding parameters.
+// The casts are by design at the SQL boundary.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 mod consts;
 #[cfg(test)]
 mod tests;

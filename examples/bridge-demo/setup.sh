@@ -126,7 +126,8 @@ linera_exec() {
 echo "Compose file: $COMPOSE_FILE"
 EVM_RPC_URL="${EVM_RPC_URL:-http://anvil:8545}"
 EVM_PRIVATE_KEY="${EVM_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
-WASM_DIR="${WASM_DIR:-/wasm}"
+WASM_DIR="${WASM_DIR:-/wasm/examples}"
+EVM_BRIDGE_WASM_DIR="${EVM_BRIDGE_WASM_DIR:-/wasm/root}"
 CONTRACTS_DIR="${CONTRACTS_DIR:-/contracts}"
 OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
 FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
@@ -182,26 +183,26 @@ dc_exec linera-network sh -c "\
     cp $WALLET_DIR/keystore_0.json $WALLET_DIR/keystore_${EXTRA_WALLET_ID}.json && \
     cp -r $WALLET_DIR/client_0.db $WALLET_DIR/client_${EXTRA_WALLET_ID}.db"
 
-# ── 3. Deploy MockERC20 ──
-echo "Deploying MockERC20 via forge script..."
+# ── 3. Deploy LineraToken ──
+echo "Deploying LineraToken via forge script..."
 EVM_CHAIN_ID_DECIMAL=$(dc_exec foundry-tools cast chain-id --rpc-url "$EVM_RPC_URL")
 dc_exec foundry-tools env \
     TOKEN_NAME="TestToken" \
     TOKEN_SYMBOL="TT" \
     TOKEN_SUPPLY="1000000000000000000000" \
-    forge script /contracts/script/DeployMockERC20.s.sol \
+    forge script /contracts/script/DeployLineraToken.s.sol \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
     --private-key "$EVM_PRIVATE_KEY" \
-    --broadcast >/tmp/mock-erc20-deploy.log 2>&1 || {
-    cat /tmp/mock-erc20-deploy.log >&2
-    die "MockERC20 deploy failed"
+    --broadcast >/tmp/linera-token-deploy.log 2>&1 || {
+    cat /tmp/linera-token-deploy.log >&2
+    die "LineraToken deploy failed"
 }
 TOKEN_ADDRESS=$(dc_exec foundry-tools \
     jq -r '.transactions[0].contractAddress' \
-    "/contracts/broadcast/DeployMockERC20.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
+    "/contracts/broadcast/DeployLineraToken.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
     | tr -d '[:space:]')
-echo "  MockERC20: $TOKEN_ADDRESS"
+echo "  LineraToken: $TOKEN_ADDRESS"
 validate_eth_address "Token address" "$TOKEN_ADDRESS"
 TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
 
@@ -230,7 +231,6 @@ echo "Publishing and creating evm-bridge app..."
 BRIDGE_PARAMS=$(
     CHAIN_ID="$EVM_CHAIN_ID" \
     TOKEN_HEX="$TOKEN_ADDR_HEX" \
-    EVM_RPC_URL="$EVM_RPC_URL" \
     python3 -c "
 import json, os
 def hex_to_array(h):
@@ -238,18 +238,23 @@ def hex_to_array(h):
 params = {
     'source_chain_id': int(os.environ['CHAIN_ID']),
     'token_address': hex_to_array(os.environ['TOKEN_HEX']),
-    'rpc_endpoint': os.environ.get('EVM_RPC_URL', ''),
 }
 print(json.dumps(params))
 ")
 
+BRIDGE_ARGUMENT=$(EVM_RPC_URL="$EVM_RPC_URL" python3 -c "
+import json, os
+print(json.dumps({'rpc_endpoint': os.environ.get('EVM_RPC_URL', '')}))
+")
+
 for attempt in 1 2 3; do
     BRIDGE_APP_OUTPUT=$(linera_exec publish-and-create \
-        "$WASM_DIR/evm_bridge_contract.wasm" \
-        "$WASM_DIR/evm_bridge_service.wasm" \
+        "$EVM_BRIDGE_WASM_DIR/evm_bridge_contract.wasm" \
+        "$EVM_BRIDGE_WASM_DIR/evm_bridge_service.wasm" \
         --json-parameters "$BRIDGE_PARAMS" \
-        --json-argument 'null' 2>&1) && break
-    echo "  Attempt $attempt failed, retrying..." >&2
+        --json-argument "$BRIDGE_ARGUMENT" 2>&1) && break
+    echo "  Attempt $attempt failed:" >&2
+    echo "$BRIDGE_APP_OUTPUT" >&2
     sleep 2
 done
 [[ -z "$BRIDGE_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create evm-bridge failed after retries" >&2; exit 1; }
@@ -397,7 +402,7 @@ echo ""
 echo "Addresses & IDs:"
 echo "  LightClient (EVM):          $LIGHT_CLIENT_ADDR"
 echo "  FungibleBridge (EVM):       $BRIDGE_ADDRESS"
-echo "  MockERC20 (EVM):            $TOKEN_ADDRESS"
+echo "  LineraToken (EVM):          $TOKEN_ADDRESS"
 echo "  evm-bridge (Linera):        $BRIDGE_APP_ID"
 echo "  wrapped-fungible (Linera):  $WRAPPED_APP_ID"
 echo "  Bridge chain ID:            $BRIDGE_CHAIN_ID"

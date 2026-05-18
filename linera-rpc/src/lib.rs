@@ -75,6 +75,10 @@ pub(crate) fn jittered_backoff_delay(
     use rand::Rng as _;
     let exponential_delay =
         base_delay.saturating_mul(1u32.checked_shl(attempt).unwrap_or(u32::MAX));
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "delay is capped by max_backoff, which fits in u64 milliseconds"
+    )]
     let capped_delay_ms = exponential_delay.min(max_backoff).as_millis() as u64;
     let min_delay_ms = capped_delay_ms * 4 / 5; // 80%
     let max_delay_ms = capped_delay_ms * 6 / 5; // 120%

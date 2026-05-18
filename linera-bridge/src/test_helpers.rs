@@ -155,50 +155,16 @@ pub fn deploy_fungible_bridge(
     deploy_contract(db, deployer, deploy_data)
 }
 
-const MOCK_ERC20_SOL: &str = r#"
-// SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
+const LINERA_TOKEN_SOL: &str = include_str!("solidity/LineraToken.sol");
 
-contract MockERC20 {
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    uint256 public totalSupply;
-
-    constructor(uint256 initialSupply) {
-        balanceOf[msg.sender] = initialSupply;
-        totalSupply = initialSupply;
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        require(balanceOf[msg.sender] >= amount, "insufficient balance");
-        balanceOf[msg.sender] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        require(balanceOf[from] >= amount, "insufficient balance");
-        require(allowance[from][msg.sender] >= amount, "insufficient allowance");
-        allowance[from][msg.sender] -= amount;
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-}
-"#;
-
-pub fn deploy_mock_erc20(
+pub fn deploy_linera_token(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     initial_supply: alloy_primitives::U256,
 ) -> Address {
-    let bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
-    let constructor_args = (initial_supply,).abi_encode_params();
+    let bytecode = compile_contract(LINERA_TOKEN_SOL, "LineraToken.sol", "LineraToken");
+    let constructor_args =
+        ("TestToken".to_string(), "TT".to_string(), initial_supply).abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)

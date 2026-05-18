@@ -8,6 +8,7 @@
 //! the `wasmtime` feature flags.
 
 #![expect(clippy::large_futures)]
+#![allow(clippy::cast_possible_truncation)]
 #![cfg(any(feature = "wasmer", feature = "wasmtime"))]
 
 use std::collections::BTreeMap;

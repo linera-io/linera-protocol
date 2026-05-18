@@ -4062,6 +4062,55 @@
       ],
       "title": "Top Server Error Pairs (method \u00d7 error_type)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "spanNulls": false
+          },
+          "min": 0,
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 99
+      },
+      "id": 63,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (cluster) (rate(node_cpu_seconds_total{mode=\"steal\", cluster=~\"gke-testnet-conway-validator-.*\"}[5m]))",
+          "legendFormat": "{{cluster}}"
+        }
+      ],
+      "title": "CPU Steal Time (per validator cluster)",
+      "type": "timeseries"
     }
   ],
   "preload": false,

@@ -295,11 +295,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_eviction_when_exceeding_max_size() {
-        let cache_size = 3u64;
-        let cache = RequestsCache::new(Duration::from_millis(50), cache_size as usize);
+        let cache = RequestsCache::new(Duration::from_millis(50), 3);
 
         // Fill cache to max size
-        for i in 0..cache_size {
+        for i in 0u64..3 {
             let key = RangeKey {
                 start: i * 10,
                 end: i * 10,

@@ -173,8 +173,8 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_TransferFrom transfer_from;
         // choice=5 corresponds to Claim
         WrappedFungibleOperation_Claim claim;
-        // choice=6 corresponds to Mint
-        WrappedFungibleOperation_Mint mint;
+        // choice=6 corresponds to MintAndTransfer
+        WrappedFungibleOperation_MintAndTransfer mint_and_transfer;
         // choice=7 corresponds to Burn
         WrappedFungibleOperation_Burn burn;
     }
@@ -188,9 +188,12 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(uint8(0), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        return
+            WrappedFungibleOperation(
+                uint8(0), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
     function WrappedFungibleOperation_case_ticker_symbol() internal pure returns (WrappedFungibleOperation memory) {
@@ -199,9 +202,12 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(uint8(1), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        return
+            WrappedFungibleOperation(
+                uint8(1), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
     function WrappedFungibleOperation_case_approve(WrappedFungibleOperation_Approve memory approve)
@@ -213,9 +219,12 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(uint8(2), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        return
+            WrappedFungibleOperation(
+                uint8(2), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
     function WrappedFungibleOperation_case_transfer(WrappedFungibleOperation_Transfer memory transfer_)
@@ -227,9 +236,12 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(uint8(3), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        return
+            WrappedFungibleOperation(
+                uint8(3), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
     function WrappedFungibleOperation_case_transfer_from(WrappedFungibleOperation_TransferFrom memory transfer_from)
@@ -241,9 +253,12 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(uint8(4), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        return
+            WrappedFungibleOperation(
+                uint8(4), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
     function WrappedFungibleOperation_case_claim(WrappedFungibleOperation_Claim memory claim)
@@ -255,12 +270,15 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
-        WrappedFungibleOperation_Mint memory mint;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(uint8(5), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        return
+            WrappedFungibleOperation(
+                uint8(5), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
-    function WrappedFungibleOperation_case_mint(WrappedFungibleOperation_Mint memory mint)
+    function WrappedFungibleOperation_case_mint_and_transfer(WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer)
         internal
         pure
         returns (WrappedFungibleOperation memory)
@@ -271,7 +289,10 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(uint8(6), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        return
+            WrappedFungibleOperation(
+                uint8(6), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
     function WrappedFungibleOperation_case_burn(WrappedFungibleOperation_Burn memory burn)
@@ -284,8 +305,11 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
-        return WrappedFungibleOperation(uint8(7), balance_, approve, transfer_, transfer_from, claim, mint, burn);
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
+        return
+            WrappedFungibleOperation(
+                uint8(7), balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            );
     }
 
     function bcs_serialize_WrappedFungibleOperation(WrappedFungibleOperation memory input)
@@ -310,7 +334,9 @@ library WrappedFungibleTypes {
             return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_Claim(input.claim));
         }
         if (input.choice == 6) {
-            return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_Mint(input.mint));
+            return abi.encodePacked(
+                input.choice, bcs_serialize_WrappedFungibleOperation_MintAndTransfer(input.mint_and_transfer)
+            );
         }
         if (input.choice == 7) {
             return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_Burn(input.burn));
@@ -346,17 +372,22 @@ library WrappedFungibleTypes {
         if (choice == 5) {
             (new_pos, claim) = bcs_deserialize_offset_WrappedFungibleOperation_Claim(new_pos, input);
         }
-        WrappedFungibleOperation_Mint memory mint;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         if (choice == 6) {
-            (new_pos, mint) = bcs_deserialize_offset_WrappedFungibleOperation_Mint(new_pos, input);
+            (new_pos, mint_and_transfer) =
+                bcs_deserialize_offset_WrappedFungibleOperation_MintAndTransfer(new_pos, input);
         }
         WrappedFungibleOperation_Burn memory burn;
         if (choice == 7) {
             (new_pos, burn) = bcs_deserialize_offset_WrappedFungibleOperation_Burn(new_pos, input);
         }
         require(choice < 8);
-        return
-            (new_pos, WrappedFungibleOperation(choice, balance_, approve, transfer_, transfer_from, claim, mint, burn));
+        return (
+            new_pos,
+            WrappedFungibleOperation(
+                choice, balance_, approve, transfer_, transfer_from, claim, mint_and_transfer, burn
+            )
+        );
     }
 
     function bcs_deserialize_WrappedFungibleOperation(bytes memory input)
@@ -531,12 +562,12 @@ library WrappedFungibleTypes {
         return value;
     }
 
-    struct WrappedFungibleOperation_Mint {
+    struct WrappedFungibleOperation_MintAndTransfer {
         BridgeTypes.Account target_account;
         BridgeTypes.Amount amount;
     }
 
-    function bcs_serialize_WrappedFungibleOperation_Mint(WrappedFungibleOperation_Mint memory input)
+    function bcs_serialize_WrappedFungibleOperation_MintAndTransfer(WrappedFungibleOperation_MintAndTransfer memory input)
         internal
         pure
         returns (bytes memory)
@@ -545,27 +576,27 @@ library WrappedFungibleTypes {
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
     }
 
-    function bcs_deserialize_offset_WrappedFungibleOperation_Mint(uint256 pos, bytes memory input)
+    function bcs_deserialize_offset_WrappedFungibleOperation_MintAndTransfer(uint256 pos, bytes memory input)
         internal
         pure
-        returns (uint256, WrappedFungibleOperation_Mint memory)
+        returns (uint256, WrappedFungibleOperation_MintAndTransfer memory)
     {
         uint256 new_pos;
         BridgeTypes.Account memory target_account;
         (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(pos, input);
         BridgeTypes.Amount memory amount;
         (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
-        return (new_pos, WrappedFungibleOperation_Mint(target_account, amount));
+        return (new_pos, WrappedFungibleOperation_MintAndTransfer(target_account, amount));
     }
 
-    function bcs_deserialize_WrappedFungibleOperation_Mint(bytes memory input)
+    function bcs_deserialize_WrappedFungibleOperation_MintAndTransfer(bytes memory input)
         internal
         pure
-        returns (WrappedFungibleOperation_Mint memory)
+        returns (WrappedFungibleOperation_MintAndTransfer memory)
     {
         uint256 new_pos;
-        WrappedFungibleOperation_Mint memory value;
-        (new_pos, value) = bcs_deserialize_offset_WrappedFungibleOperation_Mint(0, input);
+        WrappedFungibleOperation_MintAndTransfer memory value;
+        (new_pos, value) = bcs_deserialize_offset_WrappedFungibleOperation_MintAndTransfer(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

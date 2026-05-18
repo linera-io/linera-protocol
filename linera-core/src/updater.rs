@@ -770,7 +770,7 @@ where
             return Ok(info);
         }
 
-        let batch_size = self.client.options().certificate_upload_batch_size as usize;
+        let batch_size = self.client.options().certificate_upload_batch_size;
         for chunk in heights.chunks(batch_size) {
             let certificates = self
                 .read_certificates_for_heights(chain_id, chunk.to_vec())

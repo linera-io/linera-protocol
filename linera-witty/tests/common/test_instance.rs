@@ -3,6 +3,13 @@
 
 //! Helper code for testing using different runtimes.
 
+// Width/sign casts at the WIT FFI boundary are by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 use std::{
     any::Any,
     fmt::Debug,

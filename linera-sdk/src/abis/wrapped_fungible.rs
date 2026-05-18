@@ -93,8 +93,9 @@ pub enum WrappedFungibleOperation {
         /// Target account to claim the amount into
         target_account: Account,
     },
-    /// Mints new tokens to a target account. Only the authorized minter can call this.
-    Mint {
+    /// Mints new tokens and transfers them to a target account. Only the authorized
+    /// minter can call this.
+    MintAndTransfer {
         /// Account to receive the minted tokens
         target_account: Account,
         /// Amount of tokens to mint

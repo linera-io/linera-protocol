@@ -127,11 +127,11 @@ pub(crate) fn burn_failed() {
 }
 
 pub(crate) fn set_last_scanned_evm_block(block: u64) {
-    LAST_SCANNED_EVM_BLOCK.set(block as i64);
+    LAST_SCANNED_EVM_BLOCK.set(i64::try_from(block).unwrap_or(i64::MAX));
 }
 
 pub(crate) fn set_last_scanned_linera_height(height: u64) {
-    LAST_SCANNED_LINERA_HEIGHT.set(height as i64);
+    LAST_SCANNED_LINERA_HEIGHT.set(i64::try_from(height).unwrap_or(i64::MAX));
 }
 
 pub(crate) fn set_relayer_evm_balance(balance_wei: f64) {

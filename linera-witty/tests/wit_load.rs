@@ -3,6 +3,13 @@
 
 //! Tests for the `WitLoad` derive macro.
 
+// Width/sign casts at the WIT FFI boundary are by design.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
+
 #[path = "common/types.rs"]
 pub mod types;
 

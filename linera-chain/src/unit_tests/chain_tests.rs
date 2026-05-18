@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![expect(clippy::large_futures)]
+#![allow(clippy::cast_possible_truncation)]
 
 use std::{
     collections::{BTreeMap, BTreeSet},

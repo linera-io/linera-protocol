@@ -496,6 +496,10 @@ impl<Env: Environment> RequestsScheduler<Env> {
         let result = operation.await;
 
         // Update metrics and release slot
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "elapsed millis fits in u64 for any realistic measurement window"
+        )]
         let response_time_ms = start_time.elapsed().as_millis() as u64;
         let is_success = result.is_ok();
         {

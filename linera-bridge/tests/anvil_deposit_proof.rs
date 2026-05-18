@@ -8,6 +8,7 @@
 //! Run: `cargo test -p linera-bridge -- --ignored test_deposit_proof`
 
 #![cfg(all(not(target_arch = "wasm32"), feature = "offchain"))]
+#![allow(clippy::cast_possible_truncation)]
 
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},
@@ -32,42 +33,7 @@ use linera_bridge::{
 };
 use linera_execution::test_utils::solidity::compile_solidity_contract;
 
-const MOCK_ERC20_SOL: &str = r#"
-// SPDX-License-Identifier: Apache-2.0
-pragma solidity ^0.8.0;
-
-contract MockERC20 {
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-    uint256 public totalSupply;
-
-    constructor(uint256 initialSupply) {
-        balanceOf[msg.sender] = initialSupply;
-        totalSupply = initialSupply;
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        require(balanceOf[msg.sender] >= amount, "insufficient balance");
-        balanceOf[msg.sender] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        allowance[msg.sender][spender] = amount;
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        require(balanceOf[from] >= amount, "insufficient balance");
-        require(allowance[from][msg.sender] >= amount, "insufficient allowance");
-        allowance[from][msg.sender] -= amount;
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
-        return true;
-    }
-}
-"#;
+const LINERA_TOKEN_SOL: &str = include_str!("../src/solidity/LineraToken.sol");
 
 // ABI bindings for contract interactions
 alloy_sol_types::sol! {
@@ -126,11 +92,13 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     // extra round-trips.
     let chain_id = provider.get_chain_id().await?;
 
-    // 2. Compile and deploy MockERC20
-    let erc20_bytecode = compile_contract(MOCK_ERC20_SOL, "MockERC20.sol", "MockERC20");
+    // 2. Compile and deploy LineraToken
+    let erc20_bytecode = compile_contract(LINERA_TOKEN_SOL, "LineraToken.sol", "LineraToken");
     let initial_supply = U256::from(1_000_000_000u64);
     let mut erc20_deploy = erc20_bytecode;
-    erc20_deploy.extend_from_slice(&(initial_supply,).abi_encode_params());
+    erc20_deploy.extend_from_slice(
+        &("TestToken".to_string(), "TT".to_string(), initial_supply).abi_encode_params(),
+    );
 
     let tx = TransactionRequest::default()
         .with_deploy_code(Bytes::from(erc20_deploy))
