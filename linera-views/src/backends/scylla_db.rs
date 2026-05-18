@@ -24,7 +24,7 @@ use scylla::{
     },
     deserialize::{DeserializationError, TypeCheckError},
     errors::{
-        DbError, ExecutionError, IntoRowsResultError, NextPageError, NextRowError,
+        DbError, ExecutionError, IntoRowsResultError, NewSessionError, NextPageError, NextRowError,
         PagerExecutionError, PrepareError, RequestAttemptError, RequestError, RowsError,
     },
     policies::{
@@ -569,6 +569,10 @@ pub enum ScyllaDbStoreInternalError {
     /// An execution error during a write-batch operation.
     #[error(transparent)]
     WriteBatchExecutionError(ExecutionError),
+
+    /// A session creation error
+    #[error(transparent)]
+    NewSessionError(#[from] NewSessionError),
 
     /// A next row error in ScyllaDB
     #[error(transparent)]
