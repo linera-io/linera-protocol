@@ -300,16 +300,12 @@ where
                 })));
             }
         };
-        let messages =
-            blob_ids
-                .into_iter()
-                .zip(blobs)
-                .map(|(blob_id, maybe_blob)| match maybe_blob {
-                    Some(blob) => RpcMessage::DownloadBlobResponse(Box::new(
-                        Arc::unwrap_or_clone(blob).into_content(),
-                    )),
-                    None => RpcMessage::Error(Box::new(NodeError::BlobsNotFound(vec![blob_id]))),
-                });
+        let messages = blobs.into_iter().filter_map(|maybe_blob| {
+            let blob = maybe_blob?;
+            Some(RpcMessage::DownloadBlobResponse(Box::new(
+                blob.content().clone(),
+            )))
+        });
         Some(Box::pin(futures::stream::iter(messages)))
     }
 }

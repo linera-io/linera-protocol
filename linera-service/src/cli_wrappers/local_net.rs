@@ -590,9 +590,14 @@ impl LocalNet {
                     );
 
                     content.push_str(&config_content);
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "loop index over a local config list bounded well below u32::MAX"
+                    )]
+                    let exporter_index = j as u32;
                     let exporter_config = self.generate_block_exporter_config(
                         n,
-                        j as u32,
+                        exporter_index,
                         &exporter.destination_config,
                     );
                     let config_path = self
@@ -977,7 +982,12 @@ impl LocalNet {
         }
         if let ExportersSetup::Local(ref exporters) = self.block_exporters {
             for block_exporter in 0..exporters.len() {
-                let exporter = self.run_exporter(index, block_exporter as u32).await?;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "loop index over a local exporter list bounded well below u32::MAX"
+                )]
+                let exporter_id = block_exporter as u32;
+                let exporter = self.run_exporter(index, exporter_id).await?;
                 validator.add_block_exporter(exporter);
             }
         }

@@ -8,7 +8,13 @@ solc_version = "0.8.30"
 optimizer = true
 optimizer_runs = 1
 via_ir = true
-evm_version = "shanghai"
+evm_version = "cancun"
+remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
+skip = [
+    "lib/openzeppelin-contracts/test/**/*.sol",
+    "lib/openzeppelin-contracts/certora/**/*.sol",
+    "lib/openzeppelin-contracts/scripts/**/*.sol",
+]
 fs_permissions = [
     { access = "read", path = "./test/fixtures" },
     { access = "read", path = "./broadcast" },

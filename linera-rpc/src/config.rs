@@ -290,6 +290,10 @@ impl std::str::FromStr for NetworkProtocol {
 
 impl<P> ValidatorInternalNetworkPreConfig<P> {
     /// Static shard assignment
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "result is reduced modulo shards.len(), so any truncation is irrelevant"
+    )]
     pub fn get_shard_id(&self, chain_id: ChainId) -> ShardId {
         use std::hash::{Hash, Hasher};
         let mut s = std::collections::hash_map::DefaultHasher::new();

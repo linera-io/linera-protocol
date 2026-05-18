@@ -1313,6 +1313,8 @@ bcs_scalar!(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
     use std::str::FromStr as _;
 
     use assert_matches::assert_matches;

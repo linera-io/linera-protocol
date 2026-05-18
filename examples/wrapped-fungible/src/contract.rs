@@ -114,10 +114,10 @@ impl Contract for WrappedFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            WrappedFungibleOperation::Mint {
+            WrappedFungibleOperation::MintAndTransfer {
                 target_account,
                 amount,
-            } => self.execute_mint(target_account, amount).await,
+            } => self.execute_mint_and_transfer(target_account, amount).await,
 
             WrappedFungibleOperation::Burn { .. } => {
                 panic!("Operation::Burn is not supported; burning happens automatically on cross-chain transfer to an Address20 on the bridge chain");
@@ -206,7 +206,11 @@ impl WrappedFungibleTokenContract {
     }
 
     /// Mints tokens to a target account (local or remote).
-    async fn execute_mint(&mut self, target_account: Account, amount: Amount) -> FungibleResponse {
+    async fn execute_mint_and_transfer(
+        &mut self,
+        target_account: Account,
+        amount: Amount,
+    ) -> FungibleResponse {
         self.require_mint_authorized();
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;

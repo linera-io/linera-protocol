@@ -8,6 +8,14 @@
 #![deny(missing_docs)]
 #![allow(async_fn_in_trait)]
 
+// The protocol assumes `usize` is at least as wide as `u32`: many call sites
+// convert `u32` lengths or counts to `usize` (and back) without an explicit
+// `try_from`. This rules out 16-bit targets workspace-wide.
+const _: () = assert!(
+    usize::BITS >= u32::BITS,
+    "linera-base requires a target with usize of at least 32 bits",
+);
+
 use std::fmt;
 
 #[doc(hidden)]

@@ -36,12 +36,26 @@ contract FungibleBridge is Microchain {
     IERC20 public immutable token;
     uint256 public depositNonce;
 
+    /// Per-burn dedup keyed by `keccak256(abi.encode(height, eventIndex))`
+    /// where `eventIndex` is the underlying Linera `Event.index` — the
+    /// position of the burn event within its stream. Set inside
+    /// `_onBlock` after the burn's `token.transfer` succeeds.
+    mapping(bytes32 => bool) internal processedBurns;
+
     constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId)
         Microchain(_lightClient, _chainId)
     {
         require(_fungibleApplicationId != bytes32(0), "fungibleApplicationId must be non-zero");
         token = IERC20(_token);
         fungibleApplicationId = _fungibleApplicationId;
+    }
+
+    /// Returns whether the burn at `(height, eventIndex)` has already been
+    /// released by a prior `addBlock` call. `eventIndex` matches
+    /// `Event.index` from the Linera block body — the same value the
+    /// off-chain relayer pulls from the certificate.
+    function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool) {
+        return processedBurns[keccak256(abi.encode(height, eventIndex))];
     }
 
     /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
@@ -78,8 +92,13 @@ contract FungibleBridge is Microchain {
 
     /// Processes a Linera block and releases ERC-20 tokens for any BurnEvent
     /// events on the "burns" stream from the wrapped-fungible application.
+    /// Idempotent: each burn's release is gated on
+    /// `processedBurns[keccak256(abi.encode(height, evt.index))]`, so
+    /// re-submitting the same cert is a no-op for burns already released
+    /// by a prior call.
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
         bytes32 burnsHash = keccak256("burns");
+        uint64 height = blockValue.header.height.value;
         for (uint256 i = 0; i < blockValue.body.events.length; i++) {
             BridgeTypes.Event[] memory txEvents = blockValue.body.events[i];
             for (uint256 j = 0; j < txEvents.length; j++) {
@@ -94,11 +113,14 @@ contract FungibleBridge is Microchain {
                 // Check stream name is "burns"
                 if (keccak256(evt.stream_id.stream_name.value) != burnsHash) continue;
 
+                bytes32 key = keccak256(abi.encode(height, evt.index));
+                if (processedBurns[key]) continue;
+
                 WrappedFungibleTypes.BurnEvent memory burnEvt =
                     WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
-
                 address target = address(burnEvt.target);
                 require(token.transfer(target, burnEvt.amount.value), "token transfer failed");
+                processedBurns[key] = true;
             }
         }
     }

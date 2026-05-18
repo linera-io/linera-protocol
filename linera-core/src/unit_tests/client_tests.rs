@@ -2,6 +2,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::cast_possible_truncation)]
+
 mod test_helpers;
 #[path = "./wasm_client_tests.rs"]
 mod wasm;
@@ -3277,68 +3279,61 @@ where
     Ok(())
 }
 
-/// Regression test: a client whose local node has the chain's description blob but
-/// hasn't yet synced the admin chain's `NewCommittee` event for the chain's active
-/// epoch must still be able to fetch its own committee — `local_committee` syncs the
-/// admin chain on its own rather than failing with `EventsNotFound` or `InactiveChain`.
+/// Regression test: when a fresh client syncs a chain that has a block at a
+/// non-genesis epoch, `process_certificates` must download the admin chain's
+/// `NewCommittee` event for that epoch — cert verification calls
+/// `get_committee_hashes` which reads the event. Without the fix this surfaces
+/// as `Events not found` for `StreamName(00)` rather than recovering.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_local_committee_syncs_admin_chain<B>(storage_builder: B) -> anyhow::Result<()>
+async fn test_synchronize_downloads_admin_chain_events<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
-    let mut signer = InMemorySigner::new(None);
-    let new_public_key = signer.generate_new();
+    let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
     let admin_client = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
     let parent = builder.add_root_chain(1, Amount::from_tokens(1000)).await?;
 
-    // Create a new epoch on the admin chain.
+    // Create a new epoch on the admin chain and migrate `parent` to it.
     admin_client
         .stage_new_committee(builder.initial_committee.clone())
         .await
         .unwrap();
-
-    // Migrate `parent` to the new epoch and open a child chain at that epoch.
     parent.synchronize_from_validators().await.unwrap();
     parent.process_inbox().await.unwrap();
-    let (child_desc, certificate) = Box::pin(parent.open_chain(
-        ChainOwnership::single(new_public_key.into()),
-        ApplicationPermissions::default(),
-        Amount::from_tokens(10),
-    ))
-    .await
-    .unwrap_ok_committed();
-    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+    // The migration block itself is at epoch 0 (the chain's epoch before
+    // `ProcessNewEpoch` executes). To make `process_certificates` actually
+    // verify against the new committee, the chain must have a follow-up block
+    // *at* epoch 1 — its cert's `get_committee_hashes(1..=1)` then reads the
+    // admin event during cert verification.
+    let cert = parent
+        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(cert.block().header.epoch, Epoch::from(1));
+    let parent_info = parent.chain_info().await?;
 
-    // A fresh client with genesis-only storage: no admin-chain events past epoch 0.
-    let mut child_client = builder
-        .make_client(child_desc.id(), None, BlockHeight::ZERO)
-        .await?;
-    child_client.set_preferred_owner(new_public_key.into());
-    // Pre-seed the child's description blob so that the first `chain_info()` call
-    // makes it past the blob-lookup and triggers initialization, which needs the
-    // admin chain's epoch events to load the committee for epoch 1. This is the
-    // exact state a web client ends up in after receiving the chain description
-    // but before syncing the admin chain.
-    child_client
-        .storage_client()
-        .write_blob(&Blob::new_chain_description(&child_desc))
+    // A fresh client (its genesis storage has `parent`'s description blob but
+    // no admin-chain events).
+    let fresh_client = builder
+        .make_client(parent.chain_id(), None, BlockHeight::ZERO)
         .await?;
 
-    // Before the fix, this returned `EventsNotFound` because
-    // `initialize_and_save_if_needed` couldn't find the admin chain's
-    // `NewCommittee` event for epoch 1. `local_committee` must sync
-    // the admin chain on its own and succeed.
-    let committee = child_client.local_committee().await?;
+    // Before the fix, `process_certificates` propagated `EventsNotFound` for
+    // the epoch-1 transfer cert because cert verification couldn't load the
+    // admin chain's `NewCommittee` event. The fix retries after downloading
+    // the publisher certificates that contain the missing event.
+    fresh_client.synchronize_from_validators().await?;
+
     assert_eq!(
-        committee.validators.len(),
-        builder.initial_committee.validators.len()
+        fresh_client.chain_info().await?.next_block_height,
+        parent_info.next_block_height,
     );
 
     Ok(())

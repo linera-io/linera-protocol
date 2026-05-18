@@ -239,6 +239,7 @@ async fn test_fee_consumption(
         blob_byte_published: Amount::from_tokens(103),
         http_request_allow_list: BTreeSet::new(),
         free_application_ids: BTreeSet::new(),
+        flags: BTreeSet::new(),
     };
 
     let consumed_fees = spends
@@ -277,6 +278,7 @@ async fn test_fee_consumption(
     let context = MessageContext {
         chain_id,
         origin: chain_id,
+        origin_timestamp: Timestamp::default(),
         is_bouncing: false,
         authenticated_owner,
         refund_grant_to,
@@ -476,6 +478,7 @@ async fn test_free_app_message_no_fees() -> anyhow::Result<()> {
     let context = MessageContext {
         chain_id,
         origin: chain_id,
+        origin_timestamp: Timestamp::default(),
         is_bouncing: false,
         authenticated_owner: Some(signer),
         refund_grant_to,

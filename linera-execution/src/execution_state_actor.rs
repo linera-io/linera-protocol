@@ -1225,7 +1225,9 @@ where
             }
         }
 
-        let mut body = Vec::with_capacity(maybe_content_length.unwrap_or(0) as usize);
+        let mut body = Vec::with_capacity(
+            usize::try_from(maybe_content_length.unwrap_or(0)).unwrap_or(usize::MAX),
+        );
         let mut body_stream = response.bytes_stream();
 
         while let Some(bytes) = body_stream.next().await.transpose()? {

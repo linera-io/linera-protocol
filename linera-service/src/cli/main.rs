@@ -595,6 +595,7 @@ impl Runnable for Job {
                                             http_request_timeout_ms,
                                             http_request_allow_list,
                                             free_application_ids,
+                                            flags,
                                         },
                                 } => {
                                     let existing_policy = policy.clone();
@@ -677,6 +678,16 @@ impl Runnable for Job {
                                             .transpose()
                                             .expect("Invalid application ID")
                                             .unwrap_or(existing_policy.free_application_ids),
+                                        flags: flags
+                                            .map(|values| {
+                                                values
+                                                    .into_iter()
+                                                    .map(|s| s.parse())
+                                                    .collect::<Result<BTreeSet<_>, _>>()
+                                            })
+                                            .transpose()
+                                            .expect("Invalid protocol flag")
+                                            .unwrap_or(existing_policy.flags),
                                     };
                                     info!("{policy}");
                                     if committee.policy() == &policy {
@@ -1459,7 +1470,8 @@ impl Runnable for Job {
                 let index_events = storage
                     .read_events_from_index(&chain_id, &stream_id, start_index)
                     .await?;
-                println!("{index_events:#?}");
+                let json = serde_json::to_string_pretty(&index_events)?;
+                println!("{json}");
                 info!("Events listed in {} ms", start_time.elapsed().as_millis());
             }
 
@@ -1852,7 +1864,8 @@ impl Runnable for Job {
                     .read_confirmed_block(block_hash)
                     .await
                     .context("Failed to find the given block in storage")?;
-                println!("{block:#?}");
+                let json = serde_json::to_string_pretty(&block)?;
+                println!("{json}");
             }
 
             Chain(ChainCommand::ShowChainDescription { chain_id }) => {
@@ -1869,7 +1882,8 @@ impl Runnable for Job {
                     }
                     err => err.context("Failed to get the chain description")?,
                 };
-                println!("{description:#?}");
+                let json = serde_json::to_string_pretty(&description)?;
+                println!("{json}");
             }
 
             Validator(validator_command) => {
@@ -2144,6 +2158,11 @@ fn main() -> anyhow::Result<process::ExitCode> {
 
     Ok(match result {
         Ok(0) => process::ExitCode::SUCCESS,
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "process exit code is conventionally a u8"
+        )]
         Ok(code) => process::ExitCode::from(code as u8),
         Err(msg) => {
             error!("Error is {:?}", msg);
@@ -2228,6 +2247,7 @@ async fn run(options: &Options) -> Result<i32, Error> {
             http_request_timeout_ms,
             http_request_allow_list,
             free_application_ids,
+            flags,
             testing_prng_seed,
             network_name,
         } => {
@@ -2294,6 +2314,17 @@ async fn run(options: &Options) -> Result<i32, Error> {
                     .transpose()
                     .expect("Invalid application ID")
                     .unwrap_or(existing_policy.free_application_ids),
+                flags: flags
+                    .as_ref()
+                    .map(|values| {
+                        values
+                            .iter()
+                            .map(|s| s.parse())
+                            .collect::<Result<BTreeSet<_>, _>>()
+                    })
+                    .transpose()
+                    .expect("Invalid protocol flag")
+                    .unwrap_or(existing_policy.flags),
             };
             let timestamp = start_timestamp.map_or_else(Timestamp::now, |st| {
                 let micros =

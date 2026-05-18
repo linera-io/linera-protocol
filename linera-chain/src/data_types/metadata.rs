@@ -3,6 +3,10 @@
 
 //! GraphQL-compatible structured metadata representations for operations and messages.
 
+// The GraphQL spec only has signed integer scalars, so this module casts
+// `u32` to `i32` at the API boundary. The casts are by design.
+#![allow(clippy::cast_possible_wrap)]
+
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::CryptoHash,

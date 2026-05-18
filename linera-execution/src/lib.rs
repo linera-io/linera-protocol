@@ -68,7 +68,7 @@ pub use crate::{
     committee::{Committee, SharedCommittees},
     execution::{ExecutionStateView, ServiceRuntimeEndpoint},
     execution_state_actor::{ExecutionRequest, ExecutionStateActor},
-    policy::ResourceControlPolicy,
+    policy::{ProtocolFlag, ResourceControlPolicy},
     resources::{BalanceHolder, ResourceController, ResourceTracker},
     runtime::{
         ContractSyncRuntimeHandle, ServiceRuntimeRequest, ServiceSyncRuntime,
@@ -314,8 +314,6 @@ pub enum ExecutionError {
     InvalidUrlForHttpRequest(#[from] url::ParseError),
     #[error("Worker thread failure: {0:?}")]
     Thread(#[from] web_thread::Error),
-    #[error("The chain being queried is not active {0}")]
-    InactiveChain(ChainId),
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
     #[error("Events not found: {0:?}")]
@@ -404,7 +402,6 @@ impl ExecutionError {
             | ExecutionError::BytecodeTooLarge
             | ExecutionError::UnauthorizedHttpRequest(_)
             | ExecutionError::InvalidUrlForHttpRequest(_)
-            | ExecutionError::InactiveChain(_)
             | ExecutionError::BlobsNotFound(_)
             | ExecutionError::EventsNotFound(_)
             | ExecutionError::InvalidHeaderName(_)
@@ -646,6 +643,8 @@ pub struct MessageContext {
     pub chain_id: ChainId,
     /// The chain ID where the message originated from.
     pub origin: ChainId,
+    /// The timestamp of the block on the origin chain that sent the message.
+    pub origin_timestamp: Timestamp,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
     pub is_bouncing: bool,
     /// The authenticated owner of the operation that created the message, if any.
@@ -951,6 +950,10 @@ pub trait ContractRuntime: BaseRuntime {
 
     /// The chain ID where the current message originated from, if there is one.
     fn message_origin_chain_id(&mut self) -> Result<Option<ChainId>, ExecutionError>;
+
+    /// The timestamp of the block on the origin chain that sent the current message, if there
+    /// is one.
+    fn message_origin_timestamp(&mut self) -> Result<Option<Timestamp>, ExecutionError>;
 
     /// The optional authenticated caller application ID, if it was provided and if there is one
     /// based on the execution context.
