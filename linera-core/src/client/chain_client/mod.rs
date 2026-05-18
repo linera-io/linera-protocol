@@ -3319,7 +3319,10 @@ impl<Env: Environment> ChainClient<Env> {
                 .collect();
             remote_node.upload_blobs(missing_blobs).await?;
             remote_node
-                .handle_confirmed_certificate(certificate.into_std(), CrossChainMessageDelivery::NonBlocking)
+                .handle_confirmed_certificate(
+                    certificate.into_std(),
+                    CrossChainMessageDelivery::NonBlocking,
+                )
                 .await?;
         }
 

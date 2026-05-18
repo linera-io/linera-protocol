@@ -23,9 +23,9 @@
 //! prevent unbounded growth.
 //!
 //! For the invariant to hold, all inserts of hash-consed values must go
-//! through the cache (e.g. [`ValueCache::insert_hashed`] or
-//! [`ValueCache::insert_arc`]). Constructing an `Arc::new(value)` off-path
-//! creates a duplicate allocation that bypasses the dedup index.
+//! through the cache (e.g. [`ValueCache::insert`] or [`ValueCache::insert_hashed`]).
+//! The [`Arc`] newtype enforces this structurally: it has no public constructor,
+//! so callers cannot bypass the cache by calling `std::sync::Arc::new` directly.
 
 mod arc;
 mod unique_value_cache;
