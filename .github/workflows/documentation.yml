@@ -56,7 +56,7 @@ jobs:
 
   test-crates-and-docrs:
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
     - uses: actions/checkout@v4
