@@ -1,8 +1,11 @@
-// Copyright (c) Zefrain Labs, Inc.
+// Copyright (c) Facebook, Inc. and its affiliates.
+// Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::crypto::ValidatorKeypair;
-use linera_base::{crypto::InMemorySigner, data_types::Amount};
+use linera_base::{
+    crypto::{InMemorySigner, ValidatorKeypair},
+    data_types::Amount,
+};
 use linera_storage::{DbStorage, TestClock};
 use linera_views::{
     random::generate_test_namespace,
@@ -18,7 +21,7 @@ use tempfile::TempDir;
 use crate::{
     chain_worker::ChainWorkerConfig,
     data_types::ChainInfoQuery,
-    test_utils::{RocksDbStorageBuilder, StorageBuilder, TestBuilder},
+    test_utils::{RocksDbStorageBuilder, TestBuilder},
     worker::WorkerState,
 };
 
@@ -89,7 +92,7 @@ async fn test_no_key_boots_on_cross_key_backup() {
     let result = worker
         .handle_chain_info_query(ChainInfoQuery::new(chain_id))
         .await;
-    assert!(result.is_ok(), "observer worker failed: {:?}", result);
+    assert!(result.is_ok(), "observer worker failed: {result:?}");
 }
 
 #[tokio::test]
@@ -161,5 +164,5 @@ async fn test_mismatched_key_boots_on_cross_key_backup() {
     let result = worker
         .handle_chain_info_query(ChainInfoQuery::new(chain_id))
         .await;
-    assert!(result.is_ok(), "mismatched-key worker failed: {:?}", result);
+    assert!(result.is_ok(), "mismatched-key worker failed: {result:?}");
 }
