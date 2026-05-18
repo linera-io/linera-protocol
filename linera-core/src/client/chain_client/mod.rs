@@ -1441,13 +1441,12 @@ impl<Env: Environment> ChainClient<Env> {
                     Transaction::ReceiveMessages(_) => true,
                     Transaction::ExecuteOperation(Operation::System(op)) => matches!(
                         **op,
-                        SystemOperation::ProcessNewEpoch(_)
-                            | SystemOperation::UpdateStream { .. }
+                        SystemOperation::ProcessNewEpoch(_) | SystemOperation::UpdateStream { .. }
                     ),
                     Transaction::ExecuteOperation(_) => false,
-                }) && transactions[start..].iter().zip(operations).all(|(tx, op)| {
-                    matches!(tx, Transaction::ExecuteOperation(tx_op) if tx_op == op)
-                })
+                }) && transactions[start..].iter().zip(operations).all(
+                    |(tx, op)| matches!(tx, Transaction::ExecuteOperation(tx_op) if tx_op == op),
+                )
             });
         if owner_matches && suffix_matches {
             ClientOutcome::Committed(certificate)
