@@ -54,7 +54,7 @@ impl CrateRoot {
     }
 }
 
-/// Compute the stable tag for a variant name.
+/// Computes the stable tag for a variant name.
 fn compute_tag(variant_name: &str) -> u32 {
     let hash = Keccak256::digest(variant_name.as_bytes());
     let val = u32::from_be_bytes([hash[0], hash[1], hash[2], hash[3]]);
