@@ -100,6 +100,7 @@ impl BridgeDb {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS pending_burns (
                 linera_height     INTEGER NOT NULL,
+                block_hash        TEXT NOT NULL,
                 tx_index          INTEGER NOT NULL,
                 event_pos_in_tx   INTEGER NOT NULL,
                 event_index       INTEGER NOT NULL,
@@ -116,6 +117,7 @@ impl BridgeDb {
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS finished_burns (
                 linera_height     INTEGER NOT NULL,
+                block_hash        TEXT NOT NULL,
                 tx_index          INTEGER NOT NULL,
                 event_pos_in_tx   INTEGER NOT NULL,
                 event_index       INTEGER NOT NULL,
@@ -222,10 +224,11 @@ impl BridgeDb {
     pub async fn insert_burn(&self, burn: &PendingBurn) -> Result<()> {
         sqlx::query(
             "INSERT OR IGNORE INTO pending_burns
-                (linera_height, tx_index, event_pos_in_tx, event_index, evm_recipient, amount)
-             VALUES (?, ?, ?, ?, ?, ?)",
+                (linera_height, block_hash, tx_index, event_pos_in_tx, event_index, evm_recipient, amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(burn.height.0 as i64)
+        .bind(burn.block_hash.to_string())
         .bind(burn.tx_index as i64)
         .bind(burn.event_pos_in_tx as i64)
         .bind(burn.event_index as i64)
@@ -251,9 +254,9 @@ impl BridgeDb {
         let mut tx = self.pool.begin().await?;
         let inserted = sqlx::query(
             "INSERT OR IGNORE INTO finished_burns
-                (linera_height, tx_index, event_pos_in_tx, event_index,
+                (linera_height, block_hash, tx_index, event_pos_in_tx, event_index,
                  evm_recipient, amount, raw_cert, status, created_at)
-             SELECT linera_height, tx_index, event_pos_in_tx, event_index,
+             SELECT linera_height, block_hash, tx_index, event_pos_in_tx, event_index,
                     evm_recipient, amount, raw_cert, ?, created_at
              FROM pending_burns
              WHERE linera_height = ? AND event_index = ?",
@@ -328,7 +331,7 @@ impl BridgeDb {
     /// in-memory `MonitorState`.
     pub async fn load_pending_burns(&self) -> Result<Vec<PendingBurn>> {
         let rows = sqlx::query(
-            "SELECT linera_height, tx_index, event_pos_in_tx, event_index, evm_recipient, amount
+            "SELECT linera_height, block_hash, tx_index, event_pos_in_tx, event_index, evm_recipient, amount
              FROM pending_burns",
         )
         .fetch_all(&self.pool)
@@ -337,14 +340,18 @@ impl BridgeDb {
         let mut out = Vec::with_capacity(rows.len());
         for row in rows {
             let height: i64 = row.get(0);
-            let tx_index: i64 = row.get(1);
-            let event_pos_in_tx: i64 = row.get(2);
-            let event_index: i64 = row.get(3);
-            let evm_recipient: String = row.get(4);
-            let amount: String = row.get(5);
+            let block_hash: String = row.get(1);
+            let tx_index: i64 = row.get(2);
+            let event_pos_in_tx: i64 = row.get(3);
+            let event_index: i64 = row.get(4);
+            let evm_recipient: String = row.get(5);
+            let amount: String = row.get(6);
 
             out.push(PendingBurn {
                 height: BlockHeight(height as u64),
+                block_hash: block_hash
+                    .parse()
+                    .context("invalid block_hash in burns row")?,
                 tx_index: tx_index as u32,
                 event_pos_in_tx: event_pos_in_tx as u32,
                 event_index: event_index as u32,
@@ -393,7 +400,7 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
     use alloy::primitives::{Address, B256, U256};
-    use linera_base::data_types::Amount;
+    use linera_base::{crypto::CryptoHash, data_types::Amount};
     use test_case::test_case;
 
     use super::*;
@@ -433,6 +440,7 @@ mod tests {
     fn test_burn() -> PendingBurn {
         PendingBurn {
             height: BlockHeight(100),
+            block_hash: CryptoHash::from([0u8; 32]),
             tx_index: 0,
             event_pos_in_tx: 0,
             event_index: 0,

@@ -20,6 +20,7 @@ use std::{
 
 use alloy::primitives::{Address, B256, U256};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
     identifiers::ApplicationId,
 };
@@ -65,6 +66,10 @@ pub struct PendingDeposit {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingBurn {
     pub height: BlockHeight,
+    /// Hash of the Linera block that produced this burn. Lets the relayer
+    /// fetch the certificate via a direct `linera_client.read_certificate`
+    /// call instead of walking the chain backwards from head.
+    pub block_hash: CryptoHash,
     /// Position of this burn's transaction within `body.events`.
     /// Used by `processBurns(cert, tx_index, ...)`.
     pub tx_index: u32,
@@ -120,6 +125,9 @@ pub type TrackedBurn = Tracked<PendingBurn>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingBurnsAtHeight {
     pub height: BlockHeight,
+    /// Hash of the Linera block at `height` — lets `process_pending_burns`
+    /// pull the certificate via a direct `read_certificate` call.
+    pub block_hash: CryptoHash,
     /// Stream indices (`Event.index`) of every pending burn at this height,
     /// sorted ascending. Used for retry accounting and cert persistence.
     pub event_indices: Vec<u32>,
@@ -277,8 +285,8 @@ impl MonitorState {
         &self,
         max_retries: u32,
     ) -> BTreeSet<PendingBurnsAtHeight> {
-        #[derive(Default)]
         struct HeightAccum {
+            block_hash: CryptoHash,
             by_tx: BTreeMap<u32, Vec<u32>>,
             event_indices: Vec<u32>,
         }
@@ -289,7 +297,13 @@ impl MonitorState {
             if tracked.failed || tracked.retry_count >= max_retries {
                 continue;
             }
-            let entry = tree.entry(tracked.value.height).or_default();
+            // All burns at a given height share the same block (cert) hash,
+            // so the first one populates it and the rest just append.
+            let entry = tree.entry(tracked.value.height).or_insert(HeightAccum {
+                block_hash: tracked.value.block_hash,
+                by_tx: BTreeMap::new(),
+                event_indices: Vec::new(),
+            });
             entry
                 .by_tx
                 .entry(tracked.value.tx_index)
@@ -305,6 +319,7 @@ impl MonitorState {
                 accum.event_indices.sort_unstable();
                 PendingBurnsAtHeight {
                     height: h,
+                    block_hash: accum.block_hash,
                     event_indices: accum.event_indices,
                     by_tx: accum.by_tx.into_iter().collect(),
                 }
@@ -586,6 +601,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(10),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 0,
                 event_index: 0,
@@ -625,6 +641,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 0,
                 event_index: 0,
@@ -779,6 +796,7 @@ mod tests {
         .unwrap();
         db.insert_burn(&PendingBurn {
             height: BlockHeight(99),
+            block_hash: CryptoHash::from([0u8; 32]),
             tx_index: 0,
             event_pos_in_tx: 0,
             event_index: 2,
@@ -807,6 +825,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height,
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 0,
                 event_index: 0,
@@ -832,6 +851,7 @@ mod tests {
             // order so the helper's sort is tested); tx 1 has one burn.
             PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 1,
                 event_index: 11,
@@ -840,6 +860,7 @@ mod tests {
             },
             PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 0,
                 event_index: 10,
@@ -848,6 +869,7 @@ mod tests {
             },
             PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 1,
                 event_pos_in_tx: 0,
                 event_index: 12,
@@ -857,6 +879,7 @@ mod tests {
             // One burn at a later height.
             PendingBurn {
                 height: BlockHeight(7),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 0,
                 event_index: 0,
@@ -875,11 +898,13 @@ mod tests {
         let expected: BTreeSet<PendingBurnsAtHeight> = [
             PendingBurnsAtHeight {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 event_indices: vec![10u32, 11, 12],
                 by_tx: vec![(0u32, vec![0u32, 1]), (1u32, vec![0u32])],
             },
             PendingBurnsAtHeight {
                 height: BlockHeight(7),
+                block_hash: CryptoHash::from([0u8; 32]),
                 event_indices: vec![0u32],
                 by_tx: vec![(0u32, vec![0u32])],
             },
@@ -899,6 +924,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 0,
                 event_index: 10,
@@ -909,6 +935,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 0,
                 event_pos_in_tx: 1,
                 event_index: 11,
@@ -922,6 +949,7 @@ mod tests {
         let groups = state.pending_burns_by_height_and_tx(/* max_retries */ 10);
         let expected: BTreeSet<PendingBurnsAtHeight> = [PendingBurnsAtHeight {
             height: BlockHeight(5),
+            block_hash: CryptoHash::from([0u8; 32]),
             event_indices: vec![11u32],
             by_tx: vec![(0u32, vec![1u32])],
         }]
@@ -936,6 +964,7 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
                 tx_index: 2,
                 event_pos_in_tx: 1,
                 event_index: 42,

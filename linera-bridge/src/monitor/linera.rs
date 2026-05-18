@@ -86,16 +86,17 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
         }
         for super::PendingBurnsAtHeight {
             height,
+            block_hash,
             event_indices,
             by_tx,
         } in groups
         {
             // Infrastructure-level failures (cert fetch, gas estimate)
             // skip the height without consuming any burn's retry budget.
-            let cert = match fetch_cert_at_height(linera_client, height).await {
+            let cert = match linera_client.read_certificate(block_hash).await {
                 Ok(cert) => cert,
-                Err(e) => {
-                    tracing::warn!(?height, "Failed to read certificate: {e:#}");
+                Err(error) => {
+                    tracing::warn!(?height, ?block_hash, ?error, "Failed to read certificate");
                     continue;
                 }
             };
@@ -272,27 +273,6 @@ async fn submit_chunks_with_retry<P: Provider>(
     }
 }
 
-/// Walks the chain history backwards from the head until the certificate at
-/// `target_height` is found.
-async fn fetch_cert_at_height<E: linera_core::environment::Environment>(
-    linera_client: &LineraClient<E>,
-    target_height: BlockHeight,
-) -> anyhow::Result<Arc<linera_chain::types::ConfirmedBlockCertificate>> {
-    linera_client.sync().await?;
-    let info = linera_client.chain_info().await?;
-    let mut hash = info.block_hash;
-    loop {
-        let Some(h) = hash else {
-            anyhow::bail!("Block at height {} not found", target_height);
-        };
-        let c = linera_client.read_certificate(h).await?;
-        if c.block().header.height == target_height {
-            return Ok(c);
-        }
-        hash = c.block().header.previous_block_hash;
-    }
-}
-
 /// Stores BCS cert bytes for every pending burn at `height`.
 async fn persist_cert_bytes(
     monitor: &RwLock<MonitorState>,
@@ -339,17 +319,18 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
             break;
         }
         hash = block.block().header.previous_block_hash;
-        blocks.push(block);
+        blocks.push((h, block));
     }
     blocks.reverse();
 
     let mut new_burns = Vec::new();
-    for block in &blocks {
+    for (block_hash, block) in &blocks {
         let height = block.block().header.height;
         let burn_events = find_burn_events(&block.block().body.events, fungible_app_id);
         for (tx_index, event_pos_in_tx, event_index, burn_event) in burn_events {
             new_burns.push((
                 height,
+                *block_hash,
                 tx_index,
                 event_pos_in_tx,
                 event_index,
@@ -360,13 +341,16 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     }
 
     let mut tracked_any = false;
-    for (height, tx_index, event_pos_in_tx, event_index, recipient, amount) in &new_burns {
-        tracing::info!(?height, tx_index, event_pos_in_tx, event_index, %recipient, %amount, "Discovered burn");
+    for (height, block_hash, tx_index, event_pos_in_tx, event_index, recipient, amount) in
+        &new_burns
+    {
+        tracing::info!(?height, ?block_hash, tx_index, event_pos_in_tx, event_index, %recipient, %amount, "Discovered burn");
         let was_new = monitor
             .write()
             .await
             .track_burn(PendingBurn {
                 height: *height,
+                block_hash: *block_hash,
                 tx_index: *tx_index,
                 event_pos_in_tx: *event_pos_in_tx,
                 event_index: *event_index,
