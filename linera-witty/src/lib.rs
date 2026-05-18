@@ -10,6 +10,14 @@
 //! [WIT]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md
 
 #![deny(missing_docs)]
+// This crate's purpose is generating FFI integer plumbing between WIT and
+// Rust — width-changing and sign-changing casts are part of the job at the
+// boundary.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
 
 #[macro_use]
 mod macro_utils;

@@ -128,7 +128,7 @@ mod metrics {
 }
 
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
-pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
+pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: usize = 500;
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
 pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
 pub static DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS: usize = 1;
@@ -843,15 +843,15 @@ impl<Env: Environment> Client<Env> {
         // block bodies, so they don't need to be fetched from a validator. The
         // chain worker resolves them from `Block::created_blobs()` during
         // `handle_certificate`.
-        let created_blob_ids: BTreeSet<BlobId> = certificates
+        let created_blob_ids = certificates
             .iter()
             .flat_map(|certificate| certificate.value().block().created_blob_ids())
-            .collect();
-        let required_blob_ids: Vec<_> = certificates
+            .collect::<BTreeSet<BlobId>>();
+        let required_blob_ids = certificates
             .iter()
             .flat_map(|certificate| certificate.value().required_blob_ids())
             .filter(|blob_id| !created_blob_ids.contains(blob_id))
-            .collect();
+            .collect::<Vec<_>>();
 
         match self
             .local_node

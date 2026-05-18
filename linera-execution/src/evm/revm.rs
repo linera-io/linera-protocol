@@ -42,7 +42,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{
-        Amount, ApplicationDescription, Bytecode, Resources, SendMessageRequest, StreamUpdate,
+        Amount, ApplicationDescription, ArithmeticError, Bytecode, Resources, SendMessageRequest,
+        StreamUpdate,
     },
     ensure,
     identifiers::{self, Account, AccountOwner, ApplicationId, ChainId, ModuleId, StreamName},
@@ -1037,7 +1038,7 @@ impl<Runtime: ContractRuntime> CallInterceptorContract<Runtime> {
         }
         let module_id = Self::publish_create_inputs(context, inputs)?;
         let mut map = self.db.modules.lock().unwrap();
-        let num_apps = map.len() as u32;
+        let num_apps = u32::try_from(map.len()).map_err(|_| ArithmeticError::Overflow)?;
         let expected_application_id =
             Self::get_expected_application_id(context, module_id, num_apps)?;
         map.insert(expected_application_id, (module_id, num_apps));
@@ -1477,7 +1478,8 @@ where
         let (max_size_evm_contract, gas_limit) = {
             let mut runtime = self.db.lock_runtime();
             let gas_limit = runtime.remaining_fuel(VmRuntime::Evm)?;
-            let max_size_evm_contract = runtime.maximum_blob_size()? as usize;
+            let max_size_evm_contract =
+                usize::try_from(runtime.maximum_blob_size()?).unwrap_or(usize::MAX);
             (max_size_evm_contract, gas_limit)
         };
         let nonce = self.db.get_nonce(&caller)?;
@@ -1650,7 +1652,7 @@ where
         };
         let max_size_evm_contract = {
             let mut runtime = self.db.lock_runtime();
-            runtime.maximum_blob_size()? as usize
+            usize::try_from(runtime.maximum_blob_size()?).unwrap_or(usize::MAX)
         };
         let nonce = self.db.get_nonce(&caller)?;
         let result_state = {

@@ -2167,6 +2167,11 @@ fn main() -> anyhow::Result<process::ExitCode> {
 
     Ok(match result {
         Ok(0) => process::ExitCode::SUCCESS,
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "process exit code is conventionally a u8"
+        )]
         Ok(code) => process::ExitCode::from(code as u8),
         Err(msg) => {
             error!("Error is {:?}", msg);

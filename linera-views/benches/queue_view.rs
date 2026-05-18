@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::cast_possible_truncation)]
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use linera_base::time::{Duration, Instant};
 #[cfg(with_dynamodb)]

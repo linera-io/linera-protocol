@@ -1301,7 +1301,7 @@
         "hide": 0,
         "includeAll": true,
         "label": "Validator",
-        "multi": false,
+        "multi": true,
         "name": "validator",
         "options": [],
         "query": {

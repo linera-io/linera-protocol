@@ -13,6 +13,7 @@ use std::{
 
 use allocative::{Allocative, Key, Visitor};
 use async_lock::{RwLock, RwLockReadGuardArc, RwLockWriteGuardArc};
+use linera_base::data_types::ArithmeticError;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency as _;
 use serde::{de::DeserializeOwned, Serialize};
@@ -1061,7 +1062,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
-        let count = keys.len() as u32;
+        let count = u32::try_from(keys.len()).map_err(|_| ArithmeticError::Overflow)?;
         hasher.update_with_bcs_bytes(&count)?;
         for key in keys {
             hasher.update_with_bytes(&key)?;
@@ -1092,7 +1093,7 @@ impl<W: HashableView> HashableView for ReentrantByteCollectionView<W::Context, W
         let _hash_latency = metrics::REENTRANT_COLLECTION_VIEW_HASH_RUNTIME.measure_latency();
         let mut hasher = sha3::Sha3_256::default();
         let keys = self.keys().await?;
-        let count = keys.len() as u32;
+        let count = u32::try_from(keys.len()).map_err(|_| ArithmeticError::Overflow)?;
         hasher.update_with_bcs_bytes(&count)?;
         for key in keys {
             hasher.update_with_bytes(&key)?;
@@ -2350,7 +2351,8 @@ mod graphql {
 
         #[graphql(derived(name = "count"))]
         async fn count_(&self) -> Result<u32, async_graphql::Error> {
-            Ok(self.iterative_count().await? as u32)
+            let count = self.iterative_count().await?;
+            u32::try_from(count).map_err(|_| async_graphql::Error::new("count exceeds u32"))
         }
 
         async fn entry(

@@ -119,6 +119,10 @@ pub(crate) async fn forward_cross_chain_queries<F, G>(
 
     loop {
         #[cfg(with_metrics)]
+        #[expect(
+            clippy::cast_possible_wrap,
+            reason = "queue length fits in i64 for any realistic queue size"
+        )]
         metrics::CROSS_CHAIN_MESSAGE_TASKS.set(job_states.len() as i64);
 
         tokio::select! {

@@ -103,6 +103,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Foundry
       uses: foundry-rs/foundry-toolchain@v1

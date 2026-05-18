@@ -657,6 +657,10 @@ impl ValidatorNode for GrpcClient {
         Ok(client_delegate!(self, missing_blob_ids, blob_ids)?.try_into()?)
     }
 
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "shard counts are bounded by validator config and fit in usize on supported targets"
+    )]
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn get_shard_info(
         &self,

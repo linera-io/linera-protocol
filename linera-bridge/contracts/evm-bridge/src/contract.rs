@@ -4,7 +4,9 @@
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
 use alloy_primitives::Bytes;
-use evm_bridge::{BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi};
+use evm_bridge::{
+    BridgeInstantiationArgument, BridgeOperation, BridgeParameters, DepositKey, EvmBridgeAbi,
+};
 use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
@@ -24,6 +26,7 @@ pub struct BridgeState {
     pub verified_block_hashes: SetView<[u8; 32]>,
     pub fungible_app_id: RegisterView<Option<ApplicationId>>,
     pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
+    pub rpc_endpoint: RegisterView<String>,
 }
 
 pub struct EvmBridgeContract {
@@ -40,7 +43,7 @@ impl WithContractAbi for EvmBridgeContract {
 impl Contract for EvmBridgeContract {
     type Message = ();
     type Parameters = BridgeParameters;
-    type InstantiationArgument = ();
+    type InstantiationArgument = BridgeInstantiationArgument;
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -50,10 +53,10 @@ impl Contract for EvmBridgeContract {
         EvmBridgeContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: ()) {
+    async fn instantiate(&mut self, argument: BridgeInstantiationArgument) {
         let params = self.runtime.application_parameters();
-        if !params.rpc_endpoint.is_empty() {
-            let client = ContractEthereumClient::new(params.rpc_endpoint.clone());
+        if !argument.rpc_endpoint.is_empty() {
+            let client = ContractEthereumClient::new(argument.rpc_endpoint.clone());
             let chain_id = client
                 .get_chain_id()
                 .await
@@ -64,6 +67,7 @@ impl Contract for EvmBridgeContract {
                 params.source_chain_id
             );
         }
+        self.state.rpc_endpoint.set(argument.rpc_endpoint);
     }
 
     async fn execute_operation(&mut self, operation: BridgeOperation) {
@@ -116,6 +120,12 @@ impl Contract for EvmBridgeContract {
                 );
                 self.state.bridge_contract_address.set(Some(address));
             }
+            BridgeOperation::SetRpcEndpoint { rpc_endpoint } => {
+                self.runtime
+                    .authenticated_owner()
+                    .expect("SetRpcEndpoint requires an authenticated signer");
+                self.state.rpc_endpoint.set(rpc_endpoint);
+            }
         }
     }
 
@@ -128,9 +138,9 @@ impl Contract for EvmBridgeContract {
 
 impl EvmBridgeContract {
     async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
-        let params = self.runtime.application_parameters();
+        let rpc_endpoint = self.state.rpc_endpoint.get();
         assert!(
-            !params.rpc_endpoint.is_empty(),
+            !rpc_endpoint.is_empty(),
             "rpc_endpoint must be configured to verify block hashes"
         );
 
@@ -173,7 +183,7 @@ impl EvmBridgeContract {
         // 1b. Finality check: when an endpoint is configured, verify the block hash
         //     is finalized. Uses cached result if a previous deposit from this block
         //     was already processed.
-        if params.rpc_endpoint.is_empty() {
+        if self.state.rpc_endpoint.get().is_empty() {
             log::warn!("rpc_endpoint is empty — skipping block finality verification.");
         } else if !self
             .state
@@ -245,17 +255,17 @@ impl EvmBridgeContract {
 
         // 5b. Cache the verified block hash so subsequent deposits from the same
         //     block skip the RPC finality check.
-        if !params.rpc_endpoint.is_empty() {
+        if !self.state.rpc_endpoint.get().is_empty() {
             self.state
                 .verified_block_hashes
                 .insert(&block_hash.0)
                 .expect("failed to cache verified block hash");
         }
 
-        // 6. Convert deposit fields to Linera types and call Mint
+        // 6. Convert deposit fields to Linera types and call MintAndTransfer
         let amount = Amount::try_from(deposit.amount).expect("deposit amount exceeds u128");
 
-        let mint_op = WrappedFungibleOperation::Mint {
+        let mint_op = WrappedFungibleOperation::MintAndTransfer {
             target_account: Account {
                 chain_id: deposit.target_chain_id,
                 owner: deposit.target_account_owner,

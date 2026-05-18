@@ -10,17 +10,22 @@ use async_graphql::{EmptyMutation, EmptySubscription, Object, Request, Response,
 use evm_bridge::{BridgeParameters, EvmBridgeAbi};
 use linera_sdk::{
     ethereum::{EthereumQueries, ServiceEthereumClient},
-    linera_base_types::WithServiceAbi,
+    linera_base_types::{ApplicationId, WithServiceAbi},
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Service, ServiceRuntime,
 };
 
-/// On-chain state (mirrors contract state).
+/// On-chain state (mirrors contract state). Field order MUST match
+/// `BridgeState` in `contract.rs` because `RootView` keys are derived
+/// from field position.
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<[u8; 32]>,
+    pub verified_block_hashes: SetView<[u8; 32]>,
+    pub fungible_app_id: RegisterView<Option<ApplicationId>>,
     pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
+    pub rpc_endpoint: RegisterView<String>,
 }
 
 #[derive(Clone)]
@@ -78,6 +83,12 @@ impl EvmBridgeService {
         format!("0x{}", hex::encode(params.token_address))
     }
 
+    /// The configured EVM JSON-RPC endpoint, or empty if finality verification
+    /// is disabled.
+    async fn rpc_endpoint(&self) -> String {
+        self.state.rpc_endpoint.get().clone()
+    }
+
     /// Whether a deposit with the given hash has been processed.
     ///
     /// The hash is the hex-encoded keccak-256 of the deposit key
@@ -104,12 +115,12 @@ impl EvmBridgeService {
             .expect("invalid hex")
             .try_into()
             .expect("hash must be 32 bytes");
-        let params: BridgeParameters = self.runtime.application_parameters();
+        let rpc_endpoint = self.state.rpc_endpoint.get().clone();
         assert!(
-            !params.rpc_endpoint.is_empty(),
+            !rpc_endpoint.is_empty(),
             "rpc_endpoint must be configured to verify block hashes"
         );
-        let client = ServiceEthereumClient::new(params.rpc_endpoint);
+        let client = ServiceEthereumClient::new(rpc_endpoint);
         client
             .is_block_hash_finalized(B256::from(bytes))
             .await

@@ -15,6 +15,10 @@ pub struct CrateVersion {
 }
 
 impl From<semver::Version> for CrateVersion {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "semver components fit in u32 for any realistic version"
+    )]
     fn from(
         semver::Version {
             major,
