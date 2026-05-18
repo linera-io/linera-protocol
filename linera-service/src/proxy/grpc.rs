@@ -46,6 +46,7 @@ use linera_rpc::{
     },
 };
 use linera_sdk::{linera_base_types::Blob, views::ViewError};
+use linera_storage::Arc as CacheArc;
 use linera_storage::{ResultReadCertificates, Storage};
 use prost::Message;
 use tokio::{select, task::JoinSet};
@@ -615,7 +616,7 @@ where
             .await
             .map_err(Self::view_error_to_status)?;
         let blob = blob
-            .map(Arc::unwrap_or_clone)
+            .map(CacheArc::unwrap_or_clone)
             .ok_or_else(|| Status::not_found(format!("Blob not found {blob_id}")))?;
         Ok(Response::new(blob.into_content().try_into()?))
     }
@@ -673,6 +674,7 @@ where
             .await
             .map_err(Self::view_error_to_status)?
             .ok_or_else(|| Status::not_found(hash.to_string()))?
+            .into_std()
             .as_ref()
             .into();
         Ok(Response::new(certificate.try_into()?))
@@ -750,7 +752,7 @@ where
 
         let returned_certificates =
             limiter.take_if(certificates_by_height, |lim, certificate| {
-                let cert: linera_chain::types::Certificate = certificate.as_ref().into();
+                let cert: linera_chain::types::Certificate = (&*certificate).into();
                 Ok(lim.fits::<Certificate>(cert.clone())?.then_some(cert))
             })?;
 
@@ -776,7 +778,7 @@ where
             .map_err(Self::view_error_to_status)?
             .into_iter()
             .flatten()
-            .map(Arc::unwrap_or_clone)
+            .map(CacheArc::unwrap_or_clone)
             .collect::<Vec<(Vec<u8>, Vec<u8>)>>();
 
         let mut limiter: GrpcMessageLimiter<linera_chain::types::Certificate> =

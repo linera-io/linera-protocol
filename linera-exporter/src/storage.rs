@@ -113,7 +113,8 @@ where
                     .storage
                     .read_certificate(hash)
                     .await?
-                    .ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
+                    .ok_or_else(|| ExporterError::ReadCertificateError(hash))?
+                    .into_std();
                 guard.insert(block.clone()).ok();
                 Ok(block)
             }
@@ -130,7 +131,8 @@ where
                     .storage
                     .read_blob(blob_id)
                     .await?
-                    .ok_or(ExporterError::ReadBlobError(blob_id))?;
+                    .ok_or(ExporterError::ReadBlobError(blob_id))?
+                    .into_std();
                 guard.insert(blob.clone()).ok();
                 Ok(blob)
             }

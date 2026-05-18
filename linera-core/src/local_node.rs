@@ -19,7 +19,7 @@ use linera_chain::{
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
-use linera_storage::Storage;
+use linera_storage::{Arc as CacheArc, Storage};
 use linera_views::ViewError;
 use thiserror::Error;
 use tracing::{instrument, warn};
@@ -180,7 +180,7 @@ where
     pub async fn read_blobs_from_storage(
         &self,
         blob_ids: &[BlobId],
-    ) -> Result<Option<Vec<Arc<Blob>>>, LocalNodeError> {
+    ) -> Result<Option<Vec<CacheArc<Blob>>>, LocalNodeError> {
         let storage = self.storage_client();
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
     }

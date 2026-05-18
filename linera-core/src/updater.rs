@@ -27,7 +27,7 @@ use linera_chain::{
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
 use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{Clock, Storage};
+use linera_storage::{Arc as CacheArc, Clock, Storage};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{instrument, Level};
@@ -283,7 +283,10 @@ where
                         .read_blobs_from_storage(&blob_ids)
                         .await?;
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
-                    self.remote_node.node.upload_blobs(blobs).await?;
+                    self.remote_node
+                        .node
+                        .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
+                        .await?;
                     sent_blobs = true;
                 }
                 result => {
@@ -743,6 +746,7 @@ where
                         "failed to read latest certificate for height sync",
                     )
                 })?
+                .into_std()
         };
 
         // Optimistically try sending just the last certificate
@@ -777,7 +781,7 @@ where
                 .await?;
 
             for certificate in certificates {
-                self.send_confirmed_certificate(&certificate, delivery)
+                self.send_confirmed_certificate(certificate.as_std(), delivery)
                     .await?;
             }
         }
@@ -790,7 +794,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<Arc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
+    ) -> Result<Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
 
         let certificates_by_height = storage
@@ -963,7 +967,7 @@ where
                     // Send each certificate
                     for certificate in certificates {
                         updater
-                            .send_confirmed_certificate(&certificate, delivery)
+                            .send_confirmed_certificate(certificate.as_std(), delivery)
                             .await?;
                     }
 
