@@ -18,7 +18,14 @@
 
 use std::time::Duration;
 
-use alloy::{primitives::U256, providers::ProviderBuilder, sol};
+use std::collections::HashSet;
+
+use alloy::{
+    primitives::{B256, U256},
+    providers::{Provider, ProviderBuilder},
+    rpc::types::Filter,
+    sol,
+};
 use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
@@ -317,6 +324,36 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
             "recipient {recipient:?} balance {balance}, expected {one_burn}"
         );
     }
+
+    // The whole point of this test is the chunked-processBurns path, which
+    // splits the cert across multiple EVM transactions. Each chunk lands in
+    // its own EVM block. Verify by counting distinct block hashes among
+    // ERC-20 `Transfer` events emitted by the bridge contract: if `addBlock`
+    // had fit, all 8 transfers would share one EVM block.
+    //
+    // `Transfer(address,address,uint256)` topic0.
+    let transfer_sig = B256::from(alloy::primitives::keccak256(
+        "Transfer(address,address,uint256)",
+    ));
+    let bridge_topic = B256::left_padding_from(bridge_addr.as_slice());
+    let transfer_logs = provider
+        .get_logs(
+            &Filter::new()
+                .address(erc20_addr)
+                .event_signature(transfer_sig)
+                .topic1(bridge_topic)
+                .from_block(0u64),
+        )
+        .await?;
+    let transfer_blocks: HashSet<B256> =
+        transfer_logs.iter().filter_map(|l| l.block_hash).collect();
+    assert!(
+        transfer_blocks.len() > 1,
+        "expected chunked processBurns path to span multiple EVM blocks; \
+         saw {} distinct block(s) across {} bridge-originated Transfer logs",
+        transfer_blocks.len(),
+        transfer_logs.len(),
+    );
 
     Ok(())
 }
