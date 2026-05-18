@@ -2274,7 +2274,6 @@ where
     /// Scans the chain's executed blocks from the latest height backwards, returning the
     /// height of the most recent block whose certificate records an
     /// [`OracleResponse::Checkpoint`], or `None` if no such block exists.
-    ///
     // TODO: cache the latest checkpoint height on `ChainTipState` so this becomes
     // O(1) instead of scanning the entire chain on every query.
     async fn find_latest_checkpoint_height(&self) -> Result<Option<BlockHeight>, WorkerError> {

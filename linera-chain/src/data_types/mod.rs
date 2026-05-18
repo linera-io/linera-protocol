@@ -25,9 +25,7 @@ use linera_base::{
     },
     time::Duration,
 };
-use linera_execution::{
-    committee::Committee, Message, MessageKind, Operation, OutgoingMessage, SystemOperation,
-};
+use linera_execution::{committee::Committee, Message, MessageKind, Operation, OutgoingMessage};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -96,11 +94,9 @@ impl ProposedBlock {
     /// this is equivalent to "the block is a checkpoint block", since Checkpoint must
     /// be the only transaction.
     pub fn starts_with_checkpoint(&self) -> bool {
-        matches!(
-            self.transactions.first(),
-            Some(Transaction::ExecuteOperation(Operation::System(sys)))
-                if matches!(**sys, SystemOperation::Checkpoint)
-        )
+        self.transactions
+            .first()
+            .is_some_and(Transaction::is_checkpoint)
     }
 
     /// Returns whether the block contains only rejected incoming messages, which
@@ -179,6 +175,14 @@ impl Transaction {
         matches!(
             self,
             Transaction::ExecuteOperation(op) if op.is_update_stream()
+        )
+    }
+
+    /// Returns whether this transaction executes a `SystemOperation::Checkpoint`.
+    pub fn is_checkpoint(&self) -> bool {
+        matches!(
+            self,
+            Transaction::ExecuteOperation(op) if op.is_checkpoint()
         )
     }
 }

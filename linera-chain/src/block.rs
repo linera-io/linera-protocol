@@ -397,11 +397,9 @@ impl BlockBody {
     /// Returns whether the first transaction in this block body is a
     /// `SystemOperation::Checkpoint`. See [`ProposedBlock::starts_with_checkpoint`].
     pub fn starts_with_checkpoint(&self) -> bool {
-        matches!(
-            self.transactions.first(),
-            Some(Transaction::ExecuteOperation(Operation::System(sys)))
-                if matches!(**sys, linera_execution::SystemOperation::Checkpoint)
-        )
+        self.transactions
+            .first()
+            .is_some_and(Transaction::is_checkpoint)
     }
 }
 

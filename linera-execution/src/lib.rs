@@ -1521,6 +1521,14 @@ impl Operation {
         };
         matches!(**system_op, SystemOperation::UpdateStream { .. })
     }
+
+    /// Returns whether this operation is a `Checkpoint` operation.
+    pub fn is_checkpoint(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        matches!(**system_op, SystemOperation::Checkpoint)
+    }
 }
 
 impl From<SystemMessage> for Message {
