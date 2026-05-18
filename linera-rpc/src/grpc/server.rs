@@ -17,7 +17,7 @@ use linera_core::{
     join_set_ext::JoinSet,
     node::NodeError,
     worker::{NetworkActions, Notification, Reason, WorkerState},
-    JoinSetExt as _, TaskHandle,
+    JoinSetExt as _, ProcessConfirmedBlockMode, TaskHandle,
 };
 use linera_storage::Storage;
 use tokio::sync::{broadcast::error::RecvError, oneshot};
@@ -829,7 +829,7 @@ where
         match self
             .state
             .clone()
-            .handle_confirmed_certificate(certificate, sender)
+            .handle_confirmed_certificate(certificate, ProcessConfirmedBlockMode::Auto, sender)
             .await
         {
             Ok((info, actions)) => {

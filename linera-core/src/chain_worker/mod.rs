@@ -10,4 +10,5 @@ pub(crate) mod state;
 
 pub use self::config::ChainWorkerConfig;
 pub(super) use self::delivery_notifier::DeliveryNotifier;
+pub use self::state::ProcessConfirmedBlockMode;
 pub(crate) use self::state::{BlockOutcome, CrossChainUpdateResult, EventSubscriptionsResult};

@@ -137,6 +137,23 @@ pub enum BlockOutcome {
     Skipped,
 }
 
+/// How to handle a confirmed block depending on whether it is contiguous with the
+/// current tip.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProcessConfirmedBlockMode {
+    /// Execute if contiguous; preprocess if there is a gap. This is what validators
+    /// always use, and is also the default for paths that don't care.
+    Auto,
+    /// Execute the block. Fails with [`WorkerError::UnexpectedBlockHeight`] if the
+    /// block is not contiguous with the current tip. Used by the client for blocks
+    /// of its own chain, where contiguity is a correctness invariant.
+    Execute,
+    /// Only preprocess the block (update outboxes and event streams), never execute
+    /// it — even if it would be contiguous. Used by the client for sender-chain
+    /// blocks, since their execution state is irrelevant to the receiver.
+    Preprocess,
+}
+
 impl<StorageClient> ChainWorkerState<StorageClient>
 where
     StorageClient: Storage + Clone + 'static,
@@ -814,6 +831,7 @@ where
     pub(crate) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
@@ -901,9 +919,25 @@ where
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
 
-        // If this block is higher than the next expected block in this chain, we're going
-        // to have a gap: do not execute this block, only update the outboxes and return.
-        if tip.next_block_height < height {
+        // Decide whether to fully execute or only preprocess this block. We preprocess
+        // when there's a gap (`tip.next_block_height < height`) under `Auto`, or
+        // whenever the caller explicitly asked for `Preprocess`. Under `Execute`, a
+        // gap is an error: the caller asserted that the block must be contiguous.
+        let must_preprocess = match mode {
+            ProcessConfirmedBlockMode::Auto => tip.next_block_height < height,
+            ProcessConfirmedBlockMode::Preprocess => true,
+            ProcessConfirmedBlockMode::Execute => {
+                ensure!(
+                    tip.next_block_height == height,
+                    WorkerError::UnexpectedBlockHeight {
+                        expected_block_height: tip.next_block_height,
+                        found_block_height: height,
+                    }
+                );
+                false
+            }
+        };
+        if must_preprocess {
             // Update the outboxes and event streams.
             let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
@@ -1459,7 +1493,8 @@ where
                 .await?
                 .map(Arc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
-            Box::pin(self.process_confirmed_block(cert, None)).await?;
+            Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Auto, None))
+                .await?;
         }
 
         // 5. Restore any previously cast votes and locking block so we cannot be
