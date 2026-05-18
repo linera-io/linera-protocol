@@ -94,8 +94,8 @@ pub(crate) async fn process_pending_deposits<E: linera_core::environment::Enviro
                             log_index,
                         };
                         if let Ok(raw) = bcs::to_bytes(&op) {
-                            if let Err(e) = db.store_deposit_raw(&pending.key, &raw).await {
-                                tracing::warn!(%tx_hash, "Failed to store deposit raw bytes: {e:#}");
+                            if let Err(error) = db.store_deposit_raw(&pending.key, &raw).await {
+                                tracing::warn!(%tx_hash, ?error, "Failed to store deposit raw bytes");
                             }
                         }
                     }
@@ -111,8 +111,8 @@ pub(crate) async fn process_pending_deposits<E: linera_core::environment::Enviro
                     }
                 }
             }
-            Err(e) => {
-                tracing::warn!(%tx_hash, "Proof generation failed: {e:#}");
+            Err(error) => {
+                tracing::warn!(%tx_hash, ?error, "Proof generation failed");
             }
         }
 
@@ -163,8 +163,8 @@ async fn evm_scan_iteration(
         };
         let deposit = match parse_deposit_event(&receipt_log, bridge_addr) {
             Ok(d) => d,
-            Err(e) => {
-                tracing::warn!(%tx_hash, "Failed to parse DepositInitiated log: {e:#}");
+            Err(error) => {
+                tracing::warn!(%tx_hash, ?error, "Failed to parse DepositInitiated log");
                 continue;
             }
         };

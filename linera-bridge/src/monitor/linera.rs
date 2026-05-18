@@ -139,8 +139,8 @@ async fn submit_addblock<P: Provider>(
                 "Burns forwarded via addBlock"
             );
         }
-        Err(e) => {
-            tracing::warn!(?height, "addBlock submission failed: {e:#}");
+        Err(error) => {
+            tracing::warn!(?height, ?error, "addBlock submission failed");
             let mut state = monitor.write().await;
             for ei in event_indices {
                 state.mark_burn_retried(height, *ei);
@@ -283,12 +283,13 @@ async fn persist_cert_bytes(
     let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
     let state = monitor.read().await;
     let Some(db) = state.db() else { return };
-    for ei in event_indices {
-        if let Err(e) = db.store_burn_raw(height, *ei, &cert_bytes).await {
+    for event_index in event_indices {
+        if let Err(error) = db.store_burn_raw(height, *event_index, &cert_bytes).await {
             tracing::warn!(
                 ?height,
-                event_index = ei,
-                "Failed to store burn raw bytes: {e:#}"
+                ?event_index,
+                ?error,
+                "Failed to store burn raw bytes"
             );
         }
     }
@@ -402,11 +403,12 @@ async fn check_burn_completion(
                     .await;
             }
             Ok(false) => {}
-            Err(e) => {
+            Err(error) => {
                 tracing::warn!(
                     ?height,
                     event_index,
-                    "is_burn_processed query failed: {e:#}"
+                    ?error,
+                    "is_burn_processed query failed"
                 );
             }
         }

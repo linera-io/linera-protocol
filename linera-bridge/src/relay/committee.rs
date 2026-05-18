@@ -69,8 +69,8 @@ where
 {
     let current_epoch = match evm_client.get_current_epoch().await {
         Ok(epoch) => epoch,
-        Err(e) => {
-            tracing::info!("LightClient not initialized yet, skipping catch-up: {e:#}");
+        Err(error) => {
+            tracing::info!(?error, "LightClient not initialized yet, skipping catch-up");
             return Ok(());
         }
     };

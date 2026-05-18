@@ -188,8 +188,8 @@ impl MonitorState {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
                 if let Some(db) = &self.db {
-                    if let Err(e) = db.insert_deposit(&pending).await {
-                        tracing::warn!("Failed to persist deposit to SQLite: {e:#}");
+                    if let Err(error) = db.insert_deposit(&pending).await {
+                        tracing::warn!(?error, "Failed to persist deposit to SQLite");
                     }
                 }
                 e.insert(Tracked::new(pending));
@@ -204,8 +204,8 @@ impl MonitorState {
             d.forwarded = true;
             crate::relay::metrics::deposit_completed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_deposit_status(key, "completed").await {
-                    tracing::warn!(?key, "Failed to update deposit status in SQLite: {e:#}");
+                if let Err(error) = db.update_deposit_status(key, "completed").await {
+                    tracing::warn!(?key, ?error, "Failed to update deposit status in SQLite");
                 }
             }
         } else {
@@ -222,8 +222,8 @@ impl MonitorState {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
                 if let Some(db) = &self.db {
-                    if let Err(err) = db.insert_burn(&pending).await {
-                        tracing::warn!("Failed to persist burn to SQLite: {err:#}");
+                    if let Err(error) = db.insert_burn(&pending).await {
+                        tracing::warn!(?error, "Failed to persist burn to SQLite");
                     }
                 }
                 e.insert(Tracked::new(pending));
@@ -238,14 +238,15 @@ impl MonitorState {
             b.forwarded = true;
             crate::relay::metrics::burn_completed();
             if let Some(db) = &self.db {
-                if let Err(e) = db
+                if let Err(error) = db
                     .update_burn_status(height, event_index, "completed")
                     .await
                 {
                     tracing::warn!(
                         ?height,
                         event_index,
-                        "Failed to update burn status in SQLite: {e:#}"
+                        ?error,
+                        "Failed to update burn status in SQLite"
                     );
                 }
             }
@@ -414,8 +415,8 @@ impl MonitorState {
             d.failed = true;
             crate::relay::metrics::deposit_failed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_deposit_status(key, "failed").await {
-                    tracing::warn!(?key, "Failed to update deposit status in SQLite: {e:#}");
+                if let Err(error) = db.update_deposit_status(key, "failed").await {
+                    tracing::warn!(?key, ?error, "Failed to update deposit status in SQLite");
                 }
             }
         }
@@ -451,11 +452,12 @@ impl MonitorState {
             b.failed = true;
             crate::relay::metrics::burn_failed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_burn_status(height, event_index, "failed").await {
+                if let Err(error) = db.update_burn_status(height, event_index, "failed").await {
                     tracing::warn!(
                         ?height,
                         event_index,
-                        "Failed to update burn status in SQLite: {e:#}"
+                        ?error,
+                        "Failed to update burn status in SQLite"
                     );
                 }
             }
