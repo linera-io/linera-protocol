@@ -181,7 +181,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns a new TransactionTracker for the current transaction.
-    fn new_transaction_tracker(&mut self) -> Result<TransactionTracker, ChainError> {
+    fn new_transaction_tracker(&self) -> Result<TransactionTracker, ChainError> {
         let mut tracker = TransactionTracker::new(
             self.local_time,
             self.transaction_index,
@@ -190,11 +190,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.oracle_responses()?,
             &self.blobs,
         );
-        // `take()` ensures only the first transaction's tracker carries the prepared
-        // checkpoint blob — safe because `check_checkpoint_preconditions` enforces
-        // that `Checkpoint` is the block's only transaction.
-        if let Some(blob) = self.prepared_checkpoint_blob.take() {
-            tracker.set_prepared_checkpoint_blob(blob);
+        // Cloning the blob is cheap — its bytes are behind an `Arc`.
+        if let Some(blob) = self.prepared_checkpoint_blob.as_ref() {
+            tracker.set_prepared_checkpoint_blob(blob.clone());
         }
         Ok(tracker)
     }

@@ -1113,6 +1113,16 @@ where
             &block,
         )?;
 
+        ensure!(
+            !block
+                .transactions
+                .iter()
+                .skip(1)
+                .any(Transaction::is_checkpoint),
+            ChainError::CheckpointPreconditionFailed(
+                "Checkpoint must be the first transaction in its block",
+            )
+        );
         if block.starts_with_checkpoint() {
             self.check_checkpoint_preconditions(&block).await?;
         }
