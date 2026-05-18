@@ -121,7 +121,9 @@ required-features = ["cli"]
 [build-dependencies]
 # TODO: switch back to a crates.io release once upstream serde-generate ships
 # the memory-safe assembly annotation for its Solidity backend.
-serde-generate = { git = "https://github.com/afck/serde-reflection", branch = "solidity-memory-safe-assembly", features = ["solidity"], optional = true }
+serde-generate = { git = "https://github.com/afck/serde-reflection", branch = "solidity-memory-safe-assembly", features = [
+    "solidity",
+], optional = true }
 serde-reflection = { workspace = true, optional = true }
 serde_yaml = { version = "0.8.26", optional = true }
 
