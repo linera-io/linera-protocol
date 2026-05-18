@@ -2271,39 +2271,10 @@ where
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
 
-    /// Scans the chain's executed blocks from the latest height backwards, returning the
-    /// height of the most recent block whose certificate records an
-    /// [`OracleResponse::Checkpoint`], or `None` if no such block exists.
-    // TODO: cache the latest checkpoint height on `ChainTipState` so this becomes
-    // O(1) instead of scanning the entire chain on every query.
+    /// Returns the height of the most recent checkpoint block applied to this chain,
+    /// or `None` if no such block exists. Maintained by `apply_confirmed_block`.
     async fn find_latest_checkpoint_height(&self) -> Result<Option<BlockHeight>, WorkerError> {
-        let next_height = self.chain.tip_state.get().next_block_height;
-        let Some(top) = next_height.0.checked_sub(1) else {
-            return Ok(None);
-        };
-        for height_n in (0..=top).rev() {
-            let height = BlockHeight(height_n);
-            let Some(certificate_hash) = self.chain.block_hashes.get(&height).await? else {
-                continue;
-            };
-            let certificate = self
-                .storage
-                .read_certificate(certificate_hash)
-                .await?
-                .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
-            // The Checkpoint operation is constrained to be the only transaction in its
-            // block and `execute_checkpoint` records a single
-            // `OracleResponse::Checkpoint` as its first oracle response, so we only
-            // need to inspect that one slot.
-            let body = &certificate.value().block().body;
-            if matches!(
-                body.oracle_responses.first().and_then(|t| t.first()),
-                Some(OracleResponse::Checkpoint(_)),
-            ) {
-                return Ok(Some(height));
-            }
-        }
-        Ok(None)
+        Ok(*self.chain.latest_checkpoint_height.get())
     }
 
     /// Executes a block with a specified policy for handling bundle failures.

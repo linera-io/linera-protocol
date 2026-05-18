@@ -249,6 +249,11 @@ where
     /// `linera-views` gains efficient first/last key support, this field can be
     /// removed in favor of `block_hashes.last_index()`.
     pub next_height_to_preprocess: RegisterView<C, BlockHeight>,
+
+    /// The height of the most recent checkpoint block applied to this chain, if any.
+    /// Maintained by `apply_confirmed_block` whenever a block starting with
+    /// `SystemOperation::Checkpoint` is executed.
+    pub latest_checkpoint_height: RegisterView<C, Option<BlockHeight>>,
 }
 
 /// Block-chaining state.
@@ -1158,6 +1163,9 @@ where
         tip.next_block_height.try_add_assign_one()?;
         tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.insert_block_hash(block.header.height, hash)?;
+        if block.body.starts_with_checkpoint() {
+            self.latest_checkpoint_height.set(Some(block.header.height));
+        }
         Ok(updated_streams)
     }
 
