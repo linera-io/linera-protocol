@@ -46,8 +46,7 @@ use linera_rpc::{
     },
 };
 use linera_sdk::{linera_base_types::Blob, views::ViewError};
-use linera_storage::Arc as CacheArc;
-use linera_storage::{ResultReadCertificates, Storage};
+use linera_storage::{Arc as CacheArc, ResultReadCertificates, Storage};
 use prost::Message;
 use tokio::{select, task::JoinSet};
 use tokio_stream::wrappers::UnboundedReceiverStream;
