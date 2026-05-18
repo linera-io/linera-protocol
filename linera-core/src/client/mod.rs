@@ -827,28 +827,29 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
-    /// Tries to process all the certificates, requesting any missing blobs from the given nodes.
-    /// Returns the chain info of the last successfully processed certificate.
-    /// If `until_block_time` is `Some`, stops before processing any certificate whose
-    /// block timestamp is greater or equal than the given value.
-    #[instrument(level = "trace", skip_all)]
     /// Downloads the checkpoint certificate at `checkpoint_height` from `remote_node`
     /// and processes it locally, if our chain isn't already past that height. The
     /// worker's `process_confirmed_block` recognises the gap-plus-checkpoint case and
     /// installs the chain's execution state from the checkpoint blob before re-running
     /// the certificate.
+    ///
+    /// The certificate's signatures are still verified against the committee resolved
+    /// from the admin chain's epoch event stream, so the remote node is trusted only
+    /// to point us at a height — not to forge the snapshot itself.
+    #[instrument(level = "trace", skip_all)]
     async fn bootstrap_chain_from_checkpoint(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
         chain_id: ChainId,
         checkpoint_height: BlockHeight,
     ) -> Result<(), chain_client::Error> {
-        let local_next = self
-            .local_node
-            .chain_info(chain_id)
-            .await
-            .map(|info| info.next_block_height)
-            .unwrap_or(BlockHeight::ZERO);
+        let local_next = match self.local_node.chain_info(chain_id).await {
+            Ok(info) => info.next_block_height,
+            // A freshly-created follower has no chain state yet; treat that as
+            // height 0 and let the checkpoint cert install the snapshot.
+            Err(LocalNodeError::InactiveChain(_)) => BlockHeight::ZERO,
+            Err(err) => return Err(err.into()),
+        };
         if local_next > checkpoint_height {
             return Ok(());
         }
@@ -865,6 +866,11 @@ impl<Env: Environment> Client<Env> {
         Ok(())
     }
 
+    /// Tries to process all the certificates, requesting any missing blobs from the given nodes.
+    /// Returns the chain info of the last successfully processed certificate.
+    /// If `until_block_time` is `Some`, stops before processing any certificate whose
+    /// block timestamp is greater or equal than the given value.
+    #[instrument(level = "trace", skip_all)]
     async fn process_certificates(
         &self,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],

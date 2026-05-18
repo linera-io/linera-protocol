@@ -190,6 +190,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.oracle_responses()?,
             &self.blobs,
         );
+        // `take()` ensures only the first transaction's tracker carries the prepared
+        // checkpoint blob — safe because `check_checkpoint_preconditions` enforces
+        // that `Checkpoint` is the block's only transaction.
         if let Some(blob) = self.prepared_checkpoint_blob.take() {
             tracker.set_prepared_checkpoint_blob(blob);
         }
