@@ -348,7 +348,7 @@ where
                     .await
                 {
                     Ok(blob) => Ok(Some(RpcMessage::DownloadPendingBlobResponse(Box::new(
-                        blob.into(),
+                        blob.content().clone(),
                     )))),
                     Err(error) => {
                         self.log_error(&error, "Failed to handle pending blob request");

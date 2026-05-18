@@ -11,7 +11,7 @@ use linera_base::{
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
 };
-use linera_cache::ValueCache;
+use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
     types::{CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate},
     ChainStateView,
@@ -1278,7 +1278,7 @@ where
     async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<Arc<ConfirmedBlock>>, ViewError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlock>>, ViewError> {
         if let Some(block) = self.caches.confirmed_block.get(&hash) {
             #[cfg(with_metrics)]
             metrics::READ_CONFIRMED_BLOCK_COUNTER
@@ -1303,7 +1303,7 @@ where
     async fn read_confirmed_blocks<I: IntoIterator<Item = CryptoHash> + Send>(
         &self,
         hashes: I,
-    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlock>>>, ViewError> {
         let hashes = hashes.into_iter().collect::<Vec<_>>();
         if hashes.is_empty() {
             return Ok(Vec::new());
@@ -1350,7 +1350,7 @@ where
     }
 
     #[instrument(skip_all, fields(%blob_id))]
-    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
+    async fn read_blob(&self, blob_id: BlobId) -> Result<Option<CacheArc<Blob>>, ViewError> {
         if let Some(blob) = self.caches.blob.get(&blob_id) {
             #[cfg(with_metrics)]
             metrics::READ_BLOB_COUNTER
@@ -1375,7 +1375,10 @@ where
     }
 
     #[instrument(skip_all, fields(blob_ids_len = %blob_ids.len()))]
-    async fn read_blobs(&self, blob_ids: &[BlobId]) -> Result<Vec<Option<Arc<Blob>>>, ViewError> {
+    async fn read_blobs(
+        &self,
+        blob_ids: &[BlobId],
+    ) -> Result<Vec<Option<CacheArc<Blob>>>, ViewError> {
         if blob_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1503,6 +1506,23 @@ where
         self.write_batch(batch).await
     }
 
+    fn cache_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+    ) -> CacheArc<ConfirmedBlockCertificate> {
+        self.caches
+            .certificate
+            .insert(&certificate.hash(), certificate)
+    }
+
+    fn cache_blob(&self, blob: Blob) -> CacheArc<Blob> {
+        self.caches.blob.insert(&blob.id(), blob)
+    }
+
+    fn cache_confirmed_block(&self, block: ConfirmedBlock) -> CacheArc<ConfirmedBlock> {
+        self.caches.confirmed_block.insert(&block.hash(), block)
+    }
+
     #[instrument(skip_all, fields(%hash))]
     async fn contains_certificate(&self, hash: CryptoHash) -> Result<bool, ViewError> {
         if self.caches.certificate.contains(&hash) || self.caches.certificate_raw.contains(&hash) {
@@ -1526,7 +1546,7 @@ where
     async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, ViewError> {
         // Assembled certificate cache (single Arc, no re-assembly)
         if let Some(cert) = self.caches.certificate.get(&hash) {
             #[cfg(with_metrics)]
@@ -1568,7 +1588,7 @@ where
     async fn read_certificates(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlockCertificate>>>, ViewError> {
         let raw_certs = self.read_certificates_raw(hashes).await?;
 
         raw_certs
@@ -1586,7 +1606,7 @@ where
     async fn read_certificates_raw(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
         if hashes.is_empty() {
             return Ok(Vec::new());
         }
@@ -1661,7 +1681,7 @@ where
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<Arc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<(Vec<u8>, Vec<u8>)>>>, ViewError> {
         let hashes: Vec<Option<CryptoHash>> = self
             .read_certificate_hashes_by_heights(chain_id, heights)
             .await?;
@@ -1706,7 +1726,7 @@ where
         &self,
         chain_id: ChainId,
         heights: &[BlockHeight],
-    ) -> Result<Vec<Option<Arc<ConfirmedBlockCertificate>>>, ViewError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlockCertificate>>>, ViewError> {
         self.read_certificates_by_heights_raw(chain_id, heights)
             .await?
             .into_iter()
@@ -1742,7 +1762,7 @@ where
     }
 
     #[instrument(skip_all, fields(event_id = ?event_id))]
-    async fn read_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
+    async fn read_event(&self, event_id: EventId) -> Result<Option<CacheArc<Vec<u8>>>, ViewError> {
         if let Some(event) = self.caches.event.get(&event_id) {
             #[cfg(with_metrics)]
             metrics::READ_EVENT_COUNTER
@@ -1887,7 +1907,7 @@ where
         &self,
         lite_cert_bytes: &[u8],
         confirmed_block_bytes: &[u8],
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, ViewError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, ViewError> {
         let lite = bcs::from_bytes::<LiteCertificate>(lite_cert_bytes)?;
         let block = bcs::from_bytes::<ConfirmedBlock>(confirmed_block_bytes)?;
         let hash = block.hash();

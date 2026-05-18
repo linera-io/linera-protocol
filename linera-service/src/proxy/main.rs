@@ -11,7 +11,7 @@ static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 #[export_name = "malloc_conf"]
 pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
-use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
@@ -34,6 +34,7 @@ use linera_service::{
     storage::{AssertStorageV1, CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
+use linera_storage::Arc as CacheArc;
 use linera_storage::{ResultReadCertificates, Storage};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -379,16 +380,14 @@ where
             }
             DownloadBlob(blob_id) => {
                 let blob = self.storage.read_blob(*blob_id).await?;
-                let blob = blob
-                    .map(Arc::unwrap_or_clone)
-                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
-                let content = blob.into_content();
+                let blob = blob.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let content = blob.content().clone();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
             DownloadConfirmedBlock(hash) => {
                 let block = self.storage.read_confirmed_block(*hash).await?;
                 let block = block
-                    .map(Arc::unwrap_or_clone)
+                    .map(CacheArc::unwrap_or_clone)
                     .ok_or_else(|| anyhow!("Missing confirmed block {hash}"))?;
                 Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
                     block,
@@ -462,7 +461,7 @@ where
                     .storage
                     .read_certificate(last_used_by)
                     .await?
-                    .map(Arc::unwrap_or_clone)
+                    .map(CacheArc::unwrap_or_clone)
                     .ok_or_else(|| anyhow!("Certificate not found {}", last_used_by))?;
                 Ok(Some(RpcMessage::BlobLastUsedByCertificateResponse(
                     Box::new(certificate),

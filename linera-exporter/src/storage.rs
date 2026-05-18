@@ -110,7 +110,8 @@ where
                     .storage
                     .read_certificate(hash)
                     .await?
-                    .ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
+                    .ok_or_else(|| ExporterError::ReadCertificateError(hash))?
+                    .into_std();
                 guard.insert(block.clone()).ok();
                 Ok(block)
             }
@@ -123,7 +124,7 @@ where
             Err(guard) => {
                 #[cfg(with_metrics)]
                 metrics::GET_BLOB_HISTOGRAM.measure_latency();
-                let blob = self.storage.read_blob(blob_id).await?.unwrap();
+                let blob = self.storage.read_blob(blob_id).await?.unwrap().into_std();
                 guard.insert(blob.clone()).ok();
                 Ok(blob)
             }
