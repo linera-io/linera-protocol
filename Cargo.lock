@@ -5773,6 +5773,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.19",
  "url",
+ "walrus",
  "walrus-meter",
  "wasmtime",
  "web-thread-pool",

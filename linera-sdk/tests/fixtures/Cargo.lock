@@ -2436,6 +2436,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "walrus",
  "walrus-meter",
  "web-thread-pool",
  "web-thread-select",

@@ -208,9 +208,20 @@ impl UserServiceModule for WasmServiceModule {
 
 /// Instrument the [`Bytecode`] to add fuel metering.
 pub fn add_metering(bytecode: &Bytecode) -> Result<Bytecode, WasmExecutionError> {
+    pub struct Costs;
+    impl walrus_meter::Costs for Costs {
+        fn instruction(&self, instruction: &walrus::ir::Instr) -> i32 {
+            use walrus::ir::Instr::*;
+            match instruction {
+                Drop(_) | Block(_) | Loop(_) | Unreachable(_) => 0,
+                _ => 1,
+            }
+        }
+    }
+
     let instrumented_module = walrus_meter::instrument(
         &bytecode.bytes,
-        walrus_meter::costs::Wasmtime,
+        Costs,
         ("linera:app/contract-runtime-api", "consume-fuel"),
     )
     .map_err(|_| WasmExecutionError::InstrumentModule)?;
