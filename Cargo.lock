@@ -3610,6 +3610,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "facile"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba3ae8a3c35e905c7dc85b5a122f4054cb37a512bb2acefd56d78c79a840d58b"
+dependencies = [
+ "deluxe",
+ "itertools 0.14.0",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11701,11 +11715,13 @@ dependencies = [
 
 [[package]]
 name = "walrus-meter"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eba396e599cf20dbd4b49211cc21f033cc66af5e6487123a885cd661752dfd55"
+checksum = "ce40d810c47b21fce1b0a8d1cf85526d5b0a60bfbce773db08f23abc1fb74734"
 dependencies = [
  "anyhow",
+ "auto_impl",
+ "facile",
  "walrus",
 ]
 
