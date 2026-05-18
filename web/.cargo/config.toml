@@ -9,6 +9,7 @@ rustflags = [
     "-Clink-arg=--export=__tls_size",
     "-Clink-arg=--export=__tls_align",
     "-Clink-arg=--export=__tls_base",
+    "-Clink-arg=--export=__heap_base",
     # allow unstable Web APIs needed by `web-sys` bindings used in the web client
     "--cfg=web_sys_unstable_apis",
     "-Z", "wasm_c_abi=spec",
