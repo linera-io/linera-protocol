@@ -1420,38 +1420,41 @@ impl<Env: Environment> ChainClient<Env> {
     }
 
     /// Returns `Committed` if the committed block reflects our request — same
-    /// authenticated owner, and our `operations` as a suffix of the block's
-    /// transactions. Any transactions before that suffix must be ones that
-    /// `prepend_epochs_messages_and_events` would have added: incoming messages,
-    /// `ProcessNewEpoch`, or `UpdateStream`. Otherwise returns `Conflict`.
+    /// authenticated owner, and our `operations`. All other transactions must be ones that
+    /// are added automatically, to process messages, streams or new epochs.
     fn classify_committed(
         &self,
         certificate: ConfirmedBlockCertificate,
         operations: &[Operation],
     ) -> ClientOutcome<ConfirmedBlockCertificate> {
         let block = certificate.block();
-        let owner_matches = self.preferred_owner.is_some()
-            && block.header.authenticated_owner == self.preferred_owner;
-        let transactions = &block.body.transactions;
-        let suffix_matches = transactions
-            .len()
-            .checked_sub(operations.len())
-            .is_some_and(|start| {
-                transactions[..start].iter().all(|tx| match tx {
-                    Transaction::ReceiveMessages(_) => true,
-                    Transaction::ExecuteOperation(Operation::System(op)) => matches!(
-                        **op,
-                        SystemOperation::ProcessNewEpoch(_) | SystemOperation::UpdateStream { .. }
-                    ),
-                    Transaction::ExecuteOperation(_) => false,
-                }) && transactions[start..].iter().zip(operations).all(
-                    |(tx, op)| matches!(tx, Transaction::ExecuteOperation(tx_op) if tx_op == op),
-                )
-            });
-        if owner_matches && suffix_matches {
-            ClientOutcome::Committed(certificate)
-        } else {
+        if self.preferred_owner.is_none()
+            || block.header.authenticated_owner != self.preferred_owner
+        {
+            return ClientOutcome::Conflict(Box::new(certificate));
+        }
+        let mut operations_iter = operations.iter().peekable();
+        for tx in &block.body.transactions {
+            let is_expected = match tx {
+                Transaction::ReceiveMessages(_) => true,
+                Transaction::ExecuteOperation(op) if Some(&op) == operations_iter.peek() => {
+                    operations_iter.next();
+                    true
+                }
+                Transaction::ExecuteOperation(Operation::System(op)) => matches!(
+                    **op,
+                    SystemOperation::ProcessNewEpoch(_) | SystemOperation::UpdateStream { .. }
+                ),
+                Transaction::ExecuteOperation(Operation::User { .. }) => false,
+            };
+            if !is_expected {
+                return ClientOutcome::Conflict(Box::new(certificate));
+            }
+        }
+        if operations_iter.next().is_some() {
             ClientOutcome::Conflict(Box::new(certificate))
+        } else {
+            ClientOutcome::Committed(certificate)
         }
     }
 
