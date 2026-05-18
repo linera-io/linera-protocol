@@ -1879,12 +1879,9 @@ where
         let local_time = self.storage.clock().current_time();
         // Try to use a cached execution state for the requested block.
         // We want to pretend that this block is committed, so we set the next block height.
-        let cached_state = block_hash.and_then(|h| {
-            self.execution_state_cache
-                .as_ref()
-                .and_then(|cache| cache.remove(&h))
-                .map(|s| (h, s))
-        });
+        let cached_state = block_hash
+            .zip(self.execution_state_cache.as_ref())
+            .and_then(|(h, cache)| Some(h).zip(cache.remove(&h)));
         if let Some((requested_block, mut state)) = cached_state {
             let next_block_height = next_block_height
                 .try_add_one()

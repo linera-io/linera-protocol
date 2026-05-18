@@ -228,7 +228,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                             if uri.is_some() {
                                 bail!("The uri has already been assigned");
                             }
-                            uri = Some(format!("{}:{}", &address, port));
+                            uri = Some(format!("{address}:{port}"));
                         }
                         _ if part.starts_with("table") => {
                             if namespace.is_some() {
@@ -280,7 +280,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             let port_str = parts[4];
             let port = NonZeroU16::from_str(port_str)
                 .map_err(|_| anyhow!("Failed to find parse port {port_str} for {s}"))?;
-            let uri = format!("{}:{}", &address, port);
+            let uri = format!("{address}:{port}");
             let inner_storage_config = InnerStorageConfig::DualRocksDbScyllaDb {
                 path_with_guard,
                 spawn_mode,
