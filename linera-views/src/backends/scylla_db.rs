@@ -851,9 +851,9 @@ impl ScyllaDbStoreInternal {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_micros() as i64)
             .unwrap_or(0);
-        // Reserve room for `T` and `T+1` of the upcoming first batch. If
-        // another caller raced ahead and set a higher floor already, leave it.
-        let seed = now_us.max(writetime + 2);
+        // `writetime` is the last batch's `T + 1`, i.e. the highest timestamp it
+        // consumed; that is exactly what `ts_floor` tracks, so seed it directly.
+        let seed = now_us.max(writetime);
         if self
             .ts_floor
             .compare_exchange(0, seed, Ordering::Relaxed, Ordering::Relaxed)
@@ -875,14 +875,15 @@ impl ScyllaDbStoreInternal {
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_micros() as i64)
                 .unwrap_or(prev);
-            let next = std::cmp::max(now_us, prev + 2);
+            let next = std::cmp::max(now_us, prev + 1);
+            // The batch uses `next` (`T`) and `next + 1` (`T + 1`); store the latter
+            // so the following batch starts strictly above both.
             if self
                 .ts_floor
-                .compare_exchange_weak(prev, next, Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange_weak(prev, next + 1, Ordering::Relaxed, Ordering::Relaxed)
                 .is_ok()
             {
-                // `next` is `T + 1`; the caller's T+1 == next, base T == next - 1.
-                return Ok(next - 1);
+                return Ok(next);
             }
         }
     }
