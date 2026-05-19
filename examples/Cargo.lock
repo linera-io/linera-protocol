@@ -4235,8 +4235,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer"
-version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+version = "4.4.0-linera.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5278f3e1541b2a6baf217ea0c935e16fdb7b735f60168d64f13e7fa9dd13ddd3"
 dependencies = [
  "bytes",
  "cfg-if",
@@ -4264,8 +4265,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler"
-version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+version = "4.4.0-linera.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d135e44dd79a595717d6ed9036dec248e192b6addbea9c5c229fb47a36ba6ab"
 dependencies = [
  "backtrace",
  "bytes",
@@ -4294,8 +4296,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-cranelift"
-version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+version = "4.4.0-linera.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6608da46995d30190253577b2c906d373e9247973b22c2964948e0b2e46f8c93"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -4312,8 +4315,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-compiler-singlepass"
-version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+version = "4.4.0-linera.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5f79ab0ec83c1b29a744dab1225c1c88487b8acf591ae69c3fbb2a1e4e0d375"
 dependencies = [
  "byteorder",
  "dynasm",
@@ -4330,8 +4334,9 @@ dependencies = [
 
 [[package]]
 name = "linera-wasmer-vm"
-version = "4.4.0-linera.7"
-source = "git+https://github.com/linera-io/wasmer?branch=fix-rust-probestack#4cd177617a7b1c3079370db27afa6f3d957f2571"
+version = "4.4.0-linera.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5caf914e663ce9728fa0c9689d4f0d09761e5c7108f3f8ef78fabd4b3d338393"
 dependencies = [
  "backtrace",
  "cc",
