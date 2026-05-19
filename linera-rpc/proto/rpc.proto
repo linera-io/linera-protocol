@@ -261,6 +261,10 @@ message ChainInfoQuery {
 
   // Query the previous event blocks for specific streams.
   optional bytes request_previous_event_blocks = 10;
+
+  // Query the height of the most recent block whose certificate records an
+  // OracleResponse::Checkpoint, if any.
+  bool request_latest_checkpoint_height = 11;
 }
 
 // An authenticated proposal for a new block.

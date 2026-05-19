@@ -15,7 +15,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse, Round,
+        Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
@@ -31,7 +32,7 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
+    ChainError, ChainExecutionContext, ChainStateView, ChainTipState, ExecutionResultExt as _,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -822,7 +823,7 @@ where
         let chain_id = block.header.chain_id;
 
         // Check if we already processed this block.
-        let tip = self.chain.tip_state.get().clone();
+        let mut tip = self.chain.tip_state.get().clone();
         if tip.next_block_height > height {
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
@@ -901,32 +902,84 @@ where
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
 
-        // If this block is higher than the next expected block in this chain, we're going
-        // to have a gap: do not execute this block, only update the outboxes and return.
+        // If this block is higher than the next expected block in this chain, we have a
+        // gap. There are two ways to bridge it:
+        //   * If the block is a checkpoint, install its execution-state snapshot from
+        //     the checkpoint blob, fast-forward the tip, and fall through to fully
+        //     execute the certificate (which re-runs `prepare_checkpoint`, deducts the
+        //     same fees, and converges on the producer's post-block state).
+        //   * Otherwise, only preprocess: update outboxes and event streams and return,
+        //     so this block becomes available to clients via cross-chain syncing.
         if tip.next_block_height < height {
-            // Update the outboxes and event streams.
-            let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
-            // Persist chain.
-            self.save().await?;
-            let mut actions = self.create_network_actions(None).await?;
-            if !updated_event_streams.is_empty() {
-                actions.notifications.push(Notification {
-                    chain_id,
-                    reason: Reason::NewEvents {
-                        height,
-                        block_hash,
-                        event_streams: updated_event_streams,
-                    },
-                });
-            }
-            trace!("Preprocessed confirmed block {height}");
-            self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
+            if block.starts_with_checkpoint() {
+                let Some(OracleResponse::Checkpoint(blob_id)) =
+                    block.body.oracle_responses.first().and_then(|r| r.first())
+                else {
+                    return Err(ChainError::InternalError(
+                        "Checkpoint block missing OracleResponse::Checkpoint".into(),
+                    )
+                    .into());
+                };
+                let blob = blobs
+                    .get(blob_id)
+                    .ok_or_else(|| WorkerError::BlobsNotFound(vec![*blob_id]))?;
+                let bytes = blob.bytes().to_vec();
+                self.chain
+                    .execution_state
+                    .restore_from_content(&bytes)
+                    .await?;
+                // `restore_from_content` writes directly to storage and leaves the
+                // in-memory view in an undefined state — reload from storage.
+                self.chain = self.storage.load_chain(chain_id).await?;
+                // We only reset `execution_state` (via restore) and `tip_state`. The
+                // other `ChainStateView` fields are either (a) already default for a
+                // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
+                // (b) about to be overwritten by `apply_confirmed_block` when the
+                // cert is applied (`manager`, `block_hashes` for height `height`),
+                // or (c) outside the protocol state hash so divergence from the
+                // producer is fine (inboxes; subsequent blocks reconcile by
+                // anticipation if needed). The `num_*` counters on `ChainTipState`
+                // are write-only in current code, so leaving them at zero has no
+                // functional impact.
+                let new_tip = ChainTipState {
+                    block_hash: block.header.previous_block_hash,
+                    next_block_height: height,
+                    ..Default::default()
+                };
+                self.chain.tip_state.set(new_tip.clone());
+                self.save().await?;
+                tip = new_tip;
+                // Fall through to the regular full-processing path below.
+            } else {
+                // Update the outboxes and event streams.
+                let updated_event_streams =
+                    self.chain.preprocess_block(certificate.value()).await?;
+                // Persist chain.
+                self.save().await?;
+                let mut actions = self.create_network_actions(None).await?;
+                if !updated_event_streams.is_empty() {
+                    actions.notifications.push(Notification {
+                        chain_id,
+                        reason: Reason::NewEvents {
+                            height,
+                            block_hash,
+                            event_streams: updated_event_streams,
+                        },
+                    });
+                }
+                trace!("Preprocessed confirmed block {height}");
+                self.register_delivery_notifier(
+                    height,
+                    &actions,
+                    notify_when_messages_are_delivered,
+                )
                 .await;
-            return Ok((
-                self.chain_info_response().await?,
-                actions,
-                BlockOutcome::Preprocessed,
-            ));
+                return Ok((
+                    self.chain_info_response().await?,
+                    actions,
+                    BlockOutcome::Preprocessed,
+                ));
+            }
         }
 
         // This should always be true for valid certificates.
@@ -2211,6 +2264,9 @@ where
                 info.requested_previous_event_blocks
                     .insert(stream_id, (height, hash));
             }
+        }
+        if query.request_latest_checkpoint_height {
+            info.requested_latest_checkpoint_height = *self.chain.latest_checkpoint_height.get();
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }

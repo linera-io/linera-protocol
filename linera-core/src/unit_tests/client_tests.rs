@@ -3946,3 +3946,84 @@ where
 
     Ok(())
 }
+
+/// Publishes a checkpoint from one client and verifies that a fresh follower client
+/// (whose storage knows only the genesis chain description) can bootstrap directly
+/// from the checkpoint, skipping pre-checkpoint history.
+///
+/// Setup: the producer creates two blocks — a burn at height 0, then a checkpoint
+/// at height 1. The follower should reach the producer's state hash at height 2
+/// while having downloaded *only* the checkpoint cert, not the height-0 burn.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_bootstrap<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let chain_id = producer.chain_id();
+
+    // Height 0: a plain burn, so the chain has some history to skip.
+    let burn_cert = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_cert.block().header.height, BlockHeight::ZERO);
+
+    // Height 1: the checkpoint itself.
+    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
+    let block = checkpoint_cert.block();
+    assert_eq!(block.header.height, BlockHeight::from(1));
+    assert_eq!(block.body.transactions.len(), 1);
+    assert_matches!(
+        &block.body.transactions[0],
+        Transaction::ExecuteOperation(Operation::System(op)) if matches!(**op, SystemOperation::Checkpoint),
+        "Unexpected first transaction",
+    );
+    let blob_id = match block.body.oracle_responses.first().and_then(|t| t.first()) {
+        Some(OracleResponse::Checkpoint(id)) => *id,
+        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
+    };
+    assert_eq!(blob_id.blob_type, BlobType::CheckpointContent);
+
+    let producer_info = producer.chain_info().await?;
+    assert_eq!(producer_info.next_block_height, BlockHeight::from(2));
+    let producer_state_hash = producer_info
+        .state_hash
+        .expect("producer should expose a state hash after the checkpoint");
+
+    // A fresh follower client starts with empty storage (other than the genesis
+    // chain description) and must bootstrap from the validator's checkpoint
+    // rather than replay history.
+    let follower = builder
+        .make_client_with_options(
+            chain_id,
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            true,
+        )
+        .await?;
+    assert_eq!(
+        follower.chain_info().await?.next_block_height,
+        BlockHeight::ZERO,
+    );
+
+    follower.synchronize_from_validators().await?;
+
+    let follower_info = follower.chain_info().await?;
+    assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
+    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
+
+    // The follower should have applied the checkpoint cert but skipped the
+    // pre-checkpoint burn at height 0.
+    let storage = follower.storage_client();
+    assert!(!storage.contains_certificate(burn_cert.hash()).await?);
+    assert!(storage.contains_certificate(checkpoint_cert.hash()).await?);
+
+    Ok(())
+}

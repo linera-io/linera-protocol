@@ -523,7 +523,8 @@ library BridgeTypes {
         ApplicationDescription,
         Committee,
         ChainDescription,
-        ApplicationFormats
+        ApplicationFormats,
+        CheckpointContent
     }
 
     function bcs_serialize_BlobType(BlobType input) internal pure returns (bytes memory) {
@@ -569,7 +570,11 @@ library BridgeTypes {
             return (pos + 1, BlobType.ApplicationFormats);
         }
 
-        require(choice < 8);
+        if (choice == 8) {
+            return (pos + 1, BlobType.CheckpointContent);
+        }
+
+        require(choice < 9);
     }
 
     function bcs_deserialize_BlobType(bytes memory input) internal pure returns (BlobType) {
@@ -1643,6 +1648,8 @@ library BridgeTypes {
         OracleResponse_Event event_;
         // choice=6 corresponds to EventExists
         EventId event_exists;
+        // choice=7 corresponds to Checkpoint
+        BlobId checkpoint;
     }
 
     function OracleResponse_case_service(bytes memory service) internal pure returns (OracleResponse memory) {
@@ -1651,7 +1658,8 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        return OracleResponse(uint8(0), service, http, blob, round, event_, event_exists);
+        BlobId memory checkpoint;
+        return OracleResponse(uint8(0), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_http(Response memory http) internal pure returns (OracleResponse memory) {
@@ -1660,7 +1668,8 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        return OracleResponse(uint8(1), service, http, blob, round, event_, event_exists);
+        BlobId memory checkpoint;
+        return OracleResponse(uint8(1), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_blob(BlobId memory blob) internal pure returns (OracleResponse memory) {
@@ -1669,7 +1678,8 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        return OracleResponse(uint8(2), service, http, blob, round, event_, event_exists);
+        BlobId memory checkpoint;
+        return OracleResponse(uint8(2), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_assert() internal pure returns (OracleResponse memory) {
@@ -1679,7 +1689,8 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        return OracleResponse(uint8(3), service, http, blob, round, event_, event_exists);
+        BlobId memory checkpoint;
+        return OracleResponse(uint8(3), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_round(opt_uint32 memory round) internal pure returns (OracleResponse memory) {
@@ -1688,7 +1699,8 @@ library BridgeTypes {
         BlobId memory blob;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        return OracleResponse(uint8(4), service, http, blob, round, event_, event_exists);
+        BlobId memory checkpoint;
+        return OracleResponse(uint8(4), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_event(OracleResponse_Event memory event_)
@@ -1701,7 +1713,8 @@ library BridgeTypes {
         BlobId memory blob;
         opt_uint32 memory round;
         EventId memory event_exists;
-        return OracleResponse(uint8(5), service, http, blob, round, event_, event_exists);
+        BlobId memory checkpoint;
+        return OracleResponse(uint8(5), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_event_exists(EventId memory event_exists)
@@ -1714,7 +1727,18 @@ library BridgeTypes {
         BlobId memory blob;
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
-        return OracleResponse(uint8(6), service, http, blob, round, event_, event_exists);
+        BlobId memory checkpoint;
+        return OracleResponse(uint8(6), service, http, blob, round, event_, event_exists, checkpoint);
+    }
+
+    function OracleResponse_case_checkpoint(BlobId memory checkpoint) internal pure returns (OracleResponse memory) {
+        bytes memory service;
+        Response memory http;
+        BlobId memory blob;
+        opt_uint32 memory round;
+        OracleResponse_Event memory event_;
+        EventId memory event_exists;
+        return OracleResponse(uint8(7), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function bcs_serialize_OracleResponse(OracleResponse memory input) internal pure returns (bytes memory) {
@@ -1735,6 +1759,9 @@ library BridgeTypes {
         }
         if (input.choice == 6) {
             return abi.encodePacked(input.choice, bcs_serialize_EventId(input.event_exists));
+        }
+        if (input.choice == 7) {
+            return abi.encodePacked(input.choice, bcs_serialize_BlobId(input.checkpoint));
         }
         return abi.encodePacked(input.choice);
     }
@@ -1771,8 +1798,12 @@ library BridgeTypes {
         if (choice == 6) {
             (new_pos, event_exists) = bcs_deserialize_offset_EventId(new_pos, input);
         }
-        require(choice < 7);
-        return (new_pos, OracleResponse(choice, service, http, blob, round, event_, event_exists));
+        BlobId memory checkpoint;
+        if (choice == 7) {
+            (new_pos, checkpoint) = bcs_deserialize_offset_BlobId(new_pos, input);
+        }
+        require(choice < 8);
+        return (new_pos, OracleResponse(choice, service, http, blob, round, event_, event_exists, checkpoint));
     }
 
     function bcs_deserialize_OracleResponse(bytes memory input) internal pure returns (OracleResponse memory) {
@@ -2321,6 +2352,7 @@ library BridgeTypes {
         Epoch process_new_epoch;
         // choice=12 corresponds to UpdateStream
         SystemOperation_UpdateStream update_stream;
+        // choice=13 corresponds to Checkpoint
     }
 
     function SystemOperation_case_transfer(SystemOperation_Transfer memory transfer_)
@@ -2745,6 +2777,36 @@ library BridgeTypes {
         );
     }
 
+    function SystemOperation_case_checkpoint() internal pure returns (SystemOperation memory) {
+        SystemOperation_Transfer memory transfer_;
+        SystemOperation_Claim memory claim;
+        OpenChainConfig memory open_chain;
+        SystemOperation_ChangeOwnership memory change_ownership;
+        ApplicationPermissions memory change_application_permissions;
+        SystemOperation_PublishModule memory publish_module;
+        SystemOperation_PublishDataBlob memory publish_data_blob;
+        SystemOperation_VerifyBlob memory verify_blob;
+        SystemOperation_CreateApplication memory create_application;
+        AdminOperation memory admin;
+        Epoch memory process_new_epoch;
+        SystemOperation_UpdateStream memory update_stream;
+        return SystemOperation(
+            uint8(13),
+            transfer_,
+            claim,
+            open_chain,
+            change_ownership,
+            change_application_permissions,
+            publish_module,
+            publish_data_blob,
+            verify_blob,
+            create_application,
+            admin,
+            process_new_epoch,
+            update_stream
+        );
+    }
+
     function bcs_serialize_SystemOperation(SystemOperation memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
             return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_Transfer(input.transfer_));
@@ -2848,7 +2910,7 @@ library BridgeTypes {
         if (choice == 12) {
             (new_pos, update_stream) = bcs_deserialize_offset_SystemOperation_UpdateStream(new_pos, input);
         }
-        require(choice < 13);
+        require(choice < 14);
         return (
             new_pos,
             SystemOperation(

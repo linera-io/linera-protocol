@@ -401,6 +401,12 @@ type ChainStateExtendedView {
 	removed in favor of `block_hashes.last_index()`.
 	"""
 	nextHeightToPreprocess: BlockHeight!
+	"""
+	The height of the most recent checkpoint block applied to this chain, if any.
+	Maintained by `apply_confirmed_block` whenever a block starting with
+	`SystemOperation::Checkpoint` is executed.
+	"""
+	latestCheckpointHeight: BlockHeight
 }
 
 """

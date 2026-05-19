@@ -274,6 +274,9 @@ pub enum BlobType {
     /// A blob containing the JSON-encoded `Formats` description published
     /// alongside an application's contract and service blobs.
     ApplicationFormats,
+    /// A blob containing the canonical content of a chain's execution state at a
+    /// checkpoint, used to bootstrap a node without replaying the chain's history.
+    CheckpointContent,
 }
 
 impl BlobType {
@@ -286,7 +289,8 @@ impl BlobType {
             | BlobType::EvmBytecode
             | BlobType::ApplicationDescription
             | BlobType::ApplicationFormats
-            | BlobType::ChainDescription => false,
+            | BlobType::ChainDescription
+            | BlobType::CheckpointContent => false,
             BlobType::Committee => true,
         }
     }

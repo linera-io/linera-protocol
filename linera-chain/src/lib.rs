@@ -20,7 +20,7 @@ mod pending_blobs;
 #[cfg(with_testing)]
 pub mod test;
 
-pub use chain::ChainStateView;
+pub use chain::{ChainStateView, ChainTipState};
 use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,
@@ -169,6 +169,8 @@ pub enum ChainError {
     RoundDoesNotTimeOut,
     #[error("Not signing timeout certificate; current round times out at time {0}")]
     NotTimedOutYet(Timestamp),
+    #[error("Checkpoint precondition failed: {0}")]
+    CheckpointPreconditionFailed(&'static str),
 }
 
 impl ChainError {
@@ -206,6 +208,7 @@ impl ChainError {
             | ChainError::MissingOracleResponseList
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
+            | ChainError::CheckpointPreconditionFailed(_)
             | ChainError::MissingCrossChainUpdate { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }

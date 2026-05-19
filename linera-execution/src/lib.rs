@@ -365,6 +365,8 @@ pub enum ExecutionError {
     OutdatedUpdateStream,
     #[error("UpdateStream references an application that is not subscribed")]
     UnsubscribedUpdateStream,
+    #[error("Checkpoint precondition failed: {0}")]
+    CheckpointPreconditionFailed(&'static str),
 }
 
 impl ExecutionError {
@@ -419,6 +421,7 @@ impl ExecutionError {
             | ExecutionError::UnprocessedStreams
             | ExecutionError::OutdatedUpdateStream
             | ExecutionError::UnsubscribedUpdateStream
+            | ExecutionError::CheckpointPreconditionFailed(_)
             | ExecutionError::ViewError(ViewError::NotFound(_)) => false,
             #[cfg(with_wasm_runtime)]
             ExecutionError::WasmError(_) => false,
@@ -1517,6 +1520,14 @@ impl Operation {
             return false;
         };
         matches!(**system_op, SystemOperation::UpdateStream { .. })
+    }
+
+    /// Returns whether this operation is a `Checkpoint` operation.
+    pub fn is_checkpoint(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        matches!(**system_op, SystemOperation::Checkpoint)
     }
 }
 

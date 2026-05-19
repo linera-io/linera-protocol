@@ -89,6 +89,16 @@ impl ProposedBlock {
             .collect()
     }
 
+    /// Returns whether the first transaction in this block is a
+    /// `SystemOperation::Checkpoint`. Under the chain-level checkpoint preconditions
+    /// this is equivalent to "the block is a checkpoint block", since Checkpoint must
+    /// be the only transaction.
+    pub fn starts_with_checkpoint(&self) -> bool {
+        self.transactions
+            .first()
+            .is_some_and(Transaction::is_checkpoint)
+    }
+
     /// Returns whether the block contains only rejected incoming messages, which
     /// makes it admissible even on closed chains.
     pub fn has_only_rejected_messages(&self) -> bool {
@@ -165,6 +175,14 @@ impl Transaction {
         matches!(
             self,
             Transaction::ExecuteOperation(op) if op.is_update_stream()
+        )
+    }
+
+    /// Returns whether this transaction executes a `SystemOperation::Checkpoint`.
+    pub fn is_checkpoint(&self) -> bool {
+        matches!(
+            self,
+            Transaction::ExecuteOperation(op) if op.is_checkpoint()
         )
     }
 }

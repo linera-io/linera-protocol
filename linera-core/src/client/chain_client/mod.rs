@@ -2439,6 +2439,14 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(ClientOutcome::Committed((description, certificate)))
     }
 
+    /// Publishes a checkpoint of the chain's execution state. The resulting block
+    /// contains a single `SystemOperation::Checkpoint`; future nodes can bootstrap
+    /// from the published blob instead of replaying the chain's history.
+    #[instrument(level = "trace")]
+    pub async fn checkpoint(&self) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
+        self.execute_operation(SystemOperation::Checkpoint).await
+    }
+
     /// Closes the chain (and loses everything in it!!).
     /// Returns `None` if the chain was already closed.
     #[instrument(level = "trace")]
