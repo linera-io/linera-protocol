@@ -285,7 +285,7 @@ impl<Env: Environment> Client<Env> {
         execution_state_cache_size: usize,
         requests_scheduler_config: &requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
-        let mut chain_modes: BTreeMap<_, _> = chain_modes.into_iter().collect();
+        let mut chain_modes = chain_modes.into_iter().collect::<BTreeMap<_, _>>();
         // The client needs the admin chain fully synced for epoch tracking, so
         // promote it (or insert) into `FullChain`. `extend` is monotonic in the
         // listening mode order, so this never weakens an existing entry.
@@ -1630,7 +1630,7 @@ impl<Env: Environment> Client<Env> {
         stream_ids: &BTreeSet<StreamId>,
         remote_node: &RemoteNode<Env::ValidatorNode>,
     ) -> Result<(), chain_client::Error> {
-        let stream_ids_vec: Vec<_> = stream_ids.iter().cloned().collect();
+        let stream_ids_vec = stream_ids.iter().cloned().collect::<Vec<_>>();
         let mut initial_blocks = BTreeSet::new();
         for chunk in stream_ids_vec.chunks(self.options.max_event_stream_queries) {
             let query = ChainInfoQuery::new(chain_id).with_previous_event_blocks(chunk.to_vec());
