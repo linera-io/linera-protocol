@@ -10,6 +10,7 @@ use futures::{
     stream::{self, FuturesUnordered, SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryStreamExt,
 };
+use linera_base::{data_types::Blob, identifiers::BlobId};
 use linera_core::{JoinSetExt as _, TaskHandle};
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -79,6 +80,12 @@ pub trait ConnectionPool: Send {
 #[async_trait]
 pub trait MessageHandler: Clone {
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage>;
+
+    /// Handles a batch blob download request by streaming one
+    /// `RpcMessage::DownloadBlobResponse` per requested blob ID.
+    async fn handle_download_blobs(&mut self, _blob_ids: Vec<BlobId>) -> Vec<Blob> {
+        vec![]
+    }
 }
 
 /// The result of spawning a server is oneshot channel to track completion, and the set of
@@ -455,6 +462,10 @@ where
                     return;
                 }
                 result = self.connection.next() => match result {
+                    Some(Ok(RpcMessage::DownloadBlobs(blob_ids))) => {
+                        self.handle_download_blobs(blob_ids).await;
+                        return;
+                    }
                     Some(Ok(message)) => self.handle_message(message).await,
                     Some(Err(error)) => {
                         Self::handle_error(&error);
@@ -471,6 +482,21 @@ where
         if let Some(reply) = self.handler.handle_message(message).await {
             if let Err(error) = self.connection.send(reply).await {
                 error!("Failed to send query response: {error}");
+            }
+        }
+    }
+
+    /// Handles a batch blob download request by streaming one response per blob.
+    async fn handle_download_blobs(&mut self, blob_ids: Vec<BlobId>) {
+        let blobs = self.handler.handle_download_blobs(blob_ids).await;
+        for blob in blobs {
+            if self.shutdown_signal.is_cancelled() {
+                break;
+            }
+            let msg = RpcMessage::DownloadBlobResponse(Box::new(blob.into_content()));
+            if let Err(error) = self.connection.send(msg).await {
+                error!("Failed to send blob response: {error}");
+                break;
             }
         }
     }

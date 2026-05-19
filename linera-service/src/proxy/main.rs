@@ -16,7 +16,7 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use futures::{FutureExt as _, SinkExt, StreamExt};
-use linera_base::listen_for_shutdown_signals;
+use linera_base::{identifiers::BlobId, listen_for_shutdown_signals};
 use linera_client::config::ValidatorServerConfig;
 use linera_core::{node::NodeError, JoinSetExt as _};
 #[cfg(with_metrics)]
@@ -277,6 +277,17 @@ where
             }
         }
     }
+
+    async fn handle_download_blobs(&mut self, blob_ids: Vec<BlobId>) -> Vec<Blob> {
+        let Ok(blobs) = self.storage.read_blobs(&blob_ids).await else {
+            return vec![];
+        };
+        blobs
+            .into_iter()
+            .flatten()
+            .map(Arc::unwrap_or_clone)
+            .collect()
+    }
 }
 
 impl<S> SimpleProxy<S>
@@ -481,6 +492,7 @@ where
             | VersionInfoResponse(_)
             | NetworkDescriptionResponse(_)
             | DownloadBlobResponse(_)
+            | DownloadBlobs(_)
             | DownloadPendingBlob(_)
             | DownloadPendingBlobResponse(_)
             | HandlePendingBlob(_)

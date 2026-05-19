@@ -182,6 +182,9 @@ impl DummyValidator {
 impl ValidatorNode for DummyValidator {
     type SubscribeStream =
         UnboundedReceiverStream<Result<linera_rpc::grpc::api::Notification, Status>>;
+    type DownloadBlobsStream = std::pin::Pin<
+        Box<dyn futures::Stream<Item = Result<linera_rpc::grpc::api::BlobContent, Status>> + Send>,
+    >;
 
     async fn handle_confirmed_certificate(
         &self,
@@ -316,6 +319,13 @@ impl ValidatorNode for DummyValidator {
         &self,
         _request: Request<linera_rpc::grpc::api::BlobId>,
     ) -> Result<Response<linera_rpc::grpc::api::BlobContent>, Status> {
+        unimplemented!()
+    }
+
+    async fn download_blobs(
+        &self,
+        _request: Request<linera_rpc::grpc::api::BlobIds>,
+    ) -> Result<Response<Self::DownloadBlobsStream>, Status> {
         unimplemented!()
     }
 

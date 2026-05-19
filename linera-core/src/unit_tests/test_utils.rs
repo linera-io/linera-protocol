@@ -202,6 +202,22 @@ where
             .await
     }
 
+    async fn download_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<crate::node::BlobStream, NodeError> {
+        let this = self.clone();
+        let stream = futures::stream::unfold(blob_ids.into_iter(), move |mut iter| {
+            let this = this.clone();
+            async move {
+                let blob_id = iter.next()?;
+                let result = this.download_blob(blob_id).await;
+                Some((result, iter))
+            }
+        });
+        Ok(Box::pin(stream))
+    }
+
     async fn download_pending_blob(
         &self,
         chain_id: ChainId,

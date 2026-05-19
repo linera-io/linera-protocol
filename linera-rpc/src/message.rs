@@ -70,6 +70,8 @@ pub enum RpcMessage {
 
     PreviousEventBlocks(Box<(ChainId, Vec<StreamId>)>),
     PreviousEventBlocksResponse(Box<BTreeMap<StreamId, (BlockHeight, CryptoHash)>>),
+
+    DownloadBlobs(Vec<BlobId>),
 }
 
 impl RpcMessage {
@@ -101,6 +103,7 @@ impl RpcMessage {
             | UploadBlob(_)
             | UploadBlobResponse(_)
             | DownloadBlob(_)
+            | DownloadBlobs(_)
             | DownloadBlobResponse(_)
             | DownloadPendingBlobResponse(_)
             | DownloadConfirmedBlock(_)
@@ -132,6 +135,7 @@ impl RpcMessage {
             | NetworkDescriptionQuery
             | UploadBlob(_)
             | DownloadBlob(_)
+            | DownloadBlobs(_)
             | DownloadConfirmedBlock(_)
             | BlobLastUsedBy(_)
             | BlobLastUsedByCertificate(_)

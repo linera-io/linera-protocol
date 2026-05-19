@@ -224,6 +224,17 @@ impl<N: ValidatorNode> RemoteNode<N> {
         }
     }
 
+    /// Streams a batch of blobs from the validator. Each yielded item is
+    /// a `Result<Blob, NodeError>` — the caller can drive the stream incrementally
+    /// and, on error, track which blob IDs still need to be fetched.
+    #[instrument(level = "trace")]
+    pub async fn download_blobs(
+        &self,
+        blob_ids: Vec<BlobId>,
+    ) -> Result<crate::node::BlobStream, NodeError> {
+        self.node.download_blobs(blob_ids).await
+    }
+
     /// Downloads a list of certificates from the given chain.
     #[instrument(level = "trace")]
     pub async fn download_certificates_by_heights(

@@ -45,7 +45,7 @@ mod metrics {
 
 use linera_core::{
     data_types::{CertificatesByHeightRequest, ChainInfoResponse},
-    node::{CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
+    node::{BlobStream, CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
 use linera_version::VersionInfo;
@@ -487,6 +487,32 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
     async fn download_blob(&self, blob_id: BlobId) -> Result<BlobContent, NodeError> {
         Ok(client_delegate!(self, download_blob, blob_id)?.try_into()?)
+    }
+
+    #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
+    async fn download_blobs(&self, blob_ids: Vec<BlobId>) -> Result<BlobStream, NodeError> {
+        debug!(
+            handler = "download_blobs",
+            num_blobs = blob_ids.len(),
+            "sending gRPC request"
+        );
+        let request = api::BlobIds::try_from(blob_ids)?;
+        let stream = self
+            .client
+            .clone()
+            .download_blobs(request)
+            .await
+            .map_err(|status| NodeError::GrpcError {
+                error: status.to_string(),
+            })?
+            .into_inner();
+        let blob_stream = stream.map(|result| match result {
+            Ok(proto_blob) => BlobContent::try_from(proto_blob).map_err(NodeError::from),
+            Err(status) => Err(NodeError::GrpcError {
+                error: status.to_string(),
+            }),
+        });
+        Ok(Box::pin(blob_stream))
     }
 
     #[instrument(target = "grpc_client", skip(self), err(level = Level::DEBUG), fields(address = self.address))]
