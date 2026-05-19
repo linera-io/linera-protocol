@@ -916,8 +916,8 @@ where
 
         // Preprocess when there's a gap (`tip.next_block_height < height`) or when
         // the caller explicitly asked for `Preprocess`.
-        let must_preprocess = matches!(mode, ProcessConfirmedBlockMode::Preprocess)
-            || tip.next_block_height < height;
+        let must_preprocess =
+            matches!(mode, ProcessConfirmedBlockMode::Preprocess) || tip.next_block_height < height;
         if must_preprocess {
             // Update the outboxes and event streams.
             let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;

@@ -1199,8 +1199,12 @@ impl<Env: Environment> Client<Env> {
         // Process the received operations. Download required hashed certificate values if
         // necessary.
         let nodes = self.validator_nodes().await?;
-        self.handle_certificate_with_retry(&certificate, &nodes, ProcessConfirmedBlockMode::Execute)
-            .await?;
+        self.handle_certificate_with_retry(
+            &certificate,
+            &nodes,
+            ProcessConfirmedBlockMode::Execute,
+        )
+        .await?;
         Ok(())
     }
 
