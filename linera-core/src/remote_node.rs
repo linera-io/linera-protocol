@@ -1,10 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{HashSet, VecDeque},
-    sync::Arc,
-};
+use linera_cache::Arc as CacheArc;
+use std::collections::{HashSet, VecDeque};
 
 use custom_debug_derive::Debug;
 use futures::future::try_join_all;
@@ -67,7 +65,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     pub(crate) async fn handle_confirmed_certificate(
         &self,
-        certificate: Arc<ConfirmedBlockCertificate>,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
@@ -114,7 +112,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     pub(crate) async fn handle_optimized_confirmed_certificate(
         &self,
-        certificate: &Arc<ConfirmedBlockCertificate>,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
         if let Some(result) = self.try_lite_certificate(certificate, delivery).await {

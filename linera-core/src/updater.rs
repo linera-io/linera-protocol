@@ -248,7 +248,7 @@ where
     )]
     async fn send_confirmed_certificate(
         &mut self,
-        certificate: &Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
@@ -683,7 +683,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<(), chain_client::Error> {
         // Phase 1: Height synchronization
         let info = if target_block_height.0 > 0 {
@@ -729,7 +729,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let height = target_block_height.try_sub_one()?;
 
@@ -746,7 +746,6 @@ where
                         "failed to read latest certificate for height sync",
                     )
                 })?
-                .into_std()
         };
 
         // Optimistically try sending just the last certificate
@@ -781,7 +780,7 @@ where
                 .await?;
 
             for certificate in certificates {
-                self.send_confirmed_certificate(certificate.as_std(), delivery)
+                self.send_confirmed_certificate(&certificate, delivery)
                     .await?;
             }
         }
@@ -967,7 +966,7 @@ where
                     // Send each certificate
                     for certificate in certificates {
                         updater
-                            .send_confirmed_certificate(certificate.as_std(), delivery)
+                            .send_confirmed_certificate(&certificate, delivery)
                             .await?;
                     }
 

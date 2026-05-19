@@ -10,6 +10,8 @@ use std::{
     time::Duration,
 };
 
+use linera_storage::Arc as CacheArc;
+
 use futures::{future::try_join_all, stream::FuturesOrdered};
 use linera_base::identifiers::BlobId;
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -112,7 +114,7 @@ where
 
     async fn run(
         &self,
-        mut receiver: Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
+        mut receiver: Receiver<(CacheArc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) -> anyhow::Result<()> {
         while let Some((block, blobs_ids)) = receiver.recv().await {
             #[cfg(with_metrics)]
@@ -186,7 +188,7 @@ where
 
     async fn dispatch_block(
         &self,
-        certificate: Arc<ConfirmedBlockCertificate>,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
     ) -> Result<(), NodeError> {
         let delivery = CrossChainMessageDelivery::NonBlocking;
         let block_id = BlockId::from_confirmed_block(certificate.value());
@@ -226,7 +228,7 @@ where
     queue_size: usize,
     start_height: usize,
     storage: ExporterStorage<S>,
-    buffer: Sender<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
+    buffer: Sender<(CacheArc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
 }
 
 impl<S> TaskQueue<S>
@@ -240,7 +242,7 @@ where
         storage: ExporterStorage<S>,
     ) -> (
         TaskQueue<S>,
-        Receiver<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
+        Receiver<(CacheArc<ConfirmedBlockCertificate>, Vec<BlobId>)>,
     ) {
         let (sender, receiver) = tokio::sync::mpsc::channel(queue_size);
 
@@ -275,7 +277,7 @@ where
     async fn get_block_task(
         &self,
         index: usize,
-    ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>), ExporterError> {
+    ) -> Result<(CacheArc<ConfirmedBlockCertificate>, Vec<BlobId>), ExporterError> {
         loop {
             match self.storage.get_block_with_blob_ids(index).await {
                 Ok(block_with_blobs_ids) => return Ok(block_with_blobs_ids),

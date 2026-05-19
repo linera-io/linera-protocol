@@ -17,7 +17,7 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_sdk::{ensure, views::View};
-use linera_storage::Storage;
+use linera_storage::{Arc as CacheArc, Storage};
 use linera_views::{
     batch::Batch, context::Context, log_view::LogView, store::WritableKeyValueStore as _,
     views::ClonableView,
@@ -43,7 +43,7 @@ where
 }
 
 type BlobCache = FifoCache<BlobId, Arc<Blob>, BlobCacheWeighter>;
-type BlockCache = FifoCache<CryptoHash, Arc<ConfirmedBlockCertificate>, BlockCacheWeighter>;
+type BlockCache = FifoCache<CryptoHash, CacheArc<ConfirmedBlockCertificate>, BlockCacheWeighter>;
 
 struct SharedStorage<C, S>
 where
@@ -103,7 +103,7 @@ where
     async fn get_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
+    ) -> Result<CacheArc<ConfirmedBlockCertificate>, ExporterError> {
         match self.blocks_cache.get_value_or_guard_async(&hash).await {
             Ok(value) => Ok(value),
             Err(guard) => {
@@ -113,8 +113,7 @@ where
                     .storage
                     .read_certificate(hash)
                     .await?
-                    .ok_or_else(|| ExporterError::ReadCertificateError(hash))?
-                    .into_std();
+                    .ok_or_else(|| ExporterError::ReadCertificateError(hash))?;
                 guard.insert(block.clone()).ok();
                 Ok(block)
             }
@@ -171,7 +170,7 @@ where
     pub(crate) async fn get_block_with_blob_ids(
         &self,
         index: usize,
-    ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<BlobId>), ExporterError> {
+    ) -> Result<(CacheArc<ConfirmedBlockCertificate>, Vec<BlobId>), ExporterError> {
         let block = self
             .shared_storage
             .shared_canonical_state
@@ -187,7 +186,7 @@ where
     pub(crate) async fn get_block_with_blobs(
         &self,
         index: usize,
-    ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<Arc<Blob>>), ExporterError> {
+    ) -> Result<(CacheArc<ConfirmedBlockCertificate>, Vec<Arc<Blob>>), ExporterError> {
         let canonical_block = self
             .shared_storage
             .shared_canonical_state
@@ -264,7 +263,7 @@ where
     pub(super) async fn get_block(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<ConfirmedBlockCertificate>, ExporterError> {
+    ) -> Result<CacheArc<ConfirmedBlockCertificate>, ExporterError> {
         self.shared_storage.get_block(hash).await
     }
 
@@ -528,11 +527,11 @@ impl Weighter<BlobId, Arc<Blob>> for BlobCacheWeighter {
     }
 }
 
-impl Weighter<CryptoHash, Arc<ConfirmedBlockCertificate>> for BlockCacheWeighter {
-    fn weight(&self, _key: &CryptoHash, _val: &Arc<ConfirmedBlockCertificate>) -> u64 {
+impl Weighter<CryptoHash, CacheArc<ConfirmedBlockCertificate>> for BlockCacheWeighter {
+    fn weight(&self, _key: &CryptoHash, _val: &CacheArc<ConfirmedBlockCertificate>) -> u64 {
         (size_of::<CryptoHash>()
             + 2 * size_of::<usize>()
-            + size_of::<Arc<ConfirmedBlockCertificate>>()
+            + size_of::<CacheArc<ConfirmedBlockCertificate>>()
             + 1_000_000) as u64 // maximum block size in testnet resource control policy
     }
 }
@@ -554,5 +553,5 @@ impl<Q, V> Default for CacheWeighter<Q, V> {
 }
 
 type BlobCacheWeighter = CacheWeighter<BlobId, Arc<Blob>>;
-type BlockCacheWeighter = CacheWeighter<CryptoHash, Arc<ConfirmedBlockCertificate>>;
+type BlockCacheWeighter = CacheWeighter<CryptoHash, CacheArc<ConfirmedBlockCertificate>>;
 type CanonicalStateCacheWeighter = CacheWeighter<usize, CanonicalBlock>;

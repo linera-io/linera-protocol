@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use linera_cache::Arc as CacheArc;
 use std::sync::Arc;
 
 #[cfg(not(web))]
@@ -74,7 +75,7 @@ pub trait ValidatorNode {
     /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
-        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
