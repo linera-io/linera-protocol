@@ -285,7 +285,15 @@ impl<Env: Environment> Client<Env> {
         execution_state_cache_size: usize,
         requests_scheduler_config: &requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
-        let chain_modes = Arc::new(RwLock::new(chain_modes.into_iter().collect()));
+        let mut chain_modes: BTreeMap<_, _> = chain_modes.into_iter().collect();
+        // The client needs the admin chain fully synced for epoch tracking, so
+        // promote it (or insert) into `FullChain`. `extend` is monotonic in the
+        // listening mode order, so this never weakens an existing entry.
+        chain_modes
+            .entry(admin_chain_id)
+            .or_insert(ListeningMode::FullChain)
+            .extend(Some(ListeningMode::FullChain));
+        let chain_modes = Arc::new(RwLock::new(chain_modes));
         let config = ChainWorkerConfig {
             nickname: name.into(),
             long_lived_services,
@@ -873,11 +881,7 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             let response = self
-                .handle_certificate_with_retry(
-                    &certificate,
-                    remote_nodes,
-                    ProcessConfirmedBlockMode::Execute,
-                )
+                .handle_certificate_with_retry(&certificate, remote_nodes)
                 .await?;
             info = Some(response.info);
         }
@@ -887,13 +891,23 @@ impl<Env: Environment> Client<Env> {
 
     /// Calls `handle_confirmed_certificate`, retrying with any missing blobs (downloaded
     /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators).
+    /// chains via the current validators). The processing mode is derived from
+    /// the chain's [`ListeningMode`]: chains we follow get executed, anything
+    /// else (sender chains, events-only chains) is only preprocessed —
+    /// preprocessing still emits events, which is all we need.
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
         nodes: &[RemoteNode<Env::ValidatorNode>],
-        mode: ProcessConfirmedBlockMode,
     ) -> Result<ChainInfoResponse, chain_client::Error> {
+        let mode = if self
+            .chain_mode(certificate.value().chain_id())
+            .is_some_and(|m| m.should_sync_chain_state())
+        {
+            ProcessConfirmedBlockMode::Execute
+        } else {
+            ProcessConfirmedBlockMode::Preprocess
+        };
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut events = EventSetDownloader::new(self);
         loop {
@@ -1199,19 +1213,15 @@ impl<Env: Environment> Client<Env> {
         // Process the received operations. Download required hashed certificate values if
         // necessary.
         let nodes = self.validator_nodes().await?;
-        self.handle_certificate_with_retry(
-            &certificate,
-            &nodes,
-            ProcessConfirmedBlockMode::Execute,
-        )
-        .await?;
+        self.handle_certificate_with_retry(&certificate, &nodes)
+            .await?;
         Ok(())
     }
 
-    /// Preprocesses the confirmed block in the local node — never executes it.
-    /// Used to ingest sender-chain blocks: only the outboxes and event streams
-    /// matter to the receiver chain, so executing them would be wasteful even
-    /// if they happen to be contiguous with the sender chain's local tip.
+    /// Processes the confirmed block in the local node. Whether it is fully
+    /// executed or only preprocessed depends on the chain's [`ListeningMode`]:
+    /// chains we follow get executed, untracked or events-only chains are only
+    /// preprocessed.
     #[instrument(level = "trace", skip_all)]
     async fn receive_sender_certificate(
         &self,
@@ -1229,12 +1239,8 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        self.handle_certificate_with_retry(
-            &certificate,
-            &nodes,
-            ProcessConfirmedBlockMode::Preprocess,
-        )
-        .await?;
+        self.handle_certificate_with_retry(&certificate, &nodes)
+            .await?;
         Ok(())
     }
 
