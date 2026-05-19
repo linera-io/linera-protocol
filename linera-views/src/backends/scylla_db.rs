@@ -309,7 +309,8 @@ impl ScyllaDbClient {
 
         let (result, _) = session
             .execute_single_page(&self.read_value, &values, PagingState::start())
-            .await?;
+            .await
+            .map_err(ScyllaDbStoreInternalError::ExecutionError)?;
         let rows = result.into_rows_result()?;
         let mut rows = rows.rows::<(Vec<u8>,)>()?;
         Ok(match rows.next() {
@@ -391,7 +392,8 @@ impl ScyllaDbClient {
 
         let (result, _) = session
             .execute_single_page(&self.contains_key, &values, PagingState::start())
-            .await?;
+            .await
+            .map_err(ScyllaDbStoreInternalError::ExecutionError)?;
         let rows = result.into_rows_result()?;
         let mut rows = rows.rows::<(Vec<u8>,)>()?;
         Ok(rows.next().is_some())
@@ -438,7 +440,10 @@ impl ScyllaDbClient {
             batch_values.push(values);
             batch_query.append_statement(query4.clone());
         }
-        session.batch(&batch_query, batch_values).await?;
+        session
+            .batch(&batch_query, batch_values)
+            .await
+            .map_err(ScyllaDbStoreInternalError::WriteBatchExecutionError)?;
         Ok(())
     }
 
@@ -533,6 +538,50 @@ pub enum ScyllaDbStoreInternalError {
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
+    /// A deserialization error
+    #[error(transparent)]
+    DeserializationError(#[from] DeserializationError),
+
+    /// A row error
+    #[error(transparent)]
+    RowsError(#[from] RowsError),
+
+    /// A conversion error in the accessed data
+    #[error(transparent)]
+    IntoRowsResultError(#[from] IntoRowsResultError),
+
+    /// A type check error
+    #[error(transparent)]
+    TypeCheckError(#[from] TypeCheckError),
+
+    /// A pager execution error
+    #[error(transparent)]
+    PagerExecutionError(#[from] PagerExecutionError),
+
+    /// A prepare error
+    #[error(transparent)]
+    PrepareError(#[from] PrepareError),
+
+    /// An execution error during a query (except write-batch).
+    #[error(transparent)]
+    ExecutionError(ExecutionError),
+
+    /// An execution error during a write-batch operation.
+    #[error(transparent)]
+    WriteBatchExecutionError(ExecutionError),
+
+    /// A session creation error
+    #[error(transparent)]
+    NewSessionError(#[from] NewSessionError),
+
+    /// A next row error in ScyllaDB
+    #[error(transparent)]
+    NextRowError(#[from] NextRowError),
+
+    /// Namespace contains forbidden characters
+    #[error("Namespace contains forbidden characters")]
+    InvalidNamespace,
+
     /// The key must have at most `MAX_KEY_SIZE` bytes
     #[error("The key must have at most MAX_KEY_SIZE")]
     KeyTooLong,
@@ -541,53 +590,19 @@ pub enum ScyllaDbStoreInternalError {
     #[error("The value must have at most RAW_MAX_VALUE_SIZE")]
     ValueTooLong,
 
-    /// A deserialization error in ScyllaDB
-    #[error(transparent)]
-    DeserializationError(#[from] DeserializationError),
-
-    /// A row error in ScyllaDB
-    #[error(transparent)]
-    RowsError(#[from] RowsError),
-
-    /// A type error in the accessed data in ScyllaDB
-    #[error(transparent)]
-    IntoRowsResultError(#[from] IntoRowsResultError),
-
-    /// A type check error in ScyllaDB
-    #[error(transparent)]
-    TypeCheckError(#[from] TypeCheckError),
-
-    /// A query error in ScyllaDB
-    #[error(transparent)]
-    PagerExecutionError(#[from] PagerExecutionError),
-
-    /// A query error in ScyllaDB
-    #[error(transparent)]
-    ScyllaDbNewSessionError(#[from] NewSessionError),
-
-    /// Namespace contains forbidden characters
-    #[error("Namespace contains forbidden characters")]
-    InvalidNamespace,
-
     /// The batch is too long to be written
     #[error("The batch is too long to be written")]
     BatchTooLong,
-
-    /// A prepare error in ScyllaDB
-    #[error(transparent)]
-    PrepareError(#[from] PrepareError),
-
-    /// An execution error in ScyllaDB
-    #[error(transparent)]
-    ExecutionError(#[from] ExecutionError),
-
-    /// A next row error in ScyllaDB
-    #[error(transparent)]
-    NextRowError(#[from] NextRowError),
 }
 
 impl KeyValueStoreError for ScyllaDbStoreInternalError {
     const BACKEND: &'static str = "scylla_db";
+
+    fn must_reload_view(&self) -> bool {
+        // Errors (notably timeouts) during a `write_batch` may leave the view in a
+        // undetermined state where the batch may or may not have happened.
+        matches!(self, Self::WriteBatchExecutionError(_))
+    }
 }
 
 impl WithError for ScyllaDbStoreInternal {
@@ -825,7 +840,8 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
 
         session
             .execute_single_page(&statement, &[], PagingState::start())
-            .await?;
+            .await
+            .map_err(ScyllaDbStoreInternalError::ExecutionError)?;
         Ok(())
     }
 
@@ -892,7 +908,8 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
             .await?;
         session
             .execute_single_page(&statement, &[], PagingState::start())
-            .await?;
+            .await
+            .map_err(ScyllaDbStoreInternalError::ExecutionError)?;
 
         // This explicitly sets a lot of default parameters for clarity and for making future
         // changes easier.
@@ -921,7 +938,8 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
             .await?;
         session
             .execute_single_page(&statement, &[], PagingState::start())
-            .await?;
+            .await
+            .map_err(ScyllaDbStoreInternalError::ExecutionError)?;
         Ok(())
     }
 
@@ -936,7 +954,8 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
             .await?;
         session
             .execute_single_page(&statement, &[], PagingState::start())
-            .await?;
+            .await
+            .map_err(ScyllaDbStoreInternalError::ExecutionError)?;
         Ok(())
     }
 }

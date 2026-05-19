@@ -987,6 +987,12 @@ impl DynamoDbStoreInternalError {
 
 impl KeyValueStoreError for DynamoDbStoreInternalError {
     const BACKEND: &'static str = "dynamo_db";
+
+    fn must_reload_view(&self) -> bool {
+        // A failed `TransactWriteItems` call (notably on timeout) may leave the view in
+        // an undetermined state where the transaction may or may not have been applied.
+        matches!(self, Self::TransactWriteItem(_))
+    }
 }
 
 #[cfg(with_testing)]
