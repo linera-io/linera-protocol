@@ -34,7 +34,7 @@ pub const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 30;
 /// A background task periodically sweeps dead `Weak` entries from the index
 /// to prevent unbounded memory growth.
 pub struct ValueCache<K, V> {
-    cache: Cache<K, Arc<V>>,
+    cache: Cache<K, crate::Arc<V>>,
     weak_index: Arc<papaya::HashMap<K, Weak<V>>>,
 }
 
@@ -73,7 +73,7 @@ where
     /// already exists (held by another consumer), the existing allocation is
     /// reused and the new value is dropped.
     pub fn insert(&self, key: &K, value: V) -> crate::Arc<V> {
-        crate::Arc(self.dedup_insert(key, Arc::new(value)))
+        self.dedup_insert(key, crate::Arc(Arc::new(value)))
     }
 
     /// Removes a value from the bounded cache.
@@ -87,7 +87,7 @@ where
         if value.is_some() {
             self.cache.remove(key);
         }
-        Self::track_cache_usage(value).map(crate::Arc)
+        Self::track_cache_usage(value)
     }
 
     /// Returns an [`crate::Arc`] to the value, checking both the bounded
@@ -95,20 +95,21 @@ where
     pub fn get(&self, key: &K) -> Option<crate::Arc<V>> {
         // Tier 1: bounded cache (hot path)
         if let Some(arc) = self.cache.get(key) {
-            return Self::track_cache_usage(Some(arc)).map(crate::Arc);
+            return Self::track_cache_usage(Some(arc));
         }
 
         // Tier 2: weak index (catches evicted-but-still-held entries)
         let guard = self.weak_index.guard();
         if let Some(weak) = self.weak_index.get(key, &guard) {
             if let Some(arc) = weak.upgrade() {
+                let arc = crate::Arc(arc);
                 // Re-insert into bounded cache for future fast lookups
                 self.cache.insert(key.clone(), arc.clone());
-                return Self::track_cache_usage(Some(arc)).map(crate::Arc);
+                return Self::track_cache_usage(Some(arc));
             }
         }
 
-        Self::track_cache_usage(None).map(crate::Arc)
+        Self::track_cache_usage(None)
     }
 
     /// Returns `true` if the value exists in either the bounded cache or
@@ -155,9 +156,9 @@ where
     /// Core dedup logic: atomically checks the weak index for an existing
     /// live allocation. If found, reuses it. Otherwise inserts the new Arc.
     /// Returns the canonical `Arc`.
-    fn dedup_insert(&self, key: &K, new_arc: Arc<V>) -> Arc<V> {
+    fn dedup_insert(&self, key: &K, new_arc: crate::Arc<V>) -> crate::Arc<V> {
         let guard = self.weak_index.guard();
-        let weak = Arc::downgrade(&new_arc);
+        let weak = Arc::downgrade(&new_arc.0);
 
         let result = self.weak_index.compute(
             key.clone(),
@@ -173,7 +174,7 @@ where
 
         let canonical_arc = match result {
             Compute::Inserted(..) | Compute::Updated { .. } => new_arc,
-            Compute::Aborted(existing_arc) => existing_arc,
+            Compute::Aborted(existing_arc) => crate::Arc(existing_arc),
             _ => unreachable!(),
         };
 
@@ -181,7 +182,7 @@ where
         canonical_arc
     }
 
-    fn track_cache_usage(maybe_value: Option<Arc<V>>) -> Option<Arc<V>> {
+    fn track_cache_usage(maybe_value: Option<crate::Arc<V>>) -> Option<crate::Arc<V>> {
         #[cfg(with_metrics)]
         {
             let metric = if maybe_value.is_some() {
@@ -212,18 +213,19 @@ impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
         let hash = (*value).hash();
         // Fast path: already in bounded cache
         if let Some(arc) = self.cache.peek(&hash) {
-            return crate::Arc(arc);
+            return arc;
         }
         // Check weak index before cloning from Cow
         let guard = self.weak_index.guard();
         if let Some(weak) = self.weak_index.get(&hash, &guard) {
             if let Some(arc) = weak.upgrade() {
+                let arc = crate::Arc(arc);
                 self.cache.insert(hash, arc.clone());
-                return crate::Arc(arc);
+                return arc;
             }
         }
         drop(guard);
-        crate::Arc(self.dedup_insert(&hash, Arc::new(value.into_owned().into())))
+        self.dedup_insert(&hash, crate::Arc(Arc::new(value.into_owned().into())))
     }
 
     /// Inserts multiple values constructed from [`Hashed<T>`]s into the cache.

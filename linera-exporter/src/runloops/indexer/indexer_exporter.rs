@@ -14,7 +14,7 @@ use futures::{stream::FuturesOrdered, StreamExt};
 use linera_base::data_types::Blob;
 use linera_chain::types::ConfirmedBlockCertificate;
 use linera_rpc::NodeOptions;
-use linera_storage::Storage;
+use linera_storage::{Arc as CacheArc, Storage};
 use tokio::{
     select,
     sync::mpsc::Sender,
@@ -264,7 +264,7 @@ where
     async fn get_block_with_blobs_task(
         &self,
         index: usize,
-    ) -> Result<(Arc<ConfirmedBlockCertificate>, Vec<Arc<Blob>>), ExporterError> {
+    ) -> Result<(CacheArc<ConfirmedBlockCertificate>, Vec<Arc<Blob>>), ExporterError> {
         let mut retries = 0u32;
         loop {
             match self.storage.get_block_with_blobs(index).await {

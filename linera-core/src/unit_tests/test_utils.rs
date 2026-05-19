@@ -149,11 +149,11 @@ where
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(Arc::unwrap_or_clone(certificate), sender)
+            validator.do_handle_certificate(CacheArc::unwrap_or_clone(certificate), sender)
         })
         .await
     }
