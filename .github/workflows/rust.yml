@@ -525,7 +525,7 @@ jobs:
       uses: ./.github/actions/install-protoc
     - name: Run cargo doc
       run: |
-        cargo doc --locked --all-features
+        cargo doc --locked --all-features --no-deps
 
   lint-check-linera-service-graphql-schema:
     needs: changed-files
