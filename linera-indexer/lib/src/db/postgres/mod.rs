@@ -290,6 +290,7 @@ impl PostgresDatabase {
                     SystemOperation::UpdateStream { .. } => "UpdateStream",
                     SystemOperation::ChangeOwnership { .. } => "ChangeOwnership",
                     SystemOperation::VerifyBlob { .. } => "VerifyBlob",
+                    SystemOperation::Checkpoint => "Checkpoint",
                 };
                 ("System", None, Some(sys_op_type))
             }
@@ -446,6 +447,9 @@ impl PostgresDatabase {
                         ))
                     })?;
                     ("EventExists", None, Some(serialized))
+                }
+                OracleResponse::Checkpoint(blob_id) => {
+                    ("Checkpoint", Some(blob_id.hash.to_string()), None)
                 }
             };
 

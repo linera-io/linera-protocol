@@ -228,6 +228,7 @@ impl ValidatorNode for DummyValidator {
             count_received_log: 0,
             requested_received_log: vec![],
             requested_previous_event_blocks: BTreeMap::new(),
+            requested_latest_checkpoint_height: None,
         };
 
         let response = if missing_blobs.is_empty() {

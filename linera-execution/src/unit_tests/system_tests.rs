@@ -131,3 +131,127 @@ async fn empty_accounts_are_removed() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn execute_checkpoint_publishes_blob_and_records_oracle_response() -> anyhow::Result<()> {
+    use linera_base::data_types::OracleResponse;
+    use linera_views::{batch::Batch, store::WritableKeyValueStore as _, views::View as _};
+
+    let mut view = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        balance: Amount::from_tokens(100),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    // Persist the initial state so dump_content reads non-default bytes from storage.
+    let mut batch = Batch::new();
+    view.pre_save(&mut batch)?;
+    view.context().store().write_batch(batch).await?;
+    view.post_save();
+
+    let pre_checkpoint_hash = view.crypto_hash_mut().await?;
+
+    let mut txn_tracker = TransactionTracker::default();
+    view.execute_checkpoint(&mut txn_tracker).await?;
+
+    // The override hash takes effect immediately for the in-memory view.
+    let post_checkpoint_hash = view.crypto_hash_mut().await?;
+    assert_ne!(pre_checkpoint_hash, post_checkpoint_hash);
+
+    let outcome = txn_tracker.into_outcome()?;
+    assert_eq!(outcome.blobs.len(), 1);
+    let blob = &outcome.blobs[0];
+    assert_eq!(blob.id().blob_type, BlobType::CheckpointContent);
+    assert!(outcome.blobs_published.is_empty());
+    assert_eq!(outcome.oracle_responses.len(), 1);
+    assert_eq!(
+        outcome.oracle_responses[0],
+        OracleResponse::Checkpoint(blob.id())
+    );
+
+    // Saving the chain commits the override; the persisted hash now matches the content hash.
+    let mut batch = Batch::new();
+    view.pre_save(&mut batch)?;
+    view.context().store().write_batch(batch).await?;
+    view.post_save();
+    assert_eq!(view.crypto_hash_mut().await?, post_checkpoint_hash);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow::Result<()> {
+    use linera_views::{
+        batch::Batch, context::MemoryContext, store::WritableKeyValueStore as _, views::View as _,
+    };
+
+    use crate::ExecutionStateView;
+
+    // Producer side: build a view with non-trivial state, save, prepare-and-apply a
+    // checkpoint, save with the override hash.
+    let mut producer = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        balance: Amount::from_tokens(100),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+    let mut batch = Batch::new();
+    producer.pre_save(&mut batch)?;
+    producer.context().store().write_batch(batch).await?;
+    producer.post_save();
+
+    let blob = producer.prepare_checkpoint().await?;
+    let blob_bytes = blob.bytes().to_vec();
+    let mut txn_tracker = TransactionTracker::default();
+    producer.apply_checkpoint(blob, &mut txn_tracker)?;
+    let mut batch = Batch::new();
+    producer.pre_save(&mut batch)?;
+    producer.context().store().write_batch(batch).await?;
+    producer.post_save();
+    let producer_hash = producer.crypto_hash_mut().await?;
+    drop(producer);
+
+    // Bootstrap side: a fresh, separate view (different storage backend, same chain
+    // description so the test contexts agree on `chain_id`). Restore the checkpoint
+    // blob's bytes, then reload the view. Its execution-state hash must match the
+    // producer's — that's the contract a bootstrapping node relies on.
+    let mut bootstrap = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+    let bootstrap_context: MemoryContext<TestExecutionRuntimeContext> = bootstrap.context().clone();
+    bootstrap.restore_from_content(&blob_bytes).await?;
+    drop(bootstrap);
+    let mut reloaded = ExecutionStateView::load(bootstrap_context).await?;
+    assert_eq!(reloaded.crypto_hash_mut().await?, producer_hash);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_checkpoint_rejects_chain_with_published_events() -> anyhow::Result<()> {
+    use linera_base::identifiers::StreamId;
+
+    let mut view = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+
+    view.previous_event_blocks
+        .insert(&StreamId::system(b"events"), BlockHeight::from(0))?;
+
+    let mut txn_tracker = TransactionTracker::default();
+    let result = view.execute_checkpoint(&mut txn_tracker).await;
+    assert!(matches!(
+        result,
+        Err(crate::ExecutionError::CheckpointPreconditionFailed(_))
+    ));
+    Ok(())
+}

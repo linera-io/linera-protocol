@@ -1065,6 +1065,8 @@ pub enum OracleResponse {
     ),
     /// An event exists.
     EventExists(EventId),
+    /// A checkpoint of the chain's execution state was published as the named blob.
+    Checkpoint(BlobId),
 }
 
 impl BcsHashable<'_> for OracleResponse {}

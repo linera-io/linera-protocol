@@ -11,8 +11,9 @@ use allocative::Allocative;
 use futures::{FutureExt, StreamExt};
 use linera_base::{
     crypto::{BcsHashable, CryptoHash},
-    data_types::{BlobContent, BlockHeight, StreamUpdate},
-    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
+    data_types::{Blob, BlobContent, BlockHeight, OracleResponse, StreamUpdate},
+    ensure,
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
     time::Instant,
 };
 use linera_views::{
@@ -30,7 +31,6 @@ use {
     crate::{
         ResourceControlPolicy, ResourceTracker, TestExecutionRuntimeContext, UserContractCode,
     },
-    linera_base::data_types::Blob,
     linera_views::context::MemoryContext,
     std::sync::Arc,
 };
@@ -105,6 +105,84 @@ where
         impl BcsHashable<'_> for ExecutionStateViewHash {}
         let hash = self.inner.historical_hash().await?;
         Ok(CryptoHash::new(&ExecutionStateViewHash(hash.into())))
+    }
+
+    /// Validates the execution-state-level preconditions for a `SystemOperation::Checkpoint`
+    /// and dumps the inner view's persisted content as a [`Blob`]. The blob is not yet
+    /// published; the caller is expected to register it during transaction execution via
+    /// [`Self::apply_checkpoint`].
+    ///
+    /// This is a *pre-block* operation: it must run before the block-level setup mutates
+    /// the chain state (e.g. setting `system.timestamp`), because `dump_content` reads
+    /// from storage and refuses to run with pending in-memory changes. Splitting the
+    /// dump out of the operation handler also guarantees the captured bytes represent
+    /// the chain's pre-block state, which is exactly what a bootstrapping node will
+    /// `restore_from_content` from before re-applying the certified checkpoint block.
+    pub async fn prepare_checkpoint(&mut self) -> Result<Blob, ExecutionError> {
+        let mut had_event_block = false;
+        self.previous_event_blocks
+            .for_each_index_while(|_| {
+                had_event_block = true;
+                Ok(false)
+            })
+            .await?;
+        ensure!(
+            !had_event_block,
+            ExecutionError::CheckpointPreconditionFailed("chain has published events")
+        );
+
+        let mut had_message_block = false;
+        self.previous_message_blocks
+            .for_each_index_while(|_| {
+                had_message_block = true;
+                Ok(false)
+            })
+            .await?;
+        ensure!(
+            !had_message_block,
+            ExecutionError::CheckpointPreconditionFailed("chain has sent cross-chain messages")
+        );
+
+        let (bytes, _content_hash) = self.inner.dump_content().await?;
+        Ok(Blob::new(BlobContent::new(
+            BlobType::CheckpointContent,
+            bytes,
+        )))
+    }
+
+    /// Registers the checkpoint blob (produced by [`Self::prepare_checkpoint`]) with the
+    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`].
+    pub fn apply_checkpoint(
+        &self,
+        blob: Blob,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
+        let blob_id = blob.id();
+        txn_tracker.add_created_blob(blob);
+        txn_tracker.replay_oracle_response(OracleResponse::Checkpoint(blob_id))?;
+        Ok(())
+    }
+
+    /// Convenience helper that combines [`Self::prepare_checkpoint`] and
+    /// [`Self::apply_checkpoint`] in a single call. Production block-execution code
+    /// invokes the two halves separately so the dump runs before any block-level state
+    /// mutation; this helper is only used by unit tests that exercise the operation in
+    /// isolation.
+    #[cfg(test)]
+    pub async fn execute_checkpoint(
+        &mut self,
+        txn_tracker: &mut TransactionTracker,
+    ) -> Result<(), ExecutionError> {
+        let blob = self.prepare_checkpoint().await?;
+        self.apply_checkpoint(blob, txn_tracker)
+    }
+
+    /// Replaces the persisted execution state with the content of a checkpoint blob,
+    /// recording the hash of the bytes as the new stored hash. The caller is
+    /// contractually obliged to reload the view after this returns.
+    pub async fn restore_from_content(&mut self, bytes: &[u8]) -> Result<(), ViewError> {
+        self.inner.restore_from_content(bytes).await?;
+        Ok(())
     }
 }
 

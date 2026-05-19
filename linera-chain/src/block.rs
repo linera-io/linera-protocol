@@ -393,6 +393,14 @@ impl BlockBody {
             Transaction::ExecuteOperation(_) => None,
         })
     }
+
+    /// Returns whether the first transaction in this block body is a
+    /// `SystemOperation::Checkpoint`. See [`ProposedBlock::starts_with_checkpoint`].
+    pub fn starts_with_checkpoint(&self) -> bool {
+        self.transactions
+            .first()
+            .is_some_and(Transaction::is_checkpoint)
+    }
 }
 
 #[async_graphql::ComplexObject]
@@ -525,6 +533,12 @@ impl Block {
             .operations()
             .flat_map(Operation::published_blob_ids)
             .collect()
+    }
+
+    /// Returns whether the first transaction in this block is a
+    /// `SystemOperation::Checkpoint`. See [`BlockBody::starts_with_checkpoint`].
+    pub fn starts_with_checkpoint(&self) -> bool {
+        self.body.starts_with_checkpoint()
     }
 
     /// Returns all the blob IDs created by the block's transactions.

@@ -642,6 +642,7 @@ impl TryFrom<api::ChainInfoQuery> for ChainInfoQuery {
             request_fallback: chain_info_query.request_fallback,
             request_sent_certificate_hashes_by_heights,
             request_previous_event_blocks,
+            request_latest_checkpoint_height: chain_info_query.request_latest_checkpoint_height,
         })
     }
 }
@@ -674,6 +675,7 @@ impl TryFrom<ChainInfoQuery> for api::ChainInfoQuery {
             request_leader_timeout,
             request_fallback: chain_info_query.request_fallback,
             request_previous_event_blocks: Some(request_previous_event_blocks),
+            request_latest_checkpoint_height: chain_info_query.request_latest_checkpoint_height,
         })
     }
 }
@@ -1199,6 +1201,7 @@ pub mod tests {
             count_received_log: 0,
             requested_received_log: vec![],
             requested_previous_event_blocks: BTreeMap::new(),
+            requested_latest_checkpoint_height: None,
         });
 
         let chain_info_response_none = ChainInfoResponse {
@@ -1235,6 +1238,7 @@ pub mod tests {
             request_fallback: true,
             request_sent_certificate_hashes_by_heights: (3..8).map(BlockHeight::from).collect(),
             request_previous_event_blocks: Vec::new(),
+            request_latest_checkpoint_height: true,
         };
         round_trip_check::<_, api::ChainInfoQuery>(&chain_info_query_some);
     }

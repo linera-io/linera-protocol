@@ -390,6 +390,7 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 }),
                 ..SystemOperationMetadata::new("UpdateStream")
             },
+            SystemOperation::Checkpoint => SystemOperationMetadata::new("Checkpoint"),
         }
     }
 }

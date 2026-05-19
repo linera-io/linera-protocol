@@ -15,7 +15,8 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse, Round,
+        Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
@@ -31,7 +32,7 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
+    ChainError, ChainExecutionContext, ChainStateView, ChainTipState, ExecutionResultExt as _,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -835,7 +836,7 @@ where
         let chain_id = block.header.chain_id;
 
         // Check if we already processed this block.
-        let tip = self.chain.tip_state.get().clone();
+        let mut tip = self.chain.tip_state.get().clone();
         if tip.next_block_height > height {
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
@@ -914,11 +915,15 @@ where
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
 
-        // Preprocess when there's a gap (`tip.next_block_height < height`) or when
-        // the caller explicitly asked for `Preprocess`.
-        let must_preprocess =
-            matches!(mode, ProcessConfirmedBlockMode::Preprocess) || tip.next_block_height < height;
-        if must_preprocess {
+        // Decide whether to fully execute or only preprocess this block. We
+        // preprocess when the caller explicitly asked for `Preprocess`, or when
+        // there's a gap that we can't bridge. A checkpoint block lets us bridge
+        // a gap in `Execute` mode by installing its execution-state snapshot;
+        // in `Preprocess` mode we deliberately skip the restore — the caller
+        // doesn't want this chain's state advanced.
+        let preprocess_only = matches!(mode, ProcessConfirmedBlockMode::Preprocess)
+            || (tip.next_block_height < height && !block.starts_with_checkpoint());
+        if preprocess_only {
             // Update the outboxes and event streams.
             let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
             // Persist chain.
@@ -942,6 +947,50 @@ where
                 actions,
                 BlockOutcome::Preprocessed,
             ));
+        }
+
+        // If we're here with a gap, the block must be a checkpoint: install its
+        // snapshot, fast-forward the tip, and fall through to full execution
+        // (which re-runs `prepare_checkpoint`, deducts the same fees, and
+        // converges on the producer's post-block state).
+        if tip.next_block_height < height {
+            let Some(OracleResponse::Checkpoint(blob_id)) =
+                block.body.oracle_responses.first().and_then(|r| r.first())
+            else {
+                return Err(ChainError::InternalError(
+                    "Checkpoint block missing OracleResponse::Checkpoint".into(),
+                )
+                .into());
+            };
+            let blob = blobs
+                .get(blob_id)
+                .ok_or_else(|| WorkerError::BlobsNotFound(vec![*blob_id]))?;
+            let bytes = blob.bytes().to_vec();
+            self.chain
+                .execution_state
+                .restore_from_content(&bytes)
+                .await?;
+            // `restore_from_content` writes directly to storage and leaves the
+            // in-memory view in an undefined state — reload from storage.
+            self.chain = self.storage.load_chain(chain_id).await?;
+            // We only reset `execution_state` (via restore) and `tip_state`. The
+            // other `ChainStateView` fields are either (a) already default for a
+            // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
+            // (b) about to be overwritten by `apply_confirmed_block` when the
+            // cert is applied (`manager`, `block_hashes` for height `height`),
+            // or (c) outside the protocol state hash so divergence from the
+            // producer is fine (inboxes; subsequent blocks reconcile by
+            // anticipation if needed). The `num_*` counters on `ChainTipState`
+            // are write-only in current code, so leaving them at zero has no
+            // functional impact.
+            let new_tip = ChainTipState {
+                block_hash: block.header.previous_block_hash,
+                next_block_height: height,
+                ..Default::default()
+            };
+            self.chain.tip_state.set(new_tip.clone());
+            self.save().await?;
+            tip = new_tip;
         }
 
         // This should always be true for valid certificates.
@@ -2227,6 +2276,9 @@ where
                 info.requested_previous_event_blocks
                     .insert(stream_id, (height, hash));
             }
+        }
+        if query.request_latest_checkpoint_height {
+            info.requested_latest_checkpoint_height = *self.chain.latest_checkpoint_height.get();
         }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
