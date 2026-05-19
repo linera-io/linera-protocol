@@ -510,7 +510,11 @@ impl ScyllaDbClient {
             batch_query.append_statement(q_insertion.clone());
         }
         if write_sentinel {
-            batch_values.push(vec![root_key.to_vec(), WRITETIME_SENTINEL_KEY.to_vec(), Vec::new()]);
+            batch_values.push(vec![
+                root_key.to_vec(),
+                WRITETIME_SENTINEL_KEY.to_vec(),
+                Vec::new(),
+            ]);
             batch_query.append_statement(q_insertion.clone());
         }
         session
@@ -816,7 +820,13 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
             .write_batch_prefix_deletes(&self.root_key, key_prefix_deletions, t_prefix)
             .await?;
         store
-            .write_batch_data(&self.root_key, deletions, insertions, t_data, write_sentinel)
+            .write_batch_data(
+                &self.root_key,
+                deletions,
+                insertions,
+                t_data,
+                write_sentinel,
+            )
             .await?;
         Ok(())
     }
