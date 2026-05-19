@@ -116,7 +116,11 @@ pub(crate) async fn process_pending_deposits<E: linera_core::environment::Enviro
             }
         }
 
-        monitor.write().await.mark_deposit_retried(&pending.key);
+        monitor
+            .write()
+            .await
+            .mark_deposit_retried(&pending.key, max_retries)
+            .await;
     }
 }
 

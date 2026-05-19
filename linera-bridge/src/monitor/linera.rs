@@ -105,11 +105,19 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 
             match estimate_fits(evm_client.estimate_add_block_gas(&cert).await) {
                 Ok(true) => {
-                    submit_addblock(monitor, evm_client, &cert, height, &event_indices).await;
+                    submit_addblock(
+                        monitor,
+                        evm_client,
+                        &cert,
+                        height,
+                        &event_indices,
+                        max_retries,
+                    )
+                    .await;
                     relay::update_balance_metrics(evm_client, linera_client).await;
                 }
                 Ok(false) => {
-                    submit_chunked(monitor, evm_client, &cert, height, &by_tx).await;
+                    submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
                     relay::update_balance_metrics(evm_client, linera_client).await;
                 }
                 Err(error) => {
@@ -130,6 +138,7 @@ async fn submit_addblock<P: Provider>(
     cert: &linera_chain::types::ConfirmedBlockCertificate,
     height: BlockHeight,
     event_indices: &[u32],
+    max_retries: u32,
 ) {
     match evm_client.forward_cert(cert).await {
         Ok(()) => {
@@ -143,7 +152,7 @@ async fn submit_addblock<P: Provider>(
             tracing::warn!(?height, ?error, "addBlock submission failed");
             let mut state = monitor.write().await;
             for ei in event_indices {
-                state.mark_burn_retried(height, *ei);
+                state.mark_burn_retried(height, *ei, max_retries).await;
             }
         }
     }
@@ -158,11 +167,21 @@ async fn submit_chunked<P: Provider>(
     cert: &linera_chain::types::ConfirmedBlockCertificate,
     height: BlockHeight,
     by_tx: &[(u32, Vec<u32>)],
+    max_retries: u32,
 ) {
     for (tx_index, positions) in by_tx {
         let (chunks, oversized) = split_to_fit(evm_client, cert, *tx_index, positions).await;
         mark_oversized_failed(monitor, height, *tx_index, &oversized).await;
-        submit_chunks_with_retry(monitor, evm_client, cert, height, *tx_index, chunks).await;
+        submit_chunks_with_retry(
+            monitor,
+            evm_client,
+            cert,
+            height,
+            *tx_index,
+            chunks,
+            max_retries,
+        )
+        .await;
     }
 }
 
@@ -246,6 +265,7 @@ async fn submit_chunks_with_retry<P: Provider>(
     height: BlockHeight,
     tx_index: u32,
     events_chunks: Vec<Vec<u32>>,
+    max_retries: u32,
 ) {
     for events_chunk in events_chunks {
         if let Err(error) = evm_client
@@ -267,7 +287,7 @@ async fn submit_chunks_with_retry<P: Provider>(
             };
             let mut state = monitor.write().await;
             for ei in to_bump {
-                state.mark_burn_retried(height, ei);
+                state.mark_burn_retried(height, ei, max_retries).await;
             }
         }
     }

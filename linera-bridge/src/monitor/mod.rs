@@ -403,10 +403,20 @@ impl MonitorState {
         Ok(())
     }
 
-    pub fn mark_deposit_retried(&mut self, key: &DepositKey) {
-        if let Some(d) = self.deposits.get_mut(key) {
+    /// Bumps the deposit's retry counter; if the bump exhausts `max_retries`,
+    /// the deposit is marked `failed` (moved to `finished_deposits` in
+    /// SQLite) so it does not get loaded back as a pending item on the next
+    /// relayer start.
+    pub async fn mark_deposit_retried(&mut self, key: &DepositKey, max_retries: u32) {
+        let exhausted = if let Some(d) = self.deposits.get_mut(key) {
             d.retry_count += 1;
             d.last_retry_at = Some(Instant::now());
+            d.retry_count >= max_retries
+        } else {
+            false
+        };
+        if exhausted {
+            self.mark_deposit_failed(key).await;
         }
     }
 
@@ -440,10 +450,25 @@ impl MonitorState {
         })
     }
 
-    pub fn mark_burn_retried(&mut self, height: BlockHeight, event_index: u32) {
-        if let Some(b) = self.burns.get_mut(&(height, event_index)) {
+    /// Bumps the burn's retry counter; if the bump exhausts `max_retries`,
+    /// the burn is marked `failed` (moved to `finished_burns` in SQLite) so
+    /// it does not get loaded back as a pending item on the next relayer
+    /// start.
+    pub async fn mark_burn_retried(
+        &mut self,
+        height: BlockHeight,
+        event_index: u32,
+        max_retries: u32,
+    ) {
+        let exhausted = if let Some(b) = self.burns.get_mut(&(height, event_index)) {
             b.retry_count += 1;
             b.last_retry_at = Some(Instant::now());
+            b.retry_count >= max_retries
+        } else {
+            false
+        };
+        if exhausted {
+            self.mark_burn_failed(height, event_index).await;
         }
     }
 
@@ -703,7 +728,7 @@ mod tests {
 
         assert_eq!(state.deposits_ready_for_retry(10).len(), 1);
 
-        state.mark_deposit_retried(&key);
+        state.mark_deposit_retried(&key, 10).await;
         assert_eq!(state.deposits_ready_for_retry(10).len(), 0);
 
         state.mark_deposit_failed(&key).await;
@@ -736,7 +761,7 @@ mod tests {
         let next = state.next_deposit_for_retry(10);
         assert!(matches!(next, Some(p) if p.key == key));
 
-        state.mark_deposit_retried(&key);
+        state.mark_deposit_retried(&key, 10).await;
         assert!(state.next_deposit_for_retry(10).is_none());
 
         state.complete_deposit(&key).await;
@@ -837,7 +862,7 @@ mod tests {
             .await;
 
         assert!(state.next_burn_for_retry(10).is_some());
-        state.mark_burn_retried(height, 0);
+        state.mark_burn_retried(height, 0, 10).await;
         assert!(state.next_burn_for_retry(10).is_none());
 
         // Once forwarded, the item is no longer offered for retry.
