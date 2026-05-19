@@ -9,57 +9,56 @@ use prometheus::{
 };
 use tokio::runtime::Handle;
 
-pub(crate) struct TokioRuntimeCollector {
+struct TokioRuntimeCollector {
     handle: Handle,
-    descs: Vec<Desc>,
+    workers: Desc,
+    alive_tasks: Desc,
+    global_queue: Desc,
+    busy_seconds: Desc,
+    parks: Desc,
+    park_unparks: Desc,
 }
-
-const IDX_WORKERS: usize = 0;
-const IDX_ALIVE_TASKS: usize = 1;
-const IDX_GLOBAL_QUEUE: usize = 2;
-const IDX_BUSY_SECONDS: usize = 3;
-const IDX_PARKS: usize = 4;
-const IDX_PARK_UNPARKS: usize = 5;
 
 impl TokioRuntimeCollector {
     fn new(handle: Handle) -> Self {
-        let descs = vec![
-            Desc::new(
+        Self {
+            handle,
+            workers: Desc::new(
                 "linera_tokio_workers".into(),
                 "Number of worker threads in the tokio runtime.".into(),
                 vec![],
                 HashMap::new(),
             )
             .expect("static metric descriptor is always valid"),
-            Desc::new(
+            alive_tasks: Desc::new(
                 "linera_tokio_alive_tasks".into(),
                 "Number of tasks currently alive in the tokio runtime.".into(),
                 vec![],
                 HashMap::new(),
             )
             .expect("static metric descriptor is always valid"),
-            Desc::new(
+            global_queue: Desc::new(
                 "linera_tokio_global_queue_depth".into(),
                 "Number of tasks in the runtime's global injection queue.".into(),
                 vec![],
                 HashMap::new(),
             )
             .expect("static metric descriptor is always valid"),
-            Desc::new(
+            busy_seconds: Desc::new(
                 "linera_tokio_worker_busy_seconds_total".into(),
                 "Cumulative time each worker has spent executing tasks, in seconds.".into(),
                 vec!["worker".to_string()],
                 HashMap::new(),
             )
             .expect("static metric descriptor is always valid"),
-            Desc::new(
+            parks: Desc::new(
                 "linera_tokio_worker_parks_total".into(),
                 "Cumulative number of times each worker has parked (ran out of work).".into(),
                 vec!["worker".to_string()],
                 HashMap::new(),
             )
             .expect("static metric descriptor is always valid"),
-            Desc::new(
+            park_unparks: Desc::new(
                 "linera_tokio_worker_park_unparks_total".into(),
                 "Monotonically increasing count of park and unpark events combined per worker. \
                  An odd value means the worker is currently parked."
@@ -68,14 +67,20 @@ impl TokioRuntimeCollector {
                 HashMap::new(),
             )
             .expect("static metric descriptor is always valid"),
-        ];
-        Self { handle, descs }
+        }
     }
 }
 
 impl Collector for TokioRuntimeCollector {
     fn desc(&self) -> Vec<&Desc> {
-        self.descs.iter().collect()
+        vec![
+            &self.workers,
+            &self.alive_tasks,
+            &self.global_queue,
+            &self.busy_seconds,
+            &self.parks,
+            &self.park_unparks,
+        ]
     }
 
     fn collect(&self) -> Vec<MetricFamily> {
@@ -83,21 +88,18 @@ impl Collector for TokioRuntimeCollector {
         let num_workers = m.num_workers();
         let mut families = Vec::with_capacity(6);
 
-        families.push(gauge_family(&self.descs[IDX_WORKERS], num_workers as f64));
+        families.push(gauge_family(&self.workers, num_workers as f64));
+        families.push(gauge_family(&self.alive_tasks, m.num_alive_tasks() as f64));
         families.push(gauge_family(
-            &self.descs[IDX_ALIVE_TASKS],
-            m.num_alive_tasks() as f64,
-        ));
-        families.push(gauge_family(
-            &self.descs[IDX_GLOBAL_QUEUE],
+            &self.global_queue,
             m.global_queue_depth() as f64,
         ));
 
         #[cfg(target_has_atomic = "64")]
         {
-            let mut busy = counter_family(&self.descs[IDX_BUSY_SECONDS]);
-            let mut parks = counter_family(&self.descs[IDX_PARKS]);
-            let mut park_unparks = counter_family(&self.descs[IDX_PARK_UNPARKS]);
+            let mut busy = counter_family(&self.busy_seconds);
+            let mut parks = counter_family(&self.parks);
+            let mut park_unparks = counter_family(&self.park_unparks);
             for i in 0..num_workers {
                 let label = worker_label(i);
                 busy.mut_metric().push(counter_metric(
@@ -157,8 +159,7 @@ fn worker_label(i: usize) -> [LabelPair; 1] {
     [lp]
 }
 
-/// Idempotently register the tokio runtime metrics collector with the default
-/// Prometheus registry. Must be called from within a tokio runtime context.
+/// Must be called from within a tokio runtime context.
 pub(crate) fn register() {
     static ONCE: OnceLock<()> = OnceLock::new();
     ONCE.get_or_init(|| {
