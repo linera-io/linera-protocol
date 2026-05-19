@@ -666,7 +666,7 @@ impl<Env: Environment> Client<Env> {
             else {
                 break;
             };
-            assert!(info.next_block_height > next_height);
+            assert!(info.next_block_height >= next_height);
             next_height = info.next_block_height;
             last_info = info;
         }
