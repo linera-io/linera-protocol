@@ -152,7 +152,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
     // Deploy a bridge backed by `lc`, with a LineraToken that has
     // `supply` tokens pre-minted to the bridge.
     function _deployBridge(address lc, uint256 supply) internal returns (FungibleBridge bridge, LineraToken tok) {
-        tok = new LineraToken("Test", "TST", supply);
+        tok = new LineraToken("Test", "TST", 18, supply);
         bridge = new FungibleBridge(lc, CHAIN_ID, address(tok), APP_ID);
         // Send all tokens to the bridge so transfer() calls succeed.
         tok.transfer(address(bridge), supply);

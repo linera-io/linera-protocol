@@ -239,6 +239,39 @@ pub async fn deploy_linera_token_with_supply(
     .await
 }
 
+/// Deploys LineraToken with a custom `decimals()` value and initial supply.
+/// `supply_raw` is the raw token amount (i.e. `tokens * 10u128.pow(decimals)`).
+pub async fn deploy_linera_token_with_decimals(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    decimals: u8,
+    supply_raw: u128,
+) -> anyhow::Result<Address> {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "env TOKEN_DECIMALS={decimals} TOKEN_SUPPLY={supply_raw} \
+             forge script /contracts/script/DeployLineraToken.s.sol \
+             --root /contracts \
+             --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             --broadcast"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    parse_broadcast_address(
+        compose,
+        project_name,
+        compose_file,
+        "DeployLineraToken.s.sol",
+    )
+    .await
+}
+
 /// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge
 /// script and returns the deployed contract address.
 pub async fn deploy_fungible_bridge(
