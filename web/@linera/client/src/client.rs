@@ -60,7 +60,10 @@ impl Client {
         const BLOCK_CACHE_SIZE: usize = 5000;
         const EXECUTION_STATE_CACHE_SIZE: usize = 10000;
 
-        let options = options.unwrap_or_default();
+        let mut options = options.unwrap_or_default();
+        if crate::multi_leader_jitter_disabled() {
+            options.disable_multi_leader_jitter = true;
+        }
 
         wallet.lock().await?;
         let mut storage = storage::get_storage(&wallet.name()).await?;
