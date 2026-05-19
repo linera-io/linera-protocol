@@ -67,8 +67,7 @@ async fn restore_backup(
 /// chain 1), takes a RocksDB backup of one validator's storage, and returns the backup
 /// directory together with the certificate for a second block ready to be fed to the
 /// restored worker.
-async fn setup_backup_and_next_cert() -> (TempDir, linera_chain::types::ConfirmedBlockCertificate)
-{
+async fn setup_backup_and_next_cert() -> (TempDir, linera_chain::types::ConfirmedBlockCertificate) {
     let mut builder = TestBuilder::new(
         RocksDbStorageBuilder::new().await,
         4,
@@ -106,9 +105,7 @@ async fn setup_backup_and_next_cert() -> (TempDir, linera_chain::types::Confirme
         .expect("at least one validator")
         .clone();
     let backup_dir = TempDir::new().expect("backup dir");
-    source_storage
-        .backup_to(backup_dir.path())
-        .expect("backup");
+    source_storage.backup_to(backup_dir.path()).expect("backup");
 
     // Block 1: second transfer — all 4 original validators commit this too.
     let cert1 = chain_a
