@@ -2,6 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![expect(clippy::large_futures)]
 //! Phase 0a: empirically confirm that a WorkerState can boot from a RocksDB backup
 //! produced by a different validator and then continue processing blocks.
 
@@ -52,7 +53,7 @@ async fn restore_backup(
     let mut config = RocksDbDatabase::new_test_config()
         .await
         .expect("test config");
-    config.inner_config.path_with_guard = PathWithGuard::new(restore_base.into_path());
+    config.inner_config.path_with_guard = PathWithGuard::new(restore_base.keep());
     DbStorage::<RocksDbDatabase, TestClock>::connect_for_testing(
         config,
         namespace,
