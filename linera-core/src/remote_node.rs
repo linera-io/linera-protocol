@@ -1,7 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_cache::Arc as CacheArc;
 use std::collections::{HashSet, VecDeque};
 
 use custom_debug_derive::Debug;
@@ -12,6 +11,7 @@ use linera_base::{
     ensure,
     identifiers::{BlobId, ChainId},
 };
+use linera_cache::Arc as CacheArc;
 use linera_chain::{
     data_types::BlockProposal,
     types::{

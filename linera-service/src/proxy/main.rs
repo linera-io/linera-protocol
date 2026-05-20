@@ -279,7 +279,7 @@ where
         blobs
             .into_iter()
             .flatten()
-            .map(Arc::unwrap_or_clone)
+            .map(CacheArc::unwrap_or_clone)
             .collect()
     }
 }

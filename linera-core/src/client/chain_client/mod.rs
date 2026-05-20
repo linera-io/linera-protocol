@@ -2117,8 +2117,7 @@ impl<Env: Environment> ChainClient<Env> {
         debug!(round = %certificate.round, "Sending confirmed block to validators");
         let update_start = linera_base::time::Instant::now();
         let certificate = self.client.storage_client().cache_certificate(certificate);
-        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone())))
-            .await?;
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
         tracing::debug!(
             update_validators_ms = update_start.elapsed().as_millis(),
             total_process_ms = process_start.elapsed().as_millis(),
@@ -2180,8 +2179,7 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate =
             Box::pin(self.client.finalize_block(&committee, certificate.clone())).await?;
         let certificate = self.client.storage_client().cache_certificate(certificate);
-        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone())))
-            .await?;
+        Box::pin(self.update_validators(Some(&committee), Some(certificate.clone()))).await?;
         Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
             certificate,
         ))))
