@@ -98,7 +98,8 @@ tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, features = ["log"] }
 url.workspace = true
-wasm-instrument = { workspace = true, features = ["sign_ext"] }
+walrus.workspace = true
+walrus-meter.workspace = true
 wasmtime = { workspace = true, optional = true }
 web-thread-pool.workspace = true
 web-thread-select.workspace = true

@@ -166,10 +166,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                     "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                    _ => Err(anyhow!(
-                        "Failed to parse {} as a spawn_mode",
-                        spawn_mode_name
-                    )),
+                    _ => Err(anyhow!("Failed to parse {spawn_mode_name} as a spawn_mode")),
                 }?;
                 let namespace = if parts.len() == 2 {
                     DEFAULT_NAMESPACE.to_string()
@@ -273,10 +270,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                 "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                _ => Err(anyhow!(
-                    "Failed to parse {} as a spawn_mode",
-                    spawn_mode_name
-                )),
+                _ => Err(anyhow!("Failed to parse {spawn_mode_name} as a spawn_mode",)),
             }?;
             let protocol = parts[2];
             if protocol != "tcp" {

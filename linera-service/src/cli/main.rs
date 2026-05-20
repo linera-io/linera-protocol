@@ -1178,18 +1178,18 @@ impl Runnable for Job {
                                     match result {
                                         Some(Ok(Ok((pid, status)))) => {
                                             if !status.success() {
-                                                error!("Benchmark process (pid {:?}) failed with status: {:?}", pid, status);
+                                                error!("Benchmark process (pid {pid:?}) failed with status: {status:?}");
                                                 kill_all_processes(&children_pids).await;
-                                                return Err(anyhow::anyhow!("Benchmark process (pid {:?}) failed", pid));
+                                                return Err(anyhow::anyhow!("Benchmark process (pid {pid:?}) failed"));
                                             }
                                         }
                                         Some(Ok(Err(e))) => {
-                                            error!("Benchmark process failed: {}", e);
+                                            error!("Benchmark process failed: {e}");
                                             kill_all_processes(&children_pids).await;
                                             return Err(e);
                                         }
                                         Some(Err(e)) => {
-                                            error!("Benchmark process panicked: {}", e);
+                                            error!("Benchmark process panicked: {e}");
                                             kill_all_processes(&children_pids).await;
                                             return Err(e.into());
                                         }

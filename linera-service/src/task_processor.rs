@@ -307,7 +307,7 @@ impl<Env: linera_core::Environment> TaskProcessor<Env> {
     ) -> Result<TaskOutcome, anyhow::Error> {
         let binary_path = operators
             .get(&operator)
-            .ok_or_else(|| anyhow::anyhow!("unsupported operator: {}", operator))?;
+            .ok_or_else(|| anyhow::anyhow!("unsupported operator: {operator}"))?;
         debug!("Executing task {operator} ({binary_path:?}) for {application_id}");
         let mut child = Command::new(binary_path)
             .stdin(std::process::Stdio::piped())
