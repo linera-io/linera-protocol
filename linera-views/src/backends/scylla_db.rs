@@ -37,6 +37,7 @@ use scylla::{
     },
     response::PagingState,
     statement::{batch::BatchType, prepared::PreparedStatement, Consistency},
+    value::CqlValue,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -114,6 +115,12 @@ struct ScyllaDbClient {
     write_batch_delete_prefix_bounded: PreparedStatement,
     write_batch_deletion: PreparedStatement,
     write_batch_insertion: PreparedStatement,
+    // Variants carrying an explicit `USING TIMESTAMP ?` marker, used by the
+    // single-batch exclusive-mode write path (`write_batch_exclusive`).
+    write_batch_delete_prefix_unbounded_ts: PreparedStatement,
+    write_batch_delete_prefix_bounded_ts: PreparedStatement,
+    write_batch_deletion_ts: PreparedStatement,
+    write_batch_insertion_ts: PreparedStatement,
     find_keys_by_prefix_unbounded: PreparedStatement,
     find_keys_by_prefix_bounded: PreparedStatement,
     find_key_values_by_prefix_unbounded: PreparedStatement,
@@ -167,6 +174,36 @@ impl ScyllaDbClient {
             ))
             .await?;
 
+        // Timestamped variants used by the single-batch exclusive-mode path. The
+        // explicit `USING TIMESTAMP ?` lets prefix-deletions (`T`) and the
+        // insertions/deletions (`T + 1`) share one atomic batch without the range
+        // tombstone shadowing the inserts.
+        let write_batch_delete_prefix_unbounded_ts = session
+            .prepare(format!(
+                "DELETE FROM {KEYSPACE}.{namespace} USING TIMESTAMP ? WHERE root_key = ? AND k >= ?"
+            ))
+            .await?;
+
+        let write_batch_delete_prefix_bounded_ts = session
+            .prepare(format!(
+                "DELETE FROM {KEYSPACE}.{namespace} USING TIMESTAMP ? \
+                 WHERE root_key = ? AND k >= ? AND k < ?"
+            ))
+            .await?;
+
+        let write_batch_deletion_ts = session
+            .prepare(format!(
+                "DELETE FROM {KEYSPACE}.{namespace} USING TIMESTAMP ? WHERE root_key = ? AND k = ?"
+            ))
+            .await?;
+
+        let write_batch_insertion_ts = session
+            .prepare(format!(
+                "INSERT INTO {KEYSPACE}.{namespace} (root_key, k, v) VALUES (?, ?, ?) \
+                 USING TIMESTAMP ?"
+            ))
+            .await?;
+
         let find_keys_by_prefix_unbounded = session
             .prepare(format!(
                 "SELECT k FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k >= ?"
@@ -201,6 +238,10 @@ impl ScyllaDbClient {
             write_batch_delete_prefix_bounded,
             write_batch_deletion,
             write_batch_insertion,
+            write_batch_delete_prefix_unbounded_ts,
+            write_batch_delete_prefix_bounded_ts,
+            write_batch_deletion_ts,
+            write_batch_insertion_ts,
             find_keys_by_prefix_unbounded,
             find_keys_by_prefix_bounded,
             find_key_values_by_prefix_unbounded,
@@ -433,23 +474,19 @@ impl ScyllaDbClient {
         })
     }
 
-    /// Issues an unlogged batch that contains only prefix-delete statements.
-    /// Phase 1 of the two-phase write. If `timestamp` is `Some(t)`, the batch
-    /// carries that explicit timestamp (exclusive mode); otherwise the
-    /// coordinator picks one (shared mode). No-op when `key_prefix_deletions`
-    /// is empty.
+    /// Issues an unlogged batch that contains only prefix-delete statements,
+    /// letting the coordinator assign the write timestamp. Phase 1 of the
+    /// shared-mode two-phase write. No-op when `key_prefix_deletions` is empty.
     async fn write_batch_prefix_deletes(
         &self,
         root_key: &[u8],
         key_prefix_deletions: Vec<Vec<u8>>,
-        timestamp: Option<i64>,
     ) -> Result<(), ScyllaDbStoreInternalError> {
         if key_prefix_deletions.is_empty() {
             return Ok(());
         }
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        batch_query.set_timestamp(timestamp);
         let mut batch_values: Vec<Vec<Vec<u8>>> = Vec::new();
         let q_unbounded = &self.write_batch_delete_prefix_unbounded;
         let q_bounded = &self.write_batch_delete_prefix_bounded;
@@ -474,27 +511,21 @@ impl ScyllaDbClient {
     }
 
     /// Issues an unlogged batch containing the single-key deletions and the
-    /// insertions. Phase 2 of the two-phase write. If `timestamp` is
-    /// `Some(t)`, the batch carries that explicit timestamp (exclusive mode);
-    /// otherwise the coordinator picks one (shared mode). When
-    /// `write_sentinel` is true, the batch additionally writes an empty
-    /// value at the reserved sentinel clustering key (`WRITETIME_SENTINEL_KEY`) in the
-    /// same partition — used in exclusive mode so future seeding reads can
-    /// recover the maximum timestamp issued by this store.
+    /// insertions, letting the coordinator assign the write timestamp. Phase 2
+    /// of the shared-mode two-phase write; the `.await` between the phases lets
+    /// the coordinator give this batch a strictly later timestamp than the
+    /// prefix-deletes, so a range tombstone never shadows these insertions.
     async fn write_batch_data(
         &self,
         root_key: &[u8],
         deletions: Vec<Vec<u8>>,
         insertions: Vec<(Vec<u8>, Vec<u8>)>,
-        timestamp: Option<i64>,
-        write_sentinel: bool,
     ) -> Result<(), ScyllaDbStoreInternalError> {
-        if deletions.is_empty() && insertions.is_empty() && !write_sentinel {
+        if deletions.is_empty() && insertions.is_empty() {
             return Ok(());
         }
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        batch_query.set_timestamp(timestamp);
         let mut batch_values: Vec<Vec<Vec<u8>>> = Vec::new();
         let q_deletion = &self.write_batch_deletion;
         for key in deletions {
@@ -509,14 +540,97 @@ impl ScyllaDbClient {
             batch_values.push(vec![root_key.to_vec(), key, value]);
             batch_query.append_statement(q_insertion.clone());
         }
-        if write_sentinel {
-            batch_values.push(vec![
-                root_key.to_vec(),
-                WRITETIME_SENTINEL_KEY.to_vec(),
-                Vec::new(),
-            ]);
-            batch_query.append_statement(q_insertion.clone());
+        session
+            .batch(&batch_query, batch_values)
+            .await
+            .map_err(ScyllaDbStoreInternalError::WriteBatchExecutionError)?;
+        Ok(())
+    }
+
+    /// Issues the whole write as a single atomic unlogged batch, used in
+    /// exclusive mode. Every statement carries an explicit `USING TIMESTAMP`:
+    /// the prefix-deletions use `t`, while the single-key deletions, the
+    /// insertions, and the sentinel write use `t + 1`. The higher timestamp on
+    /// the data ensures a range tombstone never shadows an insertion belonging
+    /// to the same logical batch (at equal timestamps, dead cells win over live
+    /// cells). Because the intended ordering is fixed by these timestamps rather
+    /// than by send order, the prefix-deletions and the data can — and must —
+    /// share one batch, preserving the atomicity that `write_batch` callers rely
+    /// on. The sentinel write at `WRITETIME_SENTINEL_KEY` lets a future process
+    /// recover this store's timestamp floor (see `ensure_ts_seeded`).
+    async fn write_batch_exclusive(
+        &self,
+        root_key: &[u8],
+        batch: UnorderedBatch,
+        t: i64,
+    ) -> Result<(), ScyllaDbStoreInternalError> {
+        let UnorderedBatch {
+            key_prefix_deletions,
+            simple_unordered_batch:
+                SimpleUnorderedBatch {
+                    deletions,
+                    insertions,
+                },
+        } = batch;
+        let session = &self.session;
+        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
+        let mut batch_values: Vec<Vec<CqlValue>> = Vec::new();
+
+        // Prefix-deletions at timestamp `t`.
+        for key_prefix in key_prefix_deletions {
+            Self::check_key_size(&key_prefix)?;
+            match get_upper_bound_option(&key_prefix) {
+                None => {
+                    batch_values.push(vec![
+                        CqlValue::BigInt(t),
+                        CqlValue::Blob(root_key.to_vec()),
+                        CqlValue::Blob(key_prefix),
+                    ]);
+                    batch_query
+                        .append_statement(self.write_batch_delete_prefix_unbounded_ts.clone());
+                }
+                Some(upper_bound) => {
+                    batch_values.push(vec![
+                        CqlValue::BigInt(t),
+                        CqlValue::Blob(root_key.to_vec()),
+                        CqlValue::Blob(key_prefix),
+                        CqlValue::Blob(upper_bound),
+                    ]);
+                    batch_query.append_statement(self.write_batch_delete_prefix_bounded_ts.clone());
+                }
+            }
         }
+
+        // Single-key deletions, insertions, and the sentinel at timestamp `t + 1`.
+        let t_data = t + 1;
+        for key in deletions {
+            Self::check_key_size(&key)?;
+            batch_values.push(vec![
+                CqlValue::BigInt(t_data),
+                CqlValue::Blob(root_key.to_vec()),
+                CqlValue::Blob(key),
+            ]);
+            batch_query.append_statement(self.write_batch_deletion_ts.clone());
+        }
+        for (key, value) in insertions {
+            Self::check_key_size(&key)?;
+            Self::check_value_size(&value)?;
+            batch_values.push(vec![
+                CqlValue::Blob(root_key.to_vec()),
+                CqlValue::Blob(key),
+                CqlValue::Blob(value),
+                CqlValue::BigInt(t_data),
+            ]);
+            batch_query.append_statement(self.write_batch_insertion_ts.clone());
+        }
+        batch_values.push(vec![
+            CqlValue::Blob(root_key.to_vec()),
+            CqlValue::Blob(WRITETIME_SENTINEL_KEY.to_vec()),
+            CqlValue::Blob(Vec::new()),
+            CqlValue::BigInt(t_data),
+        ]);
+        batch_query.append_statement(self.write_batch_insertion_ts.clone());
+
         session
             .batch(&batch_query, batch_values)
             .await
@@ -790,18 +904,24 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     // win over live cells" from
     // https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
     //
-    // Instead, we split the batch into two CQL batches:
-    //   * Phase 1: the prefix-deletions.
-    //   * Phase 2: the single-key deletions and insertions.
-    // In exclusive mode we attach explicit client timestamps `T` and `T+1`; in
-    // shared mode we let the coordinator pick timestamps and rely on token-aware
-    // routing plus the `.await` between phases to keep them ordered.
+    // We therefore order the prefix-deletions strictly before the insertions:
+    //   * In exclusive mode we own the timestamps, so we issue a single atomic CQL
+    //     batch with explicit per-statement `USING TIMESTAMP` (`T` for the
+    //     prefix-deletions, `T + 1` for the data). See `write_batch_exclusive`.
+    //   * In shared mode the coordinator owns the timestamps, so we split the write
+    //     into two sequential CQL batches; the `.await` between them, together with
+    //     token-aware routing, gives the data batch a strictly later timestamp.
     type Batch = UnorderedBatch;
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
         ScyllaDbClient::check_batch_len(&batch)?;
+        if self.is_exclusive {
+            // A single atomic batch; ordering is pinned by the explicit timestamps.
+            let t = self.next_batch_ts().await?;
+            return store.write_batch_exclusive(&self.root_key, batch, t).await;
+        }
         let UnorderedBatch {
             key_prefix_deletions,
             simple_unordered_batch:
@@ -810,23 +930,11 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
                     insertions,
                 },
         } = batch;
-        let (t_prefix, t_data, write_sentinel) = if self.is_exclusive {
-            let t = self.next_batch_ts().await?;
-            (Some(t), Some(t + 1), true)
-        } else {
-            (None, None, false)
-        };
         store
-            .write_batch_prefix_deletes(&self.root_key, key_prefix_deletions, t_prefix)
+            .write_batch_prefix_deletes(&self.root_key, key_prefix_deletions)
             .await?;
         store
-            .write_batch_data(
-                &self.root_key,
-                deletions,
-                insertions,
-                t_data,
-                write_sentinel,
-            )
+            .write_batch_data(&self.root_key, deletions, insertions)
             .await?;
         Ok(())
     }
