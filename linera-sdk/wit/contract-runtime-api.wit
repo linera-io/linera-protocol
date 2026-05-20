@@ -2,6 +2,7 @@ package linera:app;
 
 interface contract-runtime-api {
     authenticated-owner: func() -> option<account-owner>;
+    transaction-index: func() -> u32;
     message-is-bouncing: func() -> option<bool>;
     message-origin-chain-id: func() -> option<chain-id>;
     message-origin-timestamp: func() -> option<timestamp>;

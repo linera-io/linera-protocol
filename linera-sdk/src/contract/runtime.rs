@@ -198,6 +198,15 @@ where
         contract_wit::authenticated_owner().map(AccountOwner::from)
     }
 
+    /// Returns the index of the current transaction within its block.
+    ///
+    /// Combined with the chain ID, application ID, and block height, this can be used by
+    /// smart contracts to derive a deterministic seed (e.g. for pseudo-random number
+    /// generation).
+    pub fn transaction_index(&mut self) -> u32 {
+        contract_wit::transaction_index()
+    }
+
     /// Returns [`true`] if the incoming message was rejected from the original destination and is
     /// now bouncing back, or [`None`] if not executing an incoming message.
     pub fn message_is_bouncing(&mut self) -> Option<bool> {

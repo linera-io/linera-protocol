@@ -8,6 +8,7 @@ members = [
     "event-subscriber",
     "meta-counter",
     "publish-read-data-blob",
+    "random-source",
     "time-expiry",
     "track-instantiation",
 ]
@@ -16,6 +17,7 @@ members = [
 async-graphql = { version = "=7.0.17", default-features = false }
 linera-sdk = { path = "../../../linera-sdk" }
 log = "0.4.20"
+rand = { version = "0.8.5", default-features = false, features = ["std_rng"] }
 serde = { version = "1.0.152", features = ["derive"] }
 tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
 
@@ -27,6 +29,7 @@ create-and-call = { path = "./create-and-call" }
 event-emitter = { path = "./event-emitter" }
 meta-counter = { path = "./meta-counter" }
 publish-read-data-blob = { path = "./publish-read-data-blob" }
+random-source = { path = "./random-source" }
 time-expiry = { path = "./time-expiry" }
 track-instantiation = { path = "./track-instantiation" }
 

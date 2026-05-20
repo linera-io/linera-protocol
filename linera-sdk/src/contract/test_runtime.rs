@@ -60,6 +60,7 @@ where
     application_descriptions: HashMap<ApplicationId, ApplicationDescription>,
     chain_id: Option<ChainId>,
     authenticated_owner: Option<Option<AccountOwner>>,
+    transaction_index: Option<u32>,
     block_height: Option<BlockHeight>,
     round: Option<u32>,
     message_is_bouncing: Option<Option<bool>>,
@@ -114,6 +115,7 @@ where
             application_descriptions: HashMap::new(),
             chain_id: None,
             authenticated_owner: None,
+            transaction_index: None,
             block_height: None,
             round: None,
             message_is_bouncing: None,
@@ -307,6 +309,26 @@ where
         self.authenticated_owner.expect(
             "Authenticated owner has not been mocked, \
             please call `MockContractRuntime::set_authenticated_owner` first",
+        )
+    }
+
+    /// Configures the transaction index to return during the test.
+    pub fn with_transaction_index(mut self, transaction_index: u32) -> Self {
+        self.transaction_index = Some(transaction_index);
+        self
+    }
+
+    /// Configures the transaction index to return during the test.
+    pub fn set_transaction_index(&mut self, transaction_index: u32) -> &mut Self {
+        self.transaction_index = Some(transaction_index);
+        self
+    }
+
+    /// Returns the index of the current transaction within its block.
+    pub fn transaction_index(&mut self) -> u32 {
+        self.transaction_index.expect(
+            "Transaction index has not been mocked, \
+            please call `MockContractRuntime::set_transaction_index` first",
         )
     }
 

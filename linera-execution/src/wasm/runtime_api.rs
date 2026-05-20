@@ -470,6 +470,15 @@ where
             .map_err(|error| RuntimeError::Custom(error.into()))
     }
 
+    /// Returns the index of the current transaction within its block.
+    fn transaction_index(caller: &mut Caller) -> Result<u32, RuntimeError> {
+        caller
+            .user_data_mut()
+            .runtime
+            .transaction_index()
+            .map_err(|error| RuntimeError::Custom(error.into()))
+    }
+
     /// Returns `Some(true)` if the incoming message was rejected from the original destination and
     /// is now bouncing back, `Some(false)` if the message is being currently being delivered to
     /// its original destination, or [`None`] if not executing an incoming message.
