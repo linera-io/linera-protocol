@@ -965,6 +965,9 @@ where
             }
         }
 
+        // If we reach here, either we had no round sync data to send, or all attempts failed.
+        // This is not a fatal error - height sync succeeded which is the primary goal.
+        tracing::debug!("round sync not performed: no applicable data or all attempts failed");
         Ok(())
     }
 
