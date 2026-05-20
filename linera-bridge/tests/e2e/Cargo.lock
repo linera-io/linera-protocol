@@ -2577,10 +2577,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "facile"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba3ae8a3c35e905c7dc85b5a122f4054cb37a512bb2acefd56d78c79a840d58b"
+dependencies = [
+ "deluxe",
+ "itertools 0.14.0",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
+
+[[package]]
+name = "fallible-iterator"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
 
 [[package]]
 name = "fast_chemail"
@@ -3020,7 +3040,7 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22030e2c5a68ec659fde1e949a745124b48e6fa8b045b7ed5bd1fe4ccc5c4e5d"
 dependencies = [
- "fallible-iterator",
+ "fallible-iterator 0.2.0",
  "indexmap 1.9.3",
  "stable_deref_trait",
 ]
@@ -3030,6 +3050,11 @@ name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
+dependencies = [
+ "fallible-iterator 0.3.0",
+ "indexmap 2.13.0",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "glob"
@@ -4082,7 +4107,6 @@ dependencies = [
  "futures",
  "linera-base",
  "linera-views",
- "linera-wasm-instrument",
  "linera-wasmer",
  "linera-wasmer-compiler-singlepass",
  "linera-witty",
@@ -4099,6 +4123,8 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "walrus",
+ "walrus-meter",
  "web-thread-pool",
  "web-thread-select",
 ]
@@ -4117,12 +4143,6 @@ dependencies = [
  "thiserror 1.0.69",
  "thiserror-context",
 ]
-
-[[package]]
-name = "linera-parity-wasm"
-version = "0.45.1-linera.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9198100e9ce61acd3c714a2e61eb19fc5b8e2178dd645e2d9061e61e6e1feef"
 
 [[package]]
 name = "linera-persistent"
@@ -4342,15 +4362,6 @@ dependencies = [
  "linera-persistent",
  "serde",
  "tracing",
-]
-
-[[package]]
-name = "linera-wasm-instrument"
-version = "0.4.0-linera.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80b01177f7f9e3404738607912cfe9887f0f717a8dc45adff03adc9f34f5b22e"
-dependencies = [
- "linera-parity-wasm",
 ]
 
 [[package]]
@@ -8052,6 +8063,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "walrus"
+version = "0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e151599d689dac80e85c66a7cfa6ffd1b2ab79220517f9161040a87a5041aee3"
+dependencies = [
+ "anyhow",
+ "gimli 0.32.3",
+ "id-arena",
+ "leb128",
+ "log",
+ "walrus-macro",
+ "wasm-encoder 0.245.1",
+ "wasmparser 0.245.1",
+]
+
+[[package]]
+name = "walrus-macro"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a9b0525d7ea6e5f906aca581a172e5c91b4c595290dfa8ad4a2bc9ffef33b44"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "walrus-meter"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce40d810c47b21fce1b0a8d1cf85526d5b0a60bfbce773db08f23abc1fb74734"
+dependencies = [
+ "anyhow",
+ "auto_impl",
+ "facile",
+ "walrus",
+]
+
+[[package]]
 name = "want"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8169,6 +8220,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-encoder"
+version = "0.245.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9dca005e69bf015e45577e415b9af8c67e8ee3c0e38b5b0add5aa92581ed5c"
+dependencies = [
+ "leb128fmt",
+ "wasmparser 0.245.1",
+]
+
+[[package]]
 name = "wasm-metadata"
 version = "0.202.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8275,6 +8336,19 @@ dependencies = [
  "hashbrown 0.15.5",
  "indexmap 2.13.0",
  "semver 1.0.27",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.245.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f08c9adee0428b7bddf3890fc27e015ac4b761cc608c822667102b8bfd6995e"
+dependencies = [
+ "bitflags 2.11.0",
+ "hashbrown 0.16.1",
+ "indexmap 2.13.0",
+ "semver 1.0.27",
+ "serde",
 ]
 
 [[package]]
