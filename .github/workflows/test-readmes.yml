@@ -51,7 +51,7 @@ jobs:
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions/setup-node@v4
       with:
         node-version: '22'
