@@ -10,7 +10,11 @@
 use std::{
     collections::{BTreeSet, HashMap},
     ops::Deref,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc,
+    },
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -42,7 +46,7 @@ use crate::metering::MeteredDatabase;
 #[cfg(with_testing)]
 use crate::store::TestKeyValueDatabase;
 use crate::{
-    batch::UnorderedBatch,
+    batch::{SimpleUnorderedBatch, UnorderedBatch},
     common::{get_uleb128_size, get_upper_bound_option},
     journaling::{JournalingError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
@@ -104,6 +108,7 @@ struct ScyllaDbClient {
     session: Session,
     namespace: String,
     read_value: PreparedStatement,
+    read_writetime: PreparedStatement,
     contains_key: PreparedStatement,
     write_batch_delete_prefix_unbounded: PreparedStatement,
     write_batch_delete_prefix_bounded: PreparedStatement,
@@ -123,6 +128,12 @@ impl ScyllaDbClient {
         let read_value = session
             .prepare(format!(
                 "SELECT v FROM {KEYSPACE}.{namespace} WHERE root_key = ? AND k = ?"
+            ))
+            .await?;
+
+        let read_writetime = session
+            .prepare(format!(
+                "SELECT WRITETIME(v) FROM {KEYSPACE}.{namespace} WHERE root_key = ? AND k = ?"
             ))
             .await?;
 
@@ -184,6 +195,7 @@ impl ScyllaDbClient {
             session,
             namespace,
             read_value,
+            read_writetime,
             contains_key,
             write_batch_delete_prefix_unbounded,
             write_batch_delete_prefix_bounded,
@@ -399,46 +411,111 @@ impl ScyllaDbClient {
         Ok(rows.next().is_some())
     }
 
-    async fn write_batch_internal(
+    /// Reads the write-time of a single row in microseconds since Unix epoch,
+    /// returning `None` if the row does not exist or carries no live value.
+    async fn read_writetime_internal(
         &self,
         root_key: &[u8],
-        batch: UnorderedBatch,
+        key: Vec<u8>,
+    ) -> Result<Option<i64>, ScyllaDbStoreInternalError> {
+        Self::check_key_size(&key)?;
+        let session = &self.session;
+        let values = (root_key.to_vec(), key);
+        let (result, _) = session
+            .execute_single_page(&self.read_writetime, &values, PagingState::start())
+            .await
+            .map_err(ScyllaDbStoreInternalError::ExecutionError)?;
+        let rows = result.into_rows_result()?;
+        let mut rows = rows.rows::<(Option<i64>,)>()?;
+        Ok(match rows.next() {
+            Some(row) => row?.0,
+            None => None,
+        })
+    }
+
+    /// Issues an unlogged batch that contains only prefix-delete statements.
+    /// Phase 1 of the two-phase write. If `timestamp` is `Some(t)`, the batch
+    /// carries that explicit timestamp (exclusive mode); otherwise the
+    /// coordinator picks one (shared mode). No-op when `key_prefix_deletions`
+    /// is empty.
+    async fn write_batch_prefix_deletes(
+        &self,
+        root_key: &[u8],
+        key_prefix_deletions: Vec<Vec<u8>>,
+        timestamp: Option<i64>,
     ) -> Result<(), ScyllaDbStoreInternalError> {
+        if key_prefix_deletions.is_empty() {
+            return Ok(());
+        }
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        let mut batch_values = Vec::new();
-        let query1 = &self.write_batch_delete_prefix_unbounded;
-        let query2 = &self.write_batch_delete_prefix_bounded;
-        Self::check_batch_len(&batch)?;
-        for key_prefix in batch.key_prefix_deletions {
+        batch_query.set_timestamp(timestamp);
+        let mut batch_values: Vec<Vec<Vec<u8>>> = Vec::new();
+        let q_unbounded = &self.write_batch_delete_prefix_unbounded;
+        let q_bounded = &self.write_batch_delete_prefix_bounded;
+        for key_prefix in key_prefix_deletions {
             Self::check_key_size(&key_prefix)?;
             match get_upper_bound_option(&key_prefix) {
                 None => {
-                    let values = vec![root_key.to_vec(), key_prefix];
-                    batch_values.push(values);
-                    batch_query.append_statement(query1.clone());
+                    batch_values.push(vec![root_key.to_vec(), key_prefix]);
+                    batch_query.append_statement(q_unbounded.clone());
                 }
                 Some(upper_bound) => {
-                    let values = vec![root_key.to_vec(), key_prefix, upper_bound];
-                    batch_values.push(values);
-                    batch_query.append_statement(query2.clone());
+                    batch_values.push(vec![root_key.to_vec(), key_prefix, upper_bound]);
+                    batch_query.append_statement(q_bounded.clone());
                 }
             }
         }
-        let query3 = &self.write_batch_deletion;
-        for key in batch.simple_unordered_batch.deletions {
-            Self::check_key_size(&key)?;
-            let values = vec![root_key.to_vec(), key];
-            batch_values.push(values);
-            batch_query.append_statement(query3.clone());
+        session
+            .batch(&batch_query, batch_values)
+            .await
+            .map_err(ScyllaDbStoreInternalError::WriteBatchExecutionError)?;
+        Ok(())
+    }
+
+    /// Issues an unlogged batch containing the single-key deletions and the
+    /// insertions. Phase 2 of the two-phase write. If `timestamp` is
+    /// `Some(t)`, the batch carries that explicit timestamp (exclusive mode);
+    /// otherwise the coordinator picks one (shared mode). When
+    /// `write_sentinel` is true, the batch additionally writes an empty
+    /// value at the reserved sentinel clustering key (`WRITETIME_SENTINEL_KEY`) in the
+    /// same partition — used in exclusive mode so future seeding reads can
+    /// recover the maximum timestamp issued by this store.
+    async fn write_batch_data(
+        &self,
+        root_key: &[u8],
+        deletions: Vec<Vec<u8>>,
+        insertions: Vec<(Vec<u8>, Vec<u8>)>,
+        timestamp: Option<i64>,
+        write_sentinel: bool,
+    ) -> Result<(), ScyllaDbStoreInternalError> {
+        if deletions.is_empty() && insertions.is_empty() && !write_sentinel {
+            return Ok(());
         }
-        let query4 = &self.write_batch_insertion;
-        for (key, value) in batch.simple_unordered_batch.insertions {
+        let session = &self.session;
+        let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
+        batch_query.set_timestamp(timestamp);
+        let mut batch_values: Vec<Vec<Vec<u8>>> = Vec::new();
+        let q_deletion = &self.write_batch_deletion;
+        for key in deletions {
+            Self::check_key_size(&key)?;
+            batch_values.push(vec![root_key.to_vec(), key]);
+            batch_query.append_statement(q_deletion.clone());
+        }
+        let q_insertion = &self.write_batch_insertion;
+        for (key, value) in insertions {
             Self::check_key_size(&key)?;
             Self::check_value_size(&value)?;
-            let values = vec![root_key.to_vec(), key, value];
-            batch_values.push(values);
-            batch_query.append_statement(query4.clone());
+            batch_values.push(vec![root_key.to_vec(), key, value]);
+            batch_query.append_statement(q_insertion.clone());
+        }
+        if write_sentinel {
+            batch_values.push(vec![
+                root_key.to_vec(),
+                WRITETIME_SENTINEL_KEY.to_vec(),
+                Vec::new(),
+            ]);
+            batch_query.append_statement(q_insertion.clone());
         }
         session
             .batch(&batch_query, batch_values)
@@ -517,6 +594,15 @@ pub struct ScyllaDbStoreInternal {
     semaphore: Option<Arc<Semaphore>>,
     max_stream_queries: usize,
     root_key: Vec<u8>,
+    /// Whether this store was opened with `open_exclusive`. When true, `write_batch`
+    /// resolves in-batch prefix/insert collisions via per-statement `USING TIMESTAMP`;
+    /// when false, it splits the batch into two sequential sub-batches with
+    /// server-side timestamps to preserve ordering across writers.
+    is_exclusive: bool,
+    /// Per-partition timestamp floor for exclusive-mode `USING TIMESTAMP` writes.
+    /// Value 0 means unseeded; populated lazily on first write by reading
+    /// `WRITETIME` of a sentinel row. Each batch reserves 2 µs (T and T+1).
+    ts_floor: Arc<AtomicI64>,
 }
 
 /// Database-level connection to ScyllaDB for managing namespaces and partitions.
@@ -703,12 +789,103 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     // tie-breaking rule when two cells have the same write timestamp is that dead cells
     // win over live cells" from
     // https://github.com/scylladb/scylladb/blob/master/docs/dev/timestamp-conflict-resolution.md
+    //
+    // Instead, we split the batch into two CQL batches:
+    //   * Phase 1: the prefix-deletions.
+    //   * Phase 2: the single-key deletions and insertions.
+    // In exclusive mode we attach explicit client timestamps `T` and `T+1`; in
+    // shared mode we let the coordinator pick timestamps and rely on token-aware
+    // routing plus the `.await` between phases to keep them ordered.
     type Batch = UnorderedBatch;
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbStoreInternalError> {
         let store = self.store.deref();
         let _guard = self.acquire().await;
-        store.write_batch_internal(&self.root_key, batch).await
+        ScyllaDbClient::check_batch_len(&batch)?;
+        let UnorderedBatch {
+            key_prefix_deletions,
+            simple_unordered_batch:
+                SimpleUnorderedBatch {
+                    deletions,
+                    insertions,
+                },
+        } = batch;
+        let (t_prefix, t_data, write_sentinel) = if self.is_exclusive {
+            let t = self.next_batch_ts().await?;
+            (Some(t), Some(t + 1), true)
+        } else {
+            (None, None, false)
+        };
+        store
+            .write_batch_prefix_deletes(&self.root_key, key_prefix_deletions, t_prefix)
+            .await?;
+        store
+            .write_batch_data(
+                &self.root_key,
+                deletions,
+                insertions,
+                t_data,
+                write_sentinel,
+            )
+            .await?;
+        Ok(())
+    }
+}
+
+impl ScyllaDbStoreInternal {
+    /// Seeds the per-store timestamp floor on first write in exclusive mode.
+    /// Reads `WRITETIME` of this chain's row in the reserved sentinel
+    /// partition (written by every prior exclusive batch). Falls back to the
+    /// current wall clock if the row does not yet exist. Idempotent — only
+    /// the first caller wins the compare-exchange.
+    async fn ensure_ts_seeded(&self) -> Result<(), ScyllaDbStoreInternalError> {
+        if self.ts_floor.load(Ordering::Relaxed) > 0 {
+            return Ok(());
+        }
+        let writetime = self
+            .store
+            .read_writetime_internal(&self.root_key, WRITETIME_SENTINEL_KEY.to_vec())
+            .await?
+            .unwrap_or(0);
+        let now_us = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_micros() as i64)
+            .unwrap_or(0);
+        // `writetime` is the last batch's `T + 1`, i.e. the highest timestamp it
+        // consumed; that is exactly what `ts_floor` tracks, so seed it directly.
+        let seed = now_us.max(writetime);
+        if self
+            .ts_floor
+            .compare_exchange(0, seed, Ordering::Relaxed, Ordering::Relaxed)
+            .is_err()
+        {
+            // Another caller seeded first; their value wins.
+        }
+        Ok(())
+    }
+
+    /// Returns the base timestamp `T` for the next batch in exclusive mode.
+    /// The batch may also use `T + 1`; the generator advances by 2 per call,
+    /// preserving monotonicity across batches in this process.
+    async fn next_batch_ts(&self) -> Result<i64, ScyllaDbStoreInternalError> {
+        self.ensure_ts_seeded().await?;
+        loop {
+            let prev = self.ts_floor.load(Ordering::Relaxed);
+            let now_us = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_micros() as i64)
+                .unwrap_or(prev);
+            let next = std::cmp::max(now_us, prev + 1);
+            // The batch uses `next` (`T`) and `next + 1` (`T + 1`); store the latter
+            // so the following batch starts strictly above both.
+            if self
+                .ts_floor
+                .compare_exchange_weak(prev, next + 1, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                return Ok(next);
+            }
+        }
     }
 }
 
@@ -718,6 +895,13 @@ fn get_big_root_key(root_key: &[u8]) -> Vec<u8> {
     big_key.extend(root_key);
     big_key
 }
+
+/// Reserved clustering key inside each chain's partition that holds the
+/// timestamp sentinel used to seed the per-store client timestamp generator
+/// in exclusive mode. The empty clustering key is unused by any caller:
+/// views always write keys prefixed with a tag byte (>= `MIN_VIEW_TAG`),
+/// and the journaling layer writes 6-byte keys starting with `[0, ...]`.
+const WRITETIME_SENTINEL_KEY: &[u8] = &[];
 
 /// The type for building a new ScyllaDB Key Value Store
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -769,11 +953,24 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
             semaphore,
             max_stream_queries,
             root_key,
+            is_exclusive: false,
+            ts_floor: Arc::new(AtomicI64::new(0)),
         })
     }
 
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
-        self.open_shared(root_key)
+        let store = self.store.clone();
+        let semaphore = self.semaphore.clone();
+        let max_stream_queries = self.max_stream_queries;
+        let root_key = get_big_root_key(root_key);
+        Ok(ScyllaDbStoreInternal {
+            store,
+            semaphore,
+            max_stream_queries,
+            root_key,
+            is_exclusive: true,
+            ts_floor: Arc::new(AtomicI64::new(0)),
+        })
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreInternalError> {
