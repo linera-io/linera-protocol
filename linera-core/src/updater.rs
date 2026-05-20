@@ -887,7 +887,15 @@ where
         remote_round: Round,
         manager: &linera_chain::manager::ChainManagerInfo,
     ) -> Result<(), chain_client::Error> {
-        // Try to send a proposal for the current round
+        // Each of the three pieces below (proposal, validated cert, timeout cert) advances a
+        // different aspect of the remote validator's state — its proposal record, its
+        // locking block, and its current round — so we push everything we have. A success
+        // reply on one doesn't prove the remote actually changed state (e.g. the validated
+        // cert may already be its lock and `process_validated_block` returns `Skip`), so
+        // we can't early-return without risking leaving the validator wedged at an older
+        // round.
+
+        // Try to send a proposal for the current round.
         for proposal in manager
             .requested_proposed
             .iter()
@@ -901,7 +909,7 @@ where
                 {
                     Ok(_) => {
                         tracing::debug!("successfully sent block proposal for round sync");
-                        return Ok(());
+                        break;
                     }
                     Err(error) => {
                         tracing::debug!(%error, "failed to send block proposal");
@@ -926,7 +934,6 @@ where
                 {
                     Ok(_) => {
                         tracing::debug!("successfully sent validated block for round sync");
-                        return Ok(());
                     }
                     Err(error) => {
                         tracing::debug!(%error, "failed to send validated block");
@@ -935,7 +942,7 @@ where
             }
         }
 
-        // Try to send a timeout certificate
+        // Try to send a timeout certificate.
         if let Some(cert) = &manager.timeout {
             if cert.round >= remote_round {
                 match self
@@ -945,7 +952,6 @@ where
                 {
                     Ok(_) => {
                         tracing::debug!(round = %cert.round, "successfully sent timeout certificate");
-                        return Ok(());
                     }
                     Err(error) => {
                         tracing::debug!(%error, round = %cert.round, "failed to send timeout certificate");
@@ -954,9 +960,6 @@ where
             }
         }
 
-        // If we reach here, either we had no round sync data to send, or all attempts failed.
-        // This is not a fatal error - height sync succeeded which is the primary goal.
-        tracing::debug!("round sync not performed: no applicable data or all attempts failed");
         Ok(())
     }
 
