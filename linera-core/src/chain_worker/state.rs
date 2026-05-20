@@ -112,7 +112,8 @@ where
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
-    /// Set to `true` if a journal resolution failure has left storage potentially inconsistent.
+    /// Set to `true` if a database `save` failure has left storage potentially
+    /// inconsistent.
     poisoned: bool,
 }
 
@@ -264,8 +265,8 @@ where
         self.chain.rollback();
     }
 
-    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a journal
-    /// resolution failure.
+    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a database
+    /// `save` failure.
     pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
         ensure!(!self.poisoned, WorkerError::PoisonedWorker);
         Ok(())
@@ -2334,13 +2335,15 @@ where
     ))]
     pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
-            tracing::error!(
-                ?error,
-                chain_id = %self.chain_id(),
-                "Chain save failed; marking worker as poisoned"
-            );
-            self.poisoned = true;
-            return Err(WorkerError::PoisonedWorker);
+            if error.must_reload_view() {
+                tracing::error!(
+                    ?error,
+                    chain_id = %self.chain_id(),
+                    "Chain save failed with a nonrecoverable error; marking worker as poisoned"
+                );
+                self.poisoned = true;
+            }
+            return Err(WorkerError::ViewError(error));
         }
         Ok(())
     }
