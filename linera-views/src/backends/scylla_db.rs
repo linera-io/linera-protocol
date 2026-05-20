@@ -487,7 +487,7 @@ impl ScyllaDbClient {
         }
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        let mut batch_values: Vec<Vec<Vec<u8>>> = Vec::new();
+        let mut batch_values = Vec::<Vec<Vec<u8>>>::new();
         let q_unbounded = &self.write_batch_delete_prefix_unbounded;
         let q_bounded = &self.write_batch_delete_prefix_bounded;
         for key_prefix in key_prefix_deletions {
@@ -526,7 +526,7 @@ impl ScyllaDbClient {
         }
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        let mut batch_values: Vec<Vec<Vec<u8>>> = Vec::new();
+        let mut batch_values = Vec::new();
         let q_deletion = &self.write_batch_deletion;
         for key in deletions {
             Self::check_key_size(&key)?;
@@ -574,7 +574,7 @@ impl ScyllaDbClient {
         } = batch;
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        let mut batch_values: Vec<Vec<CqlValue>> = Vec::new();
+        let mut batch_values = Vec::new();
 
         // Prefix-deletions at timestamp `t`.
         for key_prefix in key_prefix_deletions {
