@@ -910,9 +910,12 @@ where
             }
         }
 
-        // Try to send a validated block for the current round
+        // Try to send a validated block. Its round can be below our `current_round` and
+        // still be useful: a validator with a lock at an even older round will rotate to
+        // this cert, and one with a `confirmed_vote` at this round will then accept a
+        // future proposal carrying it.
         if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.as_deref() {
-            if validated.round == manager.current_round {
+            if validated.round >= remote_round {
                 match self
                     .remote_node
                     .handle_optimized_validated_certificate(
