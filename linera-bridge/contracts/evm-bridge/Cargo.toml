@@ -40,6 +40,9 @@ log = "0.4.21"
 serde = { version = "1.0.197", features = ["derive"] }
 wrapped-fungible = { path = "../../../examples/wrapped-fungible" }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde-reflection = "0.5.2"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 alloy-primitives = { version = "1.0.0", default-features = false, features = [
     "serde",
