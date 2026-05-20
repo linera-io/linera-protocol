@@ -931,7 +931,7 @@ where
     for key_value in key_value_vector {
         let key = key_value.0;
         let value = key_value.1;
-        let key_str = format!("{:?}", &key);
+        let key_str = format!("{key:?}");
         let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(&key_str, value_usize)?;
         view.key_value_store.insert(key, value).await?;
@@ -961,7 +961,7 @@ where
     for operation in operations {
         match operation {
             Put { key, value } => {
-                let key_str = format!("{:?}", &key);
+                let key_str = format!("{key:?}");
                 let first_value = *value.first().unwrap();
                 let first_value_usize = first_value as usize;
                 let first_value_u64 = first_value as u64;
@@ -976,7 +976,7 @@ where
                 }
             }
             Delete { key } => {
-                let key_str = format!("{:?}", &key);
+                let key_str = format!("{key:?}");
                 view.map.remove(&key_str)?;
                 view.key_value_store.remove(key).await?;
             }
@@ -1080,24 +1080,24 @@ where
             let view = store.load(1).await?;
             view.hash().await?
         };
-        for pair in key_value_vector {
-            let str0 = format!("{:?}", &pair.0);
-            let str1 = format!("{:?}", &pair.1);
-            let pair0_first_u8 = *pair.0.first().unwrap();
-            let pair1_first_u8 = *pair.1.first().unwrap();
+        for (key, value) in key_value_vector {
+            let str0 = format!("{key:?}");
+            let str1 = format!("{value:?}");
+            let key_first_u8 = *key.first().unwrap();
+            let value_first_u8 = *value.first().unwrap();
             let choice = rng.gen_range(0..7);
             if choice < 3 {
                 let mut view = store.load(1).await?;
-                view.x1.set(pair0_first_u8 as u64);
-                view.x2.set(pair1_first_u8 as u32);
-                view.log.push(pair0_first_u8 as u32);
-                view.log.push(pair1_first_u8 as u32);
-                view.queue.push_back(pair0_first_u8 as u64);
-                view.queue.push_back(pair1_first_u8 as u64);
-                view.map.insert(&str0, pair1_first_u8 as usize)?;
-                view.map.insert(&str1, pair0_first_u8 as usize)?;
+                view.x1.set(key_first_u8 as u64);
+                view.x2.set(value_first_u8 as u32);
+                view.log.push(key_first_u8 as u32);
+                view.log.push(value_first_u8 as u32);
+                view.queue.push_back(key_first_u8 as u64);
+                view.queue.push_back(value_first_u8 as u64);
+                view.map.insert(&str0, value_first_u8 as usize)?;
+                view.map.insert(&str1, key_first_u8 as usize)?;
                 view.key_value_store
-                    .insert(pair.0.clone(), pair.1.clone())
+                    .insert(key.clone(), value.clone())
                     .await?;
                 if choice == 0 {
                     view.rollback();
@@ -1120,7 +1120,7 @@ where
             if choice == 4 {
                 let mut view = store.load(1).await?;
                 let subview = view.collection.load_entry_mut(&str0).await?;
-                subview.push(pair1_first_u8 as u32);
+                subview.push(value_first_u8 as u32);
                 let hash_new = view.hash().await?;
                 assert_ne!(hash, hash_new);
                 view.save().await?;

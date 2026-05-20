@@ -156,7 +156,7 @@ impl Project {
         ensure!(
             output.status.success(),
             "failed to initialize git repository at {}",
-            &project_root.display()
+            project_root.display()
         );
 
         Self::write_string_to_file(&project_root.join(".gitignore"), "/target")

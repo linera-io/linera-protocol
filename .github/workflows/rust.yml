@@ -513,7 +513,7 @@ jobs:
     needs: changed-files
     if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
 
     steps:
     - uses: actions/checkout@v4
@@ -525,7 +525,7 @@ jobs:
       uses: ./.github/actions/install-protoc
     - name: Run cargo doc
       run: |
-        cargo doc --locked --all-features
+        cargo doc --locked --all-features --no-deps
 
   lint-check-linera-service-graphql-schema:
     needs: changed-files

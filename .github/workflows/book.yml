@@ -65,7 +65,7 @@ jobs:
       - name: 'Build the Linera SDK'
         run: |
           cargo clippy --locked -p linera-sdk --features test,wasmer
-          DUPLICATE_LIBS=(target/debug/deps/libserde-* target/debug/deps/liblinera_sdk-*)
+          DUPLICATE_LIBS=(target/debug/deps/lib{serde,linera_sdk,async_graphql}-*)
           cargo build --locked -p linera-sdk --features test,wasmer
           # mdbook test wants only one library but build dependencies can create duplicates.
           rm "${DUPLICATE_LIBS[@]}"

@@ -118,14 +118,12 @@ where
                 .stored_count
                 .checked_add(new_values_len)
                 .ok_or(ArithmeticError::Overflow)?;
-            let mut index = self.stored_count;
-            for value in &self.new_values {
+            for (index, value) in (self.stored_count..).zip(&self.new_values) {
                 let key = self
                     .context
                     .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.put_key_value(key, value)?;
-                index += 1;
             }
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
             batch.put_key_value(key, &new_count)?;

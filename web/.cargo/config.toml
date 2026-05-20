@@ -1,7 +1,15 @@
 [target.wasm32-unknown-unknown]
 rustflags = [
-    # support threading
+    # support threading: see https://github.com/rust-lang/rust/pull/147225
     "-C", "target-feature=+atomics,+bulk-memory,+mutable-globals,+reference-types",
+    "-C", "link-arg=--shared-memory",
+    "-Clink-arg=--max-memory=1073741824",
+    "-Clink-arg=--import-memory",
+    "-Clink-arg=--export=__wasm_init_tls",
+    "-Clink-arg=--export=__tls_size",
+    "-Clink-arg=--export=__tls_align",
+    "-Clink-arg=--export=__tls_base",
+    "-Clink-arg=--export=__heap_base",
     # allow unstable Web APIs needed by `web-sys` bindings used in the web client
     "--cfg=web_sys_unstable_apis",
     "-Z", "wasm_c_abi=spec",

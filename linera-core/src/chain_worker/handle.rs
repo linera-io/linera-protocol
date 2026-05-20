@@ -42,8 +42,7 @@ impl AtomicTimestamp {
     fn current_micros() -> u64 {
         linera_base::time::SystemTime::now()
             .duration_since(linera_base::time::UNIX_EPOCH)
-            .map(|d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
-            .unwrap_or(0)
+            .map_or(0, |d| u64::try_from(d.as_micros()).unwrap_or(u64::MAX))
     }
 }
 
