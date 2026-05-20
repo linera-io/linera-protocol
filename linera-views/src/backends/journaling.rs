@@ -19,6 +19,7 @@
 //! time the data in a block are written, the journal header is updated in the same
 //! transaction to mark the block as processed.
 
+use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use static_assertions as sa;
 use thiserror::Error;
@@ -26,8 +27,8 @@ use thiserror::Error;
 use crate::{
     batch::{Batch, BatchValueWriter, DeletePrefixExpander, SimplifiedBatch},
     store::{
-        DirectKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError, WritableKeyValueStore,
+        DirectKeyValueStore, FindKeyValuesStream, FindKeysStream, KeyValueDatabase,
+        KeyValueStoreError, ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
     views::MIN_VIEW_TAG,
 };
@@ -196,11 +197,55 @@ where
         Ok(self.store.find_keys_by_prefix(key_prefix).await?)
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(
+            self.store
+                .find_keys_by_prefix_iter(key_prefix)
+                .map(|item| item.map_err(JournalingError::Inner)),
+        )
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
     ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, Self::Error> {
         Ok(self.store.find_key_values_by_prefix(key_prefix).await?)
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(
+            self.store
+                .find_key_values_by_prefix_iter(key_prefix)
+                .map(|item| item.map_err(JournalingError::Inner)),
+        )
+    }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        Box::pin(
+            self.store
+                .find_keys_by_prefix_rev_iter(key_prefix)
+                .map(|item| item.map_err(JournalingError::Inner)),
+        )
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        Box::pin(
+            self.store
+                .find_key_values_by_prefix_rev_iter(key_prefix)
+                .map(|item| item.map_err(JournalingError::Inner)),
+        )
     }
 }
 

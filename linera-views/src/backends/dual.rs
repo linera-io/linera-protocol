@@ -3,6 +3,7 @@
 
 //! Implements [`crate::store::KeyValueStore`] by combining two existing stores.
 
+use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -11,8 +12,8 @@ use crate::store::TestKeyValueDatabase;
 use crate::{
     batch::Batch,
     store::{
-        KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore, WithError,
-        WritableKeyValueStore,
+        FindKeyValuesStream, FindKeysStream, KeyValueDatabase, KeyValueStoreError,
+        ReadableKeyValueStore, WithError, WritableKeyValueStore,
     },
 };
 
@@ -175,6 +176,24 @@ where
         Ok(result)
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -190,6 +209,60 @@ where
                 .map_err(DualStoreError::Second)?,
         };
         Ok(result)
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
+    }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_keys_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        match self {
+            Self::First(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::First)),
+            ),
+            Self::Second(store) => Box::pin(
+                store
+                    .find_key_values_by_prefix_rev_iter(key_prefix)
+                    .map(|item| item.map_err(DualStoreError::Second)),
+            ),
+        }
     }
 }
 

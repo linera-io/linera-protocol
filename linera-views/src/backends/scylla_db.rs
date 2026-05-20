@@ -47,8 +47,8 @@ use crate::{
     journaling::{JournalingError, JournalingKeyValueDatabase},
     lru_caching::{LruCachingConfig, LruCachingDatabase},
     store::{
-        DirectWritableKeyValueStore, KeyValueDatabase, KeyValueStoreError, ReadableKeyValueStore,
-        WithError,
+        DirectWritableKeyValueStore, FindKeyValuesStream, FindKeysStream, KeyValueDatabase,
+        KeyValueStoreError, ReadableKeyValueStore, WithError,
     },
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
@@ -96,6 +96,13 @@ const MAX_BATCH_SIZE: usize = 5000;
 /// The keyspace to use for the ScyllaDB database.
 const KEYSPACE: &str = "kv";
 
+/// Iteration direction selector used by the streaming `find_*_iter` helpers.
+#[derive(Clone, Copy)]
+enum IterDirection {
+    Forward,
+    Reverse,
+}
+
 /// The client for ScyllaDB:
 /// * The session allows to pass queries
 /// * The namespace that is being assigned to the database
@@ -113,6 +120,10 @@ struct ScyllaDbClient {
     find_keys_by_prefix_bounded: PreparedStatement,
     find_key_values_by_prefix_unbounded: PreparedStatement,
     find_key_values_by_prefix_bounded: PreparedStatement,
+    find_keys_by_prefix_rev_unbounded: PreparedStatement,
+    find_keys_by_prefix_rev_bounded: PreparedStatement,
+    find_key_values_by_prefix_rev_unbounded: PreparedStatement,
+    find_key_values_by_prefix_rev_bounded: PreparedStatement,
     multi_key_values: papaya::HashMap<usize, PreparedStatement>,
     multi_keys: papaya::HashMap<usize, PreparedStatement>,
 }
@@ -180,6 +191,34 @@ impl ScyllaDbClient {
             ))
             .await?;
 
+        let find_keys_by_prefix_rev_unbounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k DESC"
+            ))
+            .await?;
+
+        let find_keys_by_prefix_rev_bounded = session
+            .prepare(format!(
+                "SELECT k FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k DESC"
+            ))
+            .await?;
+
+        let find_key_values_by_prefix_rev_unbounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? ORDER BY k DESC"
+            ))
+            .await?;
+
+        let find_key_values_by_prefix_rev_bounded = session
+            .prepare(format!(
+                "SELECT k,v FROM {KEYSPACE}.\"{namespace}\" \
+                 WHERE root_key = ? AND k >= ? AND k < ? ORDER BY k DESC"
+            ))
+            .await?;
+
         Ok(Self {
             session,
             namespace,
@@ -193,6 +232,10 @@ impl ScyllaDbClient {
             find_keys_by_prefix_bounded,
             find_key_values_by_prefix_unbounded,
             find_key_values_by_prefix_bounded,
+            find_keys_by_prefix_rev_unbounded,
+            find_keys_by_prefix_rev_bounded,
+            find_key_values_by_prefix_rev_unbounded,
+            find_key_values_by_prefix_rev_bounded,
             multi_key_values: papaya::HashMap::new(),
             multi_keys: papaya::HashMap::new(),
         })
@@ -667,6 +710,13 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         Box::pin(store.find_keys_by_prefix_internal(&self.root_key, key_prefix.to_vec())).await
     }
 
+    fn find_keys_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        self.find_keys_stream(key_prefix, IterDirection::Forward)
+    }
+
     async fn find_key_values_by_prefix(
         &self,
         key_prefix: &[u8],
@@ -675,6 +725,111 @@ impl ReadableKeyValueStore for ScyllaDbStoreInternal {
         let _guard = self.acquire().await;
         Box::pin(store.find_key_values_by_prefix_internal(&self.root_key, key_prefix.to_vec()))
             .await
+    }
+
+    fn find_key_values_by_prefix_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        self.find_key_values_stream(key_prefix, IterDirection::Forward)
+    }
+
+    fn find_keys_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeysStream<'a, Self::Error> {
+        self.find_keys_stream(key_prefix, IterDirection::Reverse)
+    }
+
+    fn find_key_values_by_prefix_rev_iter<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+    ) -> FindKeyValuesStream<'a, Self::Error> {
+        self.find_key_values_stream(key_prefix, IterDirection::Reverse)
+    }
+}
+
+impl ScyllaDbStoreInternal {
+    fn find_keys_stream<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+        direction: IterDirection,
+    ) -> FindKeysStream<'a, ScyllaDbStoreInternalError> {
+        Box::pin(async_stream::try_stream! {
+            let key_prefix = key_prefix.to_vec();
+            ScyllaDbClient::check_key_size(&key_prefix)?;
+            // Intentionally no `self.acquire()` here: streaming iterators run
+            // for an unbounded duration and would otherwise hold a semaphore
+            // permit across user-controlled `await` points, leading to
+            // potential deadlocks when callers interleave other store
+            // operations (e.g. `read_value`) with iterator polling.
+            let session = &self.store.session;
+            let len = key_prefix.len();
+            let (query_unbounded, query_bounded) = match direction {
+                IterDirection::Forward => (
+                    &self.store.find_keys_by_prefix_unbounded,
+                    &self.store.find_keys_by_prefix_bounded,
+                ),
+                IterDirection::Reverse => (
+                    &self.store.find_keys_by_prefix_rev_unbounded,
+                    &self.store.find_keys_by_prefix_rev_bounded,
+                ),
+            };
+            let rows = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (self.root_key.clone(), key_prefix.clone());
+                    Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+                }
+                Some(upper_bound) => {
+                    let values = (self.root_key.clone(), key_prefix.clone(), upper_bound);
+                    Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
+                }
+            };
+            let mut rows = rows.rows_stream::<(Vec<u8>,)>()?;
+            while let Some(row) = rows.next().await {
+                let (key,) = row?;
+                yield key[len..].to_vec();
+            }
+        })
+    }
+
+    fn find_key_values_stream<'a>(
+        &'a self,
+        key_prefix: &'a [u8],
+        direction: IterDirection,
+    ) -> FindKeyValuesStream<'a, ScyllaDbStoreInternalError> {
+        Box::pin(async_stream::try_stream! {
+            let key_prefix = key_prefix.to_vec();
+            ScyllaDbClient::check_key_size(&key_prefix)?;
+            // See `find_keys_stream` for why no semaphore permit is acquired.
+            let session = &self.store.session;
+            let len = key_prefix.len();
+            let (query_unbounded, query_bounded) = match direction {
+                IterDirection::Forward => (
+                    &self.store.find_key_values_by_prefix_unbounded,
+                    &self.store.find_key_values_by_prefix_bounded,
+                ),
+                IterDirection::Reverse => (
+                    &self.store.find_key_values_by_prefix_rev_unbounded,
+                    &self.store.find_key_values_by_prefix_rev_bounded,
+                ),
+            };
+            let rows = match get_upper_bound_option(&key_prefix) {
+                None => {
+                    let values = (self.root_key.clone(), key_prefix.clone());
+                    Box::pin(session.execute_iter(query_unbounded.clone(), values)).await?
+                }
+                Some(upper_bound) => {
+                    let values = (self.root_key.clone(), key_prefix.clone(), upper_bound);
+                    Box::pin(session.execute_iter(query_bounded.clone(), values)).await?
+                }
+            };
+            let mut rows = rows.rows_stream::<(Vec<u8>, Vec<u8>)>()?;
+            while let Some(row) = rows.next().await {
+                let (key, value) = row?;
+                yield (key[len..].to_vec(), value);
+            }
+        })
     }
 }
 
