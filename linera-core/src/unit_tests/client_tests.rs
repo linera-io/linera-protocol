@@ -2276,6 +2276,129 @@ where
 #[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_new_round_notification_pulls_lower_round_locking_block<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client_a = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = client_a.chain_id();
+    let recipient_id = recipient.chain_id();
+    let owner_a = client_a.identity().await?;
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+
+    // Single multi-leader round, so ML(0) has a non-`None` round duration and times out
+    // into SL(0).
+    let owners = [(owner_a, 100), (owner_b, 100)];
+    let ownership = ChainOwnership::multiple(owners, 1, TimeoutConfig::default());
+    client_a.change_ownership(ownership).await?;
+
+    let info = client_a.chain_info().await?;
+    let mut client_b = builder
+        .make_client(chain_id, info.block_hash, info.next_block_height)
+        .await?;
+    client_b.set_preferred_owner(owner_b);
+
+    // client_b proposes at MultiLeader(0). All four validators vote validate, but
+    // validators 0 and 1 refuse to absorb the resulting certificate and validator 3
+    // refuses to confirm: validators 2 and 3 end up holding a `LockingBlock::Regular @
+    // MultiLeader(0)` and a `confirmed_vote` for it, while the block never reaches a
+    // confirmation quorum and stays uncommitted.
+    builder.set_fault_type([0, 1], FaultType::DontProcessValidated);
+    builder.set_fault_type([3], FaultType::DontSendConfirmVote);
+    client_b.synchronize_from_validators().await?;
+    let b_result = client_b
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await;
+    assert!(b_result.is_err());
+
+    let manager_v2 = builder
+        .node(2)
+        .chain_info_with_manager_values(chain_id)
+        .await?
+        .manager;
+    let v2_locking = *manager_v2
+        .requested_locking
+        .expect("validator 2 should hold a locking block");
+    let LockingBlock::Regular(v2_validated) = v2_locking else {
+        panic!("expected a Regular locking block on validator 2");
+    };
+    assert_eq!(v2_validated.round, Round::MultiLeader(0));
+
+    // Restore honest behavior and drive timeout certificates until client_a is the leader
+    // of the current round. request_leader_timeout only fetches the timeout cert, not
+    // manager values, so client_a advances rounds without absorbing the locking block.
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
+    let target_round = loop {
+        let manager = client_a.chain_info().await?.manager;
+        if manager.leader == Some(owner_a) {
+            break manager.current_round;
+        }
+        clock.set(
+            manager
+                .round_timeout
+                .expect("round_timeout should be set outside the early multi-leader rounds"),
+        );
+        client_a.request_leader_timeout().await?;
+    };
+    assert!(
+        client_a
+            .chain_info_with_manager_values()
+            .await?
+            .manager
+            .requested_locking
+            .is_none(),
+        "client_a must not yet hold a locking block"
+    );
+
+    // Validator 2 delivers a NewRound notification reporting that it is in the current
+    // round. The resulting `synchronize_chain_state_from` pulls validator 2's locking
+    // block into client_a.
+    let pk_v2 = builder.node(2).name();
+    let validator_2 = builder
+        .initial_committee
+        .validator_addresses()
+        .find(|(pk, _)| *pk == pk_v2)
+        .expect("validator 2 should be in the committee");
+    let notification = Notification {
+        chain_id,
+        reason: Reason::NewRound {
+            height: BlockHeight::from(1),
+            round: target_round,
+        },
+    };
+    client_a
+        .process_notification_from(notification, validator_2)
+        .await;
+
+    // Now client_a can drive the chain forward. The locking block (owner_b's transfer)
+    // is finalized — classified as a Conflict because the authenticated signer doesn't
+    // match owner_a's intended burn — and the chain advances to height 2.
+    let burn_result = client_a.burn(AccountOwner::CHAIN, Amount::ONE).await?;
+    assert_matches!(burn_result, ClientOutcome::Conflict(_));
+    assert_eq!(
+        client_a.chain_info().await?.next_block_height,
+        BlockHeight::from(2)
+    );
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_finalize_validated<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
