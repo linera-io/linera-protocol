@@ -1929,11 +1929,40 @@ where
     }
 
     /// Validates and executes a block proposed to extend this chain.
+    ///
+    /// Returns network actions alongside the result so the caller can dispatch them
+    /// even when the proposal is rejected: a `HasIncompatibleConfirmedVote` rejection
+    /// can still advance `current_round` via `update_signed_proposal`, and subscribers
+    /// need the resulting `NewRound` notification.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %proposal.content.block.height
     ))]
     pub(crate) async fn handle_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
+        let old_round = self.chain.manager.current_round();
+        match self.try_handle_block_proposal(proposal).await {
+            Ok((response, actions)) => (Ok(response), actions),
+            Err(err) => {
+                // Even on error, the manager's `current_round` may have advanced
+                // (the `HasIncompatibleConfirmedVote` recovery path calls
+                // `update_signed_proposal`). Surface the resulting `NewRound`
+                // notification so subscribers can react.
+                let actions = if self.chain.manager.current_round() != old_round {
+                    self.create_network_actions(Some(old_round))
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    NetworkActions::default()
+                };
+                (Err(err), actions)
+            }
+        }
+    }
+
+    async fn try_handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
