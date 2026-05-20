@@ -2009,13 +2009,18 @@ where
             }
             Ok(manager::Outcome::Accept) => {}
             Err(err) => {
-                // The proposal is correctly signed and at a legitimate round, but our
-                // local state means we won't vote on it. Record it so `current_round`
-                // still tracks the round the proposer is in.
-                if self
-                    .chain
-                    .manager
-                    .update_signed_proposal(&proposal, local_time)
+                // A `HasIncompatibleConfirmedVote` rejection means the proposer is at a
+                // round we'd otherwise be happy to sign at; only our prior confirmed vote
+                // prevents us from voting. Record the proposal so `current_round` still
+                // tracks the round the proposer is in — without it, the chain can wedge.
+                // Other rejections (e.g. `WrongRound`, `InsufficientRound`) mean the
+                // proposal is not actually valid for the chain's current state, so we
+                // shouldn't let it advance our round.
+                if matches!(err, ChainError::HasIncompatibleConfirmedVote(_, _))
+                    && self
+                        .chain
+                        .manager
+                        .update_signed_proposal(&proposal, local_time)
                 {
                     self.save().await?;
                 }
