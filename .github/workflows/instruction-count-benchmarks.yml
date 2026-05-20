@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: ./.github/actions/install-protoc
@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
       with:
         fetch-depth: 0
     - uses: actions-rust-lang/setup-rust-toolchain@v1
