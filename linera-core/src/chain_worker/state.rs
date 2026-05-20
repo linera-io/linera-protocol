@@ -2001,11 +2001,27 @@ where
                 original_proposal.check_signature()?;
             }
         }
-        if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
-            // We already voted for this block.
-            return Ok((self.chain_info_response().await?, NetworkActions::default()));
-        }
         let local_time = self.storage.clock().current_time();
+        match chain.manager.check_proposed_block(&proposal) {
+            Ok(manager::Outcome::Skip) => {
+                // We already voted for this block.
+                return Ok((self.chain_info_response().await?, NetworkActions::default()));
+            }
+            Ok(manager::Outcome::Accept) => {}
+            Err(err) => {
+                // The proposal is correctly signed and at a legitimate round, but our
+                // local state means we won't vote on it. Record it so `current_round`
+                // still tracks the round the proposer is in.
+                if self
+                    .chain
+                    .manager
+                    .update_signed_proposal(&proposal, local_time)
+                {
+                    self.save().await?;
+                }
+                return Err(err.into());
+            }
+        }
 
         // Make sure we remember that a proposal was signed, to determine the correct round to
         // propose in.
