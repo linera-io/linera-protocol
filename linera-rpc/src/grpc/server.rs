@@ -750,11 +750,7 @@ where
                 info.try_into()?
             }
             Err(error) => {
-                Self::log_request_error(
-                    "handle_block_proposal",
-                    traffic_type,
-                    &error.error_type(),
-                );
+                Self::log_request_error("handle_block_proposal", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to handle block proposal");
                 NodeError::from(error).try_into()?
             }

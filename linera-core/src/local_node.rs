@@ -91,8 +91,7 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         // In local nodes, cross-chain actions will be handled internally, so we discard them.
-        let (response, _actions) =
-            Box::pin(self.node.state.handle_block_proposal(proposal)).await;
+        let (response, _actions) = Box::pin(self.node.state.handle_block_proposal(proposal)).await;
         Ok(response?)
     }
 

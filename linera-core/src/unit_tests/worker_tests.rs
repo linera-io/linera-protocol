@@ -942,7 +942,8 @@ where
     assert_matches!(
         env.worker()
             .handle_block_proposal(unknown_sender_block_proposal)
-            .await.0,
+            .await
+            .0,
         Err(WorkerError::InvalidOwner)
     );
     let chain = env.worker().chain_state_view(chain_1).await?;
@@ -1010,7 +1011,8 @@ where
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal0.clone())
-        .await.0?;
+        .await
+        .0?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
@@ -1038,7 +1040,8 @@ where
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await.0?;
+        .await
+        .0?;
 
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
@@ -1143,7 +1146,8 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await.0;
+        .await
+        .0;
     assert_matches!(
         proposal_result,
         Err(WorkerError::ChainError(err)) if matches!(*err, ChainError::UnexpectedBlockHeight {
@@ -1179,7 +1183,8 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await.0;
+        .await
+        .0;
     assert_matches!(proposal_result, Ok(_));
 
     Ok(())
@@ -1483,7 +1488,8 @@ where
         // Taking the first message only is ok.
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await.0?;
+            .await
+            .0?;
         let certificate: ConfirmedBlockCertificate = env.make_certificate(ConfirmedBlock::new(
             BlockExecutionOutcome {
                 messages: vec![
@@ -1539,7 +1545,8 @@ where
             .unwrap();
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await.0?;
+            .await
+            .0?;
     }
     Ok(())
 }
@@ -3669,7 +3676,8 @@ where
     let result = env
         .worker()
         .handle_block_proposal(proposal1_wrong_owner)
-        .await.0;
+        .await
+        .0;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal1 = proposed_block1
         .clone()
