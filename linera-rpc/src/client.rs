@@ -1,8 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_storage::Arc as CacheArc;
-
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
@@ -18,6 +16,7 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{BlobStream, CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
+use linera_storage::Arc as CacheArc;
 
 use crate::grpc::GrpcClient;
 #[cfg(with_simple_network)]

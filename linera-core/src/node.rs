@@ -2,7 +2,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_cache::Arc as CacheArc;
 use std::sync::Arc;
 
 #[cfg(not(web))]
@@ -18,6 +17,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, EventId},
     task::{MaybeSend, MaybeSync},
 };
+use linera_cache::Arc as CacheArc;
 use linera_chain::{
     data_types::BlockProposal,
     types::{

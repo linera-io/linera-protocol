@@ -10,8 +10,6 @@ use std::{
     time::Duration,
 };
 
-use linera_storage::Arc as CacheArc;
-
 use futures::{future::try_join_all, stream::FuturesOrdered};
 use linera_base::identifiers::BlobId;
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -19,7 +17,7 @@ use linera_core::node::{
     CrossChainMessageDelivery, NodeError, ValidatorNode, ValidatorNodeProvider,
 };
 use linera_rpc::grpc::{GrpcClient, GrpcNodeProvider};
-use linera_storage::Storage;
+use linera_storage::{Arc as CacheArc, Storage};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::StreamExt;
 
