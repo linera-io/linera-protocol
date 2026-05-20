@@ -475,8 +475,7 @@ impl ScyllaDbClient {
     }
 
     /// Issues an unlogged batch that contains only prefix-delete statements,
-    /// letting the coordinator assign the write timestamp. Phase 1 of the
-    /// shared-mode two-phase write. No-op when `key_prefix_deletions` is empty.
+    /// letting the coordinator assign the write timestamp.
     async fn write_batch_prefix_deletes(
         &self,
         root_key: &[u8],
@@ -511,30 +510,26 @@ impl ScyllaDbClient {
     }
 
     /// Issues an unlogged batch containing the single-key deletions and the
-    /// insertions, letting the coordinator assign the write timestamp. Phase 2
-    /// of the shared-mode two-phase write; the `.await` between the phases lets
-    /// the coordinator give this batch a strictly later timestamp than the
-    /// prefix-deletes, so a range tombstone never shadows these insertions.
-    async fn write_batch_data(
+    /// insertions, letting the coordinator assign the write timestamp.
+    async fn write_simple_batch(
         &self,
         root_key: &[u8],
-        deletions: Vec<Vec<u8>>,
-        insertions: Vec<(Vec<u8>, Vec<u8>)>,
+        batch: SimpleUnorderedBatch,
     ) -> Result<(), ScyllaDbStoreInternalError> {
-        if deletions.is_empty() && insertions.is_empty() {
+        if batch.deletions.is_empty() && batch.insertions.is_empty() {
             return Ok(());
         }
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
         let mut batch_values = Vec::new();
         let q_deletion = &self.write_batch_deletion;
-        for key in deletions {
+        for key in batch.deletions {
             Self::check_key_size(&key)?;
             batch_values.push(vec![root_key.to_vec(), key]);
             batch_query.append_statement(q_deletion.clone());
         }
         let q_insertion = &self.write_batch_insertion;
-        for (key, value) in insertions {
+        for (key, value) in batch.insertions {
             Self::check_key_size(&key)?;
             Self::check_value_size(&value)?;
             batch_values.push(vec![root_key.to_vec(), key, value]);
@@ -909,8 +904,7 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
     //     batch with explicit per-statement `USING TIMESTAMP` (`T` for the
     //     prefix-deletions, `T + 1` for the data). See `write_batch_exclusive`.
     //   * In shared mode the coordinator owns the timestamps, so we split the write
-    //     into two sequential CQL batches; the `.await` between them, together with
-    //     token-aware routing, gives the data batch a strictly later timestamp.
+    //     into two sequential CQL batches.
     type Batch = UnorderedBatch;
 
     async fn write_batch(&self, batch: Self::Batch) -> Result<(), ScyllaDbStoreInternalError> {
@@ -920,23 +914,16 @@ impl DirectWritableKeyValueStore for ScyllaDbStoreInternal {
         if self.is_exclusive {
             // A single atomic batch; ordering is pinned by the explicit timestamps.
             let t = self.next_batch_ts().await?;
-            return store.write_batch_exclusive(&self.root_key, batch, t).await;
+            store.write_batch_exclusive(&self.root_key, batch, t).await
+        } else {
+            store
+                .write_batch_prefix_deletes(&self.root_key, batch.key_prefix_deletions)
+                .await?;
+            store
+                .write_simple_batch(&self.root_key, batch.simple_unordered_batch)
+                .await?;
+            Ok(())
         }
-        let UnorderedBatch {
-            key_prefix_deletions,
-            simple_unordered_batch:
-                SimpleUnorderedBatch {
-                    deletions,
-                    insertions,
-                },
-        } = batch;
-        store
-            .write_batch_prefix_deletes(&self.root_key, key_prefix_deletions)
-            .await?;
-        store
-            .write_batch_data(&self.root_key, deletions, insertions)
-            .await?;
-        Ok(())
     }
 }
 
