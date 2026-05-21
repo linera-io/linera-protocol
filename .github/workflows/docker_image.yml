@@ -132,7 +132,7 @@ jobs:
           # internally and the test harness does not pass --metrics-port, so
           # including `metrics` would make every node-service call fail.
           build_and_push "docker/Dockerfile" \
-            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" "scylladb,jemalloc" &
+            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" "scylladb,opentelemetry,jemalloc" &
           PID_LINERA_TESTS=$!
 
           build_and_push "docker/Dockerfile.indexer" \
