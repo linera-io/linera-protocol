@@ -1656,6 +1656,19 @@ where
 
     let creator = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
 
+    // Pin the chain to two multi-leader rounds so the test walks
+    // MultiLeader(0) -> MultiLeader(1) -> SingleLeader(0) on three failed proposals,
+    // independently of the protocol-wide default.
+    let creator_key = creator.identity().await.unwrap();
+    creator
+        .change_ownership(ChainOwnership::multiple(
+            [(creator_key, 100)],
+            2,
+            TimeoutConfig::default(),
+        ))
+        .await
+        .unwrap();
+
     // Publish and create the time-expiry application.
     let module_id = creator.publish_wasm_example("time-expiry").await?;
     let module_id = module_id.with_abi::<time_expiry::TimeExpiryAbi, (), ()>();
