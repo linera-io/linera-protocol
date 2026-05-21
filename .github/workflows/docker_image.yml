@@ -88,11 +88,12 @@ jobs:
             local IMAGE_SHORT=$3
             local IMAGE_LONG=$4
             local BUILD_NAME=$5
+            local TARGET=$6
             local LOG_FILE="/tmp/${BUILD_NAME}.log"
 
             {
               echo "========================================"
-              echo "Building ${BUILD_NAME} (${DOCKERFILE})"
+              echo "Building ${BUILD_NAME} (${DOCKERFILE}${TARGET:+ target=$TARGET})"
               echo "========================================"
 
               DOCKER_BUILDKIT=1 docker build \
@@ -100,6 +101,7 @@ jobs:
                 -t "${IMAGE_SHORT}" \
                 -t "${IMAGE_LONG}" \
                 -f "${DOCKERFILE}" \
+                ${TARGET:+--target "${TARGET}"} \
                 --build-arg "git_commit=${GIT_COMMIT_LONG}" \
                 --build-arg "build_date=${BUILD_DATE}" \
                 --build-arg "build_flag=--release" \
@@ -118,24 +120,31 @@ jobs:
           echo "Starting parallel builds..."
 
           build_and_push "docker/Dockerfile" \
-            "${LINERA_IMAGE_BRANCH}" "${LINERA_IMAGE_SHORT}" "${LINERA_IMAGE_LONG}" "Linera" &
+            "${LINERA_IMAGE_BRANCH}" "${LINERA_IMAGE_SHORT}" "${LINERA_IMAGE_LONG}" "Linera" "runtime" &
           PID_LINERA=$!
 
+          # linera-tests shares the Dockerfile and chef cache mounts with
+          # linera; --target tests builds the overlay stage that bundles
+          # the remote-net integration test binary on top of the runtime.
+          build_and_push "docker/Dockerfile" \
+            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" &
+          PID_LINERA_TESTS=$!
+
           build_and_push "docker/Dockerfile.indexer" \
-            "${INDEXER_IMAGE_BRANCH}" "${INDEXER_IMAGE_SHORT}" "${INDEXER_IMAGE_LONG}" "Indexer" &
+            "${INDEXER_IMAGE_BRANCH}" "${INDEXER_IMAGE_SHORT}" "${INDEXER_IMAGE_LONG}" "Indexer" "" &
           PID_INDEXER=$!
 
           build_and_push "docker/Dockerfile.explorer" \
-            "${EXPLORER_IMAGE_BRANCH}" "${EXPLORER_IMAGE_SHORT}" "${EXPLORER_IMAGE_LONG}" "Explorer" &
+            "${EXPLORER_IMAGE_BRANCH}" "${EXPLORER_IMAGE_SHORT}" "${EXPLORER_IMAGE_LONG}" "Explorer" "" &
           PID_EXPLORER=$!
 
           build_and_push "docker/Dockerfile.exporter" \
-            "${EXPORTER_IMAGE_BRANCH}" "${EXPORTER_IMAGE_SHORT}" "${EXPORTER_IMAGE_LONG}" "Exporter" &
+            "${EXPORTER_IMAGE_BRANCH}" "${EXPORTER_IMAGE_SHORT}" "${EXPORTER_IMAGE_LONG}" "Exporter" "" &
           PID_EXPORTER=$!
 
           SUCCESS_NAMES=""
           FAILED_NAMES=""
-          for NAME_PID in Linera:$PID_LINERA Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER; do
+          for NAME_PID in Linera:$PID_LINERA LineraTests:$PID_LINERA_TESTS Indexer:$PID_INDEXER Explorer:$PID_EXPLORER Exporter:$PID_EXPORTER; do
             NAME="${NAME_PID%%:*}"
             PID="${NAME_PID##*:}"
             if wait "$PID"; then
