@@ -39,7 +39,6 @@ enums
 Ethereum
 EVM
 executables
-DynamoDB
 filesystem
 frontend
 frontends

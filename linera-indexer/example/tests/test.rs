@@ -3,7 +3,6 @@
 
 #![cfg(any(
     feature = "storage-service",
-    feature = "dynamodb",
     feature = "scylladb"
 ))]
 
@@ -95,7 +94,6 @@ const TRANSFER_DELAY_MILLIS: u64 = 100;
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_operations_indexer(config: impl LineraNetConfig) -> anyhow::Result<()> {
     // launching network, service and indexer
