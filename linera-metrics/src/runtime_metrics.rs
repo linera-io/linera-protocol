@@ -21,52 +21,50 @@ struct TokioRuntimeCollector {
 
 impl TokioRuntimeCollector {
     fn new(handle: Handle) -> Self {
+        let desc = |name: &str, help: &str, labels: Vec<String>| {
+            Desc::new(name.into(), help.into(), labels, HashMap::new())
+                .expect("static metric descriptor is always valid")
+        };
+        let workers = desc(
+            "linera_tokio_workers",
+            "Number of worker threads in the tokio runtime.",
+            vec![],
+        );
+        let alive_tasks = desc(
+            "linera_tokio_alive_tasks",
+            "Number of tasks currently alive in the tokio runtime.",
+            vec![],
+        );
+        let global_queue = desc(
+            "linera_tokio_global_queue_depth",
+            "Number of tasks in the runtime's global injection queue.",
+            vec![],
+        );
+        let worker_label = vec!["worker".to_string()];
+        let busy_seconds = desc(
+            "linera_tokio_worker_busy_seconds_total",
+            "Cumulative time each worker has spent executing tasks, in seconds.",
+            worker_label.clone(),
+        );
+        let parks = desc(
+            "linera_tokio_worker_parks_total",
+            "Cumulative number of times each worker has parked (ran out of work).",
+            worker_label.clone(),
+        );
+        let park_unparks = desc(
+            "linera_tokio_worker_park_unparks_total",
+            "Monotonically increasing count of park and unpark events combined per worker. \
+             An odd value means the worker is currently parked.",
+            worker_label,
+        );
         Self {
             handle,
-            workers: Desc::new(
-                "linera_tokio_workers".into(),
-                "Number of worker threads in the tokio runtime.".into(),
-                vec![],
-                HashMap::new(),
-            )
-            .expect("static metric descriptor is always valid"),
-            alive_tasks: Desc::new(
-                "linera_tokio_alive_tasks".into(),
-                "Number of tasks currently alive in the tokio runtime.".into(),
-                vec![],
-                HashMap::new(),
-            )
-            .expect("static metric descriptor is always valid"),
-            global_queue: Desc::new(
-                "linera_tokio_global_queue_depth".into(),
-                "Number of tasks in the runtime's global injection queue.".into(),
-                vec![],
-                HashMap::new(),
-            )
-            .expect("static metric descriptor is always valid"),
-            busy_seconds: Desc::new(
-                "linera_tokio_worker_busy_seconds_total".into(),
-                "Cumulative time each worker has spent executing tasks, in seconds.".into(),
-                vec!["worker".to_string()],
-                HashMap::new(),
-            )
-            .expect("static metric descriptor is always valid"),
-            parks: Desc::new(
-                "linera_tokio_worker_parks_total".into(),
-                "Cumulative number of times each worker has parked (ran out of work).".into(),
-                vec!["worker".to_string()],
-                HashMap::new(),
-            )
-            .expect("static metric descriptor is always valid"),
-            park_unparks: Desc::new(
-                "linera_tokio_worker_park_unparks_total".into(),
-                "Monotonically increasing count of park and unpark events combined per worker. \
-                 An odd value means the worker is currently parked."
-                    .into(),
-                vec!["worker".to_string()],
-                HashMap::new(),
-            )
-            .expect("static metric descriptor is always valid"),
+            workers,
+            alive_tasks,
+            global_queue,
+            busy_seconds,
+            parks,
+            park_unparks,
         }
     }
 }
