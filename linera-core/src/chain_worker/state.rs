@@ -1040,8 +1040,13 @@ where
         };
         self.chain.tip_state.set(new_tip.clone());
         self.save().await?;
-        self.execute_contiguous_block(certificate, blobs, new_tip, notify_when_messages_are_delivered)
-            .await
+        self.execute_contiguous_block(
+            certificate,
+            blobs,
+            new_tip,
+            notify_when_messages_are_delivered,
+        )
+        .await
     }
 
     /// Executes a confirmed block whose height equals `tip.next_block_height`,
