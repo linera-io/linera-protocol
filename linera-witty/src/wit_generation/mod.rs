@@ -127,7 +127,7 @@ impl FileContentGenerator for WitWorldWriter {
             writeln!(writer, "package {package};\n")?;
         }
 
-        writeln!(writer, "world {} {{", &self.name)?;
+        writeln!(writer, "world {} {{", self.name)?;
 
         for import in &self.imports {
             writeln!(writer, "    import {import};")?;

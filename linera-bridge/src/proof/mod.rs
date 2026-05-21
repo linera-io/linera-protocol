@@ -340,9 +340,7 @@ pub fn verify_receipt_inclusion(
     let total_bytes: usize = proof_nodes.iter().map(|n| n.len()).sum();
     ensure!(
         total_bytes <= MAX_PROOF_BYTES,
-        "proof too large: {} bytes (max {})",
-        total_bytes,
-        MAX_PROOF_BYTES
+        "proof too large: {total_bytes} bytes (max {MAX_PROOF_BYTES})",
     );
 
     let key = receipt_trie_key(tx_index);
@@ -496,7 +494,7 @@ pub fn build_receipt_proof(
         .iter()
         .map(|(idx, rlp)| (receipt_trie_key(*idx), rlp.as_slice()))
         .collect();
-    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries.sort_by_key(|x| x.0);
 
     let target_key = receipt_trie_key(target_tx_index);
     let retainer = ProofRetainer::new(vec![target_key]);

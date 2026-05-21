@@ -188,7 +188,7 @@ impl<W: View> View for ByteCollectionView<W::Context, W> {
     }
 
     fn post_save(&mut self) {
-        for (_, update) in self.updates.get_mut().iter_mut() {
+        for update in self.updates.get_mut().values_mut() {
             if let Update::Set(view) = update {
                 view.post_save();
             }

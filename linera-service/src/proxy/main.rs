@@ -208,13 +208,7 @@ where
                 storage,
                 id: context.id,
             })),
-            _ => {
-                bail!(
-                    "network protocol mismatch: cannot have {} and {} ",
-                    internal_protocol,
-                    external_protocol,
-                );
-            }
+            _ => bail!("network protocol mismatch: cannot have {internal_protocol} and {external_protocol} "),
         };
 
         Ok(proxy)
@@ -392,7 +386,7 @@ where
                 let blob = self.storage.read_blob(*blob_id).await?;
                 let blob = blob
                     .map(Arc::unwrap_or_clone)
-                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                    .ok_or_else(|| anyhow!("Blob not found {blob_id}"))?;
                 let content = blob.into_content();
                 Ok(Some(RpcMessage::DownloadBlobResponse(Box::new(content))))
             }
@@ -452,10 +446,10 @@ where
             }
             BlobLastUsedBy(blob_id) => {
                 let blob_state = self.storage.read_blob_state(*blob_id).await?;
-                let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {blob_id}"))?;
                 let last_used_by = blob_state
                     .last_used_by
-                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                    .ok_or_else(|| anyhow!("Blob not found {blob_id}"))?;
                 Ok(Some(RpcMessage::BlobLastUsedByResponse(Box::new(
                     last_used_by,
                 ))))
@@ -465,16 +459,16 @@ where
             ))),
             BlobLastUsedByCertificate(blob_id) => {
                 let blob_state = self.storage.read_blob_state(*blob_id).await?;
-                let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                let blob_state = blob_state.ok_or_else(|| anyhow!("Blob not found {blob_id}"))?;
                 let last_used_by = blob_state
                     .last_used_by
-                    .ok_or_else(|| anyhow!("Blob not found {}", blob_id))?;
+                    .ok_or_else(|| anyhow!("Blob not found {blob_id}"))?;
                 let certificate = self
                     .storage
                     .read_certificate(last_used_by)
                     .await?
                     .map(Arc::unwrap_or_clone)
-                    .ok_or_else(|| anyhow!("Certificate not found {}", last_used_by))?;
+                    .ok_or_else(|| anyhow!("Certificate not found {last_used_by}"))?;
                 Ok(Some(RpcMessage::BlobLastUsedByCertificateResponse(
                     Box::new(certificate),
                 )))

@@ -334,21 +334,25 @@ where
             self.stored_buckets[0].index = 0;
         }
         if !self.new_back_values.is_empty() {
-            let mut index = match self.stored_buckets.back() {
-                Some(bucket) => bucket.index + 1,
-                None => 0,
-            };
+            let start = self
+                .stored_buckets
+                .back()
+                .map(|bucket| bucket.index + 1)
+                .unwrap_or_default();
             let new_back_values = std::mem::take(&mut self.new_back_values);
             let new_back_values = new_back_values.into_iter().collect::<Vec<_>>();
-            for value_chunk in new_back_values.chunks(N) {
-                self.stored_buckets.push_back(Bucket {
-                    index,
-                    state: State::Loaded {
-                        data: value_chunk.to_vec(),
-                    },
-                });
-                index += 1;
-            }
+            self.stored_buckets
+                .extend(
+                    new_back_values
+                        .chunks(N)
+                        .zip(start..)
+                        .map(|(value_chunk, index)| Bucket {
+                            index,
+                            state: State::Loaded {
+                                data: value_chunk.to_vec(),
+                            },
+                        }),
+                );
             if self.cursor.is_none() {
                 self.cursor = Some(Cursor {
                     offset: 0,
