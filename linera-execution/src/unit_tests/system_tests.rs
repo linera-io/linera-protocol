@@ -170,6 +170,7 @@ async fn execute_checkpoint_publishes_blob_and_records_oracle_response() -> anyh
         outcome.oracle_responses[0],
         OracleResponse::Checkpoint {
             execution_state_blobs: vec![blob.id().hash],
+            used_blobs: vec![],
         }
     );
 
@@ -221,7 +222,7 @@ async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow
         .flat_map(|blob| blob.bytes().iter().copied())
         .collect::<Vec<u8>>();
     let mut txn_tracker = TransactionTracker::default();
-    producer.apply_checkpoint(blobs, &mut txn_tracker)?;
+    producer.apply_checkpoint(blobs, &mut txn_tracker).await?;
     let mut batch = Batch::new();
     producer.pre_save(&mut batch)?;
     producer.context().store().write_batch(batch).await?;

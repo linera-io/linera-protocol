@@ -1072,7 +1072,9 @@ where
                              the chain-level pre-block hook must run prepare_checkpoint first",
                         ),
                     )?;
-                    self.state.apply_checkpoint(blobs, self.txn_tracker)?;
+                    self.state
+                        .apply_checkpoint(blobs, self.txn_tracker)
+                        .await?;
                 }
                 op => {
                     let new_application = self

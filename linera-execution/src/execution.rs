@@ -162,18 +162,23 @@ where
     }
 
     /// Registers the checkpoint blobs (produced by [`Self::prepare_checkpoint`]) with the
-    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`].
-    pub fn apply_checkpoint(
+    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`]. The
+    /// oracle response also lists every blob the chain currently references in its
+    /// `used_blobs` set: a bootstrapping node restores those references from the dump but
+    /// must independently ensure each blob's content is present in shared storage.
+    pub async fn apply_checkpoint(
         &self,
         blobs: Vec<Blob>,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         let execution_state_blobs = blobs.iter().map(|blob| blob.id().hash).collect();
+        let used_blobs = self.system.used_blobs.indices().await?;
         for blob in blobs {
             txn_tracker.add_created_blob(blob);
         }
         txn_tracker.replay_oracle_response(OracleResponse::Checkpoint {
             execution_state_blobs,
+            used_blobs,
         })?;
         Ok(())
     }
@@ -190,7 +195,7 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         let blobs = self.prepare_checkpoint(maximum_blob_size).await?;
-        self.apply_checkpoint(blobs, txn_tracker)
+        self.apply_checkpoint(blobs, txn_tracker).await
     }
 
     /// Replaces the persisted execution state with the content of a checkpoint blob,

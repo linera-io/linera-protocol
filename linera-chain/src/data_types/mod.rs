@@ -682,8 +682,14 @@ impl BlockExecutionOutcome {
         let mut required_blob_ids = HashSet::new();
         for responses in &self.oracle_responses {
             for response in responses {
-                if let OracleResponse::Blob(blob_id) = response {
-                    required_blob_ids.insert(*blob_id);
+                match response {
+                    OracleResponse::Blob(blob_id) => {
+                        required_blob_ids.insert(*blob_id);
+                    }
+                    OracleResponse::Checkpoint { used_blobs, .. } => {
+                        required_blob_ids.extend(used_blobs.iter().copied());
+                    }
+                    _ => {}
                 }
             }
         }
