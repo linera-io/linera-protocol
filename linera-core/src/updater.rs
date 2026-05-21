@@ -833,32 +833,16 @@ where
         remote_round: Round,
         manager: &linera_chain::manager::ChainManagerInfo,
     ) -> Result<(), chain_client::Error> {
-        // Try to send a proposal for the current round
-        for proposal in manager
-            .requested_proposed
-            .iter()
-            .chain(manager.requested_signed_proposal.iter())
-        {
-            if proposal.content.round == manager.current_round {
-                match self
-                    .remote_node
-                    .handle_block_proposal(proposal.clone())
-                    .await
-                {
-                    Ok(_) => {
-                        tracing::debug!("successfully sent block proposal for round sync");
-                        return Ok(());
-                    }
-                    Err(error) => {
-                        tracing::debug!(%error, "failed to send block proposal");
-                    }
-                }
-            }
-        }
+        let target_round = manager.current_round;
 
-        // Try to send a validated block for the current round
+        // First, push the locking certificate. A remote with an older lock rotates to this
+        // one (and one already locked at this round becomes able to accept a proposal
+        // carrying the cert). Pushing it does not necessarily advance the remote's current
+        // round — e.g. if the remote already holds this exact cert as its lock,
+        // `process_validated_block` returns `Skip` — so only early-return when the
+        // response shows the remote has actually reached our current round.
         if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.as_deref() {
-            if validated.round == manager.current_round {
+            if validated.round >= remote_round {
                 match self
                     .remote_node
                     .handle_optimized_validated_certificate(
@@ -867,9 +851,11 @@ where
                     )
                     .await
                 {
-                    Ok(_) => {
+                    Ok(info) => {
                         tracing::debug!("successfully sent validated block for round sync");
-                        return Ok(());
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
                     }
                     Err(error) => {
                         tracing::debug!(%error, "failed to send validated block");
@@ -878,7 +864,8 @@ where
             }
         }
 
-        // Try to send a timeout certificate
+        // Try to send a timeout certificate. The remote applies `next_round(cert.round)`
+        // to its current round, which (for the cert we hold) lands at our current round.
         if let Some(cert) = &manager.timeout {
             if cert.round >= remote_round {
                 match self
@@ -886,12 +873,39 @@ where
                     .handle_timeout_certificate(cert.as_ref().clone())
                     .await
                 {
-                    Ok(_) => {
+                    Ok(info) => {
                         tracing::debug!(round = %cert.round, "successfully sent timeout certificate");
-                        return Ok(());
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
                     }
                     Err(error) => {
                         tracing::debug!(%error, round = %cert.round, "failed to send timeout certificate");
+                    }
+                }
+            }
+        }
+
+        // Finally, try to push a proposal at the current round.
+        for proposal in manager
+            .requested_proposed
+            .iter()
+            .chain(manager.requested_signed_proposal.iter())
+        {
+            if proposal.content.round == target_round {
+                match self
+                    .remote_node
+                    .handle_block_proposal(proposal.clone())
+                    .await
+                {
+                    Ok(info) => {
+                        tracing::debug!("successfully sent block proposal for round sync");
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to send block proposal");
                     }
                 }
             }
