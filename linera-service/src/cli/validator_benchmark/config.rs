@@ -1,0 +1,96 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! CLI definition for `linera validator benchmark`.
+
+use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
+
+/// Multi-layer pre-onboarding benchmark for a single candidate validator.
+///
+/// Probes the candidate across read-side primitives (preflight, baseline,
+/// concurrency ramp, bulk download, tip lag) and emits a structured report.
+/// The optional `--deep` layer additionally exercises the write path by
+/// syncing a bounded number of blocks; it has a stateful side effect on the
+/// candidate and is therefore off by default.
+#[derive(Debug, Clone, clap::Parser)]
+pub struct Benchmark {
+    /// Network address of the candidate validator (e.g. `grpcs://host:port`).
+    pub address: String,
+
+    /// Expected public key of the validator (identity verification).
+    #[arg(long)]
+    pub public_key: Option<ValidatorPublicKey>,
+
+    /// Chain to exercise. Repeat for multiple chains. At least one required.
+    #[arg(long, required = true)]
+    pub chain: Vec<ChainId>,
+
+    // --- Layer toggles ---
+    #[arg(long)]
+    pub skip_preflight: bool,
+    #[arg(long)]
+    pub skip_read_baseline: bool,
+    #[arg(long)]
+    pub skip_read_stress: bool,
+    #[arg(long)]
+    pub skip_bulk_download: bool,
+    #[arg(long)]
+    pub skip_tip_lag: bool,
+
+    /// Enable partial-sync layer (L6). Stateful side effect on the candidate.
+    #[arg(long)]
+    pub deep: bool,
+
+    // --- L2 (read latency baseline) ---
+    #[arg(long, default_value_t = 200)]
+    pub baseline_requests: usize,
+
+    // --- L3 (read stress / concurrency ramp) ---
+    #[arg(long, value_delimiter = ',', default_value = "1,2,4,8,16,32,64")]
+    pub stress_levels: Vec<usize>,
+    #[arg(long, default_value_t = 30)]
+    pub stress_duration_secs: u64,
+
+    // --- L4 (bulk download) ---
+    #[arg(long, default_value_t = 100)]
+    pub bulk_batch_size: u32,
+    #[arg(long, value_delimiter = ',', default_value = "1,8")]
+    pub bulk_concurrency: Vec<usize>,
+    /// Either `auto` (last batch_size * 100 heights up to the candidate's tip)
+    /// or an explicit `FROM:TO` range.
+    #[arg(long, default_value = "auto")]
+    pub bulk_height_range: String,
+
+    // --- L5 (tip-lag snapshot) ---
+    #[arg(long, default_value_t = 3)]
+    pub tip_lag_samples: usize,
+    #[arg(long, default_value_t = 120)]
+    pub tip_lag_interval_secs: u64,
+
+    // --- L6 (partial sync, opt-in) ---
+    #[arg(long, default_value_t = 1000)]
+    pub deep_blocks: u32,
+    #[arg(long)]
+    pub deep_chain: Option<ChainId>,
+
+    // --- Output ---
+    /// Output spec, repeatable; or comma/+-separated within a single value.
+    /// SPEC: `<format>` (stdout) or `<format>:<path>` (file).
+    /// Formats: `json`, `yaml`, `md`, `brief`. Default if omitted: `md` to stdout.
+    #[arg(long)]
+    pub output: Vec<String>,
+
+    /// Free-form tag carried in the report (e.g. `OVH US-EAST`).
+    #[arg(long, default_value = "unspecified")]
+    pub observer_location: String,
+
+    /// Include raw per-request latency arrays in json/yaml output.
+    #[arg(long)]
+    pub raw_samples: bool,
+
+    // --- Robustness ---
+    #[arg(long, default_value_t = 30)]
+    pub rpc_timeout_secs: u64,
+    #[arg(long)]
+    pub abort_on_preflight_fail: bool,
+}
