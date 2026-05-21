@@ -709,24 +709,10 @@ where
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
 
-        // Pre-block hook: if this block contains a `SystemOperation::Checkpoint`, dump the
-        // execution state from storage *now*, before any block-level mutation taints the
-        // inner view's pending-changes set. The matching operation handler will publish
-        // the resulting blob without re-dumping; subsequent fees and other state changes
-        // accumulate normally and end up persisted with the override hash on save.
-        let prepared_checkpoint_blob = if block.starts_with_checkpoint() {
-            Some(
-                chain
-                    .prepare_checkpoint()
-                    .await
-                    .with_execution_context(ChainExecutionContext::Block)?,
-            )
-        } else {
-            None
-        };
-
-        chain.system.timestamp.set(block.timestamp);
-
+        // Resolve the current epoch's resource policy first: `prepare_checkpoint` needs
+        // `maximum_blob_size` to chunk the dump, and `current_committee` is a pure read
+        // so it can run before the dump without tainting the inner view's pending-changes
+        // set.
         let committee_policy = chain
             .system
             .current_committee()
@@ -736,6 +722,24 @@ where
             .1
             .policy()
             .clone();
+
+        // Pre-block hook: if this block contains a `SystemOperation::Checkpoint`, dump the
+        // execution state from storage *now*, before any block-level mutation taints the
+        // inner view's pending-changes set. The matching operation handler will publish
+        // the resulting blobs without re-dumping; subsequent fees and other state changes
+        // accumulate normally and end up persisted with the override hash on save.
+        let prepared_checkpoint_blobs = if block.starts_with_checkpoint() {
+            Some(
+                chain
+                    .prepare_checkpoint(committee_policy.maximum_blob_size)
+                    .await
+                    .with_execution_context(ChainExecutionContext::Block)?,
+            )
+        } else {
+            None
+        };
+
+        chain.system.timestamp.set(block.timestamp);
 
         let mut resource_controller = ResourceController::new(
             Arc::new(committee_policy),
@@ -762,8 +766,8 @@ where
             replaying_oracle_responses,
             block,
         )?;
-        if let Some(blob) = prepared_checkpoint_blob {
-            block_execution_tracker.set_prepared_checkpoint_blob(blob);
+        if let Some(blobs) = prepared_checkpoint_blobs {
+            block_execution_tracker.set_prepared_checkpoint_blobs(blobs);
         }
 
         // Extract failure-policy parameters from exec_policy.
@@ -1124,7 +1128,7 @@ where
             )
         );
         if block.starts_with_checkpoint() {
-            self.check_checkpoint_preconditions(&block).await?;
+            self.check_checkpoint_preconditions().await?;
         }
 
         Self::execute_block_inner(
@@ -1253,25 +1257,16 @@ where
     }
 
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
-    ///   * the block contains the Checkpoint operation as its only transaction;
     ///   * no inbox has consumed any incoming bundle (every `next_cursor_to_remove` is
     ///     at default);
     ///   * no outbox has pending outgoing messages;
     ///   * no event stream tracker is set.
     ///
-    /// Sender-side conditions (no events ever published, no cross-chain messages ever
-    /// sent) are validated inside `ExecutionStateView::execute_checkpoint`.
-    async fn check_checkpoint_preconditions(
-        &self,
-        block: &ProposedBlock,
-    ) -> Result<(), ChainError> {
-        ensure!(
-            block.transactions.len() == 1,
-            ChainError::CheckpointPreconditionFailed(
-                "Checkpoint must be the only transaction in its block",
-            )
-        );
-
+    /// The structural invariant that Checkpoint must be the *first* transaction in its
+    /// block is enforced unconditionally in `execute_block`, independently of these
+    /// preconditions. Sender-side conditions (no events ever published, no cross-chain
+    /// messages ever sent) are validated inside `ExecutionStateView::prepare_checkpoint`.
+    async fn check_checkpoint_preconditions(&self) -> Result<(), ChainError> {
         let origins = self.inboxes.indices().await?;
         for origin in &origins {
             let Some(inbox) = self.inboxes.try_load_entry(origin).await? else {

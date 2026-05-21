@@ -19,7 +19,7 @@ use linera_base::{
         Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
 };
 use linera_cache::{UniqueValueCache, ValueCache};
 use linera_chain::{
@@ -913,18 +913,25 @@ where
         //     so this block becomes available to clients via cross-chain syncing.
         if tip.next_block_height < height {
             if block.starts_with_checkpoint() {
-                let Some(OracleResponse::Checkpoint(blob_id)) =
-                    block.body.oracle_responses.first().and_then(|r| r.first())
+                let Some(OracleResponse::Checkpoint {
+                    execution_state_blobs,
+                }) = block.body.oracle_responses.first().and_then(|r| r.first())
                 else {
                     return Err(ChainError::InternalError(
                         "Checkpoint block missing OracleResponse::Checkpoint".into(),
                     )
                     .into());
                 };
-                let blob = blobs
-                    .get(blob_id)
-                    .ok_or_else(|| WorkerError::BlobsNotFound(vec![*blob_id]))?;
-                let bytes = blob.bytes().to_vec();
+                let mut bytes = Vec::new();
+                let mut missing = Vec::new();
+                for hash in execution_state_blobs {
+                    let blob_id = BlobId::new(*hash, BlobType::CheckpointExecutionState);
+                    match blobs.get(&blob_id) {
+                        Some(blob) => bytes.extend_from_slice(blob.bytes()),
+                        None => missing.push(blob_id),
+                    }
+                }
+                ensure!(missing.is_empty(), WorkerError::BlobsNotFound(missing));
                 self.chain
                     .execution_state
                     .restore_from_content(&bytes)

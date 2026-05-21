@@ -154,7 +154,7 @@ async fn execute_checkpoint_publishes_blob_and_records_oracle_response() -> anyh
     let pre_checkpoint_hash = view.crypto_hash_mut().await?;
 
     let mut txn_tracker = TransactionTracker::default();
-    view.execute_checkpoint(&mut txn_tracker).await?;
+    view.execute_checkpoint(u64::MAX, &mut txn_tracker).await?;
 
     // The override hash takes effect immediately for the in-memory view.
     let post_checkpoint_hash = view.crypto_hash_mut().await?;
@@ -163,12 +163,14 @@ async fn execute_checkpoint_publishes_blob_and_records_oracle_response() -> anyh
     let outcome = txn_tracker.into_outcome()?;
     assert_eq!(outcome.blobs.len(), 1);
     let blob = &outcome.blobs[0];
-    assert_eq!(blob.id().blob_type, BlobType::CheckpointContent);
+    assert_eq!(blob.id().blob_type, BlobType::CheckpointExecutionState);
     assert!(outcome.blobs_published.is_empty());
     assert_eq!(outcome.oracle_responses.len(), 1);
     assert_eq!(
         outcome.oracle_responses[0],
-        OracleResponse::Checkpoint(blob.id())
+        OracleResponse::Checkpoint {
+            execution_state_blobs: vec![blob.id().hash],
+        }
     );
 
     // Saving the chain commits the override; the persisted hash now matches the content hash.
@@ -203,10 +205,23 @@ async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow
     producer.context().store().write_batch(batch).await?;
     producer.post_save();
 
-    let blob = producer.prepare_checkpoint().await?;
-    let blob_bytes = blob.bytes().to_vec();
+    // Use a small chunk size so the dump spans multiple `CheckpointExecutionState`
+    // blobs. The bootstrap side concatenates them in restore order.
+    const CHUNK_SIZE: usize = 32;
+    let blobs = producer.prepare_checkpoint(CHUNK_SIZE as u64).await?;
+    assert!(
+        blobs.len() > 1,
+        "Test state should be large enough to span multiple chunks",
+    );
+    for blob in &blobs {
+        assert!(blob.bytes().len() <= CHUNK_SIZE);
+    }
+    let blob_bytes = blobs
+        .iter()
+        .flat_map(|blob| blob.bytes().iter().copied())
+        .collect::<Vec<u8>>();
     let mut txn_tracker = TransactionTracker::default();
-    producer.apply_checkpoint(blob, &mut txn_tracker)?;
+    producer.apply_checkpoint(blobs, &mut txn_tracker)?;
     let mut batch = Batch::new();
     producer.pre_save(&mut batch)?;
     producer.context().store().write_batch(batch).await?;
@@ -248,7 +263,7 @@ async fn execute_checkpoint_rejects_chain_with_published_events() -> anyhow::Res
         .insert(&StreamId::system(b"events"), BlockHeight::from(0))?;
 
     let mut txn_tracker = TransactionTracker::default();
-    let result = view.execute_checkpoint(&mut txn_tracker).await;
+    let result = view.execute_checkpoint(u64::MAX, &mut txn_tracker).await;
     assert!(matches!(
         result,
         Err(crate::ExecutionError::CheckpointPreconditionFailed(_))
