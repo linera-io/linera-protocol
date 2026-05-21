@@ -89,6 +89,7 @@ jobs:
             local IMAGE_LONG=$4
             local BUILD_NAME=$5
             local TARGET=$6
+            local BUILD_FEATURES=${7:-}
             local LOG_FILE="/tmp/${BUILD_NAME}.log"
 
             {
@@ -106,6 +107,7 @@ jobs:
                 --build-arg "build_date=${BUILD_DATE}" \
                 --build-arg "build_flag=--release" \
                 --build-arg "build_folder=release" \
+                ${BUILD_FEATURES:+--build-arg "build_features=${BUILD_FEATURES}"} \
                 .
 
               echo "Pushing ${BUILD_NAME} images..."
@@ -126,8 +128,11 @@ jobs:
           # linera-tests shares the Dockerfile and chef cache mounts with
           # linera; --target tests builds the overlay stage that bundles
           # the remote-net integration test binary on top of the runtime.
+          # Build without the `metrics` feature: tests spawn `linera service`
+          # internally and the test harness does not pass --metrics-port, so
+          # including `metrics` would make every node-service call fail.
           build_and_push "docker/Dockerfile" \
-            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" &
+            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" "scylladb,jemalloc" &
           PID_LINERA_TESTS=$!
 
           build_and_push "docker/Dockerfile.indexer" \
