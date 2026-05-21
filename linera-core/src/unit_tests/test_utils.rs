@@ -377,14 +377,14 @@ where
             | FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated => {
-                let result = self
+                let (response_result, _actions) = self
                     .client
                     .lock()
                     .await
                     .state
                     .handle_block_proposal(proposal)
-                    .await
-                    .map_err(Into::into);
+                    .await;
+                let result = response_result.map_err(NodeError::from);
                 if self.fault_type == FaultType::DontSendValidateVote {
                     Err(NodeError::ClientIoError {
                         error: "refusing to validate".to_string(),
@@ -395,7 +395,7 @@ where
             }
         };
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map(|(info, _actions)| info))
+        sender.send(result)
     }
 
     async fn do_handle_lite_certificate(

@@ -3006,8 +3006,11 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
+                // The validator may hold a locking block whose round is below both its
+                // current round and ours, so we only short-circuit when strictly past its
+                // height.
                 if let Some(info) = self.maybe_local_chain_info(chain_id, &local_node).await? {
-                    if (info.next_block_height, info.manager.current_round) >= (height, round) {
+                    if info.next_block_height > height {
                         debug!(
                             chain_id = %self.chain_id,
                             "Accepting redundant notification for new round"
