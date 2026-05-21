@@ -34,10 +34,6 @@ mod metrics {
 }
 
 /// A view that supports modifying a single value of type `T`.
-///
-/// When `T` is (or contains) a `BTreeMap`/`BTreeSet`, prefer `linera_base`'s
-/// `NonCanonicalBTreeMap`/`NonCanonicalBTreeSet`: BCS re-sorts canonical maps on every `save()`,
-/// whereas the non-canonical variants serialize as a plain sequence and skip that cost.
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative")]
 pub struct RegisterView<C, T> {
