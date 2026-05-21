@@ -528,7 +528,12 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     /// middles (KeyTag::Index, starting at `first_index`+1), and back (KeyTag::Back).
     /// Returns the total number of buckets written. The caller is responsible for
     /// writing the matching `BucketLayout` entry. Used by `Rewrite`.
-    fn write_chunks(&self, batch: &mut Batch, data: &[T], first_index: u32) -> Result<u32, ViewError>
+    fn write_chunks(
+        &self,
+        batch: &mut Batch,
+        data: &[T],
+        first_index: u32,
+    ) -> Result<u32, ViewError>
     where
         T: Serialize + Clone,
     {
