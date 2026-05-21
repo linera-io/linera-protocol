@@ -995,6 +995,12 @@ where
 
 /// A `View` that has a type for keys. The ordering of the entries
 /// is determined by the serialization of the context.
+///
+/// When the value type `V` is (or contains) a `BTreeMap`/`BTreeSet`, prefer `linera_base`'s
+/// `NonCanonicalBTreeMap`/`NonCanonicalBTreeSet`: BCS re-sorts canonical maps on every `save()`,
+/// whereas the non-canonical variants serialize as a plain sequence and skip that cost. Do *not*
+/// use them for the key type `I`, however: keys are ordered and compared by their serialized
+/// bytes, which relies precisely on the canonical encoding that those types skip.
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, I, V: Allocative")]
 pub struct MapView<C, I, V> {
