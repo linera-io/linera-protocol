@@ -38,10 +38,7 @@ use linera_sdk::{
     },
     linera_base_types::{AccountSecretKey, BlobContent, BlockHeight, DataBlobHash},
 };
-#[cfg(any(
-    feature = "scylladb",
-    feature = "storage-service",
-))]
+#[cfg(any(feature = "scylladb", feature = "storage-service",))]
 use linera_service::cli_wrappers::{
     local_net::{Database, LocalNetConfig},
     Network,

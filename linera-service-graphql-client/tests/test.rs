@@ -1,10 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(
-    feature = "storage-service",
-    feature = "scylladb"
-))]
+#![cfg(any(feature = "storage-service", feature = "scylladb"))]
 
 use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 
