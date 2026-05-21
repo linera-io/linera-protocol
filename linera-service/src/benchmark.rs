@@ -253,9 +253,7 @@ async fn benchmark_with_fungible(
                         }
                         if i == 4 {
                             bail!(
-                                "Expected balance: {}, actual balance: {}",
-                                expected_balance,
-                                actual_balance
+                                "Expected balance: {expected_balance}, actual balance: {actual_balance}",
                             );
                         }
                     }

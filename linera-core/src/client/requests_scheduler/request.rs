@@ -183,13 +183,13 @@ impl SubsumingKey<RequestResult> for super::request::RequestKey {
         let mut certificates_iter = certificates.iter();
         let mut collected = vec![];
         while let Some(height) = requested_heights.first() {
-            // Remove certs below the requested height.
-            if let Some(cert) = certificates_iter.find(|cert| &cert.value().height() == height) {
-                collected.push(cert.clone());
-                requested_heights.remove(0);
-            } else {
-                return None; // Missing a requested height
-            }
+            // Remove certs below the requested height, if present.
+            collected.push(
+                certificates_iter
+                    .find(|cert| &cert.value().height() == height)?
+                    .clone(),
+            );
+            requested_heights.remove(0);
         }
 
         Some(RequestResult::Certificates(collected))

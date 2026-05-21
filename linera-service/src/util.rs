@@ -35,13 +35,9 @@ pub trait ChildExt: std::fmt::Debug {
 impl ChildExt for tokio::process::Child {
     fn ensure_is_running(&mut self) -> Result<()> {
         if let Some(status) = self.try_wait().context("try_wait child process")? {
-            bail!(
-                "Child process {:?} already exited with status: {}",
-                self,
-                status
-            );
+            bail!("Child process {self:?} already exited with status: {status}");
         }
-        debug!("Child process {:?} is running as expected.", self);
+        debug!("Child process {self:?} is running as expected.");
         Ok(())
     }
 }

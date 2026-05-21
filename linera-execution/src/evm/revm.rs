@@ -686,9 +686,11 @@ impl<'a, Runtime: ContractRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Cont
     }
 
     fn warm_addresses(&self) -> Box<impl Iterator<Item = Address>> {
-        let mut addresses = self.inner.warm_addresses().collect::<Vec<Address>>();
-        addresses.push(PRECOMPILE_ADDRESS);
-        Box::new(addresses.into_iter())
+        Box::new(
+            self.inner
+                .warm_addresses()
+                .chain(std::iter::once(PRECOMPILE_ADDRESS)),
+        )
     }
 
     fn contains(&self, address: &Address) -> bool {
@@ -866,9 +868,11 @@ impl<'a, Runtime: ServiceRuntime> PrecompileProvider<Ctx<'a, Runtime>> for Servi
     }
 
     fn warm_addresses(&self) -> Box<impl Iterator<Item = Address>> {
-        let mut addresses = self.inner.warm_addresses().collect::<Vec<Address>>();
-        addresses.push(PRECOMPILE_ADDRESS);
-        Box::new(addresses.into_iter())
+        Box::new(
+            self.inner
+                .warm_addresses()
+                .chain(std::iter::once(PRECOMPILE_ADDRESS)),
+        )
     }
 
     fn contains(&self, address: &Address) -> bool {

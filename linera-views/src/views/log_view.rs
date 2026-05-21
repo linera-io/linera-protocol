@@ -111,15 +111,14 @@ where
         }
         if !self.new_values.is_empty() {
             delete_view = false;
-            let mut count = self.stored_count;
-            for value in &self.new_values {
+            for (count, value) in (self.stored_count..).zip(&self.new_values) {
                 let key = self
                     .context
                     .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &count)?;
                 batch.put_key_value(key, value)?;
-                count += 1;
             }
+            let count = self.stored_count + self.new_values.len();
             let key = self.context.base_key().base_tag(KeyTag::Count as u8);
             batch.put_key_value(key, &count)?;
         }

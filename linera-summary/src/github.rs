@@ -119,9 +119,9 @@ impl GithubContext {
                 env_base_branch.map_err(|_| {
                     anyhow!("GITHUB_BASE_BRANCH is not set! This must be run from within CI")
                 })?,
-                pr_string.parse().map_err(|_| {
-                    anyhow!("GITHUB_PR_NUMBER is not a valid number: {}", pr_string)
-                })?,
+                pr_string
+                    .parse()
+                    .map_err(|_| anyhow!("GITHUB_PR_NUMBER is not a valid number: {pr_string}"))?,
             )
         };
 

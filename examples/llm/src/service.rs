@@ -134,16 +134,15 @@ impl ModelContext {
         debug!("trying to load model assuming gguf");
         let model_contents = gguf_file::Content::read(cursor)?;
         let mut total_size_in_bytes = 0;
-        for (_, tensor) in model_contents.tensor_infos.iter() {
+        for tensor in model_contents.tensor_infos.values() {
             let elem_count = tensor.shape.elem_count();
             total_size_in_bytes +=
                 elem_count * tensor.ggml_dtype.type_size() / tensor.ggml_dtype.block_size();
         }
 
         debug!(
-            "loaded {:?} tensors ({}B) ",
+            "loaded {:?} tensors ({total_size_in_bytes}B) ",
             model_contents.tensor_infos.len(),
-            total_size_in_bytes,
         );
 
         ModelWeights::from_gguf(model_contents, cursor, &Device::Cpu)
@@ -153,16 +152,15 @@ impl ModelContext {
         debug!("trying to load model assuming ggml");
         let model_contents = ggml_file::Content::read(cursor, &Device::Cpu)?;
         let mut total_size_in_bytes = 0;
-        for (_, tensor) in model_contents.tensors.iter() {
+        for tensor in model_contents.tensors.values() {
             let elem_count = tensor.shape().elem_count();
             total_size_in_bytes +=
                 elem_count * tensor.dtype().type_size() / tensor.dtype().block_size();
         }
 
         debug!(
-            "loaded {:?} tensors ({}B) ",
+            "loaded {:?} tensors ({total_size_in_bytes}B) ",
             model_contents.tensors.len(),
-            total_size_in_bytes,
         );
 
         ModelWeights::from_ggml(model_contents, 1)

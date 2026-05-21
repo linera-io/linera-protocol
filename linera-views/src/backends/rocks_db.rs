@@ -60,9 +60,7 @@ fn get_available_memory(sys: &System) -> usize {
 }
 
 fn get_available_cpus() -> i32 {
-    std::thread::available_parallelism()
-        .map(|p| p.get() as i32)
-        .unwrap_or(1)
+    std::thread::available_parallelism().map_or(1, |p| p.get() as i32)
 }
 
 const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
