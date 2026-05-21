@@ -33,6 +33,8 @@ jobs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
       - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
       - name: Filter paths
         uses: dorny/paths-filter@v4.0.1
         id: files-changed
