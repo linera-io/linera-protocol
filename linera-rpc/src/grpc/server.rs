@@ -737,24 +737,23 @@ where
         let traffic_type = Self::get_traffic_type(&request);
         let proposal = request.into_inner().try_into()?;
         trace!(?proposal, "Handling block proposal");
-        Ok(Response::new(
-            match self.state.clone().handle_block_proposal(proposal).await {
-                Ok((info, actions)) => {
-                    Self::log_request_success("handle_block_proposal", traffic_type);
-                    self.handle_network_actions(actions);
-                    info.try_into()?
-                }
-                Err(error) => {
-                    Self::log_request_error(
-                        "handle_block_proposal",
-                        traffic_type,
-                        &error.error_type(),
-                    );
-                    self.log_error(&error, "Failed to handle block proposal");
-                    NodeError::from(error).try_into()?
-                }
-            },
-        ))
+        let (result, actions) = self.state.clone().handle_block_proposal(proposal).await;
+        // Dispatch actions whether or not the proposal was accepted: a rejected
+        // proposal can still advance the manager's `current_round` (via
+        // `update_signed_proposal` on the `HasIncompatibleConfirmedVote` recovery
+        // path), and subscribers need the resulting `NewRound` notification.
+        self.handle_network_actions(actions);
+        Ok(Response::new(match result {
+            Ok(info) => {
+                Self::log_request_success("handle_block_proposal", traffic_type);
+                info.try_into()?
+            }
+            Err(error) => {
+                Self::log_request_error("handle_block_proposal", traffic_type, &error.error_type());
+                self.log_error(&error, "Failed to handle block proposal");
+                NodeError::from(error).try_into()?
+            }
+        }))
     }
 
     #[instrument(

@@ -180,6 +180,9 @@ impl ValidatorQueryResults {
                 }) {
                     println!("Round: {}", info.manager.current_round);
                 }
+                if let Some(leader) = info.manager.leader {
+                    println!("Leader: {leader}");
+                }
                 if let Some(locking) = &info.manager.requested_locking {
                     match &**locking {
                         LockingBlock::Fast(proposal) => {

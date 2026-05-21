@@ -715,7 +715,7 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(bad_signature_block_proposal)
-            .await,
+            .await.0,
             Err(WorkerError::CryptoError(error))
                 if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
@@ -756,7 +756,7 @@ where
     assert_matches!(
     env.executing_worker()
         .handle_block_proposal(zero_amount_block_proposal)
-        .await,
+        .await.0,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
@@ -805,7 +805,8 @@ where
         assert_matches!(
             env.executing_worker()
                 .handle_block_proposal(block_proposal)
-                .await,
+                .await
+                .0,
             Err(WorkerError::InvalidTimestamp { .. })
         );
     }
@@ -845,7 +846,7 @@ where
             .unwrap();
         // Timestamp older than previous one
         assert_matches!(
-            env.executing_worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(error))
                 if matches!(*error, ChainError::InvalidBlockTimestamp { .. })
         );
@@ -907,7 +908,7 @@ where
         )
         .await?;
     // Past timestamp should be handled immediately (and succeed).
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
         .await;
@@ -938,7 +939,7 @@ where
             BundleExecutionPolicy::committed(),
         )
         .await?;
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
         .await;
@@ -989,7 +990,7 @@ where
     clock.set(future_timestamp);
 
     // Now the future should complete.
-    let result = future.as_mut().await;
+    let (result, _actions) = future.as_mut().await;
     assert!(
         result.is_ok(),
         "Future timestamp within grace period should succeed after delay"
@@ -1014,7 +1015,8 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(block_proposal)
-            .await,
+            .await
+            .0,
         Err(WorkerError::InvalidTimestamp { .. })
     );
 
@@ -1052,7 +1054,8 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(unknown_sender_block_proposal)
-            .await,
+            .await
+            .0,
         Err(WorkerError::InvalidOwner)
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
@@ -1103,7 +1106,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal1.clone()).await,
+        env.worker().handle_block_proposal(block_proposal1.clone()).await.0,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -1119,7 +1122,8 @@ where
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal0.clone())
-        .await?;
+        .await
+        .0?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
@@ -1147,7 +1151,8 @@ where
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await?;
+        .await
+        .0?;
 
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
@@ -1156,7 +1161,7 @@ where
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal0).await,
+        env.worker().handle_block_proposal(block_proposal0).await.0,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -1249,7 +1254,8 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await;
+        .await
+        .0;
     assert_matches!(
         proposal_result,
         Err(WorkerError::ChainError(err)) if matches!(*err, ChainError::UnexpectedBlockHeight {
@@ -1285,7 +1291,8 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await;
+        .await
+        .0;
     assert_matches!(proposal_result, Ok(_));
 
     Ok(())
@@ -1412,7 +1419,7 @@ where
             .unwrap();
         // Insufficient funding
         assert_matches!(
-                env.worker().handle_block_proposal(block_proposal).await,
+                env.worker().handle_block_proposal(block_proposal).await.0,
                 Err(
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
@@ -1468,7 +1475,7 @@ where
             .unwrap();
         // Inconsistent received messages.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::UnexpectedMessage { .. })
         );
@@ -1494,7 +1501,7 @@ where
             .unwrap();
         // Skipped message.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1545,7 +1552,7 @@ where
             .unwrap();
         // Inconsistent order in received messages (heights).
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1575,7 +1582,8 @@ where
         // Taking the first message only is ok.
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await?;
+            .await
+            .0?;
         let certificate = env
             .execute_proposal(block_proposal.content.block, vec![])
             .await?;
@@ -1628,7 +1636,8 @@ where
             .unwrap();
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await?;
+            .await
+            .0?;
     }
     Ok(())
 }
@@ -1660,7 +1669,7 @@ where
         .await
         .unwrap();
     assert_matches!(
-        env.executing_worker().handle_block_proposal(block_proposal).await,
+        env.executing_worker().handle_block_proposal(block_proposal).await.0,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
@@ -1701,10 +1710,11 @@ where
         .await
         .unwrap();
 
-    let (chain_info_response, _actions) = env
+    let chain_info_response = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
-        .await?;
+        .await
+        .0?;
     chain_info_response.check(env.executing_worker().public_key())?;
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
@@ -1757,15 +1767,17 @@ where
         .await
         .unwrap();
 
-    let (response, _actions) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(block_proposal.clone())
-        .await?;
+        .await
+        .0?;
     response.check(env.executing_worker().public_key())?;
-    let (replay_response, _actions) = env
+    let replay_response = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
-        .await?;
+        .await
+        .0?;
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&*response.info),
@@ -3525,14 +3537,14 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
 
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
@@ -3591,17 +3603,19 @@ where
     let result = env
         .executing_worker()
         .handle_block_proposal(proposal1_wrong_owner)
-        .await;
+        .await
+        .0;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal1 = proposed_block1
         .clone()
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(proposal1)
-        .await?;
+        .await
+        .0?;
     let value1 = ValidatedBlock::new(block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
@@ -3665,7 +3679,7 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(5))
         .await
         .unwrap();
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(proposal.clone())
         .await;
@@ -3685,10 +3699,10 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env
-        .executing_worker()
+    env.executing_worker()
         .handle_block_proposal(proposal)
-        .await?;
+        .await
+        .0?;
     let response = env
         .executing_worker()
         .handle_chain_info_query(query_values.clone())
@@ -3716,7 +3730,7 @@ where
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(6))
         .await
         .unwrap();
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(proposal.clone())
         .await;
@@ -3810,13 +3824,13 @@ where
         .into_proposal_with_round(owner1, &signer, Round::Fast)
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
     );
@@ -3862,10 +3876,11 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let (_, actions) = env
+    let (result, actions) = env
         .executing_worker()
         .handle_block_proposal(proposal1)
-        .await?;
+        .await;
+    result?;
     assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let response = env
@@ -3956,10 +3971,11 @@ where
         )
         .await?;
     let value1 = ConfirmedBlock::new(block1);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(proposal1.clone())
-        .await?;
+        .await
+        .0?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3982,10 +3998,11 @@ where
         BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
             .await
             .unwrap();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(proposal1b)
-        .await?;
+        .await
+        .0?;
 
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
@@ -4000,7 +4017,7 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(proposal2)
         .await;
@@ -4013,7 +4030,8 @@ where
             .unwrap();
     env.executing_worker()
         .handle_block_proposal(proposal3)
-        .await?;
+        .await
+        .0?;
 
     // A validated block certificate from a later round can override the locked fast block.
     let (_, block2, _, _, _) = env
@@ -4036,10 +4054,10 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env
-        .executing_worker()
+    env.executing_worker()
         .handle_block_proposal(proposal)
-        .await?;
+        .await
+        .0?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let response = env
         .executing_worker()
@@ -4335,7 +4353,8 @@ where
         .unwrap();
     env.executing_worker()
         .handle_block_proposal(block_proposal)
-        .await?;
+        .await
+        .0?;
 
     for local_time in queries_before_confirmation {
         clock.set(local_time);
@@ -4548,7 +4567,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.executing_worker().handle_block_proposal(bad_proposal).await,
+        env.executing_worker().handle_block_proposal(bad_proposal).await.0,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
     );
