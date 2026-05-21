@@ -658,6 +658,12 @@ impl ScyllaDbClient {
         let mut keys = Vec::new();
         while let Some(row) = rows.next().await {
             let (key,) = row?;
+            // Skip the reserved timestamp sentinel (exclusive mode writes it at the
+            // empty clustering key). It is an internal implementation detail and must
+            // not surface to callers; it can only match an empty-prefix scan.
+            if key == WRITETIME_SENTINEL_KEY {
+                continue;
+            }
             let short_key = key[len..].to_vec();
             keys.push(short_key);
         }
@@ -689,6 +695,10 @@ impl ScyllaDbClient {
         let mut key_values = Vec::new();
         while let Some(row) = rows.next().await {
             let (key, value) = row?;
+            // Skip the reserved timestamp sentinel; see `find_keys_by_prefix_internal`.
+            if key == WRITETIME_SENTINEL_KEY {
+                continue;
+            }
             let short_key = key[len..].to_vec();
             key_values.push((short_key, value));
         }
