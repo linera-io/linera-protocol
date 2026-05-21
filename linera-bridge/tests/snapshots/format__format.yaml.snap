@@ -361,6 +361,9 @@ OracleResponse:
           - execution_state_blobs:
               SEQ:
                 TYPENAME: CryptoHash
+          - used_blobs:
+              SEQ:
+                TYPENAME: BlobId
 OutgoingMessage:
   STRUCT:
     - destination:
