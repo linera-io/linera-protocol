@@ -140,7 +140,7 @@ impl ScyllaDbClient {
 
         let read_writetime = session
             .prepare(format!(
-                "SELECT WRITETIME(v) FROM {KEYSPACE}.{namespace} WHERE root_key = ? AND k = ?"
+                "SELECT WRITETIME(v) FROM {KEYSPACE}.\"{namespace}\" WHERE root_key = ? AND k = ?"
             ))
             .await?;
 
@@ -180,26 +180,26 @@ impl ScyllaDbClient {
         // tombstone shadowing the inserts.
         let write_batch_delete_prefix_unbounded_ts = session
             .prepare(format!(
-                "DELETE FROM {KEYSPACE}.{namespace} USING TIMESTAMP ? WHERE root_key = ? AND k >= ?"
+                "DELETE FROM {KEYSPACE}.\"{namespace}\" USING TIMESTAMP ? WHERE root_key = ? AND k >= ?"
             ))
             .await?;
 
         let write_batch_delete_prefix_bounded_ts = session
             .prepare(format!(
-                "DELETE FROM {KEYSPACE}.{namespace} USING TIMESTAMP ? \
+                "DELETE FROM {KEYSPACE}.\"{namespace}\" USING TIMESTAMP ? \
                  WHERE root_key = ? AND k >= ? AND k < ?"
             ))
             .await?;
 
         let write_batch_deletion_ts = session
             .prepare(format!(
-                "DELETE FROM {KEYSPACE}.{namespace} USING TIMESTAMP ? WHERE root_key = ? AND k = ?"
+                "DELETE FROM {KEYSPACE}.\"{namespace}\" USING TIMESTAMP ? WHERE root_key = ? AND k = ?"
             ))
             .await?;
 
         let write_batch_insertion_ts = session
             .prepare(format!(
-                "INSERT INTO {KEYSPACE}.{namespace} (root_key, k, v) VALUES (?, ?, ?) \
+                "INSERT INTO {KEYSPACE}.\"{namespace}\" (root_key, k, v) VALUES (?, ?, ?) \
                  USING TIMESTAMP ?"
             ))
             .await?;
