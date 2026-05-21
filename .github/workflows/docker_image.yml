@@ -67,7 +67,7 @@ jobs:
 
           REGISTRY_BASE="us-docker.pkg.dev/linera-io-dev/linera-public-registry"
 
-          for IMAGE_VAR in LINERA:linera INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter; do
+          for IMAGE_VAR in LINERA:linera LINERA_TESTS:linera-tests INDEXER:linera-indexer EXPLORER:linera-explorer EXPORTER:linera-exporter; do
             VAR="${IMAGE_VAR%%:*}"
             NAME="${IMAGE_VAR##*:}"
             echo "${VAR}_IMAGE_BRANCH=${REGISTRY_BASE}/${NAME}:${BRANCH_TAG}" >> "$GITHUB_ENV"
