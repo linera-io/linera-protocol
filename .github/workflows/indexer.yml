@@ -31,9 +31,9 @@ jobs:
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
       - name: Filter paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4.0.1
         id: files-changed
         with:
           predicate-quantifier: 'every'
@@ -58,7 +58,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: ./.github/actions/install-protoc
@@ -78,7 +78,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: ./.github/actions/install-protoc

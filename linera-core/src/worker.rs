@@ -1518,7 +1518,7 @@ where
     pub async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
         trace!("{} <-- {:?}", self.nickname(), proposal);
         #[cfg(with_metrics)]
         let round = proposal.content.round;
@@ -1536,16 +1536,22 @@ where
             self.storage.clock().sleep_until(block_timestamp).await;
         }
 
-        let response = self
+        let outcome = self
             .chain_write(chain_id, move |mut guard| async move {
-                guard.handle_block_proposal(proposal).await
+                Ok::<_, WorkerError>(guard.handle_block_proposal(proposal).await)
             })
-            .await?;
+            .await;
+        let (result, actions) = match outcome {
+            Ok((result, actions)) => (result, actions),
+            Err(err) => (Err(err), NetworkActions::default()),
+        };
         #[cfg(with_metrics)]
-        metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
-            .with_label_values(&[round.type_name()])
-            .observe(round.number() as f64);
-        Ok(response)
+        if result.is_ok() {
+            metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
+                .with_label_values(&[round.type_name()])
+                .observe(round.number() as f64);
+        }
+        (result, actions)
     }
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.

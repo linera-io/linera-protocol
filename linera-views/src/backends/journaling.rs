@@ -444,6 +444,7 @@ where
                 transaction_size = 0;
             }
         }
+        // Until the journal header is written nothing is committed.
         let header = JournalHeader { block_count };
         if block_count > 0 {
             let value = bcs::to_bytes(&header)?;

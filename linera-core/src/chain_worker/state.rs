@@ -112,7 +112,8 @@ where
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
-    /// Set to `true` if a journal resolution failure has left storage potentially inconsistent.
+    /// Set to `true` if a database `save` failure has left storage potentially
+    /// inconsistent.
     poisoned: bool,
 }
 
@@ -276,8 +277,8 @@ where
         self.chain.rollback();
     }
 
-    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a journal
-    /// resolution failure.
+    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a database
+    /// `save` failure.
     pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
         ensure!(!self.poisoned, WorkerError::PoisonedWorker);
         Ok(())
@@ -1890,12 +1891,9 @@ where
         let local_time = self.storage.clock().current_time();
         // Try to use a cached execution state for the requested block.
         // We want to pretend that this block is committed, so we set the next block height.
-        let cached_state = block_hash.and_then(|h| {
-            self.execution_state_cache
-                .as_ref()
-                .and_then(|cache| cache.remove(&h))
-                .map(|s| (h, s))
-        });
+        let cached_state = block_hash
+            .zip(self.execution_state_cache.as_ref())
+            .and_then(|(h, cache)| Some(h).zip(cache.remove(&h)));
         if let Some((requested_block, mut state)) = cached_state {
             let next_block_height = next_block_height
                 .try_add_one()
@@ -2016,11 +2014,40 @@ where
     }
 
     /// Validates and executes a block proposed to extend this chain.
+    ///
+    /// Returns network actions alongside the result so the caller can dispatch them
+    /// even when the proposal is rejected: a `HasIncompatibleConfirmedVote` rejection
+    /// can still advance `current_round` via `update_signed_proposal`, and subscribers
+    /// need the resulting `NewRound` notification.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %proposal.content.block.height
     ))]
     pub(crate) async fn handle_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
+        let old_round = self.chain.manager.current_round();
+        match self.try_handle_block_proposal(proposal).await {
+            Ok((response, actions)) => (Ok(response), actions),
+            Err(err) => {
+                // Even on error, the manager's `current_round` may have advanced
+                // (the `HasIncompatibleConfirmedVote` recovery path calls
+                // `update_signed_proposal`). Surface the resulting `NewRound`
+                // notification so subscribers can react.
+                let actions = if self.chain.manager.current_round() != old_round {
+                    self.create_network_actions(Some(old_round))
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    NetworkActions::default()
+                };
+                (Err(err), actions)
+            }
+        }
+    }
+
+    async fn try_handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -2088,11 +2115,32 @@ where
                 original_proposal.check_signature()?;
             }
         }
-        if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
-            // We already voted for this block.
-            return Ok((self.chain_info_response().await?, NetworkActions::default()));
-        }
         let local_time = self.storage.clock().current_time();
+        match chain.manager.check_proposed_block(&proposal) {
+            Ok(manager::Outcome::Skip) => {
+                // We already voted for this block.
+                return Ok((self.chain_info_response().await?, NetworkActions::default()));
+            }
+            Ok(manager::Outcome::Accept) => {}
+            Err(err) => {
+                // A `HasIncompatibleConfirmedVote` rejection means the proposer is at a
+                // round we'd otherwise be happy to sign at; only our prior confirmed vote
+                // prevents us from voting. Record the proposal so `current_round` still
+                // tracks the round the proposer is in — without it, the chain can wedge.
+                // Other rejections (e.g. `WrongRound`, `InsufficientRound`) mean the
+                // proposal is not actually valid for the chain's current state, so we
+                // shouldn't let it advance our round.
+                if matches!(err, ChainError::HasIncompatibleConfirmedVote(_, _))
+                    && self
+                        .chain
+                        .manager
+                        .update_signed_proposal(&proposal, local_time)
+                {
+                    self.save().await?;
+                }
+                return Err(err.into());
+            }
+        }
 
         // Make sure we remember that a proposal was signed, to determine the correct round to
         // propose in.
@@ -2346,13 +2394,15 @@ where
     ))]
     pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
-            tracing::error!(
-                ?error,
-                chain_id = %self.chain_id(),
-                "Chain save failed; marking worker as poisoned"
-            );
-            self.poisoned = true;
-            return Err(WorkerError::PoisonedWorker);
+            if error.must_reload_view() {
+                tracing::error!(
+                    ?error,
+                    chain_id = %self.chain_id(),
+                    "Chain save failed with a nonrecoverable error; marking worker as poisoned"
+                );
+                self.poisoned = true;
+            }
+            return Err(WorkerError::ViewError(error));
         }
         Ok(())
     }

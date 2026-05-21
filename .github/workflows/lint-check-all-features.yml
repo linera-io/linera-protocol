@@ -32,9 +32,9 @@ jobs:
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
       - name: Filter paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4.0.1
         id: files-changed
         with:
           predicate-quantifier: 'every'
@@ -63,7 +63,7 @@ jobs:
         partition: [1, 2, 3, 4, 5, 6]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - name: Put lint toolchain file in place
       run: |
         ln -sf toolchains/nightly/rust-toolchain.toml
