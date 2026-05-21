@@ -119,7 +119,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --bin linera-proxy \
     --bin linera-server \
     --bin linera \
-    --features $build_features
+    ${build_features:+--features $build_features}
 
 # Copy full source and build (only changed crates recompile).
 COPY . .
@@ -132,7 +132,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
         --bin linera-proxy \
         --bin linera-server \
         --bin linera \
-        --features $build_features \
+        ${build_features:+--features $build_features} \
     && cp \
         target/"$build_folder"/linera \
         target/"$build_folder"/linera-proxy \
