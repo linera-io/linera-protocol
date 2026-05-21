@@ -498,7 +498,7 @@ impl ScyllaDbClient {
         }
         let session = &self.session;
         let mut batch_query = scylla::statement::batch::Batch::new(BatchType::Unlogged);
-        let mut batch_values = Vec::<Vec<Vec<u8>>>::new();
+        let mut batch_values = Vec::new();
         let q_unbounded = &self.write_batch_delete_prefix_unbounded;
         let q_bounded = &self.write_batch_delete_prefix_bounded;
         for key_prefix in key_prefix_deletions {
@@ -971,7 +971,8 @@ impl ScyllaDbStoreInternal {
             .unwrap_or(0);
         let now_us = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_micros() as i64)
+            .ok()
+            .and_then(|d| i64::try_from(d.as_micros()).ok())
             .unwrap_or(0);
         // `writetime` is the last batch's `T + 1`, i.e. the highest timestamp it
         // consumed; that is exactly what `ts_floor` tracks, so seed it directly.
@@ -995,7 +996,8 @@ impl ScyllaDbStoreInternal {
             let prev = self.ts_floor.load(Ordering::Relaxed);
             let now_us = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_micros() as i64)
+                .ok()
+                .and_then(|d| i64::try_from(d.as_micros()).ok())
                 .unwrap_or(prev);
             let next = std::cmp::max(now_us, prev + 1);
             // The batch uses `next` (`T`) and `next + 1` (`T + 1`); store the latter
