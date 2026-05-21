@@ -19,6 +19,7 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
+use anyhow::Context as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
@@ -45,6 +46,29 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
     };
     let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
     Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
+}
+
+/// Queries the wrapped-fungible app for its declared source-ERC-20 decimals.
+pub async fn query_wrapped_fungible_decimals<E: linera_core::environment::Environment>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    fungible_app_id: ApplicationId,
+) -> anyhow::Result<u8> {
+    let query = Query::user_without_abi(
+        fungible_app_id,
+        &GqlRequest {
+            query: "{ decimals }".to_string(),
+        },
+    )?;
+    let (outcome, _) = chain_client.query_application(query, None).await?;
+    let response_bytes = match outcome.response {
+        QueryResponse::User(bytes) => bytes,
+        other => anyhow::bail!("unexpected query response: {other:?}"),
+    };
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
+    let decimals = response["data"]["decimals"]
+        .as_u64()
+        .context("missing or invalid `decimals` field in service response")?;
+    u8::try_from(decimals).context("`decimals` field does not fit in u8")
 }
 
 /// A pending deposit detected by the EVM scanner, sent to the retry loop.

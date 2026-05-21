@@ -66,6 +66,12 @@ impl WrappedFungibleTokenService {
         Ok(params.ticker_symbol)
     }
 
+    /// The number of decimal places used by the source ERC-20.
+    async fn decimals(&self) -> u8 {
+        let params: WrappedParameters = self.runtime.application_parameters();
+        params.decimals
+    }
+
     /// The ERC-20 token address on the source EVM chain (hex-encoded).
     async fn evm_token_address(&self) -> String {
         let params: WrappedParameters = self.runtime.application_parameters();
