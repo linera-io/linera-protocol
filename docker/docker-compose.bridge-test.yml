@@ -265,6 +265,8 @@ services:
     depends_on:
       bridge-chain-init:
         condition: service_completed_successfully
+      bridge-init:
+        condition: service_completed_successfully
       anvil:
         condition: service_healthy
 
