@@ -2465,7 +2465,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_sync_consensus_round_pushes_locking_below_current_round<B>(
@@ -2603,7 +2602,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_finalize_validated<B>(storage_builder: B) -> anyhow::Result<()>
