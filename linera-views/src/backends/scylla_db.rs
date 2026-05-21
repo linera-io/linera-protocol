@@ -342,6 +342,18 @@ impl ScyllaDbClient {
         Ok(())
     }
 
+    /// Validates a key supplied by a caller's batch. Besides the size limit, the
+    /// key must be non-empty: the empty (zero-length) key is `WRITETIME_SENTINEL_KEY`,
+    /// reserved for the per-store timestamp sentinel that exclusive mode writes
+    /// internally. Prefix scans now deliberately hide that key, so any caller
+    /// content stored there would be silently invisible to reads. DynamoDB
+    /// likewise forbids zero-length keys.
+    fn check_batch_key(key: &[u8]) -> Result<(), ScyllaDbStoreInternalError> {
+        Self::check_key_size(key)?;
+        ensure!(!key.is_empty(), ScyllaDbStoreInternalError::ZeroLengthKey);
+        Ok(())
+    }
+
     fn check_batch_len(batch: &UnorderedBatch) -> Result<(), ScyllaDbStoreInternalError> {
         ensure!(
             batch.len() <= MAX_BATCH_SIZE,
@@ -524,13 +536,13 @@ impl ScyllaDbClient {
         let mut batch_values = Vec::new();
         let q_deletion = &self.write_batch_deletion;
         for key in batch.deletions {
-            Self::check_key_size(&key)?;
+            Self::check_batch_key(&key)?;
             batch_values.push(vec![root_key.to_vec(), key]);
             batch_query.append_statement(q_deletion.clone());
         }
         let q_insertion = &self.write_batch_insertion;
         for (key, value) in batch.insertions {
-            Self::check_key_size(&key)?;
+            Self::check_batch_key(&key)?;
             Self::check_value_size(&value)?;
             batch_values.push(vec![root_key.to_vec(), key, value]);
             batch_query.append_statement(q_insertion.clone());
@@ -599,7 +611,7 @@ impl ScyllaDbClient {
         // Single-key deletions, insertions, and the sentinel at timestamp `t + 1`.
         let t_data = t + 1;
         for key in deletions {
-            Self::check_key_size(&key)?;
+            Self::check_batch_key(&key)?;
             batch_values.push(vec![
                 CqlValue::BigInt(t_data),
                 CqlValue::Blob(root_key.to_vec()),
@@ -608,7 +620,7 @@ impl ScyllaDbClient {
             batch_query.append_statement(self.write_batch_deletion_ts.clone());
         }
         for (key, value) in insertions {
-            Self::check_key_size(&key)?;
+            Self::check_batch_key(&key)?;
             Self::check_value_size(&value)?;
             batch_values.push(vec![
                 CqlValue::Blob(root_key.to_vec()),
@@ -798,6 +810,11 @@ pub enum ScyllaDbStoreInternalError {
     /// The batch is too long to be written
     #[error("The batch is too long to be written")]
     BatchTooLong,
+
+    /// Keys have to be of nonzero length (the empty key is reserved for the
+    /// timestamp sentinel).
+    #[error("The key must be of nonzero length")]
+    ZeroLengthKey,
 }
 
 impl KeyValueStoreError for ScyllaDbStoreInternalError {
