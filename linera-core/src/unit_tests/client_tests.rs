@@ -3984,11 +3984,17 @@ where
         Transaction::ExecuteOperation(Operation::System(op)) if matches!(**op, SystemOperation::Checkpoint),
         "Unexpected first transaction",
     );
-    let blob_id = match block.body.oracle_responses.first().and_then(|t| t.first()) {
-        Some(OracleResponse::Checkpoint(id)) => *id,
+    let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first())
+    {
+        Some(OracleResponse::Checkpoint {
+            execution_state_blobs,
+        }) => execution_state_blobs.clone(),
         other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
     };
-    assert_eq!(blob_id.blob_type, BlobType::CheckpointContent);
+    assert!(
+        !execution_state_blobs.is_empty(),
+        "Checkpoint must list at least one execution-state blob",
+    );
 
     let producer_info = producer.chain_info().await?;
     assert_eq!(producer_info.next_block_height, BlockHeight::from(2));

@@ -461,7 +461,7 @@ impl ResourceControlPolicy {
             | BlobType::ApplicationFormats
             | BlobType::Committee
             | BlobType::ChainDescription
-            | BlobType::CheckpointContent => {}
+            | BlobType::CheckpointExecutionState => {}
         }
         Ok(())
     }

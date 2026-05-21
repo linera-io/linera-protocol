@@ -1066,13 +1066,13 @@ where
         match operation {
             Operation::System(op) => match *op {
                 SystemOperation::Checkpoint => {
-                    let blob = self.txn_tracker.take_prepared_checkpoint_blob().ok_or(
+                    let blobs = self.txn_tracker.take_prepared_checkpoint_blobs().ok_or(
                         ExecutionError::CheckpointPreconditionFailed(
-                            "Checkpoint operation reached the actor without a prepared blob; \
+                            "Checkpoint operation reached the actor without prepared blobs; \
                              the chain-level pre-block hook must run prepare_checkpoint first",
                         ),
                     )?;
-                    self.state.apply_checkpoint(blob, self.txn_tracker)?;
+                    self.state.apply_checkpoint(blobs, self.txn_tracker)?;
                 }
                 op => {
                     let new_application = self
