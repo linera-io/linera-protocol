@@ -3984,8 +3984,7 @@ where
         Transaction::ExecuteOperation(Operation::System(op)) if matches!(**op, SystemOperation::Checkpoint),
         "Unexpected first transaction",
     );
-    let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first())
-    {
+    let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first()) {
         Some(OracleResponse::Checkpoint {
             execution_state_blobs,
         }) => execution_state_blobs.clone(),
