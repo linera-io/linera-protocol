@@ -832,12 +832,11 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
-        let block_hash = certificate.hash();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
         // Check if we already processed this block.
-        let mut tip = self.chain.tip_state.get().clone();
+        let tip = self.chain.tip_state.get().clone();
         if tip.next_block_height > height {
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
@@ -911,50 +910,93 @@ where
             .maybe_write_blob_states(&blob_ids, blob_state)
             .await?;
 
-        let mut blobs = blobs_result?
+        let blobs = blobs_result?
             .into_iter()
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
 
-        // Decide whether to fully execute or only preprocess this block. We
-        // preprocess when the caller explicitly asked for `Preprocess`, or when
-        // there's a gap that we can't bridge. A checkpoint block lets us bridge
-        // a gap in `Execute` mode by installing its execution-state snapshot;
-        // in `Preprocess` mode we deliberately skip the restore — the caller
-        // doesn't want this chain's state advanced.
-        let preprocess_only = matches!(mode, ProcessConfirmedBlockMode::Preprocess)
-            || (tip.next_block_height < height && !block.starts_with_checkpoint());
-        if preprocess_only {
-            // Update the outboxes and event streams.
-            let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
-            // Persist chain.
-            self.save().await?;
-            let mut actions = self.create_network_actions(None).await?;
-            if !updated_event_streams.is_empty() {
-                actions.notifications.push(Notification {
-                    chain_id,
-                    reason: Reason::NewEvents {
-                        height,
-                        block_hash,
-                        event_streams: updated_event_streams,
-                    },
-                });
+        // Dispatch on the actual outcome (preprocess / checkpoint-restore-then-execute
+        // / contiguous execute):
+        //  - `Preprocess` mode: never execute, even if contiguous.
+        //  - `Execute` mode + gap + checkpoint block: install the snapshot, then execute.
+        //  - `Execute` mode + gap + non-checkpoint block: fall back to preprocess
+        //    (we can't bridge the gap).
+        //  - `Execute` mode + contiguous: execute directly.
+        let gap = tip.next_block_height < height;
+        let starts_with_checkpoint = block.starts_with_checkpoint();
+        match (mode, gap, starts_with_checkpoint) {
+            (ProcessConfirmedBlockMode::Preprocess, _, _)
+            | (ProcessConfirmedBlockMode::Execute, true, false) => {
+                self.preprocess_certified_block(certificate, notify_when_messages_are_delivered)
+                    .await
             }
-            trace!("Preprocessed confirmed block {height}");
-            self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
-                .await;
-            return Ok((
-                self.chain_info_response().await?,
-                actions,
-                BlockOutcome::Preprocessed,
-            ));
+            (ProcessConfirmedBlockMode::Execute, true, true) => {
+                self.execute_block_with_checkpoint_restore(
+                    certificate,
+                    blobs,
+                    notify_when_messages_are_delivered,
+                )
+                .await
+            }
+            (ProcessConfirmedBlockMode::Execute, false, _) => {
+                self.execute_contiguous_block(
+                    certificate,
+                    blobs,
+                    tip,
+                    notify_when_messages_are_delivered,
+                )
+                .await
+            }
         }
+    }
 
-        // If we're here with a gap, the block must be a checkpoint: install its
-        // snapshot, fast-forward the tip, and fall through to full execution
-        // (which re-runs `prepare_checkpoint`, deducts the same fees, and
-        // converges on the producer's post-block state).
-        if tip.next_block_height < height {
+    /// Preprocesses a confirmed block: updates outboxes and event streams without
+    /// executing it, and does not advance the chain tip.
+    async fn preprocess_certified_block(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        let block_hash = certificate.hash();
+        let block = certificate.block();
+        let chain_id = block.header.chain_id;
+        let height = block.header.height;
+
+        let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
+        self.save().await?;
+        let mut actions = self.create_network_actions(None).await?;
+        if !updated_event_streams.is_empty() {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewEvents {
+                    height,
+                    block_hash,
+                    event_streams: updated_event_streams,
+                },
+            });
+        }
+        trace!("Preprocessed confirmed block {height}");
+        self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
+            .await;
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Preprocessed,
+        ))
+    }
+
+    /// Restores the chain's execution state from the checkpoint blob embedded in
+    /// the block's first oracle response, fast-forwards the tip to the block's
+    /// height, then executes the block as if it were contiguous. Re-running the
+    /// block applies its fees and re-derives any post-checkpoint state.
+    async fn execute_block_with_checkpoint_restore(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+        blobs: BTreeMap<BlobId, Blob>,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        let (blob_id, chain_id, height, previous_block_hash) = {
+            let block = certificate.block();
             let Some(OracleResponse::Checkpoint(blob_id)) =
                 block.body.oracle_responses.first().and_then(|r| r.first())
             else {
@@ -963,36 +1005,58 @@ where
                 )
                 .into());
             };
-            let blob = blobs
-                .get(blob_id)
-                .ok_or_else(|| WorkerError::BlobsNotFound(vec![*blob_id]))?;
-            let bytes = blob.bytes().to_vec();
-            self.chain
-                .execution_state
-                .restore_from_content(&bytes)
-                .await?;
-            // `restore_from_content` writes directly to storage and leaves the
-            // in-memory view in an undefined state — reload from storage.
-            self.chain = self.storage.load_chain(chain_id).await?;
-            // We only reset `execution_state` (via restore) and `tip_state`. The
-            // other `ChainStateView` fields are either (a) already default for a
-            // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
-            // (b) about to be overwritten by `apply_confirmed_block` when the
-            // cert is applied (`manager`, `block_hashes` for height `height`),
-            // or (c) outside the protocol state hash so divergence from the
-            // producer is fine (inboxes; subsequent blocks reconcile by
-            // anticipation if needed). The `num_*` counters on `ChainTipState`
-            // are write-only in current code, so leaving them at zero has no
-            // functional impact.
-            let new_tip = ChainTipState {
-                block_hash: block.header.previous_block_hash,
-                next_block_height: height,
-                ..Default::default()
-            };
-            self.chain.tip_state.set(new_tip.clone());
-            self.save().await?;
-            tip = new_tip;
-        }
+            (
+                *blob_id,
+                block.header.chain_id,
+                block.header.height,
+                block.header.previous_block_hash,
+            )
+        };
+        let blob = blobs
+            .get(&blob_id)
+            .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
+        let bytes = blob.bytes().to_vec();
+        self.chain
+            .execution_state
+            .restore_from_content(&bytes)
+            .await?;
+        // `restore_from_content` writes directly to storage and leaves the
+        // in-memory view in an undefined state — reload from storage.
+        self.chain = self.storage.load_chain(chain_id).await?;
+        // We only reset `execution_state` (via restore) and `tip_state`. The
+        // other `ChainStateView` fields are either (a) already default for a
+        // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
+        // (b) about to be overwritten by `apply_confirmed_block` when the
+        // cert is applied (`manager`, `block_hashes` for height `height`),
+        // or (c) outside the protocol state hash so divergence from the
+        // producer is fine (inboxes; subsequent blocks reconcile by
+        // anticipation if needed). The `num_*` counters on `ChainTipState`
+        // are write-only in current code, so leaving them at zero has no
+        // functional impact.
+        let new_tip = ChainTipState {
+            block_hash: previous_block_hash,
+            next_block_height: height,
+            ..Default::default()
+        };
+        self.chain.tip_state.set(new_tip.clone());
+        self.save().await?;
+        self.execute_contiguous_block(certificate, blobs, new_tip, notify_when_messages_are_delivered)
+            .await
+    }
+
+    /// Executes a confirmed block whose height equals `tip.next_block_height`,
+    /// updating inboxes, applying the block, and persisting the chain.
+    async fn execute_contiguous_block(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+        mut blobs: BTreeMap<BlobId, Blob>,
+        tip: ChainTipState,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        let block_hash = certificate.hash();
+        let block = certificate.block();
+        let chain_id = block.header.chain_id;
+        let height = block.header.height;
 
         // This should always be true for valid certificates.
         ensure!(
@@ -1000,9 +1064,8 @@ where
             WorkerError::InvalidBlockChaining
         );
 
-        // If we got here, `height` is equal to `tip.next_block_height` and the block is
-        // properly chained. Verify that the chain is active and that the epoch we used for
-        // verifying the certificate is actually the active one on the chain.
+        // Verify that the chain is active and that the epoch we used for verifying
+        // the certificate is actually the active one on the chain.
         self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
@@ -1013,7 +1076,6 @@ where
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
 
-        // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
         if block.header.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
             warn!(
@@ -1069,7 +1131,6 @@ where
             ConfirmedBlock::new(Block::new(proposed_block, verified))
         };
 
-        // Update the rest of the chain state.
         let updated_streams = chain
             .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
@@ -1092,7 +1153,6 @@ where
                 },
             });
         }
-        // Persist chain.
         self.save().await?;
 
         self.block_values
