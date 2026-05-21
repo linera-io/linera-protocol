@@ -54,8 +54,8 @@ use wrapped_fungible::{Account, InitialState, WrappedFungibleOperation, WrappedP
 
 const TOKEN_DECIMALS: u8 = 6;
 const ONE_EVM_TOKEN_RAW: u128 = 1_000_000; // 10^6
-// Must exceed `Amount::from_tokens(1).value = 10^18` so the (buggy) raw
-// release attempt doesn't revert the EVM transfer before the assertion fires.
+                                           // Must exceed `Amount::from_tokens(1).value = 10^18` so the (buggy) raw
+                                           // release attempt doesn't revert the EVM transfer before the assertion fires.
 const INITIAL_SUPPLY_EVM_RAW: u128 = 2_000_000_000_000_000_000;
 
 sol! {
@@ -174,6 +174,7 @@ async fn decimal_mismatch_linera_to_evm() -> anyhow::Result<()> {
     // ── Create wrapped-fungible app on chain A, seeding owner_a with 1 wTEST ──
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wTEST".to_string(),
+        decimals: TOKEN_DECIMALS,
         minter: Some(owner_a),
         mint_chain_id: Some(chain_a),
         evm_token_address: erc20_addr.0 .0,

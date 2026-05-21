@@ -201,6 +201,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             wf_module_id,
             serde_json::to_vec(&WrappedParameters {
                 ticker_symbol: "wTEST".to_string(),
+                decimals: 18,
                 minter: Some(owner_a),
                 mint_chain_id: Some(chain_a),
                 evm_token_address: erc20_addr.0 .0,

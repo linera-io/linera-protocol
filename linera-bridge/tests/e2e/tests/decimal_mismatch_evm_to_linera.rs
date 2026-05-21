@@ -207,6 +207,7 @@ async fn decimal_mismatch_evm_to_linera() -> anyhow::Result<()> {
     // ── Create wrapped-fungible app on chain A ──
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wTEST".to_string(),
+        decimals: TOKEN_DECIMALS,
         minter: Some(owner_a),
         mint_chain_id: Some(chain_a),
         evm_token_address: erc20_addr.0 .0,

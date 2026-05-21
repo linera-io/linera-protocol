@@ -19,6 +19,8 @@ pub use super::fungible::{Account, FungibleResponse, InitialState, InitialStateB
 pub struct WrappedParameters {
     /// Ticker symbol (e.g. "USDC")
     pub ticker_symbol: String,
+    /// Number of decimal places used by the source ERC-20 (e.g. 6 for USDC).
+    pub decimals: u8,
     /// If set, only this account owner can sign mint operations
     pub minter: Option<AccountOwner>,
     /// If set, minting and auto-burning are restricted to this chain

@@ -465,6 +465,7 @@ where
             wf_module_id,
             serde_json::to_vec(&wrapped_fungible::WrappedParameters {
                 ticker_symbol: "wTEST".to_string(),
+                decimals: 18,
                 minter: None,
                 mint_chain_id: Some(mint_chain_id),
                 evm_token_address: erc20_addr.0 .0,

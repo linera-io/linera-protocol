@@ -185,6 +185,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!("Creating wrapped-fungible application...");
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wTEST".to_string(),
+        decimals: 18,
         minter: Some(owner),
         mint_chain_id: Some(chain_id),
         evm_token_address: erc20_addr.0 .0,

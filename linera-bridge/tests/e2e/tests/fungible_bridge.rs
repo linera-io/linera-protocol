@@ -145,6 +145,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!("Creating wrapped-fungible application...");
     let params = WrappedParameters {
         ticker_symbol: "TEST".to_string(),
+        decimals: 18,
         minter: Some(owner_a),
         mint_chain_id: Some(chain_a),
         evm_token_address: [0u8; 20],
