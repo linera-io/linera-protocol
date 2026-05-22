@@ -237,7 +237,18 @@ pub enum TipLagTrend {
     Diverging,
 }
 
-pub type PartialSyncReport = serde_json::Value;
+/// L6 partial sync: write-path ingest of a bounded run of blocks (opt-in).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartialSyncReport {
+    pub chain_id: String,
+    pub from_height: u64,
+    pub to_height: u64,
+    pub blocks_attempted: u64,
+    pub blocks_accepted: u64,
+    pub bytes_in: u64,
+    pub duration_secs: f64,
+    pub blocks_per_sec: f64,
+}
 
 /// Render the report as a human-readable Markdown document.
 ///

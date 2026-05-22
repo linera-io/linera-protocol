@@ -8,6 +8,7 @@
 mod bulk_download;
 mod config;
 mod latency;
+mod partial_sync;
 mod preflight;
 mod read_latency;
 mod report;
