@@ -45,7 +45,7 @@ impl OutputSpec {
         }
         let mut out = Vec::new();
         for item in raw {
-            for part in item.split(|c| c == ',' || c == '+') {
+            for part in item.split([',', '+']) {
                 let part = part.trim();
                 if part.is_empty() {
                     continue;
@@ -255,25 +255,25 @@ pub struct PartialSyncReport {
 /// Per-layer detail sections are appended by each layer's own rendering helper
 /// as those layers are implemented; this base covers the metadata header.
 pub fn render_markdown(r: &Report) -> String {
-    use std::fmt::Write as _;
+    let m = &r.metadata;
     let mut s = String::new();
-    let _ = writeln!(s, "# Validator Benchmark Report");
-    let _ = writeln!(s);
-    let _ = writeln!(s, "- **Candidate:** `{}`", r.metadata.candidate.address);
-    if let Some(pk) = &r.metadata.candidate.public_key {
-        let _ = writeln!(s, "- **Public key:** `{pk}`");
+    s.push_str("# Validator Benchmark Report\n\n");
+    s.push_str(&format!("- **Candidate:** `{}`\n", m.candidate.address));
+    if let Some(pk) = &m.candidate.public_key {
+        s.push_str(&format!("- **Public key:** `{pk}`\n"));
     }
-    let _ = writeln!(
-        s,
-        "- **Observer:** {} @ {}",
-        r.metadata.observer.location, r.metadata.observer.hostname
-    );
-    let _ = writeln!(s, "- **Started:** {}", r.metadata.observer.started_at);
-    if let Some(d) = r.metadata.observer.duration_secs {
-        let _ = writeln!(s, "- **Duration:** {d}s");
+    s.push_str(&format!(
+        "- **Observer:** {} @ {}\n",
+        m.observer.location, m.observer.hostname
+    ));
+    s.push_str(&format!("- **Started:** {}\n", m.observer.started_at));
+    if let Some(d) = m.observer.duration_secs {
+        s.push_str(&format!("- **Duration:** {d}s\n"));
     }
-    let _ = writeln!(s, "- **Chains:** {}", r.metadata.chains_tested.join(", "));
-    let _ = writeln!(s);
+    s.push_str(&format!(
+        "- **Chains:** {}\n\n",
+        m.chains_tested.join(", ")
+    ));
     s
 }
 
