@@ -9,7 +9,7 @@
 //! `BlobsNotFound`) but capped to a fixed number of blocks. This is the only
 //! layer with a stateful side effect on the candidate, hence opt-in.
 
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use anyhow::Result;
 use linera_base::{data_types::BlockHeight, identifiers::ChainId};
@@ -70,17 +70,18 @@ where
 
     let heights: Vec<BlockHeight> = (from..to).map(BlockHeight).collect();
     let storage = chain_client.storage_client();
+    // Certificates and blobs stay wrapped in the storage cache `Arc`, which is
+    // exactly what the validator node's handlers accept.
     let certificates = storage
         .read_certificates_by_heights(chain, &heights)
         .await?
         .into_iter()
-        .flatten()
-        .map(Arc::unwrap_or_clone);
+        .flatten();
 
     let started = Instant::now();
     for certificate in certificates {
         report.blocks_attempted += 1;
-        report.bytes_in += bcs::serialized_size(&certificate).unwrap_or(0) as u64;
+        report.bytes_in += bcs::serialized_size(&*certificate).unwrap_or(0) as u64;
 
         // First attempt; on missing blobs, upload them and retry once.
         let missing = match node
@@ -103,8 +104,8 @@ where
             .await?
             .into_iter()
             .flatten()
-            .map(Arc::unwrap_or_clone)
-            .collect();
+            .map(|b| b.into_std())
+            .collect::<Vec<_>>();
         node.upload_blobs(blobs).await?;
         node.handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
             .await?;
