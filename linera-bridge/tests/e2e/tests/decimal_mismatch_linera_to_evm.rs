@@ -257,7 +257,7 @@ async fn decimal_mismatch_linera_to_evm() -> anyhow::Result<()> {
     let evm_recipient_owner: AccountOwner = format!("0x{evm_recipient_hex}").parse()?;
     let burn_transfer = WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: Amount::from_tokens(1).to_attos().to_string(),
+        amount: "1000000".to_string(), // matches ONE_EVM_TOKEN_RAW
         target_account: Account {
             chain_id: chain_a,
             owner: evm_recipient_owner,
