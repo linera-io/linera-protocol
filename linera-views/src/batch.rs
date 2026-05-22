@@ -337,7 +337,7 @@ impl Batch {
 
 /// A trait to expand `DeletePrefix` operations.
 ///
-/// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
+/// Certain databases do not support the deletion by prefix.
 /// Thus we need to access the databases in order to replace a `DeletePrefix`
 /// by a vector of the keys to be removed.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]

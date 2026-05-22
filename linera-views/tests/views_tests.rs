@@ -4,8 +4,6 @@
 use std::collections::BTreeSet;
 
 use anyhow::Result;
-#[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
 use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
@@ -185,34 +183,6 @@ impl StateStorage for ScyllaDbTestStorage {
         let database = ScyllaDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStorage {
-            database,
-            accessed_chains,
-        }
-    }
-
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
-        self.accessed_chains.insert(id);
-        let root_key = bcs::to_bytes(&id)?;
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, id).await?;
-        StateView::load(context).await
-    }
-}
-
-#[cfg(with_dynamodb)]
-pub struct DynamoDbTestStorage {
-    database: DynamoDbDatabase,
-    accessed_chains: BTreeSet<usize>,
-}
-
-#[cfg(with_dynamodb)]
-impl StateStorage for DynamoDbTestStorage {
-    type Context = ViewContext<usize, <DynamoDbDatabase as KeyValueDatabase>::Store>;
-
-    async fn new() -> Self {
-        let database = DynamoDbDatabase::connect_test_namespace().await.unwrap();
-        let accessed_chains = BTreeSet::new();
-        DynamoDbTestStorage {
             database,
             accessed_chains,
         }
@@ -747,20 +717,6 @@ async fn test_views_in_scylla_db() -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_views_in_dynamo_db() -> Result<()> {
-    let mut store = DynamoDbTestStorage::new().await;
-    let config = TestConfig::default();
-    let hash = test_store(&mut store, &config).await?;
-    assert_eq!(store.accessed_chains.len(), 1);
-
-    let mut store = MemoryTestStorage::new().await;
-    let hash2 = test_store(&mut store, &config).await?;
-    assert_eq!(hash, hash2);
-    Ok(())
-}
-
 #[cfg(with_rocksdb)]
 #[cfg(test)]
 async fn test_store_rollback_kernel<S>(store: &mut S) -> Result<()>
@@ -1185,18 +1141,6 @@ where
         Ok(())
     })
     .await
-}
-
-#[tokio::test]
-#[cfg(with_dynamodb)]
-async fn check_large_write_dynamo_db() -> Result<()> {
-    // By writing 1000 elements we seriously check the Amazon journaling
-    // writing system.
-    let n = 1000;
-    let mut rng = make_deterministic_rng();
-    let vector = get_random_byte_vector(&mut rng, &[], n);
-    let mut store = DynamoDbTestStorage::new().await;
-    check_large_write(&mut store, vector).await
 }
 
 #[tokio::test]

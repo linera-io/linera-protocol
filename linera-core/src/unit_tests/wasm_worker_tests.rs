@@ -35,8 +35,6 @@ use linera_execution::{
     WasmContractModule, WasmRuntime,
 };
 use linera_storage::{DbStorage, Storage};
-#[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(feature = "scylladb")]
@@ -65,17 +63,6 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
     let storage = DbStorage::<RocksDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
-}
-
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn test_dynamo_db_handle_certificates_to_create_application(
-    wasm_runtime: WasmRuntime,
-) -> anyhow::Result<()> {
-    let storage = DbStorage::<DynamoDbDatabase, _>::make_test_storage(Some(wasm_runtime)).await;
     run_test_handle_certificates_to_create_application(storage, wasm_runtime).await
 }
 

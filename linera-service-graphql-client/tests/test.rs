@@ -1,11 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(
-    feature = "storage-service",
-    feature = "dynamodb",
-    feature = "scylladb"
-))]
+#![cfg(any(feature = "storage-service", feature = "scylladb"))]
 
 use std::{collections::BTreeMap, str::FromStr, sync::LazyLock, time::Duration};
 
@@ -50,7 +46,6 @@ async fn transfer(client: &reqwest::Client, url: &str, from: ChainId, to: Accoun
 
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc); "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "dynamodb_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_end_to_end_queries(config: impl LineraNetConfig) -> anyhow::Result<()> {
     let _guard = INTEGRATION_TEST_GUARD.lock().await;
