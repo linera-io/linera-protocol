@@ -3,6 +3,46 @@ pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
 library WrappedFungibleTypes {
+    function bcs_serialize_len(uint256 x) internal pure returns (bytes memory) {
+        bytes memory result;
+        bytes1 entry;
+        while (true) {
+            if (x < 128) {
+                entry = bytes1(uint8(x));
+                return abi.encodePacked(result, entry);
+            } else {
+                uint256 xb = x >> 7;
+                uint256 remainder = x - (xb << 7);
+                require(remainder < 128);
+                entry = bytes1(uint8(remainder) + 128);
+                result = abi.encodePacked(result, entry);
+                x = xb;
+            }
+        }
+        require(false, "This line is unreachable");
+        return result;
+    }
+
+    function bcs_deserialize_offset_len(uint256 pos, bytes memory input) internal pure returns (uint256, uint256) {
+        uint256 idx = 0;
+        while (true) {
+            if (uint8(input[pos + idx]) < 128) {
+                uint256 result = 0;
+                uint256 power = 1;
+                for (uint256 u = 0; u < idx; u++) {
+                    uint8 val = uint8(input[pos + u]) - 128;
+                    result += power * uint256(val);
+                    power *= 128;
+                }
+                result += power * uint8(input[pos + idx]);
+                return (pos + idx + 1, result);
+            }
+            idx += 1;
+        }
+        require(false, "This line is unreachable");
+        return (0, 0);
+    }
+
     struct BurnEvent {
         bytes20 target;
         BridgeTypes.Amount amount;
@@ -572,7 +612,7 @@ library WrappedFungibleTypes {
 
     struct WrappedFungibleOperation_Transfer {
         BridgeTypes.AccountOwner owner;
-        BridgeTypes.Amount amount;
+        string amount;
         BridgeTypes.Account target_account;
     }
 
@@ -582,7 +622,7 @@ library WrappedFungibleTypes {
         returns (bytes memory)
     {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
-        result = abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
+        result = abi.encodePacked(result, bcs_serialize_string(input.amount));
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
     }
 
@@ -594,8 +634,8 @@ library WrappedFungibleTypes {
         uint256 new_pos;
         BridgeTypes.AccountOwner memory owner;
         (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(pos, input);
-        BridgeTypes.Amount memory amount;
-        (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
+        string memory amount;
+        (new_pos, amount) = bcs_deserialize_offset_string(new_pos, input);
         BridgeTypes.Account memory target_account;
         (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(new_pos, input);
         return (new_pos, WrappedFungibleOperation_Transfer(owner, amount, target_account));
@@ -616,7 +656,7 @@ library WrappedFungibleTypes {
     struct WrappedFungibleOperation_TransferFrom {
         BridgeTypes.AccountOwner owner;
         BridgeTypes.AccountOwner spender;
-        BridgeTypes.Amount amount;
+        string amount;
         BridgeTypes.Account target_account;
     }
 
@@ -627,7 +667,7 @@ library WrappedFungibleTypes {
     {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
         result = abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.spender));
-        result = abi.encodePacked(result, BridgeTypes.bcs_serialize_Amount(input.amount));
+        result = abi.encodePacked(result, bcs_serialize_string(input.amount));
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
     }
 
@@ -641,8 +681,8 @@ library WrappedFungibleTypes {
         (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(pos, input);
         BridgeTypes.AccountOwner memory spender;
         (new_pos, spender) = BridgeTypes.bcs_deserialize_offset_AccountOwner(new_pos, input);
-        BridgeTypes.Amount memory amount;
-        (new_pos, amount) = BridgeTypes.bcs_deserialize_offset_Amount(new_pos, input);
+        string memory amount;
+        (new_pos, amount) = bcs_deserialize_offset_string(new_pos, input);
         BridgeTypes.Account memory target_account;
         (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(new_pos, input);
         return (new_pos, WrappedFungibleOperation_TransferFrom(owner, spender, amount, target_account));
@@ -670,6 +710,58 @@ library WrappedFungibleTypes {
             dest := mload(add(add(input, 0x20), pos))
         }
         return (pos + 20, dest);
+    }
+
+    function bcs_serialize_string(string memory input) internal pure returns (bytes memory) {
+        bytes memory input_bytes = bytes(input);
+        uint256 number_bytes = input_bytes.length;
+        uint256 number_char = 0;
+        uint256 pos = 0;
+        while (true) {
+            if (uint8(input_bytes[pos]) < 128) {
+                number_char += 1;
+            }
+            pos += 1;
+            if (pos == number_bytes) {
+                break;
+            }
+        }
+        bytes memory result_len = bcs_serialize_len(number_char);
+        return abi.encodePacked(result_len, input);
+    }
+
+    function bcs_deserialize_offset_string(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, string memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        uint256 shift = 0;
+        for (uint256 i = 0; i < len; i++) {
+            while (true) {
+                bytes1 val = input[new_pos + shift];
+                shift += 1;
+                if (uint8(val) < 128) {
+                    break;
+                }
+            }
+        }
+        bytes memory result_bytes = new bytes(shift);
+        for (uint256 i = 0; i < shift; i++) {
+            result_bytes[i] = input[new_pos + i];
+        }
+        string memory result = string(result_bytes);
+        return (new_pos + shift, result);
+    }
+
+    function bcs_deserialize_string(bytes memory input) internal pure returns (string memory) {
+        uint256 new_pos;
+        string memory value;
+        (new_pos, value) = bcs_deserialize_offset_string(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
     }
 
     function bcs_serialize_uint8(uint8 input) internal pure returns (bytes memory) {
