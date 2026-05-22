@@ -1468,6 +1468,7 @@ Probes the candidate across read-side primitives (preflight, baseline, concurren
 * `--observer-location <OBSERVER_LOCATION>` — Free-form tag carried in the report (e.g. `OVH US-EAST`)
 
   Default value: `unspecified`
+* `--no-progress` — Disable the interactive progress UI (auto-disabled when stderr is not a TTY)
 * `--abort-on-preflight-fail` — Abort the run if preflight fails (default: continue and report)
 
 
