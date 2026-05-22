@@ -207,7 +207,36 @@ pub struct BulkRun {
     pub latency_ms: LatencySummary,
 }
 
-pub type TipLagReport = serde_json::Value;
+/// L5 tip-lag snapshot: candidate tip vs the committee-backed reference tip.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TipLagReport {
+    pub per_chain: Vec<PerChainTipLag>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerChainTipLag {
+    pub chain_id: String,
+    pub samples: Vec<TipLagSample>,
+    pub trend: TipLagTrend,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TipLagSample {
+    pub t_secs: u64,
+    pub candidate_tip: u64,
+    pub reference_tip: u64,
+    /// `reference_tip - candidate_tip`; positive means the candidate is behind.
+    pub lag_blocks: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TipLagTrend {
+    Converging,
+    Stable,
+    Diverging,
+}
+
 pub type PartialSyncReport = serde_json::Value;
 
 /// Render the report as a human-readable Markdown document.

@@ -11,6 +11,7 @@ mod latency;
 mod preflight;
 mod read_latency;
 mod report;
+mod tip_lag;
 
 pub use config::Benchmark;
 
