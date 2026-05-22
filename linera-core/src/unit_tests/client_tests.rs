@@ -4209,6 +4209,7 @@ where
     let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first()) {
         Some(OracleResponse::Checkpoint {
             execution_state_blobs,
+            used_blobs: _,
         }) => execution_state_blobs.clone(),
         other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
     };

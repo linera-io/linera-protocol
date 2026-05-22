@@ -1820,6 +1820,7 @@ library BridgeTypes {
 
     struct OracleResponse_Checkpoint {
         CryptoHash[] execution_state_blobs;
+        BlobId[] used_blobs;
     }
 
     function bcs_serialize_OracleResponse_Checkpoint(OracleResponse_Checkpoint memory input)
@@ -1827,7 +1828,8 @@ library BridgeTypes {
         pure
         returns (bytes memory)
     {
-        return bcs_serialize_seq_CryptoHash(input.execution_state_blobs);
+        bytes memory result = bcs_serialize_seq_CryptoHash(input.execution_state_blobs);
+        return abi.encodePacked(result, bcs_serialize_seq_BlobId(input.used_blobs));
     }
 
     function bcs_deserialize_offset_OracleResponse_Checkpoint(uint256 pos, bytes memory input)
@@ -1838,7 +1840,9 @@ library BridgeTypes {
         uint256 new_pos;
         CryptoHash[] memory execution_state_blobs;
         (new_pos, execution_state_blobs) = bcs_deserialize_offset_seq_CryptoHash(pos, input);
-        return (new_pos, OracleResponse_Checkpoint(execution_state_blobs));
+        BlobId[] memory used_blobs;
+        (new_pos, used_blobs) = bcs_deserialize_offset_seq_BlobId(new_pos, input);
+        return (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs));
     }
 
     function bcs_deserialize_OracleResponse_Checkpoint(bytes memory input)
@@ -4075,6 +4079,41 @@ library BridgeTypes {
         uint256 new_pos;
         BlobContent[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_BlobContent(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_seq_BlobId(BlobId[] memory input) internal pure returns (bytes memory) {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_len(len);
+        for (uint256 i = 0; i < len; i++) {
+            result = abi.encodePacked(result, bcs_serialize_BlobId(input[i]));
+        }
+        return result;
+    }
+
+    function bcs_deserialize_offset_seq_BlobId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, BlobId[] memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        BlobId[] memory result;
+        result = new BlobId[](len);
+        BlobId memory value;
+        for (uint256 i = 0; i < len; i++) {
+            (new_pos, value) = bcs_deserialize_offset_BlobId(new_pos, input);
+            result[i] = value;
+        }
+        return (new_pos, result);
+    }
+
+    function bcs_deserialize_seq_BlobId(bytes memory input) internal pure returns (BlobId[] memory) {
+        uint256 new_pos;
+        BlobId[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_BlobId(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

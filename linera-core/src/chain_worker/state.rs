@@ -915,6 +915,7 @@ where
             if block.starts_with_checkpoint() {
                 let Some(OracleResponse::Checkpoint {
                     execution_state_blobs,
+                    ..
                 }) = block.body.oracle_responses.first().and_then(|r| r.first())
                 else {
                     return Err(ChainError::InternalError(
