@@ -103,6 +103,10 @@ pub struct Benchmark {
     pub no_progress: bool,
 
     // --- Robustness ---
+    /// Per-RPC timeout in seconds. A call that exceeds it is recorded as a
+    /// `timeout` error and the run keeps going, so a hung validator never blocks.
+    #[arg(long, default_value_t = 30)]
+    pub rpc_timeout_secs: u64,
     /// Abort the run if preflight fails (default: continue and report).
     #[arg(long)]
     pub abort_on_preflight_fail: bool,

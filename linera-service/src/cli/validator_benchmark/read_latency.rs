@@ -15,11 +15,11 @@ use tokio::{task::JoinSet, time::Instant as TokioInstant};
 
 use super::{
     latency::Samples,
-    preflight::categorize,
     progress::Progress,
     report::{
         PerChainReadBaseline, PerChainReadStress, ReadBaselineReport, ReadStressReport, StressLevel,
     },
+    rpc::timed,
 };
 
 /// First 8 hex chars of a chain id, for compact progress messages.
@@ -32,6 +32,7 @@ pub async fn run_baseline<N: ValidatorNode>(
     node: &N,
     chains: &[ChainId],
     requests_per_chain: usize,
+    rpc_timeout: Duration,
     progress: &Progress,
 ) -> ReadBaselineReport {
     let phase = progress.phase(
@@ -43,11 +44,11 @@ pub async fn run_baseline<N: ValidatorNode>(
         phase.set_message(format!("chain {}", short(chain)));
         let mut samples = Samples::new();
         for _ in 0..requests_per_chain {
-            let query = ChainInfoQuery::new(*chain);
             let start = Instant::now();
-            match node.handle_chain_info_query(query).await {
+            match timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(*chain))).await
+            {
                 Ok(_) => samples.record_success(start.elapsed().as_secs_f64() * 1000.0),
-                Err(e) => samples.record_error(categorize(&e.to_string())),
+                Err(category) => samples.record_error(category),
             }
             phase.inc(1);
         }
@@ -68,6 +69,7 @@ pub async fn run_stress<N>(
     chains: &[ChainId],
     levels: &[usize],
     duration: Duration,
+    rpc_timeout: Duration,
     progress: &Progress,
 ) -> ReadStressReport
 where
@@ -87,11 +89,10 @@ where
                 set.spawn(async move {
                     let mut samples = Samples::new();
                     while TokioInstant::now() < deadline {
-                        let query = ChainInfoQuery::new(chain);
                         let start = Instant::now();
-                        match node.handle_chain_info_query(query).await {
+                        match timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain))).await {
                             Ok(_) => samples.record_success(start.elapsed().as_secs_f64() * 1000.0),
-                            Err(e) => samples.record_error(categorize(&e.to_string())),
+                            Err(category) => samples.record_error(category),
                         }
                     }
                     samples

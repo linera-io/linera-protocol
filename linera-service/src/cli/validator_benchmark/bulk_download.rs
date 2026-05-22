@@ -8,7 +8,7 @@
 //! recent heights the candidate already has, so the only variable under test is
 //! the read path, not history availability.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use linera_base::{data_types::BlockHeight, identifiers::ChainId};
@@ -17,9 +17,9 @@ use tokio::task::JoinSet;
 
 use super::{
     latency::Samples,
-    preflight::categorize,
     progress::{Phase, Progress},
     report::{BulkDownloadReport, BulkRun, PerChainBulk},
+    rpc::timed,
 };
 
 /// How many batches the `auto` range spans.
@@ -31,6 +31,7 @@ pub async fn run<N>(
     batch_size: u32,
     concurrencies: &[usize],
     height_range_arg: &str,
+    rpc_timeout: Duration,
     progress: &Progress,
 ) -> Result<BulkDownloadReport>
 where
@@ -39,15 +40,38 @@ where
     let phase = progress.phase("L4 bulk download", Some(0));
     let mut per_chain = Vec::with_capacity(chains.len());
     for &chain in chains {
-        let info = node.handle_chain_info_query(ChainInfoQuery::new(chain)).await?;
-        let tip = info.info.next_block_height.0;
+        // A timed-out tip query means we cannot pick a range; skip the chain
+        // (recorded as no runs) rather than hang or abort the whole layer.
+        let tip = match timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain)))
+            .await
+        {
+            Ok(info) => info.info.next_block_height.0,
+            Err(_) => {
+                per_chain.push(PerChainBulk {
+                    chain_id: chain.to_string(),
+                    runs: Vec::new(),
+                });
+                continue;
+            }
+        };
         let (from, to) = resolve_range(height_range_arg, tip, batch_size)?;
         let batches = (from..to).step_by(batch_size.max(1) as usize).count() as u64;
         phase.inc_length(batches * concurrencies.len() as u64);
 
         let mut runs = Vec::with_capacity(concurrencies.len());
         for &concurrency in concurrencies {
-            runs.push(run_one(node, chain, batch_size, concurrency.max(1), from, to, &phase).await);
+            runs.push(
+                run_one(
+                    node,
+                    chain,
+                    batch_size,
+                    concurrency.max(1),
+                    (from, to),
+                    rpc_timeout,
+                    &phase,
+                )
+                .await,
+            );
         }
         per_chain.push(PerChainBulk {
             chain_id: chain.to_string(),
@@ -58,19 +82,20 @@ where
     Ok(BulkDownloadReport { per_chain })
 }
 
-/// Run a single (chain, concurrency) batch download over `[from, to)`.
+/// Run a single (chain, concurrency) batch download over `[from, to)` (`range`).
 async fn run_one<N>(
     node: &N,
     chain: ChainId,
     batch_size: u32,
     concurrency: usize,
-    from: u64,
-    to: u64,
+    range: (u64, u64),
+    rpc_timeout: Duration,
     phase: &Phase,
 ) -> BulkRun
 where
     N: ValidatorNode + Clone + Send + Sync + 'static,
 {
+    let (from, to) = range;
     let batch_starts: Vec<u64> = (from..to).step_by(batch_size.max(1) as usize).collect();
     let mut set: JoinSet<(Result<u64, String>, u64, f64)> = JoinSet::new();
     let mut samples = Samples::new();
@@ -89,7 +114,11 @@ where
             let node = node.clone();
             set.spawn(async move {
                 let t0 = Instant::now();
-                let result = node.download_certificates_by_heights(chain, heights).await;
+                let result = timed(
+                    rpc_timeout,
+                    node.download_certificates_by_heights(chain, heights),
+                )
+                .await;
                 let elapsed = t0.elapsed().as_secs_f64() * 1000.0;
                 match result {
                     Ok(certs) => {
@@ -99,7 +128,7 @@ where
                             .sum();
                         (Ok(certs.len() as u64), bytes, elapsed)
                     }
-                    Err(e) => (Err(categorize(&e.to_string()).to_string()), 0, elapsed),
+                    Err(category) => (Err(category), 0, elapsed),
                 }
             });
         }

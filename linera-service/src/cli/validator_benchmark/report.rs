@@ -93,6 +93,10 @@ pub struct Metadata {
     pub observer: Observer,
     pub config: serde_json::Value,
     pub chains_tested: Vec<String>,
+    /// `false` while the run is in progress (a file flushed after each layer),
+    /// `true` only on the final write. Lets a reader tell a partial run from a
+    /// complete one.
+    pub complete: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -307,6 +311,17 @@ impl Writer {
         })
     }
 
+    /// Write only the file targets, leaving stdout untouched. Called after each
+    /// layer so an interrupted run still leaves the completed layers on disk.
+    pub fn write_files(&self, report: &Report) -> Result<()> {
+        for spec in &self.targets {
+            if let Target::File(path) = &spec.target {
+                std::fs::write(path, Self::render(spec.format, report)?)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Emit the report to every configured target. When several formats share
     /// stdout, they are concatenated under `===== <FORMAT> =====` headers.
     pub fn emit(&self, report: &Report) -> Result<()> {
@@ -355,6 +370,7 @@ fn fixture() -> Report {
             },
             config: serde_json::Value::Null,
             chains_tested: vec!["c1".into()],
+            complete: false,
         },
         layers: Layers::default(),
     }

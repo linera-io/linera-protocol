@@ -13,6 +13,7 @@ mod preflight;
 mod progress;
 mod read_latency;
 mod report;
+mod rpc;
 mod tip_lag;
 
 pub use config::Benchmark;
@@ -40,133 +41,152 @@ impl Benchmark {
         let output_specs = OutputSpec::parse_all(&self.output)?;
 
         let progress = Progress::new(!self.no_progress && std::io::stderr().is_terminal());
+        let rpc_timeout = Duration::from_secs(self.rpc_timeout_secs);
 
         let started_at = Utc::now();
         let node = context.make_node_provider().make_node(&self.address)?;
+        let writer = Writer::new(output_specs);
+
+        // Build the report up front and flush file targets after each layer, so
+        // an interrupted run still leaves the completed layers on disk.
+        let mut report = Report {
+            metadata: Metadata {
+                tool_version: env!("CARGO_PKG_VERSION").to_string(),
+                candidate: Candidate {
+                    address: self.address.clone(),
+                    public_key: self.public_key.map(|k| k.to_string()),
+                    version_info: None,
+                    network_description: None,
+                },
+                observer: Observer {
+                    location: self.observer_location.clone(),
+                    hostname: std::env::var("HOSTNAME").unwrap_or_default(),
+                    started_at: started_at.to_rfc3339(),
+                    ended_at: None,
+                    duration_secs: None,
+                },
+                config: serde_json::to_value(self)?,
+                chains_tested: self.chain.iter().map(|c| c.to_string()).collect(),
+                complete: false,
+            },
+            layers: Layers::default(),
+        };
 
         // L1 preflight also yields version/network info for the report metadata.
         // When skipped, fetch those two cheap fields best-effort anyway.
-        let (preflight, version_info, network_description) = if !self.skip_preflight {
-            let outcome = preflight::run(&node, &progress).await;
+        if !self.skip_preflight {
+            let outcome = preflight::run(&node, rpc_timeout, &progress).await;
             if self.abort_on_preflight_fail
                 && outcome.report.status == report::PreflightStatus::Fail
             {
+                progress.clear();
                 anyhow::bail!(
                     "preflight failed for {}: {:?}",
                     self.address,
                     outcome.report.errors
                 );
             }
-            (
-                Some(outcome.report),
-                outcome.version_info,
-                outcome.network_description,
-            )
+            report.metadata.candidate.version_info = outcome.version_info;
+            report.metadata.candidate.network_description = outcome.network_description;
+            report.layers.preflight = Some(outcome.report);
         } else {
-            let version_info = node.get_version_info().await.ok().map(|v| format!("{v:?}"));
-            let network_description = node
-                .get_network_description()
+            report.metadata.candidate.version_info = rpc::timed(rpc_timeout, node.get_version_info())
                 .await
                 .ok()
-                .and_then(|nd| serde_json::to_value(nd).ok());
-            (None, version_info, network_description)
-        };
+                .map(|v| format!("{v:?}"));
+            report.metadata.candidate.network_description =
+                rpc::timed(rpc_timeout, node.get_network_description())
+                    .await
+                    .ok()
+                    .and_then(|nd| serde_json::to_value(nd).ok());
+        }
+        writer.write_files(&report)?;
 
-        let read_baseline = if !self.skip_read_baseline {
-            Some(
-                read_latency::run_baseline(&node, &self.chain, self.baseline_requests, &progress)
-                    .await,
-            )
-        } else {
-            None
-        };
+        // Layer futures are large; box them at the await site (clippy::large_futures).
+        if !self.skip_read_baseline {
+            report.layers.read_baseline = Some(
+                Box::pin(read_latency::run_baseline(
+                    &node,
+                    &self.chain,
+                    self.baseline_requests,
+                    rpc_timeout,
+                    &progress,
+                ))
+                .await,
+            );
+            writer.write_files(&report)?;
+        }
 
-        let read_stress = if !self.skip_read_stress {
-            Some(
-                read_latency::run_stress(
+        if !self.skip_read_stress {
+            report.layers.read_stress = Some(
+                Box::pin(read_latency::run_stress(
                     &node,
                     &self.chain,
                     &self.stress_levels,
                     Duration::from_secs(self.stress_duration_secs),
+                    rpc_timeout,
                     &progress,
-                )
+                ))
                 .await,
-            )
-        } else {
-            None
-        };
+            );
+            writer.write_files(&report)?;
+        }
 
-        let bulk_download = if !self.skip_bulk_download {
-            Some(
-                bulk_download::run(
+        if !self.skip_bulk_download {
+            report.layers.bulk_download = Some(
+                Box::pin(bulk_download::run(
                     &node,
                     &self.chain,
                     self.bulk_batch_size,
                     &self.bulk_concurrency,
                     &self.bulk_height_range,
+                    rpc_timeout,
                     &progress,
-                )
+                ))
                 .await?,
-            )
-        } else {
-            None
-        };
+            );
+            writer.write_files(&report)?;
+        }
 
-        let tip_lag = if !self.skip_tip_lag {
-            Some(
-                tip_lag::run(
+        if !self.skip_tip_lag {
+            report.layers.tip_lag = Some(
+                Box::pin(tip_lag::run(
                     &node,
                     context,
                     &self.chain,
                     self.tip_lag_samples,
                     Duration::from_secs(self.tip_lag_interval_secs),
+                    rpc_timeout,
                     &progress,
-                )
+                ))
                 .await?,
-            )
-        } else {
-            None
-        };
+            );
+            writer.write_files(&report)?;
+        }
 
-        let partial_sync = if self.deep {
+        if self.deep {
             let deep_chain = self.deep_chain.unwrap_or(self.chain[0]);
-            Some(partial_sync::run(&node, context, deep_chain, self.deep_blocks, &progress).await?)
-        } else {
-            None
-        };
+            report.layers.partial_sync = Some(
+                Box::pin(partial_sync::run(
+                    &node,
+                    context,
+                    deep_chain,
+                    self.deep_blocks,
+                    rpc_timeout,
+                    &progress,
+                ))
+                .await?,
+            );
+            writer.write_files(&report)?;
+        }
 
         let ended_at = Utc::now();
+        report.metadata.observer.ended_at = Some(ended_at.to_rfc3339());
+        report.metadata.observer.duration_secs =
+            Some((ended_at - started_at).num_seconds().max(0) as u64);
+        report.metadata.complete = true;
         progress.clear();
-        let report = Report {
-            metadata: Metadata {
-                tool_version: env!("CARGO_PKG_VERSION").to_string(),
-                candidate: Candidate {
-                    address: self.address.clone(),
-                    public_key: self.public_key.map(|k| k.to_string()),
-                    version_info,
-                    network_description,
-                },
-                observer: Observer {
-                    location: self.observer_location.clone(),
-                    hostname: std::env::var("HOSTNAME").unwrap_or_default(),
-                    started_at: started_at.to_rfc3339(),
-                    ended_at: Some(ended_at.to_rfc3339()),
-                    duration_secs: Some((ended_at - started_at).num_seconds().max(0) as u64),
-                },
-                config: serde_json::to_value(self)?,
-                chains_tested: self.chain.iter().map(|c| c.to_string()).collect(),
-            },
-            layers: Layers {
-                preflight,
-                read_baseline,
-                read_stress,
-                bulk_download,
-                tip_lag,
-                partial_sync,
-            },
-        };
-
-        Writer::new(output_specs).emit(&report)?;
+        writer.emit(&report)?;
         Ok(())
     }
 }

@@ -9,7 +9,7 @@
 //! `BlobsNotFound`) but capped to a fixed number of blocks. This is the only
 //! layer with a stateful side effect on the candidate, hence opt-in.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use linera_base::{data_types::BlockHeight, identifiers::ChainId};
@@ -17,7 +17,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::node::{CrossChainMessageDelivery, NodeError, ValidatorNode};
 use linera_storage::Storage as _;
 
-use super::{progress::Progress, report::PartialSyncReport};
+use super::{progress::Progress, report::PartialSyncReport, rpc::timed};
 
 /// Compute the exclusive end height for a bounded sync, saturating on overflow.
 pub(super) fn end_height(candidate_tip: u64, max_blocks: u32, local_tip: u64) -> u64 {
@@ -29,41 +29,57 @@ pub async fn run<N, Env>(
     context: &ClientContext<Env>,
     chain: ChainId,
     max_blocks: u32,
+    rpc_timeout: Duration,
     progress: &Progress,
 ) -> Result<PartialSyncReport>
 where
     N: ValidatorNode,
     Env: linera_core::Environment,
 {
-    let chain_client = context.make_chain_client(chain).await?;
-
-    // Make sure the local node holds the certificates we are about to push.
-    let local_info = chain_client.synchronize_chain_state(chain).await?;
-    let local_tip = local_info.next_block_height.0;
-
-    // The candidate may not yet know the chain at all (BlobsNotFound -> 0).
-    let candidate_tip = match node
-        .handle_chain_info_query(linera_core::data_types::ChainInfoQuery::new(chain))
-        .await
-    {
-        Ok(response) => response.info.next_block_height.0,
-        Err(NodeError::BlobsNotFound(_)) => 0,
-        Err(e) => return Err(e.into()),
-    };
-
-    let from = candidate_tip;
-    let to = end_height(candidate_tip, max_blocks, local_tip);
-
     let mut report = PartialSyncReport {
         chain_id: chain.to_string(),
-        from_height: from,
-        to_height: to,
+        from_height: 0,
+        to_height: 0,
         blocks_attempted: 0,
         blocks_accepted: 0,
         bytes_in: 0,
         duration_secs: 0.0,
         blocks_per_sec: 0.0,
     };
+
+    let chain_client = context.make_chain_client(chain).await?;
+
+    // The local sync can be heavy (it downloads the certificates to push); give
+    // it a visible spinner so it never looks frozen. NOTE: on a tall chain the
+    // wallet does not track, this can exceed --rpc-timeout-secs; raise it or use
+    // a tracked chain if L6 times out here.
+    let sync_phase = progress.phase("L6 sync local state", None);
+    let local_tip = match timed(rpc_timeout, chain_client.synchronize_chain_state(chain)).await {
+        Ok(info) => {
+            sync_phase.finish_ok();
+            info.next_block_height.0
+        }
+        Err(category) => {
+            sync_phase.finish_fail();
+            anyhow::bail!("L6 local sync failed ({category})");
+        }
+    };
+
+    // The candidate may not yet know the chain at all (BlobsNotFound -> 0).
+    let candidate_tip = match timed(
+        rpc_timeout,
+        node.handle_chain_info_query(linera_core::data_types::ChainInfoQuery::new(chain)),
+    )
+    .await
+    {
+        Ok(response) => response.info.next_block_height.0,
+        Err(_) => 0,
+    };
+
+    let from = candidate_tip;
+    let to = end_height(candidate_tip, max_blocks, local_tip);
+    report.from_height = from;
+    report.to_height = to;
 
     if to <= from {
         return Ok(report);
@@ -86,20 +102,25 @@ where
         phase.inc(1);
         report.bytes_in += bcs::serialized_size(&*certificate).unwrap_or(0) as u64;
 
-        // First attempt; on missing blobs, upload them and retry once.
-        let missing = match node
-            .handle_confirmed_certificate(
+        // First attempt. A timeout or non-blob error skips this block (the run
+        // keeps going); a `BlobsNotFound` triggers the blob-upload retry below.
+        // The typed error is needed here, so use a raw timeout rather than the
+        // string-categorizing `timed` helper.
+        let first = tokio::time::timeout(
+            rpc_timeout,
+            node.handle_confirmed_certificate(
                 certificate.clone(),
                 CrossChainMessageDelivery::NonBlocking,
-            )
-            .await
-        {
-            Ok(_) => {
+            ),
+        )
+        .await;
+        let missing = match first {
+            Ok(Ok(_)) => {
                 report.blocks_accepted += 1;
                 continue;
             }
-            Err(NodeError::BlobsNotFound(missing_blob_ids)) => missing_blob_ids,
-            Err(e) => return Err(e.into()),
+            Ok(Err(NodeError::BlobsNotFound(missing_blob_ids))) => missing_blob_ids,
+            Ok(Err(_)) | Err(_) => continue,
         };
 
         let blobs = storage
@@ -109,10 +130,18 @@ where
             .flatten()
             .map(|b| b.into_std())
             .collect::<Vec<_>>();
-        node.upload_blobs(blobs).await?;
-        node.handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking)
-            .await?;
-        report.blocks_accepted += 1;
+        if timed(rpc_timeout, node.upload_blobs(blobs)).await.is_err() {
+            continue;
+        }
+        if timed(
+            rpc_timeout,
+            node.handle_confirmed_certificate(certificate, CrossChainMessageDelivery::NonBlocking),
+        )
+        .await
+        .is_ok()
+        {
+            report.blocks_accepted += 1;
+        }
     }
 
     let duration = started.elapsed().as_secs_f64().max(f64::EPSILON);

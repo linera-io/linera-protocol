@@ -3,22 +3,28 @@
 
 //! L5 tip-lag snapshot.
 //!
-//! Compares the candidate's reported tip against a committee-backed reference
-//! tip (obtained through the local client's normal synchronization path, not by
-//! benchmarking the committee). Repeated sampling reveals whether the candidate
-//! is keeping up, catching up, or falling behind.
+//! Compares the candidate's reported tip against the network reference tip,
+//! taken as the highest `next_block_height` reported by the current committee
+//! members. This is a cheap read (one `handle_chain_info_query` per validator
+//! per sample), not a full chain synchronization, so it never downloads history
+//! or blocks on a slow sync. Repeated sampling reveals whether the candidate is
+//! keeping up, catching up, or falling behind.
 
 use std::time::Duration;
 
 use anyhow::Result;
 use linera_base::identifiers::ChainId;
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
+use linera_core::{
+    data_types::ChainInfoQuery,
+    node::{ValidatorNode, ValidatorNodeProvider as _},
+};
 use tokio::time::{sleep, Instant};
 
 use super::{
     progress::Progress,
     report::{PerChainTipLag, TipLagReport, TipLagSample, TipLagTrend},
+    rpc::timed,
 };
 
 /// Lag delta (in blocks) within which two samples are considered unchanged.
@@ -30,6 +36,7 @@ pub async fn run<N, Env>(
     chains: &[ChainId],
     samples: usize,
     interval: Duration,
+    rpc_timeout: Duration,
     progress: &Progress,
 ) -> Result<TipLagReport>
 where
@@ -38,6 +45,11 @@ where
 {
     let started = Instant::now();
     let phase = progress.phase("L5 tip-lag", Some(samples.max(1) as u64));
+
+    // Build the committee node set once from the (locally tracked) admin chain;
+    // the committee is network-wide, so any tracked chain yields the same set.
+    let committee_nodes = committee_nodes(context).await?;
+
     let mut per_chain: Vec<PerChainTipLag> = chains
         .iter()
         .map(|c| PerChainTipLag {
@@ -61,20 +73,23 @@ where
         phase.set_message(format!("sample {}/{}", i + 1, samples.max(1)));
         let t_secs = started.elapsed().as_secs();
         for (idx, &chain) in chains.iter().enumerate() {
-            let candidate_tip = node
-                .handle_chain_info_query(ChainInfoQuery::new(chain))
+            let candidate_tip = timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain)))
                 .await
                 .map(|response| response.info.next_block_height.0)
                 .unwrap_or(0);
 
-            // Reference tip: synchronize the local view from the committee and
-            // read the resulting next block height.
-            let chain_client = context.make_chain_client(chain).await?;
-            let reference_tip = chain_client
-                .synchronize_chain_state(chain)
+            // Reference tip = highest tip across reachable committee members.
+            let mut reference_tip = 0u64;
+            for committee_node in &committee_nodes {
+                if let Ok(response) = timed(
+                    rpc_timeout,
+                    committee_node.handle_chain_info_query(ChainInfoQuery::new(chain)),
+                )
                 .await
-                .map(|info| info.next_block_height.0)
-                .unwrap_or(0);
+                {
+                    reference_tip = reference_tip.max(response.info.next_block_height.0);
+                }
+            }
 
             per_chain[idx].samples.push(TipLagSample {
                 t_secs,
@@ -91,6 +106,27 @@ where
         pc.trend = compute_trend(&pc.samples);
     }
     Ok(TipLagReport { per_chain })
+}
+
+/// Build the current committee's validator nodes (network-wide, read from the
+/// locally tracked default chain). Unreachable addresses are skipped.
+///
+/// Returns the concrete gRPC client type produced by the context's node
+/// provider, independent of the candidate node's generic type.
+async fn committee_nodes<Env>(context: &ClientContext<Env>) -> Result<Vec<linera_rpc::Client>>
+where
+    Env: linera_core::Environment,
+{
+    let chain_client = context.make_chain_client(context.default_chain()).await?;
+    let committee = chain_client.local_committee().await?;
+    let provider = context.make_node_provider();
+    let mut nodes = Vec::new();
+    for state in committee.validators().values() {
+        if let Ok(node) = provider.make_node(&state.network_address) {
+            nodes.push(node);
+        }
+    }
+    Ok(nodes)
 }
 
 /// Classify the lag trend by comparing the first and last sample.

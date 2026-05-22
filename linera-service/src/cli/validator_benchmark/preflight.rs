@@ -3,7 +3,7 @@
 
 //! L1 preflight: reachability, version, network description, baseline RTT.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use linera_core::node::ValidatorNode;
 
@@ -11,6 +11,7 @@ use super::{
     latency::Samples,
     progress::Progress,
     report::{PreflightReport, PreflightStatus},
+    rpc::timed,
 };
 
 /// Number of lightweight round-trips used to estimate baseline RTT.
@@ -27,12 +28,16 @@ pub struct PreflightOutcome {
 }
 
 /// Run the preflight layer against a candidate node.
-pub async fn run<N: ValidatorNode>(node: &N, progress: &Progress) -> PreflightOutcome {
+pub async fn run<N: ValidatorNode>(
+    node: &N,
+    rpc_timeout: Duration,
+    progress: &Progress,
+) -> PreflightOutcome {
     let phase = progress.phase("L1 preflight", None);
     phase.set_message("version, network, rtt");
     let mut report = PreflightReport::default();
 
-    let version_info = match node.get_version_info().await {
+    let version_info = match timed(rpc_timeout, node.get_version_info()).await {
         Ok(v) => Some(format!("{v:?}")),
         Err(e) => {
             report.errors.push(format!("get_version_info: {e}"));
@@ -40,7 +45,7 @@ pub async fn run<N: ValidatorNode>(node: &N, progress: &Progress) -> PreflightOu
         }
     };
 
-    let network_description = match node.get_network_description().await {
+    let network_description = match timed(rpc_timeout, node.get_network_description()).await {
         Ok(nd) => serde_json::to_value(&nd).ok(),
         Err(e) => {
             report.errors.push(format!("get_network_description: {e}"));
@@ -52,9 +57,9 @@ pub async fn run<N: ValidatorNode>(node: &N, progress: &Progress) -> PreflightOu
     let mut rtt = Samples::new();
     for _ in 0..PING_COUNT {
         let start = Instant::now();
-        match node.get_version_info().await {
+        match timed(rpc_timeout, node.get_version_info()).await {
             Ok(_) => rtt.record_success(start.elapsed().as_secs_f64() * 1000.0),
-            Err(e) => rtt.record_error(categorize(&e.to_string())),
+            Err(category) => rtt.record_error(category),
         }
     }
     report.rtt_ms = rtt.summary();
