@@ -6,6 +6,7 @@
 //! Tracking: linera-io/linera-infra#1198.
 
 mod config;
+mod latency;
 
 pub use config::Benchmark;
 
