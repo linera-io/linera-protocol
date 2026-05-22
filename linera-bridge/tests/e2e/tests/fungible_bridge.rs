@@ -233,7 +233,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!("Sending wrapped-fungible transfer to owner_b on chain B...");
     let transfer_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_a,
-        amount: Amount::from_tokens(100),
+        amount: Amount::from_tokens(100).to_attos().to_string(),
         target_account: Account {
             chain_id: chain_b,
             owner: owner_b,
@@ -282,7 +282,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!("Withdrawing tokens from chain B to evm_recipient on chain A...");
     let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: Amount::from_tokens(100),
+        amount: Amount::from_tokens(100).to_attos().to_string(),
         target_account: Account {
             chain_id: chain_a,
             owner: receiver,

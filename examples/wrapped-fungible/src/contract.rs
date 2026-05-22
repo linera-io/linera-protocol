@@ -76,6 +76,7 @@ impl Contract for WrappedFungibleTokenContract {
                 amount,
                 target_account,
             } => {
+                let amount = parse_token_amount(&amount);
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
@@ -91,6 +92,7 @@ impl Contract for WrappedFungibleTokenContract {
                 amount,
                 target_account,
             } => {
+                let amount = parse_token_amount(&amount);
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for TransferFrom operation");
@@ -270,4 +272,17 @@ impl WrappedFungibleTokenContract {
                 .send_to(target_account.chain_id);
         }
     }
+}
+
+/// Parses a `Transfer*` amount string into an [`Amount`].
+///
+/// The amount field is a `String` over the wire (so it can serialize as JSON for
+/// GraphQL clients), but represents a raw `u128` of token sub-units in the source
+/// ERC-20's decimal scale. We map straight into `Amount::from_attos` so the rest
+/// of the contract continues to operate on `Amount`.
+fn parse_token_amount(amount: &str) -> Amount {
+    let value: u128 = amount
+        .parse()
+        .expect("amount is not a valid `u128` decimal string");
+    Amount::from_attos(value)
 }

@@ -231,7 +231,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     cc_b.synchronize_from_validators().await?;
     let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: burn_amount,
+        amount: burn_amount.to_attos().to_string(),
         target_account: Account {
             chain_id: chain_a,
             owner: receiver,

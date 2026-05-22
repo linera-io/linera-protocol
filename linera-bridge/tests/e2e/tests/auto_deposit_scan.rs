@@ -453,7 +453,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     cc_b.synchronize_from_validators().await?;
     let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: withdraw_amount,
+        amount: withdraw_amount.to_attos().to_string(),
         target_account: Account {
             chain_id: chain_a,
             owner: receiver,

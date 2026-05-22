@@ -223,7 +223,7 @@ async fn decimal_mismatch_linera_to_evm() -> anyhow::Result<()> {
     // ── owner_a transfers 1 wTEST cross-chain to (chain_b, owner_b) ──
     let transfer_a_to_b = WrappedFungibleOperation::Transfer {
         owner: owner_a,
-        amount: Amount::from_tokens(1),
+        amount: Amount::from_tokens(1).to_attos().to_string(),
         target_account: Account {
             chain_id: chain_b,
             owner: owner_b,
@@ -257,7 +257,7 @@ async fn decimal_mismatch_linera_to_evm() -> anyhow::Result<()> {
     let evm_recipient_owner: AccountOwner = format!("0x{evm_recipient_hex}").parse()?;
     let burn_transfer = WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: Amount::from_tokens(1),
+        amount: Amount::from_tokens(1).to_attos().to_string(),
         target_account: Account {
             chain_id: chain_a,
             owner: evm_recipient_owner,

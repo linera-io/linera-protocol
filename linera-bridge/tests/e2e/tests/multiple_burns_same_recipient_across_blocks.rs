@@ -150,7 +150,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
         cc_b.synchronize_from_validators().await?;
         let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
             owner: owner_b,
-            amount: burn_amount,
+            amount: burn_amount.to_attos().to_string(),
             target_account: Account {
                 chain_id: chain_a,
                 owner: receiver,

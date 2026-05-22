@@ -67,8 +67,10 @@ pub enum WrappedFungibleOperation {
     Transfer {
         /// Owner to transfer from
         owner: AccountOwner,
-        /// Amount to be transferred
-        amount: Amount,
+        /// Amount to be transferred, as a decimal string of raw `u128` sub-units
+        /// in the source ERC-20's decimal scale. String form so the field is
+        /// GraphQL-compatible (`u128` has no `async_graphql::InputType`).
+        amount: String,
         /// Target account to transfer the amount to
         target_account: Account,
     },
@@ -78,8 +80,9 @@ pub enum WrappedFungibleOperation {
         owner: AccountOwner,
         /// The spender of the amount.
         spender: AccountOwner,
-        /// Amount to be transferred
-        amount: Amount,
+        /// Amount to be transferred, as a decimal string of raw `u128` sub-units
+        /// in the source ERC-20's decimal scale.
+        amount: String,
         /// Target account to transfer the amount to
         target_account: Account,
     },

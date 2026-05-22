@@ -120,7 +120,7 @@ async fn test_wrapped_fungible_standard_transfer() {
                 application_id,
                 WrappedFungibleOperation::Transfer {
                     owner,
-                    amount: Amount::from_tokens(300),
+                    amount: Amount::from_tokens(300).to_attos().to_string(),
                     target_account: Account {
                         chain_id: chain.id(),
                         owner: recipient,
@@ -226,7 +226,7 @@ async fn test_credit_to_address20_on_bridge_chain_auto_burns() {
                 application_id,
                 WrappedFungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: Amount::from_tokens(500),
+                    amount: Amount::from_tokens(500).to_attos().to_string(),
                     target_account: Account {
                         chain_id: bridge_chain.id(),
                         owner: evm_address,
@@ -287,7 +287,7 @@ async fn test_credit_to_non_address20_on_bridge_chain_credits_normally() {
                 application_id,
                 WrappedFungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: Amount::from_tokens(500),
+                    amount: Amount::from_tokens(500).to_attos().to_string(),
                     target_account: Account {
                         chain_id: bridge_chain.id(),
                         owner: recipient,

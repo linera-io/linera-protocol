@@ -84,8 +84,7 @@ WrappedFungibleOperation:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: STR
           - target_account:
               TYPENAME: Account
     4:
@@ -95,8 +94,7 @@ WrappedFungibleOperation:
               TYPENAME: AccountOwner
           - spender:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: STR
           - target_account:
               TYPENAME: Account
     5:

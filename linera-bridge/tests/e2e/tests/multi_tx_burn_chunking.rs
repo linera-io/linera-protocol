@@ -177,7 +177,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
             let owner = AccountOwner::Address20(recipient.0 .0);
             let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
                 owner: owner_b,
-                amount: burn_amount,
+                amount: burn_amount.to_attos().to_string(),
                 target_account: Account {
                     chain_id: chain_a,
                     owner,
