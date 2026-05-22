@@ -7,6 +7,7 @@
 
 mod config;
 mod latency;
+mod preflight;
 mod report;
 
 pub use config::Benchmark;

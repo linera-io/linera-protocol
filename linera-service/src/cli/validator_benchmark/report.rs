@@ -8,6 +8,8 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
+use super::latency::LatencySummary;
+
 /// Output format requested on the command line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
@@ -97,7 +99,9 @@ pub struct Metadata {
 pub struct Candidate {
     pub address: String,
     pub public_key: Option<String>,
-    pub version_info: Option<serde_json::Value>,
+    /// Debug rendering of the validator's `VersionInfo` (the type is not
+    /// `Serialize` outside the version-build context, so it is captured as text).
+    pub version_info: Option<String>,
     pub network_description: Option<serde_json::Value>,
 }
 
@@ -126,7 +130,25 @@ pub struct Layers {
 // Per-layer report shapes are introduced as concrete structs when each layer is
 // implemented. Until then they are JSON-value placeholders so the model and the
 // serializers can be built and tested independently.
-pub type PreflightReport = serde_json::Value;
+
+/// L1 preflight: reachability, version, network description, baseline RTT.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PreflightReport {
+    pub status: PreflightStatus,
+    pub rtt_ms: LatencySummary,
+    pub version_match: Option<bool>,
+    pub network_description_match: Option<bool>,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PreflightStatus {
+    #[default]
+    Ok,
+    Fail,
+}
+
 pub type ReadBaselineReport = serde_json::Value;
 pub type ReadStressReport = serde_json::Value;
 pub type BulkDownloadReport = serde_json::Value;
