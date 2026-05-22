@@ -2041,7 +2041,27 @@ fn main() -> anyhow::Result<process::ExitCode> {
     })
 }
 
+/// When running `validator benchmark` interactively with the progress UI, default
+/// the log level to WARN so INFO lines do not corrupt the bars. Gated entirely on
+/// this command; every other command and an explicit `RUST_LOG` are untouched.
+fn maybe_quiet_logs_for_benchmark(options: &Options) {
+    use std::io::IsTerminal as _;
+
+    use linera_service::cli::validator;
+
+    let ClientCommand::Validator(validator::Command::Benchmark(benchmark)) = &options.command else {
+        return;
+    };
+    if !benchmark.no_progress
+        && std::io::stderr().is_terminal()
+        && std::env::var_os("RUST_LOG").is_none()
+    {
+        std::env::set_var("RUST_LOG", "warn");
+    }
+}
+
 async fn run(options: &Options) -> Result<i32, Error> {
+    maybe_quiet_logs_for_benchmark(options);
     let _guard = init_tracing(options)?;
     match &options.command {
         ClientCommand::HelpMarkdown => {

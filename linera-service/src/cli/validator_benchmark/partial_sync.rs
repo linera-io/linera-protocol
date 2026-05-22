@@ -17,7 +17,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::node::{CrossChainMessageDelivery, NodeError, ValidatorNode};
 use linera_storage::Storage as _;
 
-use super::report::PartialSyncReport;
+use super::{progress::Progress, report::PartialSyncReport};
 
 /// Compute the exclusive end height for a bounded sync, saturating on overflow.
 pub(super) fn end_height(candidate_tip: u64, max_blocks: u32, local_tip: u64) -> u64 {
@@ -29,6 +29,7 @@ pub async fn run<N, Env>(
     context: &ClientContext<Env>,
     chain: ChainId,
     max_blocks: u32,
+    progress: &Progress,
 ) -> Result<PartialSyncReport>
 where
     N: ValidatorNode,
@@ -68,6 +69,7 @@ where
         return Ok(report);
     }
 
+    let phase = progress.phase("L6 partial sync", Some(to - from));
     let heights: Vec<BlockHeight> = (from..to).map(BlockHeight).collect();
     let storage = chain_client.storage_client();
     // Certificates and blobs stay wrapped in the storage cache `Arc`, which is
@@ -81,6 +83,7 @@ where
     let started = Instant::now();
     for certificate in certificates {
         report.blocks_attempted += 1;
+        phase.inc(1);
         report.bytes_in += bcs::serialized_size(&*certificate).unwrap_or(0) as u64;
 
         // First attempt; on missing blobs, upload them and retry once.
@@ -115,6 +118,7 @@ where
     let duration = started.elapsed().as_secs_f64().max(f64::EPSILON);
     report.duration_secs = duration;
     report.blocks_per_sec = report.blocks_accepted as f64 / duration;
+    phase.finish_ok();
     Ok(report)
 }
 

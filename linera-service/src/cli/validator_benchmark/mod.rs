@@ -17,14 +17,17 @@ mod tip_lag;
 
 pub use config::Benchmark;
 
-use std::time::Duration;
+use std::{io::IsTerminal as _, time::Duration};
 
 use anyhow::Result;
 use chrono::Utc;
 use linera_client::client_context::ClientContext;
 use linera_core::node::{ValidatorNode as _, ValidatorNodeProvider as _};
 
-use self::report::{Candidate, Layers, Metadata, Observer, OutputSpec, Report, Writer};
+use self::{
+    progress::Progress,
+    report::{Candidate, Layers, Metadata, Observer, OutputSpec, Report, Writer},
+};
 
 impl Benchmark {
     pub async fn run(
@@ -36,13 +39,15 @@ impl Benchmark {
         // Validate output specs up front so a typo fails fast, before any work.
         let output_specs = OutputSpec::parse_all(&self.output)?;
 
+        let progress = Progress::new(!self.no_progress && std::io::stderr().is_terminal());
+
         let started_at = Utc::now();
         let node = context.make_node_provider().make_node(&self.address)?;
 
         // L1 preflight also yields version/network info for the report metadata.
         // When skipped, fetch those two cheap fields best-effort anyway.
         let (preflight, version_info, network_description) = if !self.skip_preflight {
-            let outcome = preflight::run(&node).await;
+            let outcome = preflight::run(&node, &progress).await;
             if self.abort_on_preflight_fail
                 && outcome.report.status == report::PreflightStatus::Fail
             {
@@ -68,7 +73,10 @@ impl Benchmark {
         };
 
         let read_baseline = if !self.skip_read_baseline {
-            Some(read_latency::run_baseline(&node, &self.chain, self.baseline_requests).await)
+            Some(
+                read_latency::run_baseline(&node, &self.chain, self.baseline_requests, &progress)
+                    .await,
+            )
         } else {
             None
         };
@@ -80,6 +88,7 @@ impl Benchmark {
                     &self.chain,
                     &self.stress_levels,
                     Duration::from_secs(self.stress_duration_secs),
+                    &progress,
                 )
                 .await,
             )
@@ -95,6 +104,7 @@ impl Benchmark {
                     self.bulk_batch_size,
                     &self.bulk_concurrency,
                     &self.bulk_height_range,
+                    &progress,
                 )
                 .await?,
             )
@@ -110,6 +120,7 @@ impl Benchmark {
                     &self.chain,
                     self.tip_lag_samples,
                     Duration::from_secs(self.tip_lag_interval_secs),
+                    &progress,
                 )
                 .await?,
             )
@@ -119,12 +130,13 @@ impl Benchmark {
 
         let partial_sync = if self.deep {
             let deep_chain = self.deep_chain.unwrap_or(self.chain[0]);
-            Some(partial_sync::run(&node, context, deep_chain, self.deep_blocks).await?)
+            Some(partial_sync::run(&node, context, deep_chain, self.deep_blocks, &progress).await?)
         } else {
             None
         };
 
         let ended_at = Utc::now();
+        progress.clear();
         let report = Report {
             metadata: Metadata {
                 tool_version: env!("CARGO_PKG_VERSION").to_string(),

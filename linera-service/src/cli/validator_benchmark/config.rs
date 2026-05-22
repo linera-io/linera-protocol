@@ -98,6 +98,10 @@ pub struct Benchmark {
     #[arg(long, default_value = "unspecified")]
     pub observer_location: String,
 
+    /// Disable the interactive progress UI (auto-disabled when stderr is not a TTY).
+    #[arg(long)]
+    pub no_progress: bool,
+
     // --- Robustness ---
     /// Abort the run if preflight fails (default: continue and report).
     #[arg(long)]

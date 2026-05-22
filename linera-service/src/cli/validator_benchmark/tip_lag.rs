@@ -16,7 +16,10 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
 use tokio::time::{sleep, Instant};
 
-use super::report::{PerChainTipLag, TipLagReport, TipLagSample, TipLagTrend};
+use super::{
+    progress::Progress,
+    report::{PerChainTipLag, TipLagReport, TipLagSample, TipLagTrend},
+};
 
 /// Lag delta (in blocks) within which two samples are considered unchanged.
 const STABLE_BAND: i64 = 2;
@@ -27,12 +30,14 @@ pub async fn run<N, Env>(
     chains: &[ChainId],
     samples: usize,
     interval: Duration,
+    progress: &Progress,
 ) -> Result<TipLagReport>
 where
     N: ValidatorNode,
     Env: linera_core::Environment,
 {
     let started = Instant::now();
+    let phase = progress.phase("L5 tip-lag", Some(samples.max(1) as u64));
     let mut per_chain: Vec<PerChainTipLag> = chains
         .iter()
         .map(|c| PerChainTipLag {
@@ -44,8 +49,10 @@ where
 
     for i in 0..samples.max(1) {
         if i > 0 {
+            phase.set_message(format!("waiting {}s", interval.as_secs()));
             sleep(interval).await;
         }
+        phase.set_message(format!("sample {}/{}", i + 1, samples.max(1)));
         let t_secs = started.elapsed().as_secs();
         for (idx, &chain) in chains.iter().enumerate() {
             let candidate_tip = node
@@ -70,7 +77,9 @@ where
                 lag_blocks: reference_tip as i64 - candidate_tip as i64,
             });
         }
+        phase.inc(1);
     }
+    phase.finish_ok();
 
     for pc in &mut per_chain {
         pc.trend = compute_trend(&pc.samples);

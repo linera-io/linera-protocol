@@ -9,6 +9,7 @@ use linera_core::node::ValidatorNode;
 
 use super::{
     latency::Samples,
+    progress::Progress,
     report::{PreflightReport, PreflightStatus},
 };
 
@@ -26,7 +27,9 @@ pub struct PreflightOutcome {
 }
 
 /// Run the preflight layer against a candidate node.
-pub async fn run<N: ValidatorNode>(node: &N) -> PreflightOutcome {
+pub async fn run<N: ValidatorNode>(node: &N, progress: &Progress) -> PreflightOutcome {
+    let phase = progress.phase("L1 preflight", None);
+    phase.set_message("version, network, rtt");
     let mut report = PreflightReport::default();
 
     let version_info = match node.get_version_info().await {
@@ -61,6 +64,11 @@ pub async fn run<N: ValidatorNode>(node: &N) -> PreflightOutcome {
     } else {
         PreflightStatus::Fail
     };
+
+    match report.status {
+        PreflightStatus::Ok => phase.finish_ok(),
+        PreflightStatus::Fail => phase.finish_fail(),
+    }
 
     PreflightOutcome {
         report,

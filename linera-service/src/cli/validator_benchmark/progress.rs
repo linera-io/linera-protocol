@@ -50,7 +50,9 @@ impl Progress {
     /// Remove all bars from the terminal (call before printing the report).
     pub fn clear(&self) {
         if let Some(multi) = &self.multi {
-            let _ = multi.clear();
+            if let Err(error) = multi.clear() {
+                tracing::debug!(%error, "failed to clear progress bars");
+            }
         }
     }
 }
@@ -63,10 +65,6 @@ pub struct Phase {
 }
 
 impl Phase {
-    pub fn set_length(&self, n: u64) {
-        self.bar.set_length(n);
-    }
-
     pub fn inc_length(&self, n: u64) {
         self.bar.inc_length(n);
     }

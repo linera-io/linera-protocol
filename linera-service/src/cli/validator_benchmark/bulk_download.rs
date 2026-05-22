@@ -18,6 +18,7 @@ use tokio::task::JoinSet;
 use super::{
     latency::Samples,
     preflight::categorize,
+    progress::{Phase, Progress},
     report::{BulkDownloadReport, BulkRun, PerChainBulk},
 };
 
@@ -30,25 +31,30 @@ pub async fn run<N>(
     batch_size: u32,
     concurrencies: &[usize],
     height_range_arg: &str,
+    progress: &Progress,
 ) -> Result<BulkDownloadReport>
 where
     N: ValidatorNode + Clone + Send + Sync + 'static,
 {
+    let phase = progress.phase("L4 bulk download", Some(0));
     let mut per_chain = Vec::with_capacity(chains.len());
     for &chain in chains {
         let info = node.handle_chain_info_query(ChainInfoQuery::new(chain)).await?;
         let tip = info.info.next_block_height.0;
         let (from, to) = resolve_range(height_range_arg, tip, batch_size)?;
+        let batches = (from..to).step_by(batch_size.max(1) as usize).count() as u64;
+        phase.inc_length(batches * concurrencies.len() as u64);
 
         let mut runs = Vec::with_capacity(concurrencies.len());
         for &concurrency in concurrencies {
-            runs.push(run_one(node, chain, batch_size, concurrency.max(1), from, to).await);
+            runs.push(run_one(node, chain, batch_size, concurrency.max(1), from, to, &phase).await);
         }
         per_chain.push(PerChainBulk {
             chain_id: chain.to_string(),
             runs,
         });
     }
+    phase.finish_ok();
     Ok(BulkDownloadReport { per_chain })
 }
 
@@ -60,6 +66,7 @@ async fn run_one<N>(
     concurrency: usize,
     from: u64,
     to: u64,
+    phase: &Phase,
 ) -> BulkRun
 where
     N: ValidatorNode + Clone + Send + Sync + 'static,
@@ -106,6 +113,7 @@ where
                 Ok((Err(category), _, _)) => samples.record_error(category),
                 Err(e) => samples.record_error(format!("join: {e}")),
             }
+            phase.inc(1);
         }
     }
 
