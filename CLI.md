@@ -1469,6 +1469,9 @@ Probes the candidate across read-side primitives (preflight, baseline, concurren
 
   Default value: `unspecified`
 * `--no-progress` — Disable the interactive progress UI (auto-disabled when stderr is not a TTY)
+* `--rpc-timeout-secs <RPC_TIMEOUT_SECS>` — Per-RPC timeout in seconds. A call that exceeds it is recorded as a `timeout` error and the run keeps going, so a hung validator never blocks
+
+  Default value: `30`
 * `--abort-on-preflight-fail` — Abort the run if preflight fails (default: continue and report)
 
 
