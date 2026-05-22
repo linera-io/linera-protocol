@@ -8,6 +8,7 @@
 mod config;
 mod latency;
 mod preflight;
+mod read_latency;
 mod report;
 
 pub use config::Benchmark;

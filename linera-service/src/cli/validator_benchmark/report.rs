@@ -149,8 +149,39 @@ pub enum PreflightStatus {
     Fail,
 }
 
-pub type ReadBaselineReport = serde_json::Value;
-pub type ReadStressReport = serde_json::Value;
+/// L2 read latency baseline: sequential `handle_chain_info_query` per chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadBaselineReport {
+    pub per_chain: Vec<PerChainReadBaseline>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerChainReadBaseline {
+    pub chain_id: String,
+    pub latency_ms: LatencySummary,
+}
+
+/// L3 read stress: a concurrency ramp over `handle_chain_info_query` per chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadStressReport {
+    pub per_chain: Vec<PerChainReadStress>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerChainReadStress {
+    pub chain_id: String,
+    pub levels: Vec<StressLevel>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StressLevel {
+    pub concurrency: usize,
+    pub duration_secs: u64,
+    pub completed: u64,
+    pub throughput_per_sec: f64,
+    pub latency_ms: LatencySummary,
+}
+
 pub type BulkDownloadReport = serde_json::Value;
 pub type TipLagReport = serde_json::Value;
 pub type PartialSyncReport = serde_json::Value;
