@@ -5,6 +5,7 @@
 //!
 //! Tracking: linera-io/linera-infra#1198.
 
+mod bulk_download;
 mod config;
 mod latency;
 mod preflight;

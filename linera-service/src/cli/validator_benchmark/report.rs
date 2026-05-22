@@ -182,7 +182,31 @@ pub struct StressLevel {
     pub latency_ms: LatencySummary,
 }
 
-pub type BulkDownloadReport = serde_json::Value;
+/// L4 bulk download: `download_certificates_by_heights` over a height range.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkDownloadReport {
+    pub per_chain: Vec<PerChainBulk>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerChainBulk {
+    pub chain_id: String,
+    pub runs: Vec<BulkRun>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkRun {
+    pub concurrency: usize,
+    pub batch_size: u32,
+    pub heights_range: (u64, u64),
+    pub bytes_in: u64,
+    pub certs_received: u64,
+    pub duration_secs: f64,
+    pub mb_per_sec: f64,
+    pub certs_per_sec: f64,
+    pub latency_ms: LatencySummary,
+}
+
 pub type TipLagReport = serde_json::Value;
 pub type PartialSyncReport = serde_json::Value;
 
