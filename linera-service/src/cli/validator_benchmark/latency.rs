@@ -34,11 +34,6 @@ impl Samples {
         *self.errors.entry(category.into()).or_default() += 1;
     }
 
-    /// Raw successful-request latencies, for `--raw-samples` output.
-    pub fn raw_samples(&self) -> &[f64] {
-        &self.durations_ms
-    }
-
     /// Fold another bucket's samples and errors into this one.
     ///
     /// Used by the stress runner to merge per-task `Samples` without a shared

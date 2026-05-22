@@ -12,7 +12,7 @@ use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
 /// The optional `--deep` layer additionally exercises the write path by
 /// syncing a bounded number of blocks; it has a stateful side effect on the
 /// candidate and is therefore off by default.
-#[derive(Debug, Clone, clap::Parser)]
+#[derive(Debug, Clone, clap::Parser, serde::Serialize)]
 pub struct Benchmark {
     /// Network address of the candidate validator (e.g. `grpcs://host:port`).
     pub address: String,
@@ -83,10 +83,6 @@ pub struct Benchmark {
     /// Free-form tag carried in the report (e.g. `OVH US-EAST`).
     #[arg(long, default_value = "unspecified")]
     pub observer_location: String,
-
-    /// Include raw per-request latency arrays in json/yaml output.
-    #[arg(long)]
-    pub raw_samples: bool,
 
     // --- Robustness ---
     #[arg(long, default_value_t = 30)]
