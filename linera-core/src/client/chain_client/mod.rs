@@ -2332,7 +2332,7 @@ impl<Env: Environment> ChainClient<Env> {
         Box::pin(self.execute_operation(SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
-            multi_leader_rounds: 2,
+            multi_leader_rounds: 5,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }))

@@ -100,7 +100,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: iter::once(owner).collect(),
             owners: BTreeMap::new(),
-            multi_leader_rounds: 2,
+            multi_leader_rounds: 5,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }
@@ -111,7 +111,7 @@ impl ChainOwnership {
         ChainOwnership {
             super_owners: BTreeSet::new(),
             owners: iter::once((owner, 100)).collect(),
-            multi_leader_rounds: 2,
+            multi_leader_rounds: 5,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         }
