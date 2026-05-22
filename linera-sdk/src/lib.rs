@@ -47,7 +47,10 @@ use std::fmt::Debug;
 pub use bcs;
 pub use linera_base::{
     abi,
-    data_types::{Resources, SendMessageRequest},
+    data_types::{
+        CanonicalBTreeMap, CanonicalBTreeSet, NonCanonicalBTreeMap, NonCanonicalBTreeSet, Resources,
+        SendMessageRequest,
+    },
     ensure, http, task_processor,
 };
 use linera_base::{
