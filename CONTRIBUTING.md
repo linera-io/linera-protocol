@@ -70,6 +70,31 @@ Contributions should generally follow the [Rust API guidelines](https://rust-lan
   unawaited futures or unhandled errors. `let _x =` should only be used for RAII guards.
 
 
+## Hash-consed types and `linera_cache::Arc<T>`
+
+Any content-addressed immutable data (also known as hash-consed data) — for
+example `Block`, `Blob`, `ConfirmedBlockCertificate` — should be cached and
+passed around as `linera_cache::Arc<T>` (re-exported as `linera_storage::Arc`).
+
+`linera_cache::Arc<T>` is a newtype over `std::sync::Arc<T>` with **no public
+constructor**: the only way to obtain one is through `ValueCache::insert`,
+`ValueCache::insert_hashed`, or `ValueCache::get`. This makes the
+"one allocation per content" invariant a compile-time guarantee rather than a
+convention. Concretely:
+
+- For freshly-constructed `ConfirmedBlockCertificate`s (e.g. from network or
+  proposal flows), call `Storage::cache_certificate`.
+- For freshly-constructed `ConfirmedBlock`s, call
+  `Storage::cache_confirmed_block`.
+- For freshly-constructed `Blob`s, call `Storage::cache_blob`.
+- For values being re-inserted from a borrowed reference, use
+  `ValueCache::insert_hashed`.
+
+`std::sync::Arc::new` for a hash-consed value bypasses the dedup index and
+creates a duplicate allocation; the type system prevents this by design.
+See the [`linera-cache` README](linera-cache/README.md) for details.
+
+
 ## Formatting and linting
 
 Make sure to fix the lint errors reported by

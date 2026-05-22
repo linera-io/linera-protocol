@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 #[cfg(not(web))]
 use futures::stream::BoxStream;
@@ -17,6 +17,7 @@ use linera_base::{
     identifiers::{BlobId, ChainId, EventId, StreamId},
     task::{MaybeSend, MaybeSync},
 };
+use linera_cache::Arc as CacheArc;
 use linera_chain::{
     data_types::BlockProposal,
     types::{
@@ -74,7 +75,7 @@ pub trait ValidatorNode {
     /// Processes a confirmed certificate.
     async fn handle_confirmed_certificate(
         &self,
-        certificate: GenericCertificate<ConfirmedBlock>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError>;
 
@@ -115,7 +116,7 @@ pub trait ValidatorNode {
     // See also https://github.com/rust-lang/impl-trait-utils/issues/17
     fn upload_blobs(
         &self,
-        blobs: Vec<Blob>,
+        blobs: Vec<Arc<Blob>>,
     ) -> impl futures::Future<Output = Result<Vec<BlobId>, NodeError>> {
         let tasks: Vec<_> = blobs
             .into_iter()

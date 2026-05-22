@@ -18,10 +18,9 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
-    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
-use linera_cache::{UniqueValueCache, ValueCache};
+use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
@@ -103,7 +102,7 @@ where
     /// Wrapped in `Arc` so the keep-alive task can read it without acquiring
     /// the `RwLock`.
     last_access: Arc<AtomicTimestamp>,
-    block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+    block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
@@ -148,7 +147,7 @@ where
     pub(crate) async fn load(
         config: ChainWorkerConfig,
         storage: StorageClient,
-        block_values: Arc<ValueCache<CryptoHash, Hashed<Block>>>,
+        block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
         execution_state_cache: Option<
             Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
@@ -257,12 +256,16 @@ where
         chain_id = %self.chain_id(),
         blob_id = %blob_id
     ))]
-    pub(crate) async fn download_pending_blob(&self, blob_id: BlobId) -> Result<Blob, WorkerError> {
+    pub(crate) async fn download_pending_blob(
+        &self,
+        blob_id: BlobId,
+    ) -> Result<CacheArc<Blob>, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
-            return Ok(blob);
+            return Ok(self.storage.cache_blob(blob));
         }
-        let blob = self.storage.read_blob(blob_id).await?;
-        blob.map(Arc::unwrap_or_clone)
+        self.storage
+            .read_blob(blob_id)
+            .await?
             .ok_or(WorkerError::BlobsNotFound(vec![blob_id]))
     }
 
@@ -349,7 +352,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
+            maybe_blobs[index].1 = blob.map(CacheArc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -426,16 +429,14 @@ where
     async fn read_confirmed_blocks(
         &self,
         hashes: Vec<CryptoHash>,
-    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, WorkerError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlock>>>, WorkerError> {
         let mut blocks = Vec::with_capacity(hashes.len());
         let mut uncached_indices = Vec::new();
         let mut uncached_hashes = Vec::new();
 
         for (i, hash) in hashes.iter().enumerate() {
-            if let Some(hashed_block) = self.block_values.get(hash) {
-                blocks.push(Some(Arc::new(ConfirmedBlock::from_hashed(
-                    Arc::unwrap_or_clone(hashed_block),
-                ))));
+            if let Some(block) = self.block_values.get(hash) {
+                blocks.push(Some(block));
             } else {
                 blocks.push(None);
                 uncached_indices.push(i);
@@ -446,10 +447,6 @@ where
         if !uncached_hashes.is_empty() {
             let from_storage = self.storage.read_confirmed_blocks(uncached_hashes).await?;
             for (i, maybe_block) in uncached_indices.into_iter().zip(from_storage) {
-                if let Some(block) = &maybe_block {
-                    self.block_values
-                        .insert_hashed(Cow::Borrowed(block.inner()));
-                }
                 blocks[i] = maybe_block;
             }
         }
@@ -478,7 +475,7 @@ where
         let mut height_to_blocks = HashMap::new();
         for (block, hash) in blocks.into_iter().zip(hashes) {
             let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
-            let hashed_block = Arc::unwrap_or_clone(block).into_inner();
+            let hashed_block = CacheArc::unwrap_or_clone(block).into_inner();
             height_to_blocks.insert(hashed_block.inner().header.height, hashed_block);
         }
 
@@ -1416,7 +1413,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
-                .map(Arc::unwrap_or_clone)
+                .map(CacheArc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1425,7 +1422,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
-                .map(Arc::unwrap_or_clone)
+                .map(CacheArc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, None)).await?;
         }
@@ -1772,7 +1769,7 @@ where
     pub(crate) async fn read_certificate(
         &self,
         height: BlockHeight,
-    ) -> Result<Option<ConfirmedBlockCertificate>, WorkerError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, WorkerError> {
         let certificate_hash = match self.chain.confirmed_log.get(height.try_into()?).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1781,7 +1778,6 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
-            .map(Arc::unwrap_or_clone)
             .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }

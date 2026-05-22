@@ -6,13 +6,14 @@ use std::sync::Arc;
 use bincode::Error;
 use linera_base::data_types::Blob;
 use linera_chain::types::ConfirmedBlockCertificate;
+use linera_storage::Arc as CacheArc;
 
 use super::indexer_api::{self, element::Payload, Block, Element};
 
-impl TryFrom<Arc<ConfirmedBlockCertificate>> for Element {
+impl TryFrom<CacheArc<ConfirmedBlockCertificate>> for Element {
     type Error = Error;
 
-    fn try_from(value: Arc<ConfirmedBlockCertificate>) -> Result<Self, Self::Error> {
+    fn try_from(value: CacheArc<ConfirmedBlockCertificate>) -> Result<Self, Self::Error> {
         let bytes = bincode::serialize(value.as_ref())?;
         let element = Element {
             payload: Some(Payload::Block(Block { bytes })),

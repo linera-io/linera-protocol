@@ -18,6 +18,7 @@ use linera_core::{
     data_types::{ChainInfoQuery, ChainInfoResponse},
     node::{BlobStream, CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
 };
+use linera_storage::Arc as CacheArc;
 
 use crate::grpc::GrpcClient;
 #[cfg(with_simple_network)]
@@ -103,7 +104,7 @@ impl ValidatorNode for Client {
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: ConfirmedBlockCertificate,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         match self {

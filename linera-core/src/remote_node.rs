@@ -11,6 +11,7 @@ use linera_base::{
     ensure,
     identifiers::{BlobId, ChainId},
 };
+use linera_cache::Arc as CacheArc;
 use linera_chain::{
     data_types::BlockProposal,
     types::{
@@ -64,7 +65,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     pub(crate) async fn handle_confirmed_certificate(
         &self,
-        certificate: ConfirmedBlockCertificate,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
         let chain_id = certificate.inner().chain_id();
@@ -111,7 +112,7 @@ impl<N: ValidatorNode> RemoteNode<N> {
 
     pub(crate) async fn handle_optimized_confirmed_certificate(
         &self,
-        certificate: &ConfirmedBlockCertificate,
+        certificate: &CacheArc<ConfirmedBlockCertificate>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, NodeError> {
         if let Some(result) = self.try_lite_certificate(certificate, delivery).await {
