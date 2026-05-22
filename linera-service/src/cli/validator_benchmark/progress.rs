@@ -29,12 +29,12 @@ impl Progress {
             Some(multi) => {
                 let bar = match len {
                     Some(n) => ProgressBar::new(n).with_style(bar_style()),
-                    None => {
-                        let b = ProgressBar::new_spinner().with_style(spinner_style());
-                        b.enable_steady_tick(std::time::Duration::from_millis(100));
-                        b
-                    }
+                    None => ProgressBar::new_spinner().with_style(spinner_style()),
                 };
+                // Steady tick keeps the spinner and elapsed time animating even
+                // while a phase is waiting (e.g. L5's inter-sample sleep), so a
+                // long-running step never looks frozen.
+                bar.enable_steady_tick(std::time::Duration::from_millis(120));
                 multi.add(bar)
             }
             None => ProgressBar::hidden(),
@@ -102,9 +102,11 @@ fn spinner_style() -> ProgressStyle {
 }
 
 fn bar_style() -> ProgressStyle {
-    ProgressStyle::with_template("{prefix:.bold} [{bar:30.cyan/blue}] {pos}/{len} {msg}")
-        .expect("valid bar template")
-        .progress_chars("=>-")
+    ProgressStyle::with_template(
+        "{spinner:.cyan} {prefix:.bold} [{bar:30.cyan/blue}] {pos}/{len} ({elapsed}) {msg}",
+    )
+    .expect("valid bar template")
+    .progress_chars("=>-")
 }
 
 fn done_style() -> ProgressStyle {

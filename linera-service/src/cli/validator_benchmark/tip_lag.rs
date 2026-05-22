@@ -49,8 +49,14 @@ where
 
     for i in 0..samples.max(1) {
         if i > 0 {
-            phase.set_message(format!("waiting {}s", interval.as_secs()));
-            sleep(interval).await;
+            // Count down by the second so the bar visibly stays alive during the
+            // (potentially long) inter-sample wait.
+            let mut remaining = interval.as_secs();
+            while remaining > 0 {
+                phase.set_message(format!("next sample in {remaining}s"));
+                sleep(Duration::from_secs(1)).await;
+                remaining -= 1;
+            }
         }
         phase.set_message(format!("sample {}/{}", i + 1, samples.max(1)));
         let t_secs = started.elapsed().as_secs();
