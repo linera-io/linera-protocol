@@ -40,7 +40,7 @@ use linera_chain::{
     ChainError,
 };
 use linera_execution::{committee::Committee, ExecutionError};
-use linera_storage::{Clock as _, ResultReadCertificates, Storage as _};
+use linera_storage::{Arc as CacheArc, Clock as _, ResultReadCertificates, Storage as _};
 use rand::seq::SliceRandom;
 use received_log::ReceivedLogs;
 use serde::{Deserialize, Serialize};
@@ -352,7 +352,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         hash: Option<CryptoHash>,
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, chain_client::Error> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, chain_client::Error> {
         if let Some(hash) = hash {
             return Ok(self.storage_client().read_certificate(hash).await?);
         }
@@ -1007,7 +1007,7 @@ impl<Env: Environment> Client<Env> {
             .await?;
         if let Some(blob) = blob {
             // We have the blob - return it.
-            return Ok(blob);
+            return Ok(blob.into_std());
         }
         // Recover history from the current validators, according to the admin chain.
         self.synchronize_chain_state(self.admin_chain_id).await?;
@@ -1016,7 +1016,8 @@ impl<Env: Environment> Client<Env> {
             .update_local_node_with_blobs_from(vec![chain_desc_id], &nodes)
             .await?
             .pop()
-            .unwrap()) // Returns exactly as many blobs as passed-in IDs.
+            .unwrap() // Returns exactly as many blobs as passed-in IDs.
+            .into_std())
     }
 
     /// Ensures that the client has the `ChainDescription` blob corresponding to this
@@ -1128,7 +1129,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -1232,7 +1233,7 @@ impl<Env: Environment> Client<Env> {
     #[instrument(level = "trace", skip_all)]
     async fn receive_sender_certificate(
         &self,
-        certificate: Arc<ConfirmedBlockCertificate>,
+        certificate: CacheArc<ConfirmedBlockCertificate>,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
     ) -> Result<(), chain_client::Error> {
@@ -1248,6 +1249,7 @@ impl<Env: Environment> Client<Env> {
         };
         self.handle_certificate_with_retry(&certificate, &nodes)
             .await?;
+
         Ok(())
     }
 
@@ -1988,7 +1990,7 @@ impl<Env: Environment> Client<Env> {
         &self,
         blob_ids: Vec<BlobId>,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
-    ) -> Result<Vec<Arc<Blob>>, chain_client::Error> {
+    ) -> Result<Vec<CacheArc<Blob>>, chain_client::Error> {
         let timeout = self.options.blob_download_timeout;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();

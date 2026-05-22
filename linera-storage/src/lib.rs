@@ -5,7 +5,7 @@
 
 mod db_storage;
 
-use std::sync::Arc;
+use std::sync::Arc as StdArc;
 
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -18,7 +18,7 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
-pub use linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS;
+pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
@@ -64,7 +64,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool>;
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool>;
 
     /// Loads the view of a chain state.
     ///
@@ -427,7 +427,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<Committee>, ExecutionError> {
+    ) -> Result<StdArc<Committee>, ExecutionError> {
         if let Some(committee) = self.shared_committees().get(hash) {
             return Ok(committee);
         }
@@ -437,7 +437,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
             .await?
             .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
         let committee = bcs::from_bytes(blob.bytes())?;
-        Ok(self.shared_committees().insert(hash, Arc::new(committee)))
+        Ok(self
+            .shared_committees()
+            .insert(hash, StdArc::new(committee)))
     }
 
     /// Returns whether the given epoch's committee has been revoked, i.e. whether the
@@ -462,7 +464,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn committee_for_epoch(
         &self,
         epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+    ) -> Result<Option<StdArc<Committee>>, ExecutionError> {
         let blob_hash = if epoch == Epoch::ZERO {
             self.read_network_description()
                 .await?
@@ -529,10 +531,10 @@ impl ResultReadCertificates {
 pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
-    thread_pool: Arc<linera_execution::ThreadPool>,
+    thread_pool: StdArc<linera_execution::ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
-    user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    user_contracts: StdArc<papaya::HashMap<ApplicationId, UserContractCode>>,
+    user_services: StdArc<papaya::HashMap<ApplicationId, UserServiceCode>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -542,7 +544,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.chain_id
     }
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool> {
         &self.thread_pool
     }
 
@@ -550,11 +552,11 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
@@ -588,12 +590,12 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         Ok(service)
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
-        self.storage.read_blob(blob_id).await
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<StdArc<Blob>>, ViewError> {
+        Ok(self.storage.read_blob(blob_id).await?.map(Arc::into_std))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
-        self.storage.read_event(event_id).await
+    async fn get_event(&self, event_id: EventId) -> Result<Option<StdArc<Vec<u8>>>, ViewError> {
+        Ok(self.storage.read_event(event_id).await?.map(Arc::into_std))
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -603,7 +605,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<Committee>, ExecutionError> {
+    ) -> Result<StdArc<Committee>, ExecutionError> {
         self.storage.get_or_load_committee_by_hash(hash).await
     }
 
@@ -938,10 +940,10 @@ mod tests {
 
         // Test individual event reading
         let read_event1 = storage.read_event(event_id1).await?;
-        assert_eq!(read_event1, Some(Arc::new(event_data1)));
+        assert_eq!(read_event1.as_deref(), Some(&event_data1));
 
         let read_event2 = storage.read_event(event_id2).await?;
-        assert_eq!(read_event2, Some(Arc::new(event_data2)));
+        assert_eq!(read_event2.as_deref(), Some(&event_data2));
 
         // Test reading events from index
         let events_from_index = storage

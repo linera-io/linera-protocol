@@ -30,7 +30,7 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, ResultReadCertificates, Storage, TestClock};
+use linera_storage::{Arc as CacheArc, DbStorage, ResultReadCertificates, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::StorageServiceDatabase;
 use linera_version::VersionInfo;
@@ -154,11 +154,11 @@ where
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(Arc::unwrap_or_clone(certificate), sender)
+            validator.do_handle_certificate(CacheArc::unwrap_or_clone(certificate), sender)
         })
         .await
     }
@@ -553,7 +553,7 @@ where
             Ok(blob) => blob.ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error),
         };
-        sender.send(blob.map(|blob| Arc::unwrap_or_clone(blob).into_content()))
+        sender.send(blob.map(|blob| CacheArc::unwrap_or_clone(blob).into_content()))
     }
 
     async fn do_download_pending_blob(
@@ -602,7 +602,7 @@ where
         let certificate = match certificate {
             Err(error) => Err(error),
             Ok(entry) => match entry {
-                Some(certificate) => Ok(Arc::unwrap_or_clone(certificate)),
+                Some(certificate) => Ok(CacheArc::unwrap_or_clone(certificate)),
                 None => {
                     panic!("Missing certificate: {hash}");
                 }

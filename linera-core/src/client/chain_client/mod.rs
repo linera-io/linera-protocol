@@ -53,7 +53,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome,
 };
-use linera_storage::{Clock as _, Storage as _};
+use linera_storage::{Arc as CacheArc, Clock as _, Storage as _};
 use linera_views::ViewError;
 use serde::Serialize;
 pub use state::State;
@@ -818,7 +818,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn update_validators(
         &self,
         old_committee: Option<&Committee>,
-        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
@@ -843,7 +843,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
-        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let delivery = self.options.cross_chain_message_delivery;
         let height = self.chain_info().await?.next_block_height;
@@ -2082,7 +2082,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
         // Clear the pending proposal now that the block has been committed.
         *proposal_guard = None;
-        Ok(ClientOutcome::Committed(Some(Arc::unwrap_or_clone(
+        Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
             certificate,
         ))))
     }
@@ -2144,7 +2144,7 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = self.client.storage_client().cache_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
-        Ok(ClientOutcome::Committed(Some(Arc::unwrap_or_clone(
+        Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
             certificate,
         ))))
     }
@@ -2783,13 +2783,14 @@ impl<Env: Environment> ChainClient<Env> {
             .read_confirmed_block(hash)
             .await?
             .ok_or(Error::MissingConfirmedBlock(hash))
+            .map(|b| b.into_std())
     }
 
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<ConfirmedBlockCertificate>, Error> {
+    ) -> Result<CacheArc<ConfirmedBlockCertificate>, Error> {
         self.client
             .storage_client()
             .read_certificate(hash)
@@ -3316,6 +3317,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?
                 .into_iter()
                 .flatten()
+                .map(|b| b.into_std())
                 .collect();
             remote_node.upload_blobs(missing_blobs).await?;
             remote_node

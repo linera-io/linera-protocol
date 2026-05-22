@@ -24,7 +24,7 @@ use linera_core::{
     worker::{Notification, Reason},
     Environment, Wallet,
 };
-use linera_storage::Storage as _;
+use linera_storage::{Arc as CacheArc, Storage as _};
 use tokio::sync::{mpsc::UnboundedReceiver, Notify};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn, Instrument as _};
@@ -408,7 +408,7 @@ impl<C: ClientContext + 'static> ChainListener<C> {
     /// add them to the wallet and start listening for notifications. (This is not done for
     /// fallback owners, as those would have to monitor all chains anyway.)
     async fn add_new_chains(&mut self, hash: CryptoHash) -> Result<(), Error> {
-        let block = Arc::unwrap_or_clone(
+        let block = CacheArc::unwrap_or_clone(
             self.storage
                 .read_confirmed_block(hash)
                 .await?

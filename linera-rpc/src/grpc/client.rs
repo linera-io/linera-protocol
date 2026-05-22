@@ -48,6 +48,7 @@ use linera_core::{
     node::{BlobStream, CrossChainMessageDelivery, NodeError, NotificationStream, ValidatorNode},
     worker::Notification,
 };
+use linera_storage::Arc as CacheArc;
 use linera_version::VersionInfo;
 use tonic::{Code, IntoRequest, Request, Status};
 use tracing::{debug, instrument, trace, Level};
@@ -280,12 +281,12 @@ impl ValidatorNode for GrpcClient {
     #[instrument(target = "grpc_client", skip_all, err(level = Level::DEBUG), fields(address = self.address))]
     async fn handle_confirmed_certificate(
         &self,
-        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<linera_core::data_types::ChainInfoResponse, NodeError> {
         let wait_for_outgoing_messages: bool = delivery.wait_for_outgoing_messages();
         let request = HandleConfirmedCertificateRequest {
-            certificate: Arc::unwrap_or_clone(certificate),
+            certificate: CacheArc::unwrap_or_clone(certificate),
             wait_for_outgoing_messages,
         };
         GrpcClient::try_into_chain_info(client_delegate!(
