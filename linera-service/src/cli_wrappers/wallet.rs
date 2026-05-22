@@ -657,6 +657,25 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera validator benchmark` and returns its stdout.
+    pub async fn validator_benchmark(
+        &self,
+        address: impl Into<String>,
+        chains: impl IntoIterator<Item = &ChainId>,
+        extra_args: &[&str],
+    ) -> Result<String> {
+        let mut command = self.command().await?;
+        command
+            .arg("validator")
+            .arg("benchmark")
+            .arg(address.into());
+        for chain in chains {
+            command.args(["--chain", &chain.to_string()]);
+        }
+        command.args(extra_args);
+        command.spawn_and_wait_for_stdout().await
+    }
+
     /// Runs `linera faucet`.
     pub async fn run_faucet(
         &self,
