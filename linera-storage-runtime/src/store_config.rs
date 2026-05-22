@@ -10,8 +10,6 @@ use linera_execution::WasmRuntime;
 use linera_storage::{DbStorage, Storage, StorageCacheConfig};
 #[cfg(feature = "storage-service")]
 use linera_storage_service::client::StorageServiceDatabase;
-#[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(feature = "rocksdb")]
 use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(feature = "scylladb")]
@@ -43,12 +41,6 @@ pub enum StoreConfig {
     #[cfg(feature = "rocksdb")]
     RocksDb {
         config: linera_views::rocks_db::RocksDbStoreConfig,
-        namespace: String,
-    },
-    /// The DynamoDB key value store
-    #[cfg(feature = "dynamodb")]
-    DynamoDb {
-        config: linera_views::dynamo_db::DynamoDbStoreConfig,
         namespace: String,
     },
     /// The ScyllaDB key value store
@@ -151,18 +143,6 @@ impl StoreConfig {
                 .with_allow_application_logs(allow_application_logs);
                 Ok(job.run(storage).await)
             }
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb { config, namespace } => {
-                let storage = DbStorage::<DynamoDbDatabase, _>::connect(
-                    &config,
-                    &namespace,
-                    wasm_runtime,
-                    cache_sizes,
-                )
-                .await?
-                .with_allow_application_logs(allow_application_logs);
-                Ok(job.run(storage).await)
-            }
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb { config, namespace } => {
                 let storage = DbStorage::<ScyllaDbDatabase, _>::connect(
@@ -209,10 +189,6 @@ impl StoreConfig {
             #[cfg(feature = "rocksdb")]
             StoreConfig::RocksDb { config, namespace } => Ok(job
                 .run::<RocksDbDatabase>(config, namespace, cache_sizes)
-                .await?),
-            #[cfg(feature = "dynamodb")]
-            StoreConfig::DynamoDb { config, namespace } => Ok(job
-                .run::<DynamoDbDatabase>(config, namespace, cache_sizes)
                 .await?),
             #[cfg(feature = "scylladb")]
             StoreConfig::ScyllaDb { config, namespace } => Ok(job

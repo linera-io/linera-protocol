@@ -166,7 +166,7 @@ pub fn span_random_reordering_put_delete<R: Rng>(
 /// * `find_keys_by_prefix` / `find_key_values_by_prefix`
 /// * The ordering of keys returned by `find_keys_by_prefix` and `find_key_values_by_prefix`
 pub async fn run_reads<S: KeyValueStore>(store: S, key_values: Vec<(Vec<u8>, Vec<u8>)>) {
-    // We need a nontrivial key_prefix because dynamo requires a non-trivial prefix
+    // We need a nontrivial key_prefix because some stores require a non-trivial prefix
     let mut batch = Batch::new();
     let mut keys = Vec::new();
     let mut set_keys = HashSet::new();
@@ -544,7 +544,7 @@ pub async fn tombstone_triggering_test<C: KeyValueStore>(key_value_store: C) {
     }
 }
 
-/// DynamoDB has limits at 1 MB (for pagination), 4 MB (for write)
+/// Some key-value stores impose limits (e.g. 1 MB for pagination, 4 MB for write).
 /// Let us go right past them at 20 MB of data with writing and then
 /// reading it. And 20 MB is not huge by any mean. All `KeyValueStore`
 /// must handle that.

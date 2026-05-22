@@ -20,7 +20,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(web)]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-#[cfg(any(with_dynamodb, with_scylladb))]
+#[cfg(with_scylladb)]
 use linera_views::test_utils::access_admin_test;
 
 #[ignore]
@@ -28,15 +28,6 @@ use linera_views::test_utils::access_admin_test;
 async fn test_read_multi_values_memory() {
     let config = MemoryDatabase::new_test_config().await.unwrap();
     big_read_multi_values::<MemoryDatabase>(config, 2200000, 1000).await;
-}
-
-#[ignore]
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_read_multi_values_dynamo_db() {
-    use linera_views::dynamo_db::DynamoDbDatabase;
-    let config = DynamoDbDatabase::new_test_config().await.unwrap();
-    big_read_multi_values::<DynamoDbDatabase>(config, 22000000, 1000).await;
 }
 
 #[ignore]
@@ -71,20 +62,6 @@ async fn test_reads_rocks_db() {
         let store = linera_views::rocks_db::RocksDbDatabase::new_test_store()
             .await
             .unwrap();
-        run_reads(store, scenario).await;
-    }
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_reads_dynamo_db() {
-    use linera_views::store::KeyValueDatabase as _;
-
-    for scenario in get_random_test_scenarios() {
-        let database = linera_views::dynamo_db::DynamoDbDatabase::connect_test_namespace()
-            .await
-            .unwrap();
-        let store = database.open_exclusive(&[]).unwrap();
         run_reads(store, scenario).await;
     }
 }
@@ -167,15 +144,6 @@ async fn test_key_value_store_view_memory_writes_from_blank() {
 #[tokio::test]
 async fn test_rocks_db_writes_from_blank() {
     let store = linera_views::rocks_db::RocksDbDatabase::new_test_store()
-        .await
-        .unwrap();
-    run_writes_from_blank(&store).await;
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamo_db_writes_from_blank() {
-    let store = linera_views::dynamo_db::DynamoDbDatabase::new_test_store()
         .await
         .unwrap();
     run_writes_from_blank(&store).await;
@@ -285,20 +253,6 @@ async fn test_indexed_db_big_write_read() {
     run_big_write_read(key_value_store, target_size, value_sizes).await;
 }
 
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamo_db_big_write_read() {
-    use linera_views::store::KeyValueDatabase as _;
-
-    let database = linera_views::dynamo_db::DynamoDbDatabase::connect_test_namespace()
-        .await
-        .unwrap();
-    let store = database.open_exclusive(&[]).unwrap();
-    let value_sizes = vec![100, 1000, 200000, 5000000];
-    let target_size = 20000000;
-    run_big_write_read(store, target_size, value_sizes).await;
-}
-
 #[tokio::test]
 async fn test_memory_writes_from_state() {
     let store = MemoryDatabase::new_test_store().await.unwrap();
@@ -319,15 +273,6 @@ async fn test_rocks_db_writes_from_state() {
 async fn test_indexed_db_writes_from_state() {
     let key_value_store = linera_views::indexed_db::create_indexed_db_test_store().await;
     run_writes_from_state(&key_value_store).await;
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamo_db_writes_from_state() {
-    let store = linera_views::dynamo_db::DynamoDbDatabase::new_test_store()
-        .await
-        .unwrap();
-    run_writes_from_state(&store).await;
 }
 
 #[cfg(with_scylladb)]
@@ -408,10 +353,4 @@ async fn test_scylla_db_exclusive_seed_after_restart() {
 #[tokio::test]
 async fn test_scylladb_access() {
     access_admin_test::<linera_views::scylla_db::ScyllaDbDatabase>().await
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamodb_access() {
-    access_admin_test::<linera_views::dynamo_db::DynamoDbDatabase>().await
 }

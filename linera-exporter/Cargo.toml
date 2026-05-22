@@ -22,7 +22,6 @@ path = "src/main.rs"
 default = ["rocksdb", "storage-service"]
 metrics = ["dep:linera-metrics", "dep:prometheus", "linera-base/metrics"]
 rocksdb = ["linera-views/rocksdb", "linera-storage-runtime/rocksdb"]
-dynamodb = ["linera-views/dynamodb", "linera-storage-runtime/dynamodb"]
 scylladb = ["linera-views/scylladb", "linera-storage-runtime/scylladb"]
 storage-service = ["linera-storage-runtime/storage-service"]
 jemalloc = []

@@ -20,7 +20,6 @@ test = ["linera-execution/test", "linera-views/test"]
 wasmer = ["linera-execution/wasmer"]
 wasmtime = ["linera-execution/wasmtime"]
 scylladb = ["linera-views/scylladb"]
-dynamodb = ["linera-views/dynamodb"]
 rocksdb = ["linera-views/rocksdb"]
 metrics = [
     "linera-base/metrics",

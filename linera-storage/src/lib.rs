@@ -662,8 +662,6 @@ mod tests {
         data_types::{BlockExecutionOutcome, ProposedBlock},
     };
     use linera_execution::BlobState;
-    #[cfg(feature = "dynamodb")]
-    use linera_views::dynamo_db::DynamoDbDatabase;
     #[cfg(feature = "scylladb")]
     use linera_views::scylla_db::ScyllaDbDatabase;
     use linera_views::{memory::MemoryDatabase, ViewError};
@@ -984,7 +982,6 @@ mod tests {
 
     /// Generic test function to test Storage trait features
     #[test_case(DbStorage::<MemoryDatabase, _>::make_test_storage(None).await; "memory")]
-    #[cfg_attr(feature = "dynamodb", test_case(DbStorage::<DynamoDbDatabase, _>::make_test_storage(None).await; "dynamo_db"))]
     #[cfg_attr(feature = "scylladb", test_case(DbStorage::<ScyllaDbDatabase, _>::make_test_storage(None).await; "scylla_db"))]
     #[test_log::test(tokio::test)]
     async fn test_storage_features<S: Storage + Sync>(storage: S) -> Result<(), ViewError>

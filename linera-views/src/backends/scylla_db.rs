@@ -346,8 +346,7 @@ impl ScyllaDbClient {
     /// key must be non-empty: the empty (zero-length) key is `WRITETIME_SENTINEL_KEY`,
     /// reserved for the per-store timestamp sentinel that exclusive mode writes
     /// internally. Prefix scans now deliberately hide that key, so any caller
-    /// content stored there would be silently invisible to reads. DynamoDB
-    /// likewise forbids zero-length keys.
+    /// content stored there would be silently invisible to reads.
     fn check_batch_key(key: &[u8]) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_key_size(key)?;
         ensure!(!key.is_empty(), ScyllaDbStoreInternalError::ZeroLengthKey);
