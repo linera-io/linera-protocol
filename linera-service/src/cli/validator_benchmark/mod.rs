@@ -10,6 +10,7 @@ mod config;
 mod latency;
 mod partial_sync;
 mod preflight;
+mod progress;
 mod read_latency;
 mod report;
 mod tip_lag;
