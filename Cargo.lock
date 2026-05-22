@@ -6165,6 +6165,7 @@ dependencies = [
  "serde",
  "serde-command-opts",
  "serde_json",
+ "serde_yaml 0.9.34+deprecated",
  "social",
  "stdext",
  "task-processor",

@@ -133,6 +133,116 @@ pub type BulkDownloadReport = serde_json::Value;
 pub type TipLagReport = serde_json::Value;
 pub type PartialSyncReport = serde_json::Value;
 
+/// Render the report as a human-readable Markdown document.
+///
+/// Per-layer detail sections are appended by each layer's own rendering helper
+/// as those layers are implemented; this base covers the metadata header.
+pub fn render_markdown(r: &Report) -> String {
+    use std::fmt::Write as _;
+    let mut s = String::new();
+    let _ = writeln!(s, "# Validator Benchmark Report");
+    let _ = writeln!(s);
+    let _ = writeln!(s, "- **Candidate:** `{}`", r.metadata.candidate.address);
+    if let Some(pk) = &r.metadata.candidate.public_key {
+        let _ = writeln!(s, "- **Public key:** `{pk}`");
+    }
+    let _ = writeln!(
+        s,
+        "- **Observer:** {} @ {}",
+        r.metadata.observer.location, r.metadata.observer.hostname
+    );
+    let _ = writeln!(s, "- **Started:** {}", r.metadata.observer.started_at);
+    if let Some(d) = r.metadata.observer.duration_secs {
+        let _ = writeln!(s, "- **Duration:** {d}s");
+    }
+    let _ = writeln!(s, "- **Chains:** {}", r.metadata.chains_tested.join(", "));
+    let _ = writeln!(s);
+    s
+}
+
+/// Render a 3-5 line recap suitable for stdout when full output goes to a file.
+pub fn render_brief(r: &Report) -> String {
+    format!(
+        "validator-benchmark | candidate={} | observer={} | chains={} | started={}\n",
+        r.metadata.candidate.address,
+        r.metadata.observer.location,
+        r.metadata.chains_tested.len(),
+        r.metadata.observer.started_at,
+    )
+}
+
+/// Renders a report to one or more targets (files and/or stdout).
+pub struct Writer {
+    targets: Vec<OutputSpec>,
+}
+
+impl Writer {
+    pub fn new(targets: Vec<OutputSpec>) -> Self {
+        Self { targets }
+    }
+
+    fn render(format: Format, report: &Report) -> Result<String> {
+        Ok(match format {
+            Format::Json => serde_json::to_string_pretty(report)?,
+            Format::Yaml => serde_yaml::to_string(report)?,
+            Format::Md => render_markdown(report),
+            Format::Brief => render_brief(report),
+        })
+    }
+
+    /// Emit the report to every configured target. When several formats share
+    /// stdout, they are concatenated under `===== <FORMAT> =====` headers.
+    pub fn emit(&self, report: &Report) -> Result<()> {
+        use std::io::Write as _;
+
+        let mut stdout_chunks: Vec<(Format, String)> = Vec::new();
+        for spec in &self.targets {
+            let rendered = Self::render(spec.format, report)?;
+            match &spec.target {
+                Target::Stdout => stdout_chunks.push((spec.format, rendered)),
+                Target::File(path) => std::fs::write(path, rendered)?,
+            }
+        }
+        if !stdout_chunks.is_empty() {
+            let stdout = std::io::stdout();
+            let mut lock = stdout.lock();
+            let multi = stdout_chunks.len() > 1;
+            for (format, content) in &stdout_chunks {
+                if multi {
+                    writeln!(lock, "===== {format:?} =====")?;
+                }
+                writeln!(lock, "{content}")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+fn fixture() -> Report {
+    Report {
+        metadata: Metadata {
+            tool_version: "linera vX (test)".into(),
+            candidate: Candidate {
+                address: "grpcs://example:443".into(),
+                public_key: None,
+                version_info: None,
+                network_description: None,
+            },
+            observer: Observer {
+                location: "test".into(),
+                hostname: "h".into(),
+                started_at: "2026-05-21T12:34:56Z".into(),
+                ended_at: None,
+                duration_secs: None,
+            },
+            config: serde_json::Value::Null,
+            chains_tested: vec!["c1".into()],
+        },
+        layers: Layers::default(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,5 +307,39 @@ mod tests {
     #[test]
     fn parse_unknown_format_rejected() {
         assert!(OutputSpec::parse_all(&["html".to_string()]).is_err());
+    }
+
+    #[test]
+    fn json_round_trip() {
+        let r = fixture();
+        let s = serde_json::to_string(&r).unwrap();
+        let back: Report = serde_json::from_str(&s).unwrap();
+        assert_eq!(
+            back.metadata.candidate.address,
+            r.metadata.candidate.address
+        );
+    }
+
+    #[test]
+    fn yaml_serializes() {
+        let r = fixture();
+        let s = serde_yaml::to_string(&r).unwrap();
+        assert!(s.contains("grpcs://example:443"));
+    }
+
+    #[test]
+    fn markdown_contains_header_and_candidate() {
+        let r = fixture();
+        let md = render_markdown(&r);
+        assert!(md.contains("# Validator Benchmark Report"));
+        assert!(md.contains("grpcs://example:443"));
+    }
+
+    #[test]
+    fn brief_is_short_and_identifies_candidate() {
+        let r = fixture();
+        let b = render_brief(&r);
+        assert!(b.lines().count() <= 6);
+        assert!(b.contains("grpcs://example:443"));
     }
 }
