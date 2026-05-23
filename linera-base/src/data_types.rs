@@ -2033,17 +2033,32 @@ mod tests {
 
         // `256u32` is chosen so that its little-endian BCS bytes sort *before* `1u32`'s,
         // i.e. the canonical (serialized-byte) order differs from the numeric `Ord` order.
-        let map =
-            NonCanonicalBTreeMap::from(BTreeMap::from([(1u32, 10u8), (256u32, 20u8), (2u32, 30u8)]));
+        let map = NonCanonicalBTreeMap::from(BTreeMap::from([
+            (1u32, 10u8),
+            (256u32, 20u8),
+            (2u32, 30u8),
+        ]));
 
         // It serializes as a plain `Vec<(K, V)>` in the map's `Ord` key order, with no canonical
         // re-sorting.
-        let entries = map.iter().map(|(k, v)| (*k, *v)).collect::<Vec<(u32, u8)>>();
-        assert_eq!(bcs::to_bytes(&map).unwrap(), bcs::to_bytes(&entries).unwrap());
+        let entries = map
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect::<Vec<(u32, u8)>>();
+        assert_eq!(
+            bcs::to_bytes(&map).unwrap(),
+            bcs::to_bytes(&entries).unwrap()
+        );
 
         // ... which differs from the canonical `BTreeMap` encoding that re-sorts by serialized key.
-        let canonical = map.iter().map(|(k, v)| (*k, *v)).collect::<BTreeMap<u32, u8>>();
-        assert_ne!(bcs::to_bytes(&map).unwrap(), bcs::to_bytes(&canonical).unwrap());
+        let canonical = map
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect::<BTreeMap<u32, u8>>();
+        assert_ne!(
+            bcs::to_bytes(&map).unwrap(),
+            bcs::to_bytes(&canonical).unwrap()
+        );
 
         // It round-trips.
         let deserialized: NonCanonicalBTreeMap<u32, u8> =

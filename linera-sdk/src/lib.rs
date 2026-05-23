@@ -48,8 +48,8 @@ pub use bcs;
 pub use linera_base::{
     abi,
     data_types::{
-        CanonicalBTreeMap, CanonicalBTreeSet, NonCanonicalBTreeMap, NonCanonicalBTreeSet, Resources,
-        SendMessageRequest,
+        CanonicalBTreeMap, CanonicalBTreeSet, NonCanonicalBTreeMap, NonCanonicalBTreeSet,
+        Resources, SendMessageRequest,
     },
     ensure, http, task_processor,
 };
