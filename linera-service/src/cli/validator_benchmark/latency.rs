@@ -55,12 +55,13 @@ impl Samples {
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let count = sorted.len();
 
-        // Nearest-rank percentile (1-based rank), clamped to the sample range.
-        let percentile = |q: f64| -> f64 {
+        // Nearest-rank percentile, `num/den` of the way through, via integer math
+        // to avoid a lossy float-to-index cast.
+        let percentile = |num: usize, den: usize| -> f64 {
             if sorted.is_empty() {
                 return 0.0;
             }
-            let rank = (q * count as f64).ceil() as usize;
+            let rank = (count * num).div_ceil(den); // 1-based ceil(count * num / den)
             let idx = rank.saturating_sub(1).min(count - 1);
             sorted[idx]
         };
@@ -83,9 +84,9 @@ impl Samples {
             max: sorted.last().copied().unwrap_or(0.0),
             mean,
             stddev,
-            p50: percentile(0.50),
-            p95: percentile(0.95),
-            p99: percentile(0.99),
+            p50: percentile(50, 100),
+            p95: percentile(95, 100),
+            p99: percentile(99, 100),
             errors: self
                 .errors
                 .iter()

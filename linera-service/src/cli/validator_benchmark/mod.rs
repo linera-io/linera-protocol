@@ -183,7 +183,7 @@ impl Benchmark {
         let ended_at = Utc::now();
         report.metadata.observer.ended_at = Some(ended_at.to_rfc3339());
         report.metadata.observer.duration_secs =
-            Some((ended_at - started_at).num_seconds().max(0) as u64);
+            Some(u64::try_from((ended_at - started_at).num_seconds()).unwrap_or(0));
         report.metadata.complete = true;
         progress.clear();
         writer.emit(&report)?;

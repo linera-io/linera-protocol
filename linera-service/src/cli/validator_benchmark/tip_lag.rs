@@ -77,10 +77,10 @@ where
         phase.set_message(format!("sample {}/{}", i + 1, samples.max(1)));
         let t_secs = started.elapsed().as_secs();
         for (idx, &chain) in chains.iter().enumerate() {
-            let candidate_tip = timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain)))
-                .await
-                .map(|response| response.info.next_block_height.0)
-                .unwrap_or(0);
+            let candidate_tip =
+                timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain)))
+                    .await
+                    .map_or(0, |response| response.info.next_block_height.0);
 
             // Reference tip = highest tip across reachable committee members.
             let mut reference_tip = 0u64;
@@ -95,11 +95,14 @@ where
                 }
             }
 
+            // Heights fit in i64 in practice; clamp defensively rather than cast.
+            let reference = i64::try_from(reference_tip).unwrap_or(i64::MAX);
+            let candidate = i64::try_from(candidate_tip).unwrap_or(i64::MAX);
             per_chain[idx].samples.push(TipLagSample {
                 t_secs,
                 candidate_tip,
                 reference_tip,
-                lag_blocks: reference_tip as i64 - candidate_tip as i64,
+                lag_blocks: reference.saturating_sub(candidate),
             });
         }
         phase.inc(1);
@@ -156,7 +159,7 @@ mod tests {
         TipLagSample {
             t_secs: t,
             candidate_tip: 0,
-            reference_tip: lag.max(0) as u64,
+            reference_tip: u64::try_from(lag).unwrap_or(0),
             lag_blocks: lag,
         }
     }
