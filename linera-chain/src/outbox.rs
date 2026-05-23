@@ -36,11 +36,10 @@ pub(crate) mod metrics {
     });
 }
 
-// The number of block heights in a bucket
-// The `BlockHeight` has just 8 bytes so the size is constant.
-// This means that by choosing a size of 1000, we have a
-// reasonable size that will not create any memory issues.
-const BLOCK_HEIGHT_BUCKET_SIZE: usize = 1000;
+/// The number of block heights in a bucket.
+///
+/// The current value keeps buckets comfortably under 1KB.
+const BLOCK_HEIGHT_BUCKET_SIZE: usize = 100;
 
 /// The state of an outbox
 /// * An outbox is used to send messages to another chain.
