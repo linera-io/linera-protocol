@@ -251,7 +251,7 @@ where
                 if plan.has_storage {
                     batch.delete_key_prefix(self.context.base_key().bytes.clone());
                 }
-                let mut all_data: Vec<T> = Vec::new();
+                let mut all_data = Vec::new();
                 if let Some(bucket) = self.stored_buckets.get(plan.remaining_start) {
                     let State::Loaded { data } = &bucket.state else {
                         unreachable!("front bucket is always loaded");
@@ -304,9 +304,9 @@ where
                     else {
                         unreachable!("back bucket is always loaded");
                     };
-                    let mut merged: Vec<T> = back_data.clone();
+                    let mut merged = back_data.clone();
                     merged.extend(self.new_back_values.iter().cloned());
-                    let chunks: Vec<&[T]> = merged.chunks(N).collect();
+                    let chunks = merged.chunks(N).collect::<Vec<_>>();
                     let num_new_chunks =
                         u32::try_from(chunks.len()).map_err(|_| ArithmeticError::Overflow)?;
                     let new_middle_start = new_first_index + remaining_count - 1;
@@ -349,7 +349,7 @@ where
                 self.stored_front_position = plan.cursor_position_u32;
             }
             SaveCase::Rewrite => {
-                let mut all_data: Vec<T> = Vec::new();
+                let mut all_data = Vec::new();
                 if let Some(bucket) = self.stored_buckets.get(plan.remaining_start) {
                     let State::Loaded { data } = &bucket.state else {
                         unreachable!("front bucket is always loaded");
@@ -385,7 +385,7 @@ where
                     let first_index = self.stored_buckets[0].index;
                     let old_remaining_without_back =
                         u32::try_from(self.stored_buckets.len()).expect("verified in pre_save");
-                    let mut merged: Vec<T> = back_data;
+                    let mut merged = back_data;
                     merged.extend(std::mem::take(&mut self.new_back_values));
                     let new_start = first_index + old_remaining_without_back;
                     for (i, chunk) in merged.chunks(N).enumerate() {
