@@ -457,7 +457,7 @@ struct SavePlan {
     case: SaveCase,
     /// Offset within `stored_buckets` of the first surviving bucket.
     remaining_start: usize,
-    /// Position within the front bucket of the cursor.
+    /// Position of the cursor within the front bucket
     cursor_position: usize,
     /// `cursor_position` pre-validated as `u32`.
     cursor_position_u32: u32,
