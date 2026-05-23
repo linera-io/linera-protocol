@@ -1034,7 +1034,7 @@ async fn test_validator_benchmark(config: LocalNetConfig) -> Result<()> {
         .await?;
 
     // The brief recap goes to stdout.
-    assert!(stdout.contains("validator-benchmark"));
+    assert!(stdout.contains("Validator Benchmark"));
     assert!(stdout.contains("integration-test"));
 
     // The JSON report must parse and carry every read-side layer; partial_sync
