@@ -142,8 +142,13 @@ pub enum BlockOutcome {
 /// How to handle a confirmed block.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessConfirmedBlockMode {
-    /// Execute the block if it is contiguous with the local tip; otherwise
-    /// preprocess it (update outboxes and event streams without executing).
+    /// Execute the block if it is contiguous (or bridgeable via a checkpoint);
+    /// otherwise preprocess it. Used by validators and by any caller that
+    /// wants graceful fallback when there's a gap.
+    Auto,
+    /// Execute the block. Fail with [`WorkerError::InvalidBlockChaining`] if
+    /// there's a gap that can't be bridged. Use when the caller knows the
+    /// block must be contiguous and wants a hard error otherwise.
     Execute,
     /// Only preprocess the block, never execute it — even if it would be
     /// contiguous. Used by the client for sender-chain blocks it is not
@@ -917,20 +922,21 @@ where
 
         // Dispatch on the actual outcome (preprocess / checkpoint-restore-then-execute
         // / contiguous execute):
-        //  - `Preprocess` mode: never execute, even if contiguous.
-        //  - `Execute` mode + gap + checkpoint block: install the snapshot, then execute.
-        //  - `Execute` mode + gap + non-checkpoint block: fall back to preprocess
-        //    (we can't bridge the gap).
-        //  - `Execute` mode + contiguous: execute directly.
+        //  - `Preprocess` mode, or `Auto` with an unbridgeable gap: preprocess.
+        //  - `Execute` mode with an unbridgeable gap: error.
+        //  - `Auto`/`Execute` mode + gap + checkpoint block: install the snapshot,
+        //    then execute.
+        //  - `Auto`/`Execute` mode + contiguous: execute directly.
+        use ProcessConfirmedBlockMode::{Auto, Execute, Preprocess};
         let gap = tip.next_block_height < height;
         let starts_with_checkpoint = block.starts_with_checkpoint();
         match (mode, gap, starts_with_checkpoint) {
-            (ProcessConfirmedBlockMode::Preprocess, _, _)
-            | (ProcessConfirmedBlockMode::Execute, true, false) => {
+            (Preprocess, _, _) | (Auto, true, false) => {
                 self.preprocess_certified_block(certificate, notify_when_messages_are_delivered)
                     .await
             }
-            (ProcessConfirmedBlockMode::Execute, true, true) => {
+            (Execute, true, false) => Err(WorkerError::InvalidBlockChaining),
+            (Auto | Execute, true, true) => {
                 self.execute_block_with_checkpoint_restore(
                     certificate,
                     blobs,
@@ -938,7 +944,7 @@ where
                 )
                 .await
             }
-            (ProcessConfirmedBlockMode::Execute, false, _) => {
+            (Auto | Execute, false, _) => {
                 self.execute_contiguous_block(
                     certificate,
                     blobs,

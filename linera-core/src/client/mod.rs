@@ -945,7 +945,7 @@ impl<Env: Environment> Client<Env> {
             .chain_mode(certificate.value().chain_id())
             .is_some_and(|m| m.should_sync_chain_state())
         {
-            ProcessConfirmedBlockMode::Execute
+            ProcessConfirmedBlockMode::Auto
         } else {
             ProcessConfirmedBlockMode::Preprocess
         };

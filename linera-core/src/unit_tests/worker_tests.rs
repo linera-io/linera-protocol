@@ -1233,7 +1233,7 @@ where
     env.worker()
         .handle_confirmed_certificate(
             certificate2.clone(),
-            ProcessConfirmedBlockMode::Execute,
+            ProcessConfirmedBlockMode::Auto,
             None,
         )
         .await?;
@@ -1360,7 +1360,7 @@ where
         env.worker()
             .handle_confirmed_certificate(
                 certificate1.clone(),
-                ProcessConfirmedBlockMode::Execute,
+                ProcessConfirmedBlockMode::Auto,
                 None
             )
             .await,

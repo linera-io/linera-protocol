@@ -302,7 +302,7 @@ where
                     .state
                     .handle_confirmed_certificate(
                         request.certificate,
-                        ProcessConfirmedBlockMode::Execute,
+                        ProcessConfirmedBlockMode::Auto,
                         sender,
                     )
                     .await
