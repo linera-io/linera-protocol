@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use linera_base::identifiers::ChainId;
-use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
+use linera_client::client_context::ClientContext;
 use linera_core::{
     data_types::ChainInfoQuery,
     node::{ValidatorNode, ValidatorNodeProvider as _},
@@ -46,9 +46,13 @@ where
     let started = Instant::now();
     let phase = progress.phase("L5 tip-lag", Some(samples.max(1) as u64));
 
-    // Build the committee node set once from the (locally tracked) admin chain;
-    // the committee is network-wide, so any tracked chain yields the same set.
-    let committee_nodes = committee_nodes(context).await?;
+    // Build the committee node set once from the wallet's genesis config: it is
+    // local (no RPC, no tracked chain needed). Validators serve committee info
+    // only to local clients, and the operator's wallet may have no default
+    // chain, so this is the robust source. NOTE: it is the genesis committee;
+    // members added/removed since genesis are missed/unreachable, which is fine
+    // for a max-over-reachable reference tip.
+    let committee_nodes = committee_nodes(context);
 
     let mut per_chain: Vec<PerChainTipLag> = chains
         .iter()
@@ -108,25 +112,22 @@ where
     Ok(TipLagReport { per_chain })
 }
 
-/// Build the current committee's validator nodes (network-wide, read from the
-/// locally tracked default chain). Unreachable addresses are skipped.
+/// Build the genesis committee's validator nodes from the wallet's local config.
 ///
-/// Returns the concrete gRPC client type produced by the context's node
-/// provider, independent of the candidate node's generic type.
-async fn committee_nodes<Env>(context: &ClientContext<Env>) -> Result<Vec<linera_rpc::Client>>
+/// Returns the concrete gRPC client type from the context's node provider;
+/// unparseable addresses are skipped.
+fn committee_nodes<Env>(context: &ClientContext<Env>) -> Vec<linera_rpc::Client>
 where
     Env: linera_core::Environment,
 {
-    let chain_client = context.make_chain_client(context.default_chain()).await?;
-    let committee = chain_client.local_committee().await?;
     let provider = context.make_node_provider();
-    let mut nodes = Vec::new();
-    for state in committee.validators().values() {
-        if let Ok(node) = provider.make_node(&state.network_address) {
-            nodes.push(node);
-        }
-    }
-    Ok(nodes)
+    context
+        .genesis_config
+        .committee
+        .validators()
+        .values()
+        .filter_map(|state| provider.make_node(&state.network_address).ok())
+        .collect()
 }
 
 /// Classify the lag trend by comparing the first and last sample.
