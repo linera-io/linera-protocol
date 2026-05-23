@@ -21,7 +21,9 @@ use super::{progress::Progress, report::PartialSyncReport, rpc::timed};
 
 /// Compute the exclusive end height for a bounded sync, saturating on overflow.
 pub(super) fn end_height(candidate_tip: u64, max_blocks: u32, local_tip: u64) -> u64 {
-    candidate_tip.saturating_add(max_blocks as u64).min(local_tip)
+    candidate_tip
+        .saturating_add(max_blocks as u64)
+        .min(local_tip)
 }
 
 pub async fn run<N, Env>(

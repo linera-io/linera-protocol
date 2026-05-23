@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 
-use super::latency::LatencySummary;
 #[cfg(test)]
 use super::latency::ErrorBucket;
+use super::latency::LatencySummary;
 
 /// Output format requested on the command line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -401,10 +401,7 @@ pub fn render_brief(r: &Report) -> String {
     let m = &r.metadata;
     let h = highlights(r);
     let mut s = String::new();
-    s.push_str(&format!(
-        "Validator Benchmark — {}\n",
-        m.candidate.address
-    ));
+    s.push_str(&format!("Validator Benchmark — {}\n", m.candidate.address));
     s.push_str(&format!(
         "Observer: {} · {} · {} · {}\n",
         m.observer.location,
@@ -448,7 +445,10 @@ pub fn render_brief(r: &Report) -> String {
     if let Some(bps) = h.partial_bps {
         s.push_str(&format!("  Partial sync     {bps:.1} blocks/s\n"));
     }
-    s.push_str(&format!("  Errors           {}\n", errors_inline(&h.errors)));
+    s.push_str(&format!(
+        "  Errors           {}\n",
+        errors_inline(&h.errors)
+    ));
     s
 }
 

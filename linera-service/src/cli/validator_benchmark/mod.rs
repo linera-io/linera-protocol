@@ -16,12 +16,11 @@ mod report;
 mod rpc;
 mod tip_lag;
 
-pub use config::Benchmark;
-
 use std::{io::IsTerminal as _, time::Duration};
 
 use anyhow::Result;
 use chrono::Utc;
+pub use config::Benchmark;
 use linera_client::client_context::ClientContext;
 use linera_core::node::{ValidatorNode as _, ValidatorNodeProvider as _};
 
@@ -90,10 +89,11 @@ impl Benchmark {
             report.metadata.candidate.network_description = outcome.network_description;
             report.layers.preflight = Some(outcome.report);
         } else {
-            report.metadata.candidate.version_info = rpc::timed(rpc_timeout, node.get_version_info())
-                .await
-                .ok()
-                .map(|v| format!("{v:?}"));
+            report.metadata.candidate.version_info =
+                rpc::timed(rpc_timeout, node.get_version_info())
+                    .await
+                    .ok()
+                    .map(|v| format!("{v:?}"));
             report.metadata.candidate.network_description =
                 rpc::timed(rpc_timeout, node.get_network_description())
                     .await

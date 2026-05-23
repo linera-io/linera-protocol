@@ -2179,7 +2179,8 @@ fn maybe_quiet_logs_for_benchmark(options: &Options) {
 
     use linera_service::cli::validator;
 
-    let ClientCommand::Validator(validator::Command::Benchmark(benchmark)) = &options.command else {
+    let ClientCommand::Validator(validator::Command::Benchmark(benchmark)) = &options.command
+    else {
         return;
     };
     if !benchmark.no_progress

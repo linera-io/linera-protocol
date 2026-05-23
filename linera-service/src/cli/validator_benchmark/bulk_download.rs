@@ -42,8 +42,11 @@ where
     for &chain in chains {
         // A timed-out tip query means we cannot pick a range; skip the chain
         // (recorded as no runs) rather than hang or abort the whole layer.
-        let tip = match timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain)))
-            .await
+        let tip = match timed(
+            rpc_timeout,
+            node.handle_chain_info_query(ChainInfoQuery::new(chain)),
+        )
+        .await
         {
             Ok(info) => info.info.next_block_height.0,
             Err(_) => {
@@ -185,7 +188,10 @@ mod tests {
 
     #[test]
     fn auto_under_tip() {
-        assert_eq!(resolve_range("auto", 50_000, 100).unwrap(), (40_000, 50_000));
+        assert_eq!(
+            resolve_range("auto", 50_000, 100).unwrap(),
+            (40_000, 50_000)
+        );
     }
 
     #[test]

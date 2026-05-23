@@ -77,10 +77,12 @@ where
         phase.set_message(format!("sample {}/{}", i + 1, samples.max(1)));
         let t_secs = started.elapsed().as_secs();
         for (idx, &chain) in chains.iter().enumerate() {
-            let candidate_tip =
-                timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain)))
-                    .await
-                    .map_or(0, |response| response.info.next_block_height.0);
+            let candidate_tip = timed(
+                rpc_timeout,
+                node.handle_chain_info_query(ChainInfoQuery::new(chain)),
+            )
+            .await
+            .map_or(0, |response| response.info.next_block_height.0);
 
             // Reference tip = highest tip across reachable committee members.
             let mut reference_tip = 0u64;
