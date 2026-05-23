@@ -1082,7 +1082,7 @@ mod tests {
 
             let reloaded = BucketQueueView::<_, u32, N>::load(context).await?;
             let elements = reloaded.elements().await?;
-            let expected: Vec<u32> = (0..u32::try_from(size).unwrap()).collect();
+            let expected = (0..u32::try_from(size).unwrap()).collect::<Vec<_>>();
             assert_eq!(elements, expected, "size = {size}");
             assert_eq!(reloaded.count(), size, "count for size = {size}");
         }
