@@ -537,7 +537,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     where
         T: Serialize + Clone,
     {
-        let chunks: Vec<&[T]> = data.chunks(N).collect();
+        let chunks = data.chunks(N).collect::<Vec<_>>();
         let num_buckets = u32::try_from(chunks.len()).map_err(|_| ArithmeticError::Overflow)?;
         batch.put_key_value(self.front_key(), &chunks[0].to_vec())?;
         for (i, chunk) in chunks
