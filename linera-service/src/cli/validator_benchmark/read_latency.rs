@@ -45,7 +45,11 @@ pub async fn run_baseline<N: ValidatorNode>(
         let mut samples = Samples::new();
         for _ in 0..requests_per_chain {
             let start = Instant::now();
-            match timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(*chain))).await
+            match timed(
+                rpc_timeout,
+                node.handle_chain_info_query(ChainInfoQuery::new(*chain)),
+            )
+            .await
             {
                 Ok(_) => samples.record_success(start.elapsed().as_secs_f64() * 1000.0),
                 Err(category) => samples.record_error(category),
@@ -90,7 +94,12 @@ where
                     let mut samples = Samples::new();
                     while TokioInstant::now() < deadline {
                         let start = Instant::now();
-                        match timed(rpc_timeout, node.handle_chain_info_query(ChainInfoQuery::new(chain))).await {
+                        match timed(
+                            rpc_timeout,
+                            node.handle_chain_info_query(ChainInfoQuery::new(chain)),
+                        )
+                        .await
+                        {
                             Ok(_) => samples.record_success(start.elapsed().as_secs_f64() * 1000.0),
                             Err(category) => samples.record_error(category),
                         }
