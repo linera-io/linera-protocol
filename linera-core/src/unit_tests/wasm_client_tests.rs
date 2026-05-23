@@ -7,7 +7,7 @@
 //! the `wasmtime` feature flags.
 
 #![allow(clippy::cast_possible_truncation)]
-// Tests for `RocksDb`, `DynamoDb`, `ScyllaDb` and `Service` are currently disabled
+// Tests for `RocksDb`, `ScyllaDb` and `Service` are currently disabled
 // because they are slow and their behavior appears to be correctly check by the
 // test with memory.
 #![expect(clippy::large_futures)]
@@ -43,8 +43,6 @@ use linera_storage::Storage as _;
 use serde_json::json;
 use test_case::test_case;
 
-#[cfg(feature = "dynamodb")]
-use crate::client::client_tests::DynamoDbStorageBuilder;
 #[cfg(feature = "rocksdb")]
 use crate::client::client_tests::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
@@ -104,15 +102,6 @@ async fn test_service_create_application(wasm_runtime: WasmRuntime) -> anyhow::R
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn test_rocks_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
     run_test_create_application(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
-}
-
-#[ignore]
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn test_dynamo_db_create_application(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_create_application(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -260,20 +249,6 @@ async fn test_rocks_db_run_application_with_dependency(
     run_test_run_application_with_dependency(
         RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await,
     )
-    .await
-}
-
-#[ignore]
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn test_dynamo_db_run_application_with_dependency(
-    wasm_runtime: WasmRuntime,
-) -> anyhow::Result<()> {
-    run_test_run_application_with_dependency(DynamoDbStorageBuilder::with_wasm_runtime(
-        wasm_runtime,
-    ))
     .await
 }
 
@@ -512,15 +487,6 @@ async fn test_rocks_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow:
 }
 
 #[ignore]
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_cross_chain_message(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_cross_chain_message(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
-}
-
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -682,15 +648,6 @@ async fn test_service_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
     run_test_event_streams(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
-}
-
-#[ignore]
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_event_streams(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_event_streams(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -1133,18 +1090,6 @@ async fn test_rocks_db_message_policy_accept_apps(wasm_runtime: WasmRuntime) -> 
 }
 
 #[ignore]
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
-#[test_log::test(tokio::test)]
-async fn test_dynamo_db_message_policy_accept_apps(
-    wasm_runtime: WasmRuntime,
-) -> anyhow::Result<()> {
-    run_test_message_policy_accept_apps(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime))
-        .await
-}
-
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
@@ -1547,15 +1492,6 @@ async fn test_rocks_db_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyh
 }
 
 #[ignore]
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn test_dynamo_db_publish_read_data_blob(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_publish_read_data_blob(DynamoDbStorageBuilder::with_wasm_runtime(wasm_runtime)).await
-}
-
-#[ignore]
 #[cfg(feature = "scylladb")]
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
@@ -1655,6 +1591,19 @@ where
         .with_policy(ResourceControlPolicy::all_categories());
 
     let creator = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+
+    // Pin the chain to two multi-leader rounds so the test walks
+    // MultiLeader(0) -> MultiLeader(1) -> SingleLeader(0) on three failed proposals,
+    // independently of the protocol-wide default.
+    let creator_key = creator.identity().await.unwrap();
+    creator
+        .change_ownership(ChainOwnership::multiple(
+            [(creator_key, 100)],
+            2,
+            TimeoutConfig::default(),
+        ))
+        .await
+        .unwrap();
 
     // Publish and create the time-expiry application.
     let module_id = creator.publish_wasm_example("time-expiry").await?;

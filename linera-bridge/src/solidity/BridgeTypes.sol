@@ -524,7 +524,7 @@ library BridgeTypes {
         Committee,
         ChainDescription,
         ApplicationFormats,
-        CheckpointContent
+        CheckpointExecutionState
     }
 
     function bcs_serialize_BlobType(BlobType input) internal pure returns (bytes memory) {
@@ -571,7 +571,7 @@ library BridgeTypes {
         }
 
         if (choice == 8) {
-            return (pos + 1, BlobType.CheckpointContent);
+            return (pos + 1, BlobType.CheckpointExecutionState);
         }
 
         require(choice < 9);
@@ -1649,7 +1649,7 @@ library BridgeTypes {
         // choice=6 corresponds to EventExists
         EventId event_exists;
         // choice=7 corresponds to Checkpoint
-        BlobId checkpoint;
+        OracleResponse_Checkpoint checkpoint;
     }
 
     function OracleResponse_case_service(bytes memory service) internal pure returns (OracleResponse memory) {
@@ -1658,7 +1658,7 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         return OracleResponse(uint8(0), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
@@ -1668,7 +1668,7 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         return OracleResponse(uint8(1), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
@@ -1678,7 +1678,7 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         return OracleResponse(uint8(2), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
@@ -1689,7 +1689,7 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         return OracleResponse(uint8(3), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
@@ -1699,7 +1699,7 @@ library BridgeTypes {
         BlobId memory blob;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         return OracleResponse(uint8(4), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
@@ -1713,7 +1713,7 @@ library BridgeTypes {
         BlobId memory blob;
         opt_uint32 memory round;
         EventId memory event_exists;
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         return OracleResponse(uint8(5), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
@@ -1727,11 +1727,15 @@ library BridgeTypes {
         BlobId memory blob;
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         return OracleResponse(uint8(6), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
-    function OracleResponse_case_checkpoint(BlobId memory checkpoint) internal pure returns (OracleResponse memory) {
+    function OracleResponse_case_checkpoint(OracleResponse_Checkpoint memory checkpoint)
+        internal
+        pure
+        returns (OracleResponse memory)
+    {
         bytes memory service;
         Response memory http;
         BlobId memory blob;
@@ -1761,7 +1765,7 @@ library BridgeTypes {
             return abi.encodePacked(input.choice, bcs_serialize_EventId(input.event_exists));
         }
         if (input.choice == 7) {
-            return abi.encodePacked(input.choice, bcs_serialize_BlobId(input.checkpoint));
+            return abi.encodePacked(input.choice, bcs_serialize_OracleResponse_Checkpoint(input.checkpoint));
         }
         return abi.encodePacked(input.choice);
     }
@@ -1798,9 +1802,9 @@ library BridgeTypes {
         if (choice == 6) {
             (new_pos, event_exists) = bcs_deserialize_offset_EventId(new_pos, input);
         }
-        BlobId memory checkpoint;
+        OracleResponse_Checkpoint memory checkpoint;
         if (choice == 7) {
-            (new_pos, checkpoint) = bcs_deserialize_offset_BlobId(new_pos, input);
+            (new_pos, checkpoint) = bcs_deserialize_offset_OracleResponse_Checkpoint(new_pos, input);
         }
         require(choice < 8);
         return (new_pos, OracleResponse(choice, service, http, blob, round, event_, event_exists, checkpoint));
@@ -1810,6 +1814,45 @@ library BridgeTypes {
         uint256 new_pos;
         OracleResponse memory value;
         (new_pos, value) = bcs_deserialize_offset_OracleResponse(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct OracleResponse_Checkpoint {
+        CryptoHash[] execution_state_blobs;
+        BlobId[] used_blobs;
+    }
+
+    function bcs_serialize_OracleResponse_Checkpoint(OracleResponse_Checkpoint memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_seq_CryptoHash(input.execution_state_blobs);
+        return abi.encodePacked(result, bcs_serialize_seq_BlobId(input.used_blobs));
+    }
+
+    function bcs_deserialize_offset_OracleResponse_Checkpoint(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, OracleResponse_Checkpoint memory)
+    {
+        uint256 new_pos;
+        CryptoHash[] memory execution_state_blobs;
+        (new_pos, execution_state_blobs) = bcs_deserialize_offset_seq_CryptoHash(pos, input);
+        BlobId[] memory used_blobs;
+        (new_pos, used_blobs) = bcs_deserialize_offset_seq_BlobId(new_pos, input);
+        return (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs));
+    }
+
+    function bcs_deserialize_OracleResponse_Checkpoint(bytes memory input)
+        internal
+        pure
+        returns (OracleResponse_Checkpoint memory)
+    {
+        uint256 new_pos;
+        OracleResponse_Checkpoint memory value;
+        (new_pos, value) = bcs_deserialize_offset_OracleResponse_Checkpoint(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -4036,6 +4079,76 @@ library BridgeTypes {
         uint256 new_pos;
         BlobContent[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_BlobContent(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_seq_BlobId(BlobId[] memory input) internal pure returns (bytes memory) {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_len(len);
+        for (uint256 i = 0; i < len; i++) {
+            result = abi.encodePacked(result, bcs_serialize_BlobId(input[i]));
+        }
+        return result;
+    }
+
+    function bcs_deserialize_offset_seq_BlobId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, BlobId[] memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        BlobId[] memory result;
+        result = new BlobId[](len);
+        BlobId memory value;
+        for (uint256 i = 0; i < len; i++) {
+            (new_pos, value) = bcs_deserialize_offset_BlobId(new_pos, input);
+            result[i] = value;
+        }
+        return (new_pos, result);
+    }
+
+    function bcs_deserialize_seq_BlobId(bytes memory input) internal pure returns (BlobId[] memory) {
+        uint256 new_pos;
+        BlobId[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_BlobId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    function bcs_serialize_seq_CryptoHash(CryptoHash[] memory input) internal pure returns (bytes memory) {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_len(len);
+        for (uint256 i = 0; i < len; i++) {
+            result = abi.encodePacked(result, bcs_serialize_CryptoHash(input[i]));
+        }
+        return result;
+    }
+
+    function bcs_deserialize_offset_seq_CryptoHash(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, CryptoHash[] memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        CryptoHash[] memory result;
+        result = new CryptoHash[](len);
+        CryptoHash memory value;
+        for (uint256 i = 0; i < len; i++) {
+            (new_pos, value) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+            result[i] = value;
+        }
+        return (new_pos, result);
+    }
+
+    function bcs_deserialize_seq_CryptoHash(bytes memory input) internal pure returns (CryptoHash[] memory) {
+        uint256 new_pos;
+        CryptoHash[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_CryptoHash(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

@@ -20,7 +20,7 @@ use wasm_bindgen_test::wasm_bindgen_test;
 #[cfg(web)]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-#[cfg(any(with_dynamodb, with_scylladb))]
+#[cfg(with_scylladb)]
 use linera_views::test_utils::access_admin_test;
 
 #[ignore]
@@ -28,15 +28,6 @@ use linera_views::test_utils::access_admin_test;
 async fn test_read_multi_values_memory() {
     let config = MemoryDatabase::new_test_config().await.unwrap();
     big_read_multi_values::<MemoryDatabase>(config, 2200000, 1000).await;
-}
-
-#[ignore]
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_read_multi_values_dynamo_db() {
-    use linera_views::dynamo_db::DynamoDbDatabase;
-    let config = DynamoDbDatabase::new_test_config().await.unwrap();
-    big_read_multi_values::<DynamoDbDatabase>(config, 22000000, 1000).await;
 }
 
 #[ignore]
@@ -71,20 +62,6 @@ async fn test_reads_rocks_db() {
         let store = linera_views::rocks_db::RocksDbDatabase::new_test_store()
             .await
             .unwrap();
-        run_reads(store, scenario).await;
-    }
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_reads_dynamo_db() {
-    use linera_views::store::KeyValueDatabase as _;
-
-    for scenario in get_random_test_scenarios() {
-        let database = linera_views::dynamo_db::DynamoDbDatabase::connect_test_namespace()
-            .await
-            .unwrap();
-        let store = database.open_exclusive(&[]).unwrap();
         run_reads(store, scenario).await;
     }
 }
@@ -167,15 +144,6 @@ async fn test_key_value_store_view_memory_writes_from_blank() {
 #[tokio::test]
 async fn test_rocks_db_writes_from_blank() {
     let store = linera_views::rocks_db::RocksDbDatabase::new_test_store()
-        .await
-        .unwrap();
-    run_writes_from_blank(&store).await;
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamo_db_writes_from_blank() {
-    let store = linera_views::dynamo_db::DynamoDbDatabase::new_test_store()
         .await
         .unwrap();
     run_writes_from_blank(&store).await;
@@ -285,20 +253,6 @@ async fn test_indexed_db_big_write_read() {
     run_big_write_read(key_value_store, target_size, value_sizes).await;
 }
 
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamo_db_big_write_read() {
-    use linera_views::store::KeyValueDatabase as _;
-
-    let database = linera_views::dynamo_db::DynamoDbDatabase::connect_test_namespace()
-        .await
-        .unwrap();
-    let store = database.open_exclusive(&[]).unwrap();
-    let value_sizes = vec![100, 1000, 200000, 5000000];
-    let target_size = 20000000;
-    run_big_write_read(store, target_size, value_sizes).await;
-}
-
 #[tokio::test]
 async fn test_memory_writes_from_state() {
     let store = MemoryDatabase::new_test_store().await.unwrap();
@@ -321,15 +275,6 @@ async fn test_indexed_db_writes_from_state() {
     run_writes_from_state(&key_value_store).await;
 }
 
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamo_db_writes_from_state() {
-    let store = linera_views::dynamo_db::DynamoDbDatabase::new_test_store()
-        .await
-        .unwrap();
-    run_writes_from_state(&store).await;
-}
-
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylla_db_writes_from_state() {
@@ -339,14 +284,73 @@ async fn test_scylla_db_writes_from_state() {
     run_writes_from_state(&store).await;
 }
 
+// `new_test_store` opens a shared store, so the test above only exercises the
+// coordinator-timestamp path. This variant opens an exclusive store, routing the
+// same batches (including the `DeletePrefix`-overlapping-`Put` cases in
+// `generate_specific_state_batch`) through the explicit `T`/`T + 1` timestamps.
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_scylla_db_writes_from_state_exclusive() {
+    use linera_views::store::KeyValueDatabase as _;
+
+    let database = linera_views::scylla_db::ScyllaDbDatabase::connect_test_namespace()
+        .await
+        .unwrap();
+    let store = database.open_exclusive(&[]).unwrap();
+    run_writes_from_state(&store).await;
+}
+
+// Exclusive mode keeps timestamps monotonic across batches via an in-memory
+// floor seeded, on first write, from the `WRITETIME` of a persisted sentinel.
+// A reconnect resets that floor to 0, so this test checks that a "restarted"
+// store resumes strictly above the previously persisted data: the second
+// process's `DeletePrefix` + `Put` must win over the first process's value.
+#[cfg(with_scylladb)]
+#[tokio::test]
+async fn test_scylla_db_exclusive_seed_after_restart() {
+    use linera_views::{
+        random::generate_test_namespace, scylla_db::ScyllaDbDatabase, store::KeyValueDatabase as _,
+    };
+
+    let config = ScyllaDbDatabase::new_test_config().await.unwrap();
+    let namespace = generate_test_namespace();
+    let key = vec![42];
+
+    // First process: write an initial value through an exclusive store.
+    {
+        let database = ScyllaDbDatabase::recreate_and_connect(&config, &namespace)
+            .await
+            .unwrap();
+        let store = database.open_exclusive(&[]).unwrap();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(key.clone(), vec![1]);
+        store.write_batch(batch).await.unwrap();
+    }
+
+    // Second process: a fresh database + store resets the timestamp floor to 0,
+    // forcing the seed to read the persisted sentinel and resume above it.
+    {
+        let database = ScyllaDbDatabase::connect(&config, &namespace)
+            .await
+            .unwrap();
+        let store = database.open_exclusive(&[]).unwrap();
+        let mut batch = Batch::new();
+        batch.delete_key_prefix(key.clone());
+        batch.put_key_value_bytes(key.clone(), vec![2]);
+        store.write_batch(batch).await.unwrap();
+    }
+
+    // Third process: a fresh connection (empty cache) reads from the database and
+    // must observe the second write, proving it was resolved as the later one.
+    let database = ScyllaDbDatabase::connect(&config, &namespace)
+        .await
+        .unwrap();
+    let store = database.open_exclusive(&[]).unwrap();
+    assert_eq!(store.read_value_bytes(&key).await.unwrap(), Some(vec![2]));
+}
+
 #[cfg(with_scylladb)]
 #[tokio::test]
 async fn test_scylladb_access() {
     access_admin_test::<linera_views::scylla_db::ScyllaDbDatabase>().await
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_dynamodb_access() {
-    access_admin_test::<linera_views::dynamo_db::DynamoDbDatabase>().await
 }

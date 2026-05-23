@@ -448,8 +448,17 @@ impl PostgresDatabase {
                     })?;
                     ("EventExists", None, Some(serialized))
                 }
-                OracleResponse::Checkpoint(blob_id) => {
-                    ("Checkpoint", Some(blob_id.hash.to_string()), None)
+                OracleResponse::Checkpoint {
+                    execution_state_blobs,
+                    used_blobs,
+                } => {
+                    let serialized = bincode::serialize(&(execution_state_blobs, used_blobs))
+                        .map_err(|e| {
+                            PostgresError::Serialization(format!(
+                                "Failed to serialize checkpoint: {e}"
+                            ))
+                        })?;
+                    ("Checkpoint", None, Some(serialized))
                 }
             };
 

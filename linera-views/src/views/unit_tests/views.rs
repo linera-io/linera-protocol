@@ -6,13 +6,11 @@ use std::{collections::VecDeque, fmt::Debug, marker::PhantomData};
 use serde::{de::DeserializeOwned, Serialize};
 use test_case::test_case;
 
-#[cfg(with_dynamodb)]
-use crate::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
 use crate::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
 use crate::scylla_db::ScyllaDbDatabase;
-#[cfg(any(with_scylladb, with_dynamodb, with_rocksdb))]
+#[cfg(any(with_scylladb, with_rocksdb))]
 use crate::store::{KeyValueDatabase, TestKeyValueDatabase};
 use crate::{
     batch::Batch,
@@ -28,7 +26,7 @@ use crate::{
     },
     views::{HashableView, View},
 };
-#[cfg(any(with_rocksdb, with_scylladb, with_dynamodb))]
+#[cfg(any(with_rocksdb, with_scylladb))]
 use crate::{context::ViewContext, random::generate_test_namespace};
 
 #[tokio::test]
@@ -40,12 +38,6 @@ async fn test_queue_operations_with_memory_context() -> Result<(), anyhow::Error
 #[tokio::test]
 async fn test_queue_operations_with_rocks_db_context() -> Result<(), anyhow::Error> {
     run_test_queue_operations_test_cases(RocksDbContextFactory).await
-}
-
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_queue_operations_with_dynamo_db_context() -> Result<(), anyhow::Error> {
-    run_test_queue_operations_test_cases(DynamoDbContextFactory).await
 }
 
 #[cfg(with_scylladb)]
@@ -216,22 +208,6 @@ impl TestContextFactory for RocksDbContextFactory {
         let context = ViewContext::create_root_context(store, ()).await?;
 
         Ok(context)
-    }
-}
-
-#[cfg(with_dynamodb)]
-struct DynamoDbContextFactory;
-
-#[cfg(with_dynamodb)]
-impl TestContextFactory for DynamoDbContextFactory {
-    type Context = ViewContext<(), <DynamoDbDatabase as KeyValueDatabase>::Store>;
-
-    async fn new_context(&mut self) -> Result<Self::Context, anyhow::Error> {
-        let config = DynamoDbDatabase::new_test_config().await?;
-        let namespace = generate_test_namespace();
-        let database = DynamoDbDatabase::recreate_and_connect(&config, &namespace).await?;
-        let store = database.open_shared(&[])?;
-        Ok(ViewContext::create_root_context(store, ()).await?)
     }
 }
 

@@ -19,9 +19,9 @@ use linera_base::{
         Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
 };
-use linera_cache::{UniqueValueCache, ValueCache};
+use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
@@ -333,7 +333,7 @@ where
     pub(crate) async fn download_pending_blob(
         &self,
         blob_id: BlobId,
-    ) -> Result<Arc<Blob>, WorkerError> {
+    ) -> Result<CacheArc<Blob>, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
             return Ok(self.storage.cache_blob(blob));
         }
@@ -426,7 +426,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
+            maybe_blobs[index].1 = blob.map(CacheArc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -503,7 +503,7 @@ where
     async fn read_confirmed_blocks(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, WorkerError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlock>>>, WorkerError> {
         let mut blocks = Vec::with_capacity(hashes.len());
         let mut uncached_indices = Vec::new();
         let mut uncached_hashes = Vec::new();
@@ -995,27 +995,35 @@ where
         blobs: BTreeMap<BlobId, Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
-        let (blob_id, chain_id, height, previous_block_hash) = {
+        let (bytes, chain_id, height, previous_block_hash) = {
             let block = certificate.block();
-            let Some(OracleResponse::Checkpoint(blob_id)) =
-                block.body.oracle_responses.first().and_then(|r| r.first())
+            let Some(OracleResponse::Checkpoint {
+                execution_state_blobs,
+                ..
+            }) = block.body.oracle_responses.first().and_then(|r| r.first())
             else {
                 return Err(ChainError::InternalError(
                     "Checkpoint block missing OracleResponse::Checkpoint".into(),
                 )
                 .into());
             };
+            let mut bytes = Vec::new();
+            let mut missing = Vec::new();
+            for hash in execution_state_blobs {
+                let blob_id = BlobId::new(*hash, BlobType::CheckpointExecutionState);
+                match blobs.get(&blob_id) {
+                    Some(blob) => bytes.extend_from_slice(blob.bytes()),
+                    None => missing.push(blob_id),
+                }
+            }
+            ensure!(missing.is_empty(), WorkerError::BlobsNotFound(missing));
             (
-                *blob_id,
+                bytes,
                 block.header.chain_id,
                 block.header.height,
                 block.header.previous_block_hash,
             )
         };
-        let blob = blobs
-            .get(&blob_id)
-            .ok_or_else(|| WorkerError::BlobsNotFound(vec![blob_id]))?;
-        let bytes = blob.bytes().to_vec();
         self.chain
             .execution_state
             .restore_from_content(&bytes)
@@ -1587,7 +1595,7 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
-                .map(Arc::unwrap_or_clone)
+                .map(CacheArc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Execute, None))
                 .await?;
@@ -1928,7 +1936,7 @@ where
     pub(crate) async fn read_certificate(
         &self,
         height: BlockHeight,
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, WorkerError> {
         let certificate_hash = match self.chain.block_hashes.get(&height).await? {
             Some(hash) => hash,
             None => return Ok(None),

@@ -108,9 +108,11 @@ where
     }
 
     /// Validates the execution-state-level preconditions for a `SystemOperation::Checkpoint`
-    /// and dumps the inner view's persisted content as a [`Blob`]. The blob is not yet
-    /// published; the caller is expected to register it during transaction execution via
-    /// [`Self::apply_checkpoint`].
+    /// and dumps the inner view's persisted content as one or more [`Blob`]s. The dump is
+    /// split into chunks of at most `maximum_blob_size` bytes (from the current epoch's
+    /// resource policy) so each chunk respects the per-blob size limit even for very
+    /// large states. The blobs are not yet published; the caller is expected to register
+    /// them during transaction execution via [`Self::apply_checkpoint`].
     ///
     /// This is a *pre-block* operation: it must run before the block-level setup mutates
     /// the chain state (e.g. setting `system.timestamp`), because `dump_content` reads
@@ -118,7 +120,10 @@ where
     /// dump out of the operation handler also guarantees the captured bytes represent
     /// the chain's pre-block state, which is exactly what a bootstrapping node will
     /// `restore_from_content` from before re-applying the certified checkpoint block.
-    pub async fn prepare_checkpoint(&mut self) -> Result<Blob, ExecutionError> {
+    pub async fn prepare_checkpoint(
+        &mut self,
+        maximum_blob_size: u64,
+    ) -> Result<Vec<Blob>, ExecutionError> {
         let mut had_event_block = false;
         self.previous_event_blocks
             .for_each_index_while(|_| {
@@ -144,22 +149,37 @@ where
         );
 
         let (bytes, _content_hash) = self.inner.dump_content().await?;
-        Ok(Blob::new(BlobContent::new(
-            BlobType::CheckpointContent,
-            bytes,
-        )))
+        let chunk_size = usize::try_from(maximum_blob_size).unwrap_or(usize::MAX);
+        Ok(bytes
+            .chunks(chunk_size)
+            .map(|chunk| {
+                Blob::new(BlobContent::new(
+                    BlobType::CheckpointExecutionState,
+                    chunk.to_vec(),
+                ))
+            })
+            .collect())
     }
 
-    /// Registers the checkpoint blob (produced by [`Self::prepare_checkpoint`]) with the
-    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`].
-    pub fn apply_checkpoint(
+    /// Registers the checkpoint blobs (produced by [`Self::prepare_checkpoint`]) with the
+    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`]. The
+    /// oracle response also lists every blob the chain currently references in its
+    /// `used_blobs` set: a bootstrapping node restores those references from the dump but
+    /// must independently ensure each blob's content is present in shared storage.
+    pub async fn apply_checkpoint(
         &self,
-        blob: Blob,
+        blobs: Vec<Blob>,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
-        let blob_id = blob.id();
-        txn_tracker.add_created_blob(blob);
-        txn_tracker.replay_oracle_response(OracleResponse::Checkpoint(blob_id))?;
+        let execution_state_blobs = blobs.iter().map(|blob| blob.id().hash).collect();
+        let used_blobs = self.system.used_blobs.indices().await?;
+        for blob in blobs {
+            txn_tracker.add_created_blob(blob);
+        }
+        txn_tracker.replay_oracle_response(OracleResponse::Checkpoint {
+            execution_state_blobs,
+            used_blobs,
+        })?;
         Ok(())
     }
 
@@ -171,10 +191,11 @@ where
     #[cfg(test)]
     pub async fn execute_checkpoint(
         &mut self,
+        maximum_blob_size: u64,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
-        let blob = self.prepare_checkpoint().await?;
-        self.apply_checkpoint(blob, txn_tracker)
+        let blobs = self.prepare_checkpoint(maximum_blob_size).await?;
+        self.apply_checkpoint(blobs, txn_tracker).await
     }
 
     /// Replaces the persisted execution state with the content of a checkpoint blob,

@@ -18,7 +18,7 @@ metadata.cargo-machete.ignored = ["getrandom"]
 workspace = true
 
 [package.metadata.docs.rs]
-features = ["scylladb", "rocksdb", "dynamodb", "test"]
+features = ["scylladb", "rocksdb", "test"]
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [features]
@@ -28,7 +28,6 @@ web = ["linera-base/web", "gloo-utils"]
 indexeddb = ["indexed-db", "wasm-bindgen"]
 web-default = ["web", "indexeddb"]
 
-dynamodb = ["aws-config", "aws-sdk-dynamodb", "aws-smithy-types"]
 scylladb = ["scylla"]
 
 [dependencies]
@@ -36,9 +35,6 @@ allocative.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true
 async-lock.workspace = true
-aws-config = { workspace = true, optional = true }
-aws-sdk-dynamodb = { workspace = true, optional = true }
-aws-smithy-types = { workspace = true, optional = true }
 bcs.workspace = true
 convert_case.workspace = true
 custom_debug_derive.workspace = true

@@ -98,7 +98,7 @@ BlobType:
     7:
       ApplicationFormats: UNIT
     8:
-      CheckpointContent: UNIT
+      CheckpointExecutionState: UNIT
 Block:
   STRUCT:
     - header:
@@ -357,8 +357,13 @@ OracleResponse:
           TYPENAME: EventId
     7:
       Checkpoint:
-        NEWTYPE:
-          TYPENAME: BlobId
+        STRUCT:
+          - execution_state_blobs:
+              SEQ:
+                TYPENAME: CryptoHash
+          - used_blobs:
+              SEQ:
+                TYPENAME: BlobId
 OutgoingMessage:
   STRUCT:
     - destination:

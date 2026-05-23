@@ -59,10 +59,11 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
 
-    // A checkpoint blob computed pre-block, to be handed to the matching
-    // `SystemOperation::Checkpoint` operation handler when it runs.
+    // Checkpoint blobs computed pre-block, to be handed to the matching
+    // `SystemOperation::Checkpoint` operation handler when it runs. A single dump may
+    // span multiple blobs to respect `maximum_blob_size` from the current epoch's policy.
     #[debug(skip_if = Option::is_none)]
-    prepared_checkpoint_blob: Option<Blob>,
+    prepared_checkpoint_blobs: Option<Vec<Blob>>,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -98,14 +99,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
-            prepared_checkpoint_blob: None,
+            prepared_checkpoint_blobs: None,
         })
     }
 
-    /// Stashes a pre-computed checkpoint blob to be handed to the matching
+    /// Stashes pre-computed checkpoint blobs to be handed to the matching
     /// `SystemOperation::Checkpoint` handler when its transaction runs.
-    pub fn set_prepared_checkpoint_blob(&mut self, blob: Blob) {
-        self.prepared_checkpoint_blob = Some(blob);
+    pub fn set_prepared_checkpoint_blobs(&mut self, blobs: Vec<Blob>) {
+        self.prepared_checkpoint_blobs = Some(blobs);
     }
 
     /// Executes a transaction in the context of the block.
@@ -190,9 +191,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.oracle_responses()?,
             &self.blobs,
         );
-        // Cloning the blob is cheap — its bytes are behind an `Arc`.
-        if let Some(blob) = self.prepared_checkpoint_blob.as_ref() {
-            tracker.set_prepared_checkpoint_blob(blob.clone());
+        // Cloning each blob is cheap — its bytes are behind an `Arc`.
+        if let Some(blobs) = self.prepared_checkpoint_blobs.as_ref() {
+            tracker.set_prepared_checkpoint_blobs(blobs.clone());
         }
         Ok(tracker)
     }

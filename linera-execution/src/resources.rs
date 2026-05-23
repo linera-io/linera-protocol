@@ -700,7 +700,11 @@ where
     pub fn track_blob_published(&mut self, blob: &Blob) -> Result<(), ExecutionError> {
         self.policy.check_blob_size(blob.content())?;
         let size = blob.content().bytes().len() as u64;
-        if blob.is_committee_blob() {
+        // Committee and checkpoint-execution-state blobs are exempt from fees and the
+        // per-block published-blob limit. Committee blobs are produced by network-level
+        // governance; checkpoint blobs are produced by `SystemOperation::Checkpoint`
+        // and their size is bounded by the policy's `maximum_blob_size` per chunk.
+        if blob.is_committee_blob() || blob.is_checkpoint_blob() {
             return Ok(());
         }
         {

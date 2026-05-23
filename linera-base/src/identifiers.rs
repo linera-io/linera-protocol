@@ -274,25 +274,24 @@ pub enum BlobType {
     /// A blob containing the JSON-encoded `Formats` description published
     /// alongside an application's contract and service blobs.
     ApplicationFormats,
-    /// A blob containing the canonical content of a chain's execution state at a
+    /// A blob containing one ordered chunk of a chain's execution-state dump at a
     /// checkpoint, used to bootstrap a node without replaying the chain's history.
-    CheckpointContent,
+    /// A single checkpoint produces a sequence of such blobs whose content hashes
+    /// are listed in `OracleResponse::Checkpoint`.
+    CheckpointExecutionState,
 }
 
 impl BlobType {
     /// Returns whether the blob is of [`BlobType::Committee`] variant.
     pub fn is_committee_blob(&self) -> bool {
-        match self {
-            BlobType::Data
-            | BlobType::ContractBytecode
-            | BlobType::ServiceBytecode
-            | BlobType::EvmBytecode
-            | BlobType::ApplicationDescription
-            | BlobType::ApplicationFormats
-            | BlobType::ChainDescription
-            | BlobType::CheckpointContent => false,
-            BlobType::Committee => true,
-        }
+        matches!(self, BlobType::Committee)
+    }
+
+    /// Returns whether the blob carries a chunk of a checkpoint's execution-state dump.
+    /// Such blobs are produced by `ExecutionStateView::prepare_checkpoint` and exempt
+    /// from per-block published-blob counts and per-blob fees.
+    pub fn is_checkpoint_blob(&self) -> bool {
+        matches!(self, BlobType::CheckpointExecutionState)
     }
 }
 
@@ -1343,7 +1342,7 @@ mod tests {
         );
         assert_eq!(
             description.id().to_string(),
-            "6699e88680fe07056777caa26522cea7493c9cbe0611aa0e5c9d4918469d9e82"
+            "372e43034b962ee04f8242bce87fa9cd405dd824a31b6673cef4d24b937d0de5"
         );
     }
 

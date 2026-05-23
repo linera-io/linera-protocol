@@ -105,7 +105,6 @@ async-graphql-value = { version = "=7.0.17", features = ["raw_value"] }
 async-lock = "3.3.0"
 async-trait = "0.1.77"
 async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
-aws-smithy-types = "1.3.1"
 axum = "0.8.4"
 base64 = "0.22.0"
 bcs = "0.1.6"
@@ -241,9 +240,7 @@ revm-state = { version = "4.0.1", default-features = false, features = [
     "serde",
 ] }
 rocksdb = "0.24.0"
-# 0.8.2 doesn't build with Rust 1.87. Remove `=` once
-# https://github.com/linera-io/linera-protocol/issues/4742 is resolved.
-ruzstd = "=0.8.1"
+ruzstd = "0.8.1"
 scylla = "~1.1.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
@@ -374,15 +371,6 @@ social = { path = "./examples/social" }
 task-processor = { path = "./examples/task-processor" }
 time-expiry = { path = "./linera-sdk/tests/fixtures/time-expiry" }
 wrapped-fungible = { path = "./examples/wrapped-fungible" }
-
-[workspace.dependencies.aws-config]
-default-features = false
-version = "1.6.3"
-
-[workspace.dependencies.aws-sdk-dynamodb]
-default-features = false
-features = ["rt-tokio", "rustls"]
-version = "1.88.0"
 
 [profile.release]
 lto = "thin"

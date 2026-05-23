@@ -82,7 +82,12 @@ pub struct SimpleUnorderedBatch {
 }
 
 /// An unordered batch of deletions and insertions, together with a set of key-prefixes to
-/// delete. Key-prefix deletions must happen before the insertions and the deletions.
+/// delete.
+///
+/// The batch may contain collisions between `key_prefix_deletions` and `insertions`: a
+/// prefix in `key_prefix_deletions` may cover one or more keys in `insertions`. Backends
+/// are responsible for ordering execution so that insertions "happen after" the prefix
+/// deletions semantically.
 #[derive(Default, Serialize, Deserialize)]
 pub struct UnorderedBatch {
     /// The key-prefix deletions.
@@ -117,44 +122,6 @@ impl UnorderedBatch {
             deletions,
             insertions,
         })
-    }
-
-    /// Modifies an [`UnorderedBatch`] so that the key-prefix deletions do not conflict
-    /// with subsequent insertions. This may require accessing the database to compute
-    /// lists of deleted keys.
-    pub async fn expand_colliding_prefix_deletions<DB: DeletePrefixExpander>(
-        &mut self,
-        db: &DB,
-    ) -> Result<(), DB::Error> {
-        if self.key_prefix_deletions.is_empty() {
-            return Ok(());
-        }
-        let inserted_keys = self
-            .simple_unordered_batch
-            .insertions
-            .iter()
-            .map(|x| x.0.clone())
-            .collect::<BTreeSet<_>>();
-        let mut key_prefix_deletions = Vec::new();
-        for key_prefix in &self.key_prefix_deletions {
-            if inserted_keys
-                .range(get_key_range_for_prefix(key_prefix.clone()))
-                .next()
-                .is_some()
-            {
-                for short_key in &db.expand_delete_prefix(key_prefix).await? {
-                    let mut key = key_prefix.clone();
-                    key.extend(short_key);
-                    if !inserted_keys.contains(&key) {
-                        self.simple_unordered_batch.deletions.push(key);
-                    }
-                }
-            } else {
-                key_prefix_deletions.push(key_prefix.to_vec());
-            }
-        }
-        self.key_prefix_deletions = key_prefix_deletions;
-        Ok(())
     }
 
     /// The total number of entries of the batch.
@@ -370,7 +337,7 @@ impl Batch {
 
 /// A trait to expand `DeletePrefix` operations.
 ///
-/// Certain databases (e.g. DynamoDB) do not support the deletion by prefix.
+/// Certain databases do not support the deletion by prefix.
 /// Thus we need to access the databases in order to replace a `DeletePrefix`
 /// by a vector of the keys to be removed.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
@@ -541,7 +508,7 @@ impl BatchValueWriter<SimpleUnorderedBatch> for SimpleUnorderedBatchIter {
     }
 }
 
-/// The iterator that corresponds to a `SimpleUnorderedBatch`
+/// The iterator that corresponds to an [`UnorderedBatch`].
 pub struct UnorderedBatchIter {
     delete_prefix_iter: Peekable<IntoIter<Vec<u8>>>,
     insert_deletion_iter: SimpleUnorderedBatchIter,
@@ -584,12 +551,11 @@ impl SimplifiedBatch for UnorderedBatch {
         self.simple_unordered_batch.add_insert(key, value)
     }
 
-    async fn from_batch<S: DeletePrefixExpander>(store: S, batch: Batch) -> Result<Self, S::Error> {
-        let mut unordered_batch = batch.simplify();
-        unordered_batch
-            .expand_colliding_prefix_deletions(&store)
-            .await?;
-        Ok(unordered_batch)
+    async fn from_batch<S: DeletePrefixExpander>(
+        _store: S,
+        batch: Batch,
+    ) -> Result<Self, S::Error> {
+        Ok(batch.simplify())
     }
 }
 
@@ -637,7 +603,7 @@ impl BatchValueWriter<UnorderedBatch> for UnorderedBatchIter {
 #[cfg(test)]
 mod tests {
     use linera_views::{
-        batch::{Batch, SimpleUnorderedBatch, UnorderedBatch},
+        batch::Batch,
         context::{Context, MemoryContext},
         store::WritableKeyValueStore as _,
     };
@@ -715,30 +681,5 @@ mod tests {
             vec![vec![1, 2, 3], vec![1, 2, 4], vec![1, 2, 5]]
         );
         assert!(simple_unordered_batch.insertions.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_simplify_batch6() {
-        let context = MemoryContext::new_for_testing(());
-        let insertions = vec![(vec![1, 2, 3], vec![])];
-        let simple_unordered_batch = SimpleUnorderedBatch {
-            insertions: insertions.clone(),
-            deletions: vec![],
-        };
-        let key_prefix_deletions = vec![vec![1, 2]];
-        let mut unordered_batch = UnorderedBatch {
-            simple_unordered_batch,
-            key_prefix_deletions,
-        };
-        unordered_batch
-            .expand_colliding_prefix_deletions(&context)
-            .await
-            .unwrap();
-        assert!(unordered_batch.simple_unordered_batch.deletions.is_empty());
-        assert_eq!(
-            unordered_batch.simple_unordered_batch.insertions,
-            insertions
-        );
-        assert!(unordered_batch.key_prefix_deletions.is_empty());
     }
 }

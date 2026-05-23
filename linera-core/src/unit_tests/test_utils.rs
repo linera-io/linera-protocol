@@ -30,12 +30,10 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, ResultReadCertificates, Storage, TestClock};
+use linera_storage::{Arc as CacheArc, DbStorage, ResultReadCertificates, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::StorageServiceDatabase;
 use linera_version::VersionInfo;
-#[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbDatabase;
 use linera_views::{
@@ -154,11 +152,11 @@ where
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(Arc::unwrap_or_clone(certificate), sender)
+            validator.do_handle_certificate(CacheArc::unwrap_or_clone(certificate), sender)
         })
         .await
     }
@@ -553,7 +551,7 @@ where
             Ok(blob) => blob.ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error),
         };
-        sender.send(blob.map(|blob| Arc::unwrap_or_clone(blob).into_content()))
+        sender.send(blob.map(|blob| CacheArc::unwrap_or_clone(blob).into_content()))
     }
 
     async fn do_download_pending_blob(
@@ -602,7 +600,7 @@ where
         let certificate = match certificate {
             Err(error) => Err(error),
             Ok(entry) => match entry {
-                Some(certificate) => Ok(Arc::unwrap_or_clone(certificate)),
+                Some(certificate) => Ok(CacheArc::unwrap_or_clone(certificate)),
                 None => {
                     panic!("Missing certificate: {hash}");
                 }
@@ -1377,50 +1375,6 @@ impl StorageBuilder for ServiceStorageBuilder {
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         self.instance_counter += 1;
         let config = StorageServiceDatabase::new_test_config().await?;
-        if self.namespace.is_empty() {
-            self.namespace = generate_test_namespace();
-        }
-        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
-        Ok(
-            DbStorage::new_for_testing(config, &namespace, self.wasm_runtime, self.clock.clone())
-                .await?,
-        )
-    }
-
-    fn clock(&self) -> &TestClock {
-        &self.clock
-    }
-}
-
-#[cfg(feature = "dynamodb")]
-#[derive(Default)]
-pub struct DynamoDbStorageBuilder {
-    namespace: String,
-    instance_counter: usize,
-    wasm_runtime: Option<WasmRuntime>,
-    clock: TestClock,
-}
-
-#[cfg(feature = "dynamodb")]
-impl DynamoDbStorageBuilder {
-    /// Creates a [`DynamoDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
-    /// applications.
-    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        DynamoDbStorageBuilder {
-            wasm_runtime: wasm_runtime.into(),
-            ..DynamoDbStorageBuilder::default()
-        }
-    }
-}
-
-#[cfg(feature = "dynamodb")]
-#[async_trait]
-impl StorageBuilder for DynamoDbStorageBuilder {
-    type Storage = DbStorage<DynamoDbDatabase, TestClock>;
-
-    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        self.instance_counter += 1;
-        let config = DynamoDbDatabase::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }
