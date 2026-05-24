@@ -355,7 +355,7 @@ where
     );
 
     let cert = fetch_latest_cert(cc_a).await?;
-    let cert_bytes = bcs::to_bytes(&cert).context("BCS-serialize cert")?;
+    let cert_bytes = bcs::to_bytes(&*cert).context("BCS-serialize cert")?;
 
     let bridge = IFungibleBridge::new(bridge_addr, provider);
     let gas = bridge
