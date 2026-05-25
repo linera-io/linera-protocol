@@ -40,12 +40,12 @@ mod metrics {
 /// Key tags to create the sub-keys of a [`BucketQueueView`] on top of the base key.
 #[repr(u8)]
 enum KeyTag {
+    /// Key tag for the `BucketLayout` metadata.
+    Layout = MIN_VIEW_TAG,
     /// Key tag for the front bucket.
-    Front = MIN_VIEW_TAG,
-    /// Key tag for the `BucketLayout`.
-    Layout,
+    Front,
     /// Key tag for the content of middle buckets.
-    Index,
+    Middle,
     /// Key tag for the back bucket.
     Back,
 }
@@ -62,7 +62,7 @@ struct BucketLayout {
     /// The total number of stored buckets.
     num_buckets: u32,
     /// The logical index of the front bucket. Middle bucket at position `p` (1-indexed
-    /// from front) has storage key `KeyTag::Index + (first_index + p)`.
+    /// from front) has storage key `KeyTag::Middle + (first_index + p)`.
     first_index: u32,
 }
 
@@ -122,10 +122,18 @@ pub struct BucketQueueView<C, T, const N: usize> {
     stored_buckets: VecDeque<Bucket<T>>,
     /// The newly inserted back values.
     new_back_values: VecDeque<T>,
-    /// The position for the stored front value in the first stored bucket.
+    /// Position of the front value within the first stored bucket, as of the last save.
+    /// Together with `stored_buckets`, this is the anchor that `rollback` restores the
+    /// `cursor` to (it reads neither storage nor `cursor`), so in-memory mutations such
+    /// as `clear` must leave both intact.
     stored_front_position: u32,
-    /// The current position of the front value if it is in the stored buckets, and `None`
-    /// otherwise.
+    /// Position of the queue's front value within `stored_buckets`, or `None` when no
+    /// stored value remains (so the front, if any, is the first of `new_back_values`).
+    ///
+    /// When this is `Some`, the bucket at `cursor.offset` is always `Loaded`. Note that
+    /// `None` does not imply `stored_buckets` is empty: after enough `delete_front`s the
+    /// cursor walks off the end and becomes `None` while the consumed buckets remain in
+    /// `stored_buckets` until the next save.
     cursor: Option<Cursor>,
     /// Whether the storage is to be deleted or not.
     delete_storage_first: bool,
@@ -145,15 +153,15 @@ where
     }
 
     fn pre_load(context: &C) -> Result<Vec<Vec<u8>>, ViewError> {
-        let key1 = context.base_key().base_tag(KeyTag::Front as u8);
-        let key2 = context.base_key().base_tag(KeyTag::Layout as u8);
+        let key1 = context.base_key().base_tag(KeyTag::Layout as u8);
+        let key2 = context.base_key().base_tag(KeyTag::Front as u8);
         let key3 = context.base_key().base_tag(KeyTag::Back as u8);
         Ok(vec![key1, key2, key3])
     }
 
     fn post_load(context: C, values: &[Option<Vec<u8>>]) -> Result<Self, ViewError> {
-        let value_front = values.first().ok_or(ViewError::PostLoadValuesError)?;
-        let value_layout = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
+        let value_layout = values.first().ok_or(ViewError::PostLoadValuesError)?;
+        let value_front = values.get(1).ok_or(ViewError::PostLoadValuesError)?;
         let value_back = values.get(2).ok_or(ViewError::PostLoadValuesError)?;
         let front = from_bytes_option::<Vec<T>>(value_front)?;
         let back = from_bytes_option::<Vec<T>>(value_back)?;
@@ -483,7 +491,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
         Ok(self
             .context
             .base_key()
-            .derive_tag_key(KeyTag::Index as u8, &index)?)
+            .derive_tag_key(KeyTag::Middle as u8, &index)?)
     }
 
     /// Classifies the pending save based on the current view state.
@@ -525,7 +533,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     }
 
     /// Splits `data` into N-sized chunks and writes them as front (KeyTag::Front),
-    /// middles (KeyTag::Index, starting at `first_index`+1), and back (KeyTag::Back).
+    /// middles (KeyTag::Middle, starting at `first_index`+1), and back (KeyTag::Back).
     /// Returns the total number of buckets written. The caller is responsible for
     /// writing the matching `BucketLayout` entry. Used by `Rewrite`.
     fn write_chunks(
@@ -1256,6 +1264,37 @@ mod tests {
         assert_eq!(view.elements().await?, vec![0, 1, 2, 3, 4]);
 
         // After rollback, has_pending_changes must be false again.
+        assert!(!view.has_pending_changes().await);
+        Ok(())
+    }
+
+    /// `clear()` followed by `rollback()` must restore the last-saved state,
+    /// including a non-zero saved front position. `rollback` is synchronous and
+    /// rebuilds the cursor purely from the in-memory `stored_buckets` and
+    /// `stored_front_position`, so `clear` must preserve both.
+    #[tokio::test]
+    async fn rollback_after_clear_restores_front_position() -> Result<(), ViewError> {
+        const N: usize = 5;
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        for value in [10u32, 20, 30] {
+            view.push_back(value);
+        }
+        save(&context, &mut view).await?;
+
+        // Advance the saved front past position 0 (single bucket -> MetadataOnly).
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        view.delete_front().await?; // drop 10
+        save(&context, &mut view).await?;
+
+        let mut view = BucketQueueView::<_, u32, N>::load(context).await?;
+        assert_eq!(view.elements().await?, vec![20, 30]);
+
+        view.clear();
+        assert_eq!(view.elements().await?, Vec::<u32>::new());
+
+        view.rollback();
+        assert_eq!(view.elements().await?, vec![20, 30]);
         assert!(!view.has_pending_changes().await);
         Ok(())
     }
