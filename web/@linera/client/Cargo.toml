@@ -19,6 +19,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 console_error_panic_hook.workspace = true
 futures.workspace = true
+hex.workspace = true
 js-sys.workspace = true
 num-traits.workspace = true
 serde.workspace = true
