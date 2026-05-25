@@ -16,7 +16,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
 };
-use linera_execution::{BlobState, Operation, OutgoingMessage};
+use linera_execution::{BlobOrigin, BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
@@ -146,9 +146,11 @@ impl ConfirmedBlock {
     /// Returns a blob state that applies to all blobs used by this block.
     pub fn to_blob_state(&self, is_stored_block: bool) -> BlobState {
         BlobState {
+            origin: BlobOrigin::Published {
+                chain_id: self.chain_id(),
+                block_height: self.height(),
+            },
             last_used_by: is_stored_block.then_some(self.0.hash()),
-            chain_id: self.chain_id(),
-            block_height: self.height(),
             epoch: is_stored_block.then_some(self.epoch()),
         }
     }

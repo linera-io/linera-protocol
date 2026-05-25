@@ -26,7 +26,7 @@ use linera_chain::{
     manager::LockingBlock,
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
-use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
+use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME, BlobOrigin};
 use linera_storage::{Arc as CacheArc, Clock, Storage};
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -938,12 +938,20 @@ where
 
         let mut chain_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> = BTreeMap::new();
         for blob_state in blob_states {
-            let block_chain_id = blob_state.chain_id;
-            let block_height = blob_state.block_height;
-            chain_heights
-                .entry(block_chain_id)
-                .or_default()
-                .insert(block_height);
+            match blob_state.origin {
+                // Genesis blobs aren't published by any block; the recipient has
+                // them from its own genesis config. Nothing to ship.
+                BlobOrigin::Genesis => continue,
+                BlobOrigin::Published {
+                    chain_id,
+                    block_height,
+                } => {
+                    chain_heights
+                        .entry(chain_id)
+                        .or_default()
+                        .insert(block_height);
+                }
+            }
         }
 
         self.send_chain_info_at_heights(chain_heights, delivery)
