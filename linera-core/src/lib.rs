@@ -9,7 +9,7 @@
 #![allow(async_fn_in_trait)]
 
 mod chain_worker;
-pub use chain_worker::ChainWorkerConfig;
+pub use chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode};
 pub mod client;
 pub use client::Client;
 pub mod data_types;

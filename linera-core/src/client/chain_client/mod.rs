@@ -2615,12 +2615,12 @@ impl<Env: Environment> ChainClient<Env> {
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
-            let mut creation: Vec<_> = certificate
+            let mut creation = certificate
                 .block()
                 .created_blob_ids()
                 .into_iter()
                 .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
-                .collect();
+                .collect::<Vec<_>>();
             if creation.len() > 1 {
                 return Err(Error::InternalError(
                     "Unexpected number of application descriptions published",
@@ -3136,11 +3136,11 @@ impl<Env: Environment> ChainClient<Env> {
             } else {
                 self.client.admin_committee().await?.1
             };
-            let nodes: HashMap<_, _> = self
+            let nodes = self
                 .client
                 .validator_node_provider()
                 .make_nodes(&committee)?
-                .collect();
+                .collect::<HashMap<_, _>>();
             (nodes, self.client.local_node.clone())
         };
         // Detect circuit breaker state transitions before cleaning up senders.

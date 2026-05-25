@@ -67,6 +67,7 @@ use crate::{
         handle,
         state::{send_result, ChainWorkerState},
         BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult, DeliveryNotifier,
+        ProcessConfirmedBlockMode,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -807,7 +808,12 @@ impl ProcessableCertificate for ConfirmedBlock {
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        Box::pin(worker.handle_confirmed_certificate(certificate, None)).await
+        Box::pin(worker.handle_confirmed_certificate(
+            certificate,
+            ProcessConfirmedBlockMode::Auto,
+            None,
+        ))
+        .await
     }
 }
 
@@ -892,6 +898,34 @@ where
         linera_base::Task::spawn(async move {
             let (response, actions) =
                 ProcessableCertificate::process_certificate(&this, certificate).await?;
+            notifications.notify(&actions.notifications);
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.notify(&actions.notifications);
+            }
+            Ok(response)
+        })
+        .await
+    }
+
+    /// Same as [`Self::fully_handle_certificate_with_notifications`] but for a
+    /// confirmed block certificate and with an explicit [`ProcessConfirmedBlockMode`].
+    /// The generic variant always uses [`ProcessConfirmedBlockMode::Auto`].
+    #[instrument(level = "trace", skip(self, certificate, notifier))]
+    #[inline]
+    pub async fn fully_handle_confirmed_certificate_with_notifications(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
+        notifier: &impl Notifier,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        let notifications = (*notifier).clone();
+        let this = self.clone();
+        linera_base::Task::spawn(async move {
+            let (response, actions) =
+                Box::pin(this.handle_confirmed_certificate(certificate, mode, None)).await?;
             notifications.notify(&actions.notifications);
             let mut requests = VecDeque::from(actions.cross_chain_requests);
             while let Some(request) = requests.pop_front() {
@@ -1291,12 +1325,13 @@ where
     async fn process_confirmed_block(
         &self,
         certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
         self.chain_write(chain_id, move |mut guard| async move {
             guard
-                .process_confirmed_block(certificate, notify_when_messages_are_delivered)
+                .process_confirmed_block(certificate, mode, notify_when_messages_are_delivered)
                 .await
         })
         .await
@@ -1532,12 +1567,11 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         match self.full_certificate(certificate).await? {
             Either::Left(confirmed) => {
-                Box::pin(
-                    self.handle_confirmed_certificate(
-                        confirmed,
-                        notify_when_messages_are_delivered,
-                    ),
-                )
+                Box::pin(self.handle_confirmed_certificate(
+                    confirmed,
+                    ProcessConfirmedBlockMode::Auto,
+                    notify_when_messages_are_delivered,
+                ))
                 .await
             }
             Either::Right(validated) => {
@@ -1561,6 +1595,7 @@ where
     pub async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), certificate);
@@ -1568,9 +1603,12 @@ where
         let metrics_data = metrics::MetricsData::new(&certificate);
 
         #[allow(unused_variables)]
-        let (info, actions, outcome) =
-            Box::pin(self.process_confirmed_block(certificate, notify_when_messages_are_delivered))
-                .await?;
+        let (info, actions, outcome) = Box::pin(self.process_confirmed_block(
+            certificate,
+            mode,
+            notify_when_messages_are_delivered,
+        ))
+        .await?;
 
         #[cfg(with_metrics)]
         if matches!(outcome, BlockOutcome::Processed) {
