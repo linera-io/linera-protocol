@@ -6,12 +6,17 @@ produces; the numbers are a point-in-time sample, not a target.
 
 ## Prerequisite
 
-The read layers (L2 baseline, L3 stress, L4 bulk) are only meaningful if the
+The read layers (L3 baseline, L4 stress, L5 bulk) are only meaningful if the
 candidate already holds the `--chain` you pass. A not-yet-committee candidate may
 hold no blocks, in which case those layers only exercise the bare request path.
 Either let the candidate sync the chains first (`linera validator sync`, or boot
-it and let it follow the network) or pass `--deep`, which seeds a bounded run of
-blocks **before** the read layers. The tool warns when a chain is not held.
+it and let it follow the network) or pass `--deep` (L2 partial sync), which seeds
+a bounded run of blocks **before** the read layers. The tool warns when a chain
+is not held.
+
+The layers, in execution order: **L1** preflight, **L2** partial sync (seed,
+opt-in `--deep`), **L3** read baseline, **L4** read stress, **L5** bulk download,
+**L6** tip-lag.
 
 ## Command
 

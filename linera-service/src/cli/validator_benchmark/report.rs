@@ -421,6 +421,9 @@ pub fn render_brief(r: &Report) -> String {
             if ok { "✓ OK" } else { "✗ FAIL" }
         ));
     }
+    if let Some(bps) = h.partial_bps {
+        s.push_str(&format!("  Partial sync     {bps:.1} blocks/s (seed)\n"));
+    }
     if let Some((p50, p95, p99)) = h.read {
         s.push_str(&format!(
             "  Read latency     p50 {p50:.0}ms · p95 {p95:.0}ms · p99 {p99:.0}ms\n"
@@ -441,9 +444,6 @@ pub fn render_brief(r: &Report) -> String {
             "  Tip lag          {lag} blocks behind · {}\n",
             trend_str(trend)
         ));
-    }
-    if let Some(bps) = h.partial_bps {
-        s.push_str(&format!("  Partial sync     {bps:.1} blocks/s\n"));
     }
     s.push_str(&format!(
         "  Errors           {}\n",
@@ -495,6 +495,10 @@ pub fn render_markdown(r: &Report) -> String {
             if ok { "✓ OK" } else { "✗ FAIL" }
         ));
     }
+    match h.partial_bps {
+        Some(bps) => s.push_str(&format!("| Partial sync (seed) | {bps:.1} blocks/s |\n")),
+        None => s.push_str("| Partial sync (seed) | — (not run) |\n"),
+    }
     if let Some((p50, p95, p99)) = h.read {
         s.push_str(&format!(
             "| Read latency (p50/p95/p99) | {p50:.0} / {p95:.0} / {p99:.0} ms |\n"
@@ -517,10 +521,6 @@ pub fn render_markdown(r: &Report) -> String {
         )),
         None => s.push_str("| Tip lag (last) | — |\n"),
     }
-    match h.partial_bps {
-        Some(bps) => s.push_str(&format!("| Partial sync | {bps:.1} blocks/s |\n")),
-        None => s.push_str("| Partial sync | — (not run) |\n"),
-    }
     s.push_str(&format!(
         "| Total errors | {} |\n\n",
         errors_inline(&h.errors)
@@ -542,8 +542,21 @@ pub fn render_markdown(r: &Report) -> String {
         }
         s.push('\n');
     }
+    if let Some(p) = &r.layers.partial_sync {
+        s.push_str(&format!(
+            "## L2 Partial sync (seed)\n\nChain {} · heights {}–{} · accepted {}/{} blocks · {:.1} blocks/s · {} bytes in {:.1}s\n\n",
+            short(&p.chain_id),
+            p.from_height,
+            p.to_height,
+            p.blocks_accepted,
+            p.blocks_attempted,
+            p.blocks_per_sec,
+            p.bytes_in,
+            p.duration_secs,
+        ));
+    }
     if let Some(b) = &r.layers.read_baseline {
-        s.push_str("## L2 Read baseline\n\n| chain | count | min | p50 | p95 | p99 | max | errors |\n|---|---|---|---|---|---|---|---|\n");
+        s.push_str("## L3 Read baseline\n\n| chain | count | min | p50 | p95 | p99 | max | errors |\n|---|---|---|---|---|---|---|---|\n");
         for c in &b.per_chain {
             let m = &c.latency_ms;
             s.push_str(&format!(
@@ -561,7 +574,7 @@ pub fn render_markdown(r: &Report) -> String {
         s.push('\n');
     }
     if let Some(st) = &r.layers.read_stress {
-        s.push_str("## L3 Read stress\n\n| chain | conc | req/s | p50 | p95 | p99 | errors |\n|---|---|---|---|---|---|---|\n");
+        s.push_str("## L4 Read stress\n\n| chain | conc | req/s | p50 | p95 | p99 | errors |\n|---|---|---|---|---|---|---|\n");
         for c in &st.per_chain {
             for level in &c.levels {
                 let m = &level.latency_ms;
@@ -580,7 +593,7 @@ pub fn render_markdown(r: &Report) -> String {
         s.push('\n');
     }
     if let Some(b) = &r.layers.bulk_download {
-        s.push_str("## L4 Bulk download\n\n| chain | conc | MB/s | certs/s | p95 ms | errors |\n|---|---|---|---|---|---|\n");
+        s.push_str("## L5 Bulk download\n\n| chain | conc | MB/s | certs/s | p95 ms | errors |\n|---|---|---|---|---|---|\n");
         for c in &b.per_chain {
             for run in &c.runs {
                 s.push_str(&format!(
@@ -599,7 +612,7 @@ pub fn render_markdown(r: &Report) -> String {
     if let Some(t) = &r.layers.tip_lag {
         for c in &t.per_chain {
             s.push_str(&format!(
-                "## L5 Tip-lag {} (trend: {})\n\n| t(s) | candidate | reference | lag |\n|---|---|---|---|\n",
+                "## L6 Tip-lag {} (trend: {})\n\n| t(s) | candidate | reference | lag |\n|---|---|---|---|\n",
                 short(&c.chain_id),
                 trend_str(c.trend),
             ));
@@ -612,20 +625,6 @@ pub fn render_markdown(r: &Report) -> String {
             s.push('\n');
         }
     }
-    if let Some(p) = &r.layers.partial_sync {
-        s.push_str(&format!(
-            "## L6 Partial sync\n\nChain {} · heights {}–{} · accepted {}/{} blocks · {:.1} blocks/s · {} bytes in {:.1}s\n\n",
-            short(&p.chain_id),
-            p.from_height,
-            p.to_height,
-            p.blocks_accepted,
-            p.blocks_attempted,
-            p.blocks_per_sec,
-            p.bytes_in,
-            p.duration_secs,
-        ));
-    }
-
     s
 }
 
@@ -900,9 +899,9 @@ mod tests {
         assert!(md.contains("## Summary"));
         assert!(md.contains("| Peak sustained throughput | 920 req/s @ conc 32 |"));
         assert!(md.contains("## L1 Preflight"));
-        assert!(md.contains("## L2 Read baseline"));
-        assert!(md.contains("## L3 Read stress"));
-        assert!(md.contains("## L5 Tip-lag"));
+        assert!(md.contains("## L3 Read baseline"));
+        assert!(md.contains("## L4 Read stress"));
+        assert!(md.contains("## L6 Tip-lag"));
         assert!(md.contains("**Version:**"));
     }
 }

@@ -54,8 +54,8 @@ where
     // The local sync can be heavy (it downloads the certificates to push); give
     // it a visible spinner so it never looks frozen. NOTE: on a tall chain the
     // wallet does not track, this can exceed --rpc-timeout-secs; raise it or use
-    // a tracked chain if L6 times out here.
-    let sync_phase = progress.phase("L6 sync local state", None);
+    // a tracked chain if the seed times out here.
+    let sync_phase = progress.phase("L2 partial sync: local state", None);
     let local_tip = match timed(rpc_timeout, chain_client.synchronize_chain_state(chain)).await {
         Ok(info) => {
             sync_phase.finish_ok();
@@ -63,7 +63,7 @@ where
         }
         Err(category) => {
             sync_phase.finish_fail();
-            anyhow::bail!("L6 local sync failed ({category})");
+            anyhow::bail!("L2 partial sync: local sync failed ({category})");
         }
     };
 
@@ -87,7 +87,7 @@ where
         return Ok(report);
     }
 
-    let phase = progress.phase("L6 partial sync", Some(to - from));
+    let phase = progress.phase("L2 partial sync", Some(to - from));
     let heights: Vec<BlockHeight> = (from..to).map(BlockHeight).collect();
     let storage = chain_client.storage_client();
     // Certificates and blobs stay wrapped in the storage cache `Arc`, which is

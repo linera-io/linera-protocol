@@ -44,7 +44,7 @@ where
     Env: linera_core::Environment,
 {
     let started = Instant::now();
-    let phase = progress.phase("L5 tip-lag", Some(samples.max(1) as u64));
+    let phase = progress.phase("L6 tip-lag", Some(samples.max(1) as u64));
 
     // Build the committee node set once from the wallet's genesis config: it is
     // local (no RPC, no tracked chain needed). Validators serve committee info
