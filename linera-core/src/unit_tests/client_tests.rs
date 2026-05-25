@@ -900,6 +900,67 @@ where
     Ok(())
 }
 
+/// Regression test: when the preferred owner changes while a pending proposal exists, the
+/// next call to `process_pending_block` must sign the proposal as the original author (the
+/// owner that staged it), not as the new preferred owner. Otherwise the worker rejects the
+/// proposal with `WorkerError::InvalidSigner` because the operations in the block are
+/// authenticated by the original owner.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_is_signed_by_original_owner<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in
+    // multi-leader rounds — mirroring a chain shared by a wallet key and an autosigner.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending in the
+    // shared per-chain queue, authenticated by `a`.
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    let pending = client
+        .pending_proposal()
+        .await
+        .expect("a pending proposal authored by owner `a` should remain");
+    assert_eq!(pending.block.authenticated_owner, Some(owner_a));
+
+    // Bring the validators back and act as owner `b` on the same shared queue.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    client.set_preferred_owner(owner_b);
+
+    // Owner `b`'s client retries the pending block. The signer still holds owner `a`'s key,
+    // so the proposal is signed as `a` and the worker accepts it.
+    let certificate = client
+        .process_pending_block()
+        .await
+        .unwrap_ok_committed()
+        .expect("the pending block should be committed");
+    assert_eq!(
+        certificate.block().header.authenticated_owner,
+        Some(owner_a)
+    );
+    assert!(client.pending_proposal().await.is_none());
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
