@@ -2028,7 +2028,7 @@ impl<Env: Environment> ChainClient<Env> {
             // it as someone else (which would happen if `preferred_owner` changed since the
             // block was staged). The signer is global to the client, so we can sign as the
             // original author as long as we still hold their key.
-            let owner = match pending.block.authenticated_owner {
+            let owner = match pending.block.authenticated_signer {
                 Some(staged_owner) if staged_owner != identity => {
                     if !self.has_key_for(&staged_owner).await? {
                         // If a fast-round proposal was already submitted, we can't safely

@@ -907,7 +907,7 @@ where
         .pending_proposal()
         .await
         .expect("a pending proposal authored by owner `a` should remain");
-    assert_eq!(pending.block.authenticated_owner, Some(owner_a));
+    assert_eq!(pending.block.authenticated_signer, Some(owner_a));
 
     // Bring the validators back and act as owner `b` on the same shared queue.
     builder.set_fault_type([0, 1], FaultType::Honest);
@@ -922,7 +922,7 @@ where
         .unwrap_ok_committed()
         .expect("the pending block should be committed");
     assert_eq!(
-        certificate.block().header.authenticated_owner,
+        certificate.block().header.authenticated_signer,
         Some(owner_a)
     );
     assert!(client.pending_proposal().await.is_none());
