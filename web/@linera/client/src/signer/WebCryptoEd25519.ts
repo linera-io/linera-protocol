@@ -26,17 +26,39 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-function tx<T>(
+function txRead<T>(
   db: IDBDatabase,
-  mode: IDBTransactionMode,
   fn: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, mode);
+    const transaction = db.transaction(STORE_NAME, "readonly");
     const store = transaction.objectStore(STORE_NAME);
     const req = fn(store);
     req.onerror = () => reject(req.error);
+    transaction.onerror = () => reject(transaction.error);
     req.onsuccess = () => resolve(req.result);
+  });
+}
+
+// Resolves on `transaction.oncomplete` (not `req.onsuccess`) so the caller knows the
+// write has reached the IndexedDB log, not just the request's buffer. Without this,
+// `create()` could return before the keypair is durable, and a tab close in the
+// intervening window would silently lose the autosigner association.
+function txWrite<T>(
+  db: IDBDatabase,
+  fn: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const req = fn(store);
+    let result: T;
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      result = req.result;
+    };
+    transaction.onerror = () => reject(transaction.error);
+    transaction.oncomplete = () => resolve(result);
   });
 }
 
@@ -54,6 +76,10 @@ function bytesToHex(bytes: Uint8Array): string {
  *
  * Owner addresses are `AccountOwner::Address32(Keccak256(BCS(public_key)))`, derived in
  * Rust via {@link accountOwnerFromEd25519PublicKey}.
+ *
+ * **Requires** `linera.initialize()` to have been called before `create()` or
+ * `loadOrCreate()` — both call the wasm owner-derivation helper. `load()` is wasm-free
+ * and may be invoked before initialization.
  */
 export default class WebCryptoEd25519 implements Signer {
   private constructor(private readonly record: StoredRecord) {}
@@ -80,7 +106,7 @@ export default class WebCryptoEd25519 implements Signer {
     };
     const db = await openDb();
     try {
-      await tx(db, "readwrite", (store) => store.put(record, recordKey));
+      await txWrite(db, (store) => store.put(record, recordKey));
     } finally {
       db.close();
     }
@@ -93,7 +119,7 @@ export default class WebCryptoEd25519 implements Signer {
   static async load(recordKey: string): Promise<WebCryptoEd25519 | null> {
     const db = await openDb();
     try {
-      const stored = await tx<StoredRecord | undefined>(db, "readonly", (store) =>
+      const stored = await txRead<StoredRecord | undefined>(db, (store) =>
         store.get(recordKey) as IDBRequest<StoredRecord | undefined>,
       );
       if (!stored) return null;
@@ -116,8 +142,9 @@ export default class WebCryptoEd25519 implements Signer {
 
   async sign(owner: string, value: Uint8Array): Promise<string> {
     this.assertOwner(owner);
-    // Copy into a plain ArrayBuffer so TypeScript's BufferSource constraint is satisfied
-    // regardless of whether the caller passed a SharedArrayBuffer-backed view.
+    // Runtime defense: `crypto.subtle.sign` rejects SharedArrayBuffer-backed views in
+    // some browsers. Copy into a fresh ArrayBuffer so the call works regardless of how
+    // the caller obtained `value`.
     const buf = new Uint8Array(value).buffer as ArrayBuffer;
     const sig = await crypto.subtle.sign("Ed25519", this.record.privateKey, buf);
     return "0x" + bytesToHex(new Uint8Array(sig));
