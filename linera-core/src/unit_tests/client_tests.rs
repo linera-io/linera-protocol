@@ -4256,3 +4256,53 @@ where
 
     Ok(())
 }
+
+/// Verifies that a chain that has sent cross-chain messages can checkpoint, and that
+/// the checkpoint's oracle response certifies the hashes of those sender blocks via
+/// `outbox_block_hashes`. The bootstrap side of this scenario is exercised in a later
+/// commit, once a follower has a way to reconstruct `block_hashes` for the sender
+/// blocks it skipped.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_with_outgoing_messages<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+
+    // Height 0: a cross-chain transfer, so the chain has an unfinalized
+    // outgoing-message block at the time of the checkpoint.
+    let transfer_cert = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(transfer_cert.block().header.height, BlockHeight::ZERO);
+
+    // Height 1: the checkpoint. With the no-sent-messages precondition lifted this is
+    // now allowed even though height 0 sent a message.
+    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
+    let block = checkpoint_cert.block();
+    assert_eq!(block.header.height, BlockHeight::from(1));
+    let outbox_block_hashes = match block.body.oracle_responses.first().and_then(|t| t.first()) {
+        Some(OracleResponse::Checkpoint {
+            outbox_block_hashes,
+            ..
+        }) => outbox_block_hashes.clone(),
+        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
+    };
+    assert_eq!(
+        outbox_block_hashes,
+        vec![transfer_cert.hash()],
+        "Checkpoint must certify the height-0 transfer's block hash",
+    );
+
+    Ok(())
+}

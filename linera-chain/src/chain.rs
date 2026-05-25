@@ -1345,8 +1345,10 @@ where
     ///
     /// The structural invariant that Checkpoint must be the *first* transaction in its
     /// block is enforced unconditionally in `execute_block`, independently of these
-    /// preconditions. Sender-side conditions (no events ever published, no cross-chain
-    /// messages ever sent) are validated inside `ExecutionStateView::prepare_checkpoint`.
+    /// preconditions. Sender-side event conditions (no events ever published) are
+    /// validated inside `ExecutionStateView::prepare_checkpoint`. Outgoing messages
+    /// are no longer a precondition: the on-chain `unfinalized_message_blocks` map
+    /// captures everything a bootstrapping node needs.
     async fn check_checkpoint_preconditions(&self) -> Result<(), ChainError> {
         let origins = self.inboxes.indices().await?;
         for origin in &origins {
@@ -1358,11 +1360,6 @@ where
                 ChainError::CheckpointPreconditionFailed("chain has consumed incoming messages")
             );
         }
-
-        ensure!(
-            self.nonempty_outboxes.get().is_empty(),
-            ChainError::CheckpointPreconditionFailed("chain has pending outgoing messages")
-        );
 
         let mut had_event_tracker = false;
         self.next_expected_events

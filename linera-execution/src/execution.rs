@@ -139,18 +139,6 @@ where
             ExecutionError::CheckpointPreconditionFailed("chain has published events")
         );
 
-        let mut had_message_block = false;
-        self.previous_message_blocks
-            .for_each_index_while(|_| {
-                had_message_block = true;
-                Ok(false)
-            })
-            .await?;
-        ensure!(
-            !had_message_block,
-            ExecutionError::CheckpointPreconditionFailed("chain has sent cross-chain messages")
-        );
-
         let (bytes, _content_hash) = self.inner.dump_content().await?;
         let chunk_size = usize::try_from(maximum_blob_size).unwrap_or(usize::MAX);
         Ok(bytes
