@@ -164,6 +164,10 @@ export default class WebCryptoEd25519 implements Signer {
 
   async sign(owner: string, value: Uint8Array): Promise<string> {
     this.assertOwner(owner);
+    console.debug(
+      "[Linera Signer] WebCryptoEd25519.sign via Web Crypto API",
+      { owner, valueBytes: value.length },
+    );
     // Runtime defense: `crypto.subtle.sign` rejects SharedArrayBuffer-backed views in
     // some browsers. Copy into a fresh ArrayBuffer so the call works regardless of how
     // the caller obtained `value`.
