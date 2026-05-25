@@ -153,7 +153,8 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .nth(3)
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
-    let evm_bridge_wasm_dir = repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
+    let evm_bridge_wasm_dir =
+        repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
 
     tracing::info!("Publishing evm-bridge module...");
@@ -405,7 +406,9 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337,
         block_hash: deposit_receipt.block_hash.unwrap(),
-        tx_index: deposit_receipt.transaction_index.expect("transaction_index missing"),
+        tx_index: deposit_receipt
+            .transaction_index
+            .expect("transaction_index missing"),
         log_index,
     };
 

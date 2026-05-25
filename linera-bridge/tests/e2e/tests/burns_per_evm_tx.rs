@@ -200,7 +200,11 @@ async fn burns_per_evm_tx(
             tracing::info!(burn_ops = next_hi, gas, "search: found upper bound");
             break;
         }
-        tracing::info!(burn_ops = next_hi, gas, "search: doubling, still under limit");
+        tracing::info!(
+            burn_ops = next_hi,
+            gas,
+            "search: doubling, still under limit"
+        );
         if hi == MAX_SEARCH_N {
             break;
         }

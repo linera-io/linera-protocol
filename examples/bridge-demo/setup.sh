@@ -299,6 +299,7 @@ for attempt in 1 2 3; do
         --json-parameters "$WRAPPED_PARAMS" \
         --json-argument '{"accounts":{}}' 2>&1) && break
     echo "  Attempt $attempt failed, retrying..." >&2
+    echo "$WRAPPED_APP_OUTPUT" >&2
     sleep 2
 done
 [[ -z "$WRAPPED_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create wrapped-fungible failed after retries" >&2; exit 1; }
