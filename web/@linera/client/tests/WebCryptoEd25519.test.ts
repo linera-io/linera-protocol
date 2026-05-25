@@ -125,6 +125,21 @@ test("getPublicKey() rejects requests for a mismatched owner", async () => {
   );
 });
 
+test("generate() alone does not persist — load() still returns null", async () => {
+  const signer = await linera.signer.WebCryptoEd25519.generate();
+  expect(signer.address()).toMatch(/^0x[0-9a-f]{64}$/);
+  const loaded = await linera.signer.WebCryptoEd25519.load(RECORD_KEY);
+  expect(loaded).toBeNull();
+});
+
+test("generate() then persist() makes the keypair loadable", async () => {
+  const generated = await linera.signer.WebCryptoEd25519.generate();
+  await generated.persist(RECORD_KEY);
+  const loaded = await linera.signer.WebCryptoEd25519.load(RECORD_KEY);
+  expect(loaded).not.toBeNull();
+  expect(loaded!.address()).toBe(generated.address());
+});
+
 async function wipeDb(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const req = indexedDB.deleteDatabase(DB_NAME);
