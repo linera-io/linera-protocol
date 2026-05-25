@@ -4210,6 +4210,7 @@ where
         Some(OracleResponse::Checkpoint {
             execution_state_blobs,
             used_blobs: _,
+            outbox_block_hashes: _,
         }) => execution_state_blobs.clone(),
         other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
     };

@@ -449,13 +449,16 @@ impl SqliteDatabase {
                 OracleResponse::Checkpoint {
                     execution_state_blobs,
                     used_blobs,
+                    outbox_block_hashes,
                 } => {
-                    let serialized = bincode::serialize(&(execution_state_blobs, used_blobs))
-                        .map_err(|e| {
-                            SqliteError::Serialization(format!(
-                                "Failed to serialize checkpoint: {e}"
-                            ))
-                        })?;
+                    let serialized = bincode::serialize(&(
+                        execution_state_blobs,
+                        used_blobs,
+                        outbox_block_hashes,
+                    ))
+                    .map_err(|e| {
+                        SqliteError::Serialization(format!("Failed to serialize checkpoint: {e}"))
+                    })?;
                     ("Checkpoint", None, Some(serialized))
                 }
             };

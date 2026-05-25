@@ -197,6 +197,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             tracker.set_prepared_checkpoint(PreparedCheckpoint {
                 blobs: prepared.blobs.clone(),
                 origin_cursors: prepared.origin_cursors.clone(),
+                outbox_block_hashes: prepared.outbox_block_hashes.clone(),
             });
         }
         Ok(tracker)

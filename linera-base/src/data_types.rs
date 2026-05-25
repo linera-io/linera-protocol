@@ -1114,6 +1114,14 @@ pub enum OracleResponse {
         /// storage before applying the checkpoint, otherwise subsequent operations on
         /// the chain could try to read blob content the node doesn't actually have.
         used_blobs: Vec<BlobId>,
+        /// Hashes of every block on this chain that the chain's outboxes still reference
+        /// at the time of the checkpoint — i.e. the heights with cross-chain messages
+        /// that recipients haven't acknowledged yet. The current-epoch certificate over
+        /// the checkpoint block transitively certifies these older blocks: a node that
+        /// later receives one of these block's bytes can verify the bytes hash to a
+        /// hash in this set, without trusting the (possibly revoked) validator
+        /// signatures on the older block's own certificate.
+        outbox_block_hashes: Vec<CryptoHash>,
     },
 }
 

@@ -9,6 +9,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Blob, BlobContent, Cursor, Event, OracleResponse, StreamUpdate, Timestamp},
     ensure,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
@@ -75,6 +76,10 @@ pub struct PreparedCheckpoint {
     /// we've consumed. Used to emit a `SystemMessage::Checkpoint` to each origin so the
     /// origin can later trim its outbox dump.
     pub origin_cursors: Vec<(ChainId, Cursor)>,
+    /// Hashes of every block on this chain that the chain's outboxes still reference,
+    /// taken before the block runs. Included in the oracle response so the checkpoint
+    /// block's certificate transitively certifies those older blocks.
+    pub outbox_block_hashes: Vec<CryptoHash>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.

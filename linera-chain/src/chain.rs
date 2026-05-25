@@ -740,6 +740,7 @@ where
             Some(PreparedCheckpoint {
                 blobs,
                 origin_cursors: checkpoint_origin_cursors,
+                outbox_block_hashes: Vec::new(),
             })
         } else {
             None

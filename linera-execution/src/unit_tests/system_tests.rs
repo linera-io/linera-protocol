@@ -174,6 +174,7 @@ async fn execute_checkpoint_publishes_blob_and_records_oracle_response() -> anyh
         OracleResponse::Checkpoint {
             execution_state_blobs: vec![blob.id().hash],
             used_blobs: vec![],
+            outbox_block_hashes: vec![],
         }
     );
 
@@ -230,6 +231,7 @@ async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow
             PreparedCheckpoint {
                 blobs,
                 origin_cursors: Vec::new(),
+                outbox_block_hashes: Vec::new(),
             },
             &mut txn_tracker,
         )
@@ -294,6 +296,7 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
         PreparedCheckpoint {
             blobs,
             origin_cursors: vec![(origin_a, cursor_a), (origin_b, cursor_b)],
+            outbox_block_hashes: Vec::new(),
         },
         &mut txn_tracker,
     )

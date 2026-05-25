@@ -894,6 +894,9 @@ OracleResponse:
           - used_blobs:
               SEQ:
                 TYPENAME: BlobId
+          - outbox_block_hashes:
+              SEQ:
+                TYPENAME: CryptoHash
 OriginalProposal:
   ENUM:
     0:
