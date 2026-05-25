@@ -21,8 +21,12 @@ use std::{io::IsTerminal as _, time::Duration};
 use anyhow::Result;
 use chrono::Utc;
 pub use config::Benchmark;
+use linera_base::identifiers::ChainId;
 use linera_client::client_context::ClientContext;
-use linera_core::node::{ValidatorNode as _, ValidatorNodeProvider as _};
+use linera_core::{
+    data_types::ChainInfoQuery,
+    node::{ValidatorNode, ValidatorNodeProvider as _},
+};
 
 use self::{
     progress::Progress,
@@ -102,6 +106,26 @@ impl Benchmark {
         }
         writer.write_files(&report)?;
 
+        // A not-yet-committee candidate may hold few or no blocks. Seed first when
+        // --deep so the read layers below exercise a candidate that actually has
+        // the data, and warn about any chain it does not hold and will not seed.
+        let deep_chain = self.deep.then(|| self.deep_chain.unwrap_or(self.chain[0]));
+        warn_unheld_chains(&node, &self.chain, deep_chain, rpc_timeout).await;
+        if let Some(deep_chain) = deep_chain {
+            report.layers.partial_sync = Some(
+                Box::pin(partial_sync::run(
+                    &node,
+                    context,
+                    deep_chain,
+                    self.deep_blocks,
+                    rpc_timeout,
+                    &progress,
+                ))
+                .await?,
+            );
+            writer.write_files(&report)?;
+        }
+
         // Layer futures are large; box them at the await site (clippy::large_futures).
         if !self.skip_read_baseline {
             report.layers.read_baseline = Some(
@@ -164,22 +188,6 @@ impl Benchmark {
             writer.write_files(&report)?;
         }
 
-        if self.deep {
-            let deep_chain = self.deep_chain.unwrap_or(self.chain[0]);
-            report.layers.partial_sync = Some(
-                Box::pin(partial_sync::run(
-                    &node,
-                    context,
-                    deep_chain,
-                    self.deep_blocks,
-                    rpc_timeout,
-                    &progress,
-                ))
-                .await?,
-            );
-            writer.write_files(&report)?;
-        }
-
         let ended_at = Utc::now();
         report.metadata.observer.ended_at = Some(ended_at.to_rfc3339());
         report.metadata.observer.duration_secs =
@@ -188,5 +196,38 @@ impl Benchmark {
         progress.clear();
         writer.emit(&report)?;
         Ok(())
+    }
+}
+
+/// Warn about chains the candidate does not hold (read layers would be shallow),
+/// excluding one that `--deep` is about to seed. A chain with tip 0 or an
+/// unreachable lookup is treated as not held.
+async fn warn_unheld_chains(
+    node: &impl ValidatorNode,
+    chains: &[ChainId],
+    seeded: Option<ChainId>,
+    rpc_timeout: Duration,
+) {
+    let mut unheld = Vec::new();
+    for &chain in chains {
+        if Some(chain) == seeded {
+            continue;
+        }
+        let held = rpc::timed(
+            rpc_timeout,
+            node.handle_chain_info_query(ChainInfoQuery::new(chain)),
+        )
+        .await
+        .is_ok_and(|response| response.info.next_block_height.0 > 0);
+        if !held {
+            unheld.push(chain.to_string());
+        }
+    }
+    if !unheld.is_empty() {
+        tracing::warn!(
+            "candidate does not hold chain(s) [{}]; read layers (L2-L4) will be shallow. \
+             Pre-sync them (`linera validator sync`) or pass `--deep` to seed blocks first.",
+            unheld.join(", ")
+        );
     }
 }

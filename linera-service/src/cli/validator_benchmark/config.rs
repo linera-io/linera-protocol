@@ -12,6 +12,12 @@ use linera_base::{crypto::ValidatorPublicKey, identifiers::ChainId};
 /// The optional `--deep` layer additionally exercises the write path by
 /// syncing a bounded number of blocks; it has a stateful side effect on the
 /// candidate and is therefore off by default.
+///
+/// PREREQUISITE: the read layers are only meaningful if the candidate already
+/// holds the `--chain` you pass. A not-yet-committee candidate may hold no
+/// blocks; in that case pre-sync it (`linera validator sync`) or pass `--deep`,
+/// which seeds the blocks first (and is run before the read layers). The tool
+/// warns when a chain is not held.
 #[derive(Debug, Clone, clap::Parser, serde::Serialize)]
 pub struct Benchmark {
     /// Network address of the candidate validator (e.g. `grpcs://host:port`).
@@ -42,7 +48,9 @@ pub struct Benchmark {
     #[arg(long)]
     pub skip_tip_lag: bool,
 
-    /// Enable partial-sync layer (L6). Stateful side effect on the candidate.
+    /// Seed the candidate by syncing a bounded run of blocks (partial-sync
+    /// layer), run before the read layers so they exercise real data. Stateful
+    /// side effect on the candidate; off by default.
     #[arg(long)]
     pub deep: bool,
 
