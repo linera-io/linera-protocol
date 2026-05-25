@@ -85,10 +85,13 @@ export default class WebCryptoEd25519 implements Signer {
   private constructor(private readonly record: StoredRecord) {}
 
   /**
-   * Generates a fresh non-extractable Ed25519 keypair and persists it under `recordKey`.
-   * Overwrites any existing record at that key.
+   * Generates a fresh non-extractable Ed25519 keypair in memory.
+   *
+   * The returned signer is NOT yet persisted to IndexedDB; call {@link persist} to
+   * commit it. Use this when the caller needs to take an extra step (e.g. registering
+   * the autosigner address on-chain) before the keypair becomes durable.
    */
-  static async create(recordKey: string): Promise<WebCryptoEd25519> {
+  static async generate(): Promise<WebCryptoEd25519> {
     const pair = (await crypto.subtle.generateKey(
       { name: "Ed25519" },
       false,
@@ -104,13 +107,32 @@ export default class WebCryptoEd25519 implements Signer {
       privateKey: pair.privateKey,
       createdAt: Date.now(),
     };
+    return new WebCryptoEd25519(record);
+  }
+
+  /**
+   * Generates a fresh non-extractable Ed25519 keypair and persists it under `recordKey`.
+   * Equivalent to `generate().then(s => s.persist(recordKey).then(() => s))`.
+   * Overwrites any existing record at that key.
+   */
+  static async create(recordKey: string): Promise<WebCryptoEd25519> {
+    const signer = await WebCryptoEd25519.generate();
+    await signer.persist(recordKey);
+    return signer;
+  }
+
+  /**
+   * Commits this signer's keypair to IndexedDB under `recordKey`. Subsequent calls to
+   * {@link load} with the same `recordKey` will return a signer pointing at the same
+   * key material. Overwrites any existing record.
+   */
+  async persist(recordKey: string): Promise<void> {
     const db = await openDb();
     try {
-      await txWrite(db, (store) => store.put(record, recordKey));
+      await txWrite(db, (store) => store.put(this.record, recordKey));
     } finally {
       db.close();
     }
-    return new WebCryptoEd25519(record);
   }
 
   /**
