@@ -442,7 +442,10 @@ where
     E: linera_core::environment::Environment,
 {
     use anyhow::Context as _;
-    use linera_base::{data_types::Bytecode, vm::VmRuntime};
+    use linera_base::{
+        data_types::{Bytecode, TokenAmount},
+        vm::VmRuntime,
+    };
 
     let repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -459,7 +462,7 @@ where
     chain_client.synchronize_from_validators().await?;
     chain_client.process_inbox().await?;
 
-    let initial_balance = linera_base::data_types::Amount::from_tokens(initial_balance_tokens);
+    let initial_balance = TokenAmount(initial_balance_tokens * 10u128.pow(18));
     let (fungible_app_id, _) = chain_client
         .create_application_untyped(
             wf_module_id,

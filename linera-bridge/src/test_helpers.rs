@@ -14,7 +14,7 @@ use std::{
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp},
+    data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp, TokenAmount},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
@@ -221,7 +221,7 @@ pub fn fungible_message_transaction(
 pub fn burn_event(
     application_id: CryptoHash,
     target: [u8; 20],
-    amount: Amount,
+    amount: TokenAmount,
     index: u32,
 ) -> linera_base::data_types::Event {
     use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};

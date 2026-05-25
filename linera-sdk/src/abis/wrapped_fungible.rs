@@ -3,16 +3,18 @@
 
 //! An ABI for applications that implement a wrapped (bridged) fungible token with Mint/Burn.
 
+use std::collections::BTreeMap;
+
 use async_graphql::{Request, Response};
 use linera_base::{
     abi::{ContractAbi, ServiceAbi},
-    data_types::Amount,
+    data_types::TokenAmount,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use linera_sdk_derive::GraphQLMutationRootInCrate;
 use serde::{Deserialize, Serialize};
 
-pub use super::fungible::{Account, FungibleResponse, InitialState, InitialStateBuilder};
+pub use super::fungible::Account;
 
 /// Parameters for a wrapped fungible token backed by an EVM bridge.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -40,77 +42,106 @@ pub struct WrappedParameters {
 pub struct BurnEvent {
     /// The Ethereum address to receive the unlocked ERC-20 tokens
     pub target: [u8; 20],
-    /// Amount of tokens burned
-    pub amount: Amount,
+    /// Amount of tokens burned, in raw sub-units of the source ERC-20.
+    pub amount: TokenAmount,
+}
+
+/// Initial accounts and balances for the wrapped fungible token application.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InitialState {
+    pub accounts: BTreeMap<AccountOwner, TokenAmount>,
+}
+
+/// Builder for [`InitialState`].
+#[derive(Debug, Default)]
+pub struct InitialStateBuilder {
+    account_balances: BTreeMap<AccountOwner, TokenAmount>,
+}
+
+impl InitialStateBuilder {
+    pub fn with_account(mut self, account: AccountOwner, balance: TokenAmount) -> Self {
+        self.account_balances.insert(account, balance);
+        self
+    }
+
+    pub fn build(&self) -> InitialState {
+        InitialState {
+            accounts: self.account_balances.clone(),
+        }
+    }
+}
+
+/// Response variants returned by the wrapped fungible token application.
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub enum FungibleResponse {
+    #[default]
+    Ok,
+    Balance(TokenAmount),
+    TickerSymbol(String),
 }
 
 /// Operations for the wrapped fungible token application.
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
 pub enum WrappedFungibleOperation {
     /// Requests an account balance.
-    Balance {
-        /// Owner to query the balance for
-        owner: AccountOwner,
-    },
+    Balance { owner: AccountOwner },
     /// Requests this fungible token's ticker symbol.
     TickerSymbol,
-    /// Approve the transfer of tokens
+    /// Approve the transfer of tokens.
     Approve {
-        /// Owner to transfer from
         owner: AccountOwner,
-        /// The spender account
         spender: AccountOwner,
-        /// Maximum amount to be transferred
-        allowance: Amount,
+        allowance: TokenAmount,
     },
     /// Transfers tokens from a (locally owned) account to a (possibly remote) account.
     Transfer {
-        /// Owner to transfer from
         owner: AccountOwner,
-        /// Amount to be transferred, as a decimal string of raw `u128` sub-units
-        /// in the source ERC-20's decimal scale. String form so the field is
-        /// GraphQL-compatible (`u128` has no `async_graphql::InputType`).
-        amount: String,
-        /// Target account to transfer the amount to
+        amount: TokenAmount,
         target_account: Account,
     },
-    /// Transfers tokens from a (locally owned) account to a (possibly remote) account by using the allowance.
+    /// Transfers tokens from a (locally owned) account using a previously approved allowance.
     TransferFrom {
-        /// Owner to transfer from
         owner: AccountOwner,
-        /// The spender of the amount.
         spender: AccountOwner,
-        /// Amount to be transferred, as a decimal string of raw `u128` sub-units
-        /// in the source ERC-20's decimal scale.
-        amount: String,
-        /// Target account to transfer the amount to
+        amount: TokenAmount,
         target_account: Account,
     },
-    /// Same as `Transfer` but the source account may be remote. Depending on its
-    /// configuration, the target chain may take time or refuse to process
-    /// the message.
+    /// Same as `Transfer` but the source account may be remote.
     Claim {
-        /// Source account to claim amount from
         source_account: Account,
-        /// Amount to be claimed
-        amount: Amount,
-        /// Target account to claim the amount into
+        amount: TokenAmount,
         target_account: Account,
     },
     /// Mints new tokens to a target account. Only the authorized minter can call this.
     Mint {
-        /// Account to receive the minted tokens
         target_account: Account,
-        /// Amount of tokens to mint
-        amount: Amount,
+        amount: TokenAmount,
     },
     /// Burns tokens from an account. Rejected by the contract — burning happens
     /// automatically when tokens are transferred to an Address20 on the bridge chain.
     Burn {
-        /// Account owner whose tokens to burn
         owner: AccountOwner,
-        /// Amount of tokens to burn
-        amount: Amount,
+        amount: TokenAmount,
+    },
+}
+
+/// Cross-chain message used by the wrapped fungible token application.
+/// Amounts are [`TokenAmount`] in the source ERC-20's decimal scale.
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Message {
+    /// Credits the given `target` account, unless the message is bouncing, in which case
+    /// `source` is credited instead.
+    Credit {
+        target: AccountOwner,
+        amount: TokenAmount,
+        source: AccountOwner,
+    },
+
+    /// Withdraws from the given account and starts a transfer to the target account.
+    Withdraw {
+        owner: AccountOwner,
+        amount: TokenAmount,
+        target_account: Account,
     },
 }
 

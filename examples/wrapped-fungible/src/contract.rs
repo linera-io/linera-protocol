@@ -3,19 +3,22 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
-use fungible::{state::FungibleTokenState, FungibleResponse, InitialState};
+mod state;
+
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, StreamName, WithContractAbi},
+    linera_base_types::{AccountOwner, StreamName, TokenAmount, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{
-    Account, BurnEvent, Message, WrappedFungibleOperation, WrappedFungibleTokenAbi,
-    WrappedParameters,
+    Account, BurnEvent, FungibleResponse, InitialState, Message, WrappedFungibleOperation,
+    WrappedFungibleTokenAbi, WrappedParameters,
 };
 
+use crate::state::WrappedFungibleTokenState;
+
 pub struct WrappedFungibleTokenContract {
-    state: FungibleTokenState,
+    state: WrappedFungibleTokenState,
     runtime: ContractRuntime<Self>,
 }
 
@@ -32,7 +35,7 @@ impl Contract for WrappedFungibleTokenContract {
     type EventValue = BurnEvent;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = FungibleTokenState::load(runtime.root_view_storage_context())
+        let state = WrappedFungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         WrappedFungibleTokenContract { state, runtime }
@@ -41,7 +44,7 @@ impl Contract for WrappedFungibleTokenContract {
     async fn instantiate(&mut self, state: Self::InstantiationArgument) {
         self.runtime.application_parameters();
         for (k, v) in state.accounts {
-            if v != Amount::ZERO {
+            if v.0 != 0 {
                 self.state.credit(k, v).await;
             }
         }
@@ -76,7 +79,6 @@ impl Contract for WrappedFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                let amount = parse_token_amount(&amount);
                 self.runtime
                     .check_account_permission(owner)
                     .expect("Permission for Transfer operation");
@@ -92,7 +94,6 @@ impl Contract for WrappedFungibleTokenContract {
                 amount,
                 target_account,
             } => {
-                let amount = parse_token_amount(&amount);
                 self.runtime
                     .check_account_permission(spender)
                     .expect("Permission for TransferFrom operation");
@@ -210,8 +211,11 @@ impl WrappedFungibleTokenContract {
         }
     }
 
-    /// Mints tokens to a target account (local or remote).
-    async fn execute_mint(&mut self, target_account: Account, amount: Amount) -> FungibleResponse {
+    async fn execute_mint(
+        &mut self,
+        target_account: Account,
+        amount: TokenAmount,
+    ) -> FungibleResponse {
         self.require_mint_authorized();
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
@@ -233,7 +237,12 @@ impl WrappedFungibleTokenContract {
         FungibleResponse::Ok
     }
 
-    async fn claim(&mut self, source_account: Account, amount: Amount, target_account: Account) {
+    async fn claim(
+        &mut self,
+        source_account: Account,
+        amount: TokenAmount,
+        target_account: Account,
+    ) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;
             self.finish_transfer_to_account(amount, target_account, source_account.owner)
@@ -253,7 +262,7 @@ impl WrappedFungibleTokenContract {
 
     async fn finish_transfer_to_account(
         &mut self,
-        amount: Amount,
+        amount: TokenAmount,
         target_account: Account,
         source: AccountOwner,
     ) {
@@ -272,17 +281,4 @@ impl WrappedFungibleTokenContract {
                 .send_to(target_account.chain_id);
         }
     }
-}
-
-/// Parses a `Transfer*` amount string into an [`Amount`].
-///
-/// The amount field is a `String` over the wire (so it can serialize as JSON for
-/// GraphQL clients), but represents a raw `u128` of token sub-units in the source
-/// ERC-20's decimal scale. We map straight into `Amount::from_attos` so the rest
-/// of the contract continues to operate on `Amount`.
-fn parse_token_amount(amount: &str) -> Amount {
-    let value: u128 = amount
-        .parse()
-        .expect("amount is not a valid `u128` decimal string");
-    Amount::from_attos(value)
 }

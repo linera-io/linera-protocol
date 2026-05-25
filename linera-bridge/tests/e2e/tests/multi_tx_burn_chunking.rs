@@ -26,7 +26,7 @@ use alloy::{
     rpc::types::Filter,
     sol,
 };
-use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
+use linera_base::{crypto::InMemorySigner, data_types::TokenAmount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible,
@@ -167,7 +167,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
         "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955".parse()?,
         "0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f".parse()?,
     ];
-    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
+    let burn_amount = TokenAmount(BURN_AMOUNT_TOKENS * 10u128.pow(18));
 
     // Bundle every Transfer into one chain-B block; chain-A's
     // process_inbox produces a single chain-A block with N BurnEvents.
@@ -177,7 +177,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
             let owner = AccountOwner::Address20(recipient.0 .0);
             let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
                 owner: owner_b,
-                amount: burn_amount.to_attos().to_string(),
+                amount: burn_amount,
                 target_account: Account {
                     chain_id: chain_a,
                     owner,

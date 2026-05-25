@@ -3,21 +3,25 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
+mod state;
+
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{state::FungibleTokenState, OwnerSpender};
+use fungible::OwnerSpender;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, WithServiceAbi},
+    linera_base_types::{AccountOwner, TokenAmount, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,
 };
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters};
 
+use crate::state::WrappedFungibleTokenState;
+
 #[derive(Clone)]
 pub struct WrappedFungibleTokenService {
-    state: Arc<FungibleTokenState>,
+    state: Arc<WrappedFungibleTokenState>,
     runtime: Arc<ServiceRuntime<Self>>,
 }
 
@@ -31,7 +35,7 @@ impl Service for WrappedFungibleTokenService {
     type Parameters = WrappedParameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = FungibleTokenState::load(runtime.root_view_storage_context())
+        let state = WrappedFungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         WrappedFungibleTokenService {
@@ -53,11 +57,11 @@ impl Service for WrappedFungibleTokenService {
 
 #[Object]
 impl WrappedFungibleTokenService {
-    async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
+    async fn accounts(&self) -> &MapView<AccountOwner, TokenAmount> {
         &self.state.accounts
     }
 
-    async fn allowances(&self) -> &MapView<OwnerSpender, Amount> {
+    async fn allowances(&self) -> &MapView<OwnerSpender, TokenAmount> {
         &self.state.allowances
     }
 

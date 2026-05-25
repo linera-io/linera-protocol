@@ -8,7 +8,7 @@ mod tests {
     use alloy_sol_types::SolEvent;
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
-        data_types::{Amount, BlockHeight},
+        data_types::{BlockHeight, TokenAmount},
     };
     use revm::{
         database::{CacheDB, EmptyDB},
@@ -124,7 +124,7 @@ mod tests {
         fn submit_burn(
             &mut self,
             target: [u8; 20],
-            amount: Amount,
+            amount: TokenAmount,
         ) -> (Vec<revm::primitives::Log>, u64) {
             let evt = burn_event(self.app_id, target, amount, 0);
             self.submit_block_with_events(vec![vec![evt]])
@@ -185,7 +185,7 @@ mod tests {
 
         let transfer_amount = 100_000_000_000_000_000_000u128;
 
-        t.submit_burn(TEST_TARGET, Amount::from_attos(transfer_amount));
+        t.submit_burn(TEST_TARGET, TokenAmount(transfer_amount));
 
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
@@ -200,7 +200,7 @@ mod tests {
 
         let transfer_amount = 100_000_000_000_000_000_000u128;
 
-        t.submit_burn(TEST_TARGET, Amount::from_attos(transfer_amount));
+        t.submit_burn(TEST_TARGET, TokenAmount(transfer_amount));
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
             alloy_primitives::U256::from(transfer_amount),
@@ -209,7 +209,7 @@ mod tests {
 
         let second_transfer = 50_000_000_000_000_000_000u128;
 
-        t.submit_burn(TEST_TARGET, Amount::from_attos(second_transfer));
+        t.submit_burn(TEST_TARGET, TokenAmount(second_transfer));
         assert_eq!(
             t.query_token_balance(test_target_evm_address()),
             alloy_primitives::U256::from(transfer_amount + second_transfer),
@@ -229,7 +229,12 @@ mod tests {
         let mut t = TestBridge::new();
         let other_app_id = CryptoHash::new(&TestString::new("other_app"));
 
-        let evt = burn_event(other_app_id, TEST_TARGET, Amount::from_tokens(50), 0);
+        let evt = burn_event(
+            other_app_id,
+            TEST_TARGET,
+            TokenAmount(50u128 * 10u128.pow(18)),
+            0,
+        );
         t.submit_block_with_events(vec![vec![evt]]);
 
         assert_eq!(
@@ -243,7 +248,7 @@ mod tests {
     fn test_fungible_bridge_gas_measurement() {
         let mut t = TestBridge::new();
 
-        let (_, gas_used) = t.submit_burn(TEST_TARGET, Amount::from_tokens(100));
+        let (_, gas_used) = t.submit_burn(TEST_TARGET, TokenAmount(100u128 * 10u128.pow(18)));
 
         println!("Gas used for fungible bridge addBlock with BurnEvent: {gas_used}");
     }

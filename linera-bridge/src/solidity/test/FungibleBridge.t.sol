@@ -78,7 +78,7 @@ contract MockLightClientForBurns {
     function _encodeBurn(address target, uint128 amount) private pure returns (bytes memory) {
         WrappedFungibleTypes.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(target);
-        burnEvt.amount = BridgeTypes.Amount(amount);
+        burnEvt.amount = amount;
         return WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
     }
 }
@@ -119,7 +119,7 @@ contract MockLightClientForNonBurn {
         evt.index = 5;
         WrappedFungibleTypes.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(recipBase);
-        burnEvt.amount = BridgeTypes.Amount(amountPerBurn);
+        burnEvt.amount = amountPerBurn;
         evt.value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
         b.body.events[0][0] = evt;
 

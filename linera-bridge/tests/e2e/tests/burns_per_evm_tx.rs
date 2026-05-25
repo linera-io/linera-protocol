@@ -11,7 +11,7 @@
 #![recursion_limit = "512"]
 
 use alloy::{providers::ProviderBuilder, sol};
-use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
+use linera_base::{crypto::InMemorySigner, data_types::TokenAmount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token_with_supply, fetch_latest_cert,
     fund_bridge_erc20, light_client_address, publish_and_create_wrapped_fungible,
@@ -318,7 +318,7 @@ where
 {
     use anyhow::Context as _;
 
-    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
+    let burn_amount = TokenAmount(BURN_AMOUNT_TOKENS * 10u128.pow(18));
     let operations = (1..=n)
         .map(|i| {
             // Deterministic distinct recipients; high bytes spell out the
@@ -330,7 +330,7 @@ where
             let owner = AccountOwner::Address20(bytes);
             let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
                 owner: owner_b,
-                amount: burn_amount.to_attos().to_string(),
+                amount: burn_amount,
                 target_account: Account {
                     chain_id: chain_a,
                     owner,

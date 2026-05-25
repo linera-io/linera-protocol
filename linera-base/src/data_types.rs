@@ -104,6 +104,73 @@ impl TryFrom<U256> for Amount {
     }
 }
 
+/// Raw `u128` token sub-units, in the source token's decimal scale.
+///
+/// Unlike [`Amount`] (Linera-native, hardcoded 18 decimal places), `TokenAmount`
+/// carries no implicit decimal scale: it is whatever the source token's own
+/// `decimals()` says it is. Used at application boundaries that bridge non-18-
+/// decimal tokens (e.g. wrapped USDC at 6) so callers don't accidentally read
+/// the value through Linera's 18-decimal lens.
+///
+/// Wire format: decimal string in human-readable serializers (JSON / GraphQL,
+/// since `u128` has no `async_graphql::InputType`), bare `u128` in binary
+/// (BCS) — identical bytes to [`Amount`] over BCS.
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Hash)]
+pub struct TokenAmount(pub u128);
+
+impl std::fmt::Display for TokenAmount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for TokenAmount {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        u128::from_str(s).map(TokenAmount)
+    }
+}
+
+impl From<u128> for TokenAmount {
+    fn from(value: u128) -> Self {
+        TokenAmount(value)
+    }
+}
+
+impl From<TokenAmount> for u128 {
+    fn from(value: TokenAmount) -> Self {
+        value.0
+    }
+}
+
+impl Serialize for TokenAmount {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.0.to_string())
+        } else {
+            self.0.serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TokenAmount {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            s.parse().map(TokenAmount).map_err(serde::de::Error::custom)
+        } else {
+            u128::deserialize(deserializer).map(TokenAmount)
+        }
+    }
+}
+
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq,
@@ -1659,6 +1726,10 @@ impl MessagePolicy {
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
+doc_scalar!(
+    TokenAmount,
+    "Raw u128 token sub-units in the source token's decimal scale."
+);
 doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"

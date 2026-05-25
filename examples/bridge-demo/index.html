@@ -594,14 +594,12 @@
           const targetAccount = { owner: targetOwner, chainId: BRIDGE_CHAIN_ID };
 
           // Step 1: Transfer wrapped tokens to bridge chain with Address20 owner.
-          // The wrapped-fungible app expects `amount` as a decimal string of raw
-          // `u128` sub-units in the source ERC-20's decimal scale.
           setStatus('Step 1/3: Burning wrapped tokens (transfer to bridge chain)...');
           const decimals = 18;
           const amountSubUnits = ethers.parseUnits(amount, decimals).toString();
           const mutation = gql(`mutation(
             $donor: AccountOwner!,
-            $amount: String!,
+            $amount: TokenAmount!,
             $recipient: FungibleAccount!
           ) {
             transfer(owner: $donor, amount: $amount, targetAccount: $recipient)

@@ -24,7 +24,7 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
-use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
+use linera_base::{crypto::InMemorySigner, data_types::TokenAmount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
@@ -226,12 +226,12 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     // the "burns" stream, which the relayer's Linera scanner will pick up.
     let evm_recipient_hex = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
     let receiver: AccountOwner = format!("0x{evm_recipient_hex}").parse()?;
-    let burn_amount = Amount::from_tokens(25);
+    let burn_amount = TokenAmount(25u128 * 10u128.pow(18));
 
     cc_b.synchronize_from_validators().await?;
     let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: burn_amount.to_attos().to_string(),
+        amount: burn_amount,
         target_account: Account {
             chain_id: chain_a,
             owner: receiver,

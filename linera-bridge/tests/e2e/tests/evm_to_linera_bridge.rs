@@ -17,7 +17,7 @@ use alloy::{
 use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Amount, Bytecode},
+    data_types::{Bytecode, TokenAmount},
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
@@ -369,10 +369,10 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let balance_str = response["data"]["accounts"]["entry"]["value"]
         .as_str()
         .context("no balance in GraphQL response")?;
-    let balance: Amount = balance_str.parse()?;
+    let balance: TokenAmount = balance_str.parse()?;
     assert_eq!(
         balance,
-        Amount::from_tokens(100),
+        TokenAmount(100u128 * 10u128.pow(18)),
         "wrapped-fungible balance should match the 100-token deposit"
     );
 

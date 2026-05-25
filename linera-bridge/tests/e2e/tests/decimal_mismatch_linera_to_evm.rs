@@ -35,7 +35,7 @@ use anyhow::Context as _;
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Amount, Bytecode},
+    data_types::{Bytecode, TokenAmount},
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
@@ -182,7 +182,7 @@ async fn decimal_mismatch_linera_to_evm() -> anyhow::Result<()> {
         bridge_app_id: None,
     };
     let wrapped_init = InitialState {
-        accounts: BTreeMap::from([(owner_a, Amount::from_tokens(1))]),
+        accounts: BTreeMap::from([(owner_a, TokenAmount(10u128.pow(18)))]),
     };
     let (fungible_app_id, _) = cc_a
         .create_application_untyped(
@@ -223,7 +223,7 @@ async fn decimal_mismatch_linera_to_evm() -> anyhow::Result<()> {
     // ── owner_a transfers 1 wTEST cross-chain to (chain_b, owner_b) ──
     let transfer_a_to_b = WrappedFungibleOperation::Transfer {
         owner: owner_a,
-        amount: Amount::from_tokens(1).to_attos().to_string(),
+        amount: TokenAmount(10u128.pow(18)),
         target_account: Account {
             chain_id: chain_b,
             owner: owner_b,
@@ -257,7 +257,7 @@ async fn decimal_mismatch_linera_to_evm() -> anyhow::Result<()> {
     let evm_recipient_owner: AccountOwner = format!("0x{evm_recipient_hex}").parse()?;
     let burn_transfer = WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: "1000000".to_string(), // matches ONE_EVM_TOKEN_RAW
+        amount: TokenAmount(ONE_EVM_TOKEN_RAW),
         target_account: Account {
             chain_id: chain_a,
             owner: evm_recipient_owner,

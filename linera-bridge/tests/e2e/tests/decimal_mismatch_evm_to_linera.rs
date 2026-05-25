@@ -34,7 +34,7 @@ use anyhow::Context as _;
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Amount, Bytecode},
+    data_types::{Bytecode, TokenAmount},
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
@@ -371,15 +371,14 @@ async fn decimal_mismatch_evm_to_linera() -> anyhow::Result<()> {
     let balance_str = response["data"]["accounts"]["entry"]["value"]
         .as_str()
         .context("no balance in GraphQL response")?;
-    let linera_balance: Amount = balance_str.parse()?;
+    let linera_balance: TokenAmount = balance_str.parse()?;
 
     assert_eq!(
-        linera_balance.to_attos(),
-        DEPOSIT_RAW,
+        linera_balance.0, DEPOSIT_RAW,
         "Linera balance after deposit must preserve the deposited raw value: \
          deposited {DEPOSIT_RAW} raw of a 6-decimal token, \
-         got {} attos on Linera",
-        linera_balance.to_attos(),
+         got {} raw on Linera",
+        linera_balance.0,
     );
     tracing::info!(%linera_balance, "Deposit assertion passed");
 

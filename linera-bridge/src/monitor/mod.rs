@@ -22,7 +22,7 @@ use alloy::primitives::{Address, B256, U256};
 use anyhow::Context as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, BlockHeight},
+    data_types::{BlockHeight, TokenAmount},
     identifiers::ApplicationId,
 };
 use linera_execution::{Query, QueryResponse};
@@ -107,7 +107,7 @@ pub struct PendingBurn {
     /// dedup key.
     pub event_index: u32,
     pub evm_recipient: Address,
-    pub amount: Amount,
+    pub amount: TokenAmount,
 }
 
 /// Wraps a pending bridging request with tracking metadata.
@@ -590,7 +590,7 @@ fn retry_eligible(retry_count: u32, last_retry_at: Option<Instant>, max_retries:
 #[cfg(test)]
 mod tests {
     use alloy::primitives::{Address, B256, U256};
-    use linera_base::data_types::{Amount, BlockHeight};
+    use linera_base::data_types::BlockHeight;
 
     use super::*;
 
@@ -665,7 +665,7 @@ mod tests {
                 event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
-                amount: Amount::from_attos(500),
+                amount: TokenAmount(500),
             })
             .await;
 
@@ -705,7 +705,7 @@ mod tests {
                 event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0x12; 20]),
-                amount: Amount::from_attos(100),
+                amount: TokenAmount(100),
             })
             .await;
 
@@ -860,7 +860,7 @@ mod tests {
             event_pos_in_tx: 0,
             event_index: 2,
             evm_recipient: Address::from([0xDD; 20]),
-            amount: Amount::from_attos(7),
+            amount: TokenAmount(7),
         })
         .await
         .unwrap();
@@ -889,7 +889,7 @@ mod tests {
                 event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
-                amount: Amount::from_attos(500),
+                amount: TokenAmount(500),
             })
             .await;
 
@@ -915,7 +915,7 @@ mod tests {
                 event_pos_in_tx: 1,
                 event_index: 11,
                 evm_recipient: Address::ZERO,
-                amount: Amount::ZERO,
+                amount: TokenAmount(0),
             },
             PendingBurn {
                 height: BlockHeight(5),
@@ -924,7 +924,7 @@ mod tests {
                 event_pos_in_tx: 0,
                 event_index: 10,
                 evm_recipient: Address::ZERO,
-                amount: Amount::ZERO,
+                amount: TokenAmount(0),
             },
             PendingBurn {
                 height: BlockHeight(5),
@@ -933,7 +933,7 @@ mod tests {
                 event_pos_in_tx: 0,
                 event_index: 12,
                 evm_recipient: Address::ZERO,
-                amount: Amount::ZERO,
+                amount: TokenAmount(0),
             },
             // One burn at a later height.
             PendingBurn {
@@ -943,7 +943,7 @@ mod tests {
                 event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::ZERO,
-                amount: Amount::ZERO,
+                amount: TokenAmount(0),
             },
         ];
         for b in burns {
@@ -988,7 +988,7 @@ mod tests {
                 event_pos_in_tx: 0,
                 event_index: 10,
                 evm_recipient: Address::ZERO,
-                amount: Amount::ZERO,
+                amount: TokenAmount(0),
             })
             .await;
         state
@@ -999,7 +999,7 @@ mod tests {
                 event_pos_in_tx: 1,
                 event_index: 11,
                 evm_recipient: Address::ZERO,
-                amount: Amount::ZERO,
+                amount: TokenAmount(0),
             })
             .await;
 
@@ -1028,7 +1028,7 @@ mod tests {
                 event_pos_in_tx: 1,
                 event_index: 42,
                 evm_recipient: Address::ZERO,
-                amount: Amount::ZERO,
+                amount: TokenAmount(0),
             })
             .await;
 

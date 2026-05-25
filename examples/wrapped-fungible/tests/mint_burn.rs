@@ -5,13 +5,15 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use fungible::{InitialState, InitialStateBuilder};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, ChainId, CryptoHash, TestString},
+    linera_base_types::{
+        AccountOwner, ApplicationId, ChainId, CryptoHash, TestString, TokenAmount,
+    },
     test::TestValidator,
 };
 use wrapped_fungible::{
-    Account, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
+    Account, InitialState, InitialStateBuilder, WrappedFungibleOperation, WrappedFungibleTokenAbi,
+    WrappedParameters,
 };
 
 /// Helper to query an account balance via GraphQL.
@@ -19,7 +21,7 @@ async fn query_account(
     application_id: linera_sdk::linera_base_types::ApplicationId<WrappedFungibleTokenAbi>,
     chain: &linera_sdk::test::ActiveChain,
     account_owner: AccountOwner,
-) -> Option<Amount> {
+) -> Option<TokenAmount> {
     use async_graphql::InputType;
     use linera_sdk::test::QueryOutcome;
 
@@ -86,7 +88,7 @@ async fn test_mint_from_unauthorized_signer() {
                         chain_id: chain.id(),
                         owner: chain_owner,
                     },
-                    amount: Amount::from_tokens(100),
+                    amount: TokenAmount(100u128 * 10u128.pow(18)),
                 },
             );
         })
@@ -108,7 +110,7 @@ async fn test_wrapped_fungible_standard_transfer() {
 
     let params = test_params(owner, chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default()
-        .with_account(owner, Amount::from_tokens(1000))
+        .with_account(owner, TokenAmount(1000u128 * 10u128.pow(18)))
         .build();
     let application_id = chain
         .create_application(module_id, params, initial_state, vec![])
@@ -120,7 +122,7 @@ async fn test_wrapped_fungible_standard_transfer() {
                 application_id,
                 WrappedFungibleOperation::Transfer {
                     owner,
-                    amount: Amount::from_tokens(300).to_attos().to_string(),
+                    amount: TokenAmount(300u128 * 10u128.pow(18)),
                     target_account: Account {
                         chain_id: chain.id(),
                         owner: recipient,
@@ -132,11 +134,11 @@ async fn test_wrapped_fungible_standard_transfer() {
 
     assert_eq!(
         query_account(application_id, &chain, owner).await,
-        Some(Amount::from_tokens(700)),
+        Some(TokenAmount(700u128 * 10u128.pow(18))),
     );
     assert_eq!(
         query_account(application_id, &chain, recipient).await,
-        Some(Amount::from_tokens(300)),
+        Some(TokenAmount(300u128 * 10u128.pow(18))),
     );
 }
 
@@ -154,7 +156,7 @@ async fn test_credit_to_address20_on_non_bridge_chain_does_not_burn() {
     let evm_address = AccountOwner::Address20([0xAA; 20]);
 
     // Bridge chain is minter_chain; other_chain is NOT the bridge chain.
-    let mint_amount = Amount::from_tokens(500);
+    let mint_amount = TokenAmount(500u128 * 10u128.pow(18));
     let params = test_params(minter_account, minter_chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default()
         .with_account(minter_account, mint_amount)
@@ -213,7 +215,7 @@ async fn test_credit_to_address20_on_bridge_chain_auto_burns() {
     let minter = AccountOwner::from(bridge_chain.public_key());
     let params = test_params(minter, bridge_chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default()
-        .with_account(sender_account, Amount::from_tokens(500))
+        .with_account(sender_account, TokenAmount(500u128 * 10u128.pow(18)))
         .build();
     let application_id = sender_chain
         .create_application(module_id, params, initial_state, vec![])
@@ -226,7 +228,7 @@ async fn test_credit_to_address20_on_bridge_chain_auto_burns() {
                 application_id,
                 WrappedFungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: Amount::from_tokens(500).to_attos().to_string(),
+                    amount: TokenAmount(500u128 * 10u128.pow(18)),
                     target_account: Account {
                         chain_id: bridge_chain.id(),
                         owner: evm_address,
@@ -274,7 +276,7 @@ async fn test_credit_to_non_address20_on_bridge_chain_credits_normally() {
     let minter = AccountOwner::from(bridge_chain.public_key());
     let params = test_params(minter, bridge_chain.id(), dummy_bridge_app_id());
     let initial_state = InitialStateBuilder::default()
-        .with_account(sender_account, Amount::from_tokens(500))
+        .with_account(sender_account, TokenAmount(500u128 * 10u128.pow(18)))
         .build();
     let application_id = sender_chain
         .create_application(module_id, params, initial_state, vec![])
@@ -287,7 +289,7 @@ async fn test_credit_to_non_address20_on_bridge_chain_credits_normally() {
                 application_id,
                 WrappedFungibleOperation::Transfer {
                     owner: sender_account,
-                    amount: Amount::from_tokens(500).to_attos().to_string(),
+                    amount: TokenAmount(500u128 * 10u128.pow(18)),
                     target_account: Account {
                         chain_id: bridge_chain.id(),
                         owner: recipient,
@@ -308,7 +310,7 @@ async fn test_credit_to_non_address20_on_bridge_chain_credits_normally() {
     let balance = query_account(application_id, &bridge_chain, recipient).await;
     assert_eq!(
         balance,
-        Some(Amount::from_tokens(500)),
+        Some(TokenAmount(500u128 * 10u128.pow(18))),
         "Credit to non-Address20 on bridge chain should credit normally, not burn"
     );
 }
@@ -342,7 +344,7 @@ async fn test_mint_on_wrong_chain() {
                         chain_id: minter_chain.id(),
                         owner: minter_account,
                     },
-                    amount: Amount::from_tokens(100),
+                    amount: TokenAmount(100u128 * 10u128.pow(18)),
                 },
             );
         })
@@ -377,7 +379,7 @@ async fn test_direct_mint_without_bridge_is_rejected() {
                         chain_id: minter_chain.id(),
                         owner: minter_account,
                     },
-                    amount: Amount::from_tokens(1000),
+                    amount: TokenAmount(1000u128 * 10u128.pow(18)),
                 },
             );
         })
