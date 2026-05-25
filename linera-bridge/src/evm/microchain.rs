@@ -68,7 +68,7 @@ mod tests {
     }
 
     #[test]
-    fn test_microchain_rejects_duplicate_block() {
+    fn test_microchain_accepts_duplicate_block() {
         let mut microchain = TestMicrochain::new();
 
         microchain.add_block(BlockHeight(1));
@@ -76,8 +76,8 @@ mod tests {
         assert!(
             microchain
                 .try_add_block(microchain.chain_id, BlockHeight(1))
-                .is_err(),
-            "should reject duplicate block"
+                .is_ok(),
+            "Microchain must accept duplicate addBlock calls; subclass owns dedup"
         );
     }
 

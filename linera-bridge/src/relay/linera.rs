@@ -148,17 +148,19 @@ impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
     }
 }
 
-/// Finds all `BurnEvent`s in a block's event streams for a given application,
-/// returning each burn paired with the underlying `Event.index` — the
-/// position of the event within its stream. That index is what the
-/// `FungibleBridge` contract keys its per-burn dedup mapping on.
+/// Finds all `BurnEvent`s in a block's event streams for a given application.
+///
+/// Returns `(tx_index, event_pos_in_tx, event_index, BurnEvent)` for each burn:
+/// - `tx_index`: position of the transaction within `body.events` (outer index)
+/// - `event_pos_in_tx`: position of the event within `body.events[tx_index]` (inner index)
+/// - `event_index`: `Event.index` — the stream index, used as the on-chain dedup key
 pub(crate) fn find_burn_events(
     events: &[Vec<Event>],
     fungible_app_id: ApplicationId,
-) -> Vec<(u32, wrapped_fungible::BurnEvent)> {
+) -> Vec<(u32, u32, u32, wrapped_fungible::BurnEvent)> {
     let mut result = Vec::new();
-    for tx_events in events {
-        for event in tx_events {
+    for (tx_index, tx_events) in (0u32..).zip(events) {
+        for (event_pos, event) in (0u32..).zip(tx_events) {
             if event.stream_id.application_id != GenericApplicationId::User(fungible_app_id) {
                 continue;
             }
@@ -166,7 +168,7 @@ pub(crate) fn find_burn_events(
                 continue;
             }
             if let Ok(burn) = bcs::from_bytes::<wrapped_fungible::BurnEvent>(&event.value) {
-                result.push((event.index, burn));
+                result.push((tx_index, event_pos, event.index, burn));
             }
         }
     }

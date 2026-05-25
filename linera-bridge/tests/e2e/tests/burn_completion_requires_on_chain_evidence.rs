@@ -16,11 +16,7 @@
 
 #![recursion_limit = "512"]
 
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use alloy::{
     primitives::U256,
@@ -28,10 +24,7 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
-use anyhow::Context as _;
-use linera_base::{
-    crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner,
-};
+use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,

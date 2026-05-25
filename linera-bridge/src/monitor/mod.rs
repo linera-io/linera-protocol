@@ -13,13 +13,14 @@ pub mod evm;
 pub mod linera;
 
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::{Duration, Instant},
 };
 
 use alloy::primitives::{Address, B256, U256};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{Amount, BlockHeight},
     identifiers::ApplicationId,
 };
@@ -65,6 +66,21 @@ pub struct PendingDeposit {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingBurn {
     pub height: BlockHeight,
+    /// Hash of the Linera block that produced this burn. Lets the relayer
+    /// fetch the certificate via a direct `linera_client.read_certificate`
+    /// call instead of walking the chain backwards from head.
+    pub block_hash: CryptoHash,
+    /// Position of this burn's transaction within `body.events`.
+    /// Used by `processBurns(cert, tx_index, ...)`.
+    pub tx_index: u32,
+    /// Position of this burn within `body.events[tx_index]`.
+    /// Used by `processBurns(cert, tx_index, [event_pos_in_tx, ...])`.
+    pub event_pos_in_tx: u32,
+    /// `Event.index` — sequential position of this burn within its stream
+    /// (the "burns" stream of the configured fungible app on the configured
+    /// Linera chain). Unique for the lifetime of that stream, so unique
+    /// across all heights within the relayer's scope. Off-chain and on-chain
+    /// dedup key.
     pub event_index: u32,
     pub evm_recipient: Address,
     pub amount: Amount,
@@ -97,6 +113,50 @@ impl<T: Clone> Tracked<T> {
 
 pub type TrackedDeposit = Tracked<PendingDeposit>;
 pub type TrackedBurn = Tracked<PendingBurn>;
+
+/// One height's slice of `pending_burns_by_height_and_tx`. The two views
+/// (`event_indices` and `by_tx`) describe the same set of burns under one
+/// retry-filter snapshot.
+///
+/// `Ord` is keyed solely on `height`, so a `BTreeSet<PendingBurnsAtHeight>`
+/// is naturally height-sorted and structurally rejects a second entry for
+/// the same height (which never happens in practice — there is at most one
+/// entry per height).
+#[derive(Debug, Clone)]
+pub struct PendingBurnsAtHeight {
+    pub height: BlockHeight,
+    /// Hash of the Linera block at `height` — lets `process_pending_burns`
+    /// pull the certificate via a direct `read_certificate` call.
+    pub block_hash: CryptoHash,
+    /// Stream indices (`Event.index`) of every pending burn at this height,
+    /// sorted ascending. Used for retry accounting and cert persistence.
+    pub event_indices: Vec<u32>,
+    /// Pending burns grouped by `tx_index`, in ascending `tx_index` order;
+    /// the `Vec<u32>` inside each entry is the sorted `event_pos_in_tx`
+    /// positions for that tx — input to the chunked `processBurns`
+    /// fallback when `addBlock` would not fit.
+    pub by_tx: Vec<(u32, Vec<u32>)>,
+}
+
+impl PartialEq for PendingBurnsAtHeight {
+    fn eq(&self, other: &Self) -> bool {
+        self.height == other.height
+    }
+}
+
+impl Eq for PendingBurnsAtHeight {}
+
+impl Ord for PendingBurnsAtHeight {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.height.cmp(&other.height)
+    }
+}
+
+impl PartialOrd for PendingBurnsAtHeight {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 /// In-memory monitoring state shared across scan loops and HTTP handlers.
 pub struct MonitorState {
@@ -136,8 +196,8 @@ impl MonitorState {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
                 if let Some(db) = &self.db {
-                    if let Err(e) = db.insert_deposit(&pending).await {
-                        tracing::warn!("Failed to persist deposit to SQLite: {e:#}");
+                    if let Err(error) = db.insert_deposit(&pending).await {
+                        tracing::warn!(?error, "Failed to persist deposit to SQLite");
                     }
                 }
                 e.insert(Tracked::new(pending));
@@ -152,8 +212,8 @@ impl MonitorState {
             d.forwarded = true;
             crate::relay::metrics::deposit_completed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_deposit_status(key, "completed").await {
-                    tracing::warn!(?key, "Failed to update deposit status in SQLite: {e:#}");
+                if let Err(error) = db.update_deposit_status(key, "completed").await {
+                    tracing::warn!(?key, ?error, "Failed to update deposit status in SQLite");
                 }
             }
         } else {
@@ -170,8 +230,8 @@ impl MonitorState {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
                 if let Some(db) = &self.db {
-                    if let Err(err) = db.insert_burn(&pending).await {
-                        tracing::warn!("Failed to persist burn to SQLite: {err:#}");
+                    if let Err(error) = db.insert_burn(&pending).await {
+                        tracing::warn!(?error, "Failed to persist burn to SQLite");
                     }
                 }
                 e.insert(Tracked::new(pending));
@@ -186,14 +246,15 @@ impl MonitorState {
             b.forwarded = true;
             crate::relay::metrics::burn_completed();
             if let Some(db) = &self.db {
-                if let Err(e) = db
+                if let Err(error) = db
                     .update_burn_status(height, event_index, "completed")
                     .await
                 {
                     tracing::warn!(
                         ?height,
                         event_index,
-                        "Failed to update burn status in SQLite: {e:#}"
+                        ?error,
+                        "Failed to update burn status in SQLite"
                     );
                 }
             }
@@ -224,6 +285,55 @@ impl MonitorState {
 
     pub fn completed_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().filter(|b| b.forwarded).collect()
+    }
+
+    /// Returns one `PendingBurnsAtHeight` per height with pending burns,
+    /// in ascending height order. Burns are skipped if they are `failed`
+    /// (e.g. permanently oversized) or have exceeded `max_retries`.
+    pub fn pending_burns_by_height_and_tx(
+        &self,
+        max_retries: u32,
+    ) -> BTreeSet<PendingBurnsAtHeight> {
+        struct HeightAccum {
+            block_hash: CryptoHash,
+            by_tx: BTreeMap<u32, Vec<u32>>,
+            event_indices: Vec<u32>,
+        }
+        let mut tree: BTreeMap<BlockHeight, HeightAccum> = BTreeMap::new();
+        for tracked in self.pending_burns() {
+            // Failed burns (e.g. permanently oversized) and burns past the
+            // retry budget are no longer eligible for processing.
+            if tracked.failed || tracked.retry_count >= max_retries {
+                continue;
+            }
+            // All burns at a given height share the same block (cert) hash,
+            // so the first one populates it and the rest just append.
+            let entry = tree.entry(tracked.value.height).or_insert(HeightAccum {
+                block_hash: tracked.value.block_hash,
+                by_tx: BTreeMap::new(),
+                event_indices: Vec::new(),
+            });
+            entry
+                .by_tx
+                .entry(tracked.value.tx_index)
+                .or_default()
+                .push(tracked.value.event_pos_in_tx);
+            entry.event_indices.push(tracked.value.event_index);
+        }
+        tree.into_iter()
+            .map(|(h, mut accum)| {
+                for positions in accum.by_tx.values_mut() {
+                    positions.sort_unstable();
+                }
+                accum.event_indices.sort_unstable();
+                PendingBurnsAtHeight {
+                    height: h,
+                    block_hash: accum.block_hash,
+                    event_indices: accum.event_indices,
+                    by_tx: accum.by_tx.into_iter().collect(),
+                }
+            })
+            .collect()
     }
 
     pub fn deposits_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedDeposit> {
@@ -301,10 +411,20 @@ impl MonitorState {
         Ok(())
     }
 
-    pub fn mark_deposit_retried(&mut self, key: &DepositKey) {
-        if let Some(d) = self.deposits.get_mut(key) {
+    /// Bumps the deposit's retry counter; if the bump exhausts `max_retries`,
+    /// the deposit is marked `failed` (moved to `finished_deposits` in
+    /// SQLite) so it does not get loaded back as a pending item on the next
+    /// relayer start.
+    pub async fn mark_deposit_retried(&mut self, key: &DepositKey, max_retries: u32) {
+        let exhausted = if let Some(d) = self.deposits.get_mut(key) {
             d.retry_count += 1;
             d.last_retry_at = Some(Instant::now());
+            d.retry_count >= max_retries
+        } else {
+            false
+        };
+        if exhausted {
+            self.mark_deposit_failed(key).await;
         }
     }
 
@@ -313,17 +433,50 @@ impl MonitorState {
             d.failed = true;
             crate::relay::metrics::deposit_failed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_deposit_status(key, "failed").await {
-                    tracing::warn!(?key, "Failed to update deposit status in SQLite: {e:#}");
+                if let Err(error) = db.update_deposit_status(key, "failed").await {
+                    tracing::warn!(?key, ?error, "Failed to update deposit status in SQLite");
                 }
             }
         }
     }
 
-    pub fn mark_burn_retried(&mut self, height: BlockHeight, event_index: u32) {
-        if let Some(b) = self.burns.get_mut(&(height, event_index)) {
+    /// Looks up the `event_index` of the pending burn at
+    /// `(height, tx_index, pos_in_tx)`. Used by `process_pending_burns`
+    /// to map per-chunk positions back to the stream-index keys that
+    /// `mark_burn_retried` / `mark_burn_failed` expect.
+    pub fn event_index_for_pos(
+        &self,
+        height: BlockHeight,
+        tx_index: u32,
+        pos_in_tx: u32,
+    ) -> Option<u32> {
+        self.burns.values().find_map(|b| {
+            (b.value.height == height
+                && b.value.tx_index == tx_index
+                && b.value.event_pos_in_tx == pos_in_tx)
+                .then_some(b.value.event_index)
+        })
+    }
+
+    /// Bumps the burn's retry counter; if the bump exhausts `max_retries`,
+    /// the burn is marked `failed` (moved to `finished_burns` in SQLite) so
+    /// it does not get loaded back as a pending item on the next relayer
+    /// start.
+    pub async fn mark_burn_retried(
+        &mut self,
+        height: BlockHeight,
+        event_index: u32,
+        max_retries: u32,
+    ) {
+        let exhausted = if let Some(b) = self.burns.get_mut(&(height, event_index)) {
             b.retry_count += 1;
             b.last_retry_at = Some(Instant::now());
+            b.retry_count >= max_retries
+        } else {
+            false
+        };
+        if exhausted {
+            self.mark_burn_failed(height, event_index).await;
         }
     }
 
@@ -332,11 +485,12 @@ impl MonitorState {
             b.failed = true;
             crate::relay::metrics::burn_failed();
             if let Some(db) = &self.db {
-                if let Err(e) = db.update_burn_status(height, event_index, "failed").await {
+                if let Err(error) = db.update_burn_status(height, event_index, "failed").await {
                     tracing::warn!(
                         ?height,
                         event_index,
-                        "Failed to update burn status in SQLite: {e:#}"
+                        ?error,
+                        "Failed to update burn status in SQLite"
                     );
                 }
             }
@@ -482,6 +636,9 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(10),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
                 amount: Amount::from_attos(500),
@@ -519,6 +676,9 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0x12; 20]),
                 amount: Amount::from_attos(100),
@@ -576,7 +736,7 @@ mod tests {
 
         assert_eq!(state.deposits_ready_for_retry(10).len(), 1);
 
-        state.mark_deposit_retried(&key);
+        state.mark_deposit_retried(&key, 10).await;
         assert_eq!(state.deposits_ready_for_retry(10).len(), 0);
 
         state.mark_deposit_failed(&key).await;
@@ -609,7 +769,7 @@ mod tests {
         let next = state.next_deposit_for_retry(10);
         assert!(matches!(next, Some(p) if p.key == key));
 
-        state.mark_deposit_retried(&key);
+        state.mark_deposit_retried(&key, 10).await;
         assert!(state.next_deposit_for_retry(10).is_none());
 
         state.complete_deposit(&key).await;
@@ -671,6 +831,9 @@ mod tests {
         .unwrap();
         db.insert_burn(&PendingBurn {
             height: BlockHeight(99),
+            block_hash: CryptoHash::from([0u8; 32]),
+            tx_index: 0,
+            event_pos_in_tx: 0,
             event_index: 2,
             evm_recipient: Address::from([0xDD; 20]),
             amount: Amount::from_attos(7),
@@ -697,6 +860,9 @@ mod tests {
         state
             .track_burn(PendingBurn {
                 height,
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
                 amount: Amount::from_attos(500),
@@ -704,11 +870,147 @@ mod tests {
             .await;
 
         assert!(state.next_burn_for_retry(10).is_some());
-        state.mark_burn_retried(height, 0);
+        state.mark_burn_retried(height, 0, 10).await;
         assert!(state.next_burn_for_retry(10).is_none());
 
         // Once forwarded, the item is no longer offered for retry.
         state.complete_burn(height, 0).await;
         assert!(state.next_burn_for_retry(10).is_none());
+    }
+
+    #[tokio::test]
+    async fn pending_burns_by_height_and_tx_groups_and_sorts() {
+        let mut state = MonitorState::new(0);
+        let burns = [
+            // Two burns at height 5: tx 0 has positions 1 then 0 (out of
+            // order so the helper's sort is tested); tx 1 has one burn.
+            PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 1,
+                event_index: 11,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+            PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+            PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 1,
+                event_pos_in_tx: 0,
+                event_index: 12,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+            // One burn at a later height.
+            PendingBurn {
+                height: BlockHeight(7),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 0,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            },
+        ];
+        for b in burns {
+            state.track_burn(b).await;
+        }
+
+        let groups = state.pending_burns_by_height_and_tx(/* max_retries */ 10);
+        // Same retry filter applies to both views — event_indices is the
+        // sorted list of `event_index` values at each height, used by
+        // `process_pending_burns` for retry accounting and cert persistence.
+        let expected: BTreeSet<PendingBurnsAtHeight> = [
+            PendingBurnsAtHeight {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                event_indices: vec![10u32, 11, 12],
+                by_tx: vec![(0u32, vec![0u32, 1]), (1u32, vec![0u32])],
+            },
+            PendingBurnsAtHeight {
+                height: BlockHeight(7),
+                block_hash: CryptoHash::from([0u8; 32]),
+                event_indices: vec![0u32],
+                by_tx: vec![(0u32, vec![0u32])],
+            },
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(groups, expected);
+    }
+
+    #[tokio::test]
+    async fn pending_burns_by_height_and_tx_excludes_failed_burns() {
+        // After a burn is marked `failed` (e.g. oversized in the chunked
+        // `processBurns` path), it must not reappear in subsequent retry
+        // snapshots — otherwise the chunking loop would keep re-discovering
+        // it as oversized and burn estimate-RPC budget on every pass.
+        let mut state = MonitorState::new(0);
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            })
+            .await;
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 1,
+                event_index: 11,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            })
+            .await;
+
+        state.mark_burn_failed(BlockHeight(5), 10).await;
+
+        let groups = state.pending_burns_by_height_and_tx(/* max_retries */ 10);
+        let expected: BTreeSet<PendingBurnsAtHeight> = [PendingBurnsAtHeight {
+            height: BlockHeight(5),
+            block_hash: CryptoHash::from([0u8; 32]),
+            event_indices: vec![11u32],
+            by_tx: vec![(0u32, vec![1u32])],
+        }]
+        .into_iter()
+        .collect();
+        assert_eq!(groups, expected);
+    }
+
+    #[tokio::test]
+    async fn event_index_for_pos_matches_tracked_burn() {
+        let mut state = MonitorState::new(0);
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 2,
+                event_pos_in_tx: 1,
+                event_index: 42,
+                evm_recipient: Address::ZERO,
+                amount: Amount::ZERO,
+            })
+            .await;
+
+        assert_eq!(state.event_index_for_pos(BlockHeight(5), 2, 1), Some(42));
+        assert_eq!(state.event_index_for_pos(BlockHeight(5), 2, 0), None);
+        assert_eq!(state.event_index_for_pos(BlockHeight(5), 0, 1), None);
+        assert_eq!(state.event_index_for_pos(BlockHeight(6), 2, 1), None);
     }
 }

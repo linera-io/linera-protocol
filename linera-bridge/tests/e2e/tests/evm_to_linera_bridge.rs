@@ -27,8 +27,7 @@ use linera_bridge::{
 };
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, light_client_address,
-    start_compose, wait_for_light_client,
-    ANVIL_PRIVATE_KEY,
+    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -133,7 +132,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         .nth(3)
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
-    let evm_bridge_wasm_dir = repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
+    let evm_bridge_wasm_dir =
+        repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
 
     // 4a. Publish and create wrapped-fungible app
@@ -151,7 +151,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // 4b. Publish and create evm-bridge app first (so wrapped-fungible can reference it)
     tracing::info!("Publishing evm-bridge module...");
-    let eb_contract = Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm"))?;
+    let eb_contract =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm"))?;
     let eb_service = Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_service.wasm"))?;
 
     let (eb_module_id, _) = cc

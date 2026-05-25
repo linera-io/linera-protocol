@@ -153,11 +153,13 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .nth(3)
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
-    let evm_bridge_wasm_dir = repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
+    let evm_bridge_wasm_dir =
+        repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
 
     tracing::info!("Publishing evm-bridge module...");
-    let eb_contract = Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm"))?;
+    let eb_contract =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm"))?;
     let eb_service = Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_service.wasm"))?;
     let (eb_module_id, _) = cc_a
         .publish_module(eb_contract, eb_service, VmRuntime::Wasm)
@@ -316,9 +318,9 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             None,
             relay_port,
             &linera_storage_runtime::CommonStorageOptions::with_defaults(),
-            std::time::Duration::from_secs(5),  // monitor_scan_interval
-            0,  // monitor_start_block
-            5,  // max_retries
+            std::time::Duration::from_secs(5), // monitor_scan_interval
+            0,                                 // monitor_start_block
+            5,                                 // max_retries
             None,
         ))
         .await
@@ -401,7 +403,9 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     let deposit_key = linera_bridge::proof::DepositKey {
         source_chain_id: 31337,
         block_hash: deposit_receipt.block_hash.unwrap(),
-        tx_index: deposit_receipt.transaction_index.expect("transaction_index missing"),
+        tx_index: deposit_receipt
+            .transaction_index
+            .expect("transaction_index missing"),
         log_index,
     };
 
