@@ -895,8 +895,6 @@ impl<Env: Environment> Client<Env> {
     /// Returns the chain info of the last successfully processed certificate.
     /// If `until_block_time` is `Some`, stops before processing any certificate whose
     /// block timestamp is greater or equal than the given value.
-    /// `mode` is the caller's requested processing mode; chains we don't follow
-    /// are still downgraded to `Preprocess` regardless of `mode`.
     #[instrument(level = "trace", skip_all)]
     async fn process_certificates(
         &self,
@@ -950,23 +948,13 @@ impl<Env: Environment> Client<Env> {
 
     /// Calls `handle_confirmed_certificate`, retrying with any missing blobs (downloaded
     /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators). The effective processing mode is
-    /// `mode` for chains we follow, and `Preprocess` for chains we don't —
-    /// we never execute a chain we're not tracking, even if asked.
+    /// chains via the current validators).
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
         nodes: &[RemoteNode<Env::ValidatorNode>],
         mode: ProcessConfirmedBlockMode,
     ) -> Result<ChainInfoResponse, chain_client::Error> {
-        let mode = if self
-            .chain_mode(certificate.value().chain_id())
-            .is_some_and(|m| m.should_sync_chain_state())
-        {
-            mode
-        } else {
-            ProcessConfirmedBlockMode::Preprocess
-        };
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut events = EventSetDownloader::new(self);
         loop {
@@ -1303,7 +1291,15 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        self.handle_certificate_with_retry(&certificate, &nodes, ProcessConfirmedBlockMode::Auto)
+        let processing_mode = if self
+            .chain_mode(certificate.value().chain_id())
+            .is_some_and(|m| m.should_sync_chain_state())
+        {
+            ProcessConfirmedBlockMode::Auto
+        } else {
+            ProcessConfirmedBlockMode::Preprocess
+        };
+        self.handle_certificate_with_retry(&certificate, &nodes, processing_mode)
             .await?;
 
         Ok(())
