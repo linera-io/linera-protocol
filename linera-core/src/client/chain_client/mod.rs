@@ -1979,11 +1979,23 @@ impl<Env: Environment> ChainClient<Env> {
             // validators reject the proposal with `WorkerError::InvalidSigner` if we re-sign
             // it as someone else (which would happen if `preferred_owner` changed since the
             // block was staged). The signer is global to the client, so we can sign as the
-            // original author as long as we still hold their key. If we don't, the pending
-            // block is unfinishable and we drop it.
+            // original author as long as we still hold their key.
             let owner = match pending.block.authenticated_owner {
                 Some(staged_owner) if staged_owner != identity => {
                     if !self.has_key_for(&staged_owner).await? {
+                        // If a fast-round proposal was already submitted, we can't safely
+                        // drop it and propose a conflicting fast block: fast rounds skip
+                        // the validation step and rely on the super owner not forking
+                        // itself, so a second proposal could split votes between f+1 and
+                        // 2f and wedge the round until it times out. Surface an error so
+                        // the caller can recover the key or wait for the timeout.
+                        if pending.round.is_some_and(|round| round.is_fast()) {
+                            return Err(Error::BlockProposalError(
+                                "pending fast block was signed by an owner whose key is no \
+                                 longer available; recover the key or wait for the round to \
+                                 time out before retrying",
+                            ));
+                        }
                         warn!(
                             ?staged_owner, %identity,
                             "Discarding pending block: no signer key for its authenticated owner",
