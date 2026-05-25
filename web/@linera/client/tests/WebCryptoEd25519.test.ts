@@ -49,6 +49,32 @@ test("create() then load() returns a signer with the same address", async () => 
   expect(second!.address()).toBe(first.address());
 });
 
+test("loaded signer can still sign — IndexedDB CryptoKey roundtrip preserves usability", async () => {
+  const first = await linera.signer.WebCryptoEd25519.create(RECORD_KEY);
+  const owner = first.address();
+  const loaded = await linera.signer.WebCryptoEd25519.load(RECORD_KEY);
+  expect(loaded).not.toBeNull();
+
+  const message = new Uint8Array(32).fill(0x37);
+  const sigHex = await loaded!.sign(owner, message);
+  const pubHex = await loaded!.getPublicKey(owner);
+
+  const verifyKey = await crypto.subtle.importKey(
+    "raw",
+    hexToBytes(pubHex),
+    { name: "Ed25519" },
+    false,
+    ["verify"],
+  );
+  const ok = await crypto.subtle.verify(
+    "Ed25519",
+    verifyKey,
+    hexToBytes(sigHex),
+    message,
+  );
+  expect(ok).toBe(true);
+});
+
 test("loadOrCreate() is idempotent for the same recordKey", async () => {
   const first = await linera.signer.WebCryptoEd25519.loadOrCreate(RECORD_KEY);
   const second = await linera.signer.WebCryptoEd25519.loadOrCreate(RECORD_KEY);

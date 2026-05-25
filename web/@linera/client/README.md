@@ -31,10 +31,10 @@ exposed to untrusted code.
 ### `WebCryptoEd25519` (browser, production-ready for session keys)
 
 `WebCryptoEd25519` holds the private half of an Ed25519 keypair as a non-extractable
-`CryptoKey` from the Web Crypto API. The raw bytes never enter JavaScript: the key is
-generated with `extractable: false` and the `CryptoKey` handle is persisted in IndexedDB
-so it survives reloads. An in-page attacker can request signatures while the tab is open,
-but cannot exfiltrate the key.
+`CryptoKey` from the Web Crypto API. The raw **private** bytes never enter JavaScript:
+the key is generated with `extractable: false` and the `CryptoKey` handle is persisted
+in IndexedDB so it survives reloads. An in-page attacker can request signatures while
+the tab is open, but cannot exfiltrate the key.
 
 ```typescript
 import * as linera from "@linera/client";
