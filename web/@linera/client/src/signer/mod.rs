@@ -79,6 +79,12 @@ extern "C" {
 
     #[wasm_bindgen(catch, method, js_name = "containsKey")]
     async fn contains_key(this: &Signer, owner: AccountOwner) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(catch, method, js_name = "getPublicKey")]
+    async fn get_public_key(
+        this: &Signer,
+        owner: AccountOwner,
+    ) -> Result<js_sys::JsString, JsValue>;
 }
 
 impl linera_base::crypto::Signer for Signer {
