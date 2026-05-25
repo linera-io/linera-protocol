@@ -316,14 +316,26 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
         );
     }
 
-    // Receiver side: deliver one of those messages to a fresh chain and check that it
-    // records the (cursor, certificate_hash) entry in `finalized_sent_messages`.
+    // Receiver side: pre-populate `unfinalized_message_blocks` with three heights
+    // from origin_a (the block-end hook would normally do this), then deliver the
+    // checkpoint message and verify both halves of the receive logic:
+    //   - `finalized_sent_messages[origin_a]` records (cursor, cert_hash).
+    //   - `unfinalized_message_blocks[origin_a]` drops heights strictly below the
+    //     cursor's height and retains heights at-or-above (per-block granularity).
     let mut receiver = SystemExecutionState {
         description: Some(dummy_chain_description(3)),
         ..SystemExecutionState::default()
     }
     .into_view()
     .await;
+    receiver.system.unfinalized_message_blocks.insert(
+        &origin_a,
+        std::collections::BTreeSet::from([
+            BlockHeight::from(5),
+            BlockHeight::from(7),
+            BlockHeight::from(9),
+        ]),
+    )?;
     let sender_cert_hash = CryptoHash::test_hash("sender block");
     let context = MessageContext {
         chain_id: dummy_chain_description(3).id(),
@@ -354,6 +366,18 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
             .get(&origin_a)
             .await?,
         Some((cursor_a, sender_cert_hash))
+    );
+    // cursor_a.height == 7, so heights 5 are dropped, 7 and 9 are retained.
+    assert_eq!(
+        receiver
+            .system
+            .unfinalized_message_blocks
+            .get(&origin_a)
+            .await?,
+        Some(std::collections::BTreeSet::from([
+            BlockHeight::from(7),
+            BlockHeight::from(9),
+        ]))
     );
 
     Ok(())

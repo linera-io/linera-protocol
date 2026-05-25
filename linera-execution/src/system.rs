@@ -6,7 +6,10 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use custom_debug_derive::Debug;
@@ -111,6 +114,14 @@ pub struct SystemExecutionStateView<C> {
     /// message we sent that the recipient finalized, together with the hash of the
     /// recipient's block carrying the notification.
     pub finalized_sent_messages: MapView<C, ChainId, (Cursor, CryptoHash)>,
+    /// For each recipient chain, the heights of our blocks that sent messages to that
+    /// recipient and have not yet been acknowledged via [`SystemMessage::Checkpoint`].
+    /// Maintained on-chain (as opposed to the local off-chain outbox in chain state)
+    /// so it is identical across validators and can feed the checkpoint oracle
+    /// response's `outbox_block_hashes`. We store heights only; the matching block
+    /// hashes are looked up from `block_hashes` at checkpoint-creation time, since the
+    /// current block's hash is unknown while we're still executing it.
+    pub unfinalized_message_blocks: MapView<C, ChainId, BTreeSet<BlockHeight>>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -136,6 +147,10 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             event_subscriptions: self.event_subscriptions.with_context(ctx.clone()).await,
             stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
             finalized_sent_messages: self.finalized_sent_messages.with_context(ctx.clone()).await,
+            unfinalized_message_blocks: self
+                .unfinalized_message_blocks
+                .with_context(ctx.clone())
+                .await,
         }
     }
 }
@@ -871,6 +886,20 @@ where
                     &context.origin,
                     (latest_received_cursor, context.origin_certificate_hash),
                 )?;
+                // Drop heights the recipient has consumed. Per-block granularity: a
+                // height equal to `cursor.height` is retained because the recipient may
+                // still be mid-block at that height.
+                if let Some(mut heights) =
+                    self.unfinalized_message_blocks.get(&context.origin).await?
+                {
+                    let retained = heights.split_off(&latest_received_cursor.height);
+                    if retained.is_empty() {
+                        self.unfinalized_message_blocks.remove(&context.origin)?;
+                    } else {
+                        self.unfinalized_message_blocks
+                            .insert(&context.origin, retained)?;
+                    }
+                }
             }
         }
         Ok(outcome)

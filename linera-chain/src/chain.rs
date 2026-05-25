@@ -697,6 +697,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
         checkpoint_origin_cursors: Vec<(ChainId, Cursor)>,
+        checkpoint_outbox_block_hashes: Vec<CryptoHash>,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
@@ -740,7 +741,7 @@ where
             Some(PreparedCheckpoint {
                 blobs,
                 origin_cursors: checkpoint_origin_cursors,
-                outbox_block_hashes: Vec::new(),
+                outbox_block_hashes: checkpoint_outbox_block_hashes,
             })
         } else {
             None
@@ -967,6 +968,21 @@ where
             chain
                 .previous_message_blocks
                 .insert(&recipient, block.height)?;
+            // Track this block's height as pending acknowledgement from the recipient.
+            // The matching hash isn't known yet (we're mid-execution), so we only
+            // store the height; the checkpoint pre-block hook resolves heights to
+            // hashes via `block_hashes` when it builds the oracle response.
+            let mut heights = chain
+                .system
+                .unfinalized_message_blocks
+                .get(&recipient)
+                .await?
+                .unwrap_or_default();
+            heights.insert(block.height);
+            chain
+                .system
+                .unfinalized_message_blocks
+                .insert(&recipient, heights)?;
             if let Some(height) = height {
                 recipient_heights.push((recipient, height));
             }
@@ -1134,11 +1150,13 @@ where
                 "Checkpoint must be the first transaction in its block",
             )
         );
-        let origin_cursors = if block.starts_with_checkpoint() {
+        let (origin_cursors, outbox_block_hashes) = if block.starts_with_checkpoint() {
             self.check_checkpoint_preconditions().await?;
-            self.collect_inbox_cursors().await?
+            let cursors = self.collect_inbox_cursors().await?;
+            let hashes = self.collect_unfinalized_block_hashes().await?;
+            (cursors, hashes)
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
 
         Self::execute_block_inner(
@@ -1151,6 +1169,7 @@ where
             replaying_oracle_responses,
             policy,
             origin_cursors,
+            outbox_block_hashes,
         )
         .await
         .map(|(outcome, tracker, never_reject_origins)| {
@@ -1171,6 +1190,42 @@ where
             cursors.push((origin, *inbox.next_cursor_to_remove.get()));
         }
         Ok(cursors)
+    }
+
+    /// Collects the hashes of every block on this chain still listed in the on-chain
+    /// `unfinalized_message_blocks` map. The checkpoint pre-block hook calls this to
+    /// build the oracle response's `outbox_block_hashes`, so the checkpoint
+    /// certificate transitively re-certifies those older (possibly revoked-epoch)
+    /// blocks.
+    async fn collect_unfinalized_block_hashes(&self) -> Result<Vec<CryptoHash>, ChainError> {
+        let mut heights = BTreeSet::new();
+        let recipients = self
+            .execution_state
+            .system
+            .unfinalized_message_blocks
+            .indices()
+            .await?;
+        for recipient in recipients {
+            if let Some(per_recipient) = self
+                .execution_state
+                .system
+                .unfinalized_message_blocks
+                .get(&recipient)
+                .await?
+            {
+                heights.extend(per_recipient);
+            }
+        }
+        let mut hashes = Vec::with_capacity(heights.len());
+        for height in heights {
+            let hash = self.block_hashes.get(&height).await?.ok_or_else(|| {
+                ChainError::CorruptedChainState(format!(
+                    "missing entry in block_hashes at height {height}"
+                ))
+            })?;
+            hashes.push(hash);
+        }
+        Ok(hashes)
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
