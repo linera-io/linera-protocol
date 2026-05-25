@@ -90,6 +90,7 @@ pub fn start_metrics_with_extras(
     memory_profiling: MemoryProfiling,
     extra_routes: Option<Router>,
 ) {
+    crate::runtime_metrics::register();
     let mut app = metrics_router(memory_profiling);
 
     if let Some(extra) = extra_routes {
