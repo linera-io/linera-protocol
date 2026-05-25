@@ -1339,4 +1339,25 @@ mod tests {
         let stream_id2 = StreamId::from_str(&format!("{stream_id1}")).unwrap();
         assert_eq!(stream_id1, stream_id2);
     }
+
+    #[test]
+    fn ed25519_public_key_to_account_owner_known_vector() {
+        use crate::crypto::Ed25519PublicKey;
+        // Fixed 32-byte public key (0x01..0x20). Pinning this guarantees the
+        // owner-derivation hash (Keccak256(BCS(Ed25519PublicKey))) does not drift.
+        let pubkey_bytes: [u8; 32] = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+            0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c,
+            0x1d, 0x1e, 0x1f, 0x20,
+        ];
+        let pubkey = Ed25519PublicKey(pubkey_bytes);
+        let owner = AccountOwner::from(pubkey);
+        // The expected hex is the pinned output of `Keccak256(BCS(Ed25519PublicKey))`.
+        // Do not update it without understanding why the derivation changed — the JS
+        // test in `@linera/client` cross-checks this exact value.
+        assert_eq!(
+            owner_str, "0xeacee5344cbec9569e836f95029d476c700f4f5bc007c71c0752c73fba149043",
+            "Ed25519 owner derivation drifted; verify intentional before updating"
+        );
+    }
 }
