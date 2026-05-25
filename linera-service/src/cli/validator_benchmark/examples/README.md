@@ -4,6 +4,15 @@ These files are a real run of `linera validator benchmark` against a testnet
 validator, captured in each output format. They illustrate what the tool
 produces; the numbers are a point-in-time sample, not a target.
 
+## Prerequisite
+
+The read layers (L2 baseline, L3 stress, L4 bulk) are only meaningful if the
+candidate already holds the `--chain` you pass. A not-yet-committee candidate may
+hold no blocks, in which case those layers only exercise the bare request path.
+Either let the candidate sync the chains first (`linera validator sync`, or boot
+it and let it follow the network) or pass `--deep`, which seeds a bounded run of
+blocks **before** the read layers. The tool warns when a chain is not held.
+
 ## Command
 
 ```bash

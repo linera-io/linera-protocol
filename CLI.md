@@ -1424,6 +1424,8 @@ Multi-layer pre-onboarding benchmark for a single candidate validator.
 
 Probes the candidate across read-side primitives (preflight, baseline, concurrency ramp, bulk download, tip lag) and emits a structured report. The optional `--deep` layer additionally exercises the write path by syncing a bounded number of blocks; it has a stateful side effect on the candidate and is therefore off by default.
 
+PREREQUISITE: the read layers are only meaningful if the candidate already holds the `--chain` you pass. A not-yet-committee candidate may hold no blocks; in that case pre-sync it (`linera validator sync`) or pass `--deep`, which seeds the blocks first (and is run before the read layers). The tool warns when a chain is not held.
+
 **Usage:** `linera validator benchmark [OPTIONS] --chain <CHAIN> <ADDRESS>`
 
 ###### **Arguments:**
@@ -1439,7 +1441,7 @@ Probes the candidate across read-side primitives (preflight, baseline, concurren
 * `--skip-read-stress` — Skip L3 read stress (concurrency ramp)
 * `--skip-bulk-download` — Skip L4 bulk certificate download
 * `--skip-tip-lag` — Skip L5 tip-lag snapshot
-* `--deep` — Enable partial-sync layer (L6). Stateful side effect on the candidate
+* `--deep` — Seed the candidate by syncing a bounded run of blocks (partial-sync layer), run before the read layers so they exercise real data. Stateful side effect on the candidate; off by default
 * `--baseline-requests <BASELINE_REQUESTS>` — Number of sequential chain-info queries per chain in L2
 
   Default value: `200`
