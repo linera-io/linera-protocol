@@ -9,7 +9,10 @@ use linera_base::vm::VmRuntime;
 use linera_views::context::MemoryContext;
 
 use super::*;
-use crate::{test_utils::dummy_chain_description, ExecutionStateView, TestExecutionRuntimeContext};
+use crate::{
+    test_utils::dummy_chain_description, ExecutionStateView, Message, MessageContext,
+    PreparedCheckpoint, TestExecutionRuntimeContext,
+};
 
 /// Returns an execution state view and a matching operation context, for epoch 1, with root
 /// chain 0 as the admin ID and one empty committee.
@@ -222,7 +225,15 @@ async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow
         .flat_map(|blob| blob.bytes().iter().copied())
         .collect::<Vec<u8>>();
     let mut txn_tracker = TransactionTracker::default();
-    producer.apply_checkpoint(blobs, &mut txn_tracker).await?;
+    producer
+        .apply_checkpoint(
+            PreparedCheckpoint {
+                blobs,
+                origin_cursors: Vec::new(),
+            },
+            &mut txn_tracker,
+        )
+        .await?;
     let mut batch = Batch::new();
     producer.pre_save(&mut batch)?;
     producer.context().store().write_batch(batch).await?;
@@ -245,6 +256,102 @@ async fn checkpoint_roundtrip_via_separate_view_yields_matching_hash() -> anyhow
     drop(bootstrap);
     let mut reloaded = ExecutionStateView::load(bootstrap_context).await?;
     assert_eq!(reloaded.crypto_hash_mut().await?, producer_hash);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyhow::Result<()> {
+    use linera_base::{crypto::CryptoHash, data_types::Cursor};
+
+    let origin_a = dummy_chain_description(1).id();
+    let origin_b = dummy_chain_description(2).id();
+    let cursor_a = Cursor {
+        height: BlockHeight::from(7),
+        index: 3,
+    };
+    let cursor_b = Cursor {
+        height: BlockHeight::from(11),
+        index: 0,
+    };
+
+    // Producer side: apply a checkpoint with non-empty origin_cursors and check that
+    // it queues one `SystemMessage::Checkpoint` per origin.
+    use linera_views::{batch::Batch, store::WritableKeyValueStore as _, views::View as _};
+    let mut view = SystemExecutionState {
+        description: Some(dummy_chain_description(0)),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+    let mut batch = Batch::new();
+    view.pre_save(&mut batch)?;
+    view.context().store().write_batch(batch).await?;
+    view.post_save();
+    let blobs = view.prepare_checkpoint(u64::MAX).await?;
+    let mut txn_tracker = TransactionTracker::default();
+    view.apply_checkpoint(
+        PreparedCheckpoint {
+            blobs,
+            origin_cursors: vec![(origin_a, cursor_a), (origin_b, cursor_b)],
+        },
+        &mut txn_tracker,
+    )
+    .await?;
+    let outcome = txn_tracker.into_outcome()?;
+    assert_eq!(outcome.outgoing_messages.len(), 2);
+    for (msg, expected_destination, expected_cursor) in [
+        (&outcome.outgoing_messages[0], origin_a, cursor_a),
+        (&outcome.outgoing_messages[1], origin_b, cursor_b),
+    ] {
+        assert_eq!(msg.destination, expected_destination);
+        assert_eq!(
+            msg.message,
+            Message::System(SystemMessage::Checkpoint {
+                latest_received_cursor: expected_cursor,
+            })
+        );
+    }
+
+    // Receiver side: deliver one of those messages to a fresh chain and check that it
+    // records the (cursor, certificate_hash) entry in `finalized_sent_messages`.
+    let mut receiver = SystemExecutionState {
+        description: Some(dummy_chain_description(3)),
+        ..SystemExecutionState::default()
+    }
+    .into_view()
+    .await;
+    let sender_cert_hash = CryptoHash::test_hash("sender block");
+    let context = MessageContext {
+        chain_id: dummy_chain_description(3).id(),
+        origin: origin_a,
+        origin_certificate_hash: sender_cert_hash,
+        origin_timestamp: Default::default(),
+        is_bouncing: false,
+        authenticated_owner: None,
+        refund_grant_to: None,
+        height: BlockHeight::from(0),
+        round: Some(0),
+        timestamp: Default::default(),
+    };
+    let produced = receiver
+        .system
+        .execute_message(
+            context,
+            SystemMessage::Checkpoint {
+                latest_received_cursor: cursor_a,
+            },
+        )
+        .await?;
+    assert!(produced.is_empty());
+    assert_eq!(
+        receiver
+            .system
+            .finalized_sent_messages
+            .get(&origin_a)
+            .await?,
+        Some((cursor_a, sender_cert_hash))
+    );
 
     Ok(())
 }

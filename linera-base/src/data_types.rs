@@ -634,6 +634,43 @@ impl FromStr for BlockHeight {
     }
 }
 
+/// A logical position in a chain's stream of outgoing messages: the height of the block
+/// that produced the message and the index of the message-producing transaction within
+/// that block.
+#[derive(
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    Hash,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    SimpleObject,
+    Allocative,
+)]
+pub struct Cursor {
+    /// The height of the producing block.
+    pub height: BlockHeight,
+    /// The transaction index within the block.
+    pub index: u32,
+}
+
+impl Cursor {
+    /// Returns the cursor pointing to the next position within the same block, or
+    /// [`ArithmeticError::Overflow`] if `index` is already at the maximum.
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let value = Self {
+            height: self.height,
+            index: self.index.checked_add(1).ok_or(ArithmeticError::Overflow)?,
+        };
+        Ok(value)
+    }
+}
+
 impl Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

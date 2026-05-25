@@ -37,10 +37,13 @@ use {
 
 use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequest};
 use crate::{
-    execution_state_actor::ExecutionStateActor, resources::ResourceController,
-    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeContext, JsVec, MessageContext, OperationContext, ProcessStreamsContext, Query,
-    QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp, TransactionTracker,
+    execution_state_actor::ExecutionStateActor,
+    resources::ResourceController,
+    system::{SystemExecutionStateView, SystemMessage},
+    transaction_tracker::PreparedCheckpoint,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext, JsVec, Message,
+    MessageContext, OperationContext, OutgoingMessage, ProcessStreamsContext, Query, QueryContext,
+    QueryOutcome, ServiceSyncRuntime, Timestamp, TransactionTracker,
 };
 
 /// An inner view accessing the execution state of a chain, for hashing purposes.
@@ -161,16 +164,22 @@ where
             .collect())
     }
 
-    /// Registers the checkpoint blobs (produced by [`Self::prepare_checkpoint`]) with the
-    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`]. The
-    /// oracle response also lists every blob the chain currently references in its
-    /// `used_blobs` set: a bootstrapping node restores those references from the dump but
-    /// must independently ensure each blob's content is present in shared storage.
+    /// Registers the pre-block-computed checkpoint inputs (from
+    /// [`Self::prepare_checkpoint`]) with the transaction tracker. This: publishes the
+    /// execution-state blobs, records the matching [`OracleResponse::Checkpoint`] (which
+    /// also lists every blob the chain currently references in `used_blobs` so a
+    /// bootstrapping node can fetch them from shared storage), and emits a
+    /// [`SystemMessage::Checkpoint`] to each origin chain so the origin can later trim
+    /// its outbox dump of already-delivered messages.
     pub async fn apply_checkpoint(
         &self,
-        blobs: Vec<Blob>,
+        prepared: PreparedCheckpoint,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
+        let PreparedCheckpoint {
+            blobs,
+            origin_cursors,
+        } = prepared;
         let execution_state_blobs = blobs.iter().map(|blob| blob.id().hash).collect();
         let used_blobs = self.system.used_blobs.indices().await?;
         for blob in blobs {
@@ -180,14 +189,23 @@ where
             execution_state_blobs,
             used_blobs,
         })?;
+        for (origin, latest_received_cursor) in origin_cursors {
+            txn_tracker.add_outgoing_message(OutgoingMessage::new(
+                origin,
+                Message::System(SystemMessage::Checkpoint {
+                    latest_received_cursor,
+                }),
+            ));
+        }
         Ok(())
     }
 
     /// Convenience helper that combines [`Self::prepare_checkpoint`] and
-    /// [`Self::apply_checkpoint`] in a single call. Production block-execution code
-    /// invokes the two halves separately so the dump runs before any block-level state
-    /// mutation; this helper is only used by unit tests that exercise the operation in
-    /// isolation.
+    /// [`Self::apply_checkpoint`] in a single call, with an empty origin-cursor list.
+    /// Production block-execution code invokes the two halves separately so the dump
+    /// runs before any block-level state mutation, and so the inbox snapshot is taken at
+    /// the same point; this helper is only used by unit tests that exercise the
+    /// operation in isolation.
     #[cfg(test)]
     pub async fn execute_checkpoint(
         &mut self,
@@ -195,7 +213,14 @@ where
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
         let blobs = self.prepare_checkpoint(maximum_blob_size).await?;
-        self.apply_checkpoint(blobs, txn_tracker).await
+        self.apply_checkpoint(
+            PreparedCheckpoint {
+                blobs,
+                origin_cursors: Vec::new(),
+            },
+            txn_tracker,
+        )
+        .await
     }
 
     /// Replaces the persisted execution state with the content of a checkpoint blob,

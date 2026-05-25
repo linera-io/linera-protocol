@@ -500,6 +500,11 @@ CryptoHash:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Cursor:
+  STRUCT:
+    - height:
+        TYPENAME: BlockHeight
+    - index: U32
 Ed25519PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -1235,6 +1240,11 @@ SystemMessage:
               TYPENAME: Amount
           - recipient:
               TYPENAME: Account
+    2:
+      Checkpoint:
+        STRUCT:
+          - latest_received_cursor:
+              TYPENAME: Cursor
 SystemOperation:
   ENUM:
     0:

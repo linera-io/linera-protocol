@@ -14,7 +14,8 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
+        ChainDescription, ChainOrigin, Cursor, Epoch, InitialChainConfig, OracleResponse,
+        Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -105,6 +106,11 @@ pub struct SystemExecutionStateView<C> {
     pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
+    /// For each chain that previously received messages from this one and has since
+    /// notified us via [`SystemMessage::Checkpoint`], records the cursor past the last
+    /// message we sent that the recipient finalized, together with the hash of the
+    /// recipient's block carrying the notification.
+    pub finalized_sent_messages: MapView<C, ChainId, (Cursor, CryptoHash)>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -129,6 +135,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             used_blobs: self.used_blobs.with_context(ctx.clone()).await,
             event_subscriptions: self.event_subscriptions.with_context(ctx.clone()).await,
             stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
+            finalized_sent_messages: self.finalized_sent_messages.with_context(ctx.clone()).await,
         }
     }
 }
@@ -303,6 +310,12 @@ pub enum SystemMessage {
         amount: Amount,
         recipient: Account,
     },
+    /// Sent by a chain that just executed `SystemOperation::Checkpoint` to each chain it
+    /// previously received messages from. `latest_received_cursor` is the position past
+    /// the last bundle from the recipient that the sender has consumed. The recipient
+    /// records this in `finalized_sent_messages` so that, when it later checkpoints its
+    /// own state, it can drop already-delivered outgoing messages from its outbox dump.
+    Checkpoint { latest_received_cursor: Cursor },
 }
 
 /// A query to the system state.
@@ -850,6 +863,14 @@ where
                 {
                     outcome.push(message);
                 }
+            }
+            Checkpoint {
+                latest_received_cursor,
+            } => {
+                self.finalized_sent_messages.insert(
+                    &context.origin,
+                    (latest_received_cursor, context.origin_certificate_hash),
+                )?;
             }
         }
         Ok(outcome)

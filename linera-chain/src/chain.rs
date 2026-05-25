@@ -10,8 +10,8 @@ use allocative::Allocative;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
-        OracleResponse, Timestamp,
+        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Cursor,
+        Epoch, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
@@ -20,8 +20,8 @@ use linera_base::{
 };
 use linera_execution::{
     committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
-    Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    Message, Operation, OutgoingMessage, PreparedCheckpoint, Query, QueryContext, QueryOutcome,
+    ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -41,7 +41,7 @@ use crate::{
         BlockExecutionOutcome, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight,
         IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
-    inbox::{Cursor, InboxError, InboxStateView},
+    inbox::{InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
@@ -696,6 +696,7 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
+        checkpoint_origin_cursors: Vec<(ChainId, Cursor)>,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
@@ -727,14 +728,19 @@ where
         // execution state from storage *now*, before any block-level mutation taints the
         // inner view's pending-changes set. The matching operation handler will publish
         // the resulting blobs without re-dumping; subsequent fees and other state changes
-        // accumulate normally and end up persisted with the override hash on save.
-        let prepared_checkpoint_blobs = if block.starts_with_checkpoint() {
-            Some(
-                chain
-                    .prepare_checkpoint(committee_policy.maximum_blob_size)
-                    .await
-                    .with_execution_context(ChainExecutionContext::Block)?,
-            )
+        // accumulate normally and end up persisted with the override hash on save. The
+        // inbox snapshot was already taken by the outer `execute_block` and passed in as
+        // `checkpoint_origin_cursors`; we bundle the two halves into a
+        // [`PreparedCheckpoint`] for the handler.
+        let prepared_checkpoint = if block.starts_with_checkpoint() {
+            let blobs = chain
+                .prepare_checkpoint(committee_policy.maximum_blob_size)
+                .await
+                .with_execution_context(ChainExecutionContext::Block)?;
+            Some(PreparedCheckpoint {
+                blobs,
+                origin_cursors: checkpoint_origin_cursors,
+            })
         } else {
             None
         };
@@ -766,8 +772,8 @@ where
             replaying_oracle_responses,
             block,
         )?;
-        if let Some(blobs) = prepared_checkpoint_blobs {
-            block_execution_tracker.set_prepared_checkpoint_blobs(blobs);
+        if let Some(prepared) = prepared_checkpoint {
+            block_execution_tracker.set_prepared_checkpoint(prepared);
         }
 
         // Extract failure-policy parameters from exec_policy.
@@ -1127,9 +1133,12 @@ where
                 "Checkpoint must be the first transaction in its block",
             )
         );
-        if block.starts_with_checkpoint() {
+        let origin_cursors = if block.starts_with_checkpoint() {
             self.check_checkpoint_preconditions().await?;
-        }
+            self.collect_inbox_cursors().await?
+        } else {
+            Vec::new()
+        };
 
         Self::execute_block_inner(
             &mut self.execution_state,
@@ -1140,11 +1149,27 @@ where
             published_blobs,
             replaying_oracle_responses,
             policy,
+            origin_cursors,
         )
         .await
         .map(|(outcome, tracker, never_reject_origins)| {
             (block, outcome, tracker, never_reject_origins)
         })
+    }
+
+    /// Snapshots `(origin, next_cursor_to_remove)` for each inbox we've ever received
+    /// from. Used by the checkpoint pre-block hook so the matching operation handler
+    /// can emit a [`SystemMessage::Checkpoint`] to each origin chain.
+    async fn collect_inbox_cursors(&self) -> Result<Vec<(ChainId, Cursor)>, ChainError> {
+        let origins = self.inboxes.indices().await?;
+        let mut cursors = Vec::with_capacity(origins.len());
+        for origin in origins {
+            let Some(inbox) = self.inboxes.try_load_entry(&origin).await? else {
+                continue;
+            };
+            cursors.push((origin, *inbox.next_cursor_to_remove.get()));
+        }
+        Ok(cursors)
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use allocative::Allocative;
-use async_graphql::SimpleObject;
 use linera_base::{
-    data_types::{ArithmeticError, BlockHeight},
+    data_types::{ArithmeticError, BlockHeight, Cursor},
     ensure,
     identifiers::ChainId,
 };
@@ -17,7 +16,6 @@ use linera_views::{
     views::{ClonableView, View},
     ViewError,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{data_types::MessageBundle, ChainError};
@@ -82,26 +80,6 @@ where
     pub removed_bundles: QueueView<C, MessageBundle>,
 }
 
-#[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    Hash,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    SimpleObject,
-    Allocative,
-)]
-pub struct Cursor {
-    height: BlockHeight,
-    index: u32,
-}
-
 #[derive(Error, Debug)]
 pub(crate) enum InboxError {
     #[error(transparent)]
@@ -123,26 +101,6 @@ pub(crate) enum InboxError {
         messages from the same origin"
     )]
     UnskippableBundle { bundle: MessageBundle },
-}
-
-impl From<&MessageBundle> for Cursor {
-    #[inline]
-    fn from(bundle: &MessageBundle) -> Self {
-        Self {
-            height: bundle.height,
-            index: bundle.transaction_index,
-        }
-    }
-}
-
-impl Cursor {
-    fn try_add_one(self) -> Result<Self, ArithmeticError> {
-        let value = Self {
-            height: self.height,
-            index: self.index.checked_add(1).ok_or(ArithmeticError::Overflow)?,
-        };
-        Ok(value)
-    }
 }
 
 impl From<(ChainId, ChainId, InboxError)> for ChainError {
@@ -210,7 +168,7 @@ where
         bundle: &MessageBundle,
     ) -> Result<bool, InboxError> {
         // Record the latest cursor.
-        let cursor = Cursor::from(bundle);
+        let cursor = bundle.cursor();
         ensure!(
             cursor >= *self.next_cursor_to_remove.get(),
             InboxError::IncorrectOrder {
@@ -220,7 +178,7 @@ where
         );
         // Discard added bundles with lower cursors (if any).
         while let Some(previous_bundle) = self.added_bundles.front().await? {
-            if Cursor::from(&previous_bundle) >= cursor {
+            if previous_bundle.cursor() >= cursor {
                 break;
             }
             ensure!(
@@ -237,7 +195,7 @@ where
             Some(previous_bundle) => {
                 // Rationale: If the two cursors are equal, then the bundles should match.
                 // Otherwise, at this point we know that `self.next_cursor_to_add >
-                // Cursor::from(&previous_bundle) > cursor`. Notably, `bundle` will never be
+                // previous_bundle.cursor() > cursor`. Notably, `bundle` will never be
                 // added in the future. Therefore, we should fail instead of adding
                 // it to `self.removed_bundles`.
                 ensure!(
@@ -271,7 +229,7 @@ where
     /// Returns `true` if the bundle was new, `false` if it was already in `removed_bundles`.
     pub(crate) async fn add_bundle(&mut self, bundle: MessageBundle) -> Result<bool, InboxError> {
         // Record the latest cursor.
-        let cursor = Cursor::from(&bundle);
+        let cursor = bundle.cursor();
         ensure!(
             cursor >= *self.next_cursor_to_add.get(),
             InboxError::IncorrectOrder {
@@ -282,7 +240,7 @@ where
         // Find if the bundle was removed ahead of time.
         let newly_added = match self.removed_bundles.front().await? {
             Some(previous_bundle) => {
-                if Cursor::from(&previous_bundle) == cursor {
+                if previous_bundle.cursor() == cursor {
                     // We already executed this bundle by anticipation. Remove it from
                     // the queue.
                     ensure!(
@@ -301,7 +259,7 @@ where
                     // The receiver has already executed a later bundle from the same
                     // sender ahead of time so we should skip this one.
                     ensure!(
-                        cursor < Cursor::from(&previous_bundle) && bundle.is_skippable(),
+                        cursor < previous_bundle.cursor() && bundle.is_skippable(),
                         InboxError::UnexpectedBundle {
                             previous_bundle,
                             bundle,

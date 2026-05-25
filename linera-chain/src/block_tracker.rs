@@ -13,8 +13,9 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
-    ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, PreparedCheckpoint,
+    ResourceController, ResourceTracker, SystemExecutionStateView, TransactionOutcome,
+    TransactionTracker,
 };
 use linera_views::context::Context;
 use tracing::instrument;
@@ -59,11 +60,11 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
 
-    // Checkpoint blobs computed pre-block, to be handed to the matching
-    // `SystemOperation::Checkpoint` operation handler when it runs. A single dump may
-    // span multiple blobs to respect `maximum_blob_size` from the current epoch's policy.
+    // Checkpoint inputs computed pre-block (state dump split into blobs and the per-origin
+    // inbox cursors), to be handed to the matching `SystemOperation::Checkpoint`
+    // operation handler when it runs.
     #[debug(skip_if = Option::is_none)]
-    prepared_checkpoint_blobs: Option<Vec<Blob>>,
+    prepared_checkpoint: Option<PreparedCheckpoint>,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -99,14 +100,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
-            prepared_checkpoint_blobs: None,
+            prepared_checkpoint: None,
         })
     }
 
-    /// Stashes pre-computed checkpoint blobs to be handed to the matching
+    /// Stashes pre-computed checkpoint inputs to be handed to the matching
     /// `SystemOperation::Checkpoint` handler when its transaction runs.
-    pub fn set_prepared_checkpoint_blobs(&mut self, blobs: Vec<Blob>) {
-        self.prepared_checkpoint_blobs = Some(blobs);
+    pub fn set_prepared_checkpoint(&mut self, prepared: PreparedCheckpoint) {
+        self.prepared_checkpoint = Some(prepared);
     }
 
     /// Executes a transaction in the context of the block.
@@ -192,8 +193,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             &self.blobs,
         );
         // Cloning each blob is cheap — its bytes are behind an `Arc`.
-        if let Some(blobs) = self.prepared_checkpoint_blobs.as_ref() {
-            tracker.set_prepared_checkpoint_blobs(blobs.clone());
+        if let Some(prepared) = self.prepared_checkpoint.as_ref() {
+            tracker.set_prepared_checkpoint(PreparedCheckpoint {
+                blobs: prepared.blobs.clone(),
+                origin_cursors: prepared.origin_cursors.clone(),
+            });
         }
         Ok(tracker)
     }
@@ -223,6 +227,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
+            origin_certificate_hash: incoming_bundle.bundle.certificate_hash,
             origin_timestamp: incoming_bundle.bundle.timestamp,
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
