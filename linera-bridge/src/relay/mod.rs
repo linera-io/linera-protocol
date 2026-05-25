@@ -17,6 +17,7 @@ mod committee;
 pub mod evm;
 pub mod linera;
 pub(crate) mod metrics;
+pub(crate) mod settlement;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
@@ -67,7 +68,7 @@ pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
             let wei: u128 = balance.to();
             metrics::set_relayer_evm_balance(wei as f64);
         }
-        Err(e) => tracing::warn!("Failed to query EVM relayer balance: {e:#}"),
+        Err(error) => tracing::warn!(?error, "Failed to query EVM relayer balance"),
     }
 }
 
@@ -76,7 +77,7 @@ pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::En
 ) {
     match linera_client.chain_balance().await {
         Ok(balance) => metrics::set_relayer_linera_balance(u128::from(balance) as f64),
-        Err(e) => tracing::warn!("Failed to query Linera chain balance: {e:#}"),
+        Err(error) => tracing::warn!(?error, "Failed to query Linera chain balance"),
     }
 }
 

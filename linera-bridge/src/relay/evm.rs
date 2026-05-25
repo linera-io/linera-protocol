@@ -19,6 +19,7 @@ sol! {
     #[sol(rpc)]
     interface IFungibleBridge {
         function addBlock(bytes calldata data) external;
+        function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external;
         function lightClient() external view returns (address);
         function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool);
     }
@@ -134,6 +135,72 @@ impl<P: Provider> EvmClient<P> {
             tx = ?receipt.transaction_hash,
             "addBlock transaction confirmed"
         );
+        Ok(())
+    }
+
+    /// Dry-runs `addBlock(cert)` against the EVM to estimate the gas it
+    /// would consume. `Ok(g)` means the call would fit under the node's
+    /// current block gas limit (the value is the estimate); a gas-exceeded
+    /// RPC error indicates the call would not fit. Other RPC errors bubble
+    /// up. Classification is done by `relay::settlement::estimate_fits`.
+    pub async fn estimate_add_block_gas(
+        &self,
+        cert: &linera_chain::types::ConfirmedBlockCertificate,
+    ) -> alloy::contract::Result<u64> {
+        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+        tracing::trace!(size = cert_bytes.len(), "Estimating gas for addBlock");
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        bridge.addBlock(cert_bytes.into()).estimate_gas().await
+    }
+
+    /// Same as `estimate_add_block_gas` but for
+    /// `processBurns(cert, tx_index, positions_in_tx)`.
+    pub async fn estimate_process_burns_gas(
+        &self,
+        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        tx_index: u32,
+        positions_in_tx: &[u32],
+    ) -> alloy::contract::Result<u64> {
+        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+        tracing::trace!(
+            tx_index,
+            count = positions_in_tx.len(),
+            size = cert_bytes.len(),
+            "Estimating gas for processBurns"
+        );
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        bridge
+            .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
+            .estimate_gas()
+            .await
+    }
+
+    /// Submits `processBurns(cert, tx_index, positions_in_tx)` and waits
+    /// for the receipt. Used after `split_to_fit` returns a chunk.
+    pub async fn process_burns(
+        &self,
+        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        tx_index: u32,
+        positions_in_tx: &[u32],
+    ) -> Result<()> {
+        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        tracing::info!(
+            tx_index,
+            count = positions_in_tx.len(),
+            size = cert_bytes.len(),
+            "Calling processBurns on FungibleBridge..."
+        );
+        let pending_tx = bridge
+            .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
+            .send()
+            .await
+            .context("processBurns send failed")?;
+        let receipt = pending_tx
+            .get_receipt()
+            .await
+            .context("processBurns receipt failed")?;
+        tracing::info!(tx = ?receipt.transaction_hash, "processBurns transaction confirmed");
         Ok(())
     }
 

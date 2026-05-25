@@ -199,7 +199,13 @@ pub async fn deploy_linera_token(
         compose_file,
     )
     .await;
-    parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
+    parse_broadcast_address(
+        compose,
+        project_name,
+        compose_file,
+        "DeployLineraToken.s.sol",
+    )
+    .await
 }
 
 /// Same as [`deploy_linera_token`] but overrides the initial token supply
@@ -227,7 +233,13 @@ pub async fn deploy_linera_token_with_supply(
         compose_file,
     )
     .await;
-    parse_broadcast_address(compose, project_name, compose_file, "DeployLineraToken.s.sol").await
+    parse_broadcast_address(
+        compose,
+        project_name,
+        compose_file,
+        "DeployLineraToken.s.sol",
+    )
+    .await
 }
 
 /// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge
@@ -259,8 +271,13 @@ pub async fn deploy_fungible_bridge(
         compose_file,
     )
     .await;
-    parse_broadcast_address(compose, project_name, compose_file, "DeployFungibleBridge.s.sol")
-        .await
+    parse_broadcast_address(
+        compose,
+        project_name,
+        compose_file,
+        "DeployFungibleBridge.s.sol",
+    )
+    .await
 }
 
 /// Queries the evm-bridge app to check whether a deposit has been processed.
