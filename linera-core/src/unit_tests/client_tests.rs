@@ -4257,11 +4257,11 @@ where
     Ok(())
 }
 
-/// Verifies that a chain that has sent cross-chain messages can checkpoint, and that
-/// the checkpoint's oracle response certifies the hashes of those sender blocks via
-/// `outbox_block_hashes`. The bootstrap side of this scenario is exercised in a later
-/// commit, once a follower has a way to reconstruct `block_hashes` for the sender
-/// blocks it skipped.
+/// Verifies that a chain that has sent cross-chain messages can checkpoint, that the
+/// checkpoint's oracle response certifies the hashes of those sender blocks via
+/// `outbox_block_hashes`, and that a fresh follower can bootstrap from the checkpoint
+/// — re-populating `block_hashes` for the skipped sender blocks from the certified
+/// oracle response so the re-execution of the checkpoint verifies cleanly.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[test_log::test(tokio::test)]
@@ -4273,6 +4273,7 @@ where
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
     let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = producer.chain_id();
 
     // Height 0: a cross-chain transfer, so the chain has an unfinalized
     // outgoing-message block at the time of the checkpoint.
@@ -4303,6 +4304,30 @@ where
         vec![transfer_cert.hash()],
         "Checkpoint must certify the height-0 transfer's block hash",
     );
+
+    let producer_state_hash = producer
+        .chain_info()
+        .await?
+        .state_hash
+        .expect("producer should expose a state hash after the checkpoint");
+
+    // Bootstrap a fresh follower from the checkpoint. The follower has no record of
+    // the height-0 transfer; the gap-bridge path must restore the execution state
+    // *and* re-populate `block_hashes` from the oracle response's
+    // `outbox_block_hashes` so the subsequent re-execution converges.
+    let follower = builder
+        .make_client_with_options(
+            chain_id,
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            true,
+        )
+        .await?;
+    follower.synchronize_from_validators().await?;
+    let follower_info = follower.chain_info().await?;
+    assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
+    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
 
     Ok(())
 }

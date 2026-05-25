@@ -915,6 +915,7 @@ where
             if block.starts_with_checkpoint() {
                 let Some(OracleResponse::Checkpoint {
                     execution_state_blobs,
+                    outbox_block_hashes,
                     ..
                 }) = block.body.oracle_responses.first().and_then(|r| r.first())
                 else {
@@ -933,6 +934,7 @@ where
                     }
                 }
                 ensure!(missing.is_empty(), WorkerError::BlobsNotFound(missing));
+                let outbox_block_hashes = outbox_block_hashes.clone();
                 self.chain
                     .execution_state
                     .restore_from_content(&bytes)
@@ -940,7 +942,47 @@ where
                 // `restore_from_content` writes directly to storage and leaves the
                 // in-memory view in an undefined state — reload from storage.
                 self.chain = self.storage.load_chain(chain_id).await?;
-                // We only reset `execution_state` (via restore) and `tip_state`. The
+                // Re-populate `block_hashes` for every pre-checkpoint sender block the
+                // chain still needs. The heights live in the just-restored execution
+                // state (`unfinalized_message_blocks`); the matching hashes are the
+                // ones the producer recorded in the oracle response, certified by the
+                // checkpoint cert we already trust. Without this, the next step
+                // (re-executing the checkpoint to verify its outcome) would fail
+                // because `collect_unfinalized_block_hashes` looks these up.
+                let mut heights = std::collections::BTreeSet::new();
+                let recipients = self
+                    .chain
+                    .execution_state
+                    .system
+                    .unfinalized_message_blocks
+                    .indices()
+                    .await?;
+                for recipient in recipients {
+                    if let Some(per_recipient) = self
+                        .chain
+                        .execution_state
+                        .system
+                        .unfinalized_message_blocks
+                        .get(&recipient)
+                        .await?
+                    {
+                        heights.extend(per_recipient);
+                    }
+                }
+                ensure!(
+                    heights.len() == outbox_block_hashes.len(),
+                    ChainError::InternalError(format!(
+                        "checkpoint oracle response has {} outbox block hashes but the \
+                         restored state references {} distinct heights",
+                        outbox_block_hashes.len(),
+                        heights.len(),
+                    ))
+                );
+                for (height, hash) in heights.into_iter().zip(outbox_block_hashes) {
+                    self.chain.block_hashes.insert(&height, hash)?;
+                }
+                // We only reset `execution_state` (via restore), `tip_state`, and
+                // `block_hashes` (for outbox-referenced pre-checkpoint heights). The
                 // other `ChainStateView` fields are either (a) already default for a
                 // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
                 // (b) about to be overwritten by `apply_confirmed_block` when the
