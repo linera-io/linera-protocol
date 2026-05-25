@@ -2744,6 +2744,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
 
@@ -2758,14 +2759,17 @@ where
     // Now three validators are online again.
     builder.set_fault_type([2], FaultType::Honest);
 
-    // Under timeout-only round advancement, the chain client surfaces
-    // `WaitForTimeout` rather than silently bumping to the next multi-leader round.
-    // TODO: Once `request_leader_timeout` reliably populates the local node's
-    // `ChainDescription` blob, extend this to advance the clock, retry, and assert
-    // that the pending burn-3 block gets finalized (returning `Conflict`).
+    // The client tries to burn another token. But instead, they finalize the pending
+    // block, which transfers 3 tokens, leaving 10 - 3 = 7. Under timeout-only round
+    // advancement, the first attempt sees the conflicting pending proposal and surfaces
+    // `WaitForTimeout`; we advance the clock through the multi-leader timeout and retry.
     assert_matches!(
-        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
-        Ok(ClientOutcome::WaitForTimeout(_))
+        run_through_timeouts(&clock, || client.burn(AccountOwner::CHAIN, Amount::ONE)).await,
+        Ok(ClientOutcome::Conflict(_))
+    );
+    assert_eq!(
+        client.local_balance().await.unwrap(),
+        Amount::from_tokens(7)
     );
     Ok(())
 }
