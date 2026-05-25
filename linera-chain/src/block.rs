@@ -16,7 +16,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
 };
-use linera_execution::{BlobState, Operation, OutgoingMessage};
+use linera_execution::{BlobOrigin, BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
@@ -146,9 +146,11 @@ impl ConfirmedBlock {
     /// Returns a blob state that applies to all blobs used by this block.
     pub fn to_blob_state(&self, is_stored_block: bool) -> BlobState {
         BlobState {
+            origin: BlobOrigin::Published {
+                chain_id: self.chain_id(),
+                block_height: self.height(),
+            },
             last_used_by: is_stored_block.then_some(self.0.hash()),
-            chain_id: self.chain_id(),
-            block_height: self.height(),
             epoch: is_stored_block.then_some(self.epoch()),
         }
     }
@@ -566,8 +568,14 @@ impl Block {
         let mut required_blob_ids = BTreeSet::new();
         for responses in &self.body.oracle_responses {
             for response in responses {
-                if let OracleResponse::Blob(blob_id) = response {
-                    required_blob_ids.insert(*blob_id);
+                match response {
+                    OracleResponse::Blob(blob_id) => {
+                        required_blob_ids.insert(*blob_id);
+                    }
+                    OracleResponse::Checkpoint { used_blobs, .. } => {
+                        required_blob_ids.extend(used_blobs.iter().copied());
+                    }
+                    _ => {}
                 }
             }
         }

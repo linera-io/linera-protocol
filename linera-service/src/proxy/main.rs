@@ -11,7 +11,7 @@ static ALLOC: linera_jemallocator::Jemalloc = linera_jemallocator::Jemalloc;
 #[export_name = "malloc_conf"]
 pub static MALLOC_CONF: &[u8] = b"prof:true,prof_active:false,lg_prof_sample:19\0";
 
-use std::{net::SocketAddr, path::PathBuf, pin::Pin, sync::Arc, time::Duration};
+use std::{net::SocketAddr, path::PathBuf, pin::Pin, time::Duration};
 
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
@@ -37,7 +37,7 @@ use linera_service::{
     storage::{CommonStorageOptions, Runnable, StorageConfig},
     util,
 };
-use linera_storage::{ResultReadCertificates, Storage};
+use linera_storage::{Arc as CacheArc, ResultReadCertificates, Storage};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
@@ -472,7 +472,7 @@ where
             DownloadConfirmedBlock(hash) => {
                 let block = self.storage.read_confirmed_block(*hash).await?;
                 let block = block
-                    .map(Arc::unwrap_or_clone)
+                    .map(CacheArc::unwrap_or_clone)
                     .ok_or_else(|| anyhow!("Missing confirmed block {hash}"))?;
                 Ok(Some(RpcMessage::DownloadConfirmedBlockResponse(Box::new(
                     block,
@@ -543,7 +543,7 @@ where
                     .storage
                     .read_certificate(last_used_by)
                     .await?
-                    .map(Arc::unwrap_or_clone)
+                    .map(CacheArc::unwrap_or_clone)
                     .ok_or_else(|| anyhow!("Certificate not found {last_used_by}"))?;
                 Ok(Some(RpcMessage::BlobLastUsedByCertificateResponse(
                     Box::new(certificate),

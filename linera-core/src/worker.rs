@@ -23,7 +23,7 @@ use linera_base::{
     doc_scalar,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
-use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
+use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
@@ -772,7 +772,7 @@ where
             .block_cache
             .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
-        let block = Arc::unwrap_or_clone(block);
+        let block = CacheArc::unwrap_or_clone(block);
 
         match certificate.value.kind {
             linera_chain::types::CertificateKind::Confirmed => Ok(Either::Left(
@@ -1425,7 +1425,7 @@ where
         &self,
         chain_id: ChainId,
         height: BlockHeight,
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, WorkerError> {
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let guard = handle::read_lock_initialized(&state).await?;
         guard.read_certificate(height).await
@@ -1648,7 +1648,7 @@ where
         &self,
         chain_id: ChainId,
         blob_id: BlobId,
-    ) -> Result<Arc<Blob>, WorkerError> {
+    ) -> Result<CacheArc<Blob>, WorkerError> {
         trace!("{} <-- download_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_read(chain_id, |guard| async move {

@@ -33,7 +33,7 @@ jobs:
 
   publish-docs:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     # We only publish docs for the main branch.
     if: github.ref == 'refs/heads/main'

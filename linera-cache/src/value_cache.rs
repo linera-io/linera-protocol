@@ -34,7 +34,7 @@ pub const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 30;
 /// A background task periodically sweeps dead `Weak` entries from the index
 /// to prevent unbounded memory growth.
 pub struct ValueCache<K, V> {
-    cache: Cache<K, Arc<V>>,
+    cache: Cache<K, crate::Arc<V>>,
     weak_index: Arc<papaya::HashMap<K, Weak<V>>>,
 }
 
@@ -67,18 +67,13 @@ where
         }
     }
 
-    /// Inserts a value into the cache, returning the canonical `Arc`.
+    /// Inserts a value into the cache, returning the canonical [`crate::Arc`].
     ///
     /// The value is wrapped in `Arc` internally. If a live `Arc` for this key
     /// already exists (held by another consumer), the existing allocation is
     /// reused and the new value is dropped.
-    pub fn insert(&self, key: &K, value: V) -> Arc<V> {
-        self.dedup_insert(key, Arc::new(value))
-    }
-
-    /// Inserts a pre-wrapped `Arc<V>` into the cache, returning the canonical `Arc`.
-    pub fn insert_arc(&self, key: &K, value: Arc<V>) -> Arc<V> {
-        self.dedup_insert(key, value)
+    pub fn insert(&self, key: &K, value: V) -> crate::Arc<V> {
+        self.dedup_insert(key, crate::Arc(Arc::new(value)))
     }
 
     /// Removes a value from the bounded cache.
@@ -87,7 +82,7 @@ where
     /// still hold an `Arc` to this value, and the weak index must be able
     /// to deduplicate against it. Dead weak entries are cleaned up by the
     /// background task.
-    pub fn remove(&self, key: &K) -> Option<Arc<V>> {
+    pub fn remove(&self, key: &K) -> Option<crate::Arc<V>> {
         let value = self.cache.peek(key);
         if value.is_some() {
             self.cache.remove(key);
@@ -95,9 +90,9 @@ where
         Self::track_cache_usage(value)
     }
 
-    /// Returns an `Arc` reference to the value, checking both the bounded
+    /// Returns an [`crate::Arc`] to the value, checking both the bounded
     /// cache and the weak index.
-    pub fn get(&self, key: &K) -> Option<Arc<V>> {
+    pub fn get(&self, key: &K) -> Option<crate::Arc<V>> {
         // Tier 1: bounded cache (hot path)
         if let Some(arc) = self.cache.get(key) {
             return Self::track_cache_usage(Some(arc));
@@ -107,6 +102,7 @@ where
         let guard = self.weak_index.guard();
         if let Some(weak) = self.weak_index.get(key, &guard) {
             if let Some(arc) = weak.upgrade() {
+                let arc = crate::Arc(arc);
                 // Re-insert into bounded cache for future fast lookups
                 self.cache.insert(key.clone(), arc.clone());
                 return Self::track_cache_usage(Some(arc));
@@ -160,9 +156,9 @@ where
     /// Core dedup logic: atomically checks the weak index for an existing
     /// live allocation. If found, reuses it. Otherwise inserts the new Arc.
     /// Returns the canonical `Arc`.
-    fn dedup_insert(&self, key: &K, new_arc: Arc<V>) -> Arc<V> {
+    fn dedup_insert(&self, key: &K, new_arc: crate::Arc<V>) -> crate::Arc<V> {
         let guard = self.weak_index.guard();
-        let weak = Arc::downgrade(&new_arc);
+        let weak = Arc::downgrade(&new_arc.0);
 
         let result = self.weak_index.compute(
             key.clone(),
@@ -178,7 +174,7 @@ where
 
         let canonical_arc = match result {
             Compute::Inserted(..) | Compute::Updated { .. } => new_arc,
-            Compute::Aborted(existing_arc) => existing_arc,
+            Compute::Aborted(existing_arc) => crate::Arc(existing_arc),
             _ => unreachable!(),
         };
 
@@ -186,7 +182,7 @@ where
         canonical_arc
     }
 
-    fn track_cache_usage(maybe_value: Option<Arc<V>>) -> Option<Arc<V>> {
+    fn track_cache_usage(maybe_value: Option<crate::Arc<V>>) -> Option<crate::Arc<V>> {
         #[cfg(with_metrics)]
         {
             let metric = if maybe_value.is_some() {
@@ -209,7 +205,7 @@ impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
     ///
     /// The `value` is wrapped in a [`Cow`] so that it is only cloned if it
     /// needs to be inserted in the cache.
-    pub fn insert_hashed<T>(&self, value: Cow<Hashed<T>>) -> Arc<V>
+    pub fn insert_hashed<T>(&self, value: Cow<Hashed<T>>) -> crate::Arc<V>
     where
         T: Clone,
         V: From<Hashed<T>>,
@@ -223,12 +219,13 @@ impl<V: Clone + Send + Sync + 'static> ValueCache<CryptoHash, V> {
         let guard = self.weak_index.guard();
         if let Some(weak) = self.weak_index.get(&hash, &guard) {
             if let Some(arc) = weak.upgrade() {
+                let arc = crate::Arc(arc);
                 self.cache.insert(hash, arc.clone());
                 return arc;
             }
         }
         drop(guard);
-        self.dedup_insert(&hash, Arc::new(value.into_owned().into()))
+        self.dedup_insert(&hash, crate::Arc(Arc::new(value.into_owned().into())))
     }
 
     /// Inserts multiple values constructed from [`Hashed<T>`]s into the cache.
@@ -270,12 +267,13 @@ mod metrics {
 
 #[cfg(test)]
 mod tests {
-    use std::{borrow::Cow, sync::Arc};
+    use std::borrow::Cow;
 
     use linera_base::{crypto::CryptoHash, hashed::Hashed};
     use serde::{Deserialize, Serialize};
 
     use super::{ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
+    use crate::Arc as CacheArc;
 
     /// Test cache size for unit tests.
     const TEST_CACHE_SIZE: usize = 10;
@@ -364,7 +362,7 @@ mod tests {
         // Re-inserting should return the same Arc (dedup)
         for (value, first_arc) in values.iter().zip(&first_arcs) {
             let second_arc = cache.insert_hashed(Cow::Borrowed(value));
-            assert!(Arc::ptr_eq(&second_arc, first_arc));
+            assert!(CacheArc::ptr_eq(&second_arc, first_arc));
         }
     }
 
@@ -415,7 +413,7 @@ mod tests {
 
         let first = cache.insert_hashed(Cow::Borrowed(&promoted));
         let second = cache.insert_hashed(Cow::Borrowed(&promoted));
-        assert!(Arc::ptr_eq(&first, &second));
+        assert!(CacheArc::ptr_eq(&first, &second));
 
         let extras = create_test_values(1..=TEST_CACHE_SIZE as u64 * 2);
         for value in &extras {
@@ -445,13 +443,13 @@ mod tests {
             .get(&1)
             .expect("held Arc should keep entry findable via weak index");
         assert!(
-            Arc::ptr_eq(&retrieved, &held),
+            CacheArc::ptr_eq(&retrieved, &held),
             "must return same allocation, not a duplicate"
         );
 
         // Re-inserting should also return the same Arc
         let reinserted = cache.insert(&1, "replacement".to_string());
-        assert!(Arc::ptr_eq(&reinserted, &held));
+        assert!(CacheArc::ptr_eq(&reinserted, &held));
         assert_eq!(&*reinserted, "hello");
     }
 
@@ -466,7 +464,7 @@ mod tests {
 
         // Still findable via weak index since we hold an Arc
         let retrieved = cache.get(&1).expect("weak index should find held Arc");
-        assert!(Arc::ptr_eq(&retrieved, &held));
+        assert!(CacheArc::ptr_eq(&retrieved, &held));
     }
 
     #[test]
@@ -500,19 +498,5 @@ mod tests {
 
         // Key 1 still findable (we hold an Arc)
         assert!(cache.contains(&1));
-    }
-
-    #[test]
-    fn test_insert_arc_dedup() {
-        let cache = new_string_cache(TEST_CACHE_SIZE);
-        let value = Arc::new("hello".to_string());
-
-        let first = cache.insert_arc(&1, value.clone());
-        assert!(Arc::ptr_eq(&first, &value));
-
-        let second = cache.insert_arc(&1, Arc::new("other".to_string()));
-        assert!(Arc::ptr_eq(&second, &value));
-
-        assert_eq!(&*cache.get(&1).expect("just inserted"), "hello");
     }
 }

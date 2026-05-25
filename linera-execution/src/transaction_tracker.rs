@@ -56,12 +56,14 @@ pub struct TransactionTracker {
     blobs_published: BTreeSet<BlobId>,
     /// Blob IDs created or published by free apps (fees waived).
     free_blob_ids: BTreeSet<BlobId>,
-    /// A checkpoint blob computed pre-block by `ExecutionStateView::prepare_checkpoint`,
+    /// Checkpoint blobs computed pre-block by `ExecutionStateView::prepare_checkpoint`,
     /// stashed here so that the matching `SystemOperation::Checkpoint` operation handler
-    /// can publish it without re-dumping mid-block (which would fail because the inner
-    /// view has by then accumulated pending changes from block-level setup).
+    /// can publish them without re-dumping mid-block (which would fail because the inner
+    /// view has by then accumulated pending changes from block-level setup). The dump is
+    /// chunked at the current epoch's `maximum_blob_size`, so even a large state respects
+    /// the per-blob size limit.
     #[debug(skip_if = Option::is_none)]
-    prepared_checkpoint_blob: Option<Blob>,
+    prepared_checkpoint_blobs: Option<Vec<Blob>>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -116,16 +118,16 @@ impl TransactionTracker {
         self
     }
 
-    /// Stashes a pre-block-computed checkpoint blob on the tracker. The matching
-    /// `SystemOperation::Checkpoint` operation handler will retrieve it via
-    /// [`Self::take_prepared_checkpoint_blob`] when the operation runs.
-    pub fn set_prepared_checkpoint_blob(&mut self, blob: Blob) {
-        self.prepared_checkpoint_blob = Some(blob);
+    /// Stashes pre-block-computed checkpoint blobs on the tracker. The matching
+    /// `SystemOperation::Checkpoint` operation handler will retrieve them via
+    /// [`Self::take_prepared_checkpoint_blobs`] when the operation runs.
+    pub fn set_prepared_checkpoint_blobs(&mut self, blobs: Vec<Blob>) {
+        self.prepared_checkpoint_blobs = Some(blobs);
     }
 
-    /// Takes the pre-block-computed checkpoint blob, if one was stashed.
-    pub fn take_prepared_checkpoint_blob(&mut self) -> Option<Blob> {
-        self.prepared_checkpoint_blob.take()
+    /// Takes the pre-block-computed checkpoint blobs, if any were stashed.
+    pub fn take_prepared_checkpoint_blobs(&mut self) -> Option<Vec<Blob>> {
+        self.prepared_checkpoint_blobs.take()
     }
 
     pub fn local_time(&self) -> Timestamp {
@@ -326,7 +328,7 @@ impl TransactionTracker {
             streams_to_process,
             blobs_published,
             free_blob_ids,
-            prepared_checkpoint_blob: _,
+            prepared_checkpoint_blobs: _,
         } = self;
         ensure!(
             streams_to_process.is_empty(),

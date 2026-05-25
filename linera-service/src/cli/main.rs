@@ -1864,7 +1864,7 @@ impl Runnable for Job {
                     .read_confirmed_block(block_hash)
                     .await
                     .context("Failed to find the given block in storage")?;
-                let json = serde_json::to_string_pretty(&block)?;
+                let json = serde_json::to_string_pretty(&block.as_deref())?;
                 println!("{json}");
             }
 

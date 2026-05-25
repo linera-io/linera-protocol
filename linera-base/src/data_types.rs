@@ -1065,8 +1065,19 @@ pub enum OracleResponse {
     ),
     /// An event exists.
     EventExists(EventId),
-    /// A checkpoint of the chain's execution state was published as the named blob.
-    Checkpoint(BlobId),
+    /// A checkpoint of the chain's execution state was published. The execution-state
+    /// dump is chunked into one or more `BlobType::CheckpointExecutionState` blobs whose
+    /// content hashes are listed here in restore order; a bootstrapping node concatenates
+    /// the bytes and feeds them to `ExecutionStateView::restore_from_content`.
+    Checkpoint {
+        /// Content hashes of the execution-state-dump blobs, in restore order.
+        execution_state_blobs: Vec<CryptoHash>,
+        /// All blobs the chain references in its `used_blobs` set at the time of the
+        /// checkpoint. A bootstrapping node must have each of these in shared blob
+        /// storage before applying the checkpoint, otherwise subsequent operations on
+        /// the chain could try to read blob content the node doesn't actually have.
+        used_blobs: Vec<BlobId>,
+    },
 }
 
 impl BcsHashable<'_> for OracleResponse {}
@@ -1508,6 +1519,11 @@ impl Blob {
     /// Returns whether the blob is of [`BlobType::Committee`] variant.
     pub fn is_committee_blob(&self) -> bool {
         self.content().blob_type().is_committee_blob()
+    }
+
+    /// Returns whether the blob carries a chunk of a checkpoint's execution-state dump.
+    pub fn is_checkpoint_blob(&self) -> bool {
+        self.content().blob_type().is_checkpoint_blob()
     }
 }
 

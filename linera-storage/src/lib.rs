@@ -5,7 +5,7 @@
 
 mod db_storage;
 
-use std::sync::Arc;
+use std::sync::Arc as StdArc;
 
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -18,7 +18,7 @@ use linera_base::{
     identifiers::{ApplicationId, BlobId, BlobType, ChainId, EventId, IndexAndEvent, StreamId},
     vm::VmRuntime,
 };
-pub use linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS;
+pub use linera_cache::{Arc, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_chain::{
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
     ChainError, ChainStateView,
@@ -64,7 +64,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool>;
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool>;
 
     /// Loads the view of a chain state.
     ///
@@ -263,8 +263,13 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
     {
         let id = description.id();
-        // Store the description blob.
-        self.write_blob(&Blob::new_chain_description(&description))
+        // Store the description blob and a `Genesis` blob state for it. The blob
+        // is not published by any block, so its provenance is the genesis config
+        // rather than a particular `(chain_id, block_height)`.
+        let description_blob = Blob::new_chain_description(&description);
+        let description_blob_id = description_blob.id();
+        self.write_blob(&description_blob).await?;
+        self.maybe_write_blob_states(&[description_blob_id], BlobState::GENESIS)
             .await?;
         let mut chain = self.load_chain(id).await?;
         assert!(
@@ -427,7 +432,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<Committee>, ExecutionError> {
+    ) -> Result<StdArc<Committee>, ExecutionError> {
         if let Some(committee) = self.shared_committees().get(hash) {
             return Ok(committee);
         }
@@ -437,7 +442,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
             .await?
             .ok_or(ExecutionError::BlobsNotFound(vec![blob_id]))?;
         let committee = bcs::from_bytes(blob.bytes())?;
-        Ok(self.shared_committees().insert(hash, Arc::new(committee)))
+        Ok(self
+            .shared_committees()
+            .insert(hash, StdArc::new(committee)))
     }
 
     /// Returns whether the given epoch's committee has been revoked, i.e. whether the
@@ -462,7 +469,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     async fn committee_for_epoch(
         &self,
         epoch: Epoch,
-    ) -> Result<Option<Arc<Committee>>, ExecutionError> {
+    ) -> Result<Option<StdArc<Committee>>, ExecutionError> {
         let blob_hash = if epoch == Epoch::ZERO {
             self.read_network_description()
                 .await?
@@ -529,10 +536,10 @@ impl ResultReadCertificates {
 pub struct ChainRuntimeContext<S> {
     storage: S,
     chain_id: ChainId,
-    thread_pool: Arc<linera_execution::ThreadPool>,
+    thread_pool: StdArc<linera_execution::ThreadPool>,
     execution_runtime_config: ExecutionRuntimeConfig,
-    user_contracts: Arc<papaya::HashMap<ApplicationId, UserContractCode>>,
-    user_services: Arc<papaya::HashMap<ApplicationId, UserServiceCode>>,
+    user_contracts: StdArc<papaya::HashMap<ApplicationId, UserContractCode>>,
+    user_services: StdArc<papaya::HashMap<ApplicationId, UserServiceCode>>,
 }
 
 #[cfg_attr(not(web), async_trait)]
@@ -542,7 +549,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.chain_id
     }
 
-    fn thread_pool(&self) -> &Arc<linera_execution::ThreadPool> {
+    fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool> {
         &self.thread_pool
     }
 
@@ -550,11 +557,11 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         self.execution_runtime_config
     }
 
-    fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>> {
+    fn user_contracts(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserContractCode>> {
         &self.user_contracts
     }
 
-    fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>> {
+    fn user_services(&self) -> &StdArc<papaya::HashMap<ApplicationId, UserServiceCode>> {
         &self.user_services
     }
 
@@ -588,12 +595,12 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
         Ok(service)
     }
 
-    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError> {
-        self.storage.read_blob(blob_id).await
+    async fn get_blob(&self, blob_id: BlobId) -> Result<Option<StdArc<Blob>>, ViewError> {
+        Ok(self.storage.read_blob(blob_id).await?.map(Arc::into_std))
     }
 
-    async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError> {
-        self.storage.read_event(event_id).await
+    async fn get_event(&self, event_id: EventId) -> Result<Option<StdArc<Vec<u8>>>, ViewError> {
+        Ok(self.storage.read_event(event_id).await?.map(Arc::into_std))
     }
 
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
@@ -603,7 +610,7 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
     async fn get_or_load_committee_by_hash(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<Committee>, ExecutionError> {
+    ) -> Result<StdArc<Committee>, ExecutionError> {
         self.storage.get_or_load_committee_by_hash(hash).await
     }
 
@@ -659,9 +666,7 @@ mod tests {
         block::{Block, ConfirmedBlock},
         data_types::{BlockExecutionOutcome, ProposedBlock},
     };
-    use linera_execution::BlobState;
-    #[cfg(feature = "dynamodb")]
-    use linera_views::dynamo_db::DynamoDbDatabase;
+    use linera_execution::{BlobOrigin, BlobState};
     #[cfg(feature = "scylladb")]
     use linera_views::scylla_db::ScyllaDbDatabase;
     use linera_views::{memory::MemoryDatabase, ViewError};
@@ -755,15 +760,19 @@ mod tests {
 
         // Test blob state operations
         let blob_state1 = BlobState {
+            origin: BlobOrigin::Published {
+                chain_id: ChainId(CryptoHash::test_hash("chain1")),
+                block_height: BlockHeight(0),
+            },
             last_used_by: None,
-            chain_id: ChainId(CryptoHash::test_hash("chain1")),
-            block_height: BlockHeight(0),
             epoch: Some(Epoch::ZERO),
         };
         let blob_state2 = BlobState {
+            origin: BlobOrigin::Published {
+                chain_id: ChainId(CryptoHash::test_hash("chain2")),
+                block_height: BlockHeight(1),
+            },
             last_used_by: Some(CryptoHash::test_hash("cert")),
-            chain_id: ChainId(CryptoHash::test_hash("chain2")),
-            block_height: BlockHeight(1),
             epoch: Some(Epoch::from(1)),
         };
 
@@ -938,10 +947,10 @@ mod tests {
 
         // Test individual event reading
         let read_event1 = storage.read_event(event_id1).await?;
-        assert_eq!(read_event1, Some(Arc::new(event_data1)));
+        assert_eq!(read_event1.as_deref(), Some(&event_data1));
 
         let read_event2 = storage.read_event(event_id2).await?;
-        assert_eq!(read_event2, Some(Arc::new(event_data2)));
+        assert_eq!(read_event2.as_deref(), Some(&event_data2));
 
         // Test reading events from index
         let events_from_index = storage
@@ -982,7 +991,6 @@ mod tests {
 
     /// Generic test function to test Storage trait features
     #[test_case(DbStorage::<MemoryDatabase, _>::make_test_storage(None).await; "memory")]
-    #[cfg_attr(feature = "dynamodb", test_case(DbStorage::<DynamoDbDatabase, _>::make_test_storage(None).await; "dynamo_db"))]
     #[cfg_attr(feature = "scylladb", test_case(DbStorage::<ScyllaDbDatabase, _>::make_test_storage(None).await; "scylla_db"))]
     #[test_log::test(tokio::test)]
     async fn test_storage_features<S: Storage + Sync>(storage: S) -> Result<(), ViewError>

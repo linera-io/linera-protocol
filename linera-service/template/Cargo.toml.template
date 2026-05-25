@@ -11,23 +11,9 @@ futures = {{ version = "0.3 "}}
 serde = {{ version = "1.0", features = ["derive"] }}
 serde_json = {{ version = "1.0" }}
 
-# TODO(#4742): Remove the pinned versions once the `linera-*` crates work with Rust > 1.86.0.
-darling = {{ version = ">=0.20, <0.23" }}
-ruint = {{ version = ">=1, <1.18" }}
-serde_with = {{ version = ">=3, <3.18" }}
-time = {{ version = ">=0.3, <0.3.47" }}
-time-core = {{ version = ">=0.1, <0.1.8" }}
-unicode-segmentation = {{ version = ">=1, <1.13" }}
-
 [dev-dependencies]
 {linera_sdk_dev_dep}
 tokio = {{ version = "1.40", features = ["rt", "sync"] }}
-
-# TODO(#4742): Remove the pinned versions once the `linera-*` crates work with Rust > 1.86.0.
-tonic = {{ version = ">=0.14, <0.14.6", default-features = false }}
-tonic-build = {{ version = ">=0.14, <0.14.6", default-features = false }}
-tonic-prost = {{ version = ">=0.14, <0.14.6", default-features = false }}
-tonic-prost-build = {{ version = ">=0.14, <0.14.6", default-features = false }}
 
 [[bin]]
 name = "{contract_binary_name}"
