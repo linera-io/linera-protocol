@@ -111,17 +111,6 @@ export default class WebCryptoEd25519 implements Signer {
   }
 
   /**
-   * Generates a fresh non-extractable Ed25519 keypair and persists it under `recordKey`.
-   * Equivalent to `generate().then(s => s.persist(recordKey).then(() => s))`.
-   * Overwrites any existing record at that key.
-   */
-  static async create(recordKey: string): Promise<WebCryptoEd25519> {
-    const signer = await WebCryptoEd25519.generate();
-    await signer.persist(recordKey);
-    return signer;
-  }
-
-  /**
    * Commits this signer's keypair to IndexedDB under `recordKey`. Subsequent calls to
    * {@link load} with the same `recordKey` will return a signer pointing at the same
    * key material. Overwrites any existing record.
@@ -151,10 +140,13 @@ export default class WebCryptoEd25519 implements Signer {
     }
   }
 
-  /** Convenience: load existing, or create and persist a fresh keypair. */
+  /** Convenience: load existing, or generate + persist a fresh keypair. */
   static async loadOrCreate(recordKey: string): Promise<WebCryptoEd25519> {
     const existing = await WebCryptoEd25519.load(recordKey);
-    return existing ?? (await WebCryptoEd25519.create(recordKey));
+    if (existing) return existing;
+    const signer = await WebCryptoEd25519.generate();
+    await signer.persist(recordKey);
+    return signer;
   }
 
   /** The `Address32` account owner address, as `0x` + 64 hex chars. */
