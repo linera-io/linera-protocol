@@ -910,9 +910,7 @@ where
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_pending_block_is_signed_by_original_owner<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
+async fn test_pending_block_is_signed_by_original_owner<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -954,7 +952,10 @@ where
         .await
         .unwrap_ok_committed()
         .expect("the pending block should be committed");
-    assert_eq!(certificate.block().header.authenticated_owner, Some(owner_a));
+    assert_eq!(
+        certificate.block().header.authenticated_owner,
+        Some(owner_a)
+    );
     assert!(client.pending_proposal().await.is_none());
 
     Ok(())
