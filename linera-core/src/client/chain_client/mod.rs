@@ -2021,17 +2021,6 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             }
         } else if let Some(pending) = proposal_guard.as_ref() {
-            // Refuse to re-propose a pending block signed by a different `owner`. This
-            // would return an error `WorkerError::InvalidSigner` any way.
-            if pending.block.authenticated_signer != Some(owner) {
-                warn!(
-                    ?owner,
-                    pending_signer = ?pending.block.authenticated_signer,
-                    "Discarding pending block staged by a different owner",
-                );
-                *proposal_guard = None;
-                return Ok(ClientOutcome::Committed(None));
-            }
             // Otherwise we are free to propose our own pending block.
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();

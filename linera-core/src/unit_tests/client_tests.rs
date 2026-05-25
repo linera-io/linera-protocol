@@ -869,64 +869,6 @@ where
     Ok(())
 }
 
-/// Regression test: a block staged by one owner and left pending in the shared per-chain
-/// queue must not be re-proposed by a client with a different preferred owner. Re-signing it
-/// would set the block signer to one owner while the operations stay authenticated by
-/// another, which the worker rejects with `WorkerError::InvalidSigner`. This is the
-/// autosigner/principal race seen on chains co-owned by a wallet key and an autosigner: the
-/// owner picking up the queue must discard the foreign pending block and build its own.
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test)]
-async fn test_pending_block_from_other_owner_is_discarded<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
-    let owner_a = client.identity().await?;
-
-    // Co-own the chain with a second owner `b` and no super-owner, so it runs in multi-leader
-    // rounds — mirroring a chain shared by a wallet key and an autosigner.
-    let owner_b: AccountOwner = builder.signer.generate_new().into();
-    let ownership =
-        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
-    client.change_ownership(ownership).await?;
-
-    // Stage a block as owner `a` that can't reach a quorum, so it stays pending in the shared
-    // per-chain queue, authenticated by `a`.
-    builder.set_fault_type([0, 1], FaultType::Offline);
-    assert_matches!(
-        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
-        Err(_),
-        "the burn should fail to commit with only two of four validators online"
-    );
-    let pending = client
-        .pending_proposal()
-        .await
-        .expect("a pending proposal authored by owner `a` should remain");
-    assert_eq!(pending.block.authenticated_signer, Some(owner_a));
-
-    // Bring the validators back and act as owner `b` on the same shared queue.
-    builder.set_fault_type([0, 1], FaultType::Honest);
-    client.synchronize_from_validators().await?;
-    client.set_preferred_owner(owner_b);
-
-    // Owner `b` must discard `a`'s pending block instead of re-signing it (which would be
-    // rejected with `WorkerError::InvalidSigner`): nothing to commit, queue cleared.
-    let outcome = client.process_pending_block().await?;
-    assert_matches!(outcome, ClientOutcome::Committed(None));
-    assert!(client.pending_proposal().await.is_none());
-
-    Ok(())
-}
-
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
