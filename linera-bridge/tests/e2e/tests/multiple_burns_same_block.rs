@@ -272,8 +272,8 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
 
     // Each occurrence in `recipients` is one expected transfer. A
     // recipient listed twice should accumulate two transfers, etc.
-    let mut expected_per_recipient: std::collections::BTreeMap<alloy::primitives::Address, U256> =
-        std::collections::BTreeMap::new();
+    let mut expected_per_recipient =
+        std::collections::BTreeMap::<alloy::primitives::Address, U256>::new();
     let one_burn = U256::from(BURN_AMOUNT_TOKENS) * U256::from(10u128.pow(18));
     for recipient in &recipients {
         *expected_per_recipient

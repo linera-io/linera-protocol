@@ -246,22 +246,22 @@ async fn mark_oversized_failed(
     if oversized.is_empty() {
         return;
     }
-    let to_fail: Vec<u32> = {
+    let to_fail = {
         let state = monitor.read().await;
         oversized
             .iter()
             .filter_map(|&pos| state.event_index_for_pos(height, tx_index, pos))
-            .collect()
+            .collect::<Vec<u32>>()
     };
     let mut state = monitor.write().await;
-    for ei in to_fail {
+    for event_index in to_fail {
         tracing::error!(
             ?height,
             tx_index,
-            event_index = ei,
+            event_index,
             "single burn does not fit under the EVM block gas limit; marking failed"
         );
-        state.mark_burn_failed(height, ei).await;
+        state.mark_burn_failed(height, event_index).await;
     }
 }
 
@@ -288,16 +288,18 @@ async fn submit_chunks_with_retry<P: Provider>(
                 ?error,
                 "processBurns submission failed"
             );
-            let to_bump: Vec<u32> = {
+            let to_bump = {
                 let state = monitor.read().await;
                 events_chunk
                     .iter()
                     .filter_map(|&pos| state.event_index_for_pos(height, tx_index, pos))
-                    .collect()
+                    .collect::<Vec<u32>>()
             };
             let mut state = monitor.write().await;
-            for ei in to_bump {
-                state.mark_burn_retried(height, ei, max_retries).await;
+            for event_index in to_bump {
+                state
+                    .mark_burn_retried(height, event_index, max_retries)
+                    .await;
             }
         }
     }

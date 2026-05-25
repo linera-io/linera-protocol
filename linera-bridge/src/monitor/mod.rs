@@ -122,7 +122,7 @@ pub type TrackedBurn = Tracked<PendingBurn>;
 /// is naturally height-sorted and structurally rejects a second entry for
 /// the same height (which never happens in practice — there is at most one
 /// entry per height).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct PendingBurnsAtHeight {
     pub height: BlockHeight,
     /// Hash of the Linera block at `height` — lets `process_pending_burns`
@@ -137,6 +137,14 @@ pub struct PendingBurnsAtHeight {
     /// fallback when `addBlock` would not fit.
     pub by_tx: Vec<(u32, Vec<u32>)>,
 }
+
+impl PartialEq for PendingBurnsAtHeight {
+    fn eq(&self, other: &Self) -> bool {
+        self.height == other.height
+    }
+}
+
+impl Eq for PendingBurnsAtHeight {}
 
 impl Ord for PendingBurnsAtHeight {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {

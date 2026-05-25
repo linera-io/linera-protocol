@@ -159,8 +159,8 @@ pub(crate) fn find_burn_events(
     fungible_app_id: ApplicationId,
 ) -> Vec<(u32, u32, u32, wrapped_fungible::BurnEvent)> {
     let mut result = Vec::new();
-    for (i, tx_events) in events.iter().enumerate() {
-        for (j, event) in tx_events.iter().enumerate() {
+    for (tx_index, tx_events) in (0u32..).zip(events) {
+        for (event_pos, event) in (0u32..).zip(tx_events) {
             if event.stream_id.application_id != GenericApplicationId::User(fungible_app_id) {
                 continue;
             }
@@ -168,7 +168,7 @@ pub(crate) fn find_burn_events(
                 continue;
             }
             if let Ok(burn) = bcs::from_bytes::<wrapped_fungible::BurnEvent>(&event.value) {
-                result.push((i as u32, j as u32, event.index, burn));
+                result.push((tx_index, event_pos, event.index, burn));
             }
         }
     }
