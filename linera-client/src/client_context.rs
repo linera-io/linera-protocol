@@ -58,7 +58,7 @@ use {
 };
 
 use crate::{
-    chain_listener::{self, ClientContext as _},
+    chain_listener::{self, ClientContext as _, ClientContextExt as _},
     client_options::{ChainOwnershipConfig, Options},
     config::GenesisConfig,
     error, util, Error,
@@ -632,7 +632,7 @@ impl<Env: Environment> ClientContext<Env> {
         ownership_config: ChainOwnershipConfig,
     ) -> Result<(), Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
-        let chain_client = self.make_chain_client(chain_id).await?;
+        let mut chain_client = self.make_chain_client(chain_id).await?;
         info!(
             ?ownership_config, %chain_id, preferred_owner=?chain_client.preferred_owner(),
             "Changing ownership of a chain"
@@ -662,6 +662,8 @@ impl<Env: Environment> ClientContext<Env> {
         let time_total = time_start.elapsed();
         info!("Operation confirmed after {} ms", time_total.as_millis());
         debug!("{:?}", certificate);
+        self.maybe_auto_assign_preferred_owner(&mut chain_client, &ownership)
+            .await?;
         Ok(())
     }
 

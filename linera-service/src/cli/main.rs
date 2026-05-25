@@ -48,7 +48,9 @@ use linera_client::{
         BenchmarkConfig, FungibleTransferGenerator, NativeFungibleTransferGenerator,
         OperationGenerator,
     },
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
+    chain_listener::{
+        ChainListener, ChainListenerConfig, ClientContext as _, ClientContextExt as _,
+    },
     config::{CommitteeConfig, GenesisConfig},
 };
 use linera_core::{
@@ -282,8 +284,15 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let id = description.id();
-                // No owner. This chain can be assigned explicitly using the assign command.
-                let owner = None;
+                let owner = context
+                    .unique_owner_with_key(ownership.all_owners().copied())
+                    .await?;
+                if let Some(owner) = owner {
+                    info!(
+                        chain_id = %id, %owner,
+                        "Auto-assigning new chain to owner from wallet key pair",
+                    );
+                }
                 let timestamp = certificate.block().header.timestamp;
                 let epoch = certificate.block().header.epoch;
                 context
