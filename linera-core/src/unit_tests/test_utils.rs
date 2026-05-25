@@ -17,7 +17,9 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey},
+    crypto::{
+        AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey, ValidatorSecretKey,
+    },
     data_types::*,
     identifiers::{AccountOwner, BlobId, ChainId, EventId},
     ownership::ChainOwnership,
@@ -824,6 +826,7 @@ pub struct TestBuilder<B: StorageBuilder> {
     genesis_storage_builder: GenesisStorageBuilder,
     node_provider: NodeProvider<B::Storage>,
     pub validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
+    pub validator_key_pairs: HashMap<ValidatorPublicKey, ValidatorSecretKey>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
     pub signer: TestSigner,
@@ -916,10 +919,12 @@ where
         let initial_committee = Committee::make_simple(for_committee);
         let mut validator_clients = Vec::new();
         let mut validator_storages = HashMap::new();
+        let mut validator_key_pairs = HashMap::new();
         let mut faulty_validators = HashSet::new();
         for (i, (validator_keypair, _account_public_key)) in validators.into_iter().enumerate() {
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
+            let secret_key_copy = validator_keypair.secret_key.copy();
             let config = ChainWorkerConfig {
                 nickname: format!("Node {i}"),
                 ..ChainWorkerConfig::default()
@@ -933,6 +938,7 @@ where
             }
             validator_clients.push(validator);
             validator_storages.insert(validator_public_key, storage);
+            validator_key_pairs.insert(validator_public_key, secret_key_copy);
         }
         tracing::info!(
             "Test will use the following faulty validators: {:?}",
@@ -946,6 +952,7 @@ where
             genesis_storage_builder: GenesisStorageBuilder::default(),
             node_provider: NodeProvider::from_iter(validator_clients),
             validator_storages,
+            validator_key_pairs,
             chain_client_storages: Vec::new(),
             chain_owners: BTreeMap::new(),
             signer,
