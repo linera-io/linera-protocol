@@ -330,7 +330,9 @@ where
         Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
-    // Can still use the chain.
+    // The chain is now in the `Fast` round under a single super owner; opt into fast
+    // blocks so we can keep proposing without configuring a Fast-round timeout.
+    sender.options_mut().allow_fast_blocks = true;
     sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await
@@ -3327,6 +3329,7 @@ where
         ..ResourceControlPolicy::default()
     };
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
         .await?
         .with_policy(policy.clone());
@@ -3335,11 +3338,14 @@ where
     let mut client3 = builder.add_root_chain(3, Amount::ONE).await?;
     let chain_id3 = client3.chain_id();
 
-    // Configure the clients as super owners with fast blocks enabled.
+    // Configure the clients as super owners with fast blocks enabled. Set a Fast-
+    // round timeout so the client can fall back to a `MultiLeader(0)` block when
+    // a Fast block isn't allowed (e.g. when the block uses oracles).
     for client in [&mut client1, &mut client2, &mut client3] {
         client.options_mut().allow_fast_blocks = true;
         let owner = client.identity().await?;
-        let ownership = ChainOwnership::single_super(owner);
+        let mut ownership = ChainOwnership::single_super(owner);
+        ownership.timeout_config.fast_round_duration = Some(TimeDelta::from_secs(1));
         client.change_ownership(ownership).await.unwrap();
     }
 
@@ -3370,12 +3376,14 @@ where
     builder.set_fault_type([3], FaultType::Honest);
 
     // Client 3 should be able to update validator 3 about the blob and the message.
-    let certificate = client3
-        .execute_operation(SystemOperation::VerifyBlob { blob_id })
-        .await
-        .unwrap_ok_committed();
+    // This reads a new blob, so it cannot be a fast block; the client waits for the
+    // Fast round to time out and falls back to `MultiLeader(0)`.
+    let certificate = run_through_timeouts(&clock, || {
+        client3.execute_operation(SystemOperation::VerifyBlob { blob_id })
+    })
+    .await
+    .unwrap_ok_committed();
 
-    // This read a new blob, so it cannot be a fast block.
     assert_eq!(certificate.round, Round::MultiLeader(0));
     let block = certificate.block();
     assert_eq!(block.body.incoming_bundles().count(), 1);
@@ -3968,20 +3976,25 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
     // Create a chain and get its owner.
     let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let super_owner = client.identity().await?;
 
-    // Change ownership to make the owner a super owner.
+    // Change ownership to make the owner a super owner, configuring a Fast-round
+    // timeout so the client can wait it out when fast blocks are disabled.
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: vec![super_owner],
         owners: vec![],
         first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
-        timeout_config: TimeoutConfig::default(),
+        timeout_config: TimeoutConfig {
+            fast_round_duration: Some(TimeDelta::from_secs(1)),
+            ..TimeoutConfig::default()
+        },
     });
     client.execute_operation(owner_change_op).await.unwrap();
 
@@ -3997,12 +4010,14 @@ where
         "Block should be in Fast round when fast blocks are enabled"
     );
 
-    // With fast blocks disabled, the super owner creates a block in MultiLeader(0) instead.
+    // With fast blocks disabled, the client waits for the Fast round to time out
+    // and then proposes in MultiLeader(0).
     client.options_mut().allow_fast_blocks = false;
-    let certificate = client
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
-        .await
-        .unwrap_ok_committed();
+    let certificate = run_through_timeouts(&clock, || {
+        client.burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+    })
+    .await
+    .unwrap_ok_committed();
     assert_eq!(
         certificate.round,
         Round::MultiLeader(0),

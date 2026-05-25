@@ -2177,8 +2177,9 @@ impl<Env: Environment> ChainClient<Env> {
         let manager = &info.manager;
         let seed = manager.seed;
         // We cannot propose a block that uses oracles in the fast round, and also need to
-        // skip the fast round if fast blocks are not allowed. A super owner can break out of
-        // Fast directly into `MultiLeader(0)` / `SingleLeader(0)` without a timeout.
+        // skip the fast round if fast blocks are not allowed. Under timeout-only round
+        // advancement, that means waiting for the Fast round to time out — chains with
+        // `fast_round_duration: None` and a super owner can't skip Fast.
         let skip_fast = manager.current_round.is_fast()
             && (has_oracle_responses || !self.options.allow_fast_blocks);
         let conflict = manager
@@ -2188,12 +2189,6 @@ impl<Env: Environment> ChainClient<Env> {
             || skip_fast;
         let round = if !conflict {
             manager.current_round
-        } else if manager.current_round.is_fast() {
-            // Fast → next round is the only timeout-free transition.
-            manager
-                .ownership
-                .next_round(manager.current_round)
-                .ok_or(Error::BlockProposalError("No round available after Fast"))?
         } else if let Some(timeout) = info.round_timeout() {
             return Ok(Either::Right(timeout));
         } else {

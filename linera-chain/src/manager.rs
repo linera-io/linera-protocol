@@ -45,10 +45,11 @@
 //!
 //! ## Liveness, i.e. some block will eventually be confirmed
 //!
-//! In `Round::Fast`, liveness depends on the super owners coordinating, and proposing at most one
-//! block.
-//!
-//! If they propose none, and there are other owners, `Round::Fast` will eventually time out.
+//! Every non-`Fast` round leaves only via a timeout certificate (or a higher-round locking
+//! block). The same uniform rule applies to `Round::Fast`: if it has a configured timeout and
+//! the super owners propose nothing, validators eventually sign a timeout, and the next round
+//! opens. A chain with no `fast_round_duration` and no other owners therefore relies entirely
+//! on its super owners for progress — by design.
 //!
 //! In cooperative mode, if there is contention in a multi-leader round, validators will time out
 //! the round (using the short `multi_leader_round_duration`) and a quorum will form a timeout
@@ -289,27 +290,13 @@ where
             // The proposal from the fast round may still be relevant as a locking block, so
             // we don't compare against the current round here.
             Round::Fast => {}
-            // All other rounds can only be advanced via a timeout certificate (or, for the
-            // Fast round, via a super-owner break-out). Otherwise the proposal must match
-            // the current round exactly.
+            // All other rounds can only be advanced via a timeout certificate. A proposal
+            // must therefore match the current round exactly.
             Round::MultiLeader(_) | Round::SingleLeader(_) | Round::Validator(_) => {
-                if current_round.is_fast() {
-                    // Super owners may open `MultiLeader(0)` / `SingleLeader(0)` directly to
-                    // skip an idle Fast round without waiting for its timeout.
-                    ensure!(
-                        self.is_super(&proposal.owner())
-                            && matches!(
-                                new_round,
-                                Round::MultiLeader(0) | Round::SingleLeader(0)
-                            ),
-                        ChainError::WrongRound(current_round)
-                    );
-                } else {
-                    ensure!(
-                        new_round == current_round,
-                        ChainError::WrongRound(current_round)
-                    );
-                }
+                ensure!(
+                    new_round == current_round,
+                    ChainError::WrongRound(current_round)
+                );
             }
         }
         // The round of our validation votes is only allowed to increase.
@@ -642,11 +629,6 @@ where
             self.fallback_owners.get(),
             self.fallback_distribution.get().as_ref(),
         )
-    }
-
-    /// Returns whether the owner is a super owner.
-    fn is_super(&self, owner: &AccountOwner) -> bool {
-        self.ownership.get().super_owners.contains(owner)
     }
 
     /// Sets the proposed block, if it is newer than our known latest proposal.
