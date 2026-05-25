@@ -537,7 +537,12 @@ impl<Env: Environment> Client<Env> {
                 )
                 .await?;
             let Some(new_info) = self
-                .process_certificates(&validators, certificates, None)
+                .process_certificates(
+                    &validators,
+                    certificates,
+                    None,
+                    ProcessConfirmedBlockMode::Execute,
+                )
                 .await?
             else {
                 break;
@@ -669,7 +674,12 @@ impl<Env: Environment> Client<Env> {
         while let Some(result) = receiver.recv().await {
             let certificates = result?;
             let Some(info) = self
-                .process_certificates(slice::from_ref(remote_node), certificates, until_block_time)
+                .process_certificates(
+                    slice::from_ref(remote_node),
+                    certificates,
+                    until_block_time,
+                    ProcessConfirmedBlockMode::Execute,
+                )
                 .await?
             else {
                 break;
@@ -871,8 +881,13 @@ impl<Env: Environment> Client<Env> {
             // skip and let the regular sync path take over.
             return Ok(());
         }
-        self.process_certificates(slice::from_ref(remote_node), certificates, None)
-            .await?;
+        self.process_certificates(
+            slice::from_ref(remote_node),
+            certificates,
+            None,
+            ProcessConfirmedBlockMode::Execute,
+        )
+        .await?;
         Ok(())
     }
 
@@ -880,12 +895,15 @@ impl<Env: Environment> Client<Env> {
     /// Returns the chain info of the last successfully processed certificate.
     /// If `until_block_time` is `Some`, stops before processing any certificate whose
     /// block timestamp is greater or equal than the given value.
+    /// `mode` is the caller's requested processing mode; chains we don't follow
+    /// are still downgraded to `Preprocess` regardless of `mode`.
     #[instrument(level = "trace", skip_all)]
     async fn process_certificates(
         &self,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
         certificates: Vec<ConfirmedBlockCertificate>,
         until_block_time: Option<Timestamp>,
+        mode: ProcessConfirmedBlockMode,
     ) -> Result<Option<Box<ChainInfo>>, chain_client::Error> {
         let mut info = None;
         // Blobs created by these certs are already embedded in the downloaded
@@ -922,7 +940,7 @@ impl<Env: Environment> Client<Env> {
                 }
             }
             let response = self
-                .handle_certificate_with_retry(&certificate, remote_nodes)
+                .handle_certificate_with_retry(&certificate, remote_nodes, mode)
                 .await?;
             info = Some(response.info);
         }
@@ -932,20 +950,20 @@ impl<Env: Environment> Client<Env> {
 
     /// Calls `handle_confirmed_certificate`, retrying with any missing blobs (downloaded
     /// from `nodes`) and any missing events (downloaded from the publisher
-    /// chains via the current validators). The processing mode is derived from
-    /// the chain's [`ListeningMode`]: chains we follow get executed, anything
-    /// else (sender chains, events-only chains) is only preprocessed —
-    /// preprocessing still emits events, which is all we need.
+    /// chains via the current validators). The effective processing mode is
+    /// `mode` for chains we follow, and `Preprocess` for chains we don't —
+    /// we never execute a chain we're not tracking, even if asked.
     async fn handle_certificate_with_retry(
         &self,
         certificate: &ConfirmedBlockCertificate,
         nodes: &[RemoteNode<Env::ValidatorNode>],
+        mode: ProcessConfirmedBlockMode,
     ) -> Result<ChainInfoResponse, chain_client::Error> {
         let mode = if self
             .chain_mode(certificate.value().chain_id())
             .is_some_and(|m| m.should_sync_chain_state())
         {
-            ProcessConfirmedBlockMode::Auto
+            mode
         } else {
             ProcessConfirmedBlockMode::Preprocess
         };
@@ -1077,8 +1095,11 @@ impl<Env: Environment> Client<Env> {
         let certificate = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
-        self.receive_certificate_with_checked_signatures(certificate.clone())
-            .await?;
+        self.receive_certificate_with_checked_signatures(
+            certificate.clone(),
+            ProcessConfirmedBlockMode::Execute,
+        )
+        .await?;
         Ok(certificate)
     }
 
@@ -1247,6 +1268,7 @@ impl<Env: Environment> Client<Env> {
     async fn receive_certificate_with_checked_signatures(
         &self,
         certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
     ) -> Result<(), chain_client::Error> {
         let block = certificate.block();
         // Recover history from the network.
@@ -1255,7 +1277,7 @@ impl<Env: Environment> Client<Env> {
         // Process the received operations. Download required hashed certificate values if
         // necessary.
         let nodes = self.validator_nodes().await?;
-        self.handle_certificate_with_retry(&certificate, &nodes)
+        self.handle_certificate_with_retry(&certificate, &nodes, mode)
             .await?;
         Ok(())
     }
@@ -1281,7 +1303,7 @@ impl<Env: Environment> Client<Env> {
         } else {
             self.validator_nodes().await?
         };
-        self.handle_certificate_with_retry(&certificate, &nodes)
+        self.handle_certificate_with_retry(&certificate, &nodes, ProcessConfirmedBlockMode::Auto)
             .await?;
 
         Ok(())
