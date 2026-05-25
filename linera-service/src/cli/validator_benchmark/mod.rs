@@ -225,7 +225,7 @@ async fn warn_unheld_chains(
     }
     if !unheld.is_empty() {
         tracing::warn!(
-            "candidate does not hold chain(s) [{}]; read layers (L2-L4) will be shallow. \
+            "candidate does not hold chain(s) [{}]; read layers (L3-L5) will be shallow. \
              Pre-sync them (`linera validator sync`) or pass `--deep` to seed blocks first.",
             unheld.join(", ")
         );

@@ -37,7 +37,7 @@ pub async fn run<N>(
 where
     N: ValidatorNode + Clone + Send + Sync + 'static,
 {
-    let phase = progress.phase("L4 bulk download", Some(0));
+    let phase = progress.phase("L5 bulk download", Some(0));
     let mut per_chain = Vec::with_capacity(chains.len());
     for &chain in chains {
         // A timed-out tip query means we cannot pick a range; skip the chain

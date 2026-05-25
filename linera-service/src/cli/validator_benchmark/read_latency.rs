@@ -36,7 +36,7 @@ pub async fn run_baseline<N: ValidatorNode>(
     progress: &Progress,
 ) -> ReadBaselineReport {
     let phase = progress.phase(
-        "L2 read baseline",
+        "L3 read baseline",
         Some((chains.len() * requests_per_chain) as u64),
     );
     let mut per_chain = Vec::with_capacity(chains.len());
@@ -79,7 +79,7 @@ pub async fn run_stress<N>(
 where
     N: ValidatorNode + Clone + Send + Sync + 'static,
 {
-    let phase = progress.phase("L3 read stress", Some((chains.len() * levels.len()) as u64));
+    let phase = progress.phase("L4 read stress", Some((chains.len() * levels.len()) as u64));
     let mut per_chain = Vec::with_capacity(chains.len());
     for chain in chains {
         let mut level_reports = Vec::with_capacity(levels.len());

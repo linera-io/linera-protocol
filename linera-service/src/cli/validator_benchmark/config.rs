@@ -35,43 +35,43 @@ pub struct Benchmark {
     /// Skip L1 preflight (version, network description, RTT).
     #[arg(long)]
     pub skip_preflight: bool,
-    /// Skip L2 read latency baseline.
+    /// Skip L3 read latency baseline.
     #[arg(long)]
     pub skip_read_baseline: bool,
-    /// Skip L3 read stress (concurrency ramp).
+    /// Skip L4 read stress (concurrency ramp).
     #[arg(long)]
     pub skip_read_stress: bool,
-    /// Skip L4 bulk certificate download.
+    /// Skip L5 bulk certificate download.
     #[arg(long)]
     pub skip_bulk_download: bool,
-    /// Skip L5 tip-lag snapshot.
+    /// Skip L6 tip-lag snapshot.
     #[arg(long)]
     pub skip_tip_lag: bool,
 
-    /// Seed the candidate by syncing a bounded run of blocks (partial-sync
-    /// layer), run before the read layers so they exercise real data. Stateful
-    /// side effect on the candidate; off by default.
+    /// L2 partial sync (seed): sync a bounded run of blocks into the candidate,
+    /// run before the read layers so they exercise real data. Stateful side
+    /// effect on the candidate; off by default.
     #[arg(long)]
     pub deep: bool,
 
-    // --- L2 (read latency baseline) ---
-    /// Number of sequential chain-info queries per chain in L2.
+    // --- L3 (read latency baseline) ---
+    /// Number of sequential chain-info queries per chain in L3.
     #[arg(long, default_value_t = 200)]
     pub baseline_requests: usize,
 
-    // --- L3 (read stress / concurrency ramp) ---
-    /// Concurrency levels for the L3 ramp.
+    // --- L4 (read stress / concurrency ramp) ---
+    /// Concurrency levels for the L4 ramp.
     #[arg(long, value_delimiter = ',', default_value = "1,2,4,8,16,32,64")]
     pub stress_levels: Vec<usize>,
-    /// Seconds to sustain each L3 concurrency level.
+    /// Seconds to sustain each L4 concurrency level.
     #[arg(long, default_value_t = 30)]
     pub stress_duration_secs: u64,
 
-    // --- L4 (bulk download) ---
-    /// Number of heights per L4 download batch.
+    // --- L5 (bulk download) ---
+    /// Number of heights per L5 download batch.
     #[arg(long, default_value_t = 100)]
     pub bulk_batch_size: u32,
-    /// Concurrency levels for L4 bulk download.
+    /// Concurrency levels for L5 bulk download.
     #[arg(long, value_delimiter = ',', default_value = "1,8")]
     pub bulk_concurrency: Vec<usize>,
     /// Either `auto` (last batch_size * 100 heights up to the candidate's tip)
@@ -79,19 +79,19 @@ pub struct Benchmark {
     #[arg(long, default_value = "auto")]
     pub bulk_height_range: String,
 
-    // --- L5 (tip-lag snapshot) ---
-    /// Number of tip-lag samples in L5.
+    // --- L6 (tip-lag snapshot) ---
+    /// Number of tip-lag samples in L6.
     #[arg(long, default_value_t = 3)]
     pub tip_lag_samples: usize,
-    /// Seconds between L5 tip-lag samples.
+    /// Seconds between L6 tip-lag samples.
     #[arg(long, default_value_t = 120)]
     pub tip_lag_interval_secs: u64,
 
-    // --- L6 (partial sync, opt-in) ---
-    /// Maximum number of blocks to push in L6 (with `--deep`).
+    // --- L2 (partial sync / seed, opt-in) ---
+    /// Maximum number of blocks to seed in L2 partial sync (with `--deep`).
     #[arg(long, default_value_t = 1000)]
     pub deep_blocks: u32,
-    /// Chain to use for L6 partial sync (defaults to the first `--chain`).
+    /// Chain to use for the L2 partial-sync seed (defaults to the first `--chain`).
     #[arg(long)]
     pub deep_chain: Option<ChainId>,
 
