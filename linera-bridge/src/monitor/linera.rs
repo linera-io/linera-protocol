@@ -121,7 +121,17 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                     relay::update_balance_metrics(evm_client, linera_client).await;
                 }
                 Err(error) => {
+                    // Bumping the retry counter is critical: an `eth_estimateGas`
+                    // revert is typically deterministic (the cert is invalid for
+                    // the configured bridge), and without this the burn would be
+                    // re-polled every scan interval forever. After `max_retries`
+                    // the burns at this height transition to `failed` and stop
+                    // being yielded by `pending_burns_by_height_and_tx`.
                     tracing::warn!(?height, ?error, "estimate_add_block_gas failed");
+                    let mut state = monitor.write().await;
+                    for ei in &event_indices {
+                        state.mark_burn_retried(height, *ei, max_retries).await;
+                    }
                 }
             }
         }
