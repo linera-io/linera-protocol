@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
-    types::{Block, GenericCertificate},
+    types::{Block, ConfirmedBlockCertificate, GenericCertificate},
 };
 use linera_execution::{BlobState, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Arc as CacheArc, Storage};
@@ -24,6 +24,7 @@ use thiserror::Error;
 use tracing::{instrument, warn};
 
 use crate::{
+    chain_worker::ProcessConfirmedBlockMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     notifier::Notifier,
     worker::{ProcessableCertificate, WorkerError, WorkerState},
@@ -108,6 +109,24 @@ where
             self.node
                 .state
                 .fully_handle_certificate_with_notifications(certificate, notifier),
+        )
+        .await?)
+    }
+
+    /// Same as [`Self::handle_certificate`] but for a confirmed block certificate
+    /// and with an explicit [`ProcessConfirmedBlockMode`]. The generic variant
+    /// always uses [`ProcessConfirmedBlockMode::Auto`].
+    #[instrument(level = "trace", skip_all)]
+    pub async fn handle_confirmed_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
+        notifier: &impl Notifier,
+    ) -> Result<ChainInfoResponse, LocalNodeError> {
+        Ok(Box::pin(
+            self.node
+                .state
+                .fully_handle_confirmed_certificate_with_notifications(certificate, mode, notifier),
         )
         .await?)
     }
