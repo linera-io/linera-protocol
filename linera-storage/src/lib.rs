@@ -263,8 +263,13 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         ChainRuntimeContext<Self>: ExecutionRuntimeContext,
     {
         let id = description.id();
-        // Store the description blob.
-        self.write_blob(&Blob::new_chain_description(&description))
+        // Store the description blob and a `Genesis` blob state for it. The blob
+        // is not published by any block, so its provenance is the genesis config
+        // rather than a particular `(chain_id, block_height)`.
+        let description_blob = Blob::new_chain_description(&description);
+        let description_blob_id = description_blob.id();
+        self.write_blob(&description_blob).await?;
+        self.maybe_write_blob_states(&[description_blob_id], BlobState::GENESIS)
             .await?;
         let mut chain = self.load_chain(id).await?;
         assert!(
@@ -661,7 +666,7 @@ mod tests {
         block::{Block, ConfirmedBlock},
         data_types::{BlockExecutionOutcome, ProposedBlock},
     };
-    use linera_execution::BlobState;
+    use linera_execution::{BlobOrigin, BlobState};
     #[cfg(feature = "scylladb")]
     use linera_views::scylla_db::ScyllaDbDatabase;
     use linera_views::{memory::MemoryDatabase, ViewError};
@@ -755,15 +760,19 @@ mod tests {
 
         // Test blob state operations
         let blob_state1 = BlobState {
+            origin: BlobOrigin::Published {
+                chain_id: ChainId(CryptoHash::test_hash("chain1")),
+                block_height: BlockHeight(0),
+            },
             last_used_by: None,
-            chain_id: ChainId(CryptoHash::test_hash("chain1")),
-            block_height: BlockHeight(0),
             epoch: Some(Epoch::ZERO),
         };
         let blob_state2 = BlobState {
+            origin: BlobOrigin::Published {
+                chain_id: ChainId(CryptoHash::test_hash("chain2")),
+                block_height: BlockHeight(1),
+            },
             last_used_by: Some(CryptoHash::test_hash("cert")),
-            chain_id: ChainId(CryptoHash::test_hash("chain2")),
-            block_height: BlockHeight(1),
             epoch: Some(Epoch::from(1)),
         };
 

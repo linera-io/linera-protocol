@@ -2705,6 +2705,31 @@ where
     Ok(())
 }
 
+/// On a fresh root chain whose `ChainDescription` is defined by the genesis
+/// config (not published by any block), `request_leader_timeout` must succeed
+/// once the round has timed out: collecting the timeout certificate and then
+/// broadcasting the resulting state to validators (via
+/// `send_chain_information` -> `initialize_new_chain_on_validator` ->
+/// `send_chain_info_for_blobs`) should treat the chain-description blob as
+/// known a priori rather than looking for a publishing block.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_request_leader_timeout_with_genesis_blob<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+
+    // Advance the clock past the (default 10s) round timeout.
+    clock.set(Timestamp::from(20_000_000));
+
+    client.request_leader_timeout().await?;
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
