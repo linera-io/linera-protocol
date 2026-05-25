@@ -2002,40 +2002,11 @@ where
     }
 
     /// Validates and executes a block proposed to extend this chain.
-    ///
-    /// Returns network actions alongside the result so the caller can dispatch them
-    /// even when the proposal is rejected: a `HasIncompatibleConfirmedVote` rejection
-    /// can still advance `current_round` via `update_signed_proposal`, and subscribers
-    /// need the resulting `NewRound` notification.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %proposal.content.block.height
     ))]
     pub(crate) async fn handle_block_proposal(
-        &mut self,
-        proposal: BlockProposal,
-    ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
-        let old_round = self.chain.manager.current_round();
-        match self.try_handle_block_proposal(proposal).await {
-            Ok((response, actions)) => (Ok(response), actions),
-            Err(err) => {
-                // Even on error, the manager's `current_round` may have advanced
-                // (the `HasIncompatibleConfirmedVote` recovery path calls
-                // `update_signed_proposal`). Surface the resulting `NewRound`
-                // notification so subscribers can react.
-                let actions = if self.chain.manager.current_round() != old_round {
-                    self.create_network_actions(Some(old_round))
-                        .await
-                        .unwrap_or_default()
-                } else {
-                    NetworkActions::default()
-                };
-                (Err(err), actions)
-            }
-        }
-    }
-
-    async fn try_handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -2110,34 +2081,7 @@ where
                 return Ok((self.chain_info_response().await?, NetworkActions::default()));
             }
             Ok(manager::Outcome::Accept) => {}
-            Err(err) => {
-                // A `HasIncompatibleConfirmedVote` rejection means the proposer is at a
-                // round we'd otherwise be happy to sign at; only our prior confirmed vote
-                // prevents us from voting. Record the proposal so `current_round` still
-                // tracks the round the proposer is in — without it, the chain can wedge.
-                // Other rejections (e.g. `WrongRound`, `InsufficientRound`) mean the
-                // proposal is not actually valid for the chain's current state, so we
-                // shouldn't let it advance our round.
-                if matches!(err, ChainError::HasIncompatibleConfirmedVote(_, _))
-                    && self
-                        .chain
-                        .manager
-                        .update_signed_proposal(&proposal, local_time)
-                {
-                    self.save().await?;
-                }
-                return Err(err.into());
-            }
-        }
-
-        // Make sure we remember that a proposal was signed, to determine the correct round to
-        // propose in.
-        if self
-            .chain
-            .manager
-            .update_signed_proposal(&proposal, local_time)
-        {
-            self.save().await?;
+            Err(err) => return Err(err.into()),
         }
 
         let published_blobs = self.load_proposal_blobs(&proposal).await?;

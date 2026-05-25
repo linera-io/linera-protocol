@@ -205,15 +205,11 @@ where
     async fn handle_message(&mut self, message: RpcMessage) -> Option<RpcMessage> {
         let reply = match message {
             RpcMessage::BlockProposal(message) => {
-                let (result, actions) = self.server.state.handle_block_proposal(*message).await;
-                // Dispatch actions whether or not the proposal was accepted: a
-                // rejected proposal can still advance the manager's `current_round`
-                // (via `update_signed_proposal` on the `HasIncompatibleConfirmedVote`
-                // recovery path), and subscribers need the resulting `NewRound`
-                // notification.
-                self.handle_network_actions(actions);
-                match result {
-                    Ok(info) => Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info)))),
+                match self.server.state.handle_block_proposal(*message).await {
+                    Ok((info, actions)) => {
+                        self.handle_network_actions(actions);
+                        Ok(Some(RpcMessage::ChainInfoResponse(Box::new(info))))
+                    }
                     Err(error) => {
                         self.log_error(&error, "Failed to handle block proposal");
                         Err(error.into())

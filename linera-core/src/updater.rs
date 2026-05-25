@@ -887,11 +887,7 @@ where
         }
 
         // Finally, try to push a proposal at the current round.
-        for proposal in manager
-            .requested_proposed
-            .iter()
-            .chain(manager.requested_signed_proposal.iter())
-        {
+        for proposal in manager.requested_proposed.iter() {
             if proposal.content.round == target_round {
                 match self
                     .remote_node

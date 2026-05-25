@@ -983,7 +983,11 @@ type MutationRoot {
 		"""
 		fastRoundMs: Int,
 		"""
-		The duration of the first single-leader and all multi-leader rounds
+		The duration of every multi-leader round, in milliseconds
+		"""
+		multiLeaderRoundMs: Int! = 1000,
+		"""
+		The duration of the first single-leader round, in milliseconds
 		"""
 		baseTimeoutMs: Int! = 10000,
 		"""
@@ -1050,7 +1054,11 @@ type MutationRoot {
 		"""
 		fastRoundMs: Int,
 		"""
-		The duration of the first single-leader and all multi-leader rounds
+		The duration of every multi-leader round, in milliseconds
+		"""
+		multiLeaderRoundMs: Int! = 1000,
+		"""
+		The duration of the first single-leader round, in milliseconds
 		"""
 		baseTimeoutMs: Int! = 10000,
 		"""
@@ -1558,7 +1566,11 @@ type TimeoutConfigMetadata {
 	"""
 	fastRoundMs: String
 	"""
-	The duration of the first single-leader and all multi-leader rounds in milliseconds.
+	The duration of every multi-leader round, in milliseconds.
+	"""
+	multiLeaderRoundMs: String!
+	"""
+	The duration of the first single-leader round, in milliseconds.
 	"""
 	baseTimeoutMs: String!
 	"""

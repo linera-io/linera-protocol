@@ -40,10 +40,13 @@ pub struct TimeoutConfig {
     /// The duration of the fast round.
     #[debug(skip_if = Option::is_none)]
     pub fast_round_duration: Option<TimeDelta>,
-    /// The duration of the first multi-leader and single-leader rounds.
+    /// The duration of every multi-leader round. Multi-leader rounds use a fixed (typically
+    /// short) duration: a quorum of timeout votes is required to leave a multi-leader round,
+    /// so this controls the retry latency under multi-leader contention.
+    pub multi_leader_round_duration: TimeDelta,
+    /// The duration of the first single-leader round.
     pub base_timeout: TimeDelta,
-    /// The duration by which the timeout increases after each multi-leader or
-    /// single-leader round.
+    /// The duration by which the timeout increases after each single-leader round.
     pub timeout_increment: TimeDelta,
     /// The age of an incoming tracked or protected message after which the validators start
     /// transitioning the chain to fallback mode.
@@ -54,6 +57,9 @@ impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
             fast_round_duration: None,
+            // Default to the same value as `base_timeout`. Chains expecting heavy multi-leader
+            // contention should lower this to e.g. 1 second to keep retry latency short.
+            multi_leader_round_duration: TimeDelta::from_secs(10),
             base_timeout: TimeDelta::from_secs(10),
             timeout_increment: TimeDelta::from_secs(1),
             // This is `MAX` because the validators are not currently expected to start clients for
@@ -175,7 +181,8 @@ impl ChainOwnership {
         }
         match round {
             Round::Fast => tc.fast_round_duration,
-            Round::MultiLeader(r) | Round::SingleLeader(r) | Round::Validator(r) => {
+            Round::MultiLeader(_) => Some(tc.multi_leader_round_duration),
+            Round::SingleLeader(r) | Round::Validator(r) => {
                 let increment = tc.timeout_increment.saturating_mul(u64::from(r));
                 Some(tc.base_timeout.saturating_add(increment))
             }
@@ -332,6 +339,7 @@ mod tests {
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig {
                 fast_round_duration: Some(TimeDelta::from_secs(5)),
+                multi_leader_round_duration: TimeDelta::from_secs(2),
                 base_timeout: TimeDelta::from_secs(10),
                 timeout_increment: TimeDelta::from_secs(1),
                 fallback_duration: TimeDelta::from_secs(60 * 60),
@@ -344,11 +352,11 @@ mod tests {
         );
         assert_eq!(
             ownership.round_timeout(Round::MultiLeader(0)),
-            Some(TimeDelta::from_secs(10))
+            Some(TimeDelta::from_secs(2))
         );
         assert_eq!(
             ownership.round_timeout(Round::MultiLeader(8)),
-            Some(TimeDelta::from_secs(18))
+            Some(TimeDelta::from_secs(2))
         );
         assert_eq!(
             ownership.round_timeout(Round::SingleLeader(0)),
@@ -374,6 +382,7 @@ mod tests {
             10,
             TimeoutConfig {
                 fast_round_duration: None,
+                multi_leader_round_duration: TimeDelta::from_secs(10),
                 base_timeout: TimeDelta::from_secs(10),
                 timeout_increment: TimeDelta::ZERO,
                 fallback_duration: TimeDelta::MAX,

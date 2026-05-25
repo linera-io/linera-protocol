@@ -461,7 +461,12 @@ where
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
-            desc = "The duration of the first single-leader and all multi-leader rounds",
+            desc = "The duration of every multi-leader round, in milliseconds",
+            default = 1_000
+        )]
+        multi_leader_round_ms: u64,
+        #[graphql(
+            desc = "The duration of the first single-leader round, in milliseconds",
             default = 10_000
         )]
         base_timeout_ms: u64,
@@ -496,6 +501,7 @@ where
         let multi_leader_rounds = multi_leader_rounds.unwrap_or(u32::MAX);
         let timeout_config = TimeoutConfig {
             fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
+            multi_leader_round_duration: TimeDelta::from_millis(multi_leader_round_ms),
             base_timeout: TimeDelta::from_millis(base_timeout_ms),
             timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
             fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
@@ -568,7 +574,12 @@ where
         #[graphql(desc = "The duration of the fast round, in milliseconds; default: no timeout")]
         fast_round_ms: Option<u64>,
         #[graphql(
-            desc = "The duration of the first single-leader and all multi-leader rounds",
+            desc = "The duration of every multi-leader round, in milliseconds",
+            default = 1_000
+        )]
+        multi_leader_round_ms: u64,
+        #[graphql(
+            desc = "The duration of the first single-leader round, in milliseconds",
             default = 10_000
         )]
         base_timeout_ms: u64,
@@ -593,6 +604,7 @@ where
             open_multi_leader_rounds,
             timeout_config: TimeoutConfig {
                 fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
+                multi_leader_round_duration: TimeDelta::from_millis(multi_leader_round_ms),
                 base_timeout: TimeDelta::from_millis(base_timeout_ms),
                 timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
                 fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
