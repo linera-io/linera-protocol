@@ -1937,12 +1937,12 @@ impl<Env: Environment> ChainClient<Env> {
         {
             return self.finalize_locking_block(info).await;
         }
-        let owner = self.identity().await?;
+        let identity = self.identity().await?;
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let (block, blobs) = if let Some(locking) = &info.manager.requested_locking {
-            match &**locking {
+        let (block, blobs, owner) = if let Some(locking) = &info.manager.requested_locking {
+            let (block, blobs) = match &**locking {
                 LockingBlock::Regular(certificate) => {
                     let blob_ids = certificate.block().required_blob_ids();
                     let blobs = local_node
@@ -1971,9 +1971,30 @@ impl<Env: Environment> ChainClient<Env> {
                     debug!("Retrying locking block from fast round.");
                     (block, blobs)
                 }
-            }
+            };
+            (block, blobs, identity)
         } else if let Some(pending) = proposal_guard.as_ref() {
-            // Otherwise we are free to propose our own pending block.
+            // Otherwise we are free to propose our own pending block. Sign it as the owner
+            // that staged it: the block's operations are authenticated by that owner, and
+            // validators reject the proposal with `WorkerError::InvalidSigner` if we re-sign
+            // it as someone else (which would happen if `preferred_owner` changed since the
+            // block was staged). The signer is global to the client, so we can sign as the
+            // original author as long as we still hold their key. If we don't, the pending
+            // block is unfinishable and we drop it.
+            let owner = match pending.block.authenticated_owner {
+                Some(staged_owner) if staged_owner != identity => {
+                    if !self.has_key_for(&staged_owner).await? {
+                        warn!(
+                            ?staged_owner, %identity,
+                            "Discarding pending block: no signer key for its authenticated owner",
+                        );
+                        *proposal_guard = None;
+                        return Ok(ClientOutcome::Committed(None));
+                    }
+                    staged_owner
+                }
+                _ => identity,
+            };
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
             let staging_outcome = pending.auto_retry_outcome.as_ref();
@@ -1997,7 +2018,7 @@ impl<Env: Environment> ChainClient<Env> {
                 );
             }
             debug!("Proposing the local pending block.");
-            (block, blobs)
+            (block, blobs, owner)
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
