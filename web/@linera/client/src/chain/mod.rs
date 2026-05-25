@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use futures::stream::StreamExt;
-use linera_base::identifiers::AccountOwner;
+use linera_base::{data_types::Round, identifiers::AccountOwner};
 use linera_client::chain_listener::ClientContext as _;
 use linera_core::{
     client::ChainClient,
@@ -39,6 +39,23 @@ pub struct TransferParams {
 pub struct AddOwnerOptions {
     #[serde(default)]
     pub weight: u64,
+}
+
+/// Information about the round in which a block would currently be proposed on a chain.
+#[derive(serde::Serialize, tsify::Tsify)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct RoundInfo {
+    /// The category of the round: `"fast"`, `"multiLeader"`, `"singleLeader"` or
+    /// `"validator"`.
+    pub kind: String,
+    /// The index of the round within its category (always `0` for the fast round).
+    pub number: u32,
+    /// The owner currently allowed to propose, or `null` if any eligible owner may
+    /// propose (the fast and multi-leader rounds).
+    pub leader: Option<AccountOwner>,
+    /// Whether this client's current identity may propose a block in this round.
+    pub can_propose: bool,
 }
 
 #[wasm_bindgen]
@@ -130,6 +147,95 @@ impl Chain {
             .await
             .apply_client_command(&self.chain_client, |_chain_client| {
                 self.chain_client.share_ownership(owner, weight)
+            })
+            .await?;
+        Ok(())
+    }
+
+    /// Discards any pending block proposal on this chain.
+    ///
+    /// When a proposal fails to reach a quorum (for example because the client went
+    /// offline mid-round) it stays queued and is retried before any new block. Call this
+    /// to drop it so a fresh block can be proposed instead.
+    ///
+    /// Importantly, this should never be used to clear a proposal already submitted in
+    /// the fast round.
+    ///
+    /// # Errors
+    /// If the wallet fails to persist the cleared state.
+    #[wasm_bindgen(js_name = clearPendingProposal)]
+    pub async fn clear_pending_proposal(&self) -> JsResult<()> {
+        self.chain_client.clear_pending_proposal().await;
+        // Fast-round proposals are also persisted in the wallet across sessions, so
+        // refresh the persisted copy to keep it from coming back on reload.
+        self.client
+            .context
+            .lock()
+            .await
+            .update_wallet(&self.chain_client)
+            .await?;
+        Ok(())
+    }
+
+    /// Returns information about the round in which a block would currently be proposed on
+    /// this chain: its category, its index, the current leader (if the round restricts
+    /// proposals to a single owner) and whether this client's identity may propose.
+    ///
+    /// `leader` is `null` in the fast and multi-leader rounds, where any eligible owner
+    /// may propose; in the single-leader and validator rounds it is the owner currently
+    /// allowed to propose.
+    ///
+    /// # Errors
+    /// If the chain information cannot be retrieved.
+    #[wasm_bindgen(js_name = nextRound)]
+    pub async fn next_round(&self) -> JsResult<RoundInfo> {
+        let info = self.chain_client.chain_info().await?;
+        let manager = &info.manager;
+        let round = manager.current_round;
+        let identity = self.chain_client.identity().await?;
+        let can_propose = match manager.leader {
+            Some(leader) => leader == identity,
+            None => match round {
+                Round::Fast => manager.ownership.super_owners.contains(&identity),
+                _ => manager
+                    .ownership
+                    .can_propose_in_multi_leader_round(&identity),
+            },
+        };
+        let (kind, number) = match round {
+            Round::Fast => ("fast", 0),
+            Round::MultiLeader(number) => ("multiLeader", number),
+            Round::SingleLeader(number) => ("singleLeader", number),
+            Round::Validator(number) => ("validator", number),
+        };
+        Ok(RoundInfo {
+            kind: kind.to_owned(),
+            number,
+            leader: manager.leader,
+            can_propose,
+        })
+    }
+
+    /// Sets the number of multi-leader rounds for this chain, leaving the rest of the
+    /// ownership configuration (owners, super owners, timeouts) unchanged.
+    ///
+    /// In multi-leader rounds every eligible owner may propose a block concurrently;
+    /// afterwards the chain falls back to single-leader rounds. A larger number favors
+    /// liveness under contention, while `0` makes the chain reach single-leader rounds
+    /// immediately.
+    ///
+    /// # Errors
+    /// If the chain is inactive, or the ownership change fails to commit.
+    #[wasm_bindgen(js_name = setMultiLeaderRounds)]
+    pub async fn set_multi_leader_rounds(&self, rounds: u32) -> JsResult<()> {
+        self.client
+            .context
+            .lock()
+            .await
+            .apply_client_command(&self.chain_client, |_chain_client| async {
+                let mut ownership = self.chain_client.query_chain_ownership().await?;
+                ownership.multi_leader_rounds = rounds;
+                self.chain_client.change_ownership(ownership).await
             })
             .await?;
         Ok(())
