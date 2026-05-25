@@ -545,7 +545,7 @@ pub async fn set_anvil_block_gas_limit(
 /// to the head block (no per-height search loop needed in tests).
 pub async fn fetch_latest_cert<E>(
     chain_client: &linera_core::client::ChainClient<E>,
-) -> anyhow::Result<std::sync::Arc<linera_chain::types::ConfirmedBlockCertificate>>
+) -> anyhow::Result<linera_storage::Arc<linera_chain::types::ConfirmedBlockCertificate>>
 where
     E: linera_core::environment::Environment,
 {
