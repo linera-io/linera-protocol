@@ -135,12 +135,7 @@ impl linera_base::crypto::Signer for Signer {
 fn parse_ed25519_public_key(hex_str: &str) -> Option<linera_base::crypto::Ed25519PublicKey> {
     let trimmed = hex_str.strip_prefix("0x").unwrap_or(hex_str);
     let bytes = hex::decode(trimmed).ok()?;
-    if bytes.len() != 32 {
-        return None;
-    }
-    let mut buf = [0u8; 32];
-    buf.copy_from_slice(&bytes);
-    Some(linera_base::crypto::Ed25519PublicKey(buf))
+    linera_base::crypto::Ed25519PublicKey::from_slice(&bytes).ok()
 }
 
 fn parse_ed25519_signature(hex_str: &str) -> Option<linera_base::crypto::Ed25519Signature> {
