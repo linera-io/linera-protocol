@@ -1231,11 +1231,7 @@ where
         .await?;
 
     env.worker()
-        .handle_confirmed_certificate(
-            certificate2.clone(),
-            ProcessConfirmedBlockMode::Auto,
-            None,
-        )
+        .handle_confirmed_certificate(certificate2.clone(), ProcessConfirmedBlockMode::Auto, None)
         .await?;
 
     {
