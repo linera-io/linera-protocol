@@ -139,6 +139,20 @@ test("generate() then persist() makes the keypair loadable", async () => {
   expect(loaded!.address()).toBe(generated.address());
 });
 
+test("delete() removes the record so load() returns null again", async () => {
+  await linera.signer.WebCryptoEd25519.loadOrCreate(RECORD_KEY);
+  expect(await linera.signer.WebCryptoEd25519.load(RECORD_KEY)).not.toBeNull();
+
+  await linera.signer.WebCryptoEd25519.delete(RECORD_KEY);
+  expect(await linera.signer.WebCryptoEd25519.load(RECORD_KEY)).toBeNull();
+});
+
+test("delete() is a no-op on a missing record", async () => {
+  await expect(
+    linera.signer.WebCryptoEd25519.delete(RECORD_KEY),
+  ).resolves.toBeUndefined();
+});
+
 async function wipeDb(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const req = indexedDB.deleteDatabase(DB_NAME);

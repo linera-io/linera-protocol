@@ -2,10 +2,12 @@ import type { Signer } from "./Signer.d.ts";
 import { accountOwnerFromEd25519PublicKey } from "../wasm/index.js";
 
 type StoredRecord = {
+  // Canonical owner address: "0x" + 64 lowercase hex chars. Lowercase is invariant —
+  // produced by Rust's `Display for AccountOwner` which uses `hex::encode`. Callers
+  // comparing against it must `.toLowerCase()` their side only.
   owner: string;
   publicKey: Uint8Array;
   privateKey: CryptoKey;
-  createdAt: number;
 };
 
 /**
@@ -19,12 +21,17 @@ type StoredRecord = {
  * Owner addresses are `AccountOwner::Address32(Keccak256(BCS(public_key)))`, derived in
  * Rust via {@link accountOwnerFromEd25519PublicKey}.
  *
- * **Requires** `linera.initialize()` to have been called before `create()` or
- * `loadOrCreate()` — both call the wasm owner-derivation helper. `load()` is wasm-free
- * and may be invoked before initialization.
+ * **Requires** `linera.initialize()` to have been called before `generate()` or
+ * `loadOrCreate()` — both call the wasm owner-derivation helper. `load()` and
+ * `delete()` are wasm-free and may be invoked before initialization.
  */
 export default class WebCryptoEd25519 implements Signer {
-  private constructor(private readonly record: StoredRecord) {}
+  private constructor(private readonly record: StoredRecord) {
+    // Shallow freeze guards against accidental mutation of the cached owner / key
+    // references by the rest of the codebase. The nested `publicKey` Uint8Array's
+    // bytes remain mutable per JS semantics; treat them as read-only.
+    Object.freeze(this.record);
+  }
 
   /**
    * Generates a fresh non-extractable Ed25519 keypair in memory.
@@ -34,22 +41,25 @@ export default class WebCryptoEd25519 implements Signer {
    * the autosigner address on-chain) before the keypair becomes durable.
    */
   static async generate(): Promise<WebCryptoEd25519> {
-    const pair = (await crypto.subtle.generateKey(
+    const pair = await crypto.subtle.generateKey(
       { name: "Ed25519" },
       false,
       ["sign", "verify"],
-    )) as CryptoKeyPair;
+    );
+    if (!("privateKey" in pair)) {
+      throw new Error(
+        "crypto.subtle.generateKey did not return a CryptoKeyPair for Ed25519",
+      );
+    }
     const publicKey = new Uint8Array(
       await crypto.subtle.exportKey("raw", pair.publicKey),
     );
     const owner = accountOwnerFromEd25519PublicKey(publicKey);
-    const record: StoredRecord = {
+    return new WebCryptoEd25519({
       owner,
       publicKey,
       privateKey: pair.privateKey,
-      createdAt: Date.now(),
-    };
-    return new WebCryptoEd25519(record);
+    });
   }
 
   /**
@@ -91,7 +101,21 @@ export default class WebCryptoEd25519 implements Signer {
     return signer;
   }
 
-  /** The `Address32` account owner address, as `0x` + 64 hex chars. */
+  /**
+   * Removes the keypair record stored under `recordKey`. No-op if no record exists.
+   * Use to revoke a session locally (e.g. after `forgoDelegation` succeeds on-chain
+   * or during a migration to a different key shape).
+   */
+  static async delete(recordKey: string): Promise<void> {
+    const db = await openDb();
+    try {
+      await txWrite(db, (store) => store.delete(recordKey));
+    } finally {
+      db.close();
+    }
+  }
+
+  /** The `Address32` account owner address, as `0x` + 64 hex chars (lowercase). */
   address(): string {
     return this.record.owner;
   }
@@ -116,11 +140,13 @@ export default class WebCryptoEd25519 implements Signer {
   }
 
   async containsKey(owner: string): Promise<boolean> {
-    return owner.toLowerCase() === this.record.owner.toLowerCase();
+    // record.owner is canonical lowercase; only normalize the caller side.
+    return owner.toLowerCase() === this.record.owner;
   }
 
   private assertOwner(owner: string): void {
-    if (owner.toLowerCase() !== this.record.owner.toLowerCase()) {
+    // record.owner is canonical lowercase; only normalize the caller side.
+    if (owner.toLowerCase() !== this.record.owner) {
       throw new Error("Invalid owner address");
     }
   }
@@ -139,8 +165,23 @@ function openDb(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAME);
       }
     };
+    // Fires when another open connection on a lower version blocks this upgrade.
+    // Surface as an error rather than hanging indefinitely.
+    req.onblocked = () =>
+      reject(
+        new Error(
+          `IndexedDB upgrade blocked: another open connection is holding ` +
+            `"${DB_NAME}" at an older version. Close other tabs of this site and retry.`,
+        ),
+      );
     req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // If another tab triggers a version upgrade, close this connection so the
+      // upgrade can proceed rather than blocking it indefinitely.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
   });
 }
 
@@ -158,13 +199,15 @@ function txRead<T>(
     const req = fn(store);
     req.onerror = () => reject(req.error);
     transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("IndexedDB read transaction aborted"));
     req.onsuccess = () => resolve(req.result);
   });
 }
 
 // Resolves on `transaction.oncomplete` (not `req.onsuccess`) so the caller knows the
 // write has reached the IndexedDB log, not just the request's buffer. Without this,
-// `create()` could return before the keypair is durable, and a tab close in the
+// `persist()` could return before the keypair is durable, and a tab close in the
 // intervening window would silently lose the autosigner association.
 function txWrite<T>(
   db: IDBDatabase,
@@ -180,6 +223,8 @@ function txWrite<T>(
       result = req.result;
     };
     transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("IndexedDB write transaction aborted"));
     transaction.oncomplete = () => resolve(result);
   });
 }
