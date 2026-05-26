@@ -6,7 +6,7 @@
 mod state;
 
 use linera_sdk::{
-    linera_base_types::{AccountOwner, StreamName, U128, WithContractAbi},
+    linera_base_types::{AccountOwner, StreamName, WithContractAbi, U128},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -211,11 +211,7 @@ impl WrappedFungibleTokenContract {
         }
     }
 
-    async fn execute_mint(
-        &mut self,
-        target_account: Account,
-        amount: U128,
-    ) -> FungibleResponse {
+    async fn execute_mint(&mut self, target_account: Account, amount: U128) -> FungibleResponse {
         self.require_mint_authorized();
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
@@ -237,12 +233,7 @@ impl WrappedFungibleTokenContract {
         FungibleResponse::Ok
     }
 
-    async fn claim(
-        &mut self,
-        source_account: Account,
-        amount: U128,
-        target_account: Account,
-    ) {
+    async fn claim(&mut self, source_account: Account, amount: U128, target_account: Account) {
         if source_account.chain_id == self.runtime.chain_id() {
             self.state.debit(source_account.owner, amount).await;
             self.finish_transfer_to_account(amount, target_account, source_account.owner)

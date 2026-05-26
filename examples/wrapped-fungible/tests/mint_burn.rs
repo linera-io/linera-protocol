@@ -6,9 +6,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use linera_sdk::{
-    linera_base_types::{
-        AccountOwner, ApplicationId, ChainId, CryptoHash, TestString, U128,
-    },
+    linera_base_types::{AccountOwner, ApplicationId, ChainId, CryptoHash, TestString, U128},
     test::TestValidator,
 };
 use wrapped_fungible::{

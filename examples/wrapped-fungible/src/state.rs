@@ -40,12 +40,7 @@ impl WrappedFungibleTokenState {
         self.balance(account).await.unwrap_or_default()
     }
 
-    pub async fn approve(
-        &mut self,
-        owner: AccountOwner,
-        spender: AccountOwner,
-        allowance: U128,
-    ) {
+    pub async fn approve(&mut self, owner: AccountOwner, spender: AccountOwner, allowance: U128) {
         let owner_spender = OwnerSpender::new(owner, spender);
         if allowance.0 == 0 {
             self.allowances
