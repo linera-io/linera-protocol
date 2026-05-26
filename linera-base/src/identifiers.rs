@@ -1343,8 +1343,27 @@ mod tests {
     #[test]
     fn ed25519_public_key_to_account_owner_known_vector() {
         use crate::crypto::Ed25519PublicKey;
-        // Fixed 32-byte public key (0x01..0x20). Pinning this guarantees the
-        // owner-derivation hash (Keccak256(BCS(Ed25519PublicKey))) does not drift.
+        // Pins the entire derivation pipeline against silent drift, not just BCS.
+        // The chain executed:
+        //
+        //   [u8; 32]
+        //     -> Ed25519PublicKey                       (newtype wrap)
+        //     -> AccountOwner::from(public_key)         (impl From, this file)
+        //          -> CryptoHash::new(&public_key)
+        //               -> Hashable::write into a Keccak256 hasher
+        //                    -> BcsHashable blanket impl writes:
+        //                         * type-name discriminator prefix
+        //                         * BCS body (32 raw bytes for [u8; 32])
+        //               -> Keccak256 finalize -> 32-byte hash
+        //     -> AccountOwner::Address32(hash)
+        //     -> Display: "0x" + lowercase hex
+        //
+        // Any change in any link breaks this test: BCS format, the
+        // `BcsHashable` type-name discriminator, the hash function, the
+        // `From<Ed25519PublicKey>` impl, the `Address32` carrier, or the
+        // `Display` formatting.
+        //
+        // Fixed 32-byte public key (0x01..0x20).
         let pubkey_bytes: [u8; 32] = [
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
             0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c,
