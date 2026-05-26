@@ -12,14 +12,7 @@ use wasm_bindgen::prelude::*;
 /// matching `AccountOwner::Display`.
 #[wasm_bindgen(js_name = "accountOwnerFromEd25519PublicKey")]
 pub fn account_owner_from_ed25519_public_key(public_key: &[u8]) -> Result<String, JsError> {
-    if public_key.len() != 32 {
-        return Err(JsError::new(&format!(
-            "expected 32 bytes for an Ed25519 public key, got {}",
-            public_key.len()
-        )));
-    }
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(public_key);
-    let pubkey = Ed25519PublicKey(bytes);
+    let pubkey =
+        Ed25519PublicKey::from_slice(public_key).map_err(|e| JsError::new(&e.to_string()))?;
     Ok(AccountOwner::from(pubkey).to_string())
 }
