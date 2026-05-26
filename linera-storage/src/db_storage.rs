@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fmt::Debug,
     sync::{Arc, OnceLock},
 };
@@ -40,7 +40,7 @@ use tracing::{debug, instrument};
 use {
     futures::channel::oneshot::{self, Receiver},
     linera_views::{random::generate_test_namespace, store::TestKeyValueDatabase},
-    std::{cmp::Reverse, collections::BTreeMap},
+    std::cmp::Reverse,
 };
 
 use crate::{ChainRuntimeContext, Clock, Storage};
@@ -341,6 +341,22 @@ impl MultiPartitionBatch {
         let index_value = bcs::to_bytes(&hash)?;
         self.put_key_value(index_root_key, height_key, index_value);
 
+        // Write event block height index: chain_id -> (stream_id, index) -> height
+        let event_index_root_key = RootKey::EventBlockHeight(chain_id).bytes();
+        let height_value = bcs::to_bytes(&height)?;
+        for event in certificate.value().block().body.events.iter().flatten() {
+            let event_key = to_event_key(&EventId {
+                chain_id,
+                stream_id: event.stream_id.clone(),
+                index: event.index,
+            });
+            self.put_key_value(
+                event_index_root_key.clone(),
+                event_key,
+                height_value.clone(),
+            );
+        }
+
         Ok(())
     }
 
@@ -468,6 +484,7 @@ pub enum RootKey {
     BlockExporterState(u32),
     /// The partition holding the height-to-hash certificate index of the given chain.
     BlockByHeight(ChainId),
+    EventBlockHeight(ChainId),
 }
 
 const CHAIN_ID_TAG: u8 = 0;
@@ -1756,6 +1773,39 @@ where
             }
         }
 
+        Ok(results)
+    }
+
+    async fn read_event_block_heights(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<Vec<Option<BlockHeight>>, ViewError> {
+        if event_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Group event IDs by chain ID for batch lookups per partition.
+        let mut chain_groups = BTreeMap::<_, Vec<_>>::new();
+        for (i, event_id) in event_ids.iter().enumerate() {
+            chain_groups
+                .entry(event_id.chain_id)
+                .or_default()
+                .push((i, to_event_key(event_id)));
+        }
+        let mut results = vec![None; event_ids.len()];
+        for (chain_id, entries) in chain_groups {
+            let root_key = RootKey::EventBlockHeight(chain_id).bytes();
+            let store = self.database.open_shared(&root_key)?;
+            let keys = entries
+                .iter()
+                .map(|(_, key)| key.clone())
+                .collect::<Vec<_>>();
+            let values = store.read_multi_values_bytes(&keys).await?;
+            for ((original_index, _), value) in entries.into_iter().zip(values) {
+                if let Some(bytes) = value {
+                    results[original_index] = Some(bcs::from_bytes::<BlockHeight>(&bytes)?);
+                }
+            }
+        }
         Ok(results)
     }
 
