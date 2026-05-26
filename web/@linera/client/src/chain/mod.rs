@@ -166,6 +166,27 @@ impl Chain {
         Ok(ownership.verify_owner(&owner))
     }
 
+    /// Returns the weight of a regular owner of this chain, or `undefined` if `owner` is
+    /// not a regular owner (it may be a super owner, which has no weight, or not an owner
+    /// at all).
+    ///
+    /// The weight determines how often the owner is selected as the leader in
+    /// single-leader and validator rounds.
+    ///
+    /// # Errors
+    /// If the chain ownership cannot be retrieved.
+    #[wasm_bindgen(js_name = ownerWeight)]
+    pub async fn owner_weight(&self, owner: AccountOwner) -> JsResult<Option<f64>> {
+        let ownership = self.chain_client.query_chain_ownership().await?;
+        let weight = ownership.owners.get(&owner).copied();
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "owner weights are small relative values"
+        )]
+        let weight = weight.map(|weight| weight as f64);
+        Ok(weight)
+    }
+
     /// Discards any pending block proposal on this chain.
     ///
     /// When a proposal fails to reach a quorum (for example because the client went

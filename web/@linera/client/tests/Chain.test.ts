@@ -45,6 +45,21 @@ test("isOwner reflects chain membership", async () => {
   expect(await chain.isOwner(stranger)).toBe(true);
 }, 150000);
 
+test("ownerWeight reads owner weights", async () => {
+  const { chain } = await freshChain();
+  const owner = linera.signer.PrivateKey.createRandom().address();
+
+  // An address that is not a regular owner has no weight.
+  expect(await chain.ownerWeight(owner)).toBeUndefined();
+
+  await chain.addOwner(owner, { weight: 100 });
+  expect(await chain.ownerWeight(owner)).toBe(100);
+
+  // Re-adding an existing owner overwrites its weight.
+  await chain.addOwner(owner, { weight: 250 });
+  expect(await chain.ownerWeight(owner)).toBe(250);
+}, 150000);
+
 test("clearPendingProposal is a no-op when nothing is pending", async () => {
   const { chain } = await freshChain();
   // No proposal has failed, so there is nothing to clear; this should resolve.
