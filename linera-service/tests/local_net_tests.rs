@@ -988,6 +988,72 @@ async fn test_sync_validator(config: LocalNetConfig) -> Result<()> {
     Ok(())
 }
 
+/// Tests that `validator benchmark` runs every read-side layer against a live
+/// validator and emits a well-formed report (JSON to a file, brief to stdout).
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_service_grpc"))]
+#[cfg_attr(feature = "dynamodb", test_case(LocalNetConfig::new_test(Database::DynamoDb, Network::Grpc) ; "aws_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_validator_benchmark(config: LocalNetConfig) -> Result<()> {
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, client) = config.instantiate().await?;
+    let chain = client.default_chain().expect("Client has no default chain");
+    let validator_address = net.validator_address(0);
+
+    let dir = tempfile::tempdir()?;
+    let json_path = dir.path().join("report.json");
+
+    // Keep every layer small so the test stays fast; --deep is intentionally off.
+    let stdout = client
+        .validator_benchmark(
+            validator_address,
+            [&chain],
+            &[
+                "--baseline-requests",
+                "5",
+                "--stress-levels",
+                "1,2",
+                "--stress-duration-secs",
+                "1",
+                "--bulk-batch-size",
+                "10",
+                "--bulk-concurrency",
+                "1",
+                "--tip-lag-samples",
+                "1",
+                "--tip-lag-interval-secs",
+                "1",
+                "--observer-location",
+                "integration-test",
+                "--output",
+                &format!("json:{},brief", json_path.display()),
+            ],
+        )
+        .await?;
+
+    // The brief recap goes to stdout.
+    assert!(stdout.contains("Validator Benchmark"));
+    assert!(stdout.contains("integration-test"));
+
+    // The JSON report must parse and carry every read-side layer; partial_sync
+    // is absent because --deep was not passed.
+    let json = std::fs::read_to_string(&json_path)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    assert!(report["metadata"]["candidate"]["address"].is_string());
+    assert!(report["layers"]["preflight"].is_object());
+    assert!(report["layers"]["read_baseline"]["per_chain"].is_array());
+    assert!(report["layers"]["read_stress"]["per_chain"].is_array());
+    assert!(report["layers"]["bulk_download"]["per_chain"].is_array());
+    assert!(report["layers"]["tip_lag"]["per_chain"].is_array());
+    assert!(report["layers"]["partial_sync"].is_null());
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+    Ok(())
+}
+
 /// Tests if a validator can process blocks on a child chain without syncing the parent
 /// chain.
 // #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Udp) ; "scylladb_udp"))]

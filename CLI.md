@@ -61,6 +61,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera validator`↴](#linera-validator)
 * [`linera validator add`↴](#linera-validator-add)
 * [`linera validator batch-query`↴](#linera-validator-batch-query)
+* [`linera validator benchmark`↴](#linera-validator-benchmark)
 * [`linera validator update`↴](#linera-validator-update)
 * [`linera validator list`↴](#linera-validator-list)
 * [`linera validator query`↴](#linera-validator-query)
@@ -1367,6 +1368,7 @@ Manage validators in the committee
 
 * `add` — Add a validator to the committee
 * `batch-query` — Query multiple validators using a JSON specification file
+* `benchmark` — Multi-layer pre-onboarding benchmark for a single candidate validator
 * `update` — Apply multiple validator changes from JSON input
 * `list` — List all validators in the committee
 * `query` — Query a single validator's state and connectivity
@@ -1409,6 +1411,70 @@ Reads validator specifications from a JSON file and queries their state. The JSO
 ###### **Options:**
 
 * `--chain-id <CHAIN_ID>` — Chain ID to query (defaults to default chain)
+
+
+
+## `linera validator benchmark`
+
+Multi-layer pre-onboarding benchmark for a single candidate validator.
+
+Probes the candidate across read-side primitives (preflight, baseline, concurrency ramp, bulk download, tip lag) and emits a structured report. The optional `--deep` layer additionally exercises the write path by syncing a bounded number of blocks; it has a stateful side effect on the candidate and is therefore off by default.
+
+PREREQUISITE: the read layers are only meaningful if the candidate already holds the `--chain` you pass. A not-yet-committee candidate may hold no blocks; in that case pre-sync it (`linera validator sync`) or pass `--deep`, which seeds the blocks first (and is run before the read layers). The tool warns when a chain is not held.
+
+**Usage:** `linera validator benchmark [OPTIONS] --chain <CHAIN> <ADDRESS>`
+
+###### **Arguments:**
+
+* `<ADDRESS>` — Network address of the candidate validator (e.g. `grpcs://host:port`)
+
+###### **Options:**
+
+* `--public-key <PUBLIC_KEY>` — Expected public key of the validator (identity verification)
+* `--chain <CHAIN>` — Chain to exercise. Repeat for multiple chains. At least one required
+* `--skip-preflight` — Skip L1 preflight (version, network description, RTT)
+* `--skip-read-baseline` — Skip L3 read latency baseline
+* `--skip-read-stress` — Skip L4 read stress (concurrency ramp)
+* `--skip-bulk-download` — Skip L5 bulk certificate download
+* `--skip-tip-lag` — Skip L6 tip-lag snapshot
+* `--deep` — L2 partial sync (seed): sync a bounded run of blocks into the candidate, run before the read layers so they exercise real data. Stateful side effect on the candidate; off by default
+* `--baseline-requests <BASELINE_REQUESTS>` — Number of sequential chain-info queries per chain in L3
+
+  Default value: `200`
+* `--stress-levels <STRESS_LEVELS>` — Concurrency levels for the L4 ramp
+
+  Default value: `1,2,4,8,16,32,64`
+* `--stress-duration-secs <STRESS_DURATION_SECS>` — Seconds to sustain each L4 concurrency level
+
+  Default value: `30`
+* `--bulk-batch-size <BULK_BATCH_SIZE>` — Number of heights per L5 download batch
+
+  Default value: `100`
+* `--bulk-concurrency <BULK_CONCURRENCY>` — Concurrency levels for L5 bulk download
+
+  Default value: `1,8`
+* `--bulk-height-range <BULK_HEIGHT_RANGE>` — Either `auto` (last batch_size * 100 heights up to the candidate's tip) or an explicit `FROM:TO` range
+
+  Default value: `auto`
+* `--tip-lag-samples <TIP_LAG_SAMPLES>` — Number of tip-lag samples in L6
+
+  Default value: `3`
+* `--tip-lag-interval-secs <TIP_LAG_INTERVAL_SECS>` — Seconds between L6 tip-lag samples
+
+  Default value: `120`
+* `--deep-blocks <DEEP_BLOCKS>` — Maximum number of blocks to seed in L2 partial sync (with `--deep`)
+
+  Default value: `1000`
+* `--deep-chain <DEEP_CHAIN>` — Chain to use for the L2 partial-sync seed (defaults to the first `--chain`)
+* `--output <OUTPUT>` — Output spec, repeatable; or comma/+-separated within a single value. SPEC: `<format>` (stdout) or `<format>:<path>` (file). Formats: `json`, `yaml`, `md`, `brief`. Default if omitted: `md` to stdout
+* `--observer-location <OBSERVER_LOCATION>` — Free-form tag carried in the report (e.g. `OVH US-EAST`)
+
+  Default value: `unspecified`
+* `--no-progress` — Disable the interactive progress UI (auto-disabled when stderr is not a TTY)
+* `--rpc-timeout-secs <RPC_TIMEOUT_SECS>` — Per-RPC timeout in seconds. A call that exceeds it is recorded as a `timeout` error and the run keeps going, so a hung validator never blocks
+
+  Default value: `30`
+* `--abort-on-preflight-fail` — Abort the run if preflight fails (default: continue and report)
 
 
 
