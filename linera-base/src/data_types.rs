@@ -104,47 +104,52 @@ impl TryFrom<U256> for Amount {
     }
 }
 
-/// Raw `u128` token sub-units, in the source token's decimal scale.
-///
-/// Unlike [`Amount`] (Linera-native, hardcoded 18 decimal places), `TokenAmount`
-/// carries no implicit decimal scale: it is whatever the source token's own
-/// `decimals()` says it is. Used at application boundaries that bridge non-18-
-/// decimal tokens (e.g. wrapped USDC at 6) so callers don't accidentally read
-/// the value through Linera's 18-decimal lens.
-///
-/// Wire format: decimal string in human-readable serializers (JSON / GraphQL,
-/// since `u128` has no `async_graphql::InputType`), bare `u128` in binary
-/// (BCS) — identical bytes to [`Amount`] over BCS.
+/// A `u128` newtype that serialises as a decimal string in human-readable
+/// formats (JSON / GraphQL) and as a bare `u128` in binary (BCS).
 #[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Hash)]
-pub struct TokenAmount(pub u128);
+pub struct U128(pub u128);
 
-impl std::fmt::Display for TokenAmount {
+impl std::fmt::Display for U128 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
-impl std::str::FromStr for TokenAmount {
+impl std::str::FromStr for U128 {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        u128::from_str(s).map(TokenAmount)
+        u128::from_str(s).map(U128)
     }
 }
 
-impl From<u128> for TokenAmount {
+impl From<u128> for U128 {
     fn from(value: u128) -> Self {
-        TokenAmount(value)
+        U128(value)
     }
 }
 
-impl From<TokenAmount> for u128 {
-    fn from(value: TokenAmount) -> Self {
+impl From<U128> for u128 {
+    fn from(value: U128) -> Self {
         value.0
     }
 }
 
-impl Serialize for TokenAmount {
+impl std::ops::Deref for U128 {
+    type Target = u128;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for U128 {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Serialize for U128 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -157,16 +162,16 @@ impl Serialize for TokenAmount {
     }
 }
 
-impl<'de> Deserialize<'de> for TokenAmount {
+impl<'de> Deserialize<'de> for U128 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            s.parse().map(TokenAmount).map_err(serde::de::Error::custom)
+            s.parse().map(U128).map_err(serde::de::Error::custom)
         } else {
-            u128::deserialize(deserializer).map(TokenAmount)
+            u128::deserialize(deserializer).map(U128)
         }
     }
 }
@@ -1726,10 +1731,7 @@ impl MessagePolicy {
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
-doc_scalar!(
-    TokenAmount,
-    "Raw u128 token sub-units in the source token's decimal scale."
-);
+doc_scalar!(U128, "A 128-bit unsigned integer.");
 doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"

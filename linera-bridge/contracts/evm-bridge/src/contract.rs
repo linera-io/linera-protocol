@@ -11,7 +11,7 @@ use fungible::Account;
 use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
-    linera_base_types::{ApplicationId, TokenAmount, WithContractAbi},
+    linera_base_types::{ApplicationId, U128, WithContractAbi},
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
@@ -267,7 +267,7 @@ impl EvmBridgeContract {
         }
 
         // 6. Convert deposit fields to Linera types and call Mint
-        let amount = TokenAmount(
+        let amount = U128(
             deposit
                 .amount
                 .try_into()

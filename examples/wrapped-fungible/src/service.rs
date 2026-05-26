@@ -11,7 +11,7 @@ use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use fungible::OwnerSpender;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, TokenAmount, WithServiceAbi},
+    linera_base_types::{AccountOwner, U128, WithServiceAbi},
     views::{MapView, View},
     Service, ServiceRuntime,
 };
@@ -57,11 +57,11 @@ impl Service for WrappedFungibleTokenService {
 
 #[Object]
 impl WrappedFungibleTokenService {
-    async fn accounts(&self) -> &MapView<AccountOwner, TokenAmount> {
+    async fn accounts(&self) -> &MapView<AccountOwner, U128> {
         &self.state.accounts
     }
 
-    async fn allowances(&self) -> &MapView<OwnerSpender, TokenAmount> {
+    async fn allowances(&self) -> &MapView<OwnerSpender, U128> {
         &self.state.allowances
     }
 

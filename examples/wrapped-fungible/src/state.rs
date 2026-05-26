@@ -3,18 +3,18 @@
 
 use fungible::OwnerSpender;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, TokenAmount},
+    linera_base_types::{AccountOwner, U128},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 use wrapped_fungible::InitialState;
 
-/// Wrapped fungible token state, with balances stored as [`TokenAmount`]
+/// Wrapped fungible token state, with balances stored as [`U128`]
 /// (raw `u128` in the source ERC-20's decimal scale).
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct WrappedFungibleTokenState {
-    pub accounts: MapView<AccountOwner, TokenAmount>,
-    pub allowances: MapView<OwnerSpender, TokenAmount>,
+    pub accounts: MapView<AccountOwner, U128>,
+    pub allowances: MapView<OwnerSpender, U128>,
 }
 
 #[allow(dead_code)]
@@ -29,14 +29,14 @@ impl WrappedFungibleTokenState {
         }
     }
 
-    pub async fn balance(&self, account: &AccountOwner) -> Option<TokenAmount> {
+    pub async fn balance(&self, account: &AccountOwner) -> Option<U128> {
         self.accounts
             .get(account)
             .await
             .expect("Failure in the retrieval")
     }
 
-    pub async fn balance_or_default(&self, account: &AccountOwner) -> TokenAmount {
+    pub async fn balance_or_default(&self, account: &AccountOwner) -> U128 {
         self.balance(account).await.unwrap_or_default()
     }
 
@@ -44,7 +44,7 @@ impl WrappedFungibleTokenState {
         &mut self,
         owner: AccountOwner,
         spender: AccountOwner,
-        allowance: TokenAmount,
+        allowance: U128,
     ) {
         let owner_spender = OwnerSpender::new(owner, spender);
         if allowance.0 == 0 {
@@ -65,7 +65,7 @@ impl WrappedFungibleTokenState {
         &mut self,
         owner: AccountOwner,
         spender: AccountOwner,
-        amount: TokenAmount,
+        amount: U128,
     ) {
         if amount.0 == 0 {
             return;
@@ -85,7 +85,7 @@ impl WrappedFungibleTokenState {
                 .expect("Failed to remove an empty account");
         } else {
             self.accounts
-                .insert(&owner, TokenAmount(new_balance))
+                .insert(&owner, U128(new_balance))
                 .expect("Failed insertion operation");
         }
         let owner_spender = OwnerSpender::new(owner, spender);
@@ -104,23 +104,23 @@ impl WrappedFungibleTokenState {
                 .expect("Failed to remove an empty allowance");
         } else {
             self.allowances
-                .insert(&owner_spender, TokenAmount(new_allowance))
+                .insert(&owner_spender, U128(new_allowance))
                 .expect("Failed insertion operation");
         }
     }
 
-    pub async fn credit(&mut self, account: AccountOwner, amount: TokenAmount) {
+    pub async fn credit(&mut self, account: AccountOwner, amount: U128) {
         if amount.0 == 0 {
             return;
         }
         let balance = self.balance_or_default(&account).await;
-        let new_balance = TokenAmount(balance.0.saturating_add(amount.0));
+        let new_balance = U128(balance.0.saturating_add(amount.0));
         self.accounts
             .insert(&account, new_balance)
             .expect("Failed insert statement");
     }
 
-    pub async fn debit(&mut self, account: AccountOwner, amount: TokenAmount) {
+    pub async fn debit(&mut self, account: AccountOwner, amount: U128) {
         if amount.0 == 0 {
             return;
         }
@@ -134,7 +134,7 @@ impl WrappedFungibleTokenState {
                 .expect("Failed to remove an empty account");
         } else {
             self.accounts
-                .insert(&account, TokenAmount(new_balance))
+                .insert(&account, U128(new_balance))
                 .expect("Failed insertion operation");
         }
     }

@@ -29,7 +29,7 @@ use alloy::{
 use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Bytecode, TokenAmount},
+    data_types::{Bytecode, U128},
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
@@ -447,7 +447,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     // ══════════════════════════════════════════════════════════════════
     let evm_recipient = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
     let receiver: AccountOwner = format!("0x{evm_recipient}").parse()?;
-    let withdraw_amount = TokenAmount(25u128 * 10u128.pow(18));
+    let withdraw_amount = U128(25u128 * 10u128.pow(18));
 
     tracing::info!("Sending cross-chain withdrawal from chain B to Address20 on chain A...");
     cc_b.synchronize_from_validators().await?;

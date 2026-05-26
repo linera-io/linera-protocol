@@ -19,7 +19,7 @@ use anyhow::Context as _;
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Bytecode, TokenAmount},
+    data_types::{Bytecode, U128},
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
@@ -155,7 +155,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         bridge_app_id: None,
     };
     let init_state = InitialState {
-        accounts: BTreeMap::from([(owner_a, TokenAmount(1000u128 * 10u128.pow(18)))]),
+        accounts: BTreeMap::from([(owner_a, U128(1000u128 * 10u128.pow(18)))]),
     };
     let (app_id, create_cert): (
         linera_base::identifiers::ApplicationId<WrappedFungibleTokenAbi>,
@@ -233,7 +233,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!("Sending wrapped-fungible transfer to owner_b on chain B...");
     let transfer_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_a,
-        amount: TokenAmount(100u128 * 10u128.pow(18)),
+        amount: U128(100u128 * 10u128.pow(18)),
         target_account: Account {
             chain_id: chain_b,
             owner: owner_b,
@@ -282,7 +282,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!("Withdrawing tokens from chain B to evm_recipient on chain A...");
     let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
         owner: owner_b,
-        amount: TokenAmount(100u128 * 10u128.pow(18)),
+        amount: U128(100u128 * 10u128.pow(18)),
         target_account: Account {
             chain_id: chain_a,
             owner: receiver,

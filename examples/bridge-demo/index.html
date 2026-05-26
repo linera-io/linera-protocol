@@ -599,7 +599,7 @@
           const amountSubUnits = ethers.parseUnits(amount, tokenDecimals).toString();
           const mutation = gql(`mutation(
             $donor: AccountOwner!,
-            $amount: TokenAmount!,
+            $amount: U128!,
             $recipient: FungibleAccount!
           ) {
             transfer(owner: $donor, amount: $amount, targetAccount: $recipient)
