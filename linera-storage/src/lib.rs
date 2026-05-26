@@ -229,6 +229,14 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         indices: &[(BlockHeight, CryptoHash)],
     ) -> Result<(), ViewError>;
 
+    /// Looks up the block heights where the given events were published.
+    /// Returns `None` for events that are not in the index (e.g. published before the
+    /// index was populated).
+    async fn read_event_block_heights(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<Vec<Option<BlockHeight>>, ViewError>;
+
     /// Reads the event with the given ID.
     async fn read_event(&self, id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
