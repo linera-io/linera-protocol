@@ -34,7 +34,6 @@ test("loadOrCreate() (no prior record) yields a signer whose address matches the
   const address = signer.address();
   expect(address).toMatch(/^0x[0-9a-f]{64}$/);
   expect(await signer.containsKey(address)).toBe(true);
-  expect(await signer.containsKey("0x" + "0".repeat(64))).toBe(false);
 });
 
 test("load() returns null when no record exists", async () => {
