@@ -173,17 +173,21 @@ COPY --from=binaries \
     ./
 
 # ── Stage 4: tests-builder — compile the remote-net integration test ──
-# Builds /linera_net_tests by parsing cargo's JSON output for the executable
-# path; the underlying binary lives in /app/target/release/deps/ which is a
-# cache mount and won't persist past this RUN, hence the explicit cp.
+# Builds /linera_net_tests and /linera-benchmark; also pre-compiles all
+# example Wasm contracts so the test binary can publish them without needing
+# cargo or source code at runtime.  The test binary lives in
+# /app/target/release/deps/ (a cache mount) so it must be copied out in the
+# same RUN.
 
 FROM builder_src AS tests-builder
 ARG build_flag
+ARG build_folder
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    cargo test --no-run ${build_flag:+"$build_flag"} \
+    cargo build ${build_flag:+"$build_flag"} --bin linera-benchmark \
+    && cargo test --no-run ${build_flag:+"$build_flag"} \
         -p linera-service \
         --features remote-net \
         --test linera_net_tests \
@@ -191,7 +195,26 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     && jq -r 'select(.executable != null) | .executable' /tmp/cargo-tests.json \
         | grep '/linera_net_tests-' \
         | head -1 \
-        | xargs -I{} cp {} /linera_net_tests
+        | xargs -I{} cp {} /linera_net_tests \
+    && cp target/"${build_folder}"/linera-benchmark /linera-benchmark
+
+# Build every example contract exactly the way CI does (.github/workflows/
+# scylladb.yml: `cd examples && cargo build --locked --release --target
+# wasm32-unknown-unknown`). Building the whole examples workspace guarantees
+# every `<name>_contract.wasm` / `<name>_service.wasm` the tests publish is
+# produced — an explicit `-p` list silently misses contracts.
+#
+# No cache mount on examples/target: the wasm must persist into this image
+# layer for the `tests` stage to copy, and building into a real dir (as CI
+# does) avoids any cache-mount visibility ambiguity.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cd examples \
+    && cargo build --locked --release --target wasm32-unknown-unknown \
+    && mkdir -p /wasm-examples \
+    && find target/wasm32-unknown-unknown/release \
+        -maxdepth 1 -name "*.wasm" \
+        -exec cp {} /wasm-examples/ \;
 
 # ── Stage 5: tests runtime — runtime image + remote-net test binary ──
 # Used by linera-infra's network-health-check CronJob; production image
@@ -201,3 +224,16 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 FROM runtime AS tests
 RUN ln -s /linera /usr/local/bin/linera
 COPY --from=tests-builder /linera_net_tests /usr/local/bin/linera-net-tests
+COPY --from=tests-builder /linera-benchmark /usr/local/bin/linera-benchmark
+# Stub cargo so build_application() succeeds without a Rust toolchain: it calls
+# `cargo build`, the stub exits 0, then reads the pre-built .wasm files below.
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/cargo && chmod +x /usr/local/bin/cargo
+# The remote-net tests run from `/` and treat `/examples` as a linera-protocol
+# checkout: they read contract sources and snapshot fixtures (e.g.
+# examples/counter/tests/snapshots/format__format.snap), resolve each contract
+# via `…/examples/<name>/../target/…/release/<name>_contract.wasm` (needs the
+# real `/examples/<name>` dir to exist for the `..` to collapse), and
+# linera-benchmark canonicalize()s `/examples/fungible`. Ship the examples
+# source tree (.dockerignore strips target/) and overlay the pre-built wasm.
+COPY examples /examples
+COPY --from=tests-builder /wasm-examples/ /examples/target/wasm32-unknown-unknown/release/
