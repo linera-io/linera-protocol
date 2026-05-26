@@ -61,7 +61,7 @@ fn compute_tag(variant_name: &str) -> u32 {
     (val & 0x07FF_FFFF) | 0x0800_0000
 }
 
-/// Compute all variant tags, returning an error on a (vanishingly unlikely) collision.
+/// Computes all variant tags, returning an error on a (vanishingly unlikely) collision.
 fn variant_tags(input: &ItemEnum) -> Result<Vec<(String, u32, &Variant)>> {
     let mut out = Vec::with_capacity(input.variants.len());
     for variant in &input.variants {
@@ -94,7 +94,7 @@ fn reject_generics(input: &ItemEnum) -> Result<()> {
     Ok(())
 }
 
-/// Emit the combined `Serialize` + `Deserialize` + `StableEnumTrace` impls.
+/// Emits the combined `Serialize` + `Deserialize` + `StableEnumTrace` impls.
 pub fn generate_all(input: &ItemEnum, crate_root: CrateRoot) -> Result<TokenStream2> {
     let ser = generate_serialize(input, &crate_root)?;
     let de = generate_deserialize(input, &crate_root)?;
