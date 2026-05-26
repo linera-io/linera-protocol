@@ -7,3 +7,4 @@ pub mod command;
 pub mod common_options;
 pub mod net_up_utils;
 pub mod validator;
+pub mod validator_benchmark;
