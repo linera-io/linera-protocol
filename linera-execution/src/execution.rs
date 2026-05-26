@@ -160,7 +160,7 @@ where
     /// [`SystemMessage::Checkpoint`] to each origin chain so the origin can later trim
     /// its outbox dump of already-delivered messages.
     pub async fn apply_checkpoint(
-        &self,
+        &mut self,
         prepared: PreparedCheckpoint,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
@@ -187,6 +187,10 @@ where
                 }),
             ));
         }
+        // We just emitted notifications for everyone in `pending_checkpoint_targets`;
+        // reset the set so the next own checkpoint only fires for origins that send
+        // us a fresh non-`Checkpoint` message in the meantime.
+        self.system.pending_checkpoint_targets.clear();
         Ok(())
     }
 

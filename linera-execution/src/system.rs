@@ -121,7 +121,17 @@ pub struct SystemExecutionStateView<C> {
     /// response's `outbox_block_hashes`. We store heights only; the matching block
     /// hashes are looked up from `block_hashes` at checkpoint-creation time, since the
     /// current block's hash is unknown while we're still executing it.
+    ///
+    /// Excludes blocks whose only messages to a given recipient were
+    /// `SystemMessage::Checkpoint`: those don't trigger a return notification from the
+    /// recipient, so tracking them would accumulate forever.
     pub unfinalized_message_blocks: MapView<C, ChainId, BTreeSet<BlockHeight>>,
+    /// Chains from which we've received at least one non-`Checkpoint` message since
+    /// our last `SystemOperation::Checkpoint`. Determines whom to notify with a
+    /// `SystemMessage::Checkpoint` at the next checkpoint operation. Excluding
+    /// `Checkpoint` messages here is what breaks the otherwise-perpetual
+    /// notification ping-pong between two chains that ever exchanged a real message.
+    pub pending_checkpoint_targets: SetView<C, ChainId>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -149,6 +159,10 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             finalized_sent_messages: self.finalized_sent_messages.with_context(ctx.clone()).await,
             unfinalized_message_blocks: self
                 .unfinalized_message_blocks
+                .with_context(ctx.clone())
+                .await,
+            pending_checkpoint_targets: self
+                .pending_checkpoint_targets
                 .with_context(ctx.clone())
                 .await,
         }

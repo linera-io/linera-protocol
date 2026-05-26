@@ -959,30 +959,40 @@ where
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         let recipients = block_execution_tracker.recipients();
+        let non_checkpoint_recipients = block_execution_tracker.non_checkpoint_recipients();
         let mut recipient_heights = Vec::new();
         for (recipient, height) in chain
             .previous_message_blocks
             .multi_get_pairs(recipients)
             .await?
         {
-            chain
-                .previous_message_blocks
-                .insert(&recipient, block.height)?;
-            // Track this block's height as pending acknowledgement from the recipient.
-            // The matching hash isn't known yet (we're mid-execution), so we only
-            // store the height; the checkpoint pre-block hook resolves heights to
-            // hashes via `block_hashes` when it builds the oracle response.
-            let mut heights = chain
-                .system
-                .unfinalized_message_blocks
-                .get(&recipient)
-                .await?
-                .unwrap_or_default();
-            heights.insert(block.height);
-            chain
-                .system
-                .unfinalized_message_blocks
-                .insert(&recipient, heights)?;
+            // Only `Checkpoint`-only blocks are excluded from the chain-level
+            // tracking. Otherwise the recipient never acknowledges (a `Checkpoint`
+            // doesn't trigger a return `Checkpoint`), so the entry would never get
+            // trimmed. Off-chain outbox bookkeeping further down still queues these
+            // for delivery; only the `previous_message_blocks` /
+            // `unfinalized_message_blocks` chain skips them.
+            if non_checkpoint_recipients.contains(&recipient) {
+                chain
+                    .previous_message_blocks
+                    .insert(&recipient, block.height)?;
+                // Track this block's height as pending acknowledgement from the
+                // recipient. The matching hash isn't known yet (we're mid-execution),
+                // so we only store the height; the checkpoint pre-block hook resolves
+                // heights to hashes via `block_hashes` when it builds the oracle
+                // response.
+                let mut heights = chain
+                    .system
+                    .unfinalized_message_blocks
+                    .get(&recipient)
+                    .await?
+                    .unwrap_or_default();
+                heights.insert(block.height);
+                chain
+                    .system
+                    .unfinalized_message_blocks
+                    .insert(&recipient, heights)?;
+            }
             if let Some(height) = height {
                 recipient_heights.push((recipient, height));
             }
@@ -1177,13 +1187,22 @@ where
         })
     }
 
-    /// Snapshots `(origin, next_cursor_to_remove)` for each inbox we've ever received
-    /// from. Used by the checkpoint pre-block hook so the matching operation handler
-    /// can emit a [`SystemMessage::Checkpoint`] to each origin chain.
+    /// Snapshots `(origin, next_cursor_to_remove)` for each chain we've received a
+    /// non-`Checkpoint` message from since our last own checkpoint. Used by the
+    /// pre-block hook so the matching operation handler can emit a
+    /// [`SystemMessage::Checkpoint`] to each origin chain. Iterating
+    /// `pending_checkpoint_targets` (instead of every inbox) is what prevents the
+    /// notification ping-pong: a chain that only ever sent us `Checkpoint`s is
+    /// excluded here, so we never reply with a `Checkpoint` of our own.
     async fn collect_inbox_cursors(&self) -> Result<Vec<(ChainId, Cursor)>, ChainError> {
-        let origins = self.inboxes.indices().await?;
-        let mut cursors = Vec::with_capacity(origins.len());
-        for origin in origins {
+        let targets = self
+            .execution_state
+            .system
+            .pending_checkpoint_targets
+            .indices()
+            .await?;
+        let mut cursors = Vec::with_capacity(targets.len());
+        for origin in targets {
             let Some(inbox) = self.inboxes.try_load_entry(&origin).await? else {
                 continue;
             };
