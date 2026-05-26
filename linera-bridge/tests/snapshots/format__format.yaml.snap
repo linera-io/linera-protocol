@@ -209,6 +209,11 @@ CryptoHash:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+Cursor:
+  STRUCT:
+    - height:
+        TYPENAME: BlockHeight
+    - index: U32
 Epoch:
   NEWTYPESTRUCT: U32
 Event:
@@ -364,6 +369,9 @@ OracleResponse:
           - used_blobs:
               SEQ:
                 TYPENAME: BlobId
+          - outbox_block_hashes:
+              SEQ:
+                TYPENAME: CryptoHash
 OutgoingMessage:
   STRUCT:
     - destination:
@@ -452,6 +460,11 @@ SystemMessage:
               TYPENAME: Amount
           - recipient:
               TYPENAME: Account
+    2:
+      CheckpointAck:
+        STRUCT:
+          - latest_received_cursor:
+              TYPENAME: Cursor
 SystemOperation:
   ENUM:
     0:

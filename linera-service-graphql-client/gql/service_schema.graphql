@@ -460,6 +460,13 @@ type ChangeOwnershipOperationMetadata {
 }
 
 """
+CheckpointAck message metadata.
+"""
+type CheckpointAckMessageMetadata {
+	latestReceivedCursor: Cursor!
+}
+
+"""
 Claim operation metadata.
 """
 type ClaimOperationMetadata {
@@ -526,8 +533,19 @@ A Keccak256 value
 """
 scalar CryptoHash
 
+"""
+A logical position in a chain's stream of outgoing messages: the height of the block
+that produced the message and the index of the message-producing transaction within
+that block.
+"""
 type Cursor {
+	"""
+	The height of the producing block.
+	"""
 	height: BlockHeight!
+	"""
+	The transaction index within the block.
+	"""
 	index: Int!
 }
 
@@ -1485,6 +1503,10 @@ type SystemMessageMetadata {
 	Withdraw message details
 	"""
 	withdraw: WithdrawMessageMetadata
+	"""
+	CheckpointAck message details
+	"""
+	checkpointAck: CheckpointAckMessageMetadata
 }
 
 """

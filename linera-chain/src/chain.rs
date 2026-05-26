@@ -1245,7 +1245,7 @@ where
             new_nonempty.insert(recipient);
         }
         self.outbox_counters.set(new_counters.into());
-        self.nonempty_outboxes.set(new_nonempty.into());
+        self.nonempty_outboxes.set(new_nonempty);
         Ok(())
     }
 

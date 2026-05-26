@@ -920,6 +920,37 @@ library BridgeTypes {
         return value;
     }
 
+    struct Cursor {
+        BlockHeight height;
+        uint32 index;
+    }
+
+    function bcs_serialize_Cursor(Cursor memory input) internal pure returns (bytes memory) {
+        bytes memory result = bcs_serialize_BlockHeight(input.height);
+        return abi.encodePacked(result, bcs_serialize_uint32(input.index));
+    }
+
+    function bcs_deserialize_offset_Cursor(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, Cursor memory)
+    {
+        uint256 new_pos;
+        BlockHeight memory height;
+        (new_pos, height) = bcs_deserialize_offset_BlockHeight(pos, input);
+        uint32 index;
+        (new_pos, index) = bcs_deserialize_offset_uint32(new_pos, input);
+        return (new_pos, Cursor(height, index));
+    }
+
+    function bcs_deserialize_Cursor(bytes memory input) internal pure returns (Cursor memory) {
+        uint256 new_pos;
+        Cursor memory value;
+        (new_pos, value) = bcs_deserialize_offset_Cursor(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct Epoch {
         uint32 value;
     }
@@ -1776,6 +1807,7 @@ library BridgeTypes {
     struct OracleResponse_Checkpoint {
         CryptoHash[] execution_state_blobs;
         BlobId[] used_blobs;
+        CryptoHash[] outbox_block_hashes;
     }
 
     function bcs_serialize_OracleResponse_Checkpoint(OracleResponse_Checkpoint memory input)
@@ -1784,7 +1816,8 @@ library BridgeTypes {
         returns (bytes memory)
     {
         bytes memory result = bcs_serialize_seq_CryptoHash(input.execution_state_blobs);
-        return abi.encodePacked(result, bcs_serialize_seq_BlobId(input.used_blobs));
+        result = abi.encodePacked(result, bcs_serialize_seq_BlobId(input.used_blobs));
+        return abi.encodePacked(result, bcs_serialize_seq_CryptoHash(input.outbox_block_hashes));
     }
 
     function bcs_deserialize_offset_OracleResponse_Checkpoint(uint256 pos, bytes memory input)
@@ -1797,7 +1830,9 @@ library BridgeTypes {
         (new_pos, execution_state_blobs) = bcs_deserialize_offset_seq_CryptoHash(pos, input);
         BlobId[] memory used_blobs;
         (new_pos, used_blobs) = bcs_deserialize_offset_seq_BlobId(new_pos, input);
-        return (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs));
+        CryptoHash[] memory outbox_block_hashes;
+        (new_pos, outbox_block_hashes) = bcs_deserialize_offset_seq_CryptoHash(new_pos, input);
+        return (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs, outbox_block_hashes));
     }
 
     function bcs_deserialize_OracleResponse_Checkpoint(bytes memory input)
@@ -2180,6 +2215,8 @@ library BridgeTypes {
         SystemMessage_Credit credit;
         // choice=1 corresponds to Withdraw
         SystemMessage_Withdraw withdraw;
+        // choice=2 corresponds to CheckpointAck
+        SystemMessage_CheckpointAck checkpoint_ack;
     }
 
     function SystemMessage_case_credit(SystemMessage_Credit memory credit)
@@ -2188,7 +2225,8 @@ library BridgeTypes {
         returns (SystemMessage memory)
     {
         SystemMessage_Withdraw memory withdraw;
-        return SystemMessage(uint64(0), credit, withdraw);
+        SystemMessage_CheckpointAck memory checkpoint_ack;
+        return SystemMessage(uint64(0), credit, withdraw, checkpoint_ack);
     }
 
     function SystemMessage_case_withdraw(SystemMessage_Withdraw memory withdraw)
@@ -2197,7 +2235,18 @@ library BridgeTypes {
         returns (SystemMessage memory)
     {
         SystemMessage_Credit memory credit;
-        return SystemMessage(uint64(1), credit, withdraw);
+        SystemMessage_CheckpointAck memory checkpoint_ack;
+        return SystemMessage(uint64(1), credit, withdraw, checkpoint_ack);
+    }
+
+    function SystemMessage_case_checkpoint_ack(SystemMessage_CheckpointAck memory checkpoint_ack)
+        internal
+        pure
+        returns (SystemMessage memory)
+    {
+        SystemMessage_Credit memory credit;
+        SystemMessage_Withdraw memory withdraw;
+        return SystemMessage(uint64(2), credit, withdraw, checkpoint_ack);
     }
 
     function bcs_serialize_SystemMessage(SystemMessage memory input) internal pure returns (bytes memory) {
@@ -2206,6 +2255,9 @@ library BridgeTypes {
         }
         if (input.choice == 1) {
             return abi.encodePacked(hex"01", bcs_serialize_SystemMessage_Withdraw(input.withdraw));
+        }
+        if (input.choice == 2) {
+            return abi.encodePacked(hex"02", bcs_serialize_SystemMessage_CheckpointAck(input.checkpoint_ack));
         }
         revert("invalid variant index");
     }
@@ -2220,7 +2272,7 @@ library BridgeTypes {
         (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
         require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
         uint64 choice = uint64(choice_raw);
-        require(choice < 2, "invalid variant index");
+        require(choice < 3, "invalid variant index");
         SystemMessage_Credit memory credit;
         if (choice == 0) {
             (new_pos, credit) = bcs_deserialize_offset_SystemMessage_Credit(new_pos, input);
@@ -2229,13 +2281,52 @@ library BridgeTypes {
         if (choice == 1) {
             (new_pos, withdraw) = bcs_deserialize_offset_SystemMessage_Withdraw(new_pos, input);
         }
-        return (new_pos, SystemMessage(choice, credit, withdraw));
+        SystemMessage_CheckpointAck memory checkpoint_ack;
+        if (choice == 2) {
+            (new_pos, checkpoint_ack) = bcs_deserialize_offset_SystemMessage_CheckpointAck(new_pos, input);
+        }
+        return (new_pos, SystemMessage(choice, credit, withdraw, checkpoint_ack));
     }
 
     function bcs_deserialize_SystemMessage(bytes memory input) internal pure returns (SystemMessage memory) {
         uint256 new_pos;
         SystemMessage memory value;
         (new_pos, value) = bcs_deserialize_offset_SystemMessage(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct SystemMessage_CheckpointAck {
+        Cursor latest_received_cursor;
+    }
+
+    function bcs_serialize_SystemMessage_CheckpointAck(SystemMessage_CheckpointAck memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_Cursor(input.latest_received_cursor);
+    }
+
+    function bcs_deserialize_offset_SystemMessage_CheckpointAck(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, SystemMessage_CheckpointAck memory)
+    {
+        uint256 new_pos;
+        Cursor memory latest_received_cursor;
+        (new_pos, latest_received_cursor) = bcs_deserialize_offset_Cursor(pos, input);
+        return (new_pos, SystemMessage_CheckpointAck(latest_received_cursor));
+    }
+
+    function bcs_deserialize_SystemMessage_CheckpointAck(bytes memory input)
+        internal
+        pure
+        returns (SystemMessage_CheckpointAck memory)
+    {
+        uint256 new_pos;
+        SystemMessage_CheckpointAck memory value;
+        (new_pos, value) = bcs_deserialize_offset_SystemMessage_CheckpointAck(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
