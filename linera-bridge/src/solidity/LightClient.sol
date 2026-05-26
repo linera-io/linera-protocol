@@ -176,7 +176,7 @@ contract LightClient {
     {
         uint256 pos;
         uint256 count;
-        (pos, count) = BridgeTypes.bcs_deserialize_offset_len(0, blob);
+        (pos, count) = BridgeTypes.bcs_deserialize_offset_uleb128(0, blob);
         require(count == uncompressedKeys.length, "validator count mismatch");
 
         address[] memory addrs = new address[](count);
@@ -195,7 +195,7 @@ contract LightClient {
 
             // Skip network_address (ULEB128 length-prefixed string)
             uint256 strLen;
-            (pos, strLen) = BridgeTypes.bcs_deserialize_offset_len(pos, blob);
+            (pos, strLen) = BridgeTypes.bcs_deserialize_offset_uleb128(pos, blob);
             pos += strLen;
 
             // Read votes (u64 LE)

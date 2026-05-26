@@ -47,9 +47,7 @@ num-bigint = "0.4.3"
 num-traits = "0.2.16"
 rand = "0.8.5"
 serde = { version = "1.0.152", features = ["derive"] }
-# TODO: switch back to a crates.io release once upstream serde-generate ships
-# the memory-safe assembly annotation for its Solidity backend.
-serde-reflection = { git = "https://github.com/afck/serde-reflection", branch = "solidity-memory-safe-assembly" }
+serde-reflection = "0.6.0"
 serde_json = "1.0.93"
 sha3 = "0.10.8"
 test-log = { version = "0.2.15", default-features = false, features = [
