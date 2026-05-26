@@ -39,9 +39,11 @@ jobs:
     outputs:
       should-run: ${{ steps.files-changed.outputs.paths }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
       - name: Filter paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4.0.1
         id: files-changed
         with:
           predicate-quantifier: 'every'
@@ -65,7 +67,7 @@ jobs:
 
     steps:
       # Install dependencies
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         rustflags: ""

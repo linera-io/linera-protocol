@@ -36,8 +36,6 @@ use test_helpers::{
     assert_insufficient_funding,
 };
 
-#[cfg(feature = "dynamodb")]
-use crate::test_utils::DynamoDbStorageBuilder;
 #[cfg(feature = "rocksdb")]
 use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
@@ -86,7 +84,6 @@ fn test_listener_is_send() {
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_initiating_valid_transfer_with_notifications<B>(
@@ -163,7 +160,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_claim_amount<B>(storage_builder: B) -> anyhow::Result<()>
@@ -298,7 +294,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_rotate_key_pair<B>(storage_builder: B) -> anyhow::Result<()>
@@ -345,7 +340,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfer_ownership<B>(storage_builder: B) -> anyhow::Result<()>
@@ -393,7 +387,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_share_ownership<B>(storage_builder: B) -> anyhow::Result<()>
@@ -508,7 +501,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 /// Regression test: A super owner should be able to propose even without multi-leader rounds.
@@ -551,7 +543,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_then_close_it<B>(storage_builder: B) -> anyhow::Result<()>
@@ -593,7 +584,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfer_then_open_chain<B>(storage_builder: B) -> anyhow::Result<()>
@@ -705,7 +695,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_then_transfer<B>(storage_builder: B) -> anyhow::Result<()>
@@ -769,7 +758,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_close_chain<B>(storage_builder: B) -> anyhow::Result<()>
@@ -874,7 +862,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_initiating_valid_transfer_too_many_faults<B>(storage_builder: B) -> anyhow::Result<()>
@@ -913,10 +900,70 @@ where
     Ok(())
 }
 
+/// Regression test: when the preferred owner changes while a pending proposal exists, the
+/// next call to `process_pending_block` must sign the proposal as the original author (the
+/// owner that staged it), not as the new preferred owner. Otherwise the worker rejects the
+/// proposal with `WorkerError::InvalidSigner` because the operations in the block are
+/// authenticated by the original owner.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_is_signed_by_original_owner<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in
+    // multi-leader rounds — mirroring a chain shared by a wallet key and an autosigner.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending in the
+    // shared per-chain queue, authenticated by `a`.
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    let pending = client
+        .pending_proposal()
+        .await
+        .expect("a pending proposal authored by owner `a` should remain");
+    assert_eq!(pending.block.authenticated_owner, Some(owner_a));
+
+    // Bring the validators back and act as owner `b` on the same shared queue.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    client.set_preferred_owner(owner_b);
+
+    // Owner `b`'s client retries the pending block. The signer still holds owner `a`'s key,
+    // so the proposal is signed as `a` and the worker accepts it.
+    let certificate = client
+        .process_pending_block()
+        .await
+        .unwrap_ok_committed()
+        .expect("the pending block should be committed");
+    assert_eq!(
+        certificate.block().header.authenticated_owner,
+        Some(owner_a)
+    );
+    assert!(client.pending_proposal().await.is_none());
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_bidirectional_transfer<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1037,7 +1084,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1089,7 +1135,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_receiving_unconfirmed_transfer_with_lagging_sender_balances<B>(
@@ -1198,7 +1243,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_change_voting_rights<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1508,7 +1552,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_finalize_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1683,7 +1726,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_existing_proposal_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1812,7 +1854,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_conflicting_proposals<B>(storage_builder: B) -> anyhow::Result<()>
@@ -1896,7 +1937,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_locked_block_with_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2123,7 +2163,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_request_leader_timeout<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2139,6 +2178,11 @@ where
     let observer_id = observer.chain_id();
     let owner0 = client.identity().await.unwrap();
     let owner1 = AccountSecretKey::generate().public().into();
+    // The observer needs to fully execute the client's chain to see its manager
+    // state; otherwise the client chain would only be preprocessed.
+    observer
+        .client
+        .extend_chain_mode(chain_id, ListeningMode::FollowChain);
 
     let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
@@ -2255,7 +2299,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_request_leader_timeout_client_behind_validators<B>(
@@ -2366,7 +2409,265 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_new_round_notification_pulls_lower_round_locking_block<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client_a = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = client_a.chain_id();
+    let recipient_id = recipient.chain_id();
+    let owner_a = client_a.identity().await?;
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+
+    // Single multi-leader round, so ML(0) has a non-`None` round duration and times out
+    // into SL(0).
+    let owners = [(owner_a, 100), (owner_b, 100)];
+    let ownership = ChainOwnership::multiple(owners, 1, TimeoutConfig::default());
+    client_a.change_ownership(ownership).await?;
+
+    let info = client_a.chain_info().await?;
+    let mut client_b = builder
+        .make_client(chain_id, info.block_hash, info.next_block_height)
+        .await?;
+    client_b.set_preferred_owner(owner_b);
+
+    // client_b proposes at MultiLeader(0). All four validators vote validate, but
+    // validators 0 and 1 refuse to absorb the resulting certificate and validator 3
+    // refuses to confirm: validators 2 and 3 end up holding a `LockingBlock::Regular @
+    // MultiLeader(0)` and a `confirmed_vote` for it, while the block never reaches a
+    // confirmation quorum and stays uncommitted.
+    builder.set_fault_type([0, 1], FaultType::DontProcessValidated);
+    builder.set_fault_type([3], FaultType::DontSendConfirmVote);
+    client_b.synchronize_from_validators().await?;
+    let b_result = client_b
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await;
+    assert!(b_result.is_err());
+
+    let manager_v2 = builder
+        .node(2)
+        .chain_info_with_manager_values(chain_id)
+        .await?
+        .manager;
+    let v2_locking = *manager_v2
+        .requested_locking
+        .expect("validator 2 should hold a locking block");
+    let LockingBlock::Regular(v2_validated) = v2_locking else {
+        panic!("expected a Regular locking block on validator 2");
+    };
+    assert_eq!(v2_validated.round, Round::MultiLeader(0));
+
+    // Restore honest behavior and drive timeout certificates until client_a is the leader
+    // of the current round. request_leader_timeout only fetches the timeout cert, not
+    // manager values, so client_a advances rounds without absorbing the locking block.
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
+    let target_round = loop {
+        let manager = client_a.chain_info().await?.manager;
+        if manager.leader == Some(owner_a) {
+            break manager.current_round;
+        }
+        clock.set(
+            manager
+                .round_timeout
+                .expect("round_timeout should be set outside the early multi-leader rounds"),
+        );
+        client_a.request_leader_timeout().await?;
+    };
+    assert!(
+        client_a
+            .chain_info_with_manager_values()
+            .await?
+            .manager
+            .requested_locking
+            .is_none(),
+        "client_a must not yet hold a locking block"
+    );
+
+    // Validator 2 delivers a NewRound notification reporting that it is in the current
+    // round. The resulting `synchronize_chain_state_from` pulls validator 2's locking
+    // block into client_a.
+    let pk_v2 = builder.node(2).name();
+    let validator_2 = builder
+        .initial_committee
+        .validator_addresses()
+        .find(|(pk, _)| *pk == pk_v2)
+        .expect("validator 2 should be in the committee");
+    let notification = Notification {
+        chain_id,
+        reason: Reason::NewRound {
+            height: BlockHeight::from(1),
+            round: target_round,
+        },
+    };
+    client_a
+        .process_notification_from(notification, validator_2)
+        .await;
+
+    // Now client_a can drive the chain forward. The locking block (owner_b's transfer)
+    // is finalized — classified as a Conflict because the authenticated signer doesn't
+    // match owner_a's intended burn — and the chain advances to height 2.
+    let burn_result = client_a.burn(AccountOwner::CHAIN, Amount::ONE).await?;
+    assert_matches!(burn_result, ClientOutcome::Conflict(_));
+    assert_eq!(
+        client_a.chain_info().await?.next_block_height,
+        BlockHeight::from(2)
+    );
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_sync_consensus_round_pushes_locking_below_current_round<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client_a = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = client_a.chain_id();
+    let recipient_id = recipient.chain_id();
+    let owner_a = client_a.identity().await?;
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+
+    let owners = [(owner_a, 100), (owner_b, 100)];
+    let ownership = ChainOwnership::multiple(owners, 1, TimeoutConfig::default());
+    client_a.change_ownership(ownership).await?;
+
+    let info = client_a.chain_info().await?;
+    let mut client_b = builder
+        .make_client(chain_id, info.block_hash, info.next_block_height)
+        .await?;
+    client_b.set_preferred_owner(owner_b);
+
+    // client_b proposes at MultiLeader(0). All four validators vote validate, but only
+    // validator 2 absorbs the resulting certificate: validators 0, 1, 3 refuse to process
+    // it. So validator 2 ends up holding a `LockingBlock::Regular @ MultiLeader(0)` and
+    // `confirmed_vote @ MultiLeader(0)`; the other three hold neither.
+    builder.set_fault_type([0, 1, 3], FaultType::DontProcessValidated);
+    client_b.synchronize_from_validators().await?;
+    let b_result = client_b
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await;
+    assert!(b_result.is_err());
+    assert!(
+        builder
+            .node(2)
+            .chain_info_with_manager_values(chain_id)
+            .await?
+            .manager
+            .requested_locking
+            .is_some(),
+        "validator 2 should hold the locking block",
+    );
+
+    // Take validator 1 offline and let the other three timeout out of MultiLeader(0) into
+    // SingleLeader(0). Validator 1 stays at MultiLeader(0) without any locking block.
+    builder.set_fault_type([0, 2, 3], FaultType::Honest);
+    builder.set_fault_type([1], FaultType::OfflineWithInfo);
+    let manager_a = client_a.chain_info().await?.manager;
+    clock.set(manager_a.round_timeout.expect("round_timeout"));
+    client_a.request_leader_timeout().await?;
+    assert_eq!(
+        client_a.chain_info().await?.manager.current_round,
+        Round::SingleLeader(0)
+    );
+
+    builder.set_fault_type([1], FaultType::Honest);
+    let manager_v1 = builder
+        .node(1)
+        .chain_info_with_manager_values(chain_id)
+        .await?
+        .manager;
+    assert_eq!(manager_v1.current_round, Round::MultiLeader(0));
+    assert!(manager_v1.requested_locking.is_none());
+
+    // Pull validator 2's locking block into client_a via a NewRound notification (the
+    // mechanism added by the same branch).
+    let pk_v2 = builder.node(2).name();
+    let validator_2 = builder
+        .initial_committee
+        .validator_addresses()
+        .find(|(pk, _)| *pk == pk_v2)
+        .expect("validator 2 should be in the committee");
+    let notification = Notification {
+        chain_id,
+        reason: Reason::NewRound {
+            height: BlockHeight::from(1),
+            round: Round::SingleLeader(0),
+        },
+    };
+    client_a
+        .process_notification_from(notification, validator_2)
+        .await;
+    let info_a = client_a.chain_info_with_manager_values().await?;
+    let locking = *info_a
+        .manager
+        .requested_locking
+        .expect("client_a should hold the locking block");
+    let LockingBlock::Regular(client_locking_cert) = locking else {
+        panic!("expected Regular locking block on client_a");
+    };
+
+    // Advance the clock past the SingleLeader(0) round_timeout and call
+    // `request_leader_timeout` again. The per-validator request for validator 1 hits the
+    // `WrongRound(MultiLeader(0))` path, which routes through `send_chain_information` →
+    // `sync_consensus_round`. Branch 2 of that function now pushes the locking
+    // certificate because its round (`MultiLeader(0)`) is at least the remote validator's
+    // current round (`MultiLeader(0)`).
+    clock.set(
+        client_a
+            .chain_info()
+            .await?
+            .manager
+            .round_timeout
+            .expect("round_timeout for SingleLeader(0)"),
+    );
+    client_a.request_leader_timeout().await?;
+
+    let manager_v1_after = builder
+        .node(1)
+        .chain_info_with_manager_values(chain_id)
+        .await?
+        .manager;
+    let v1_locking = *manager_v1_after
+        .requested_locking
+        .expect("validator 1 should have absorbed the pushed locking block");
+    let LockingBlock::Regular(v1_validated) = v1_locking else {
+        panic!("expected Regular locking block on validator 1");
+    };
+    assert_eq!(v1_validated.round, Round::MultiLeader(0));
+    assert_eq!(v1_validated.hash(), client_locking_cert.hash());
+
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_finalize_validated<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2470,10 +2771,34 @@ where
     Ok(())
 }
 
+/// On a fresh root chain whose `ChainDescription` is defined by the genesis
+/// config (not published by any block), `request_leader_timeout` must succeed
+/// once the round has timed out: collecting the timeout certificate and then
+/// broadcasting the resulting state to validators (via
+/// `send_chain_information` -> `initialize_new_chain_on_validator` ->
+/// `send_chain_info_for_blobs`) should treat the chain-description blob as
+/// known a priori rather than looking for a publishing block.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_request_leader_timeout_with_genesis_blob<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+
+    // Advance the clock past the (default 10s) round timeout.
+    clock.set(Timestamp::from(20_000_000));
+
+    client.request_leader_timeout().await?;
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_propose_pending_block<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2511,7 +2836,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_validated<B>(storage_builder: B) -> anyhow::Result<()>
@@ -2623,7 +2947,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_re_propose_fast_block<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3041,7 +3364,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_propose_block_with_messages_and_blobs<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3180,7 +3502,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_validator_outdated_admin_chain<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3287,7 +3608,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_synchronize_downloads_admin_chain_events<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3342,7 +3662,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_prepare_chain_with_cross_chain_messages<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3440,7 +3759,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_rejected_message_bundles_are_free<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3491,7 +3809,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_follow_chain_mode<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3623,7 +3940,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_chain_for_owned_key_is_fully_tracked<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3696,7 +4012,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_disallow_fast_blocks<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3753,7 +4068,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_block_limit_removes_bundles_not_rejects<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3820,7 +4134,6 @@ where
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_open_multi_leader_rounds<B>(storage_builder: B) -> anyhow::Result<()>
@@ -3943,6 +4256,93 @@ where
         Amount::from_tokens(10),
         "Receiver should have received all three transfers"
     );
+
+    Ok(())
+}
+
+/// Publishes a checkpoint from one client and verifies that a fresh follower client
+/// (whose storage knows only the genesis chain description) can bootstrap directly
+/// from the checkpoint, skipping pre-checkpoint history.
+///
+/// Setup: the producer creates two blocks — a burn at height 0, then a checkpoint
+/// at height 1. The follower should reach the producer's state hash at height 2
+/// while having downloaded *only* the checkpoint cert, not the height-0 burn.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_bootstrap<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let chain_id = producer.chain_id();
+
+    // Height 0: a plain burn, so the chain has some history to skip.
+    let burn_cert = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_cert.block().header.height, BlockHeight::ZERO);
+
+    // Height 1: the checkpoint itself.
+    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
+    let block = checkpoint_cert.block();
+    assert_eq!(block.header.height, BlockHeight::from(1));
+    assert_eq!(block.body.transactions.len(), 1);
+    assert_matches!(
+        &block.body.transactions[0],
+        Transaction::ExecuteOperation(Operation::System(op)) if matches!(**op, SystemOperation::Checkpoint),
+        "Unexpected first transaction",
+    );
+    let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first()) {
+        Some(OracleResponse::Checkpoint {
+            execution_state_blobs,
+            used_blobs: _,
+        }) => execution_state_blobs.clone(),
+        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
+    };
+    assert!(
+        !execution_state_blobs.is_empty(),
+        "Checkpoint must list at least one execution-state blob",
+    );
+
+    let producer_info = producer.chain_info().await?;
+    assert_eq!(producer_info.next_block_height, BlockHeight::from(2));
+    let producer_state_hash = producer_info
+        .state_hash
+        .expect("producer should expose a state hash after the checkpoint");
+
+    // A fresh follower client starts with empty storage (other than the genesis
+    // chain description) and must bootstrap from the validator's checkpoint
+    // rather than replay history.
+    let follower = builder
+        .make_client_with_options(
+            chain_id,
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            true,
+        )
+        .await?;
+    assert_eq!(
+        follower.chain_info().await?.next_block_height,
+        BlockHeight::ZERO,
+    );
+
+    follower.synchronize_from_validators().await?;
+
+    let follower_info = follower.chain_info().await?;
+    assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
+    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
+
+    // The follower should have applied the checkpoint cert but skipped the
+    // pre-checkpoint burn at height 0.
+    let storage = follower.storage_client();
+    assert!(!storage.contains_certificate(burn_cert.hash()).await?);
+    assert!(storage.contains_certificate(checkpoint_cert.hash()).await?);
 
     Ok(())
 }

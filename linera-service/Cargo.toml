@@ -45,11 +45,6 @@ rocksdb = [
     "linera-core/rocksdb",
     "linera-storage-runtime/rocksdb",
 ]
-dynamodb = [
-    "linera-views/dynamodb",
-    "linera-core/dynamodb",
-    "linera-storage-runtime/dynamodb",
-]
 scylladb = [
     "linera-views/scylladb",
     "linera-core/scylladb",
@@ -103,6 +98,7 @@ fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 heck.workspace = true
 http.workspace = true
+indicatif.workspace = true
 insta.workspace = true
 is-terminal.workspace = true
 k8s-openapi = { workspace = true, optional = true }
@@ -148,6 +144,7 @@ reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 serde-command-opts.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 stdext = { workspace = true, optional = true }
 tempfile.workspace = true
 thiserror.workspace = true

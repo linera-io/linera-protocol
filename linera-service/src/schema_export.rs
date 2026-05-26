@@ -31,7 +31,7 @@ use linera_core::{
 use linera_execution::committee::Committee;
 use linera_sdk::linera_base_types::ValidatorPublicKey;
 use linera_service::node_service::NodeService;
-use linera_storage::DbStorage;
+use linera_storage::{Arc as CacheArc, DbStorage};
 use linera_version::VersionInfo;
 use linera_views::memory::MemoryDatabase;
 
@@ -69,7 +69,7 @@ impl ValidatorNode for DummyValidatorNode {
 
     async fn handle_confirmed_certificate(
         &self,
-        _: Arc<GenericCertificate<ConfirmedBlock>>,
+        _: CacheArc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         Err(NodeError::UnexpectedMessage)

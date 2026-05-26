@@ -460,7 +460,8 @@ impl ResourceControlPolicy {
             | BlobType::ApplicationDescription
             | BlobType::ApplicationFormats
             | BlobType::Committee
-            | BlobType::ChainDescription => {}
+            | BlobType::ChainDescription
+            | BlobType::CheckpointExecutionState => {}
         }
         Ok(())
     }

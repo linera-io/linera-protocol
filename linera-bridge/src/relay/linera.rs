@@ -104,6 +104,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         self.chain_client
             .read_certificate(hash)
             .await
+            .map(|c| c.into_std())
             .map_err(|e| anyhow::anyhow!(e))
     }
 

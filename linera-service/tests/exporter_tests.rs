@@ -1,11 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(
-    feature = "dynamodb",
-    feature = "scylladb",
-    feature = "storage-service",
-))]
+#![cfg(any(feature = "scylladb", feature = "storage-service",))]
 #![allow(clippy::cast_possible_truncation)]
 
 use anyhow::Result;
@@ -25,7 +21,6 @@ use test_case::test_case;
 #[ignore]
 #[cfg_attr(feature = "storage-service", test_case(Database::Service, Network::Grpc ; "storage_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(Database::ScyllaDb, Network::Grpc ; "scylladb_grpc"))]
-#[cfg_attr(feature = "dynamodb", test_case(Database::DynamoDb, Network::Grpc ; "aws_grpc"))]
 #[test_log::test(tokio::test)]
 async fn test_linera_exporter(database: Database, network: Network) -> Result<()> {
     tracing::info!("Starting test {}", test_name!());

@@ -16,7 +16,6 @@ workspace = true
 
 [features]
 rocksdb = ["linera-views/rocksdb"]
-dynamodb = ["linera-views/dynamodb"]
 scylladb = ["linera-views/scylladb"]
 storage-service = ["linera-storage-service"]
 

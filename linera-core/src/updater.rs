@@ -26,8 +26,8 @@ use linera_chain::{
     manager::LockingBlock,
     types::{ConfirmedBlock, GenericCertificate, ValidatedBlock, ValidatedBlockCertificate},
 };
-use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME};
-use linera_storage::{Clock, Storage};
+use linera_execution::{committee::Committee, system::EPOCH_STREAM_NAME, BlobOrigin};
+use linera_storage::{Arc as CacheArc, Clock, Storage};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tracing::{instrument, Level};
@@ -248,7 +248,7 @@ where
     )]
     async fn send_confirmed_certificate(
         &mut self,
-        certificate: &Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: &CacheArc<GenericCertificate<ConfirmedBlock>>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let mut result = self
@@ -283,7 +283,10 @@ where
                         .read_blobs_from_storage(&blob_ids)
                         .await?;
                     let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blob_ids))?;
-                    self.remote_node.node.upload_blobs(blobs).await?;
+                    self.remote_node
+                        .node
+                        .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
+                        .await?;
                     sent_blobs = true;
                 }
                 result => {
@@ -680,7 +683,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<(), chain_client::Error> {
         // Phase 1: Height synchronization
         let info = if target_block_height.0 > 0 {
@@ -726,7 +729,7 @@ where
         chain_id: ChainId,
         target_block_height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<Arc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let height = target_block_height.try_sub_one()?;
 
@@ -790,7 +793,7 @@ where
         &self,
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
-    ) -> Result<Vec<Arc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
+    ) -> Result<Vec<CacheArc<GenericCertificate<ConfirmedBlock>>>, chain_client::Error> {
         let storage = self.client.local_node.storage_client();
 
         let certificates_by_height = storage
@@ -833,32 +836,16 @@ where
         remote_round: Round,
         manager: &linera_chain::manager::ChainManagerInfo,
     ) -> Result<(), chain_client::Error> {
-        // Try to send a proposal for the current round
-        for proposal in manager
-            .requested_proposed
-            .iter()
-            .chain(manager.requested_signed_proposal.iter())
-        {
-            if proposal.content.round == manager.current_round {
-                match self
-                    .remote_node
-                    .handle_block_proposal(proposal.clone())
-                    .await
-                {
-                    Ok(_) => {
-                        tracing::debug!("successfully sent block proposal for round sync");
-                        return Ok(());
-                    }
-                    Err(error) => {
-                        tracing::debug!(%error, "failed to send block proposal");
-                    }
-                }
-            }
-        }
+        let target_round = manager.current_round;
 
-        // Try to send a validated block for the current round
+        // First, push the locking certificate. A remote with an older lock rotates to this
+        // one (and one already locked at this round becomes able to accept a proposal
+        // carrying the cert). Pushing it does not necessarily advance the remote's current
+        // round — e.g. if the remote already holds this exact cert as its lock,
+        // `process_validated_block` returns `Skip` — so only early-return when the
+        // response shows the remote has actually reached our current round.
         if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.as_deref() {
-            if validated.round == manager.current_round {
+            if validated.round >= remote_round {
                 match self
                     .remote_node
                     .handle_optimized_validated_certificate(
@@ -867,9 +854,11 @@ where
                     )
                     .await
                 {
-                    Ok(_) => {
+                    Ok(info) => {
                         tracing::debug!("successfully sent validated block for round sync");
-                        return Ok(());
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
                     }
                     Err(error) => {
                         tracing::debug!(%error, "failed to send validated block");
@@ -878,7 +867,8 @@ where
             }
         }
 
-        // Try to send a timeout certificate
+        // Try to send a timeout certificate. The remote applies `next_round(cert.round)`
+        // to its current round, which (for the cert we hold) lands at our current round.
         if let Some(cert) = &manager.timeout {
             if cert.round >= remote_round {
                 match self
@@ -886,12 +876,39 @@ where
                     .handle_timeout_certificate(cert.as_ref().clone())
                     .await
                 {
-                    Ok(_) => {
+                    Ok(info) => {
                         tracing::debug!(round = %cert.round, "successfully sent timeout certificate");
-                        return Ok(());
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
                     }
                     Err(error) => {
                         tracing::debug!(%error, round = %cert.round, "failed to send timeout certificate");
+                    }
+                }
+            }
+        }
+
+        // Finally, try to push a proposal at the current round.
+        for proposal in manager
+            .requested_proposed
+            .iter()
+            .chain(manager.requested_signed_proposal.iter())
+        {
+            if proposal.content.round == target_round {
+                match self
+                    .remote_node
+                    .handle_block_proposal(proposal.clone())
+                    .await
+                {
+                    Ok(info) => {
+                        tracing::debug!("successfully sent block proposal for round sync");
+                        if info.manager.current_round >= target_round {
+                            return Ok(());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::debug!(%error, "failed to send block proposal");
                     }
                 }
             }
@@ -921,12 +938,20 @@ where
 
         let mut chain_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> = BTreeMap::new();
         for blob_state in blob_states {
-            let block_chain_id = blob_state.chain_id;
-            let block_height = blob_state.block_height;
-            chain_heights
-                .entry(block_chain_id)
-                .or_default()
-                .insert(block_height);
+            match blob_state.origin {
+                // Genesis blobs aren't published by any block; the recipient has
+                // them from its own genesis config. Nothing to ship.
+                BlobOrigin::Genesis => continue,
+                BlobOrigin::Published {
+                    chain_id,
+                    block_height,
+                } => {
+                    chain_heights
+                        .entry(chain_id)
+                        .or_default()
+                        .insert(block_height);
+                }
+            }
         }
 
         self.send_chain_info_at_heights(chain_heights, delivery)

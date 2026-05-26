@@ -58,6 +58,12 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
 
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
+
+    // Checkpoint blobs computed pre-block, to be handed to the matching
+    // `SystemOperation::Checkpoint` operation handler when it runs. A single dump may
+    // span multiple blobs to respect `maximum_blob_size` from the current epoch's policy.
+    #[debug(skip_if = Option::is_none)]
+    prepared_checkpoint_blobs: Option<Vec<Blob>>,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -93,7 +99,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
+            prepared_checkpoint_blobs: None,
         })
+    }
+
+    /// Stashes pre-computed checkpoint blobs to be handed to the matching
+    /// `SystemOperation::Checkpoint` handler when its transaction runs.
+    pub fn set_prepared_checkpoint_blobs(&mut self, blobs: Vec<Blob>) {
+        self.prepared_checkpoint_blobs = Some(blobs);
     }
 
     /// Executes a transaction in the context of the block.
@@ -170,14 +183,19 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
 
     /// Returns a new TransactionTracker for the current transaction.
     fn new_transaction_tracker(&self) -> Result<TransactionTracker, ChainError> {
-        Ok(TransactionTracker::new(
+        let mut tracker = TransactionTracker::new(
             self.local_time,
             self.transaction_index,
             self.next_application_index,
             self.next_chain_index,
             self.oracle_responses()?,
             &self.blobs,
-        ))
+        );
+        // Cloning each blob is cheap — its bytes are behind an `Arc`.
+        if let Some(blobs) = self.prepared_checkpoint_blobs.as_ref() {
+            tracker.set_prepared_checkpoint_blobs(blobs.clone());
+        }
+        Ok(tracker)
     }
 
     /// Executes a message as part of an incoming bundle in a block.

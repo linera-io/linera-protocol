@@ -78,14 +78,12 @@ use linera_views::{context::Context, views::RootView};
 use test_case::test_case;
 use test_log::test;
 
-#[cfg(feature = "dynamodb")]
-use crate::test_utils::DynamoDbStorageBuilder;
 #[cfg(feature = "rocksdb")]
 use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::ChainWorkerConfig,
+    chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode},
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -669,7 +667,6 @@ fn update_recipient_direct(
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_bad_signature<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -715,7 +712,7 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(bad_signature_block_proposal)
-            .await,
+            .await.0,
             Err(WorkerError::CryptoError(error))
                 if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
@@ -728,7 +725,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_zero_amount<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -756,7 +752,7 @@ where
     assert_matches!(
     env.executing_worker()
         .handle_block_proposal(zero_amount_block_proposal)
-        .await,
+        .await.0,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
@@ -772,7 +768,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_valid_timestamps<B>(
@@ -805,7 +800,8 @@ where
         assert_matches!(
             env.executing_worker()
                 .handle_block_proposal(block_proposal)
-                .await,
+                .await
+                .0,
             Err(WorkerError::InvalidTimestamp { .. })
         );
     }
@@ -845,7 +841,7 @@ where
             .unwrap();
         // Timestamp older than previous one
         assert_matches!(
-            env.executing_worker().handle_block_proposal(block_proposal).await,
+            env.executing_worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(error))
                 if matches!(*error, ChainError::InvalidBlockTimestamp { .. })
         );
@@ -857,7 +853,6 @@ where
 /// while other requests can still be processed.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_timestamp_delay<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -907,7 +902,7 @@ where
         )
         .await?;
     // Past timestamp should be handled immediately (and succeed).
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
         .await;
@@ -938,7 +933,7 @@ where
             BundleExecutionPolicy::committed(),
         )
         .await?;
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
         .await;
@@ -989,7 +984,7 @@ where
     clock.set(future_timestamp);
 
     // Now the future should complete.
-    let result = future.as_mut().await;
+    let (result, _actions) = future.as_mut().await;
     assert!(
         result.is_ok(),
         "Future timestamp within grace period should succeed after delay"
@@ -1014,7 +1009,8 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(block_proposal)
-            .await,
+            .await
+            .0,
         Err(WorkerError::InvalidTimestamp { .. })
     );
 
@@ -1023,7 +1019,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1052,7 +1047,8 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(unknown_sender_block_proposal)
-            .await,
+            .await
+            .0,
         Err(WorkerError::InvalidOwner)
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
@@ -1064,7 +1060,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_with_chaining<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1103,7 +1098,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal1.clone()).await,
+        env.worker().handle_block_proposal(block_proposal1.clone()).await.0,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -1119,7 +1114,8 @@ where
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal0.clone())
-        .await?;
+        .await
+        .0?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
@@ -1141,13 +1137,14 @@ where
     drop(chain);
 
     env.worker()
-        .handle_confirmed_certificate(certificate0, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await?;
+        .await
+        .0?;
 
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
@@ -1156,7 +1153,7 @@ where
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal0).await,
+        env.worker().handle_block_proposal(block_proposal0).await.0,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -1169,7 +1166,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_sparse_chain<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1231,11 +1227,11 @@ where
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
     env.worker()
-        .handle_confirmed_certificate(certificate0, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     env.worker()
-        .handle_confirmed_certificate(certificate2.clone(), None)
+        .handle_confirmed_certificate(certificate2.clone(), ProcessConfirmedBlockMode::Auto, None)
         .await?;
 
     {
@@ -1249,7 +1245,8 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await;
+        .await
+        .0;
     assert_matches!(
         proposal_result,
         Err(WorkerError::ChainError(err)) if matches!(*err, ChainError::UnexpectedBlockHeight {
@@ -1260,7 +1257,7 @@ where
 
     // Handle the certificate in the gap.
     env.worker()
-        .handle_confirmed_certificate(certificate1, None)
+        .handle_confirmed_certificate(certificate1, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1272,7 +1269,7 @@ where
     // ...and the one that has been preprocessed before, again, as it is not automatically
     // re-processed.
     env.worker()
-        .handle_confirmed_certificate(certificate2, None)
+        .handle_confirmed_certificate(certificate2, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1285,7 +1282,8 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await;
+        .await
+        .0;
     assert_matches!(proposal_result, Ok(_));
 
     Ok(())
@@ -1293,7 +1291,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_with_incoming_bundles<B>(
@@ -1357,7 +1354,11 @@ where
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
         env.worker()
-            .handle_confirmed_certificate(certificate1.clone(), None)
+            .handle_confirmed_certificate(
+                certificate1.clone(),
+                ProcessConfirmedBlockMode::Auto,
+                None
+            )
             .await,
         Ok(_)
     );
@@ -1412,7 +1413,7 @@ where
             .unwrap();
         // Insufficient funding
         assert_matches!(
-                env.worker().handle_block_proposal(block_proposal).await,
+                env.worker().handle_block_proposal(block_proposal).await.0,
                 Err(
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
@@ -1468,7 +1469,7 @@ where
             .unwrap();
         // Inconsistent received messages.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::UnexpectedMessage { .. })
         );
@@ -1494,7 +1495,7 @@ where
             .unwrap();
         // Skipped message.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1545,7 +1546,7 @@ where
             .unwrap();
         // Inconsistent order in received messages (heights).
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await,
+            env.worker().handle_block_proposal(block_proposal).await.0,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1575,7 +1576,8 @@ where
         // Taking the first message only is ok.
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await?;
+            .await
+            .0?;
         let certificate = env
             .execute_proposal(block_proposal.content.block, vec![])
             .await?;
@@ -1593,7 +1595,11 @@ where
         );
 
         env.worker()
-            .handle_confirmed_certificate(certificate.clone(), None)
+            .handle_confirmed_certificate(
+                certificate.clone(),
+                ProcessConfirmedBlockMode::Execute,
+                None,
+            )
             .await?;
 
         // Then receive the next two messages.
@@ -1628,14 +1634,14 @@ where
             .unwrap();
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await?;
+            .await
+            .0?;
     }
     Ok(())
 }
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_exceed_balance<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1660,7 +1666,7 @@ where
         .await
         .unwrap();
     assert_matches!(
-        env.executing_worker().handle_block_proposal(block_proposal).await,
+        env.executing_worker().handle_block_proposal(block_proposal).await.0,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
@@ -1676,7 +1682,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1701,10 +1706,11 @@ where
         .await
         .unwrap();
 
-    let (chain_info_response, _actions) = env
+    let chain_info_response = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
-        .await?;
+        .await
+        .0?;
     chain_info_response.check(env.executing_worker().public_key())?;
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
@@ -1732,7 +1738,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_replay<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1757,15 +1762,17 @@ where
         .await
         .unwrap();
 
-    let (response, _actions) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(block_proposal.clone())
-        .await?;
+        .await
+        .0?;
     response.check(env.executing_worker().public_key())?;
-    let (replay_response, _actions) = env
+    let replay_response = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
-        .await?;
+        .await
+        .0?;
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&*response.info),
@@ -1776,7 +1783,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_unknown_sender<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1819,7 +1825,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_bad_block_height<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -1857,7 +1862,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_with_anticipated_incoming_bundle<B>(
@@ -1963,7 +1967,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_receiver_balance_overflow<B>(
@@ -2025,7 +2028,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_same_chain_same_owner_no_messages<B>(
@@ -2072,7 +2074,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_different_chain_with_messages<B>(
@@ -2157,7 +2158,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_cross_chain_request<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -2230,7 +2230,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_cross_chain_request_no_recipient_chain<B>(
@@ -2269,7 +2268,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_cross_chain_request_no_recipient_chain_on_client<B>(
@@ -2321,7 +2319,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_to_active_recipient<B>(
@@ -2490,7 +2487,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_to_inactive_recipient<B>(
@@ -2532,7 +2528,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_handle_certificate_with_rejected_transfer<B>(
@@ -2716,7 +2711,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn run_test_chain_creation_with_committee_creation<B>(
@@ -2936,7 +2930,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfers_and_committee_creation<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -3048,7 +3041,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_transfers_and_committee_removal<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -3466,7 +3458,6 @@ async fn test_cross_chain_helper() -> anyhow::Result<()> {
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_timeouts<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -3521,14 +3512,14 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
 
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
@@ -3587,17 +3578,19 @@ where
     let result = env
         .executing_worker()
         .handle_block_proposal(proposal1_wrong_owner)
-        .await;
+        .await
+        .0;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal1 = proposed_block1
         .clone()
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(proposal1)
-        .await?;
+        .await
+        .0?;
     let value1 = ValidatedBlock::new(block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
@@ -3661,7 +3654,7 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(5))
         .await
         .unwrap();
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(proposal.clone())
         .await;
@@ -3681,10 +3674,10 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env
-        .executing_worker()
+    env.executing_worker()
         .handle_block_proposal(proposal)
-        .await?;
+        .await
+        .0?;
     let response = env
         .executing_worker()
         .handle_chain_info_query(query_values.clone())
@@ -3712,7 +3705,7 @@ where
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(6))
         .await
         .unwrap();
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(proposal.clone())
         .await;
@@ -3750,7 +3743,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_round_types<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -3806,13 +3798,13 @@ where
         .into_proposal_with_round(owner1, &signer, Round::Fast)
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let result = env.executing_worker().handle_block_proposal(proposal).await;
+    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
     );
@@ -3858,10 +3850,11 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let (_, actions) = env
+    let (result, actions) = env
         .executing_worker()
         .handle_block_proposal(proposal1)
-        .await?;
+        .await;
+    result?;
     assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let response = env
@@ -3874,7 +3867,6 @@ where
 
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_fast_proposal_is_locked<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -3952,10 +3944,11 @@ where
         )
         .await?;
     let value1 = ConfirmedBlock::new(block1);
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(proposal1.clone())
-        .await?;
+        .await
+        .0?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3978,10 +3971,11 @@ where
         BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
             .await
             .unwrap();
-    let (response, _) = env
+    let response = env
         .executing_worker()
         .handle_block_proposal(proposal1b)
-        .await?;
+        .await
+        .0?;
 
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::MultiLeader(0));
@@ -3996,7 +3990,7 @@ where
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let result = env
+    let (result, _actions) = env
         .executing_worker()
         .handle_block_proposal(proposal2)
         .await;
@@ -4009,7 +4003,8 @@ where
             .unwrap();
     env.executing_worker()
         .handle_block_proposal(proposal3)
-        .await?;
+        .await
+        .0?;
 
     // A validated block certificate from a later round can override the locked fast block.
     let (_, block2, _, _, _) = env
@@ -4032,10 +4027,10 @@ where
     .await
     .unwrap();
     let lite_value2 = LiteValue::new(&value2);
-    let (_, _) = env
-        .executing_worker()
+    env.executing_worker()
         .handle_block_proposal(proposal)
-        .await?;
+        .await
+        .0?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let response = env
         .executing_worker()
@@ -4055,7 +4050,6 @@ where
 /// and is older than the fallback_duration.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_fallback<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -4169,7 +4163,6 @@ where
 /// some calls.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_long_lived_service<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -4239,7 +4232,6 @@ where
 /// application state may have changed.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_new_block_causes_service_restart<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -4331,7 +4323,8 @@ where
         .unwrap();
     env.executing_worker()
         .handle_block_proposal(block_proposal)
-        .await?;
+        .await
+        .0?;
 
     for local_time in queries_before_confirmation {
         clock.set(local_time);
@@ -4402,7 +4395,6 @@ where
 }
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_stage_block_with_message_earlier_than_cursor<B>(
@@ -4545,7 +4537,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.executing_worker().handle_block_proposal(bad_proposal).await,
+        env.executing_worker().handle_block_proposal(bad_proposal).await.0,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
     );
@@ -4562,7 +4554,6 @@ where
 /// bundles so the inbox can reconcile.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_revert_confirm_recovery<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -4605,10 +4596,10 @@ where
 
     // Step 2: Process both certs on chain_1 (adds heights 0, 1 to outbox for chain_2).
     env.worker()
-        .process_confirmed_block(cert_0.clone(), None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
     env.worker()
-        .process_confirmed_block(cert_1.clone(), None)
+        .process_confirmed_block(cert_1.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Step 3: Deliver height 0 to chain_2 and confirm it on chain_1.
@@ -4661,7 +4652,7 @@ where
         .await;
     // Process cert_2 on chain_1 so the block is in block_hashes.
     env.worker()
-        .process_confirmed_block(cert_2.clone(), None)
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Now manually deliver height 2's cross-chain update to chain_2.
@@ -4721,7 +4712,6 @@ where
 /// flag and verifies that the chain is reset and re-executed successfully.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
 async fn test_reset_on_corrupted_chain_state<B>(mut storage_builder: B) -> anyhow::Result<()>
@@ -4990,9 +4980,16 @@ where
         .await;
 
     // Process all three blocks on chain_1.
-    env.worker().process_confirmed_block(cert_0, None).await?;
-    env.worker().process_confirmed_block(cert_1, None).await?;
-    let (_, actions, _) = env.worker().process_confirmed_block(cert_2, None).await?;
+    env.worker()
+        .process_confirmed_block(cert_0, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    let (_, actions, _) = env
+        .worker()
+        .process_confirmed_block(cert_2, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
 
     // With chunk_limit=1, only the first chunk (height 0) should be returned.
     // The remaining heights stay in the outbox for delivery after confirmation.
@@ -5105,11 +5102,13 @@ where
 
     // Process all three blocks on chain_1.
     env.worker()
-        .process_confirmed_block(cert_0.clone(), None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
-    env.worker().process_confirmed_block(cert_1, None).await?;
     env.worker()
-        .process_confirmed_block(cert_2.clone(), None)
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Deliver height 0 to chain_2 and confirm it.

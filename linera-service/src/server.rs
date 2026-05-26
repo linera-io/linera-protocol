@@ -96,7 +96,7 @@ impl ServerContext {
         let config = ChainWorkerConfig {
             nickname: format!("Shard {} @ {}:{}", shard_id, local_ip_addr, shard.port),
             key_pair: Some(Arc::new(self.server_config.validator_secret.copy())),
-            allow_inactive_chains: false,
+            allow_inactive_chains: true,
             block_time_grace_period: self.block_time_grace_period,
             ttl: util::non_zero_duration(self.chain_worker_ttl),
             chain_info_max_received_log_entries: self.chain_info_max_received_log_entries,

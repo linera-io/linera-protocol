@@ -19,7 +19,6 @@ The databases supported are of the NoSQL variety and they are key-value stores.
 We provide support for the following databases:
 * `MemoryDatabase` is using the memory
 * `RocksDbDatabase` is a disk-based key-value store
-* `DynamoDbDatabase` is the AWS-based DynamoDB service.
 * `ScyllaDbDatabase` is a cloud-based Cassandra-compatible database.
 * `StorageServiceDatabase` is a gRPC-based storage that uses either memory or RocksDB. It is available in `linera-storage-service`.
 
@@ -102,8 +101,6 @@ pub mod random;
 #[cfg(with_testing)]
 pub mod test_utils;
 
-#[cfg(with_dynamodb)]
-pub use backends::dynamo_db;
 #[cfg(with_indexeddb)]
 pub use backends::indexed_db;
 #[cfg(with_metrics)]

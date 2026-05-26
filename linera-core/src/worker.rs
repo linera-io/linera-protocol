@@ -23,7 +23,7 @@ use linera_base::{
     doc_scalar,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
 };
-use linera_cache::{UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
+use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache, DEFAULT_CLEANUP_INTERVAL_SECS};
 #[cfg(with_testing)]
 use linera_chain::ChainExecutionContext;
 use linera_chain::{
@@ -67,6 +67,7 @@ use crate::{
         handle,
         state::{send_result, ChainWorkerState},
         BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult, DeliveryNotifier,
+        ProcessConfirmedBlockMode,
     },
     client::ListeningMode,
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -79,6 +80,10 @@ pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
 #[cfg(test)]
 #[path = "unit_tests/worker_tests.rs"]
 mod worker_tests;
+
+#[cfg(all(test, feature = "rocksdb"))]
+#[path = "unit_tests/worker_backup_tests.rs"]
+mod worker_backup_tests;
 
 /// Wraps a future in `SyncFuture` on non-web targets so that it satisfies `Sync` bounds.
 /// On web targets the future is returned as-is.
@@ -772,7 +777,7 @@ where
             .block_cache
             .get(&certificate.value.value_hash)
             .ok_or(WorkerError::MissingCertificateValue)?;
-        let block = Arc::unwrap_or_clone(block);
+        let block = CacheArc::unwrap_or_clone(block);
 
         match certificate.value.kind {
             linera_chain::types::CertificateKind::Confirmed => Ok(Either::Left(
@@ -807,7 +812,12 @@ impl ProcessableCertificate for ConfirmedBlock {
         worker: &WorkerState<S>,
         certificate: ConfirmedBlockCertificate,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
-        Box::pin(worker.handle_confirmed_certificate(certificate, None)).await
+        Box::pin(worker.handle_confirmed_certificate(
+            certificate,
+            ProcessConfirmedBlockMode::Auto,
+            None,
+        ))
+        .await
     }
 }
 
@@ -892,6 +902,34 @@ where
         linera_base::Task::spawn(async move {
             let (response, actions) =
                 ProcessableCertificate::process_certificate(&this, certificate).await?;
+            notifications.notify(&actions.notifications);
+            let mut requests = VecDeque::from(actions.cross_chain_requests);
+            while let Some(request) = requests.pop_front() {
+                let actions = this.handle_cross_chain_request(request).await?;
+                requests.extend(actions.cross_chain_requests);
+                notifications.notify(&actions.notifications);
+            }
+            Ok(response)
+        })
+        .await
+    }
+
+    /// Same as [`Self::fully_handle_certificate_with_notifications`] but for a
+    /// confirmed block certificate and with an explicit [`ProcessConfirmedBlockMode`].
+    /// The generic variant always uses [`ProcessConfirmedBlockMode::Auto`].
+    #[instrument(level = "trace", skip(self, certificate, notifier))]
+    #[inline]
+    pub async fn fully_handle_confirmed_certificate_with_notifications(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
+        notifier: &impl Notifier,
+    ) -> Result<ChainInfoResponse, WorkerError> {
+        let notifications = (*notifier).clone();
+        let this = self.clone();
+        linera_base::Task::spawn(async move {
+            let (response, actions) =
+                Box::pin(this.handle_confirmed_certificate(certificate, mode, None)).await?;
             notifications.notify(&actions.notifications);
             let mut requests = VecDeque::from(actions.cross_chain_requests);
             while let Some(request) = requests.pop_front() {
@@ -1291,12 +1329,13 @@ where
     async fn process_confirmed_block(
         &self,
         certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let chain_id = certificate.block().header.chain_id;
         self.chain_write(chain_id, move |mut guard| async move {
             guard
-                .process_confirmed_block(certificate, notify_when_messages_are_delivered)
+                .process_confirmed_block(certificate, mode, notify_when_messages_are_delivered)
                 .await
         })
         .await
@@ -1425,7 +1464,7 @@ where
         &self,
         chain_id: ChainId,
         height: BlockHeight,
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, WorkerError> {
         let state = self.get_or_create_chain_worker(chain_id).await?;
         let guard = handle::read_lock_initialized(&state).await?;
         guard.read_certificate(height).await
@@ -1483,7 +1522,7 @@ where
     pub async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
-    ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
+    ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
         trace!("{} <-- {:?}", self.nickname(), proposal);
         #[cfg(with_metrics)]
         let round = proposal.content.round;
@@ -1501,16 +1540,22 @@ where
             self.storage.clock().sleep_until(block_timestamp).await;
         }
 
-        let response = self
+        let outcome = self
             .chain_write(chain_id, move |mut guard| async move {
-                guard.handle_block_proposal(proposal).await
+                Ok::<_, WorkerError>(guard.handle_block_proposal(proposal).await)
             })
-            .await?;
+            .await;
+        let (result, actions) = match outcome {
+            Ok((result, actions)) => (result, actions),
+            Err(err) => (Err(err), NetworkActions::default()),
+        };
         #[cfg(with_metrics)]
-        metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
-            .with_label_values(&[round.type_name()])
-            .observe(round.number() as f64);
-        Ok(response)
+        if result.is_ok() {
+            metrics::NUM_ROUNDS_IN_BLOCK_PROPOSAL
+                .with_label_values(&[round.type_name()])
+                .observe(round.number() as f64);
+        }
+        (result, actions)
     }
 
     /// Processes a certificate, e.g. to extend a chain with a confirmed block.
@@ -1526,12 +1571,11 @@ where
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         match self.full_certificate(certificate).await? {
             Either::Left(confirmed) => {
-                Box::pin(
-                    self.handle_confirmed_certificate(
-                        confirmed,
-                        notify_when_messages_are_delivered,
-                    ),
-                )
+                Box::pin(self.handle_confirmed_certificate(
+                    confirmed,
+                    ProcessConfirmedBlockMode::Auto,
+                    notify_when_messages_are_delivered,
+                ))
                 .await
             }
             Either::Right(validated) => {
@@ -1555,6 +1599,7 @@ where
     pub async fn handle_confirmed_certificate(
         &self,
         certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
         trace!("{} <-- {:?}", self.nickname(), certificate);
@@ -1562,9 +1607,12 @@ where
         let metrics_data = metrics::MetricsData::new(&certificate);
 
         #[allow(unused_variables)]
-        let (info, actions, outcome) =
-            Box::pin(self.process_confirmed_block(certificate, notify_when_messages_are_delivered))
-                .await?;
+        let (info, actions, outcome) = Box::pin(self.process_confirmed_block(
+            certificate,
+            mode,
+            notify_when_messages_are_delivered,
+        ))
+        .await?;
 
         #[cfg(with_metrics)]
         if matches!(outcome, BlockOutcome::Processed) {
@@ -1646,7 +1694,7 @@ where
         &self,
         chain_id: ChainId,
         blob_id: BlobId,
-    ) -> Result<Arc<Blob>, WorkerError> {
+    ) -> Result<CacheArc<Blob>, WorkerError> {
         trace!("{} <-- download_pending_blob({blob_id:8})", self.nickname());
         let result = self
             .chain_read(chain_id, |guard| async move {

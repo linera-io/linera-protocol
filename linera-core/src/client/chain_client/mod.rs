@@ -21,7 +21,7 @@ use linera_base::{
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
@@ -53,7 +53,7 @@ use linera_execution::{
     },
     ExecutionError, Operation, Query, QueryOutcome,
 };
-use linera_storage::{Clock as _, Storage as _};
+use linera_storage::{Arc as CacheArc, Clock as _, Storage as _};
 use linera_views::ViewError;
 use serde::Serialize;
 pub use state::State;
@@ -120,6 +120,11 @@ pub struct Options {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
+    /// Whether to apply the multi-leader jitter delay before proposing in a multi-leader
+    /// round with index `>= 1`, to spread out concurrent proposals across honest clients.
+    /// The owner with the lowest `hash(owner, round)` still proposes immediately. The
+    /// jitter only takes effect when the round has a configured timeout.
+    pub multi_leader_jitter: bool,
     /// Initial probe interval for the notification circuit breaker. When a validator's
     /// notification stream exhausts retries, the circuit breaker waits this long before
     /// probing again. Doubles on each failed probe.
@@ -163,6 +168,7 @@ impl Options {
             max_concurrent_batch_downloads: DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
+            multi_leader_jitter: false,
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
             max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
@@ -812,7 +818,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn update_validators(
         &self,
         old_committee: Option<&Committee>,
-        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let update_validators_start = linera_base::time::Instant::now();
         // Communicate the new certificate now.
@@ -837,7 +843,7 @@ impl<Env: Environment> ChainClient<Env> {
     pub async fn communicate_chain_updates(
         &self,
         committee: &Committee,
-        latest_certificate: Option<Arc<ConfirmedBlockCertificate>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), Error> {
         let delivery = self.options.cross_chain_message_delivery;
         let height = self.chain_info().await?.next_block_height;
@@ -1370,7 +1376,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
         {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(ClientOutcome::Conflict(Box::new(certificate)))
+                return Ok(self.classify_committed(certificate, &operations));
             }
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ClientOutcome::WaitForTimeout(timeout))
@@ -1384,7 +1390,9 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect pending messages and epoch changes after acquiring the lock to avoid
         // race conditions where messages valid for one block height are proposed at a
         // different height.
-        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+        let transactions = self
+            .prepend_epochs_messages_and_events(operations.clone())
+            .await?;
 
         if transactions.is_empty() {
             return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
@@ -1392,19 +1400,15 @@ impl<Env: Environment> ChainClient<Env> {
             )));
         }
 
-        let block = self
-            .new_pending_block(transactions, blobs, &mut proposal_guard)
+        self.new_pending_block(transactions, blobs, &mut proposal_guard)
             .await?;
 
         match self
             .process_pending_block_without_prepare(&mut proposal_guard)
             .await?
         {
-            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
-                Ok(ClientOutcome::Committed(certificate))
-            }
             ClientOutcome::Committed(Some(certificate)) => {
-                Ok(ClientOutcome::Conflict(Box::new(certificate)))
+                Ok(self.classify_committed(certificate, &operations))
             }
             // Unreachable: We just set the pending proposal in the guard.
             ClientOutcome::Committed(None) => {
@@ -1412,6 +1416,45 @@ impl<Env: Environment> ChainClient<Env> {
             }
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
             ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
+        }
+    }
+
+    /// Returns `Committed` if the committed block reflects our request — same
+    /// authenticated owner, and our `operations`. All other transactions must be ones that
+    /// are added automatically, to process messages, streams or new epochs.
+    fn classify_committed(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        operations: &[Operation],
+    ) -> ClientOutcome<ConfirmedBlockCertificate> {
+        let block = certificate.block();
+        if self.preferred_owner.is_none()
+            || block.header.authenticated_owner != self.preferred_owner
+        {
+            return ClientOutcome::Conflict(Box::new(certificate));
+        }
+        let mut operations_iter = operations.iter().peekable();
+        for tx in &block.body.transactions {
+            let is_expected = match tx {
+                Transaction::ReceiveMessages(_) => true,
+                Transaction::ExecuteOperation(op) if Some(&op) == operations_iter.peek() => {
+                    operations_iter.next();
+                    true
+                }
+                Transaction::ExecuteOperation(Operation::System(op)) => matches!(
+                    **op,
+                    SystemOperation::ProcessNewEpoch(_) | SystemOperation::UpdateStream { .. }
+                ),
+                Transaction::ExecuteOperation(Operation::User { .. }) => false,
+            };
+            if !is_expected {
+                return ClientOutcome::Conflict(Box::new(certificate));
+            }
+        }
+        if operations_iter.next().is_some() {
+            ClientOutcome::Conflict(Box::new(certificate))
+        } else {
+            ClientOutcome::Committed(certificate)
         }
     }
 
@@ -1894,12 +1937,12 @@ impl<Env: Environment> ChainClient<Env> {
         {
             return self.finalize_locking_block(info).await;
         }
-        let owner = self.identity().await?;
+        let identity = self.identity().await?;
 
         let local_node = &self.client.local_node;
         // Otherwise we have to re-propose the highest validated block, if there is one.
-        let (block, blobs) = if let Some(locking) = &info.manager.requested_locking {
-            match &**locking {
+        let (block, blobs, owner) = if let Some(locking) = &info.manager.requested_locking {
+            let (block, blobs) = match &**locking {
                 LockingBlock::Regular(certificate) => {
                     let blob_ids = certificate.block().required_blob_ids();
                     let blobs = local_node
@@ -1928,9 +1971,42 @@ impl<Env: Environment> ChainClient<Env> {
                     debug!("Retrying locking block from fast round.");
                     (block, blobs)
                 }
-            }
+            };
+            (block, blobs, identity)
         } else if let Some(pending) = proposal_guard.as_ref() {
-            // Otherwise we are free to propose our own pending block.
+            // Otherwise we are free to propose our own pending block. Sign it as the owner
+            // that staged it: the block's operations are authenticated by that owner, and
+            // validators reject the proposal with `WorkerError::InvalidSigner` if we re-sign
+            // it as someone else (which would happen if `preferred_owner` changed since the
+            // block was staged). The signer is global to the client, so we can sign as the
+            // original author as long as we still hold their key.
+            let owner = match pending.block.authenticated_owner {
+                Some(staged_owner) if staged_owner != identity => {
+                    if !self.has_key_for(&staged_owner).await? {
+                        // If a fast-round proposal was already submitted, we can't safely
+                        // drop it and propose a conflicting fast block: fast rounds skip
+                        // the validation step and rely on the super owner not forking
+                        // itself, so a second proposal could split votes between f+1 and
+                        // 2f and wedge the round until it times out. Surface an error so
+                        // the caller can recover the key or wait for the timeout.
+                        if pending.round.is_some_and(|round| round.is_fast()) {
+                            return Err(Error::BlockProposalError(
+                                "pending fast block was signed by an owner whose key is no \
+                                 longer available; recover the key or wait for the round to \
+                                 time out before retrying",
+                            ));
+                        }
+                        warn!(
+                            ?staged_owner, %identity,
+                            "Discarding pending block: no signer key for its authenticated owner",
+                        );
+                        *proposal_guard = None;
+                        return Ok(ClientOutcome::Committed(None));
+                    }
+                    staged_owner
+                }
+                _ => identity,
+            };
             let proposed_block = pending.block.clone();
             let blobs = pending.blobs.clone();
             let staging_outcome = pending.auto_retry_outcome.as_ref();
@@ -1954,7 +2030,7 @@ impl<Env: Environment> ChainClient<Env> {
                 );
             }
             debug!("Proposing the local pending block.");
-            (block, blobs)
+            (block, blobs, owner)
         } else {
             return Ok(ClientOutcome::Committed(None)); // Nothing to do.
         };
@@ -2039,7 +2115,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?;
         // Clear the pending proposal now that the block has been committed.
         *proposal_guard = None;
-        Ok(ClientOutcome::Committed(Some(Arc::unwrap_or_clone(
+        Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
             certificate,
         ))))
     }
@@ -2101,7 +2177,7 @@ impl<Env: Environment> ChainClient<Env> {
         let certificate = self.client.storage_client().cache_certificate(certificate);
         self.update_validators(Some(&committee), Some(certificate.clone()))
             .await?;
-        Ok(ClientOutcome::Committed(Some(Arc::unwrap_or_clone(
+        Ok(ClientOutcome::Committed(Some(CacheArc::unwrap_or_clone(
             certificate,
         ))))
     }
@@ -2169,6 +2245,13 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
         if manager.should_propose(identity, round, seed, &current_committee) {
+            if let Some(wait_until) = self.multi_leader_jitter_target(info, identity, round) {
+                return Ok(Either::Right(RoundTimeout {
+                    timestamp: wait_until,
+                    current_round: round,
+                    next_block_height: info.next_block_height,
+                }));
+            }
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
@@ -2177,6 +2260,41 @@ impl<Env: Environment> ChainClient<Env> {
         Err(Error::BlockProposalError(
             "Not a leader in the current round",
         ))
+    }
+
+    /// Returns the timestamp at which `owner` should propose in `round`, to spread out
+    /// concurrent proposals from honest clients in a multi-leader round. Returns `None` if
+    /// the owner should propose immediately (either because the round is not a multi-leader
+    /// round, the owner is the preferred proposer, or the jitter target is already in the past).
+    ///
+    /// The delay is deterministic per `(owner, round)` and is anchored at the round's start
+    /// time when known, so that retrying after an interrupting notification does not extend
+    /// the wait further.
+    fn multi_leader_jitter_target(
+        &self,
+        info: &ChainInfo,
+        owner: &AccountOwner,
+        round: Round,
+    ) -> Option<Timestamp> {
+        if !self.options.multi_leader_jitter {
+            return None;
+        }
+        let ownership = &info.manager.ownership;
+        let delay = ownership.multi_leader_proposal_delay(owner, round)?;
+        if delay == TimeDelta::ZERO {
+            return None;
+        }
+        let now = self.storage_client().clock().current_time();
+        let round_start = if round == info.manager.current_round {
+            match (info.manager.round_timeout, ownership.round_timeout(round)) {
+                (Some(end), Some(duration)) => end.saturating_sub(duration),
+                _ => now,
+            }
+        } else {
+            now
+        };
+        let propose_at = round_start.saturating_add(delay);
+        (propose_at > now).then_some(propose_at)
     }
 
     /// Clears the information on any operation that previously failed.
@@ -2208,7 +2326,7 @@ impl<Env: Environment> ChainClient<Env> {
             super_owners: vec![new_owner],
             owners: Vec::new(),
             first_leader: None,
-            multi_leader_rounds: 2,
+            multi_leader_rounds: 5,
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         })
@@ -2354,6 +2472,14 @@ impl<Env: Environment> ChainClient<Env> {
         Ok(ClientOutcome::Committed((description, certificate)))
     }
 
+    /// Publishes a checkpoint of the chain's execution state. The resulting block
+    /// contains a single `SystemOperation::Checkpoint`; future nodes can bootstrap
+    /// from the published blob instead of replaying the chain's history.
+    #[instrument(level = "trace")]
+    pub async fn checkpoint(&self) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
+        self.execute_operation(SystemOperation::Checkpoint).await
+    }
+
     /// Closes the chain (and loses everything in it!!).
     /// Returns `None` if the chain was already closed.
     #[instrument(level = "trace")]
@@ -2489,12 +2615,12 @@ impl<Env: Environment> ChainClient<Env> {
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
-            let mut creation: Vec<_> = certificate
+            let mut creation = certificate
                 .block()
                 .created_blob_ids()
                 .into_iter()
                 .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
-                .collect();
+                .collect::<Vec<_>>();
             if creation.len() > 1 {
                 return Err(Error::InternalError(
                     "Unexpected number of application descriptions published",
@@ -2690,13 +2816,14 @@ impl<Env: Environment> ChainClient<Env> {
             .read_confirmed_block(hash)
             .await?
             .ok_or(Error::MissingConfirmedBlock(hash))
+            .map(|b| b.into_std())
     }
 
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_certificate(
         &self,
         hash: CryptoHash,
-    ) -> Result<Arc<ConfirmedBlockCertificate>, Error> {
+    ) -> Result<CacheArc<ConfirmedBlockCertificate>, Error> {
         self.client
             .storage_client()
             .read_certificate(hash)
@@ -2863,8 +2990,11 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
+                // The validator may hold a locking block whose round is below both its
+                // current round and ours, so we only short-circuit when strictly past its
+                // height.
                 if let Some(info) = self.maybe_local_chain_info(chain_id, &local_node).await? {
-                    if (info.next_block_height, info.manager.current_round) >= (height, round) {
+                    if info.next_block_height > height {
                         debug!(
                             chain_id = %self.chain_id,
                             "Accepting redundant notification for new round"
@@ -3006,11 +3136,11 @@ impl<Env: Environment> ChainClient<Env> {
             } else {
                 self.client.admin_committee().await?.1
             };
-            let nodes: HashMap<_, _> = self
+            let nodes = self
                 .client
                 .validator_node_provider()
                 .make_nodes(&committee)?
-                .collect();
+                .collect::<HashMap<_, _>>();
             (nodes, self.client.local_node.clone())
         };
         // Detect circuit breaker state transitions before cleaning up senders.
@@ -3220,6 +3350,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .await?
                 .into_iter()
                 .flatten()
+                .map(|b| b.into_std())
                 .collect();
             remote_node.upload_blobs(missing_blobs).await?;
             remote_node

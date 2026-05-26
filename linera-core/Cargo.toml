@@ -31,8 +31,7 @@ test = [
     "test-strategy",
     "tokio/parking_lot",
 ]
-rocksdb = ["linera-views/rocksdb"]
-dynamodb = ["linera-views/dynamodb"]
+rocksdb = ["linera-views/rocksdb", "dep:rocksdb"]
 scylladb = ["linera-views/scylladb"]
 storage-service = ["linera-storage-service"]
 metrics = [
@@ -72,6 +71,7 @@ papaya = { workspace = true, features = ["serde"] }
 prometheus = { workspace = true, optional = true }
 proptest = { workspace = true, optional = true }
 rand = { workspace = true, features = ["std_rng"] }
+rocksdb = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 strum.workspace = true
@@ -110,6 +110,7 @@ publish-read-data-blob.workspace = true
 serde_json.workspace = true
 sha3.workspace = true
 social.workspace = true
+tempfile.workspace = true
 test-case.workspace = true
 time-expiry.workspace = true
 tracing-subscriber = { workspace = true, features = ["fmt"] }

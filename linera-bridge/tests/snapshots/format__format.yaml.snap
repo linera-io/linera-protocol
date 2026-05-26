@@ -97,6 +97,8 @@ BlobType:
       ChainDescription: UNIT
     7:
       ApplicationFormats: UNIT
+    8:
+      CheckpointExecutionState: UNIT
 Block:
   STRUCT:
     - header:
@@ -353,6 +355,15 @@ OracleResponse:
       EventExists:
         NEWTYPE:
           TYPENAME: EventId
+    7:
+      Checkpoint:
+        STRUCT:
+          - execution_state_blobs:
+              SEQ:
+                TYPENAME: CryptoHash
+          - used_blobs:
+              SEQ:
+                TYPENAME: BlobId
 OutgoingMessage:
   STRUCT:
     - destination:
@@ -534,6 +545,8 @@ SystemOperation:
           - stream_id:
               TYPENAME: StreamId
           - next_index: U32
+    13:
+      Checkpoint: UNIT
 TimeDelta:
   NEWTYPESTRUCT: U64
 TimeoutConfig:

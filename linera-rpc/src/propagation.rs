@@ -155,10 +155,7 @@ pub fn get_context_with_traffic_type() -> Context {
 
     let cx = Context::current();
 
-    if std::env::var(TRAFFIC_TYPE_ENV_VAR)
-        .map(|v| v == TRAFFIC_TYPE_SYNTHETIC)
-        .unwrap_or(false)
-    {
+    if std::env::var(TRAFFIC_TYPE_ENV_VAR).is_ok_and(|v| v == TRAFFIC_TYPE_SYNTHETIC) {
         cx.with_baggage(vec![KeyValue::new(
             Key::new(TRAFFIC_TYPE_KEY),
             TRAFFIC_TYPE_SYNTHETIC,

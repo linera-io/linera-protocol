@@ -6,8 +6,6 @@
 use std::collections::BTreeSet;
 
 use anyhow::Result;
-#[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
 use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
@@ -187,34 +185,6 @@ impl StateStorage for ScyllaDbTestStorage {
         let database = ScyllaDbDatabase::connect_test_namespace().await.unwrap();
         let accessed_chains = BTreeSet::new();
         ScyllaDbTestStorage {
-            database,
-            accessed_chains,
-        }
-    }
-
-    async fn load(&mut self, id: usize) -> Result<StateView<Self::Context>, ViewError> {
-        self.accessed_chains.insert(id);
-        let root_key = bcs::to_bytes(&id)?;
-        let store = self.database.open_exclusive(&root_key)?;
-        let context = ViewContext::create_root_context(store, id).await?;
-        StateView::load(context).await
-    }
-}
-
-#[cfg(with_dynamodb)]
-pub struct DynamoDbTestStorage {
-    database: DynamoDbDatabase,
-    accessed_chains: BTreeSet<usize>,
-}
-
-#[cfg(with_dynamodb)]
-impl StateStorage for DynamoDbTestStorage {
-    type Context = ViewContext<usize, <DynamoDbDatabase as KeyValueDatabase>::Store>;
-
-    async fn new() -> Self {
-        let database = DynamoDbDatabase::connect_test_namespace().await.unwrap();
-        let accessed_chains = BTreeSet::new();
-        DynamoDbTestStorage {
             database,
             accessed_chains,
         }
@@ -749,20 +719,6 @@ async fn test_views_in_scylla_db() -> Result<()> {
     Ok(())
 }
 
-#[cfg(with_dynamodb)]
-#[tokio::test]
-async fn test_views_in_dynamo_db() -> Result<()> {
-    let mut store = DynamoDbTestStorage::new().await;
-    let config = TestConfig::default();
-    let hash = test_store(&mut store, &config).await?;
-    assert_eq!(store.accessed_chains.len(), 1);
-
-    let mut store = MemoryTestStorage::new().await;
-    let hash2 = test_store(&mut store, &config).await?;
-    assert_eq!(hash, hash2);
-    Ok(())
-}
-
 #[cfg(with_rocksdb)]
 #[cfg(test)]
 async fn test_store_rollback_kernel<S>(store: &mut S) -> Result<()>
@@ -931,7 +887,7 @@ where
     for key_value in key_value_vector {
         let key = key_value.0;
         let value = key_value.1;
-        let key_str = format!("{:?}", &key);
+        let key_str = format!("{key:?}");
         let value_usize = (*value.first().unwrap()) as usize;
         view.map.insert(&key_str, value_usize)?;
         view.key_value_store.insert(key, value).await?;
@@ -961,7 +917,7 @@ where
     for operation in operations {
         match operation {
             Put { key, value } => {
-                let key_str = format!("{:?}", &key);
+                let key_str = format!("{key:?}");
                 let first_value = *value.first().unwrap();
                 let first_value_usize = first_value as usize;
                 let first_value_u64 = first_value as u64;
@@ -976,7 +932,7 @@ where
                 }
             }
             Delete { key } => {
-                let key_str = format!("{:?}", &key);
+                let key_str = format!("{key:?}");
                 view.map.remove(&key_str)?;
                 view.key_value_store.remove(key).await?;
             }
@@ -1080,24 +1036,24 @@ where
             let view = store.load(1).await?;
             view.hash().await?
         };
-        for pair in key_value_vector {
-            let str0 = format!("{:?}", &pair.0);
-            let str1 = format!("{:?}", &pair.1);
-            let pair0_first_u8 = *pair.0.first().unwrap();
-            let pair1_first_u8 = *pair.1.first().unwrap();
+        for (key, value) in key_value_vector {
+            let str0 = format!("{key:?}");
+            let str1 = format!("{value:?}");
+            let key_first_u8 = *key.first().unwrap();
+            let value_first_u8 = *value.first().unwrap();
             let choice = rng.gen_range(0..7);
             if choice < 3 {
                 let mut view = store.load(1).await?;
-                view.x1.set(pair0_first_u8 as u64);
-                view.x2.set(pair1_first_u8 as u32);
-                view.log.push(pair0_first_u8 as u32);
-                view.log.push(pair1_first_u8 as u32);
-                view.queue.push_back(pair0_first_u8 as u64);
-                view.queue.push_back(pair1_first_u8 as u64);
-                view.map.insert(&str0, pair1_first_u8 as usize)?;
-                view.map.insert(&str1, pair0_first_u8 as usize)?;
+                view.x1.set(key_first_u8 as u64);
+                view.x2.set(value_first_u8 as u32);
+                view.log.push(key_first_u8 as u32);
+                view.log.push(value_first_u8 as u32);
+                view.queue.push_back(key_first_u8 as u64);
+                view.queue.push_back(value_first_u8 as u64);
+                view.map.insert(&str0, value_first_u8 as usize)?;
+                view.map.insert(&str1, key_first_u8 as usize)?;
                 view.key_value_store
-                    .insert(pair.0.clone(), pair.1.clone())
+                    .insert(key.clone(), value.clone())
                     .await?;
                 if choice == 0 {
                     view.rollback();
@@ -1120,7 +1076,7 @@ where
             if choice == 4 {
                 let mut view = store.load(1).await?;
                 let subview = view.collection.load_entry_mut(&str0).await?;
-                subview.push(pair1_first_u8 as u32);
+                subview.push(value_first_u8 as u32);
                 let hash_new = view.hash().await?;
                 assert_ne!(hash, hash_new);
                 view.save().await?;
@@ -1189,18 +1145,6 @@ where
         Ok(())
     })
     .await
-}
-
-#[tokio::test]
-#[cfg(with_dynamodb)]
-async fn check_large_write_dynamo_db() -> Result<()> {
-    // By writing 1000 elements we seriously check the Amazon journaling
-    // writing system.
-    let n = 1000;
-    let mut rng = make_deterministic_rng();
-    let vector = get_random_byte_vector(&mut rng, &[], n);
-    let mut store = DynamoDbTestStorage::new().await;
-    check_large_write(&mut store, vector).await
 }
 
 #[tokio::test]

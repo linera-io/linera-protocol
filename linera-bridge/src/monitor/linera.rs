@@ -91,7 +91,7 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
             let mut hash = info.block_hash;
             loop {
                 let Some(h) = hash else {
-                    anyhow::bail!("Block at height {} not found", credit_height);
+                    anyhow::bail!("Block at height {credit_height} not found");
                 };
                 let c = linera_client.read_certificate(h).await?;
                 if c.block().header.height == credit_height {

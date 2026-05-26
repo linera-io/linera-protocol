@@ -142,14 +142,13 @@ where
                 .end
                 .checked_add(new_back_len)
                 .ok_or(ArithmeticError::Overflow)?;
-            let mut index = new_stored_indices.end - new_back_len;
-            for value in &self.new_back_values {
+            let start = new_stored_indices.end - new_back_len;
+            for (index, value) in (start..).zip(&self.new_back_values) {
                 let key = self
                     .context
                     .base_key()
                     .derive_tag_key(KeyTag::Index as u8, &index)?;
                 batch.put_key_value(key, value)?;
-                index += 1;
             }
         }
         if !self.delete_storage_first || !new_stored_indices.is_empty() {

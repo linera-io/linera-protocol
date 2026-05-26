@@ -17,7 +17,9 @@ use futures::{
     Future,
 };
 use linera_base::{
-    crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey},
+    crypto::{
+        AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey, ValidatorSecretKey,
+    },
     data_types::*,
     identifiers::{AccountOwner, BlobId, ChainId, EventId},
     ownership::ChainOwnership,
@@ -30,12 +32,10 @@ use linera_chain::{
     },
 };
 use linera_execution::{committee::Committee, ResourceControlPolicy, WasmRuntime};
-use linera_storage::{DbStorage, ResultReadCertificates, Storage, TestClock};
+use linera_storage::{Arc as CacheArc, DbStorage, ResultReadCertificates, Storage, TestClock};
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
 use linera_storage_service::client::StorageServiceDatabase;
 use linera_version::VersionInfo;
-#[cfg(feature = "dynamodb")]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(feature = "scylladb")]
 use linera_views::scylla_db::ScyllaDbDatabase;
 use linera_views::{
@@ -154,11 +154,11 @@ where
 
     async fn handle_confirmed_certificate(
         &self,
-        certificate: Arc<GenericCertificate<ConfirmedBlock>>,
+        certificate: CacheArc<GenericCertificate<ConfirmedBlock>>,
         _delivery: CrossChainMessageDelivery,
     ) -> Result<ChainInfoResponse, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
-            validator.do_handle_certificate(Arc::unwrap_or_clone(certificate), sender)
+            validator.do_handle_certificate(CacheArc::unwrap_or_clone(certificate), sender)
         })
         .await
     }
@@ -392,14 +392,14 @@ where
             | FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated => {
-                let result = self
+                let (response_result, _actions) = self
                     .client
                     .lock()
                     .await
                     .state
                     .handle_block_proposal(proposal)
-                    .await
-                    .map_err(Into::into);
+                    .await;
+                let result = response_result.map_err(NodeError::from);
                 if self.fault_type == FaultType::DontSendValidateVote {
                     Err(NodeError::ClientIoError {
                         error: "refusing to validate".to_string(),
@@ -410,7 +410,7 @@ where
             }
         };
         // In a local node cross-chain messages can't get lost, so we can ignore the actions here.
-        sender.send(result.map(|(info, _actions)| info))
+        sender.send(result)
     }
 
     async fn do_handle_lite_certificate(
@@ -553,7 +553,7 @@ where
             Ok(blob) => blob.ok_or_else(|| NodeError::BlobsNotFound(vec![blob_id])),
             Err(error) => Err(error),
         };
-        sender.send(blob.map(|blob| Arc::unwrap_or_clone(blob).into_content()))
+        sender.send(blob.map(|blob| CacheArc::unwrap_or_clone(blob).into_content()))
     }
 
     async fn do_download_pending_blob(
@@ -602,7 +602,7 @@ where
         let certificate = match certificate {
             Err(error) => Err(error),
             Ok(entry) => match entry {
-                Some(certificate) => Ok(Arc::unwrap_or_clone(certificate)),
+                Some(certificate) => Ok(CacheArc::unwrap_or_clone(certificate)),
                 None => {
                     panic!("Missing certificate: {hash}");
                 }
@@ -825,7 +825,8 @@ pub struct TestBuilder<B: StorageBuilder> {
     network_description: Option<NetworkDescription>,
     genesis_storage_builder: GenesisStorageBuilder,
     node_provider: NodeProvider<B::Storage>,
-    validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
+    pub validator_storages: HashMap<ValidatorPublicKey, B::Storage>,
+    pub validator_key_pairs: HashMap<ValidatorPublicKey, ValidatorSecretKey>,
     chain_client_storages: Vec<B::Storage>,
     pub chain_owners: BTreeMap<ChainId, AccountOwner>,
     pub signer: TestSigner,
@@ -918,10 +919,12 @@ where
         let initial_committee = Committee::make_simple(for_committee);
         let mut validator_clients = Vec::new();
         let mut validator_storages = HashMap::new();
+        let mut validator_key_pairs = HashMap::new();
         let mut faulty_validators = HashSet::new();
         for (i, (validator_keypair, _account_public_key)) in validators.into_iter().enumerate() {
             let validator_public_key = validator_keypair.public_key;
             let storage = storage_builder.build().await?;
+            let secret_key_copy = validator_keypair.secret_key.copy();
             let config = ChainWorkerConfig {
                 nickname: format!("Node {i}"),
                 ..ChainWorkerConfig::default()
@@ -935,6 +938,7 @@ where
             }
             validator_clients.push(validator);
             validator_storages.insert(validator_public_key, storage);
+            validator_key_pairs.insert(validator_public_key, secret_key_copy);
         }
         tracing::info!(
             "Test will use the following faulty validators: {:?}",
@@ -948,6 +952,7 @@ where
             genesis_storage_builder: GenesisStorageBuilder::default(),
             node_provider: NodeProvider::from_iter(validator_clients),
             validator_storages,
+            validator_key_pairs,
             chain_client_storages: Vec::new(),
             chain_owners: BTreeMap::new(),
             signer,
@@ -1377,50 +1382,6 @@ impl StorageBuilder for ServiceStorageBuilder {
     async fn build(&mut self) -> anyhow::Result<Self::Storage> {
         self.instance_counter += 1;
         let config = StorageServiceDatabase::new_test_config().await?;
-        if self.namespace.is_empty() {
-            self.namespace = generate_test_namespace();
-        }
-        let namespace = format!("{}_{}", self.namespace, self.instance_counter);
-        Ok(
-            DbStorage::new_for_testing(config, &namespace, self.wasm_runtime, self.clock.clone())
-                .await?,
-        )
-    }
-
-    fn clock(&self) -> &TestClock {
-        &self.clock
-    }
-}
-
-#[cfg(feature = "dynamodb")]
-#[derive(Default)]
-pub struct DynamoDbStorageBuilder {
-    namespace: String,
-    instance_counter: usize,
-    wasm_runtime: Option<WasmRuntime>,
-    clock: TestClock,
-}
-
-#[cfg(feature = "dynamodb")]
-impl DynamoDbStorageBuilder {
-    /// Creates a [`DynamoDbStorageBuilder`] that uses the specified [`WasmRuntime`] to run Wasm
-    /// applications.
-    pub fn with_wasm_runtime(wasm_runtime: impl Into<Option<WasmRuntime>>) -> Self {
-        DynamoDbStorageBuilder {
-            wasm_runtime: wasm_runtime.into(),
-            ..DynamoDbStorageBuilder::default()
-        }
-    }
-}
-
-#[cfg(feature = "dynamodb")]
-#[async_trait]
-impl StorageBuilder for DynamoDbStorageBuilder {
-    type Storage = DbStorage<DynamoDbDatabase, TestClock>;
-
-    async fn build(&mut self) -> Result<Self::Storage, anyhow::Error> {
-        self.instance_counter += 1;
-        let config = DynamoDbDatabase::new_test_config().await?;
         if self.namespace.is_empty() {
             self.namespace = generate_test_namespace();
         }

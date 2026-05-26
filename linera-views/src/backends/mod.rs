@@ -20,8 +20,12 @@ pub mod scylla_db;
 #[cfg(with_rocksdb)]
 pub mod rocks_db;
 
-#[cfg(with_dynamodb)]
-pub mod dynamo_db;
-
 #[cfg(with_indexeddb)]
 pub mod indexed_db;
+
+#[cfg(with_testing)]
+/// Creates a RocksDB backup of the underlying database into a directory.
+pub trait DatabaseBackup {
+    /// Writes a RocksDB backup snapshot into `dir`.
+    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()>;
+}

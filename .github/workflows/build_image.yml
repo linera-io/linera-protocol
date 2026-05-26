@@ -50,7 +50,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}

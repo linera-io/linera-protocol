@@ -68,9 +68,7 @@ fn get_available_memory(sys: &System) -> usize {
 }
 
 fn get_available_cpus() -> i32 {
-    std::thread::available_parallelism()
-        .map(|p| p.get() as i32)
-        .unwrap_or(1)
+    std::thread::available_parallelism().map_or(1, |p| p.get() as i32)
 }
 
 const HYPER_CLOCK_CACHE_BLOCK_SIZE: usize = 8 * 1024; // 8 KiB
@@ -793,3 +791,18 @@ pub type RocksDbDatabase = MeteredDatabase<
 /// The `RocksDbDatabase` composed type
 #[cfg(not(with_metrics))]
 pub type RocksDbDatabase = LruCachingDatabase<ValueSplittingDatabase<RocksDbDatabaseInternal>>;
+
+#[cfg(with_testing)]
+impl crate::backends::DatabaseBackup for RocksDbDatabaseInternal {
+    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        use rocksdb::{
+            backup::{BackupEngine, BackupEngineOptions},
+            Env,
+        };
+        let opts = BackupEngineOptions::new(dir)?;
+        let env = Env::new()?;
+        let mut engine = BackupEngine::open(&opts, &env)?;
+        engine.create_new_backup_flush(&*self.executor.db, true)?;
+        Ok(())
+    }
+}

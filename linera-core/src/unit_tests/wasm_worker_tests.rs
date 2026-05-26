@@ -34,8 +34,6 @@ use linera_storage::Storage;
 use test_case::test_case;
 
 use super::TestEnvironment;
-#[cfg(feature = "dynamodb")]
-use crate::test_utils::DynamoDbStorageBuilder;
 #[cfg(feature = "rocksdb")]
 use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
@@ -63,17 +61,6 @@ async fn test_rocks_db_handle_certificates_to_create_application(
     wasm_runtime: WasmRuntime,
 ) -> anyhow::Result<()> {
     let builder = RocksDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime)).await;
-    run_test_handle_certificates_to_create_application(builder).await
-}
-
-#[cfg(feature = "dynamodb")]
-#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer ; "wasmer"))]
-#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime ; "wasmtime"))]
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn test_dynamo_db_handle_certificates_to_create_application(
-    wasm_runtime: WasmRuntime,
-) -> anyhow::Result<()> {
-    let builder = DynamoDbStorageBuilder::with_wasm_runtime(Some(wasm_runtime));
     run_test_handle_certificates_to_create_application(builder).await
 }
 

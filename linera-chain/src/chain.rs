@@ -11,7 +11,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
-        OracleResponse, Timestamp,
+        NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
@@ -41,7 +41,7 @@ use crate::{
         BlockExecutionOutcome, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight,
         IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
-    inbox::{InboxError, InboxStateView},
+    inbox::{Cursor, InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
@@ -228,12 +228,12 @@ where
     pub next_expected_events: MapView<C, StreamId, u32>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
-    pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
+    pub outbox_counters: RegisterView<C, NonCanonicalBTreeMap<BlockHeight, u32>>,
     /// Outboxes with at least one pending message. This allows us to avoid loading all outboxes.
-    pub nonempty_outboxes: RegisterView<C, BTreeSet<ChainId>>,
+    pub nonempty_outboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
     /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
-    pub nonempty_inboxes: RegisterView<C, BTreeSet<ChainId>>,
+    pub nonempty_inboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
     /// The local wall-clock time when block 0 was last executed. Used to prevent
     /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
@@ -249,6 +249,11 @@ where
     /// `linera-views` gains efficient first/last key support, this field can be
     /// removed in favor of `block_hashes.last_index()`.
     pub next_height_to_preprocess: RegisterView<C, BlockHeight>,
+
+    /// The height of the most recent checkpoint block applied to this chain, if any.
+    /// Maintained by `apply_confirmed_block` whenever a block starting with
+    /// `SystemOperation::Checkpoint` is executed.
+    pub latest_checkpoint_height: RegisterView<C, Option<BlockHeight>>,
 }
 
 /// Block-chaining state.
@@ -703,8 +708,11 @@ where
 
         #[cfg(with_metrics)]
         let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
-        chain.system.timestamp.set(block.timestamp);
 
+        // Resolve the current epoch's resource policy first: `prepare_checkpoint` needs
+        // `maximum_blob_size` to chunk the dump, and `current_committee` is a pure read
+        // so it can run before the dump without tainting the inner view's pending-changes
+        // set.
         let committee_policy = chain
             .system
             .current_committee()
@@ -714,6 +722,24 @@ where
             .1
             .policy()
             .clone();
+
+        // Pre-block hook: if this block contains a `SystemOperation::Checkpoint`, dump the
+        // execution state from storage *now*, before any block-level mutation taints the
+        // inner view's pending-changes set. The matching operation handler will publish
+        // the resulting blobs without re-dumping; subsequent fees and other state changes
+        // accumulate normally and end up persisted with the override hash on save.
+        let prepared_checkpoint_blobs = if block.starts_with_checkpoint() {
+            Some(
+                chain
+                    .prepare_checkpoint(committee_policy.maximum_blob_size)
+                    .await
+                    .with_execution_context(ChainExecutionContext::Block)?,
+            )
+        } else {
+            None
+        };
+
+        chain.system.timestamp.set(block.timestamp);
 
         let mut resource_controller = ResourceController::new(
             Arc::new(committee_policy),
@@ -740,6 +766,9 @@ where
             replaying_oracle_responses,
             block,
         )?;
+        if let Some(blobs) = prepared_checkpoint_blobs {
+            block_execution_tracker.set_prepared_checkpoint_blobs(blobs);
+        }
 
         // Extract failure-policy parameters from exec_policy.
         let (max_failures, never_reject_application_ids) = match &exec_policy.on_failure {
@@ -1088,6 +1117,20 @@ where
             &block,
         )?;
 
+        ensure!(
+            !block
+                .transactions
+                .iter()
+                .skip(1)
+                .any(Transaction::is_checkpoint),
+            ChainError::CheckpointPreconditionFailed(
+                "Checkpoint must be the first transaction in its block",
+            )
+        );
+        if block.starts_with_checkpoint() {
+            self.check_checkpoint_preconditions().await?;
+        }
+
         Self::execute_block_inner(
             &mut self.execution_state,
             &self.block_hashes,
@@ -1134,6 +1177,9 @@ where
         tip.next_block_height.try_add_assign_one()?;
         tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.insert_block_hash(block.header.height, hash)?;
+        if block.body.starts_with_checkpoint() {
+            self.latest_checkpoint_height.set(Some(block.header.height));
+        }
         Ok(updated_streams)
     }
 
@@ -1207,6 +1253,48 @@ where
             mandatory.is_empty(),
             ChainError::MissingMandatoryApplications(mandatory.into_iter().collect())
         );
+        Ok(())
+    }
+
+    /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
+    ///   * no inbox has consumed any incoming bundle (every `next_cursor_to_remove` is
+    ///     at default);
+    ///   * no outbox has pending outgoing messages;
+    ///   * no event stream tracker is set.
+    ///
+    /// The structural invariant that Checkpoint must be the *first* transaction in its
+    /// block is enforced unconditionally in `execute_block`, independently of these
+    /// preconditions. Sender-side conditions (no events ever published, no cross-chain
+    /// messages ever sent) are validated inside `ExecutionStateView::prepare_checkpoint`.
+    async fn check_checkpoint_preconditions(&self) -> Result<(), ChainError> {
+        let origins = self.inboxes.indices().await?;
+        for origin in &origins {
+            let Some(inbox) = self.inboxes.try_load_entry(origin).await? else {
+                continue;
+            };
+            ensure!(
+                *inbox.next_cursor_to_remove.get() == Cursor::default(),
+                ChainError::CheckpointPreconditionFailed("chain has consumed incoming messages")
+            );
+        }
+
+        ensure!(
+            self.nonempty_outboxes.get().is_empty(),
+            ChainError::CheckpointPreconditionFailed("chain has pending outgoing messages")
+        );
+
+        let mut had_event_tracker = false;
+        self.next_expected_events
+            .for_each_index_while(|_| {
+                had_event_tracker = true;
+                Ok(false)
+            })
+            .await?;
+        ensure!(
+            !had_event_tracker,
+            ChainError::CheckpointPreconditionFailed("chain has consumed events")
+        );
+
         Ok(())
     }
 

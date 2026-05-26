@@ -33,13 +33,13 @@ jobs:
 
   publish-docs:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     # We only publish docs for the main branch.
     if: github.ref == 'refs/heads/main'
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: ./.github/actions/install-protoc
@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 90
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
     - name: Install Protoc
       uses: ./.github/actions/install-protoc

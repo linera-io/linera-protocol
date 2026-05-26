@@ -365,6 +365,8 @@ pub enum ExecutionError {
     OutdatedUpdateStream,
     #[error("UpdateStream references an application that is not subscribed")]
     UnsubscribedUpdateStream,
+    #[error("Checkpoint precondition failed: {0}")]
+    CheckpointPreconditionFailed(&'static str),
 }
 
 impl ExecutionError {
@@ -419,6 +421,7 @@ impl ExecutionError {
             | ExecutionError::UnprocessedStreams
             | ExecutionError::OutdatedUpdateStream
             | ExecutionError::UnsubscribedUpdateStream
+            | ExecutionError::CheckpointPreconditionFailed(_)
             | ExecutionError::ViewError(ViewError::NotFound(_)) => false,
             #[cfg(with_wasm_runtime)]
             ExecutionError::WasmError(_) => false,
@@ -1518,6 +1521,14 @@ impl Operation {
         };
         matches!(**system_op, SystemOperation::UpdateStream { .. })
     }
+
+    /// Returns whether this operation is a `Checkpoint` operation.
+    pub fn is_checkpoint(&self) -> bool {
+        let Operation::System(system_op) = self else {
+            return false;
+        };
+        matches!(**system_op, SystemOperation::Checkpoint)
+    }
 }
 
 impl From<SystemMessage> for Message {
@@ -1604,19 +1615,45 @@ impl From<Vec<u8>> for QueryResponse {
     }
 }
 
+/// Provenance of a stored blob: either defined by the genesis config (and thus
+/// known a priori to every node holding that config) or published by a confirmed
+/// block on some chain.
+#[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
+pub enum BlobOrigin {
+    /// The blob is part of the network's genesis: it isn't published by any
+    /// block, and every node that initialized storage from the same genesis
+    /// config already holds its content. Currently only the `ChainDescription`
+    /// blobs for root chains use this variant.
+    Genesis,
+    /// The blob was published by a confirmed block on the given chain at the
+    /// given height.
+    Published {
+        chain_id: ChainId,
+        block_height: BlockHeight,
+    },
+}
+
 /// The state of a blob of binary data.
 #[derive(Eq, PartialEq, Debug, Hash, Clone, Serialize, Deserialize)]
 pub struct BlobState {
+    /// Where the blob comes from.
+    pub origin: BlobOrigin,
     /// Hash of the last `Certificate` that published or used this blob. If empty, the
     /// blob is known to be published by a confirmed certificate but we may not have fully
     /// processed this certificate just yet.
     pub last_used_by: Option<CryptoHash>,
-    /// The `ChainId` of the chain that published the change
-    pub chain_id: ChainId,
-    /// The `BlockHeight` of the chain that published the change
-    pub block_height: BlockHeight,
     /// Epoch of the `last_used_by` certificate (if any).
     pub epoch: Option<Epoch>,
+}
+
+impl BlobState {
+    /// The state of a blob defined by the genesis config: no publishing
+    /// certificate, no epoch.
+    pub const GENESIS: BlobState = BlobState {
+        origin: BlobOrigin::Genesis,
+        last_used_by: None,
+        epoch: None,
+    };
 }
 
 /// The runtime to use for running the application.

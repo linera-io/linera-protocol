@@ -39,12 +39,6 @@ pub enum InnerStorageConfig {
         /// Whether to use `block_in_place` or `spawn_blocking`.
         spawn_mode: RocksDbSpawnMode,
     },
-    /// The DynamoDB description.
-    #[cfg(feature = "dynamodb")]
-    DynamoDb {
-        /// Whether to use the DynamoDB Local system
-        use_dynamodb_local: bool,
-    },
     /// The ScyllaDB description.
     #[cfg(feature = "scylladb")]
     ScyllaDb {
@@ -77,8 +71,6 @@ const MEMORY: &str = "memory:";
 const STORAGE_SERVICE: &str = "service:";
 #[cfg(feature = "rocksdb")]
 const ROCKS_DB: &str = "rocksdb:";
-#[cfg(feature = "dynamodb")]
-const DYNAMO_DB: &str = "dynamodb:";
 #[cfg(feature = "scylladb")]
 const SCYLLA_DB: &str = "scylladb:";
 #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -166,10 +158,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                     "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                     "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                     "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                    _ => Err(anyhow!(
-                        "Failed to parse {} as a spawn_mode",
-                        spawn_mode_name
-                    )),
+                    _ => Err(anyhow!("Failed to parse {spawn_mode_name} as a spawn_mode")),
                 }?;
                 let namespace = if parts.len() == 2 {
                     DEFAULT_NAMESPACE.to_string()
@@ -183,29 +172,6 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 });
             }
             bail!("We should have one, two or three parts");
-        }
-        #[cfg(feature = "dynamodb")]
-        if let Some(s) = input.strip_prefix(DYNAMO_DB) {
-            let mut parts = s.splitn(2, ':');
-            let namespace = parts
-                .next()
-                .ok_or_else(|| anyhow!("Missing DynamoDB table name, e.g. {DYNAMO_DB}TABLE"))?
-                .to_string();
-            let use_dynamodb_local = match parts.next() {
-                None | Some("env") => false,
-                Some("dynamodb_local") => true,
-                Some(unknown) => {
-                    bail!(
-                        "Invalid DynamoDB endpoint {unknown:?}. \
-                        Expected {DYNAMO_DB}TABLE:[env|dynamodb_local]"
-                    );
-                }
-            };
-            let inner_storage_config = InnerStorageConfig::DynamoDb { use_dynamodb_local };
-            return Ok(StorageConfig {
-                inner_storage_config,
-                namespace,
-            });
         }
         #[cfg(feature = "scylladb")]
         if let Some(s) = input.strip_prefix(SCYLLA_DB) {
@@ -231,7 +197,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                             if uri.is_some() {
                                 bail!("The uri has already been assigned");
                             }
-                            uri = Some(format!("{}:{}", &address, port));
+                            uri = Some(format!("{address}:{port}"));
                         }
                         _ if part.starts_with("table") => {
                             if namespace.is_some() {
@@ -273,10 +239,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
                 "spawn_blocking" => Ok(RocksDbSpawnMode::SpawnBlocking),
                 "block_in_place" => Ok(RocksDbSpawnMode::BlockInPlace),
                 "runtime" => Ok(RocksDbSpawnMode::get_spawn_mode_from_runtime()),
-                _ => Err(anyhow!(
-                    "Failed to parse {} as a spawn_mode",
-                    spawn_mode_name
-                )),
+                _ => Err(anyhow!("Failed to parse {spawn_mode_name} as a spawn_mode",)),
             }?;
             let protocol = parts[2];
             if protocol != "tcp" {
@@ -286,7 +249,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
             let port_str = parts[4];
             let port = NonZeroU16::from_str(port_str)
                 .map_err(|_| anyhow!("Failed to find parse port {port_str} for {s}"))?;
-            let uri = format!("{}:{}", &address, port);
+            let uri = format!("{address}:{port}");
             let inner_storage_config = InnerStorageConfig::DualRocksDbScyllaDb {
                 path_with_guard,
                 spawn_mode,
@@ -307,8 +270,6 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
         error!("Also available is linera-storage-service");
         #[cfg(feature = "rocksdb")]
         error!("Also available is RocksDB");
-        #[cfg(feature = "dynamodb")]
-        error!("Also available is DynamoDB");
         #[cfg(feature = "scylladb")]
         error!("Also available is ScyllaDB");
         #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
@@ -382,19 +343,6 @@ impl StorageConfig {
                 };
                 Ok(StoreConfig::RocksDb { config, namespace })
             }
-            #[cfg(feature = "dynamodb")]
-            InnerStorageConfig::DynamoDb { use_dynamodb_local } => {
-                let inner_config = linera_views::dynamo_db::DynamoDbStoreInternalConfig {
-                    use_dynamodb_local: *use_dynamodb_local,
-                    max_concurrent_queries: options.storage_max_concurrent_queries,
-                    max_stream_queries: options.storage_max_stream_queries,
-                };
-                let config = linera_views::dynamo_db::DynamoDbStoreConfig {
-                    inner_config,
-                    storage_cache_config: options.views_storage_cache_config(),
-                };
-                Ok(StoreConfig::DynamoDb { config, namespace })
-            }
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { uri } => {
                 let inner_config = linera_views::scylla_db::ScyllaDbStoreInternalConfig {
@@ -462,11 +410,6 @@ impl fmt::Display for StorageConfig {
                 let spawn_mode = spawn_mode.to_string();
                 write!(f, "rocksdb:{}:{}:{}", path.display(), spawn_mode, namespace)
             }
-            #[cfg(feature = "dynamodb")]
-            InnerStorageConfig::DynamoDb { use_dynamodb_local } => match use_dynamodb_local {
-                true => write!(f, "dynamodb:{namespace}:dynamodb_local"),
-                false => write!(f, "dynamodb:{namespace}:env"),
-            },
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { uri } => {
                 write!(f, "scylladb:tcp:{uri}:{namespace}")
@@ -563,42 +506,6 @@ fn test_rocks_db_storage_config_from_str() {
             namespace: "chosen_namespace".into()
         }
     );
-}
-
-#[cfg(feature = "dynamodb")]
-#[test]
-fn test_aws_storage_config_from_str() {
-    assert_eq!(
-        StorageConfig::from_str("dynamodb:table").unwrap(),
-        StorageConfig {
-            inner_storage_config: InnerStorageConfig::DynamoDb {
-                use_dynamodb_local: false
-            },
-            namespace: "table".to_string()
-        }
-    );
-    assert_eq!(
-        StorageConfig::from_str("dynamodb:table:env").unwrap(),
-        StorageConfig {
-            inner_storage_config: InnerStorageConfig::DynamoDb {
-                use_dynamodb_local: false
-            },
-            namespace: "table".to_string()
-        }
-    );
-    assert_eq!(
-        StorageConfig::from_str("dynamodb:table:dynamodb_local").unwrap(),
-        StorageConfig {
-            inner_storage_config: InnerStorageConfig::DynamoDb {
-                use_dynamodb_local: true
-            },
-            namespace: "table".to_string()
-        }
-    );
-    assert!(StorageConfig::from_str("dynamodb").is_err());
-    assert!(StorageConfig::from_str("dynamodb:").is_err());
-    assert!(StorageConfig::from_str("dynamodb:1").is_err());
-    assert!(StorageConfig::from_str("dynamodb:wrong:endpoint").is_err());
 }
 
 #[cfg(feature = "scylladb")]

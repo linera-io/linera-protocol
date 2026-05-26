@@ -15,16 +15,17 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
-    types::{Block, GenericCertificate},
+    types::{Block, ConfirmedBlockCertificate, GenericCertificate},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
-use linera_storage::Storage;
+use linera_storage::{Arc as CacheArc, Storage};
 use linera_views::ViewError;
 use thiserror::Error;
 use tracing::{instrument, warn};
 
 use crate::{
+    chain_worker::ProcessConfirmedBlockMode,
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse},
     notifier::Notifier,
     worker::{ProcessableCertificate, WorkerError, WorkerState},
@@ -106,9 +107,8 @@ where
         proposal: BlockProposal,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         // In local nodes, cross-chain actions will be handled internally, so we discard them.
-        let (response, _actions) =
-            Box::pin(self.node.state.handle_block_proposal(proposal)).await?;
-        Ok(response)
+        let (response, _actions) = Box::pin(self.node.state.handle_block_proposal(proposal)).await;
+        Ok(response?)
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -124,6 +124,24 @@ where
             self.node
                 .state
                 .fully_handle_certificate_with_notifications(certificate, notifier),
+        )
+        .await?)
+    }
+
+    /// Same as [`Self::handle_certificate`] but for a confirmed block certificate
+    /// and with an explicit [`ProcessConfirmedBlockMode`]. The generic variant
+    /// always uses [`ProcessConfirmedBlockMode::Auto`].
+    #[instrument(level = "trace", skip_all)]
+    pub async fn handle_confirmed_certificate(
+        &self,
+        certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
+        notifier: &impl Notifier,
+    ) -> Result<ChainInfoResponse, LocalNodeError> {
+        Ok(Box::pin(
+            self.node
+                .state
+                .fully_handle_confirmed_certificate_with_notifications(certificate, mode, notifier),
         )
         .await?)
     }
@@ -180,7 +198,7 @@ where
     pub async fn read_blobs_from_storage(
         &self,
         blob_ids: &[BlobId],
-    ) -> Result<Option<Vec<Arc<Blob>>>, LocalNodeError> {
+    ) -> Result<Option<Vec<CacheArc<Blob>>>, LocalNodeError> {
         let storage = self.storage_client();
         Ok(storage.read_blobs(blob_ids).await?.into_iter().collect())
     }

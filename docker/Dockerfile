@@ -41,7 +41,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libprotobuf-dev \
     clang \
     make \
-    libunwind-dev
+    libunwind-dev \
+    jq
 
 WORKDIR /app
 
@@ -150,7 +151,7 @@ COPY \
 FROM builder_src$copy AS binaries
 
 # ── Stage 3: runtime ──
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim AS runtime
 
 ARG git_commit
 LABEL git_commit=$git_commit
@@ -170,3 +171,33 @@ COPY --from=binaries \
     /linera-server \
     /linera-proxy \
     ./
+
+# ── Stage 4: tests-builder — compile the remote-net integration test ──
+# Builds /linera_net_tests by parsing cargo's JSON output for the executable
+# path; the underlying binary lives in /app/target/release/deps/ which is a
+# cache mount and won't persist past this RUN, hence the explicit cp.
+
+FROM builder_src AS tests-builder
+ARG build_flag
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo test --no-run ${build_flag:+"$build_flag"} \
+        -p linera-service \
+        --features remote-net \
+        --test linera_net_tests \
+        --message-format=json-render-diagnostics > /tmp/cargo-tests.json \
+    && jq -r 'select(.executable != null) | .executable' /tmp/cargo-tests.json \
+        | grep '/linera_net_tests-' \
+        | head -1 \
+        | xargs -I{} cp {} /linera_net_tests
+
+# ── Stage 5: tests runtime — runtime image + remote-net test binary ──
+# Used by linera-infra's network-health-check CronJob; production image
+# `linera:<tag>` (target=runtime) is unchanged. The test binary spawns
+# the linera CLI via PATH, so /linera is symlinked into /usr/local/bin.
+
+FROM runtime AS tests
+RUN ln -s /linera /usr/local/bin/linera
+COPY --from=tests-builder /linera_net_tests /usr/local/bin/linera-net-tests

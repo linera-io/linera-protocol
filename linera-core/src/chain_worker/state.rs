@@ -15,12 +15,13 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, OracleResponse, Round,
+        Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
 };
-use linera_cache::{UniqueValueCache, ValueCache};
+use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
 use linera_chain::{
     data_types::{
         BlockProposal, BundleExecutionPolicy, IncomingBundle, MessageAction, MessageBundle,
@@ -31,7 +32,7 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView, ExecutionResultExt as _,
+    ChainError, ChainExecutionContext, ChainStateView, ChainTipState, ExecutionResultExt as _,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -111,7 +112,8 @@ where
     chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
-    /// Set to `true` if a journal resolution failure has left storage potentially inconsistent.
+    /// Set to `true` if a database `save` failure has left storage potentially
+    /// inconsistent.
     poisoned: bool,
 }
 
@@ -135,6 +137,23 @@ pub enum BlockOutcome {
     Processed,
     Preprocessed,
     Skipped,
+}
+
+/// How to handle a confirmed block.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProcessConfirmedBlockMode {
+    /// Execute the block if it is contiguous (or bridgeable via a checkpoint);
+    /// otherwise preprocess it. Used by validators and by any caller that
+    /// wants graceful fallback when there's a gap.
+    Auto,
+    /// Execute the block. Fail with [`WorkerError::InvalidBlockChaining`] if
+    /// there's a gap that can't be bridged. Use when the caller knows the
+    /// block must be contiguous and wants a hard error otherwise.
+    Execute,
+    /// Only preprocess the block, never execute it — even if it would be
+    /// contiguous. Used by the client for sender-chain blocks it is not
+    /// otherwise tracking, since their execution state is irrelevant.
+    Preprocess,
 }
 
 impl<StorageClient> ChainWorkerState<StorageClient>
@@ -263,8 +282,8 @@ where
         self.chain.rollback();
     }
 
-    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a journal
-    /// resolution failure.
+    /// Returns `WorkerError::PoisonedWorker` if the worker is poisoned due to a database
+    /// `save` failure.
     pub(crate) fn check_not_poisoned(&self) -> Result<(), WorkerError> {
         ensure!(!self.poisoned, WorkerError::PoisonedWorker);
         Ok(())
@@ -319,7 +338,7 @@ where
     pub(crate) async fn download_pending_blob(
         &self,
         blob_id: BlobId,
-    ) -> Result<Arc<Blob>, WorkerError> {
+    ) -> Result<CacheArc<Blob>, WorkerError> {
         if let Some(blob) = self.chain.manager.pending_blob(&blob_id).await? {
             return Ok(self.storage.cache_blob(blob));
         }
@@ -412,7 +431,7 @@ where
         let (missing_indices, missing_blob_ids) = missing_indices_blob_ids(&maybe_blobs);
         let fourth_block_blobs = self.storage.read_blobs(&missing_blob_ids).await?;
         for (index, blob) in missing_indices.into_iter().zip(fourth_block_blobs) {
-            maybe_blobs[index].1 = blob.map(Arc::unwrap_or_clone);
+            maybe_blobs[index].1 = blob.map(CacheArc::unwrap_or_clone);
         }
         Ok(maybe_blobs.into_iter().collect())
     }
@@ -489,7 +508,7 @@ where
     async fn read_confirmed_blocks(
         &self,
         hashes: &[CryptoHash],
-    ) -> Result<Vec<Option<Arc<ConfirmedBlock>>>, WorkerError> {
+    ) -> Result<Vec<Option<CacheArc<ConfirmedBlock>>>, WorkerError> {
         let mut blocks = Vec::with_capacity(hashes.len());
         let mut uncached_indices = Vec::new();
         let mut uncached_hashes = Vec::new();
@@ -814,10 +833,10 @@ where
     pub(crate) async fn process_confirmed_block(
         &mut self,
         certificate: ConfirmedBlockCertificate,
+        mode: ProcessConfirmedBlockMode,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
-        let block_hash = certificate.hash();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
@@ -896,38 +915,167 @@ where
             .maybe_write_blob_states(&blob_ids, blob_state)
             .await?;
 
-        let mut blobs = blobs_result?
+        let blobs = blobs_result?
             .into_iter()
             .map(|blob| (blob.id(), blob))
             .collect::<BTreeMap<_, _>>();
 
-        // If this block is higher than the next expected block in this chain, we're going
-        // to have a gap: do not execute this block, only update the outboxes and return.
-        if tip.next_block_height < height {
-            // Update the outboxes and event streams.
-            let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
-            // Persist chain.
-            self.save().await?;
-            let mut actions = self.create_network_actions(None).await?;
-            if !updated_event_streams.is_empty() {
-                actions.notifications.push(Notification {
-                    chain_id,
-                    reason: Reason::NewEvents {
-                        height,
-                        block_hash,
-                        event_streams: updated_event_streams,
-                    },
-                });
+        // Dispatch on the actual outcome (preprocess / checkpoint-restore-then-execute
+        // / contiguous execute):
+        //  - `Preprocess` mode, or `Auto` with an unbridgeable gap: preprocess.
+        //  - `Execute` mode with an unbridgeable gap: error.
+        //  - `Auto`/`Execute` mode + gap + checkpoint block: install the snapshot,
+        //    then execute.
+        //  - `Auto`/`Execute` mode + contiguous: execute directly.
+        use ProcessConfirmedBlockMode::{Auto, Execute, Preprocess};
+        let gap = tip.next_block_height < height;
+        let starts_with_checkpoint = block.starts_with_checkpoint();
+        match (mode, gap, starts_with_checkpoint) {
+            (Preprocess, _, _) | (Auto, true, false) => {
+                self.preprocess_certified_block(certificate, notify_when_messages_are_delivered)
+                    .await
             }
-            trace!("Preprocessed confirmed block {height}");
-            self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
-                .await;
-            return Ok((
-                self.chain_info_response().await?,
-                actions,
-                BlockOutcome::Preprocessed,
-            ));
+            (Execute, true, false) => Err(WorkerError::InvalidBlockChaining),
+            (Auto | Execute, true, true) => {
+                self.execute_block_with_checkpoint_restore(
+                    certificate,
+                    blobs,
+                    notify_when_messages_are_delivered,
+                )
+                .await
+            }
+            (Auto | Execute, false, _) => {
+                self.execute_contiguous_block(
+                    certificate,
+                    blobs,
+                    tip,
+                    notify_when_messages_are_delivered,
+                )
+                .await
+            }
         }
+    }
+
+    /// Preprocesses a confirmed block: updates outboxes and event streams without
+    /// executing it, and does not advance the chain tip.
+    async fn preprocess_certified_block(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        let block_hash = certificate.hash();
+        let block = certificate.block();
+        let chain_id = block.header.chain_id;
+        let height = block.header.height;
+
+        let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
+        self.save().await?;
+        let mut actions = self.create_network_actions(None).await?;
+        if !updated_event_streams.is_empty() {
+            actions.notifications.push(Notification {
+                chain_id,
+                reason: Reason::NewEvents {
+                    height,
+                    block_hash,
+                    event_streams: updated_event_streams,
+                },
+            });
+        }
+        trace!("Preprocessed confirmed block {height}");
+        self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
+            .await;
+        Ok((
+            self.chain_info_response().await?,
+            actions,
+            BlockOutcome::Preprocessed,
+        ))
+    }
+
+    /// Restores the chain's execution state from the checkpoint blob embedded in
+    /// the block's first oracle response, fast-forwards the tip to the block's
+    /// height, then executes the block as if it were contiguous. Re-running the
+    /// block applies its fees and re-derives any post-checkpoint state.
+    async fn execute_block_with_checkpoint_restore(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+        blobs: BTreeMap<BlobId, Blob>,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        let (bytes, chain_id, height, previous_block_hash) = {
+            let block = certificate.block();
+            let Some(OracleResponse::Checkpoint {
+                execution_state_blobs,
+                ..
+            }) = block.body.oracle_responses.first().and_then(|r| r.first())
+            else {
+                return Err(ChainError::InternalError(
+                    "Checkpoint block missing OracleResponse::Checkpoint".into(),
+                )
+                .into());
+            };
+            let mut bytes = Vec::new();
+            let mut missing = Vec::new();
+            for hash in execution_state_blobs {
+                let blob_id = BlobId::new(*hash, BlobType::CheckpointExecutionState);
+                match blobs.get(&blob_id) {
+                    Some(blob) => bytes.extend_from_slice(blob.bytes()),
+                    None => missing.push(blob_id),
+                }
+            }
+            ensure!(missing.is_empty(), WorkerError::BlobsNotFound(missing));
+            (
+                bytes,
+                block.header.chain_id,
+                block.header.height,
+                block.header.previous_block_hash,
+            )
+        };
+        self.chain
+            .execution_state
+            .restore_from_content(&bytes)
+            .await?;
+        // `restore_from_content` writes directly to storage and leaves the
+        // in-memory view in an undefined state — reload from storage.
+        self.chain = self.storage.load_chain(chain_id).await?;
+        // We only reset `execution_state` (via restore) and `tip_state`. The
+        // other `ChainStateView` fields are either (a) already default for a
+        // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
+        // (b) about to be overwritten by `apply_confirmed_block` when the
+        // cert is applied (`manager`, `block_hashes` for height `height`),
+        // or (c) outside the protocol state hash so divergence from the
+        // producer is fine (inboxes; subsequent blocks reconcile by
+        // anticipation if needed). The `num_*` counters on `ChainTipState`
+        // are write-only in current code, so leaving them at zero has no
+        // functional impact.
+        let new_tip = ChainTipState {
+            block_hash: previous_block_hash,
+            next_block_height: height,
+            ..Default::default()
+        };
+        self.chain.tip_state.set(new_tip.clone());
+        self.save().await?;
+        self.execute_contiguous_block(
+            certificate,
+            blobs,
+            new_tip,
+            notify_when_messages_are_delivered,
+        )
+        .await
+    }
+
+    /// Executes a confirmed block whose height equals `tip.next_block_height`,
+    /// updating inboxes, applying the block, and persisting the chain.
+    async fn execute_contiguous_block(
+        &mut self,
+        certificate: ConfirmedBlockCertificate,
+        mut blobs: BTreeMap<BlobId, Blob>,
+        tip: ChainTipState,
+        notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
+    ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
+        let block_hash = certificate.hash();
+        let block = certificate.block();
+        let chain_id = block.header.chain_id;
+        let height = block.header.height;
 
         // This should always be true for valid certificates.
         ensure!(
@@ -935,9 +1083,8 @@ where
             WorkerError::InvalidBlockChaining
         );
 
-        // If we got here, `height` is equal to `tip.next_block_height` and the block is
-        // properly chained. Verify that the chain is active and that the epoch we used for
-        // verifying the certificate is actually the active one on the chain.
+        // Verify that the chain is active and that the epoch we used for verifying
+        // the certificate is actually the active one on the chain.
         self.initialize_and_save_if_needed().await?;
         let (epoch, _) = self.chain.current_committee().await?;
         check_block_epoch(epoch, chain_id, block.header.epoch)?;
@@ -948,7 +1095,6 @@ where
             .filter_map(|blob_id| blobs.remove(blob_id))
             .collect::<Vec<_>>();
 
-        // Execute the block and update inboxes.
         let local_time = self.storage.clock().current_time();
         if block.header.timestamp.duration_since(local_time) > self.config.block_time_grace_period {
             warn!(
@@ -1004,7 +1150,6 @@ where
             ConfirmedBlock::new(Block::new(proposed_block, verified))
         };
 
-        // Update the rest of the chain state.
         let updated_streams = chain
             .apply_confirmed_block(&confirmed_block, local_time)
             .await?;
@@ -1027,7 +1172,6 @@ where
                 },
             });
         }
-        // Persist chain.
         self.save().await?;
 
         self.block_values
@@ -1457,9 +1601,10 @@ where
                 .storage
                 .read_certificate(hash)
                 .await?
-                .map(Arc::unwrap_or_clone)
+                .map(CacheArc::unwrap_or_clone)
                 .ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
-            Box::pin(self.process_confirmed_block(cert, None)).await?;
+            Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Execute, None))
+                .await?;
         }
 
         // 5. Restore any previously cast votes and locking block so we cannot be
@@ -1797,7 +1942,7 @@ where
     pub(crate) async fn read_certificate(
         &self,
         height: BlockHeight,
-    ) -> Result<Option<Arc<ConfirmedBlockCertificate>>, WorkerError> {
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, WorkerError> {
         let certificate_hash = match self.chain.block_hashes.get(&height).await? {
             Some(hash) => hash,
             None => return Ok(None),
@@ -1825,12 +1970,9 @@ where
         let local_time = self.storage.clock().current_time();
         // Try to use a cached execution state for the requested block.
         // We want to pretend that this block is committed, so we set the next block height.
-        let cached_state = block_hash.and_then(|h| {
-            self.execution_state_cache
-                .as_ref()
-                .and_then(|cache| cache.remove(&h))
-                .map(|s| (h, s))
-        });
+        let cached_state = block_hash
+            .zip(self.execution_state_cache.as_ref())
+            .and_then(|(h, cache)| Some(h).zip(cache.remove(&h)));
         if let Some((requested_block, mut state)) = cached_state {
             let next_block_height = next_block_height
                 .try_add_one()
@@ -1951,11 +2093,40 @@ where
     }
 
     /// Validates and executes a block proposed to extend this chain.
+    ///
+    /// Returns network actions alongside the result so the caller can dispatch them
+    /// even when the proposal is rejected: a `HasIncompatibleConfirmedVote` rejection
+    /// can still advance `current_round` via `update_signed_proposal`, and subscribers
+    /// need the resulting `NewRound` notification.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %proposal.content.block.height
     ))]
     pub(crate) async fn handle_block_proposal(
+        &mut self,
+        proposal: BlockProposal,
+    ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
+        let old_round = self.chain.manager.current_round();
+        match self.try_handle_block_proposal(proposal).await {
+            Ok((response, actions)) => (Ok(response), actions),
+            Err(err) => {
+                // Even on error, the manager's `current_round` may have advanced
+                // (the `HasIncompatibleConfirmedVote` recovery path calls
+                // `update_signed_proposal`). Surface the resulting `NewRound`
+                // notification so subscribers can react.
+                let actions = if self.chain.manager.current_round() != old_round {
+                    self.create_network_actions(Some(old_round))
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    NetworkActions::default()
+                };
+                (Err(err), actions)
+            }
+        }
+    }
+
+    async fn try_handle_block_proposal(
         &mut self,
         proposal: BlockProposal,
     ) -> Result<(ChainInfoResponse, NetworkActions), WorkerError> {
@@ -2023,11 +2194,32 @@ where
                 original_proposal.check_signature()?;
             }
         }
-        if chain.manager.check_proposed_block(&proposal)? == manager::Outcome::Skip {
-            // We already voted for this block.
-            return Ok((self.chain_info_response().await?, NetworkActions::default()));
-        }
         let local_time = self.storage.clock().current_time();
+        match chain.manager.check_proposed_block(&proposal) {
+            Ok(manager::Outcome::Skip) => {
+                // We already voted for this block.
+                return Ok((self.chain_info_response().await?, NetworkActions::default()));
+            }
+            Ok(manager::Outcome::Accept) => {}
+            Err(err) => {
+                // A `HasIncompatibleConfirmedVote` rejection means the proposer is at a
+                // round we'd otherwise be happy to sign at; only our prior confirmed vote
+                // prevents us from voting. Record the proposal so `current_round` still
+                // tracks the round the proposer is in — without it, the chain can wedge.
+                // Other rejections (e.g. `WrongRound`, `InsufficientRound`) mean the
+                // proposal is not actually valid for the chain's current state, so we
+                // shouldn't let it advance our round.
+                if matches!(err, ChainError::HasIncompatibleConfirmedVote(_, _))
+                    && self
+                        .chain
+                        .manager
+                        .update_signed_proposal(&proposal, local_time)
+                {
+                    self.save().await?;
+                }
+                return Err(err.into());
+            }
+        }
 
         // Make sure we remember that a proposal was signed, to determine the correct round to
         // propose in.
@@ -2212,6 +2404,9 @@ where
                     .insert(stream_id, (height, hash));
             }
         }
+        if query.request_latest_checkpoint_height {
+            info.requested_latest_checkpoint_height = *self.chain.latest_checkpoint_height.get();
+        }
         Ok(ChainInfoResponse::new(info, self.config.key_pair()))
     }
 
@@ -2278,13 +2473,15 @@ where
     ))]
     pub(crate) async fn save(&mut self) -> Result<(), WorkerError> {
         if let Err(error) = self.chain.save().await {
-            tracing::error!(
-                ?error,
-                chain_id = %self.chain_id(),
-                "Chain save failed; marking worker as poisoned"
-            );
-            self.poisoned = true;
-            return Err(WorkerError::PoisonedWorker);
+            if error.must_reload_view() {
+                tracing::error!(
+                    ?error,
+                    chain_id = %self.chain_id(),
+                    "Chain save failed with a nonrecoverable error; marking worker as poisoned"
+                );
+                self.poisoned = true;
+            }
+            return Err(WorkerError::ViewError(error));
         }
         Ok(())
     }
