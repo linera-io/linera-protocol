@@ -116,9 +116,7 @@ impl linera_base::crypto::Signer for Signer {
                 let public_key = parse_ed25519_public_key(&pub_str).ok_or(Error::PublicKeyParse)?;
                 let signature =
                     parse_ed25519_signature(&sig_str).ok_or(Error::UnexpectedSignatureFormat)?;
-                // Defense in depth: a malicious or buggy signer might return a valid
-                // signature with the wrong public key. Reject before the signature ever
-                // reaches the validator.
+                // Error early if signer returns a valid signature with the wrong public key.
                 if AccountOwner::from(public_key) != *owner {
                     return Err(Error::InvalidAccountOwnerType);
                 }
