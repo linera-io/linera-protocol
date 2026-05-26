@@ -36,8 +36,7 @@ use linera_chain::{
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
-    ExecutionRuntimeContext as _, ExecutionStateView, Query, QueryContext, QueryOutcome,
-    ResourceTracker, ServiceRuntimeEndpoint,
+    ExecutionStateView, Query, QueryContext, QueryOutcome, ResourceTracker, ServiceRuntimeEndpoint,
 };
 use linera_storage::{Clock as _, Storage};
 use linera_views::{
@@ -189,38 +188,25 @@ where
         &self.chain
     }
 
-    /// Resolves the committee that signed certificates at the given epoch by
-    /// walking the admin chain's epoch event stream — works even after the
-    /// epoch has been revoked, so long as the admin chain still has the event.
+    /// Resolves the committee that signed certificates at the given epoch via
+    /// the storage backend's helper, which walks the admin chain's epoch event
+    /// stream — works even after the epoch has been revoked, so long as the
+    /// admin chain still has the event.
     async fn committee_for_epoch(
         &self,
         epoch: Epoch,
     ) -> Result<linera_execution::committee::Committee, WorkerError> {
-        let hash = self
-            .chain
-            .execution_state
-            .context()
-            .extra()
-            .get_committee_hashes(epoch..=epoch)
+        let committee = self
+            .storage
+            .committee_for_epoch(epoch)
             .await
             .map_err(|error| {
                 ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
             })?
-            .remove(&epoch)
             .ok_or_else(|| {
                 ChainError::InternalError(format!(
                     "missing committee for epoch {epoch}; this is a bug"
                 ))
-            })?;
-        let committee = self
-            .chain
-            .execution_state
-            .context()
-            .extra()
-            .get_or_load_committee_by_hash(hash)
-            .await
-            .map_err(|error| {
-                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
             })?;
         Ok((*committee).clone())
     }
