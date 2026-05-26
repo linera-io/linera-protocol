@@ -36,6 +36,10 @@ pub enum Update<T> {
 pub(crate) struct DeletionSet {
     pub(crate) delete_storage_first: bool,
     pub(crate) deleted_prefixes: BTreeSet<Vec<u8>>,
+    /// True when storage under this prefix is confirmed empty (set after a successful
+    /// full-clear save with no subsequent inserts). Allows `clear()` to skip emitting
+    /// a range tombstone when the storage is already empty.
+    pub(crate) storage_is_empty: bool,
 }
 
 impl DeletionSet {
@@ -43,11 +47,14 @@ impl DeletionSet {
         Self {
             delete_storage_first: false,
             deleted_prefixes: BTreeSet::new(),
+            storage_is_empty: false,
         }
     }
 
     pub(crate) fn clear(&mut self) {
-        self.delete_storage_first = true;
+        if !self.storage_is_empty {
+            self.delete_storage_first = true;
+        }
         self.deleted_prefixes.clear();
     }
 

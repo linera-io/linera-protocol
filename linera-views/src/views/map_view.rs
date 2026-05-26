@@ -187,9 +187,15 @@ where
     }
 
     fn post_save(&mut self) {
+        let had_full_clear = self.deletion_set.delete_storage_first;
+        let storage_now_empty =
+            had_full_clear && !self.updates.values().any(|u| matches!(u, Update::Set(_)));
         self.updates.clear();
         self.deletion_set.delete_storage_first = false;
         self.deletion_set.deleted_prefixes.clear();
+        if had_full_clear {
+            self.deletion_set.storage_is_empty = storage_now_empty;
+        }
     }
 
     fn clear(&mut self) {
@@ -228,6 +234,7 @@ where
     /// # })
     /// ```
     pub fn insert(&mut self, short_key: Vec<u8>, value: V) {
+        self.deletion_set.storage_is_empty = false;
         self.updates.insert(short_key, Update::Set(value));
     }
 
