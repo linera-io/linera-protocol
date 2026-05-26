@@ -1515,13 +1515,14 @@ where
                         // all good
                     }
                     (Some(_), None) => {
-                        // Outbox indicates there was a previous message block, but
-                        // previous_message_blocks has no idea about it - possible bug
-                        return Err(ChainError::CorruptedChainState(
-                            "block indicates no previous message block,\
-                            but we have one in the outbox"
-                                .into(),
-                        ));
+                        // The outbox already has a previous height for this recipient,
+                        // but this block's body recorded no predecessor — legitimate when
+                        // earlier sends to this recipient were `CheckpointAck`-only (those
+                        // are added to the off-chain outbox but skipped in
+                        // `chain.previous_message_blocks`). Skip the optimistic preprocess
+                        // path; the in-order `apply_confirmed_block` will schedule this
+                        // block correctly when the tip catches up.
+                        continue;
                     }
                     (None, Some((_, prev_msg_block_height))) => {
                         // We have no previously processed block in the outbox, but we are
@@ -1533,7 +1534,11 @@ where
                         }
                     }
                     (Some(ref prev_hash), Some((prev_msg_block_hash, _))) => {
-                        // Only process the outbox if the hashes match.
+                        // Only process the outbox if the hashes match. A mismatch can
+                        // arise legitimately when intermediate `CheckpointAck`-only
+                        // blocks sit in the off-chain outbox but are skipped from
+                        // `body.previous_message_blocks`; same fallback as the
+                        // `(Some, None)` arm above.
                         if prev_hash != prev_msg_block_hash {
                             continue;
                         }
