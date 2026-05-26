@@ -152,6 +152,20 @@ impl Chain {
         Ok(())
     }
 
+    /// Returns whether `owner` is currently an owner of this chain, either as a regular
+    /// owner or a super owner.
+    ///
+    /// Useful before calling [`addOwner`](Self::add_owner), which silently overwrites the
+    /// weight of an existing owner rather than failing.
+    ///
+    /// # Errors
+    /// If the chain ownership cannot be retrieved.
+    #[wasm_bindgen(js_name = isOwner)]
+    pub async fn is_owner(&self, owner: AccountOwner) -> JsResult<bool> {
+        let ownership = self.chain_client.query_chain_ownership().await?;
+        Ok(ownership.verify_owner(&owner))
+    }
+
     /// Discards any pending block proposal on this chain.
     ///
     /// When a proposal fails to reach a quorum (for example because the client went

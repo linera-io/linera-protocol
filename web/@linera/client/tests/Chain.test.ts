@@ -33,6 +33,18 @@ test("nextRound reports a well-formed multi-leader round for a fresh chain", asy
   expect(round.canPropose).toBe(true);
 }, 150000);
 
+test("isOwner reflects chain membership", async () => {
+  const { chain, owner } = await freshChain();
+  // The chain's sole owner is recognized; a random address is not.
+  expect(await chain.isOwner(owner)).toBe(true);
+  const stranger = linera.signer.PrivateKey.createRandom().address();
+  expect(await chain.isOwner(stranger)).toBe(false);
+
+  // After adding it, the stranger is recognized as an owner.
+  await chain.addOwner(stranger, { weight: 100 });
+  expect(await chain.isOwner(stranger)).toBe(true);
+}, 150000);
+
 test("clearPendingProposal is a no-op when nothing is pending", async () => {
   const { chain } = await freshChain();
   // No proposal has failed, so there is nothing to clear; this should resolve.
