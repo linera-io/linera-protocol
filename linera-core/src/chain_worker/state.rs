@@ -189,6 +189,42 @@ where
         &self.chain
     }
 
+    /// Resolves the committee that signed certificates at the given epoch by
+    /// walking the admin chain's epoch event stream — works even after the
+    /// epoch has been revoked, so long as the admin chain still has the event.
+    async fn committee_for_epoch(
+        &self,
+        epoch: Epoch,
+    ) -> Result<linera_execution::committee::Committee, WorkerError> {
+        let hash = self
+            .chain
+            .execution_state
+            .context()
+            .extra()
+            .get_committee_hashes(epoch..=epoch)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?
+            .remove(&epoch)
+            .ok_or_else(|| {
+                ChainError::InternalError(format!(
+                    "missing committee for epoch {epoch}; this is a bug"
+                ))
+            })?;
+        let committee = self
+            .chain
+            .execution_state
+            .context()
+            .extra()
+            .get_or_load_committee_by_hash(hash)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?;
+        Ok((*committee).clone())
+    }
+
     /// Filters bundles destined for this chain to drop ones already received and to refuse
     /// ones whose epoch has been revoked on the admin chain.
     ///
@@ -826,6 +862,23 @@ where
         // Check if we already processed this block.
         let mut tip = self.chain.tip_state.get().clone();
         if tip.next_block_height > height {
+            // The block is older than our tip. If `block_hashes` already references
+            // this exact hash (e.g. a checkpoint we trust named it in
+            // `outbox_block_hashes`) but we don't have the bytes in shared storage,
+            // fill it in: verify the cert against its own epoch's committee — which
+            // works even if that epoch has since been revoked, because the admin
+            // chain's epoch event stream retains the committee blob hash — and
+            // write it through. Other already-processed cases skip without doing
+            // the extra signature work.
+            if self.chain.block_hashes.get(&height).await? == Some(block_hash)
+                && !self.storage.contains_certificate(block_hash).await?
+            {
+                let committee = self.committee_for_epoch(block.header.epoch).await?;
+                certificate.check(&committee)?;
+                self.storage
+                    .write_blobs_and_certificate(&[], &certificate)
+                    .await?;
+            }
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
@@ -837,36 +890,7 @@ where
         }
 
         // We haven't processed the block - verify the certificate first.
-        // Resolve the committee hash from the admin chain's epoch event stream; the
-        // chain-local `committees` map is just a cache of the same hashes for trusted
-        // epochs, so we can skip it and always hit the event stream.
-        let epoch = block.header.epoch;
-        let hash = self
-            .chain
-            .execution_state
-            .context()
-            .extra()
-            .get_committee_hashes(epoch..=epoch)
-            .await
-            .map_err(|error| {
-                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-            })?
-            .remove(&epoch)
-            .ok_or_else(|| {
-                ChainError::InternalError(format!(
-                    "missing committee for epoch {epoch}; this is a bug"
-                ))
-            })?;
-        let committee = self
-            .chain
-            .execution_state
-            .context()
-            .extra()
-            .get_or_load_committee_by_hash(hash)
-            .await
-            .map_err(|error| {
-                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-            })?;
+        let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
@@ -1910,7 +1934,7 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
-            .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
+            .ok_or(WorkerError::BlocksNotFound(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }
 

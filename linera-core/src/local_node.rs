@@ -15,7 +15,7 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
-    types::{Block, GenericCertificate},
+    types::{Block, ConfirmedBlockCertificate, GenericCertificate},
     ChainError, ChainExecutionContext,
 };
 use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
@@ -125,6 +125,18 @@ where
                 .fully_handle_certificate_with_notifications(certificate, notifier),
         )
         .await?)
+    }
+
+    /// Test helper: returns the stored [`ConfirmedBlockCertificate`] for a
+    /// chain's block at a given height (or [`WorkerError::BlocksNotFound`] if
+    /// the height is referenced but the bytes aren't local).
+    #[cfg(with_testing)]
+    pub async fn read_certificate(
+        &self,
+        chain_id: linera_base::identifiers::ChainId,
+        height: linera_base::data_types::BlockHeight,
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, LocalNodeError> {
+        Ok(self.node.state.read_certificate(chain_id, height).await?)
     }
 
     #[instrument(level = "trace", skip_all)]

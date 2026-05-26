@@ -392,6 +392,13 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    /// Variant raised when a block-by-hash lookup hits an entry that the chain
+    /// state references (in `block_hashes`) but whose actual content the
+    /// validator doesn't have locally — typically a sender block of a
+    /// checkpoint-bootstrapped chain. The caller is expected to provide the
+    /// missing block via [`WorkerState::handle_upload_confirmed_block`].
+    #[error("Blocks not found: {0:?}")]
+    BlocksNotFound(Vec<CryptoHash>),
     #[error("Block hash at height {height} for chain {chain_id} not found")]
     BlockHashNotFound {
         height: BlockHeight,
@@ -437,6 +444,7 @@ impl WorkerError {
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
             | WorkerError::BlobsNotFound(_)
+            | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)
             | WorkerError::UnexpectedBlob
             | WorkerError::TooManyPublishedBlobs(_)

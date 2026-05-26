@@ -4329,5 +4329,48 @@ where
     assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
     assert_eq!(follower_info.state_hash, Some(producer_state_hash));
 
+    // The follower's chain state now references the height-0 transfer block via
+    // `block_hashes`, but its shared storage has no copy of the actual cert. A
+    // lookup must report `BlocksNotFound` listing the missing hash.
+    let follower_storage = follower.storage_client();
+    assert!(
+        !follower_storage
+            .contains_certificate(transfer_cert.hash())
+            .await?,
+        "follower should not have the pre-checkpoint transfer block stored yet",
+    );
+    let local_node = &follower.client.local_node;
+    let blocks_not_found = local_node
+        .read_certificate(chain_id, BlockHeight::ZERO)
+        .await
+        .expect_err("expected BlocksNotFound for the missing pre-checkpoint block");
+    assert_matches!(
+        blocks_not_found,
+        LocalNodeError::WorkerError(WorkerError::BlocksNotFound(ref hashes))
+            if hashes == &vec![transfer_cert.hash()],
+        "expected BlocksNotFound with the transfer block's hash, got {blocks_not_found:?}",
+    );
+
+    // Re-processing the real transfer cert through the normal cert-handling
+    // path now fills in the missing block: signatures are verified against the
+    // cert's own epoch's committee (which still works even if the epoch is
+    // revoked), and the hash is already certified by the checkpoint's
+    // `outbox_block_hashes`, so we accept and store the cert despite the chain
+    // having long since advanced past height 0.
+    local_node
+        .handle_certificate(transfer_cert.clone(), &())
+        .await?;
+    assert!(
+        follower_storage
+            .contains_certificate(transfer_cert.hash())
+            .await?,
+        "uploaded cert should now be in storage",
+    );
+    let reread = local_node
+        .read_certificate(chain_id, BlockHeight::ZERO)
+        .await?
+        .expect("read_certificate should return the just-uploaded cert");
+    assert_eq!(reread.hash(), transfer_cert.hash());
+
     Ok(())
 }
