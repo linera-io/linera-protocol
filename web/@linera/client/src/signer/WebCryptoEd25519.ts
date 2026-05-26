@@ -1,74 +1,12 @@
 import type { Signer } from "./Signer.d.ts";
 import { accountOwnerFromEd25519PublicKey } from "../wasm/index.js";
 
-const DB_NAME = "linera-signer";
-const STORE_NAME = "keys";
-const DB_VERSION = 1;
-
 type StoredRecord = {
   owner: string;
   publicKey: Uint8Array;
   privateKey: CryptoKey;
   createdAt: number;
 };
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => resolve(req.result);
-  });
-}
-
-// Resolves on `req.onsuccess`. Reads have no durability barrier — the value is
-// already in memory by the time `onsuccess` fires, so waiting for
-// `transaction.oncomplete` would only add latency. Contrast with `txWrite` below,
-// which must wait for the commit.
-function txRead<T>(
-  db: IDBDatabase,
-  fn: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readonly");
-    const store = transaction.objectStore(STORE_NAME);
-    const req = fn(store);
-    req.onerror = () => reject(req.error);
-    transaction.onerror = () => reject(transaction.error);
-    req.onsuccess = () => resolve(req.result);
-  });
-}
-
-// Resolves on `transaction.oncomplete` (not `req.onsuccess`) so the caller knows the
-// write has reached the IndexedDB log, not just the request's buffer. Without this,
-// `create()` could return before the keypair is durable, and a tab close in the
-// intervening window would silently lose the autosigner association.
-function txWrite<T>(
-  db: IDBDatabase,
-  fn: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const req = fn(store);
-    let result: T;
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      result = req.result;
-    };
-    transaction.onerror = () => reject(transaction.error);
-    transaction.oncomplete = () => resolve(result);
-  });
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 /**
  * A {@link Signer} backed by a non-extractable Ed25519 key from the Web Crypto API.
@@ -186,4 +124,66 @@ export default class WebCryptoEd25519 implements Signer {
       throw new Error("Invalid owner address");
     }
   }
+}
+
+const DB_NAME = "linera-signer";
+const STORE_NAME = "keys";
+const DB_VERSION = 1;
+
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+
+// Resolves on `req.onsuccess`. Reads have no durability barrier — the value is
+// already in memory by the time `onsuccess` fires, so waiting for
+// `transaction.oncomplete` would only add latency. Contrast with `txWrite` below,
+// which must wait for the commit.
+function txRead<T>(
+  db: IDBDatabase,
+  fn: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readonly");
+    const store = transaction.objectStore(STORE_NAME);
+    const req = fn(store);
+    req.onerror = () => reject(req.error);
+    transaction.onerror = () => reject(transaction.error);
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+
+// Resolves on `transaction.oncomplete` (not `req.onsuccess`) so the caller knows the
+// write has reached the IndexedDB log, not just the request's buffer. Without this,
+// `create()` could return before the keypair is durable, and a tab close in the
+// intervening window would silently lose the autosigner association.
+function txWrite<T>(
+  db: IDBDatabase,
+  fn: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const req = fn(store);
+    let result: T;
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      result = req.result;
+    };
+    transaction.onerror = () => reject(transaction.error);
+    transaction.oncomplete = () => resolve(result);
+  });
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
