@@ -460,6 +460,15 @@ where
     }
 }
 
+#[cfg(with_testing)]
+impl<D: crate::backends::DatabaseBackup> crate::backends::DatabaseBackup
+    for JournalingKeyValueDatabase<D>
+{
+    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        self.database.backup_to(dir)
+    }
+}
+
 impl<S> JournalingKeyValueStore<S> {
     /// Creates a new journaling store.
     pub fn new(store: S) -> Self {
