@@ -1255,16 +1255,7 @@ where
     /// certificate transitively re-certifies those older (possibly revoked-epoch)
     /// blocks.
     async fn collect_unfinalized_block_hashes(&self) -> Result<Vec<CryptoHash>, ChainError> {
-        let mut heights = BTreeSet::new();
-        let entries = self
-            .execution_state
-            .system
-            .unfinalized_message_blocks
-            .index_values()
-            .await?;
-        for (_, per_recipient) in entries {
-            heights.extend(per_recipient);
-        }
+        let heights = self.collect_unfinalized_heights().await?;
         let mut hashes = Vec::with_capacity(heights.len());
         for height in heights {
             let hash = self.block_hashes.get(&height).await?.ok_or_else(|| {
@@ -1275,6 +1266,24 @@ where
             hashes.push(hash);
         }
         Ok(hashes)
+    }
+
+    /// Returns the sorted, deduplicated set of block heights referenced by the on-chain
+    /// `unfinalized_message_blocks` map. Used both when building the checkpoint oracle
+    /// response (to resolve heights to hashes via `block_hashes`) and on the bootstrap
+    /// path (to zip with the certified `outbox_block_hashes` from the response).
+    pub async fn collect_unfinalized_heights(&self) -> Result<BTreeSet<BlockHeight>, ChainError> {
+        let mut heights = BTreeSet::new();
+        let entries = self
+            .execution_state
+            .system
+            .unfinalized_message_blocks
+            .index_values()
+            .await?;
+        for (_, per_recipient) in entries {
+            heights.extend(per_recipient);
+        }
+        Ok(heights)
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
@@ -1389,7 +1398,6 @@ where
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
     ///   * no inbox has consumed any incoming bundle (every `next_cursor_to_remove` is
     ///     at default);
-    ///   * no outbox has pending outgoing messages;
     ///   * no event stream tracker is set.
     ///
     /// The structural invariant that Checkpoint must be the *first* transaction in its

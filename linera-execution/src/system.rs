@@ -901,9 +901,12 @@ where
                     &context.origin,
                     (latest_received_cursor, context.origin_certificate_hash),
                 )?;
-                // Drop heights the recipient has consumed. Per-block granularity: a
-                // height equal to `cursor.height` is retained because the recipient may
-                // still be mid-block at that height.
+                // Drop heights the recipient has consumed. Tracking is per-block: we
+                // retain every height `>= cursor.height` rather than comparing the full
+                // `(height, index)` cursor, because `next_cursor_to_remove` advances per
+                // bundle and never auto-jumps from `(H, last_index + 1)` to `(H + 1, 0)`.
+                // So a recipient that has finished block H still sits at `(H, *)` and we
+                // conservatively keep H here until a later ack moves the height forward.
                 if let Some(mut heights) =
                     self.unfinalized_message_blocks.get(&context.origin).await?
                 {

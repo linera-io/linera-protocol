@@ -1074,17 +1074,7 @@ where
         // checkpoint cert we already trust. Without this, the next step
         // (re-executing the checkpoint to verify its outcome) would fail
         // because `collect_unfinalized_block_hashes` looks these up.
-        let mut heights = BTreeSet::new();
-        let entries = self
-            .chain
-            .execution_state
-            .system
-            .unfinalized_message_blocks
-            .index_values()
-            .await?;
-        for (_, per_recipient) in entries {
-            heights.extend(per_recipient);
-        }
+        let heights = self.chain.collect_unfinalized_heights().await?;
         ensure!(
             heights.len() == outbox_block_hashes.len(),
             ChainError::InternalError(format!(
