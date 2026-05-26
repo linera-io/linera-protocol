@@ -991,16 +991,24 @@ where
                 for (height, hash) in heights.into_iter().zip(outbox_block_hashes) {
                     self.chain.block_hashes.insert(&height, hash)?;
                 }
-                // We only reset `execution_state` (via restore), `tip_state`, and
-                // `block_hashes` (for outbox-referenced pre-checkpoint heights). The
-                // other `ChainStateView` fields are either (a) already default for a
-                // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
-                // (b) about to be overwritten by `apply_confirmed_block` when the
-                // cert is applied (`manager`, `block_hashes` for height `height`),
-                // or (c) outside the protocol state hash so divergence from the
-                // producer is fine (inboxes; subsequent blocks reconcile by
-                // anticipation if needed). The `num_*` counters on `ChainTipState`
-                // are write-only in current code, so leaving them at zero has no
+                // Rebuild the off-chain outbox state (queues, counters,
+                // nonempty_outboxes) from the on-chain unfinalized map so that
+                // this node can resume pushing pre-checkpoint messages forward.
+                // The outbox isn't part of the certified checkpoint blob, so
+                // without this a bootstrapped validator would silently stop
+                // delivering pending messages.
+                self.chain.restore_outboxes_from_unfinalized().await?;
+                // We reset `execution_state` (via restore), `tip_state`,
+                // `block_hashes` (for outbox-referenced pre-checkpoint heights),
+                // and the outbox views. The other `ChainStateView` fields are
+                // either (a) already default for a fresh bootstrap node
+                // (`inboxes`, `received_log`, …), (b) about to be overwritten by
+                // `apply_confirmed_block` when the cert is applied (`manager`,
+                // `block_hashes` for height `height`), or (c) outside the
+                // protocol state hash so divergence from the producer is fine
+                // (inboxes; subsequent blocks reconcile by anticipation if
+                // needed). The `num_*` counters on `ChainTipState` are
+                // write-only in current code, so leaving them at zero has no
                 // functional impact.
                 let new_tip = ChainTipState {
                     block_hash: block.header.previous_block_hash,

@@ -1192,6 +1192,53 @@ where
         Ok(cursors)
     }
 
+    /// Re-populates `outboxes`, `outbox_counters`, and `nonempty_outboxes` from
+    /// the on-chain `unfinalized_message_blocks` map after a checkpoint
+    /// bootstrap. Called once after `execution_state.restore_from_content` so
+    /// the freshly-restored chain can pick up cross-chain delivery for
+    /// pre-checkpoint messages — the off-chain outbox state isn't part of the
+    /// certified checkpoint blob, so without this a bootstrapped node would
+    /// silently stop pushing pending messages forward.
+    pub async fn restore_outboxes_from_unfinalized(&mut self) -> Result<(), ChainError> {
+        let recipients = self
+            .execution_state
+            .system
+            .unfinalized_message_blocks
+            .indices()
+            .await?;
+        let mut new_counters: BTreeMap<BlockHeight, u32> = BTreeMap::new();
+        let mut new_nonempty = BTreeSet::new();
+        for recipient in recipients {
+            let Some(heights) = self
+                .execution_state
+                .system
+                .unfinalized_message_blocks
+                .get(&recipient)
+                .await?
+            else {
+                continue;
+            };
+            if heights.is_empty() {
+                continue;
+            }
+            let mut outbox = self.outboxes.try_load_entry_mut(&recipient).await?;
+            for height in &heights {
+                outbox.queue.push_back(*height);
+                *new_counters.entry(*height).or_default() += 1;
+            }
+            let max_height = *heights
+                .last()
+                .expect("the empty case was filtered out above");
+            outbox
+                .next_height_to_schedule
+                .set(max_height.try_add_one()?);
+            new_nonempty.insert(recipient);
+        }
+        self.outbox_counters.set(new_counters);
+        self.nonempty_outboxes.set(new_nonempty);
+        Ok(())
+    }
+
     /// Collects the hashes of every block on this chain still listed in the on-chain
     /// `unfinalized_message_blocks` map. The checkpoint pre-block hook calls this to
     /// build the oracle response's `outbox_block_hashes`, so the checkpoint

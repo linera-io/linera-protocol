@@ -4329,6 +4329,42 @@ where
     assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
     assert_eq!(follower_info.state_hash, Some(producer_state_hash));
 
+    // The bootstrap path should also have reconstructed the off-chain outbox
+    // from `unfinalized_message_blocks`: the recipient is listed as nonempty,
+    // its queue holds the height-0 transfer, and the corresponding
+    // `outbox_counters` entry was bumped. Without this the bootstrapped node
+    // would silently stop delivering pre-checkpoint cross-chain messages.
+    {
+        let chain_state = follower
+            .client
+            .local_node
+            .chain_state_view(chain_id)
+            .await?;
+        let outbox_chain = chain_state
+            .outboxes
+            .try_load_entry(&recipient.chain_id())
+            .await?
+            .expect("recipient outbox should be re-populated after bootstrap");
+        let queued = outbox_chain.queue.elements().await?;
+        assert_eq!(queued, vec![BlockHeight::ZERO]);
+        assert_eq!(
+            *outbox_chain.next_height_to_schedule.get(),
+            BlockHeight::from(1)
+        );
+        assert!(chain_state
+            .nonempty_outboxes
+            .get()
+            .contains(&recipient.chain_id()));
+        assert_eq!(
+            chain_state
+                .outbox_counters
+                .get()
+                .get(&BlockHeight::ZERO)
+                .copied(),
+            Some(1)
+        );
+    }
+
     // The follower's chain state now references the height-0 transfer block via
     // `block_hashes`, but its shared storage has no copy of the actual cert. A
     // lookup must report `BlocksNotFound` listing the missing hash.
