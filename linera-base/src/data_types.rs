@@ -104,50 +104,26 @@ impl TryFrom<U256> for Amount {
     }
 }
 
-/// A `u128` newtype that serialises as a decimal string in human-readable
+/// A `u128` newtype that serializes as a decimal string in human-readable
 /// formats (JSON / GraphQL) and as a bare `u128` in binary (BCS).
-#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd, Hash)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Hash,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    derive_more::FromStr,
+)]
 pub struct U128(pub u128);
-
-impl std::fmt::Display for U128 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::str::FromStr for U128 {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        u128::from_str(s).map(U128)
-    }
-}
-
-impl From<u128> for U128 {
-    fn from(value: u128) -> Self {
-        U128(value)
-    }
-}
-
-impl From<U128> for u128 {
-    fn from(value: U128) -> Self {
-        value.0
-    }
-}
-
-impl std::ops::Deref for U128 {
-    type Target = u128;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for U128 {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 impl Serialize for U128 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

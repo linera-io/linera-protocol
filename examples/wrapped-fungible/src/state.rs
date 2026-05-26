@@ -96,7 +96,10 @@ impl WrappedFungibleTokenState {
             .expect("Failed allowance access")
             .unwrap_or_default();
         let new_allowance = allowance.0.checked_sub(amount.0).unwrap_or_else(|| {
-            panic!("Spender {spender} does not have sufficient allowance from owner {owner}; allowance={allowance} amount={amount}")
+            panic!(
+                "Spender {spender} does not have sufficient allowance from owner {owner}; \
+                 allowance={allowance} amount={amount}"
+            )
         });
         if new_allowance == 0 {
             self.allowances
