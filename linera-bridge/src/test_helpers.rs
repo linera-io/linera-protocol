@@ -188,7 +188,6 @@ pub fn fungible_message_transaction(
                 grant: Amount::ZERO,
                 refund_grant_to: None,
                 kind: MessageKind::Simple,
-                index: 0,
                 message: Message::User {
                     application_id: ApplicationId::new(application_id),
                     bytes: bcs::to_bytes(message).unwrap(),

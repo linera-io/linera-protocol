@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 library BridgeTypes {
-    function bcs_serialize_len(uint256 x) internal pure returns (bytes memory) {
+    function bcs_serialize_uleb128(uint256 x) internal pure returns (bytes memory) {
         bytes memory result;
         bytes1 entry;
         while (true) {
@@ -22,7 +22,7 @@ library BridgeTypes {
         return result;
     }
 
-    function bcs_deserialize_offset_len(uint256 pos, bytes memory input) internal pure returns (uint256, uint256) {
+    function bcs_deserialize_offset_uleb128(uint256 pos, bytes memory input) internal pure returns (uint256, uint256) {
         uint256 idx = 0;
         while (true) {
             if (uint8(input[pos + idx]) < 128) {
@@ -74,7 +74,7 @@ library BridgeTypes {
     }
 
     struct AccountOwner {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to Reserved
         uint8 reserved;
         // choice=1 corresponds to Address32
@@ -86,32 +86,32 @@ library BridgeTypes {
     function AccountOwner_case_reserved(uint8 reserved) internal pure returns (AccountOwner memory) {
         CryptoHash memory address32;
         bytes20 address20;
-        return AccountOwner(uint8(0), reserved, address32, address20);
+        return AccountOwner(uint64(0), reserved, address32, address20);
     }
 
     function AccountOwner_case_address32(CryptoHash memory address32) internal pure returns (AccountOwner memory) {
         uint8 reserved;
         bytes20 address20;
-        return AccountOwner(uint8(1), reserved, address32, address20);
+        return AccountOwner(uint64(1), reserved, address32, address20);
     }
 
     function AccountOwner_case_address20(bytes20 address20) internal pure returns (AccountOwner memory) {
         uint8 reserved;
         CryptoHash memory address32;
-        return AccountOwner(uint8(2), reserved, address32, address20);
+        return AccountOwner(uint64(2), reserved, address32, address20);
     }
 
     function bcs_serialize_AccountOwner(AccountOwner memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_uint8(input.reserved));
+            return abi.encodePacked(hex"00", bcs_serialize_uint8(input.reserved));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_CryptoHash(input.address32));
+            return abi.encodePacked(hex"01", bcs_serialize_CryptoHash(input.address32));
         }
         if (input.choice == 2) {
-            return abi.encodePacked(input.choice, bcs_serialize_bytes20(input.address20));
+            return abi.encodePacked(hex"02", bcs_serialize_bytes20(input.address20));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_AccountOwner(uint256 pos, bytes memory input)
@@ -120,8 +120,11 @@ library BridgeTypes {
         returns (uint256, AccountOwner memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 3, "invalid variant index");
         uint8 reserved;
         if (choice == 0) {
             (new_pos, reserved) = bcs_deserialize_offset_uint8(new_pos, input);
@@ -134,7 +137,6 @@ library BridgeTypes {
         if (choice == 2) {
             (new_pos, address20) = bcs_deserialize_offset_bytes20(new_pos, input);
         }
-        require(choice < 3);
         return (new_pos, AccountOwner(choice, reserved, address32, address20));
     }
 
@@ -147,7 +149,7 @@ library BridgeTypes {
     }
 
     struct AdminOperation {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to PublishCommitteeBlob
         AdminOperation_PublishCommitteeBlob publish_committee_blob;
         // choice=1 corresponds to CreateCommittee
@@ -163,7 +165,7 @@ library BridgeTypes {
     {
         AdminOperation_CreateCommittee memory create_committee;
         AdminOperation_RemoveCommittee memory remove_committee;
-        return AdminOperation(uint8(0), publish_committee_blob, create_committee, remove_committee);
+        return AdminOperation(uint64(0), publish_committee_blob, create_committee, remove_committee);
     }
 
     function AdminOperation_case_create_committee(AdminOperation_CreateCommittee memory create_committee)
@@ -173,7 +175,7 @@ library BridgeTypes {
     {
         AdminOperation_PublishCommitteeBlob memory publish_committee_blob;
         AdminOperation_RemoveCommittee memory remove_committee;
-        return AdminOperation(uint8(1), publish_committee_blob, create_committee, remove_committee);
+        return AdminOperation(uint64(1), publish_committee_blob, create_committee, remove_committee);
     }
 
     function AdminOperation_case_remove_committee(AdminOperation_RemoveCommittee memory remove_committee)
@@ -183,22 +185,23 @@ library BridgeTypes {
     {
         AdminOperation_PublishCommitteeBlob memory publish_committee_blob;
         AdminOperation_CreateCommittee memory create_committee;
-        return AdminOperation(uint8(2), publish_committee_blob, create_committee, remove_committee);
+        return AdminOperation(uint64(2), publish_committee_blob, create_committee, remove_committee);
     }
 
     function bcs_serialize_AdminOperation(AdminOperation memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(
-                input.choice, bcs_serialize_AdminOperation_PublishCommitteeBlob(input.publish_committee_blob)
-            );
+            return
+                abi.encodePacked(
+                    hex"00", bcs_serialize_AdminOperation_PublishCommitteeBlob(input.publish_committee_blob)
+                );
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_AdminOperation_CreateCommittee(input.create_committee));
+            return abi.encodePacked(hex"01", bcs_serialize_AdminOperation_CreateCommittee(input.create_committee));
         }
         if (input.choice == 2) {
-            return abi.encodePacked(input.choice, bcs_serialize_AdminOperation_RemoveCommittee(input.remove_committee));
+            return abi.encodePacked(hex"02", bcs_serialize_AdminOperation_RemoveCommittee(input.remove_committee));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_AdminOperation(uint256 pos, bytes memory input)
@@ -207,8 +210,11 @@ library BridgeTypes {
         returns (uint256, AdminOperation memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 3, "invalid variant index");
         AdminOperation_PublishCommitteeBlob memory publish_committee_blob;
         if (choice == 0) {
             (new_pos, publish_committee_blob) =
@@ -222,7 +228,6 @@ library BridgeTypes {
         if (choice == 2) {
             (new_pos, remove_committee) = bcs_deserialize_offset_AdminOperation_RemoveCommittee(new_pos, input);
         }
-        require(choice < 3);
         return (new_pos, AdminOperation(choice, publish_committee_blob, create_committee, remove_committee));
     }
 
@@ -528,7 +533,7 @@ library BridgeTypes {
     }
 
     function bcs_serialize_BlobType(BlobType input) internal pure returns (bytes memory) {
-        return abi.encodePacked(input);
+        return bcs_serialize_uleb128(uint256(input));
     }
 
     function bcs_deserialize_offset_BlobType(uint256 pos, bytes memory input)
@@ -536,45 +541,11 @@ library BridgeTypes {
         pure
         returns (uint256, BlobType)
     {
-        uint8 choice = uint8(input[pos]);
-
-        if (choice == 0) {
-            return (pos + 1, BlobType.Data);
-        }
-
-        if (choice == 1) {
-            return (pos + 1, BlobType.ContractBytecode);
-        }
-
-        if (choice == 2) {
-            return (pos + 1, BlobType.ServiceBytecode);
-        }
-
-        if (choice == 3) {
-            return (pos + 1, BlobType.EvmBytecode);
-        }
-
-        if (choice == 4) {
-            return (pos + 1, BlobType.ApplicationDescription);
-        }
-
-        if (choice == 5) {
-            return (pos + 1, BlobType.Committee);
-        }
-
-        if (choice == 6) {
-            return (pos + 1, BlobType.ChainDescription);
-        }
-
-        if (choice == 7) {
-            return (pos + 1, BlobType.ApplicationFormats);
-        }
-
-        if (choice == 8) {
-            return (pos + 1, BlobType.CheckpointExecutionState);
-        }
-
-        require(choice < 9);
+        uint256 new_pos;
+        uint256 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice < 9, "invalid variant index");
+        return (new_pos, BlobType(uint8(choice)));
     }
 
     function bcs_deserialize_BlobType(bytes memory input) internal pure returns (BlobType) {
@@ -777,7 +748,7 @@ library BridgeTypes {
     }
 
     function bcs_serialize_CertificateKind(CertificateKind input) internal pure returns (bytes memory) {
-        return abi.encodePacked(input);
+        return bcs_serialize_uleb128(uint256(input));
     }
 
     function bcs_deserialize_offset_CertificateKind(uint256 pos, bytes memory input)
@@ -785,21 +756,11 @@ library BridgeTypes {
         pure
         returns (uint256, CertificateKind)
     {
-        uint8 choice = uint8(input[pos]);
-
-        if (choice == 0) {
-            return (pos + 1, CertificateKind.Timeout);
-        }
-
-        if (choice == 1) {
-            return (pos + 1, CertificateKind.Validated);
-        }
-
-        if (choice == 2) {
-            return (pos + 1, CertificateKind.Confirmed);
-        }
-
-        require(choice < 3);
+        uint256 new_pos;
+        uint256 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice < 3, "invalid variant index");
+        return (new_pos, CertificateKind(uint8(choice)));
     }
 
     function bcs_deserialize_CertificateKind(bytes memory input) internal pure returns (CertificateKind) {
@@ -1111,7 +1072,7 @@ library BridgeTypes {
     }
 
     struct GenericApplicationId {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to System
         // choice=1 corresponds to User
         ApplicationId user;
@@ -1119,7 +1080,7 @@ library BridgeTypes {
 
     function GenericApplicationId_case_system() internal pure returns (GenericApplicationId memory) {
         ApplicationId memory user;
-        return GenericApplicationId(uint8(0), user);
+        return GenericApplicationId(uint64(0), user);
     }
 
     function GenericApplicationId_case_user(ApplicationId memory user)
@@ -1127,7 +1088,7 @@ library BridgeTypes {
         pure
         returns (GenericApplicationId memory)
     {
-        return GenericApplicationId(uint8(1), user);
+        return GenericApplicationId(uint64(1), user);
     }
 
     function bcs_serialize_GenericApplicationId(GenericApplicationId memory input)
@@ -1135,10 +1096,13 @@ library BridgeTypes {
         pure
         returns (bytes memory)
     {
-        if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_ApplicationId(input.user));
+        if (input.choice == 0) {
+            return hex"00";
         }
-        return abi.encodePacked(input.choice);
+        if (input.choice == 1) {
+            return abi.encodePacked(hex"01", bcs_serialize_ApplicationId(input.user));
+        }
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_GenericApplicationId(uint256 pos, bytes memory input)
@@ -1147,13 +1111,15 @@ library BridgeTypes {
         returns (uint256, GenericApplicationId memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 2, "invalid variant index");
         ApplicationId memory user;
         if (choice == 1) {
             (new_pos, user) = bcs_deserialize_offset_ApplicationId(new_pos, input);
         }
-        require(choice < 2);
         return (new_pos, GenericApplicationId(choice, user));
     }
 
@@ -1236,7 +1202,7 @@ library BridgeTypes {
     }
 
     struct Message {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to System
         SystemMessage system;
         // choice=1 corresponds to User
@@ -1245,22 +1211,22 @@ library BridgeTypes {
 
     function Message_case_system(SystemMessage memory system) internal pure returns (Message memory) {
         Message_User memory user;
-        return Message(uint8(0), system, user);
+        return Message(uint64(0), system, user);
     }
 
     function Message_case_user(Message_User memory user) internal pure returns (Message memory) {
         SystemMessage memory system;
-        return Message(uint8(1), system, user);
+        return Message(uint64(1), system, user);
     }
 
     function bcs_serialize_Message(Message memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemMessage(input.system));
+            return abi.encodePacked(hex"00", bcs_serialize_SystemMessage(input.system));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_Message_User(input.user));
+            return abi.encodePacked(hex"01", bcs_serialize_Message_User(input.user));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_Message(uint256 pos, bytes memory input)
@@ -1269,8 +1235,11 @@ library BridgeTypes {
         returns (uint256, Message memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 2, "invalid variant index");
         SystemMessage memory system;
         if (choice == 0) {
             (new_pos, system) = bcs_deserialize_offset_SystemMessage(new_pos, input);
@@ -1279,7 +1248,6 @@ library BridgeTypes {
         if (choice == 1) {
             (new_pos, user) = bcs_deserialize_offset_Message_User(new_pos, input);
         }
-        require(choice < 2);
         return (new_pos, Message(choice, system, user));
     }
 
@@ -1297,7 +1265,7 @@ library BridgeTypes {
     }
 
     function bcs_serialize_MessageAction(MessageAction input) internal pure returns (bytes memory) {
-        return abi.encodePacked(input);
+        return bcs_serialize_uleb128(uint256(input));
     }
 
     function bcs_deserialize_offset_MessageAction(uint256 pos, bytes memory input)
@@ -1305,17 +1273,11 @@ library BridgeTypes {
         pure
         returns (uint256, MessageAction)
     {
-        uint8 choice = uint8(input[pos]);
-
-        if (choice == 0) {
-            return (pos + 1, MessageAction.Accept);
-        }
-
-        if (choice == 1) {
-            return (pos + 1, MessageAction.Reject);
-        }
-
-        require(choice < 2);
+        uint256 new_pos;
+        uint256 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice < 2, "invalid variant index");
+        return (new_pos, MessageAction(uint8(choice)));
     }
 
     function bcs_deserialize_MessageAction(bytes memory input) internal pure returns (MessageAction) {
@@ -1377,7 +1339,7 @@ library BridgeTypes {
     }
 
     function bcs_serialize_MessageKind(MessageKind input) internal pure returns (bytes memory) {
-        return abi.encodePacked(input);
+        return bcs_serialize_uleb128(uint256(input));
     }
 
     function bcs_deserialize_offset_MessageKind(uint256 pos, bytes memory input)
@@ -1385,25 +1347,11 @@ library BridgeTypes {
         pure
         returns (uint256, MessageKind)
     {
-        uint8 choice = uint8(input[pos]);
-
-        if (choice == 0) {
-            return (pos + 1, MessageKind.Simple);
-        }
-
-        if (choice == 1) {
-            return (pos + 1, MessageKind.Protected);
-        }
-
-        if (choice == 2) {
-            return (pos + 1, MessageKind.Tracked);
-        }
-
-        if (choice == 3) {
-            return (pos + 1, MessageKind.Bouncing);
-        }
-
-        require(choice < 4);
+        uint256 new_pos;
+        uint256 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice < 4, "invalid variant index");
+        return (new_pos, MessageKind(uint8(choice)));
     }
 
     function bcs_deserialize_MessageKind(bytes memory input) internal pure returns (MessageKind) {
@@ -1520,7 +1468,7 @@ library BridgeTypes {
     }
 
     struct Operation {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to System
         SystemOperation system;
         // choice=1 corresponds to User
@@ -1529,22 +1477,22 @@ library BridgeTypes {
 
     function Operation_case_system(SystemOperation memory system) internal pure returns (Operation memory) {
         Operation_User memory user;
-        return Operation(uint8(0), system, user);
+        return Operation(uint64(0), system, user);
     }
 
     function Operation_case_user(Operation_User memory user) internal pure returns (Operation memory) {
         SystemOperation memory system;
-        return Operation(uint8(1), system, user);
+        return Operation(uint64(1), system, user);
     }
 
     function bcs_serialize_Operation(Operation memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation(input.system));
+            return abi.encodePacked(hex"00", bcs_serialize_SystemOperation(input.system));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_Operation_User(input.user));
+            return abi.encodePacked(hex"01", bcs_serialize_Operation_User(input.user));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_Operation(uint256 pos, bytes memory input)
@@ -1553,8 +1501,11 @@ library BridgeTypes {
         returns (uint256, Operation memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 2, "invalid variant index");
         SystemOperation memory system;
         if (choice == 0) {
             (new_pos, system) = bcs_deserialize_offset_SystemOperation(new_pos, input);
@@ -1563,7 +1514,6 @@ library BridgeTypes {
         if (choice == 1) {
             (new_pos, user) = bcs_deserialize_offset_Operation_User(new_pos, input);
         }
-        require(choice < 2);
         return (new_pos, Operation(choice, system, user));
     }
 
@@ -1634,7 +1584,7 @@ library BridgeTypes {
     }
 
     struct OracleResponse {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to Service
         bytes service;
         // choice=1 corresponds to Http
@@ -1659,7 +1609,7 @@ library BridgeTypes {
         OracleResponse_Event memory event_;
         EventId memory event_exists;
         OracleResponse_Checkpoint memory checkpoint;
-        return OracleResponse(uint8(0), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(0), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_http(Response memory http) internal pure returns (OracleResponse memory) {
@@ -1669,7 +1619,7 @@ library BridgeTypes {
         OracleResponse_Event memory event_;
         EventId memory event_exists;
         OracleResponse_Checkpoint memory checkpoint;
-        return OracleResponse(uint8(1), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(1), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_blob(BlobId memory blob) internal pure returns (OracleResponse memory) {
@@ -1679,7 +1629,7 @@ library BridgeTypes {
         OracleResponse_Event memory event_;
         EventId memory event_exists;
         OracleResponse_Checkpoint memory checkpoint;
-        return OracleResponse(uint8(2), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(2), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_assert() internal pure returns (OracleResponse memory) {
@@ -1690,7 +1640,7 @@ library BridgeTypes {
         OracleResponse_Event memory event_;
         EventId memory event_exists;
         OracleResponse_Checkpoint memory checkpoint;
-        return OracleResponse(uint8(3), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(3), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_round(opt_uint32 memory round) internal pure returns (OracleResponse memory) {
@@ -1700,7 +1650,7 @@ library BridgeTypes {
         OracleResponse_Event memory event_;
         EventId memory event_exists;
         OracleResponse_Checkpoint memory checkpoint;
-        return OracleResponse(uint8(4), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(4), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_event(OracleResponse_Event memory event_)
@@ -1714,7 +1664,7 @@ library BridgeTypes {
         opt_uint32 memory round;
         EventId memory event_exists;
         OracleResponse_Checkpoint memory checkpoint;
-        return OracleResponse(uint8(5), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(5), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_event_exists(EventId memory event_exists)
@@ -1728,7 +1678,7 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         OracleResponse_Checkpoint memory checkpoint;
-        return OracleResponse(uint8(6), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(6), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function OracleResponse_case_checkpoint(OracleResponse_Checkpoint memory checkpoint)
@@ -1742,32 +1692,35 @@ library BridgeTypes {
         opt_uint32 memory round;
         OracleResponse_Event memory event_;
         EventId memory event_exists;
-        return OracleResponse(uint8(7), service, http, blob, round, event_, event_exists, checkpoint);
+        return OracleResponse(uint64(7), service, http, blob, round, event_, event_exists, checkpoint);
     }
 
     function bcs_serialize_OracleResponse(OracleResponse memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_bytes(input.service));
+            return abi.encodePacked(hex"00", bcs_serialize_bytes(input.service));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_Response(input.http));
+            return abi.encodePacked(hex"01", bcs_serialize_Response(input.http));
         }
         if (input.choice == 2) {
-            return abi.encodePacked(input.choice, bcs_serialize_BlobId(input.blob));
+            return abi.encodePacked(hex"02", bcs_serialize_BlobId(input.blob));
+        }
+        if (input.choice == 3) {
+            return hex"03";
         }
         if (input.choice == 4) {
-            return abi.encodePacked(input.choice, bcs_serialize_opt_uint32(input.round));
+            return abi.encodePacked(hex"04", bcs_serialize_opt_uint32(input.round));
         }
         if (input.choice == 5) {
-            return abi.encodePacked(input.choice, bcs_serialize_OracleResponse_Event(input.event_));
+            return abi.encodePacked(hex"05", bcs_serialize_OracleResponse_Event(input.event_));
         }
         if (input.choice == 6) {
-            return abi.encodePacked(input.choice, bcs_serialize_EventId(input.event_exists));
+            return abi.encodePacked(hex"06", bcs_serialize_EventId(input.event_exists));
         }
         if (input.choice == 7) {
-            return abi.encodePacked(input.choice, bcs_serialize_OracleResponse_Checkpoint(input.checkpoint));
+            return abi.encodePacked(hex"07", bcs_serialize_OracleResponse_Checkpoint(input.checkpoint));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_OracleResponse(uint256 pos, bytes memory input)
@@ -1776,8 +1729,11 @@ library BridgeTypes {
         returns (uint256, OracleResponse memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 8, "invalid variant index");
         bytes memory service;
         if (choice == 0) {
             (new_pos, service) = bcs_deserialize_offset_bytes(new_pos, input);
@@ -1806,7 +1762,6 @@ library BridgeTypes {
         if (choice == 7) {
             (new_pos, checkpoint) = bcs_deserialize_offset_OracleResponse_Checkpoint(new_pos, input);
         }
-        require(choice < 8);
         return (new_pos, OracleResponse(choice, service, http, blob, round, event_, event_exists, checkpoint));
     }
 
@@ -1948,7 +1903,6 @@ library BridgeTypes {
         Amount grant;
         opt_Account refund_grant_to;
         MessageKind kind;
-        uint32 index;
         Message message;
     }
 
@@ -1957,7 +1911,6 @@ library BridgeTypes {
         result = abi.encodePacked(result, bcs_serialize_Amount(input.grant));
         result = abi.encodePacked(result, bcs_serialize_opt_Account(input.refund_grant_to));
         result = abi.encodePacked(result, bcs_serialize_MessageKind(input.kind));
-        result = abi.encodePacked(result, bcs_serialize_uint32(input.index));
         return abi.encodePacked(result, bcs_serialize_Message(input.message));
     }
 
@@ -1975,11 +1928,9 @@ library BridgeTypes {
         (new_pos, refund_grant_to) = bcs_deserialize_offset_opt_Account(new_pos, input);
         MessageKind kind;
         (new_pos, kind) = bcs_deserialize_offset_MessageKind(new_pos, input);
-        uint32 index;
-        (new_pos, index) = bcs_deserialize_offset_uint32(new_pos, input);
         Message memory message;
         (new_pos, message) = bcs_deserialize_offset_Message(new_pos, input);
-        return (new_pos, PostedMessage(authenticated_owner, grant, refund_grant_to, kind, index, message));
+        return (new_pos, PostedMessage(authenticated_owner, grant, refund_grant_to, kind, message));
     }
 
     function bcs_deserialize_PostedMessage(bytes memory input) internal pure returns (PostedMessage memory) {
@@ -2026,7 +1977,7 @@ library BridgeTypes {
     }
 
     struct Round {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to Fast
         // choice=1 corresponds to MultiLeader
         uint32 multi_leader;
@@ -2040,38 +1991,41 @@ library BridgeTypes {
         uint32 multi_leader;
         uint32 single_leader;
         uint32 validator;
-        return Round(uint8(0), multi_leader, single_leader, validator);
+        return Round(uint64(0), multi_leader, single_leader, validator);
     }
 
     function Round_case_multi_leader(uint32 multi_leader) internal pure returns (Round memory) {
         uint32 single_leader;
         uint32 validator;
-        return Round(uint8(1), multi_leader, single_leader, validator);
+        return Round(uint64(1), multi_leader, single_leader, validator);
     }
 
     function Round_case_single_leader(uint32 single_leader) internal pure returns (Round memory) {
         uint32 multi_leader;
         uint32 validator;
-        return Round(uint8(2), multi_leader, single_leader, validator);
+        return Round(uint64(2), multi_leader, single_leader, validator);
     }
 
     function Round_case_validator(uint32 validator) internal pure returns (Round memory) {
         uint32 multi_leader;
         uint32 single_leader;
-        return Round(uint8(3), multi_leader, single_leader, validator);
+        return Round(uint64(3), multi_leader, single_leader, validator);
     }
 
     function bcs_serialize_Round(Round memory input) internal pure returns (bytes memory) {
+        if (input.choice == 0) {
+            return hex"00";
+        }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_uint32(input.multi_leader));
+            return abi.encodePacked(hex"01", bcs_serialize_uint32(input.multi_leader));
         }
         if (input.choice == 2) {
-            return abi.encodePacked(input.choice, bcs_serialize_uint32(input.single_leader));
+            return abi.encodePacked(hex"02", bcs_serialize_uint32(input.single_leader));
         }
         if (input.choice == 3) {
-            return abi.encodePacked(input.choice, bcs_serialize_uint32(input.validator));
+            return abi.encodePacked(hex"03", bcs_serialize_uint32(input.validator));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_Round(uint256 pos, bytes memory input)
@@ -2080,8 +2034,11 @@ library BridgeTypes {
         returns (uint256, Round memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 4, "invalid variant index");
         uint32 multi_leader;
         if (choice == 1) {
             (new_pos, multi_leader) = bcs_deserialize_offset_uint32(new_pos, input);
@@ -2094,7 +2051,6 @@ library BridgeTypes {
         if (choice == 3) {
             (new_pos, validator) = bcs_deserialize_offset_uint32(new_pos, input);
         }
-        require(choice < 4);
         return (new_pos, Round(choice, multi_leader, single_leader, validator));
     }
 
@@ -2219,7 +2175,7 @@ library BridgeTypes {
     }
 
     struct SystemMessage {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to Credit
         SystemMessage_Credit credit;
         // choice=1 corresponds to Withdraw
@@ -2232,7 +2188,7 @@ library BridgeTypes {
         returns (SystemMessage memory)
     {
         SystemMessage_Withdraw memory withdraw;
-        return SystemMessage(uint8(0), credit, withdraw);
+        return SystemMessage(uint64(0), credit, withdraw);
     }
 
     function SystemMessage_case_withdraw(SystemMessage_Withdraw memory withdraw)
@@ -2241,17 +2197,17 @@ library BridgeTypes {
         returns (SystemMessage memory)
     {
         SystemMessage_Credit memory credit;
-        return SystemMessage(uint8(1), credit, withdraw);
+        return SystemMessage(uint64(1), credit, withdraw);
     }
 
     function bcs_serialize_SystemMessage(SystemMessage memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemMessage_Credit(input.credit));
+            return abi.encodePacked(hex"00", bcs_serialize_SystemMessage_Credit(input.credit));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemMessage_Withdraw(input.withdraw));
+            return abi.encodePacked(hex"01", bcs_serialize_SystemMessage_Withdraw(input.withdraw));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_SystemMessage(uint256 pos, bytes memory input)
@@ -2260,8 +2216,11 @@ library BridgeTypes {
         returns (uint256, SystemMessage memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 2, "invalid variant index");
         SystemMessage_Credit memory credit;
         if (choice == 0) {
             (new_pos, credit) = bcs_deserialize_offset_SystemMessage_Credit(new_pos, input);
@@ -2270,7 +2229,6 @@ library BridgeTypes {
         if (choice == 1) {
             (new_pos, withdraw) = bcs_deserialize_offset_SystemMessage_Withdraw(new_pos, input);
         }
-        require(choice < 2);
         return (new_pos, SystemMessage(choice, credit, withdraw));
     }
 
@@ -2369,7 +2327,7 @@ library BridgeTypes {
     }
 
     struct SystemOperation {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to Transfer
         SystemOperation_Transfer transfer_;
         // choice=1 corresponds to Claim
@@ -2415,7 +2373,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(0),
+            uint64(0),
             transfer_,
             claim,
             open_chain,
@@ -2448,7 +2406,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(1),
+            uint64(1),
             transfer_,
             claim,
             open_chain,
@@ -2481,7 +2439,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(2),
+            uint64(2),
             transfer_,
             claim,
             open_chain,
@@ -2511,7 +2469,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(3),
+            uint64(3),
             transfer_,
             claim,
             open_chain,
@@ -2544,7 +2502,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(4),
+            uint64(4),
             transfer_,
             claim,
             open_chain,
@@ -2577,7 +2535,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(5),
+            uint64(5),
             transfer_,
             claim,
             open_chain,
@@ -2610,7 +2568,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(6),
+            uint64(6),
             transfer_,
             claim,
             open_chain,
@@ -2643,7 +2601,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(7),
+            uint64(7),
             transfer_,
             claim,
             open_chain,
@@ -2676,7 +2634,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(8),
+            uint64(8),
             transfer_,
             claim,
             open_chain,
@@ -2709,7 +2667,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(9),
+            uint64(9),
             transfer_,
             claim,
             open_chain,
@@ -2738,7 +2696,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(10),
+            uint64(10),
             transfer_,
             claim,
             open_chain,
@@ -2771,7 +2729,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(11),
+            uint64(11),
             transfer_,
             claim,
             open_chain,
@@ -2804,7 +2762,7 @@ library BridgeTypes {
         AdminOperation memory admin;
         Epoch memory process_new_epoch;
         return SystemOperation(
-            uint8(12),
+            uint64(12),
             transfer_,
             claim,
             open_chain,
@@ -2834,7 +2792,7 @@ library BridgeTypes {
         Epoch memory process_new_epoch;
         SystemOperation_UpdateStream memory update_stream;
         return SystemOperation(
-            uint8(13),
+            uint64(13),
             transfer_,
             claim,
             open_chain,
@@ -2852,49 +2810,48 @@ library BridgeTypes {
 
     function bcs_serialize_SystemOperation(SystemOperation memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_Transfer(input.transfer_));
+            return abi.encodePacked(hex"00", bcs_serialize_SystemOperation_Transfer(input.transfer_));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_Claim(input.claim));
+            return abi.encodePacked(hex"01", bcs_serialize_SystemOperation_Claim(input.claim));
         }
         if (input.choice == 2) {
-            return abi.encodePacked(input.choice, bcs_serialize_OpenChainConfig(input.open_chain));
+            return abi.encodePacked(hex"02", bcs_serialize_OpenChainConfig(input.open_chain));
+        }
+        if (input.choice == 3) {
+            return hex"03";
         }
         if (input.choice == 4) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_ChangeOwnership(input.change_ownership));
+            return abi.encodePacked(hex"04", bcs_serialize_SystemOperation_ChangeOwnership(input.change_ownership));
         }
         if (input.choice == 5) {
-            return
-                abi.encodePacked(
-                    input.choice, bcs_serialize_ApplicationPermissions(input.change_application_permissions)
-                );
+            return abi.encodePacked(hex"05", bcs_serialize_ApplicationPermissions(input.change_application_permissions));
         }
         if (input.choice == 6) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_PublishModule(input.publish_module));
+            return abi.encodePacked(hex"06", bcs_serialize_SystemOperation_PublishModule(input.publish_module));
         }
         if (input.choice == 7) {
-            return
-                abi.encodePacked(input.choice, bcs_serialize_SystemOperation_PublishDataBlob(input.publish_data_blob));
+            return abi.encodePacked(hex"07", bcs_serialize_SystemOperation_PublishDataBlob(input.publish_data_blob));
         }
         if (input.choice == 8) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_VerifyBlob(input.verify_blob));
+            return abi.encodePacked(hex"08", bcs_serialize_SystemOperation_VerifyBlob(input.verify_blob));
         }
         if (input.choice == 9) {
-            return
-                abi.encodePacked(
-                    input.choice, bcs_serialize_SystemOperation_CreateApplication(input.create_application)
-                );
+            return abi.encodePacked(hex"09", bcs_serialize_SystemOperation_CreateApplication(input.create_application));
         }
         if (input.choice == 10) {
-            return abi.encodePacked(input.choice, bcs_serialize_AdminOperation(input.admin));
+            return abi.encodePacked(hex"0a", bcs_serialize_AdminOperation(input.admin));
         }
         if (input.choice == 11) {
-            return abi.encodePacked(input.choice, bcs_serialize_Epoch(input.process_new_epoch));
+            return abi.encodePacked(hex"0b", bcs_serialize_Epoch(input.process_new_epoch));
         }
         if (input.choice == 12) {
-            return abi.encodePacked(input.choice, bcs_serialize_SystemOperation_UpdateStream(input.update_stream));
+            return abi.encodePacked(hex"0c", bcs_serialize_SystemOperation_UpdateStream(input.update_stream));
         }
-        return abi.encodePacked(input.choice);
+        if (input.choice == 13) {
+            return hex"0d";
+        }
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_SystemOperation(uint256 pos, bytes memory input)
@@ -2903,8 +2860,11 @@ library BridgeTypes {
         returns (uint256, SystemOperation memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 14, "invalid variant index");
         SystemOperation_Transfer memory transfer_;
         if (choice == 0) {
             (new_pos, transfer_) = bcs_deserialize_offset_SystemOperation_Transfer(new_pos, input);
@@ -2953,7 +2913,6 @@ library BridgeTypes {
         if (choice == 12) {
             (new_pos, update_stream) = bcs_deserialize_offset_SystemOperation_UpdateStream(new_pos, input);
         }
-        require(choice < 14);
         return (
             new_pos,
             SystemOperation(
@@ -3428,7 +3387,7 @@ library BridgeTypes {
     }
 
     struct Transaction {
-        uint8 choice;
+        uint64 choice;
         // choice=0 corresponds to ReceiveMessages
         IncomingBundle receive_messages;
         // choice=1 corresponds to ExecuteOperation
@@ -3441,7 +3400,7 @@ library BridgeTypes {
         returns (Transaction memory)
     {
         Operation memory execute_operation;
-        return Transaction(uint8(0), receive_messages, execute_operation);
+        return Transaction(uint64(0), receive_messages, execute_operation);
     }
 
     function Transaction_case_execute_operation(Operation memory execute_operation)
@@ -3450,17 +3409,17 @@ library BridgeTypes {
         returns (Transaction memory)
     {
         IncomingBundle memory receive_messages;
-        return Transaction(uint8(1), receive_messages, execute_operation);
+        return Transaction(uint64(1), receive_messages, execute_operation);
     }
 
     function bcs_serialize_Transaction(Transaction memory input) internal pure returns (bytes memory) {
         if (input.choice == 0) {
-            return abi.encodePacked(input.choice, bcs_serialize_IncomingBundle(input.receive_messages));
+            return abi.encodePacked(hex"00", bcs_serialize_IncomingBundle(input.receive_messages));
         }
         if (input.choice == 1) {
-            return abi.encodePacked(input.choice, bcs_serialize_Operation(input.execute_operation));
+            return abi.encodePacked(hex"01", bcs_serialize_Operation(input.execute_operation));
         }
-        return abi.encodePacked(input.choice);
+        revert("invalid variant index");
     }
 
     function bcs_deserialize_offset_Transaction(uint256 pos, bytes memory input)
@@ -3469,8 +3428,11 @@ library BridgeTypes {
         returns (uint256, Transaction memory)
     {
         uint256 new_pos;
-        uint8 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uint8(pos, input);
+        uint256 choice_raw;
+        (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
+        uint64 choice = uint64(choice_raw);
+        require(choice < 2, "invalid variant index");
         IncomingBundle memory receive_messages;
         if (choice == 0) {
             (new_pos, receive_messages) = bcs_deserialize_offset_IncomingBundle(new_pos, input);
@@ -3479,7 +3441,6 @@ library BridgeTypes {
         if (choice == 1) {
             (new_pos, execute_operation) = bcs_deserialize_offset_Operation(new_pos, input);
         }
-        require(choice < 2);
         return (new_pos, Transaction(choice, receive_messages, execute_operation));
     }
 
@@ -3497,7 +3458,7 @@ library BridgeTypes {
     }
 
     function bcs_serialize_VmRuntime(VmRuntime input) internal pure returns (bytes memory) {
-        return abi.encodePacked(input);
+        return bcs_serialize_uleb128(uint256(input));
     }
 
     function bcs_deserialize_offset_VmRuntime(uint256 pos, bytes memory input)
@@ -3505,17 +3466,11 @@ library BridgeTypes {
         pure
         returns (uint256, VmRuntime)
     {
-        uint8 choice = uint8(input[pos]);
-
-        if (choice == 0) {
-            return (pos + 1, VmRuntime.Wasm);
-        }
-
-        if (choice == 1) {
-            return (pos + 1, VmRuntime.Evm);
-        }
-
-        require(choice < 2);
+        uint256 new_pos;
+        uint256 choice;
+        (new_pos, choice) = bcs_deserialize_offset_uleb128(pos, input);
+        require(choice < 2, "invalid variant index");
+        return (new_pos, VmRuntime(uint8(choice)));
     }
 
     function bcs_deserialize_VmRuntime(bytes memory input) internal pure returns (VmRuntime) {
@@ -3586,7 +3541,7 @@ library BridgeTypes {
 
     function bcs_serialize_bytes(bytes memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         return abi.encodePacked(result, input);
     }
 
@@ -3597,7 +3552,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         bytes memory result = new bytes(len);
         for (uint256 u = 0; u < len; u++) {
             result[u] = input[new_pos + u];
@@ -3619,7 +3574,7 @@ library BridgeTypes {
 
     function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input) internal pure returns (uint256, bytes20) {
         bytes20 dest;
-        assembly {
+        assembly ("memory-safe") {
             dest := mload(add(add(input, 0x20), pos))
         }
         return (pos + 20, dest);
@@ -3631,7 +3586,7 @@ library BridgeTypes {
 
     function bcs_deserialize_offset_bytes32(uint256 pos, bytes memory input) internal pure returns (uint256, bytes32) {
         bytes32 dest;
-        assembly {
+        assembly ("memory-safe") {
             dest := mload(add(add(input, 0x20), pos))
         }
         return (pos + 32, dest);
@@ -3980,7 +3935,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_AccountOwner(AccountOwner[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_AccountOwner(input[i]));
         }
@@ -3994,7 +3949,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         AccountOwner[] memory result;
         result = new AccountOwner[](len);
         AccountOwner memory value;
@@ -4015,7 +3970,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_ApplicationId(ApplicationId[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_ApplicationId(input[i]));
         }
@@ -4029,7 +3984,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         ApplicationId[] memory result;
         result = new ApplicationId[](len);
         ApplicationId memory value;
@@ -4050,7 +4005,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_BlobContent(BlobContent[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_BlobContent(input[i]));
         }
@@ -4064,7 +4019,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         BlobContent[] memory result;
         result = new BlobContent[](len);
         BlobContent memory value;
@@ -4085,7 +4040,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_BlobId(BlobId[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_BlobId(input[i]));
         }
@@ -4099,7 +4054,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         BlobId[] memory result;
         result = new BlobId[](len);
         BlobId memory value;
@@ -4120,7 +4075,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_CryptoHash(CryptoHash[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_CryptoHash(input[i]));
         }
@@ -4134,7 +4089,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         CryptoHash[] memory result;
         result = new CryptoHash[](len);
         CryptoHash memory value;
@@ -4155,7 +4110,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_Event(Event[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_Event(input[i]));
         }
@@ -4169,7 +4124,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         Event[] memory result;
         result = new Event[](len);
         Event memory value;
@@ -4190,7 +4145,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_Header(Header[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_Header(input[i]));
         }
@@ -4204,7 +4159,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         Header[] memory result;
         result = new Header[](len);
         Header memory value;
@@ -4225,7 +4180,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_OperationResult(OperationResult[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_OperationResult(input[i]));
         }
@@ -4239,7 +4194,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         OperationResult[] memory result;
         result = new OperationResult[](len);
         OperationResult memory value;
@@ -4260,7 +4215,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_OracleResponse(OracleResponse[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_OracleResponse(input[i]));
         }
@@ -4274,7 +4229,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         OracleResponse[] memory result;
         result = new OracleResponse[](len);
         OracleResponse memory value;
@@ -4295,7 +4250,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_OutgoingMessage(OutgoingMessage[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_OutgoingMessage(input[i]));
         }
@@ -4309,7 +4264,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         OutgoingMessage[] memory result;
         result = new OutgoingMessage[](len);
         OutgoingMessage memory value;
@@ -4330,7 +4285,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_PostedMessage(PostedMessage[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_PostedMessage(input[i]));
         }
@@ -4344,7 +4299,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         PostedMessage[] memory result;
         result = new PostedMessage[](len);
         PostedMessage memory value;
@@ -4365,7 +4320,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_Transaction(Transaction[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_Transaction(input[i]));
         }
@@ -4379,7 +4334,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         Transaction[] memory result;
         result = new Transaction[](len);
         Transaction memory value;
@@ -4404,7 +4359,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_key_values_AccountOwner_uint64(input[i]));
         }
@@ -4418,7 +4373,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         key_values_AccountOwner_uint64[] memory result;
         result = new key_values_AccountOwner_uint64[](len);
         key_values_AccountOwner_uint64 memory value;
@@ -4447,7 +4402,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_key_values_ChainId_tuple_CryptoHash_BlockHeight(input[i]));
         }
@@ -4461,7 +4416,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory result;
         result = new key_values_ChainId_tuple_CryptoHash_BlockHeight[](len);
         key_values_ChainId_tuple_CryptoHash_BlockHeight memory value;
@@ -4490,7 +4445,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_key_values_StreamId_tuple_CryptoHash_BlockHeight(input[i]));
         }
@@ -4503,7 +4458,7 @@ library BridgeTypes {
     ) internal pure returns (uint256, key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory) {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory result;
         result = new key_values_StreamId_tuple_CryptoHash_BlockHeight[](len);
         key_values_StreamId_tuple_CryptoHash_BlockHeight memory value;
@@ -4528,7 +4483,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_seq_BlobContent(BlobContent[][] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_seq_BlobContent(input[i]));
         }
@@ -4542,7 +4497,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         BlobContent[][] memory result;
         result = new BlobContent[][](len);
         BlobContent[] memory value;
@@ -4563,7 +4518,7 @@ library BridgeTypes {
 
     function bcs_serialize_seq_seq_Event(Event[][] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_seq_Event(input[i]));
         }
@@ -4577,7 +4532,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         Event[][] memory result;
         result = new Event[][](len);
         Event[] memory value;
@@ -4602,7 +4557,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_seq_OracleResponse(input[i]));
         }
@@ -4616,7 +4571,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         OracleResponse[][] memory result;
         result = new OracleResponse[][](len);
         OracleResponse[] memory value;
@@ -4645,7 +4600,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_seq_OutgoingMessage(input[i]));
         }
@@ -4659,7 +4614,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         OutgoingMessage[][] memory result;
         result = new OutgoingMessage[][](len);
         OutgoingMessage[] memory value;
@@ -4688,7 +4643,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_tuple_AccountOwner_uint64(input[i]));
         }
@@ -4702,7 +4657,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         tuple_AccountOwner_uint64[] memory result;
         result = new tuple_AccountOwner_uint64[](len);
         tuple_AccountOwner_uint64 memory value;
@@ -4731,7 +4686,7 @@ library BridgeTypes {
         returns (bytes memory)
     {
         uint256 len = input.length;
-        bytes memory result = bcs_serialize_len(len);
+        bytes memory result = bcs_serialize_uleb128(len);
         for (uint256 i = 0; i < len; i++) {
             result = abi.encodePacked(result, bcs_serialize_tuple_Secp256k1PublicKey_Secp256k1Signature(input[i]));
         }
@@ -4745,7 +4700,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         tuple_Secp256k1PublicKey_Secp256k1Signature[] memory result;
         result = new tuple_Secp256k1PublicKey_Secp256k1Signature[](len);
         tuple_Secp256k1PublicKey_Secp256k1Signature memory value;
@@ -4782,7 +4737,7 @@ library BridgeTypes {
                 break;
             }
         }
-        bytes memory result_len = bcs_serialize_len(number_char);
+        bytes memory result_len = bcs_serialize_uleb128(number_char);
         return abi.encodePacked(result_len, input);
     }
 
@@ -4793,7 +4748,7 @@ library BridgeTypes {
     {
         uint256 len;
         uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_len(pos, input);
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
         uint256 shift = 0;
         for (uint256 i = 0; i < len; i++) {
             while (true) {

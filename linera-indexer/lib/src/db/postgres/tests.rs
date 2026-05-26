@@ -145,7 +145,6 @@ async fn test_incoming_bundles_storage_and_query() {
         );
 
         let incoming_bundle_message = PostedMessage {
-            index: 0,
             authenticated_owner: None,
             grant: Amount::from_tokens(100),
             refund_grant_to: None,
