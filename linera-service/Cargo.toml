@@ -50,7 +50,6 @@ scylladb = [
     "linera-core/scylladb",
     "linera-storage-runtime/scylladb",
 ]
-kubernetes = ["dep:k8s-openapi", "dep:kube", "dep:pathdiff", "dep:fs_extra"]
 remote-net = []
 metrics = [
     "prometheus",
@@ -95,13 +94,10 @@ colored.workspace = true
 convert_case.workspace = true
 current_platform = "0.2.0"
 fs-err = { workspace = true, features = ["tokio"] }
-fs_extra = { workspace = true, optional = true }
 futures.workspace = true
 heck.workspace = true
 http.workspace = true
 indicatif.workspace = true
-k8s-openapi = { workspace = true, optional = true }
-kube = { workspace = true, optional = true }
 linera-base.workspace = true
 linera-chain.workspace = true
 linera-client = { workspace = true, features = ["fs"] }
@@ -131,7 +127,6 @@ linera-wallet-json.workspace = true
 lru.workspace = true
 nonzero_lit.workspace = true
 papaya.workspace = true
-pathdiff = { workspace = true, optional = true }
 port-selector.workspace = true
 prometheus = { workspace = true, optional = true }
 prost = { workspace = true }
