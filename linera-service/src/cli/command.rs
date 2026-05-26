@@ -379,6 +379,10 @@ pub enum ClientCommand {
     },
 
     /// Open (i.e. activate) a new multi-owner chain deriving the UID from an existing one.
+    ///
+    /// If the wallet holds the key pair for exactly one of the new chain's owners, that
+    /// owner is automatically assigned as the chain's preferred owner. Otherwise the chain
+    /// can be assigned explicitly using the `assign` command.
     OpenMultiOwnerChain {
         /// Chain ID (must be one of our chains).
         #[arg(long = "from")]
@@ -407,6 +411,10 @@ pub enum ClientCommand {
     ///
     /// Specify the complete set of new owners, by public key. Existing owners that are
     /// not included will be removed.
+    ///
+    /// If the chain's current preferred owner is no longer one of the chain's owners
+    /// and the wallet holds the key pair for exactly one of the new owners, that owner
+    /// is automatically assigned as the chain's preferred owner.
     ChangeOwnership {
         /// The ID of the chain whose owners will be changed.
         #[clap(long)]

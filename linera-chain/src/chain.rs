@@ -11,7 +11,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Cursor,
-        Epoch, OracleResponse, Timestamp,
+        Epoch, NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
@@ -228,12 +228,12 @@ where
     pub next_expected_events: MapView<C, StreamId, u32>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
-    pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
+    pub outbox_counters: RegisterView<C, NonCanonicalBTreeMap<BlockHeight, u32>>,
     /// Outboxes with at least one pending message. This allows us to avoid loading all outboxes.
-    pub nonempty_outboxes: RegisterView<C, BTreeSet<ChainId>>,
+    pub nonempty_outboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
     /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
-    pub nonempty_inboxes: RegisterView<C, BTreeSet<ChainId>>,
+    pub nonempty_inboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
     /// The local wall-clock time when block 0 was last executed. Used to prevent
     /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
@@ -1244,8 +1244,8 @@ where
                 .set(max_height.try_add_one()?);
             new_nonempty.insert(recipient);
         }
-        self.outbox_counters.set(new_counters);
-        self.nonempty_outboxes.set(new_nonempty);
+        self.outbox_counters.set(new_counters.into());
+        self.nonempty_outboxes.set(new_nonempty.into());
         Ok(())
     }
 

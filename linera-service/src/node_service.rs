@@ -3,6 +3,7 @@
 
 use std::{
     borrow::Cow,
+    collections::BTreeSet,
     future::IntoFuture,
     iter,
     net::SocketAddr,
@@ -38,7 +39,7 @@ use linera_chain::{
     ChainStateView,
 };
 use linera_client::chain_listener::{
-    ChainListener, ChainListenerConfig, ClientContext, ListenerCommand,
+    ChainListener, ChainListenerConfig, ClientContext, ClientContextExt as _, ListenerCommand,
 };
 use linera_core::{
     client::chain_client::{self, ChainClient},
@@ -244,6 +245,21 @@ where
             })
             .await?;
         Ok(certificate.hash())
+    }
+
+    /// Sets the preferred owner of the chain if the current one is no longer in the owner
+    /// set and we have a key pair for exactly one of the new owners.
+    async fn maybe_auto_assign_preferred_owner(
+        &self,
+        chain_id: ChainId,
+        new_ownership: &ChainOwnership,
+    ) -> Result<(), Error> {
+        let context = self.context.lock().await;
+        let mut chain_client = context.make_chain_client(chain_id).await?;
+        context
+            .maybe_auto_assign_preferred_owner(&mut chain_client, new_ownership)
+            .await?;
+        Ok(())
     }
 
     /// Applies the given function to the chain client.
@@ -539,6 +555,7 @@ where
         #[graphql(desc = "The chain whose ownership changes")] chain_id: ChainId,
         #[graphql(desc = "The new single owner of the chain")] new_owner: AccountOwner,
     ) -> Result<CryptoHash, Error> {
+        let new_ownership = ChainOwnership::single_super(new_owner);
         let operation = SystemOperation::ChangeOwnership {
             super_owners: vec![new_owner],
             owners: Vec::new(),
@@ -547,7 +564,10 @@ where
             open_multi_leader_rounds: false,
             timeout_config: TimeoutConfig::default(),
         };
-        self.execute_system_operation(operation, chain_id).await
+        let hash = self.execute_system_operation(operation, chain_id).await?;
+        self.maybe_auto_assign_preferred_owner(chain_id, &new_ownership)
+            .await?;
+        Ok(hash)
     }
 
     /// Changes the ownership of the chain
@@ -585,20 +605,33 @@ where
         )]
         fallback_duration_ms: u64,
     ) -> Result<CryptoHash, Error> {
-        let operation = SystemOperation::ChangeOwnership {
-            super_owners: Vec::new(),
-            owners: new_owners.into_iter().zip(new_weights).collect(),
+        let timeout_config = TimeoutConfig {
+            fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
+            base_timeout: TimeDelta::from_millis(base_timeout_ms),
+            timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
+            fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
+        };
+        let owners = new_owners.into_iter().zip(new_weights).collect::<Vec<_>>();
+        let new_ownership = ChainOwnership {
+            super_owners: BTreeSet::new(),
+            owners: owners.iter().cloned().collect(),
             first_leader,
             multi_leader_rounds,
             open_multi_leader_rounds,
-            timeout_config: TimeoutConfig {
-                fast_round_duration: fast_round_ms.map(TimeDelta::from_millis),
-                base_timeout: TimeDelta::from_millis(base_timeout_ms),
-                timeout_increment: TimeDelta::from_millis(timeout_increment_ms),
-                fallback_duration: TimeDelta::from_millis(fallback_duration_ms),
-            },
+            timeout_config: timeout_config.clone(),
         };
-        self.execute_system_operation(operation, chain_id).await
+        let operation = SystemOperation::ChangeOwnership {
+            super_owners: Vec::new(),
+            owners,
+            first_leader,
+            multi_leader_rounds,
+            open_multi_leader_rounds,
+            timeout_config,
+        };
+        let hash = self.execute_system_operation(operation, chain_id).await?;
+        self.maybe_auto_assign_preferred_owner(chain_id, &new_ownership)
+            .await?;
+        Ok(hash)
     }
 
     /// Changes the application permissions configuration on this chain.

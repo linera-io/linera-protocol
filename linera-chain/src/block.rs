@@ -16,7 +16,7 @@ use linera_base::{
     hashed::Hashed,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
 };
-use linera_execution::{BlobState, Operation, OutgoingMessage};
+use linera_execution::{BlobOrigin, BlobState, Operation, OutgoingMessage};
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 use thiserror::Error;
 
@@ -146,9 +146,11 @@ impl ConfirmedBlock {
     /// Returns a blob state that applies to all blobs used by this block.
     pub fn to_blob_state(&self, is_stored_block: bool) -> BlobState {
         BlobState {
+            origin: BlobOrigin::Published {
+                chain_id: self.chain_id(),
+                block_height: self.height(),
+            },
             last_used_by: is_stored_block.then_some(self.0.hash()),
-            chain_id: self.chain_id(),
-            block_height: self.height(),
             epoch: is_stored_block.then_some(self.epoch()),
         }
     }
@@ -470,7 +472,6 @@ impl Block {
         recipient: ChainId,
         certificate_hash: CryptoHash,
     ) -> impl Iterator<Item = (Epoch, MessageBundle)> + '_ {
-        let mut index = 0u32;
         let block_height = self.header.height;
         let block_timestamp = self.header.timestamp;
         let block_epoch = self.header.epoch;
@@ -478,16 +479,11 @@ impl Block {
         (0u32..)
             .zip(self.messages())
             .filter_map(move |(transaction_index, txn_messages)| {
-                let messages = (index..)
-                    .zip(txn_messages)
-                    .filter(|(_, message)| message.destination == recipient)
-                    .map(|(idx, message)| message.clone().into_posted(idx))
+                let messages = txn_messages
+                    .iter()
+                    .filter(|message| message.destination == recipient)
+                    .map(|message| message.clone().into_posted())
                     .collect::<Vec<_>>();
-                #[expect(clippy::cast_possible_truncation)]
-                // block size limits cap total messages well below u32::MAX
-                {
-                    index += txn_messages.len() as u32;
-                }
                 (!messages.is_empty()).then(|| {
                     let bundle = MessageBundle {
                         height: block_height,

@@ -7,7 +7,7 @@
 #[cfg(with_testing)]
 use std::ops;
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, BTreeSet, HashSet},
     fmt::{self, Display},
     hash::Hash,
     io, iter,
@@ -39,6 +39,257 @@ use crate::{
     time::{Duration, SystemTime},
     vm::VmRuntime,
 };
+
+/// A [`BTreeMap`] that serializes like a `Vec<(K, V)>` instead of using BCS's canonical
+/// map encoding.
+///
+/// BCS serializes a [`BTreeMap`] in *canonical* form: on every `serialize` call it re-sorts the
+/// entries by their serialized-key bytes (an `O(n log n)` sort) and verifies that ordering again
+/// on `deserialize`. Since a [`BTreeMap`] already keeps its entries ordered, this is wasted work.
+/// `NonCanonicalBTreeMap` instead (de)serializes the entries as a plain sequence of pairs, exactly
+/// like `Vec<(K, V)>`, trading the canonical wire format for speed.
+///
+/// Use it in *value* position — the value of a `RegisterView<Value>` or `MapView<_, Value>` — so
+/// that `save()` does not pay the canonical sort. Never use it in *key* position
+/// (`MapView<Key, _>`): keys rely on the canonical encoding that this type skips, so use
+/// [`CanonicalBTreeMap`] there instead.
+///
+/// It otherwise behaves like a [`BTreeMap`]: it derefs to one, so all the usual methods are
+/// available.
+#[derive(Debug, Clone, PartialEq, Eq, Allocative)]
+pub struct NonCanonicalBTreeMap<K, V>(BTreeMap<K, V>);
+
+impl<K, V> Default for NonCanonicalBTreeMap<K, V> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
+}
+
+impl<K, V> std::ops::Deref for NonCanonicalBTreeMap<K, V> {
+    type Target = BTreeMap<K, V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<K, V> std::ops::DerefMut for NonCanonicalBTreeMap<K, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<K, V> From<BTreeMap<K, V>> for NonCanonicalBTreeMap<K, V> {
+    fn from(map: BTreeMap<K, V>) -> Self {
+        Self(map)
+    }
+}
+
+impl<K, V> From<NonCanonicalBTreeMap<K, V>> for BTreeMap<K, V> {
+    fn from(map: NonCanonicalBTreeMap<K, V>) -> Self {
+        map.0
+    }
+}
+
+impl<K: Ord, V> FromIterator<(K, V)> for NonCanonicalBTreeMap<K, V> {
+    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+        Self(BTreeMap::from_iter(iter))
+    }
+}
+
+impl<K, V> IntoIterator for NonCanonicalBTreeMap<K, V> {
+    type Item = (K, V);
+    type IntoIter = std::collections::btree_map::IntoIter<K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, K, V> IntoIterator for &'a NonCanonicalBTreeMap<K, V> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = std::collections::btree_map::Iter<'a, K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<K, V> Serialize for NonCanonicalBTreeMap<K, V>
+where
+    K: Serialize,
+    V: Serialize,
+{
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Serialize as a sequence of pairs, exactly like `Vec<(K, V)>`. The entries are already
+        // in key order, so this avoids the canonical re-sorting that BCS does for maps.
+        serializer.collect_seq(self.0.iter())
+    }
+}
+
+impl<'de, K, V> Deserialize<'de> for NonCanonicalBTreeMap<K, V>
+where
+    K: Deserialize<'de> + Ord,
+    V: Deserialize<'de>,
+{
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let entries = Vec::<(K, V)>::deserialize(deserializer)?;
+        Ok(Self(entries.into_iter().collect()))
+    }
+}
+
+impl<K, V> async_graphql::OutputType for NonCanonicalBTreeMap<K, V>
+where
+    BTreeMap<K, V>: async_graphql::OutputType,
+{
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        <BTreeMap<K, V> as async_graphql::OutputType>::type_name()
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        <BTreeMap<K, V> as async_graphql::OutputType>::create_type_info(registry)
+    }
+
+    async fn resolve(
+        &self,
+        ctx: &async_graphql::ContextSelectionSet<'_>,
+        field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        self.0.resolve(ctx, field).await
+    }
+}
+
+/// A [`BTreeSet`] used in value position; the counterpart to [`NonCanonicalBTreeMap`].
+///
+/// Unlike maps, serde already serializes a [`BTreeSet`] as a plain sequence (it never goes through
+/// `serialize_map`), so BCS does not re-sort it. A type alias is therefore enough; no wrapper is
+/// needed.
+///
+/// Use it in *value* position (`RegisterView<Value>` or `MapView<_, Value>`). In *key* position
+/// (`MapView<Key, _>`) use [`CanonicalBTreeSet`] instead, which enforces the canonical ordering
+/// that keys require.
+pub type NonCanonicalBTreeSet<T> = BTreeSet<T>;
+
+/// A [`BTreeMap`] suitable for *key* position; an alias for [`BTreeMap`] itself.
+///
+/// In key position the canonical BCS encoding is exactly what is wanted — keys are ordered and
+/// compared by their serialized bytes — so no wrapper is needed. Use it for the key type of a
+/// `MapView<Key, _>`. In *value* position prefer [`NonCanonicalBTreeMap`], which skips the
+/// per-`save()` canonical sort. This alias exists to make that intent explicit and to pair with
+/// [`NonCanonicalBTreeMap`].
+pub type CanonicalBTreeMap<K, V> = BTreeMap<K, V>;
+
+/// A [`BTreeSet`] that serializes canonically, like a `BTreeMap<T, ()>`.
+///
+/// A plain [`BTreeSet`] serializes as a serde *sequence*, so BCS keeps the in-memory (Rust `Ord`)
+/// order without enforcing canonical ordering of the serialized elements. That is fine in value
+/// position, but in *key* position the canonical encoding matters. `CanonicalBTreeSet` therefore
+/// (de)serializes through a map of `T -> ()`, so that BCS sorts the elements by their serialized
+/// bytes, exactly as it does for [`BTreeMap`] keys.
+///
+/// Use it for the key type of a `MapView<Key, _>`. In *value* position use
+/// [`NonCanonicalBTreeSet`] instead. It otherwise behaves like a [`BTreeSet`]: it derefs to one,
+/// so all the usual methods are available.
+#[derive(Debug, Clone, PartialEq, Eq, Allocative)]
+pub struct CanonicalBTreeSet<T>(BTreeSet<T>);
+
+impl<T> Default for CanonicalBTreeSet<T> {
+    fn default() -> Self {
+        Self(BTreeSet::new())
+    }
+}
+
+impl<T> std::ops::Deref for CanonicalBTreeSet<T> {
+    type Target = BTreeSet<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for CanonicalBTreeSet<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> From<BTreeSet<T>> for CanonicalBTreeSet<T> {
+    fn from(set: BTreeSet<T>) -> Self {
+        Self(set)
+    }
+}
+
+impl<T> From<CanonicalBTreeSet<T>> for BTreeSet<T> {
+    fn from(set: CanonicalBTreeSet<T>) -> Self {
+        set.0
+    }
+}
+
+impl<T: Ord> FromIterator<T> for CanonicalBTreeSet<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self(BTreeSet::from_iter(iter))
+    }
+}
+
+impl<T> IntoIterator for CanonicalBTreeSet<T> {
+    type Item = T;
+    type IntoIter = std::collections::btree_set::IntoIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a CanonicalBTreeSet<T> {
+    type Item = &'a T;
+    type IntoIter = std::collections::btree_set::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<T> Serialize for CanonicalBTreeSet<T>
+where
+    T: Serialize,
+{
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Serialize as a `BTreeMap<T, ()>`: going through `serialize_map` lets BCS sort the
+        // elements canonically by their serialized bytes, as required in key position.
+        serializer.collect_map(self.0.iter().map(|element| (element, ())))
+    }
+}
+
+impl<'de, T> Deserialize<'de> for CanonicalBTreeSet<T>
+where
+    T: Deserialize<'de> + Ord,
+{
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let map = BTreeMap::<T, ()>::deserialize(deserializer)?;
+        Ok(Self(map.into_keys().collect()))
+    }
+}
+
+impl<T> async_graphql::OutputType for CanonicalBTreeSet<T>
+where
+    BTreeSet<T>: async_graphql::OutputType,
+{
+    fn type_name() -> std::borrow::Cow<'static, str> {
+        <BTreeSet<T> as async_graphql::OutputType>::type_name()
+    }
+
+    fn create_type_info(registry: &mut async_graphql::registry::Registry) -> String {
+        <BTreeSet<T> as async_graphql::OutputType>::create_type_info(registry)
+    }
+
+    async fn resolve(
+        &self,
+        ctx: &async_graphql::ContextSelectionSet<'_>,
+        field: &async_graphql::Positioned<async_graphql::parser::types::Field>,
+    ) -> async_graphql::ServerResult<async_graphql::Value> {
+        self.0.resolve(ctx, field).await
+    }
+}
 
 /// A non-negative amount of tokens.
 ///
@@ -1823,6 +2074,71 @@ mod tests {
         identifiers::{BlobType, ChainId, ModuleId},
         vm::VmRuntime,
     };
+
+    #[test]
+    fn non_canonical_btree_map_serializes_like_vec() {
+        use std::collections::BTreeMap;
+
+        use super::NonCanonicalBTreeMap;
+
+        // `256u32` is chosen so that its little-endian BCS bytes sort *before* `1u32`'s,
+        // i.e. the canonical (serialized-byte) order differs from the numeric `Ord` order.
+        let map = NonCanonicalBTreeMap::from(BTreeMap::from([
+            (1u32, 10u8),
+            (256u32, 20u8),
+            (2u32, 30u8),
+        ]));
+
+        // It serializes as a plain `Vec<(K, V)>` in the map's `Ord` key order, with no canonical
+        // re-sorting.
+        let entries = map
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect::<Vec<(u32, u8)>>();
+        assert_eq!(
+            bcs::to_bytes(&map).unwrap(),
+            bcs::to_bytes(&entries).unwrap()
+        );
+
+        // ... which differs from the canonical `BTreeMap` encoding that re-sorts by serialized key.
+        let canonical = map
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect::<BTreeMap<u32, u8>>();
+        assert_ne!(
+            bcs::to_bytes(&map).unwrap(),
+            bcs::to_bytes(&canonical).unwrap()
+        );
+
+        // It round-trips.
+        let deserialized: NonCanonicalBTreeMap<u32, u8> =
+            bcs::from_bytes(&bcs::to_bytes(&map).unwrap()).unwrap();
+        assert_eq!(map, deserialized);
+    }
+
+    #[test]
+    fn canonical_btree_set_serializes_like_map() {
+        use std::collections::{BTreeMap, BTreeSet};
+
+        use super::CanonicalBTreeSet;
+
+        let set = CanonicalBTreeSet::from(BTreeSet::from([1u32, 256u32, 2u32]));
+
+        // It serializes exactly like a `BTreeMap<T, ()>`, i.e. canonically sorted by serialized
+        // bytes.
+        let map = set.iter().map(|t| (*t, ())).collect::<BTreeMap<u32, ()>>();
+        assert_eq!(bcs::to_bytes(&set).unwrap(), bcs::to_bytes(&map).unwrap());
+
+        // That canonical order differs from a plain `BTreeSet`'s sequence encoding, which keeps
+        // the numeric `Ord` order.
+        let plain = set.iter().copied().collect::<BTreeSet<u32>>();
+        assert_ne!(bcs::to_bytes(&set).unwrap(), bcs::to_bytes(&plain).unwrap());
+
+        // It round-trips.
+        let deserialized: CanonicalBTreeSet<u32> =
+            bcs::from_bytes(&bcs::to_bytes(&set).unwrap()).unwrap();
+        assert_eq!(set, deserialized);
+    }
 
     #[test]
     fn display_amount() {

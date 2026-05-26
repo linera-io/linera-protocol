@@ -900,6 +900,67 @@ where
     Ok(())
 }
 
+/// Regression test: when the preferred owner changes while a pending proposal exists, the
+/// next call to `process_pending_block` must sign the proposal as the original author (the
+/// owner that staged it), not as the new preferred owner. Otherwise the worker rejects the
+/// proposal with `WorkerError::InvalidSigner` because the operations in the block are
+/// authenticated by the original owner.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_is_signed_by_original_owner<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in
+    // multi-leader rounds — mirroring a chain shared by a wallet key and an autosigner.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending in the
+    // shared per-chain queue, authenticated by `a`.
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    let pending = client
+        .pending_proposal()
+        .await
+        .expect("a pending proposal authored by owner `a` should remain");
+    assert_eq!(pending.block.authenticated_owner, Some(owner_a));
+
+    // Bring the validators back and act as owner `b` on the same shared queue.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    client.set_preferred_owner(owner_b);
+
+    // Owner `b`'s client retries the pending block. The signer still holds owner `a`'s key,
+    // so the proposal is signed as `a` and the worker accepts it.
+    let certificate = client
+        .process_pending_block()
+        .await
+        .unwrap_ok_committed()
+        .expect("the pending block should be committed");
+    assert_eq!(
+        certificate.block().header.authenticated_owner,
+        Some(owner_a)
+    );
+    assert!(client.pending_proposal().await.is_none());
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
@@ -2117,6 +2178,11 @@ where
     let observer_id = observer.chain_id();
     let owner0 = client.identity().await.unwrap();
     let owner1 = AccountSecretKey::generate().public().into();
+    // The observer needs to fully execute the client's chain to see its manager
+    // state; otherwise the client chain would only be preprocessed.
+    observer
+        .client
+        .extend_chain_mode(chain_id, ListeningMode::FollowChain);
 
     let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
@@ -2702,6 +2768,31 @@ where
         Amount::from_tokens(9)
     );
     assert!(client1.pending_proposal().await.is_none());
+    Ok(())
+}
+
+/// On a fresh root chain whose `ChainDescription` is defined by the genesis
+/// config (not published by any block), `request_leader_timeout` must succeed
+/// once the round has timed out: collecting the timeout certificate and then
+/// broadcasting the resulting state to validators (via
+/// `send_chain_information` -> `initialize_new_chain_on_validator` ->
+/// `send_chain_info_for_blobs`) should treat the chain-description blob as
+/// known a priori rather than looking for a publishing block.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_request_leader_timeout_with_genesis_blob<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+
+    // Advance the clock past the (default 10s) round timeout.
+    clock.set(Timestamp::from(20_000_000));
+
+    client.request_leader_timeout().await?;
     Ok(())
 }
 

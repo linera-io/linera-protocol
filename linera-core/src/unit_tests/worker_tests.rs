@@ -83,7 +83,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::ChainWorkerConfig,
+    chain_worker::{ChainWorkerConfig, ProcessConfirmedBlockMode},
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -1137,7 +1137,7 @@ where
     drop(chain);
 
     env.worker()
-        .handle_confirmed_certificate(certificate0, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     drop(chain);
@@ -1227,11 +1227,11 @@ where
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
     env.worker()
-        .handle_confirmed_certificate(certificate0, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     env.worker()
-        .handle_confirmed_certificate(certificate2.clone(), None)
+        .handle_confirmed_certificate(certificate2.clone(), ProcessConfirmedBlockMode::Auto, None)
         .await?;
 
     {
@@ -1257,7 +1257,7 @@ where
 
     // Handle the certificate in the gap.
     env.worker()
-        .handle_confirmed_certificate(certificate1, None)
+        .handle_confirmed_certificate(certificate1, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1269,7 +1269,7 @@ where
     // ...and the one that has been preprocessed before, again, as it is not automatically
     // re-processed.
     env.worker()
-        .handle_confirmed_certificate(certificate2, None)
+        .handle_confirmed_certificate(certificate2, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1354,7 +1354,11 @@ where
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
         env.worker()
-            .handle_confirmed_certificate(certificate1.clone(), None)
+            .handle_confirmed_certificate(
+                certificate1.clone(),
+                ProcessConfirmedBlockMode::Auto,
+                None
+            )
             .await,
         Ok(_)
     );
@@ -1428,7 +1432,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![
-                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                        system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1441,7 +1445,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1454,7 +1458,7 @@ where
                     transaction_index: 0,
                     messages: vec![
                         system_credit_message(Amount::from_tokens(2)) // wrong amount
-                            .to_posted(0, MessageKind::Tracked),
+                            .to_posted(MessageKind::Tracked),
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1481,7 +1485,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(1, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1507,7 +1511,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(3))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1519,7 +1523,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![
-                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                        system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1532,7 +1536,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(1, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1557,7 +1561,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![
-                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                        system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)
                     ],
                 },
                 action: MessageAction::Accept,
@@ -1591,7 +1595,11 @@ where
         );
 
         env.worker()
-            .handle_confirmed_certificate(certificate.clone(), None)
+            .handle_confirmed_certificate(
+                certificate.clone(),
+                ProcessConfirmedBlockMode::Execute,
+                None,
+            )
             .await?;
 
         // Then receive the next two messages.
@@ -1604,7 +1612,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 1,
                     messages: vec![system_credit_message(Amount::from_tokens(2))
-                        .to_posted(1, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1616,7 +1624,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(3))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             })
@@ -1902,7 +1910,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(995))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             }],
@@ -1946,7 +1954,6 @@ where
                 grant: Amount::ZERO,
                 refund_grant_to: None,
                 kind: MessageKind::Tracked,
-                index: 0,
                 message: Message::System(SystemMessage::Credit { amount, .. }),
             }] if amount == Amount::from_tokens(995)),
         "Unexpected bundle",
@@ -2129,7 +2136,6 @@ where
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
         }] if amount == Amount::ONE),
         "Unexpected bundle",
@@ -2212,7 +2218,6 @@ where
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind: MessageKind::Tracked,
-            index: 0,
             message: Message::System(SystemMessage::Credit { amount, .. })
         }] if amount == Amount::from_tokens(10)),
         "Unexpected bundle",
@@ -2414,7 +2419,7 @@ where
                     timestamp: Timestamp::from(0),
                     transaction_index: 0,
                     messages: vec![system_credit_message(Amount::from_tokens(5))
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             }],
@@ -2629,7 +2634,7 @@ where
                             target: recipient,
                             amount: Amount::from_tokens(3),
                         })
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                     },
                     action: MessageAction::Reject,
                 },
@@ -2645,7 +2650,7 @@ where
                             target: recipient,
                             amount: Amount::from_tokens(2),
                         })
-                        .to_posted(0, MessageKind::Tracked)],
+                        .to_posted(MessageKind::Tracked)],
                     },
                     action: MessageAction::Accept,
                 },
@@ -2684,7 +2689,7 @@ where
                         target: recipient,
                         amount: Amount::from_tokens(3),
                     })
-                    .to_posted(0, MessageKind::Bouncing)],
+                    .to_posted(MessageKind::Bouncing)],
                 },
                 action: MessageAction::Accept,
             }],
@@ -2861,8 +2866,9 @@ where
                 height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
-                messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(0, MessageKind::Tracked)],
+                messages: vec![
+                    system_credit_message(Amount::from_tokens(2)).to_posted(MessageKind::Tracked)
+                ],
             },
             action: MessageAction::Accept,
         })
@@ -3152,9 +3158,7 @@ where
                 height: BlockHeight::ZERO,
                 timestamp: Timestamp::from(0),
                 transaction_index: 0,
-                messages: vec![
-                    system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
-                ],
+                messages: vec![system_credit_message(Amount::ONE).to_posted(MessageKind::Tracked)],
             },
             action: MessageAction::Accept,
         });
@@ -4437,7 +4441,7 @@ where
                         target: owner,
                         amount: Amount::from_tokens(2),
                     })
-                    .to_posted(0, MessageKind::Tracked)],
+                    .to_posted(MessageKind::Tracked)],
                 },
                 action: MessageAction::Accept,
             }),
@@ -4473,8 +4477,9 @@ where
                 height: BlockHeight::from(1),
                 timestamp: Timestamp::from(0),
                 transaction_index: 1,
-                messages: vec![system_credit_message(Amount::from_tokens(2))
-                    .to_posted(1, MessageKind::Tracked)],
+                messages: vec![
+                    system_credit_message(Amount::from_tokens(2)).to_posted(MessageKind::Tracked)
+                ],
             },
             action: MessageAction::Accept,
         });
@@ -4511,7 +4516,7 @@ where
                     recipient: Account::chain(chain_2),
                     amount: Amount::from_tokens(2),
                 })
-                .to_posted(0, MessageKind::Simple)],
+                .to_posted(MessageKind::Simple)],
             },
             action: MessageAction::Accept,
         });
@@ -4591,10 +4596,10 @@ where
 
     // Step 2: Process both certs on chain_1 (adds heights 0, 1 to outbox for chain_2).
     env.worker()
-        .process_confirmed_block(cert_0.clone(), None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
     env.worker()
-        .process_confirmed_block(cert_1.clone(), None)
+        .process_confirmed_block(cert_1.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Step 3: Deliver height 0 to chain_2 and confirm it on chain_1.
@@ -4647,7 +4652,7 @@ where
         .await;
     // Process cert_2 on chain_1 so the block is in block_hashes.
     env.worker()
-        .process_confirmed_block(cert_2.clone(), None)
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Now manually deliver height 2's cross-chain update to chain_2.
@@ -4975,9 +4980,16 @@ where
         .await;
 
     // Process all three blocks on chain_1.
-    env.worker().process_confirmed_block(cert_0, None).await?;
-    env.worker().process_confirmed_block(cert_1, None).await?;
-    let (_, actions, _) = env.worker().process_confirmed_block(cert_2, None).await?;
+    env.worker()
+        .process_confirmed_block(cert_0, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    let (_, actions, _) = env
+        .worker()
+        .process_confirmed_block(cert_2, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
 
     // With chunk_limit=1, only the first chunk (height 0) should be returned.
     // The remaining heights stay in the outbox for delivery after confirmation.
@@ -5090,11 +5102,13 @@ where
 
     // Process all three blocks on chain_1.
     env.worker()
-        .process_confirmed_block(cert_0.clone(), None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
-    env.worker().process_confirmed_block(cert_1, None).await?;
     env.worker()
-        .process_confirmed_block(cert_2.clone(), None)
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Deliver height 0 to chain_2 and confirm it.

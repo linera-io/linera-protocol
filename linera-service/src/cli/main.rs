@@ -48,7 +48,9 @@ use linera_client::{
         BenchmarkConfig, FungibleTransferGenerator, NativeFungibleTransferGenerator,
         OperationGenerator,
     },
-    chain_listener::{ChainListener, ChainListenerConfig, ClientContext as _},
+    chain_listener::{
+        ChainListener, ChainListenerConfig, ClientContext as _, ClientContextExt as _,
+    },
     config::{CommitteeConfig, GenesisConfig},
 };
 use linera_core::{
@@ -282,8 +284,15 @@ impl Runnable for Job {
                     .await
                     .context("Failed to open chain")?;
                 let id = description.id();
-                // No owner. This chain can be assigned explicitly using the assign command.
-                let owner = None;
+                let owner = context
+                    .unique_owner_with_key(ownership.all_owners().copied())
+                    .await?;
+                if let Some(owner) = owner {
+                    info!(
+                        chain_id = %id, %owner,
+                        "Auto-assigning new chain to owner from wallet key pair",
+                    );
+                }
                 let timestamp = certificate.block().header.timestamp;
                 let epoch = certificate.block().header.epoch;
                 context
@@ -2171,7 +2180,28 @@ fn main() -> anyhow::Result<process::ExitCode> {
     })
 }
 
+/// When running `validator benchmark` interactively with the progress UI, default
+/// the log level to WARN so INFO lines do not corrupt the bars. Gated entirely on
+/// this command; every other command and an explicit `RUST_LOG` are untouched.
+fn maybe_quiet_logs_for_benchmark(options: &Options) {
+    use std::io::IsTerminal as _;
+
+    use linera_service::cli::validator;
+
+    let ClientCommand::Validator(validator::Command::Benchmark(benchmark)) = &options.command
+    else {
+        return;
+    };
+    if !benchmark.no_progress
+        && std::io::stderr().is_terminal()
+        && std::env::var_os("RUST_LOG").is_none()
+    {
+        std::env::set_var("RUST_LOG", "warn");
+    }
+}
+
 async fn run(options: &Options) -> Result<i32, Error> {
+    maybe_quiet_logs_for_benchmark(options);
     let _guard = init_tracing(options)?;
     match &options.command {
         ClientCommand::HelpMarkdown => {
