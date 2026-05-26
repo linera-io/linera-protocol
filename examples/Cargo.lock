@@ -5967,8 +5967,9 @@ dependencies = [
 
 [[package]]
 name = "serde-reflection"
-version = "0.5.2"
-source = "git+https://github.com/afck/serde-reflection?branch=solidity-memory-safe-assembly#f96ce65c2482a9cd41ab0f4c415dc3c613cd8582"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af0fdf9c543af37502581e3d6cf4e6cd1628d6616d6a1f8f4ca88aae3a405f5c"
 dependencies = [
  "erased-discriminant",
  "once_cell",
