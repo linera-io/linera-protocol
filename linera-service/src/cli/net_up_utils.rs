@@ -13,11 +13,6 @@ use linera_storage_service::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-#[cfg(feature = "kubernetes")]
-use {
-    crate::cli_wrappers::local_kubernetes_net::{BuildMode, LocalKubernetesNetConfig},
-    std::path::PathBuf,
-};
 
 use crate::{
     cli_wrappers::{
@@ -101,89 +96,6 @@ impl StorageConfigProvider {
             InnerStorageConfig::DualRocksDbScyllaDb { .. } => Ok(Database::DualRocksDbScyllaDb),
         }
     }
-}
-
-#[expect(clippy::too_many_arguments)]
-#[cfg(feature = "kubernetes")]
-pub async fn handle_net_up_kubernetes(
-    num_other_initial_chains: u32,
-    initial_amount: u128,
-    num_initial_validators: usize,
-    num_proxies: usize,
-    num_shards: usize,
-    testing_prng_seed: Option<u64>,
-    binaries: &Option<Option<PathBuf>>,
-    no_build: bool,
-    docker_image_name: String,
-    build_mode: BuildMode,
-    policy_config: ResourceControlPolicyConfig,
-    with_faucet: bool,
-    faucet_port: NonZeroU16,
-    faucet_amount: Amount,
-    with_block_exporter: bool,
-    num_block_exporters: usize,
-    indexer_image_name: String,
-    explorer_image_name: String,
-    dual_store: bool,
-    path: &Option<String>,
-) -> anyhow::Result<()> {
-    assert!(
-        num_initial_validators >= 1,
-        "The local test network must have at least one validator."
-    );
-    assert!(
-        num_proxies >= 1,
-        "The local test network must have at least one proxy."
-    );
-    assert!(
-        num_shards >= 1,
-        "The local test network must have at least one shard per validator."
-    );
-
-    let shutdown_notifier = CancellationToken::new();
-    tokio::spawn(listen_for_shutdown_signals(shutdown_notifier.clone()));
-
-    let num_block_exporters = if with_block_exporter {
-        assert!(
-            num_block_exporters > 0,
-            "If --with-block-exporter is provided, --num-block-exporters must be greater than 0"
-        );
-        num_block_exporters
-    } else {
-        0
-    };
-
-    let initial_amount = Amount::from_tokens(initial_amount);
-    let config = LocalKubernetesNetConfig {
-        network: Network::Grpc,
-        testing_prng_seed,
-        num_other_initial_chains,
-        initial_amount,
-        num_initial_validators,
-        num_proxies,
-        num_shards,
-        binaries: binaries.clone().into(),
-        no_build,
-        docker_image_name,
-        build_mode,
-        policy_config,
-        num_block_exporters,
-        indexer_image_name,
-        explorer_image_name,
-        dual_store,
-        path_provider: PathProvider::from_path_option(path)?,
-    };
-    let (mut net, client) = config.instantiate().await?;
-    let faucet_service = print_messages_and_create_faucet(
-        client,
-        &mut net,
-        with_faucet,
-        faucet_port,
-        faucet_amount,
-        initial_amount,
-    )
-    .await?;
-    wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
 }
 
 #[expect(clippy::too_many_arguments)]
