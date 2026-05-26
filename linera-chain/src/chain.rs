@@ -959,7 +959,7 @@ where
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         let recipients = block_execution_tracker.recipients();
-        let non_checkpoint_recipients = block_execution_tracker.non_checkpoint_recipients();
+        let non_checkpoint_ack_recipients = block_execution_tracker.non_checkpoint_ack_recipients();
         let mut recipient_heights = Vec::new();
         for (recipient, height) in chain
             .previous_message_blocks
@@ -972,7 +972,7 @@ where
             // trimmed. Off-chain outbox bookkeeping further down still queues these
             // for delivery; only the `previous_message_blocks` /
             // `unfinalized_message_blocks` chain skips them.
-            if non_checkpoint_recipients.contains(&recipient) {
+            if non_checkpoint_ack_recipients.contains(&recipient) {
                 chain
                     .previous_message_blocks
                     .insert(&recipient, block.height)?;
@@ -1190,15 +1190,15 @@ where
     /// Snapshots `(origin, next_cursor_to_remove)` for each chain we've received a
     /// non-`Checkpoint` message from since our last own checkpoint. Used by the
     /// pre-block hook so the matching operation handler can emit a
-    /// [`SystemMessage::Checkpoint`] to each origin chain. Iterating
-    /// `pending_checkpoint_targets` (instead of every inbox) is what prevents the
+    /// [`SystemMessage::CheckpointAck`] to each origin chain. Iterating
+    /// `pending_checkpoint_ack_targets` (instead of every inbox) is what prevents the
     /// notification ping-pong: a chain that only ever sent us `Checkpoint`s is
     /// excluded here, so we never reply with a `Checkpoint` of our own.
     async fn collect_inbox_cursors(&self) -> Result<Vec<(ChainId, Cursor)>, ChainError> {
         let targets = self
             .execution_state
             .system
-            .pending_checkpoint_targets
+            .pending_checkpoint_ack_targets
             .indices()
             .await?;
         let mut cursors = Vec::with_capacity(targets.len());

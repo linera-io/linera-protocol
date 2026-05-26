@@ -1244,7 +1244,7 @@ SystemMessage:
           - recipient:
               TYPENAME: Account
     2:
-      Checkpoint:
+      CheckpointAck:
         STRUCT:
           - latest_received_cursor:
               TYPENAME: Cursor

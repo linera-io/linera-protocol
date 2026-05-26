@@ -1544,6 +1544,11 @@ impl Message {
         Message::System(message)
     }
 
+    /// Returns whether this message is a `SystemMessage::CheckpointAck`.
+    pub fn is_checkpoint_ack(&self) -> bool {
+        matches!(self, Message::System(SystemMessage::CheckpointAck { .. }))
+    }
+
     /// Creates a new user application message assuming that the `message` is valid for the
     /// `application_id`.
     pub fn user<A, M: Serialize>(

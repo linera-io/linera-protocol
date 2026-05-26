@@ -285,16 +285,13 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             }
         }
         // Record that this origin has sent us a real message; we owe them a
-        // `SystemMessage::Checkpoint` at our next checkpoint. `Checkpoint` messages
-        // themselves are excluded so they don't keep the notification ping-pong
-        // alive forever.
-        if !matches!(
-            posted_message.message,
-            Message::System(linera_execution::SystemMessage::Checkpoint { .. })
-        ) {
+        // `SystemMessage::CheckpointAck` at our next checkpoint. `CheckpointAck`
+        // messages themselves are excluded so they don't keep the notification
+        // ping-pong alive forever.
+        if !posted_message.message.is_checkpoint_ack() {
             chain
                 .system
-                .pending_checkpoint_targets
+                .pending_checkpoint_ack_targets
                 .insert(&incoming_bundle.origin)?;
         }
         Ok(())
@@ -411,20 +408,15 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     }
 
     /// Returns the subset of [`Self::recipients`] for which this block sent at least
-    /// one non-`SystemMessage::Checkpoint` message. The chain-level bookkeeping
+    /// one non-`SystemMessage::CheckpointAck` message. The chain-level bookkeeping
     /// (`previous_message_blocks`, `unfinalized_message_blocks`) is updated only for
-    /// these recipients, so that `Checkpoint`-only blocks don't pin a slot that
+    /// these recipients, so that `CheckpointAck`-only blocks don't pin a slot that
     /// would never get trimmed (the recipient never acknowledges back).
-    pub fn non_checkpoint_recipients(&self) -> BTreeSet<ChainId> {
+    pub fn non_checkpoint_ack_recipients(&self) -> BTreeSet<ChainId> {
         self.messages
             .iter()
             .flatten()
-            .filter(|msg| {
-                !matches!(
-                    msg.message,
-                    Message::System(linera_execution::SystemMessage::Checkpoint { .. })
-                )
-            })
+            .filter(|msg| !msg.message.is_checkpoint_ack())
             .map(|msg| msg.destination)
             .collect()
     }

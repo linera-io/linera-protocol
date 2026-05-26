@@ -157,7 +157,7 @@ where
     /// execution-state blobs, records the matching [`OracleResponse::Checkpoint`] (which
     /// also lists every blob the chain currently references in `used_blobs` so a
     /// bootstrapping node can fetch them from shared storage), and emits a
-    /// [`SystemMessage::Checkpoint`] to each origin chain so the origin can later trim
+    /// [`SystemMessage::CheckpointAck`] to each origin chain so the origin can later trim
     /// its outbox dump of already-delivered messages.
     pub async fn apply_checkpoint(
         &mut self,
@@ -182,15 +182,15 @@ where
         for (origin, latest_received_cursor) in origin_cursors {
             txn_tracker.add_outgoing_message(OutgoingMessage::new(
                 origin,
-                Message::System(SystemMessage::Checkpoint {
+                Message::System(SystemMessage::CheckpointAck {
                     latest_received_cursor,
                 }),
             ));
         }
-        // We just emitted notifications for everyone in `pending_checkpoint_targets`;
+        // We just emitted notifications for everyone in `pending_checkpoint_ack_targets`;
         // reset the set so the next own checkpoint only fires for origins that send
         // us a fresh non-`Checkpoint` message in the meantime.
-        self.system.pending_checkpoint_targets.clear();
+        self.system.pending_checkpoint_ack_targets.clear();
         Ok(())
     }
 

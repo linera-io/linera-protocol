@@ -73,7 +73,7 @@ pub struct PreparedCheckpoint {
     /// `maximum_blob_size`.
     pub blobs: Vec<Blob>,
     /// For each chain we've received messages from, the position past the last bundle
-    /// we've consumed. Used to emit a `SystemMessage::Checkpoint` to each origin so the
+    /// we've consumed. Used to emit a `SystemMessage::CheckpointAck` to each origin so the
     /// origin can later trim its outbox dump.
     pub origin_cursors: Vec<(ChainId, Cursor)>,
     /// Hashes of every block on this chain that the chain's outboxes still reference,

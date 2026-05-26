@@ -110,12 +110,12 @@ pub struct SystemExecutionStateView<C> {
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
     /// For each chain that previously received messages from this one and has since
-    /// notified us via [`SystemMessage::Checkpoint`], records the cursor past the last
+    /// notified us via [`SystemMessage::CheckpointAck`], records the cursor past the last
     /// message we sent that the recipient finalized, together with the hash of the
     /// recipient's block carrying the notification.
     pub finalized_sent_messages: MapView<C, ChainId, (Cursor, CryptoHash)>,
     /// For each recipient chain, the heights of our blocks that sent messages to that
-    /// recipient and have not yet been acknowledged via [`SystemMessage::Checkpoint`].
+    /// recipient and have not yet been acknowledged via [`SystemMessage::CheckpointAck`].
     /// Maintained on-chain (as opposed to the local off-chain outbox in chain state)
     /// so it is identical across validators and can feed the checkpoint oracle
     /// response's `outbox_block_hashes`. We store heights only; the matching block
@@ -123,15 +123,15 @@ pub struct SystemExecutionStateView<C> {
     /// current block's hash is unknown while we're still executing it.
     ///
     /// Excludes blocks whose only messages to a given recipient were
-    /// `SystemMessage::Checkpoint`: those don't trigger a return notification from the
-    /// recipient, so tracking them would accumulate forever.
+    /// `SystemMessage::CheckpointAck`: those don't trigger a return notification
+    /// from the recipient, so tracking them would accumulate forever.
     pub unfinalized_message_blocks: MapView<C, ChainId, BTreeSet<BlockHeight>>,
-    /// Chains from which we've received at least one non-`Checkpoint` message since
-    /// our last `SystemOperation::Checkpoint`. Determines whom to notify with a
-    /// `SystemMessage::Checkpoint` at the next checkpoint operation. Excluding
-    /// `Checkpoint` messages here is what breaks the otherwise-perpetual
+    /// Chains from which we've received at least one non-`CheckpointAck` message
+    /// since our last `SystemOperation::Checkpoint`. Determines whom to notify with a
+    /// `SystemMessage::CheckpointAck` at the next checkpoint operation. Excluding
+    /// `CheckpointAck` messages here is what breaks the otherwise-perpetual
     /// notification ping-pong between two chains that ever exchanged a real message.
-    pub pending_checkpoint_targets: SetView<C, ChainId>,
+    pub pending_checkpoint_ack_targets: SetView<C, ChainId>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -161,8 +161,8 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
                 .unfinalized_message_blocks
                 .with_context(ctx.clone())
                 .await,
-            pending_checkpoint_targets: self
-                .pending_checkpoint_targets
+            pending_checkpoint_ack_targets: self
+                .pending_checkpoint_ack_targets
                 .with_context(ctx.clone())
                 .await,
         }
@@ -339,12 +339,13 @@ pub enum SystemMessage {
         amount: Amount,
         recipient: Account,
     },
-    /// Sent by a chain that just executed `SystemOperation::Checkpoint` to each chain it
-    /// previously received messages from. `latest_received_cursor` is the position past
-    /// the last bundle from the recipient that the sender has consumed. The recipient
-    /// records this in `finalized_sent_messages` so that, when it later checkpoints its
-    /// own state, it can drop already-delivered outgoing messages from its outbox dump.
-    Checkpoint { latest_received_cursor: Cursor },
+    /// Sent by a chain that just executed `SystemOperation::Checkpoint` to each chain
+    /// it has received at least one non-`CheckpointAck` message from since its
+    /// previous checkpoint. `latest_received_cursor` is the position past the last
+    /// bundle from the recipient that the sender has consumed. The recipient records
+    /// this in `finalized_sent_messages` so that, when it later checkpoints its own
+    /// state, it can drop already-delivered outgoing messages from its outbox dump.
+    CheckpointAck { latest_received_cursor: Cursor },
 }
 
 /// A query to the system state.
@@ -893,7 +894,7 @@ where
                     outcome.push(message);
                 }
             }
-            Checkpoint {
+            CheckpointAck {
                 latest_received_cursor,
             } => {
                 self.finalized_sent_messages.insert(

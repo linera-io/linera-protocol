@@ -4409,8 +4409,8 @@ where
     assert_eq!(reread.hash(), transfer_cert.hash());
 
     // Recipient consumes the transfer. Receiving a non-`Checkpoint` message
-    // marks the sender chain as owing us a `SystemMessage::Checkpoint` at our
-    // next own checkpoint — the on-chain `pending_checkpoint_targets` set is
+    // marks the sender chain as owing us a `SystemMessage::CheckpointAck` at our
+    // next own checkpoint — the on-chain `pending_checkpoint_ack_targets` set is
     // what drives this. (A `Checkpoint` message wouldn't be inserted, which is
     // how the otherwise-perpetual notification ping-pong is broken.)
     recipient.synchronize_from_validators().await?;
@@ -4424,7 +4424,7 @@ where
         recipient_state
             .execution_state
             .system
-            .pending_checkpoint_targets
+            .pending_checkpoint_ack_targets
             .contains(&chain_id)
             .await?,
         "consuming the transfer should mark its sender as a pending Checkpoint target",

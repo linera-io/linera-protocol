@@ -278,7 +278,7 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
     };
 
     // Producer side: apply a checkpoint with non-empty origin_cursors and check that
-    // it queues one `SystemMessage::Checkpoint` per origin.
+    // it queues one `SystemMessage::CheckpointAck` per origin.
     use linera_views::{batch::Batch, store::WritableKeyValueStore as _, views::View as _};
     let mut view = SystemExecutionState {
         description: Some(dummy_chain_description(0)),
@@ -310,7 +310,7 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
         assert_eq!(msg.destination, expected_destination);
         assert_eq!(
             msg.message,
-            Message::System(SystemMessage::Checkpoint {
+            Message::System(SystemMessage::CheckpointAck {
                 latest_received_cursor: expected_cursor,
             })
         );
@@ -353,7 +353,7 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
         .system
         .execute_message(
             context,
-            SystemMessage::Checkpoint {
+            SystemMessage::CheckpointAck {
                 latest_received_cursor: cursor_a,
             },
         )

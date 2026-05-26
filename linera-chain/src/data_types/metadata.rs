@@ -235,8 +235,8 @@ pub struct SystemMessageMetadata {
     pub credit: Option<CreditMessageMetadata>,
     /// Withdraw message details
     pub withdraw: Option<WithdrawMessageMetadata>,
-    /// Checkpoint message details
-    pub checkpoint: Option<CheckpointMessageMetadata>,
+    /// CheckpointAck message details
+    pub checkpoint_ack: Option<CheckpointAckMessageMetadata>,
 }
 
 /// Credit message metadata.
@@ -255,9 +255,9 @@ pub struct WithdrawMessageMetadata {
     pub recipient: Account,
 }
 
-/// Checkpoint message metadata.
+/// CheckpointAck message metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-pub struct CheckpointMessageMetadata {
+pub struct CheckpointAckMessageMetadata {
     pub latest_received_cursor: Cursor,
 }
 
@@ -462,7 +462,7 @@ impl From<&SystemMessage> for SystemMessageMetadata {
                     source: *source,
                 }),
                 withdraw: None,
-                checkpoint: None,
+                checkpoint_ack: None,
             },
             SystemMessage::Withdraw {
                 owner,
@@ -476,15 +476,15 @@ impl From<&SystemMessage> for SystemMessageMetadata {
                     amount: *amount,
                     recipient: *recipient,
                 }),
-                checkpoint: None,
+                checkpoint_ack: None,
             },
-            SystemMessage::Checkpoint {
+            SystemMessage::CheckpointAck {
                 latest_received_cursor,
             } => SystemMessageMetadata {
-                system_message_type: "Checkpoint".to_string(),
+                system_message_type: "CheckpointAck".to_string(),
                 credit: None,
                 withdraw: None,
-                checkpoint: Some(CheckpointMessageMetadata {
+                checkpoint_ack: Some(CheckpointAckMessageMetadata {
                     latest_received_cursor: *latest_received_cursor,
                 }),
             },
