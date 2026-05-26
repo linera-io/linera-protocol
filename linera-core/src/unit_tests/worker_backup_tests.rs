@@ -270,8 +270,6 @@ async fn test_memory_stale_backup_catches_up_with_own_key() {
 // ── RocksDB backend helpers ────────────────────────────────────────────────────
 
 #[cfg(feature = "rocksdb")]
-use crate::test_utils::RocksDbStorageBuilder;
-#[cfg(feature = "rocksdb")]
 use linera_views::{
     rocks_db::{PathWithGuard, RocksDbDatabase},
     store::TestKeyValueDatabase as _,
@@ -281,6 +279,9 @@ use rocksdb::{
     backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
     Env,
 };
+
+#[cfg(feature = "rocksdb")]
+use crate::test_utils::RocksDbStorageBuilder;
 
 /// Restores a RocksDB backup into `restore_base/<namespace>` and returns a fresh
 /// `DbStorage` connected to it.
@@ -517,13 +518,15 @@ async fn test_stale_backup_catches_up_with_own_key() {
 // ── ScyllaDB backend helpers ───────────────────────────────────────────────────
 
 #[cfg(feature = "scylladb")]
-use crate::test_utils::ScyllaDbStorageBuilder;
-#[cfg(feature = "scylladb")]
 use linera_views::{
     backends::scylla_db::ScyllaDbDatabaseInternal,
+    batch::{SimpleUnorderedBatch, UnorderedBatch},
     scylla_db::ScyllaDbDatabase,
-    store::{KeyValueDatabase as _, TestKeyValueDatabase as _, WritableKeyValueStore as _},
+    store::{DirectWritableKeyValueStore as _, KeyValueDatabase as _},
 };
+
+#[cfg(feature = "scylladb")]
+use crate::test_utils::ScyllaDbStorageBuilder;
 
 /// Deserializes a ScyllaDB backup from `dir` into a fresh namespace and returns
 /// a `DbStorage` connected to it.
@@ -533,8 +536,6 @@ async fn restore_scylladb_backup(
     namespace: &str,
 ) -> DbStorage<ScyllaDbDatabase, TestClock> {
     use std::collections::BTreeMap;
-
-    use linera_views::batch::{Batch, WriteOperation};
 
     let encoded =
         std::fs::read(backup_dir.path().join("scylladb_backup.bcs")).expect("read scylladb backup");
@@ -561,11 +562,12 @@ async fn restore_scylladb_backup(
                 .open_shared(actual_root_key)
                 .expect("open scylladb store");
             if !kv_pairs.is_empty() {
-                let batch = Batch {
-                    operations: kv_pairs
-                        .into_iter()
-                        .map(|(key, value)| WriteOperation::Put { key, value })
-                        .collect(),
+                let batch = UnorderedBatch {
+                    key_prefix_deletions: vec![],
+                    simple_unordered_batch: SimpleUnorderedBatch {
+                        deletions: vec![],
+                        insertions: kv_pairs.into_iter().collect(),
+                    },
                 };
                 store
                     .write_batch(batch)
