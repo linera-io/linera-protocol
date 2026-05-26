@@ -51,8 +51,8 @@ pub struct RoundInfo {
     pub kind: String,
     /// The index of the round within its category (always `0` for the fast round).
     pub number: u32,
-    /// The owner currently allowed to propose, or `null` if any eligible owner may
-    /// propose (the fast and multi-leader rounds).
+    /// The owner currently allowed to propose, or `undefined` if any eligible owner
+    /// may propose (the fast and multi-leader rounds).
     pub leader: Option<AccountOwner>,
     /// Whether this client's current identity may propose a block in this round.
     pub can_propose: bool,
@@ -181,9 +181,9 @@ impl Chain {
     /// this chain: its category, its index, the current leader (if the round restricts
     /// proposals to a single owner) and whether this client's identity may propose.
     ///
-    /// `leader` is `null` in the fast and multi-leader rounds, where any eligible owner
-    /// may propose; in the single-leader and validator rounds it is the owner currently
-    /// allowed to propose.
+    /// `leader` is `undefined` in the fast and multi-leader rounds, where any eligible
+    /// owner may propose; in the single-leader and validator rounds it is the owner
+    /// currently allowed to propose.
     ///
     /// # Errors
     /// If the chain information cannot be retrieved.
