@@ -16,6 +16,9 @@ async function freshChain() {
   const chainId = await faucet.claimChain(wallet, owner);
   const client = await new linera.Client(wallet, signer);
   const chain = await client.chain(chainId, { owner });
+  // The chain was just claimed, so pull its state into the local node before the tests
+  // read from it (balance, ownership, round are all local reads).
+  await chain.synchronize();
   return { chain, owner };
 }
 

@@ -152,6 +152,28 @@ impl Chain {
         Ok(())
     }
 
+    /// Synchronizes this chain with the validators, downloading any blocks and state that
+    /// the local node is missing.
+    ///
+    /// Reads such as [`balance`](Self::balance), [`nextRound`](Self::next_round),
+    /// [`isOwner`](Self::is_owner) and [`ownerWeight`](Self::owner_weight) operate on the
+    /// local node, so call this after first connecting to a chain (for example one just
+    /// claimed from the faucet) to make sure they observe the chain's current state.
+    ///
+    /// # Errors
+    /// If synchronization fails, e.g. because validators are unreachable.
+    #[wasm_bindgen]
+    pub async fn synchronize(&self) -> JsResult<()> {
+        self.chain_client.synchronize_from_validators().await?;
+        self.client
+            .context
+            .lock()
+            .await
+            .update_wallet(&self.chain_client)
+            .await?;
+        Ok(())
+    }
+
     /// Returns whether `owner` is currently an owner of this chain, either as a regular
     /// owner or a super owner.
     ///
