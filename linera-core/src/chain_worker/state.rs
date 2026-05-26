@@ -959,25 +959,16 @@ where
                 // checkpoint cert we already trust. Without this, the next step
                 // (re-executing the checkpoint to verify its outcome) would fail
                 // because `collect_unfinalized_block_hashes` looks these up.
-                let mut heights = std::collections::BTreeSet::new();
-                let recipients = self
+                let mut heights = BTreeSet::new();
+                let entries = self
                     .chain
                     .execution_state
                     .system
                     .unfinalized_message_blocks
-                    .indices()
+                    .index_values()
                     .await?;
-                for recipient in recipients {
-                    if let Some(per_recipient) = self
-                        .chain
-                        .execution_state
-                        .system
-                        .unfinalized_message_blocks
-                        .get(&recipient)
-                        .await?
-                    {
-                        heights.extend(per_recipient);
-                    }
+                for (_, per_recipient) in entries {
+                    heights.extend(per_recipient);
                 }
                 ensure!(
                     heights.len() == outbox_block_hashes.len(),

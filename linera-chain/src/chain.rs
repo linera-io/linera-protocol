@@ -1200,24 +1200,15 @@ where
     /// certified checkpoint blob, so without this a bootstrapped node would
     /// silently stop pushing pending messages forward.
     pub async fn restore_outboxes_from_unfinalized(&mut self) -> Result<(), ChainError> {
-        let recipients = self
+        let mut new_counters = BTreeMap::<BlockHeight, u32>::new();
+        let mut new_nonempty = BTreeSet::new();
+        let entries = self
             .execution_state
             .system
             .unfinalized_message_blocks
-            .indices()
+            .index_values()
             .await?;
-        let mut new_counters: BTreeMap<BlockHeight, u32> = BTreeMap::new();
-        let mut new_nonempty = BTreeSet::new();
-        for recipient in recipients {
-            let Some(heights) = self
-                .execution_state
-                .system
-                .unfinalized_message_blocks
-                .get(&recipient)
-                .await?
-            else {
-                continue;
-            };
+        for (recipient, heights) in entries {
             if heights.is_empty() {
                 continue;
             }
@@ -1246,22 +1237,14 @@ where
     /// blocks.
     async fn collect_unfinalized_block_hashes(&self) -> Result<Vec<CryptoHash>, ChainError> {
         let mut heights = BTreeSet::new();
-        let recipients = self
+        let entries = self
             .execution_state
             .system
             .unfinalized_message_blocks
-            .indices()
+            .index_values()
             .await?;
-        for recipient in recipients {
-            if let Some(per_recipient) = self
-                .execution_state
-                .system
-                .unfinalized_message_blocks
-                .get(&recipient)
-                .await?
-            {
-                heights.extend(per_recipient);
-            }
+        for (_, per_recipient) in entries {
+            heights.extend(per_recipient);
         }
         let mut hashes = Vec::with_capacity(heights.len());
         for height in heights {
