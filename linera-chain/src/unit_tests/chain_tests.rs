@@ -449,7 +449,6 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
         grant: Amount::ZERO,
         refund_grant_to: None,
         kind: MessageKind::Simple,
-        index: 0,
         message: user_message,
     };
     let message_bundle = MessageBundle {

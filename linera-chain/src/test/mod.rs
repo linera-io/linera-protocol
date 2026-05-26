@@ -202,17 +202,16 @@ impl<T: CertificateValue> VoteTestExt<T> for Vote<T> {
 
 /// Helper trait to simplify constructing messages for tests.
 pub trait MessageTestExt: Sized {
-    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage;
+    fn to_posted(self, kind: MessageKind) -> PostedMessage;
 }
 
 impl<T: Into<Message>> MessageTestExt for T {
-    fn to_posted(self, index: u32, kind: MessageKind) -> PostedMessage {
+    fn to_posted(self, kind: MessageKind) -> PostedMessage {
         PostedMessage {
             authenticated_owner: None,
             grant: Amount::ZERO,
             refund_grant_to: None,
             kind,
-            index,
             message: self.into(),
         }
     }
