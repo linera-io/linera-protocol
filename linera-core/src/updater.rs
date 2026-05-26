@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{future::try_join_all, Future, StreamExt};
+use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round, TimeDelta},
@@ -965,11 +965,11 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        try_join_all(chain_heights.into_iter().map(|(chain_id, heights)| {
+        future::try_join_all(chain_heights.into_iter().map(|(chain_id, heights)| {
             let mut updater = self.clone();
             async move {
                 // Get all block hashes for this chain at the specified heights in one call
-                let heights_vec: Vec<_> = heights.into_iter().collect();
+                let heights_vec = heights.into_iter().collect::<Vec<_>>();
                 let certificates = updater
                     .client
                     .local_node
@@ -999,7 +999,7 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        try_join_all(chain_heights.into_iter().map(|(chain_id, height)| {
+        future::try_join_all(chain_heights.into_iter().map(|(chain_id, height)| {
             let mut updater = self.clone();
             async move {
                 updater
