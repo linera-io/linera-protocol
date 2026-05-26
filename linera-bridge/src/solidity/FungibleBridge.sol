@@ -132,7 +132,7 @@ contract FungibleBridge is Microchain {
     /// - any position out of range (`"eventPos out of range"`)
     /// - any position whose event is not a matching burn for this app
     ///   (`"not a matching burn"`)
-    /// - any failed `token.transfer` (`"token transfer failed"`)
+    /// - any failed `token.transfer` (`"safeTransfer failed"`)
     function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
         require(eventPositionsInTx.length > 0, "empty positions");
         (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
@@ -181,7 +181,14 @@ contract FungibleBridge is Microchain {
     function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key) private {
         WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
         processedBurns[key] = true;
-        require(token.transfer(address(burnEvt.target), burnEvt.amount), "token transfer failed");
+        _safeTransfer(address(burnEvt.target), burnEvt.amount.value);
+    }
+
+    /// @dev Calls transfer and handles tokens that don't return a boolean.
+    function _safeTransfer(address to, uint256 amount_) internal {
+        (bool success, bytes memory data) =
+            address(token).call(abi.encodeWithSelector(token.transfer.selector, to, amount_));
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "safeTransfer failed");
     }
 
     /// @dev Calls transferFrom and handles tokens that don't return a boolean.
