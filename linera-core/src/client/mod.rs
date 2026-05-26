@@ -729,7 +729,17 @@ impl<Env: Environment> Client<Env> {
                         }
                     })
                 },
-                |_| chain_client::Error::InternalError("missing events"),
+                |errors| {
+                    for (validator, error) in &errors {
+                        warn!(
+                            %validator,
+                            %chain_id,
+                            %error,
+                            "failed to sync events from validator",
+                        );
+                    }
+                    chain_client::Error::InternalError("missing events")
+                },
                 timeout,
             )
             .await;
@@ -1317,7 +1327,15 @@ impl<Env: Environment> Client<Env> {
                 |errors| {
                     errors
                         .into_iter()
-                        .map(|(validator, _error)| validator)
+                        .map(|(validator, error)| {
+                            warn!(
+                                %validator,
+                                %sender_chain_id,
+                                %error,
+                                "failed to download certificates from validator",
+                            );
+                            validator
+                        })
                         .collect::<BTreeSet<_>>()
                 },
                 self.options.certificate_batch_download_timeout,
@@ -1989,7 +2007,17 @@ impl<Env: Environment> Client<Env> {
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, chain_client::Error>::Ok(blob)
                 },
-                move |_| chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id])),
+                move |errors| {
+                    for (validator, error) in &errors {
+                        warn!(
+                            %validator,
+                            %blob_id,
+                            %error,
+                            "failed to download certificate-for-blob from validator",
+                        );
+                    }
+                    chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+                },
                 timeout,
             )
         }))
