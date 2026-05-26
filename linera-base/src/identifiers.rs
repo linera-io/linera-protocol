@@ -1375,7 +1375,8 @@ mod tests {
         // Do not update it without understanding why the derivation changed — the JS
         // test in `@linera/client` cross-checks this exact value.
         assert_eq!(
-            owner_str, "0xeacee5344cbec9569e836f95029d476c700f4f5bc007c71c0752c73fba149043",
+            owner.to_string(),
+            "0xeacee5344cbec9569e836f95029d476c700f4f5bc007c71c0752c73fba149043",
             "Ed25519 owner derivation drifted; verify intentional before updating"
         );
     }
