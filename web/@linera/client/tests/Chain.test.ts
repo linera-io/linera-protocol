@@ -80,7 +80,9 @@ test("setMultiLeaderRounds changes the round structure", async () => {
   await chain.setMultiLeaderRounds(0);
   const single = await chain.nextRound();
   expect(single.kind).toBe("singleLeader");
-  expect(single.leader).toBe(owner);
+  // The serialized leader is lowercase, while `owner` is an EIP-55 checksummed
+  // address; they denote the same account, so compare case-insensitively.
+  expect(single.leader?.toLowerCase()).toBe(owner.toLowerCase());
   expect(single.canPropose).toBe(true);
 
   // Restoring multi-leader rounds brings back the multi-leader round.
