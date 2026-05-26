@@ -296,6 +296,12 @@ Client implementation and command-line tool for the Linera blockchain
 * `--event-cache-size <EVENT_CACHE_SIZE>` — The maximal number of entries in the event cache
 
   Default value: `1000`
+* `--block-hash-by-height-cache-size <BLOCK_HASH_BY_HEIGHT_CACHE_SIZE>` — The maximal number of entries in the block-hash-by-height cache
+
+  Default value: `1000`
+* `--event-block-height-cache-size <EVENT_BLOCK_HEIGHT_CACHE_SIZE>` — The maximal number of entries in the event-block-height cache
+
+  Default value: `1000`
 * `--cache-cleanup-interval-secs <CACHE_CLEANUP_INTERVAL_SECS>` — Interval in seconds between weak reference cleanup sweeps in value caches
 
   Default value: `30`

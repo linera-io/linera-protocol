@@ -68,6 +68,14 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub event_cache_size: usize,
 
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub block_hash_by_height_cache_size: usize,
+
+    /// The maximal number of entries in the event-block-height cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub event_block_height_cache_size: usize,
+
     /// Interval in seconds between weak reference cleanup sweeps in value caches.
     #[arg(long, default_value_t = DEFAULT_CLEANUP_INTERVAL_SECS, global = true)]
     pub cache_cleanup_interval_secs: u64,
@@ -92,6 +100,8 @@ impl CommonStorageOptions {
             certificate_cache_size: self.certificate_cache_size,
             certificate_raw_cache_size: self.certificate_raw_cache_size,
             event_cache_size: self.event_cache_size,
+            block_hash_by_height_cache_size: self.block_hash_by_height_cache_size,
+            event_block_height_cache_size: self.event_block_height_cache_size,
             cache_cleanup_interval_secs: self.cache_cleanup_interval_secs,
         }
     }
