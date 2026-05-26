@@ -248,7 +248,7 @@ where
                 batch.put_key_value(
                     self.layout_key(),
                     &BucketLayout {
-                        front_position: plan.cursor_position_u32,
+                        front_position: plan.cursor_position,
                         num_buckets: 1,
                         first_index: self.stored_buckets[0].index,
                     },
@@ -264,7 +264,7 @@ where
                     let State::Loaded { data } = &bucket.state else {
                         unreachable!("front bucket is always loaded");
                     };
-                    all_data.extend(data[plan.cursor_position..].iter().cloned());
+                    all_data.extend(data[plan.cursor_position as usize..].iter().cloned());
                 }
                 all_data.extend(self.new_back_values.iter().cloned());
                 if all_data.is_empty() {
@@ -330,7 +330,7 @@ where
                 batch.put_key_value(
                     self.layout_key(),
                     &BucketLayout {
-                        front_position: plan.cursor_position_u32,
+                        front_position: plan.cursor_position,
                         num_buckets,
                         first_index: new_first_index,
                     },
@@ -352,9 +352,9 @@ where
             SaveCase::MetadataOnly => {
                 self.cursor = Some(Cursor {
                     offset: 0,
-                    position: plan.cursor_position,
+                    position: plan.cursor_position as usize,
                 });
-                self.stored_front_position = plan.cursor_position_u32;
+                self.stored_front_position = plan.cursor_position;
             }
             SaveCase::Rewrite => {
                 let mut all_data = Vec::new();
@@ -362,7 +362,7 @@ where
                     let State::Loaded { data } = &bucket.state else {
                         unreachable!("front bucket is always loaded");
                     };
-                    all_data.extend(data[plan.cursor_position..].iter().cloned());
+                    all_data.extend(data[plan.cursor_position as usize..].iter().cloned());
                 }
                 all_data.extend(std::mem::take(&mut self.new_back_values));
                 self.stored_buckets.clear();
@@ -408,9 +408,9 @@ where
                 }
                 self.cursor = Some(Cursor {
                     offset: 0,
-                    position: plan.cursor_position,
+                    position: plan.cursor_position as usize,
                 });
-                self.stored_front_position = plan.cursor_position_u32;
+                self.stored_front_position = plan.cursor_position;
             }
         }
     }
@@ -465,10 +465,9 @@ struct SavePlan {
     case: SaveCase,
     /// Offset within `stored_buckets` of the first surviving bucket.
     remaining_start: usize,
-    /// Position of the cursor within the front bucket
-    cursor_position: usize,
-    /// `cursor_position` pre-validated as `u32`.
-    cursor_position_u32: u32,
+    /// Position of the cursor within the front bucket, validated as `u32` (the type
+    /// stored in `BucketLayout`). Cast to `usize` at the few sites that index a bucket.
+    cursor_position: u32,
     /// True if there is any existing storage to clear (for `Empty`/`Rewrite`).
     has_storage: bool,
 }
@@ -504,9 +503,8 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
             (false, None) => self.stored_buckets.len(),
         };
         let remaining_count = self.stored_buckets.len() - remaining_start;
-        let cursor_position = self.cursor.map_or(0, |c| c.position);
-        let cursor_position_u32 =
-            u32::try_from(cursor_position).map_err(|_| ArithmeticError::Overflow)?;
+        let cursor_position = u32::try_from(self.cursor.map_or(0, |c| c.position))
+            .map_err(|_| ArithmeticError::Overflow)?;
         let has_storage = !self.stored_buckets.is_empty() || self.delete_storage_first;
         let new_back_empty = self.new_back_values.is_empty();
 
@@ -527,7 +525,6 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
             case,
             remaining_start,
             cursor_position,
-            cursor_position_u32,
             has_storage,
         })
     }
