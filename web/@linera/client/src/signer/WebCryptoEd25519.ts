@@ -26,6 +26,10 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
+// Resolves on `req.onsuccess`. Reads have no durability barrier — the value is
+// already in memory by the time `onsuccess` fires, so waiting for
+// `transaction.oncomplete` would only add latency. Contrast with `txWrite` below,
+// which must wait for the commit.
 function txRead<T>(
   db: IDBDatabase,
   fn: (store: IDBObjectStore) => IDBRequest<T>,
