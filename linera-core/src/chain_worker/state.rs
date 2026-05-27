@@ -881,54 +881,24 @@ where
         let chain_id = block.header.chain_id;
 
         // Trust-mark accept path: an earlier checkpoint cert recorded this block's
-        // hash in `pre_checkpoint_block_trust`. Verify the cert against its own
-        // epoch's committee — which still works if that epoch has been revoked,
-        // because the admin chain's epoch event stream retains the committee blob
-        // hash — write it through to storage, and remove the trust mark. Tip and
-        // chain state are untouched: this is purely a "fill in a missing
-        // pre-checkpoint sender block" operation.
-        if self
+        // hash in `pre_checkpoint_block_trust`. Removing the trust mark here is
+        // only an in-memory change; if anything below fails before `save`, the
+        // mark survives on the next reload. The dispatch's `gap` definition
+        // (`!=` rather than `<`) routes both above-tip and below-tip trust
+        // uploads to `preprocess_certified_block` so the chain can write the
+        // cert without advancing the tip.
+        let in_trust_set = self
             .chain
             .pre_checkpoint_block_trust
             .contains(&block_hash)
-            .await?
-        {
-            if !self.storage.contains_certificate(block_hash).await? {
-                let committee = self.committee_for_epoch(block.header.epoch).await?;
-                certificate.check(&committee)?;
-                self.storage
-                    .write_blobs_and_certificate(&[], &certificate)
-                    .await?;
-            }
+            .await?;
+        if in_trust_set {
             self.chain.pre_checkpoint_block_trust.remove(&block_hash)?;
-            self.save().await?;
-            return Ok((
-                self.chain_info_response().await?,
-                NetworkActions::default(),
-                BlockOutcome::Skipped,
-            ));
         }
 
         // Check if we already processed this block.
         let tip = self.chain.tip_state.get().clone();
-        if tip.next_block_height > height {
-            // The block is older than our tip. If `block_hashes` already references
-            // this exact hash (e.g. a checkpoint we trust named it in
-            // `outbox_block_hashes`) but we don't have the bytes in shared storage,
-            // fill it in: verify the cert against its own epoch's committee — which
-            // works even if that epoch has since been revoked, because the admin
-            // chain's epoch event stream retains the committee blob hash — and
-            // write it through. Other already-processed cases skip without doing
-            // the extra signature work.
-            if self.chain.block_hashes.get(&height).await? == Some(block_hash)
-                && !self.storage.contains_certificate(block_hash).await?
-            {
-                let committee = self.committee_for_epoch(block.header.epoch).await?;
-                certificate.check(&committee)?;
-                self.storage
-                    .write_blobs_and_certificate(&[], &certificate)
-                    .await?;
-            }
+        if !in_trust_set && tip.next_block_height > height {
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
@@ -985,7 +955,7 @@ where
         //    then execute.
         //  - `Auto`/`Execute` mode + contiguous: execute directly.
         use ProcessConfirmedBlockMode::{Auto, Execute, Preprocess};
-        let gap = tip.next_block_height < height;
+        let gap = tip.next_block_height != height;
         let starts_with_checkpoint = block.starts_with_checkpoint();
         match (mode, gap, starts_with_checkpoint) {
             (Preprocess, _, _) | (Auto, true, false) => {
