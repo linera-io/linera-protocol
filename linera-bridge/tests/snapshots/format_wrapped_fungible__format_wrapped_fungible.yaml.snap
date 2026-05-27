@@ -25,6 +25,8 @@ AccountOwner:
             SIZE: 20
 BurnEvent:
   STRUCT:
+    - source:
+        TYPENAME: Account
     - target:
         TUPLEARRAY:
           CONTENT: U8
