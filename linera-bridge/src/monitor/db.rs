@@ -391,7 +391,7 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
     use alloy::primitives::{Address, B256, U256};
-    use linera_base::data_types::Amount;
+    use linera_base::{crypto::CryptoHash, data_types::U128};
     use test_case::test_case;
 
     use super::*;
@@ -435,7 +435,7 @@ mod tests {
             evm_recipient: "0xabcdef1234567890abcdef1234567890abcdef12"
                 .parse()
                 .unwrap(),
-            amount: Amount::from_attos(500_000),
+            amount: U128(500_000),
         }
     }
 

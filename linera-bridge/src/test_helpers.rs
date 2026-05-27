@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp},
+    data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp, U128},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
@@ -157,16 +157,30 @@ pub fn deploy_fungible_bridge(
 
 const LINERA_TOKEN_SOL: &str = include_str!("solidity/LineraToken.sol");
 
+alloy_sol_types::sol! {
+    #[allow(missing_docs)]
+    struct LineraTokenConstructorArgs {
+        string name;
+        string symbol;
+        uint8 decimals_;
+        uint256 initialSupply;
+    }
+}
+
 pub fn deploy_linera_token(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
     initial_supply: alloy_primitives::U256,
 ) -> Address {
     let bytecode = compile_contract(LINERA_TOKEN_SOL, "LineraToken.sol", "LineraToken");
-    let constructor_args =
-        ("TestToken".to_string(), "TT".to_string(), initial_supply).abi_encode_params();
+    let args = LineraTokenConstructorArgs {
+        name: "TestToken".to_string(),
+        symbol: "TT".to_string(),
+        decimals_: 18,
+        initialSupply: initial_supply,
+    };
     let mut deploy_data = bytecode;
-    deploy_data.extend_from_slice(&constructor_args);
+    deploy_data.extend_from_slice(&args.abi_encode_params());
     deploy_contract(db, deployer, deploy_data)
 }
 
@@ -202,7 +216,7 @@ pub fn fungible_message_transaction(
 pub fn burn_event(
     application_id: CryptoHash,
     target: [u8; 20],
-    amount: Amount,
+    amount: U128,
     index: u32,
 ) -> linera_base::data_types::Event {
     use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};

@@ -19,8 +19,9 @@ use std::{
 };
 
 use alloy::primitives::{Address, B256, U256};
+use anyhow::Context as _;
 use linera_base::{
-    data_types::{Amount, BlockHeight},
+    data_types::{BlockHeight, U128},
     identifiers::ApplicationId,
 };
 use linera_execution::{Query, QueryResponse};
@@ -46,6 +47,29 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
     Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
 }
 
+/// Queries the wrapped-fungible app for its declared source-ERC-20 decimals.
+pub async fn query_wrapped_fungible_decimals<E: linera_core::environment::Environment>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    fungible_app_id: ApplicationId,
+) -> anyhow::Result<u8> {
+    let query = Query::user_without_abi(
+        fungible_app_id,
+        &GqlRequest {
+            query: "{ decimals }".to_string(),
+        },
+    )?;
+    let (outcome, _) = chain_client.query_application(query, None).await?;
+    let response_bytes = match outcome.response {
+        QueryResponse::User(bytes) => bytes,
+        other => anyhow::bail!("unexpected query response: {other:?}"),
+    };
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
+    let decimals = response["data"]["decimals"]
+        .as_u64()
+        .context("missing or invalid `decimals` field in service response")?;
+    u8::try_from(decimals).context("`decimals` field does not fit in u8")
+}
+
 /// A pending deposit detected by the EVM scanner, sent to the retry loop.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingDeposit {
@@ -67,7 +91,7 @@ pub struct PendingBurn {
     pub height: BlockHeight,
     pub event_index: u32,
     pub evm_recipient: Address,
-    pub amount: Amount,
+    pub amount: U128,
 }
 
 /// Wraps a pending bridging request with tracking metadata.
@@ -412,7 +436,7 @@ fn retry_eligible(retry_count: u32, last_retry_at: Option<Instant>, max_retries:
 #[cfg(test)]
 mod tests {
     use alloy::primitives::{Address, B256, U256};
-    use linera_base::data_types::{Amount, BlockHeight};
+    use linera_base::data_types::BlockHeight;
 
     use super::*;
 
@@ -484,7 +508,7 @@ mod tests {
                 height: BlockHeight(10),
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
-                amount: Amount::from_attos(500),
+                amount: U128(500),
             })
             .await;
 
@@ -521,7 +545,7 @@ mod tests {
                 height: BlockHeight(5),
                 event_index: 0,
                 evm_recipient: Address::from([0x12; 20]),
-                amount: Amount::from_attos(100),
+                amount: U128(100),
             })
             .await;
 
@@ -673,7 +697,7 @@ mod tests {
             height: BlockHeight(99),
             event_index: 2,
             evm_recipient: Address::from([0xDD; 20]),
-            amount: Amount::from_attos(7),
+            amount: U128(7),
         })
         .await
         .unwrap();
@@ -699,7 +723,7 @@ mod tests {
                 height,
                 event_index: 0,
                 evm_recipient: Address::from([0xab; 20]),
-                amount: Amount::from_attos(500),
+                amount: U128(500),
             })
             .await;
 

@@ -31,6 +31,7 @@ FAUCET_URL=""
 RELAY_URL=""
 RELAY_OWNER=""
 TICKER_SYMBOL="wTT"
+TOKEN_DECIMALS=18
 FUND_AMOUNT="500000000000000000000"
 SHARED_DIR=""
 WALLET_DIR="/tmp/wallet"
@@ -70,6 +71,9 @@ Options:
   --faucet-url URL          Linera faucet URL (default: http://localhost:8080)
   --relay-url URL           Relay service URL (default: http://localhost:3001)
   --ticker-symbol SYM       Wrapped token ticker (default: wTT)
+  --token-decimals N        Decimal places for the deployed ERC-20 and the
+                            matching wrapped-fungible app (default: 18). Both
+                            sides MUST agree or the relayer will refuse to start.
   --fund-amount WEI         Fund bridge with this many tokens; 0 to skip
                             (default: 500000000000000000000)
   --shared-dir PATH         Directory for shared state files (bridge-address,
@@ -89,6 +93,7 @@ while [[ $# -gt 0 ]]; do
         --faucet-url)        FAUCET_URL="$2"; shift 2 ;;
         --relay-url)         RELAY_URL="$2"; shift 2 ;;
         --ticker-symbol)     TICKER_SYMBOL="$2"; shift 2 ;;
+        --token-decimals)    TOKEN_DECIMALS="$2"; shift 2 ;;
         --fund-amount)       FUND_AMOUNT="$2"; shift 2 ;;
         --shared-dir)        SHARED_DIR="$2"; shift 2 ;;
         --help)              usage ;;
@@ -189,6 +194,7 @@ EVM_CHAIN_ID_DECIMAL=$(dc_exec foundry-tools cast chain-id --rpc-url "$EVM_RPC_U
 dc_exec foundry-tools env \
     TOKEN_NAME="TestToken" \
     TOKEN_SYMBOL="TT" \
+    TOKEN_DECIMALS="$TOKEN_DECIMALS" \
     TOKEN_SUPPLY="1000000000000000000000" \
     forge script /contracts/script/DeployLineraToken.s.sol \
     --root /contracts \
@@ -273,6 +279,7 @@ linera_exec process-inbox 2>&1
 echo "Publishing and creating wrapped-fungible app..."
 WRAPPED_PARAMS=$(
     TICKER="$TICKER_SYMBOL" \
+    DECIMALS="$TOKEN_DECIMALS" \
     MINTER="$RELAY_OWNER" \
     TOKEN_HEX="$TOKEN_ADDR_HEX" \
     CHAIN_ID="$EVM_CHAIN_ID" \
@@ -284,6 +291,7 @@ def hex_to_array(h):
     return [int(h[i:i+2], 16) for i in range(0, len(h), 2)]
 params = {
     'ticker_symbol': os.environ['TICKER'],
+    'decimals': int(os.environ['DECIMALS']),
     'minter': os.environ['MINTER'],
     'mint_chain_id': os.environ['BRIDGE_CHAIN'],
     'evm_token_address': hex_to_array(os.environ['TOKEN_HEX']),

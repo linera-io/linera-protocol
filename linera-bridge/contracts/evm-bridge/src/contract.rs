@@ -10,11 +10,11 @@ use evm_bridge::{
 use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
-    linera_base_types::{Account, Amount, ApplicationId, WithContractAbi},
+    linera_base_types::{ApplicationId, U128, WithContractAbi},
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
-use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi};
+use wrapped_fungible::{Account, WrappedFungibleOperation, WrappedFungibleTokenAbi};
 
 /// On-chain state: tracks processed deposits, verified block hashes,
 /// the registered wrapped-fungible application, and the registered EVM
@@ -262,10 +262,15 @@ impl EvmBridgeContract {
                 .expect("failed to cache verified block hash");
         }
 
-        // 6. Convert deposit fields to Linera types and call MintAndTransfer
-        let amount = Amount::try_from(deposit.amount).expect("deposit amount exceeds u128");
+        // 6. Convert deposit fields to Linera types and call Mint
+        let amount = U128(
+            deposit
+                .amount
+                .try_into()
+                .expect("deposit amount exceeds u128"),
+        );
 
-        let mint_op = WrappedFungibleOperation::MintAndTransfer {
+        let mint_op = WrappedFungibleOperation::Mint {
             target_account: Account {
                 chain_id: deposit.target_chain_id,
                 owner: deposit.target_account_owner,
