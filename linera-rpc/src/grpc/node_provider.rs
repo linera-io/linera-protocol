@@ -21,10 +21,7 @@ pub struct GrpcNodeProvider {
     max_backoff: Duration,
     /// Shared across all `GrpcClient` instances. When a subscription to a validator
     /// fails, the failure time is recorded here so that other chains (which share the
-    /// same provider) skip retrying the same dead validator. Wrapped in `Arc` so the
-    /// map is genuinely shared (previously each clone allocated a fresh map and lost
-    /// the cooldown state), and to avoid the `seize::Collector` alloc per clone that
-    /// drove wasm OOMs.
+    /// same provider) skip retrying the same dead validator.
     subscription_cooldowns: Arc<papaya::HashMap<String, Instant>>,
 }
 

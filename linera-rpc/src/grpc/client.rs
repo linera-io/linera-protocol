@@ -77,10 +77,7 @@ pub struct GrpcClient {
     max_backoff: Duration,
     /// Shared across all `GrpcClient` instances created by the same `GrpcNodeProvider`.
     /// Tracks when each validator address last had a subscription failure, so that
-    /// other chains don't independently retry the same dead validator. Wrapped in
-    /// `Arc` so the map is actually shared on `Clone` (and so cloning a `GrpcClient`
-    /// does not allocate a fresh `seize::Collector` per call — the alloc that drove
-    /// wasm OOMs).
+    /// other chains don't independently retry the same dead validator.
     subscription_cooldowns: Arc<papaya::HashMap<String, Instant>>,
 }
 
