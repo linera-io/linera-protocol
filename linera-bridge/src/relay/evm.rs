@@ -13,7 +13,7 @@ use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
 
-use crate::proof::deposit_event_signature;
+use crate::proof::{burn_blocked_event_signature, deposit_event_signature};
 
 sol! {
     #[sol(rpc)]
@@ -81,6 +81,14 @@ impl<P: Provider> EvmClient<P> {
         Ok(self.provider.get_block_number().await?)
     }
 
+    /// Returns the chain ID reported by the connected EVM node.
+    pub async fn get_chain_id(&self) -> Result<u64> {
+        self.provider
+            .get_chain_id()
+            .await
+            .context("failed to query EVM chain id")
+    }
+
     /// Returns the relayer's ETH balance in wei.
     pub async fn get_relayer_balance(&self) -> Result<U256> {
         Ok(self.provider.get_balance(self.relayer_addr).await?)
@@ -108,6 +116,26 @@ impl<P: Provider> EvmClient<P> {
         let filter_base = Filter::new()
             .address(self.bridge_addr)
             .event_signature(self.deposit_event_sig);
+
+        let mut all_logs = Vec::new();
+        let mut cursor = from;
+        while cursor <= to {
+            let chunk_end = (cursor + MAX_LOG_BLOCK_RANGE - 1).min(to);
+            let filter = filter_base.clone().from_block(cursor).to_block(chunk_end);
+            let logs = self.provider.get_logs(&filter).await?;
+            all_logs.extend(logs);
+            cursor = chunk_end + 1;
+        }
+        Ok(all_logs)
+    }
+
+    /// Queries `BurnBlocked` events emitted by `FungibleBridge.blockBurn` in
+    /// chunked ranges. Returned in the same shape as deposit logs so the
+    /// scanner can hand them to `parse_burn_blocked_event`.
+    pub async fn get_burn_blocked_logs(&self, from: u64, to: u64) -> Result<Vec<Log>> {
+        let filter_base = Filter::new()
+            .address(self.bridge_addr)
+            .event_signature(burn_blocked_event_signature());
 
         let mut all_logs = Vec::new();
         let mut cursor = from;

@@ -317,7 +317,11 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let mut chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan/retry ──
-    let mut monitor_state = MonitorState::new(monitor_start_block);
+    let source_chain_id = evm_client
+        .get_chain_id()
+        .await
+        .context("failed to query EVM chain id for monitor state")?;
+    let mut monitor_state = MonitorState::new(monitor_start_block, source_chain_id);
     let default_sqlite_path = storage_dir
         .parent()
         .unwrap_or(storage_dir)

@@ -7,11 +7,12 @@
 use std::{sync::Arc, time::Duration};
 
 use alloy::providers::Provider;
+use linera_base::identifiers::Account;
 use tokio::sync::{Notify, RwLock};
 
-use super::{MonitorState, PendingDeposit};
+use super::{MonitorState, PendingDeposit, PendingRefund};
 use crate::{
-    proof::{parse_deposit_event, DepositKey, ReceiptLog},
+    proof::{parse_burn_blocked_event, parse_deposit_event, DepositKey, ReceiptLog, RefundKey},
     relay::{self, evm::EvmClient, linera::LineraClient},
 };
 
@@ -189,6 +190,63 @@ async fn evm_scan_iteration(
                 depositor: deposit.depositor,
                 amount: deposit.amount,
                 nonce: deposit.nonce,
+            })
+            .await;
+        tracked_any |= was_new;
+    }
+
+    let burn_blocked_logs = evm_client
+        .get_burn_blocked_logs(last_block + 1, current_block)
+        .await?;
+    let source_chain_id = monitor.read().await.source_chain_id();
+    for log in &burn_blocked_logs {
+        let block_hash = match log.block_hash {
+            Some(h) => h,
+            None => continue,
+        };
+        let tx_hash = match log.transaction_hash {
+            Some(h) => h,
+            None => continue,
+        };
+        let tx_index = match log.transaction_index {
+            Some(i) => i,
+            None => continue,
+        };
+        let log_index = match log.log_index {
+            Some(i) => i,
+            None => continue,
+        };
+
+        let receipt_log = ReceiptLog {
+            address: log.address(),
+            topics: log.data().topics().to_vec(),
+            data: log.data().data.to_vec(),
+        };
+        let parsed = match parse_burn_blocked_event(&receipt_log, bridge_addr) {
+            Ok(p) => p,
+            Err(error) => {
+                tracing::warn!(%tx_hash, ?error, "Failed to parse BurnBlocked log");
+                continue;
+            }
+        };
+
+        let key = RefundKey {
+            source_chain_id,
+            block_hash,
+            tx_index,
+            log_index,
+        };
+        let was_new = monitor
+            .write()
+            .await
+            .track_refund(PendingRefund {
+                key,
+                evm_tx_hash: tx_hash,
+                source: Account {
+                    chain_id: parsed.source_chain_id,
+                    owner: parsed.source_owner,
+                },
+                amount: parsed.amount,
             })
             .await;
         tracked_any |= was_new;
