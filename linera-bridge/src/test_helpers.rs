@@ -220,6 +220,7 @@ pub fn fungible_message_transaction(
 /// Creates a BurnEvent as a linera_base Event on the "burns" stream for a given application.
 pub fn burn_event(
     application_id: CryptoHash,
+    source: wrapped_fungible::Account,
     target: [u8; 20],
     amount: U128,
     index: u32,
@@ -231,7 +232,12 @@ pub fn burn_event(
             stream_name: StreamName(b"burns".to_vec()),
         },
         index,
-        value: bcs::to_bytes(&wrapped_fungible::BurnEvent { target, amount }).unwrap(),
+        value: bcs::to_bytes(&wrapped_fungible::BurnEvent {
+            source,
+            target,
+            amount,
+        })
+        .unwrap(),
     }
 }
 

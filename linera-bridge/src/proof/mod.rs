@@ -70,10 +70,12 @@
 #[cfg(feature = "offchain")]
 pub mod gen;
 
+mod burn_blocked;
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
 use anyhow::{anyhow, ensure, Result};
+pub use burn_blocked::{parse_burn_blocked_event, BurnBlockedFields, RefundKey};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{AccountOwner, ApplicationId, ChainId},
