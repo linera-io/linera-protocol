@@ -43,6 +43,14 @@ pub enum BridgeOperation {
     /// Replace the bridge's RPC endpoint. Chain-owner-only.
     /// Empty string disables finality verification.
     SetRpcEndpoint { rpc_endpoint: String },
+    /// Verify a BurnBlocked proof and mint refund to the original burner.
+    RefundBurn {
+        block_header_rlp: Vec<u8>,
+        receipt_rlp: Vec<u8>,
+        proof_nodes: Vec<Vec<u8>>,
+        tx_index: u64,
+        log_index: u64,
+    },
 }
 
 /// Initial state passed at `create_application`.
