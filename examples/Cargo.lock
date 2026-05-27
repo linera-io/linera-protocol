@@ -1735,7 +1735,6 @@ dependencies = [
  "futures",
  "insta",
  "linera-sdk",
- "serde",
  "serde-reflection",
  "serde_json",
  "tokio",
@@ -4115,6 +4114,7 @@ version = "0.16.0"
 dependencies = [
  "convert_case",
  "proc-macro2",
+ "sha3",
  "syn 2.0.117",
 ]
 
