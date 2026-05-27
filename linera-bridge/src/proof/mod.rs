@@ -75,7 +75,9 @@ use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
 use anyhow::{anyhow, ensure, Result};
-pub use burn_blocked::{parse_burn_blocked_event, BurnBlockedFields, RefundKey};
+pub use burn_blocked::{
+    burn_blocked_event_signature, parse_burn_blocked_event, BurnBlockedFields, RefundKey,
+};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{AccountOwner, ApplicationId, ChainId},
@@ -266,6 +268,35 @@ pub mod testing {
         data.extend_from_slice(token.as_slice());
         data.extend_from_slice(&U256::from(amount).to_be_bytes::<32>());
         data.extend_from_slice(&U256::from(nonce).to_be_bytes::<32>());
+        data
+    }
+
+    /// Builds ABI-encoded data for a `BurnBlocked` event:
+    /// `bytes32 source_chain_id, bytes source_owner_bcs, uint128 amount`.
+    pub fn build_burn_blocked_event_data(
+        source_chain_id: B256,
+        source_owner_bcs: &[u8],
+        amount: u128,
+    ) -> Vec<u8> {
+        let mut data = Vec::new();
+        // Head[0..32]: source_chain_id
+        data.extend_from_slice(source_chain_id.as_slice());
+        // Head[32..64]: offset to source_owner_bcs tail = 96
+        let mut offset = [0u8; 32];
+        offset[24..32].copy_from_slice(&96u64.to_be_bytes());
+        data.extend_from_slice(&offset);
+        // Head[64..96]: amount (uint128 left-padded to 32 bytes)
+        let mut amount_word = [0u8; 32];
+        amount_word[16..32].copy_from_slice(&amount.to_be_bytes());
+        data.extend_from_slice(&amount_word);
+        // Tail[96..128]: bytes length
+        let mut len_word = [0u8; 32];
+        len_word[24..32].copy_from_slice(&(source_owner_bcs.len() as u64).to_be_bytes());
+        data.extend_from_slice(&len_word);
+        // Tail[128..]: bytes data, padded to a 32-byte boundary
+        data.extend_from_slice(source_owner_bcs);
+        let pad = (32 - source_owner_bcs.len() % 32) % 32;
+        data.extend(std::iter::repeat_n(0u8, pad));
         data
     }
 

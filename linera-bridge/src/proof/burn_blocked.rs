@@ -197,6 +197,7 @@ pub fn parse_burn_blocked_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::proof::testing::build_burn_blocked_event_data;
 
     /// Builds a `blocked_by` topic (left-padded address in a 32-byte word).
     fn blocked_by_topic(addr: Address) -> B256 {
@@ -211,35 +212,6 @@ mod tests {
         let be = value.to_be_bytes();
         topic[32 - byte_len..32].copy_from_slice(&be[16 - byte_len..16]);
         B256::from(topic)
-    }
-
-    /// Builds ABI-encoded data for a `BurnBlocked` event:
-    /// `bytes32 source_chain_id, bytes source_owner_bcs, uint128 amount`.
-    fn build_burn_blocked_event_data(
-        source_chain_id: B256,
-        source_owner_bcs: &[u8],
-        amount: u128,
-    ) -> Vec<u8> {
-        let mut data = Vec::new();
-        // Head[0..32]: source_chain_id
-        data.extend_from_slice(source_chain_id.as_slice());
-        // Head[32..64]: offset to source_owner_bcs tail = 96
-        let mut offset = [0u8; 32];
-        offset[24..32].copy_from_slice(&96u64.to_be_bytes());
-        data.extend_from_slice(&offset);
-        // Head[64..96]: amount (uint128 left-padded to 32 bytes)
-        let mut amount_word = [0u8; 32];
-        amount_word[16..32].copy_from_slice(&amount.to_be_bytes());
-        data.extend_from_slice(&amount_word);
-        // Tail[96..128]: bytes length
-        let mut len_word = [0u8; 32];
-        len_word[24..32].copy_from_slice(&(source_owner_bcs.len() as u64).to_be_bytes());
-        data.extend_from_slice(&len_word);
-        // Tail[128..]: bytes data, padded to a 32-byte boundary
-        data.extend_from_slice(source_owner_bcs);
-        let pad = (32 - source_owner_bcs.len() % 32) % 32;
-        data.extend(std::iter::repeat_n(0u8, pad));
-        data
     }
 
     /// A constant bridge address used in burn-blocked parsing tests.
