@@ -37,10 +37,16 @@ contract FungibleBridge is Microchain {
     /// Emitted when a burn at `(height, eventIndex)` is administratively
     /// blocked from settlement by `blocked_by`. Subsequent `addBlock` /
     /// `processBurns` calls skip the burn instead of releasing tokens.
+    /// Includes the decoded `source` chain id + owner and the burn
+    /// `amount` so the off-chain relayer can build a Linera-side refund
+    /// proof without re-fetching the certificate.
     event BurnBlocked(
         uint64 indexed height,
         uint32 indexed eventIndex,
-        address indexed blocked_by
+        address indexed blocked_by,
+        bytes32 source_chain_id,
+        bytes source_owner_bcs,
+        uint128 amount
     );
 
     // WrappedFungible application ID on Linera,
@@ -84,22 +90,42 @@ contract FungibleBridge is Microchain {
         return blockedBurns[_burnKey(height, eventIndex)];
     }
 
-    /// Marks the burn at `(height, eventIndex)` as blocked. After this
-    /// call, `addBlock` and `processBurns` will skip the burn instead of
-    /// releasing tokens. No-op if the burn was already settled
-    /// (`processedBurns[key]` is set) — blocking after release has no
-    /// effect on the tokens already transferred. Idempotent on re-call.
-    /// Pre-emptive: the burn need not exist in any verified block yet.
-    /// One-way: there is no unblock entry point.
+    /// Verifies `cert` once, decodes the burn at (txIndex, eventPosInTx),
+    /// and marks it blocked from settlement. The decoded `source` and
+    /// `amount` are emitted alongside `(height, eventIndex)` so the
+    /// off-chain relayer can build a Linera-side refund proof without
+    /// going back to the cert.
     ///
-    /// Currently public (no access control). Access control will be
-    /// layered on in a follow-up — do not deploy to mainnet as-is.
-    function blockBurn(uint64 height, uint32 eventIndex) external {
-        bytes32 key = _burnKey(height, eventIndex);
+    /// No-op if the burn was already settled (`processedBurns[key]`) or
+    /// already blocked (`blockedBurns[key]`). One-way — no unblock entry
+    /// point. Currently public (no access control); see follow-up.
+    function blockBurn(bytes calldata cert, uint32 txIndex, uint32 eventPosInTx) external {
+        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(cert);
+        require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
+        require(txIndex < blockValue.body.events.length, "txIndex out of range");
+
+        BridgeTypes.Event[] memory txEvents = blockValue.body.events[txIndex];
+        require(eventPosInTx < txEvents.length, "eventPos out of range");
+
+        bytes32 burnsHash = keccak256("burns");
+        BridgeTypes.Event memory evt = txEvents[eventPosInTx];
+        require(_isMatchingBurn(evt, burnsHash), "not a matching burn");
+
+        uint64 height = blockValue.header.height.value;
+        bytes32 key = _burnKey(height, evt.index);
         if (processedBurns[key]) return;
         if (blockedBurns[key]) return;
         blockedBurns[key] = true;
-        emit BurnBlocked(height, eventIndex, msg.sender);
+
+        WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
+        emit BurnBlocked(
+            height,
+            evt.index,
+            msg.sender,
+            burnEvt.source.chain_id.value.value,
+            BridgeTypes.bcs_serialize_AccountOwner(burnEvt.source.owner),
+            burnEvt.amount
+        );
     }
 
     /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
