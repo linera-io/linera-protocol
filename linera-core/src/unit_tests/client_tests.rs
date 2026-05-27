@@ -4499,3 +4499,110 @@ where
 
     Ok(())
 }
+
+/// Verifies that when a chain has produced several checkpoints, a follower bootstraps
+/// from the *latest* one and only downloads sender blocks still referenced by that
+/// checkpoint's `outbox_block_hashes` — pre-first-checkpoint history, intermediate
+/// checkpoints, and message-free blocks in between are skipped entirely.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_bootstrap_from_later_checkpoint<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = producer.chain_id();
+
+    // Height 0: a cross-chain transfer. The recipient never acks in this test, so
+    // both transfers stay unfinalized and are referenced by checkpoint #2's
+    // `outbox_block_hashes`.
+    let transfer_0 = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(transfer_0.block().header.height, BlockHeight::ZERO);
+
+    // Height 1: checkpoint #1.
+    let checkpoint_1 = producer.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint_1.block().header.height, BlockHeight::from(1));
+
+    // Height 2: a same-chain burn — no cross-chain messages, so it isn't referenced
+    // by any subsequent `outbox_block_hashes` and the follower must not download it.
+    let burn_cert = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_cert.block().header.height, BlockHeight::from(2));
+
+    // Height 3: another cross-chain transfer.
+    let transfer_3 = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(transfer_3.block().header.height, BlockHeight::from(3));
+
+    // Height 4: checkpoint #2 — the one the follower should bootstrap from.
+    let checkpoint_2 = producer.checkpoint().await.unwrap().unwrap();
+    let block = checkpoint_2.block();
+    assert_eq!(block.header.height, BlockHeight::from(4));
+    let outbox_block_hashes = match block.body.oracle_responses.first().and_then(|t| t.first()) {
+        Some(OracleResponse::Checkpoint {
+            outbox_block_hashes,
+            ..
+        }) => outbox_block_hashes.clone(),
+        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
+    };
+    // Neither transfer has been acked, so both are still referenced. The burn at
+    // height 2 and checkpoint #1 at height 1 are not.
+    assert_eq!(
+        outbox_block_hashes,
+        vec![transfer_0.hash(), transfer_3.hash()],
+    );
+
+    let producer_state_hash = producer
+        .chain_info()
+        .await?
+        .state_hash
+        .expect("producer should expose a state hash after checkpoint #2");
+
+    let follower = builder
+        .make_client_with_options(
+            chain_id,
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            true,
+        )
+        .await?;
+    follower.synchronize_from_validators().await?;
+    let follower_info = follower.chain_info().await?;
+    assert_eq!(follower_info.next_block_height, BlockHeight::from(5));
+    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
+
+    let storage = follower.storage_client();
+    // The latest checkpoint cert is in storage; the two transfers it certifies are
+    // fetched via the pre-checkpoint sender-block path.
+    assert!(storage.contains_certificate(checkpoint_2.hash()).await?);
+    assert!(storage.contains_certificate(transfer_0.hash()).await?);
+    assert!(storage.contains_certificate(transfer_3.hash()).await?);
+    // The intermediate checkpoint and the message-free burn are not referenced by
+    // checkpoint #2's `outbox_block_hashes` and must not be downloaded.
+    assert!(!storage.contains_certificate(checkpoint_1.hash()).await?);
+    assert!(!storage.contains_certificate(burn_cert.hash()).await?);
+
+    Ok(())
+}
