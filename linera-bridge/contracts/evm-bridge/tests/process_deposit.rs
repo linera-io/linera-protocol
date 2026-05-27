@@ -22,7 +22,9 @@ use linera_sdk::{
 use serde::Deserialize;
 use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
 
-/// Helper to query an account balance on the wrapped-fungible app.
+/// Queries an account balance on the wrapped-fungible app. The state stores
+/// raw `U128` (no decimal scaling), so we return that directly rather than
+/// re-parsing as `Amount` (which would multiply by 10^18).
 async fn query_balance(
     app_id: ApplicationId<WrappedFungibleTokenAbi>,
     chain: &ActiveChain,
