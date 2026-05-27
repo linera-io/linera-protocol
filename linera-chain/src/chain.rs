@@ -959,7 +959,7 @@ where
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         let recipients = block_execution_tracker.recipients();
-        let non_checkpoint_ack_recipients = block_execution_tracker.non_checkpoint_ack_recipients();
+        let non_ack_tx_indices = block_execution_tracker.non_checkpoint_ack_tx_indices();
         let mut recipient_heights = Vec::new();
         for (recipient, height) in chain
             .previous_message_blocks
@@ -973,26 +973,31 @@ where
             // down still queues these for delivery; only the
             // `previous_message_blocks` / `unfinalized_message_blocks` chain skips
             // them.
-            if non_checkpoint_ack_recipients.contains(&recipient) {
+            if let Some(tx_indices) = non_ack_tx_indices.get(&recipient) {
                 chain
                     .previous_message_blocks
                     .insert(&recipient, block.height)?;
-                // Track this block's height as pending acknowledgement from the
-                // recipient. The matching hash isn't known yet (we're mid-execution),
-                // so we only store the height; the checkpoint pre-block hook resolves
-                // heights to hashes via `block_hashes` when it builds the oracle
-                // response.
-                let mut heights = chain
+                // Track each non-CheckpointAck bundle's cursor as pending
+                // acknowledgement from the recipient. We don't know this block's
+                // hash yet (we're mid-execution); the checkpoint pre-block hook
+                // resolves heights to hashes via `block_hashes` when it builds the
+                // oracle response.
+                let mut cursors = chain
                     .system
                     .unfinalized_message_blocks
                     .get(&recipient)
                     .await?
                     .unwrap_or_default();
-                heights.insert(block.height);
+                for index in tx_indices {
+                    cursors.insert(Cursor {
+                        height: block.height,
+                        index: *index,
+                    });
+                }
                 chain
                     .system
                     .unfinalized_message_blocks
-                    .insert(&recipient, heights)?;
+                    .insert(&recipient, cursors)?;
             }
             if let Some(height) = height {
                 recipient_heights.push((recipient, height));
@@ -1228,10 +1233,16 @@ where
             .unfinalized_message_blocks
             .index_values()
             .await?;
-        for (recipient, heights) in entries {
-            if heights.is_empty() {
+        for (recipient, cursors) in entries {
+            if cursors.is_empty() {
                 continue;
             }
+            // Dedup by height: the outbox queue tracks block heights only (multiple
+            // bundles at the same height share a single queue entry).
+            let heights = cursors
+                .into_iter()
+                .map(|cursor| cursor.height)
+                .collect::<BTreeSet<_>>();
             let mut outbox = self.outboxes.try_load_entry_mut(&recipient).await?;
             for height in &heights {
                 outbox.queue.push_back(*height);
@@ -1270,9 +1281,11 @@ where
     }
 
     /// Returns the sorted, deduplicated set of block heights referenced by the on-chain
-    /// `unfinalized_message_blocks` map. Used both when building the checkpoint oracle
-    /// response (to resolve heights to hashes via `block_hashes`) and on the bootstrap
-    /// path (to zip with the certified `outbox_block_hashes` from the response).
+    /// `unfinalized_message_blocks` map (one entry per height even if multiple bundles
+    /// at that height are still unfinalized). Used both when building the checkpoint
+    /// oracle response (to resolve heights to hashes via `block_hashes`) and on the
+    /// bootstrap path (to zip with the certified `outbox_block_hashes` from the
+    /// response).
     pub async fn collect_unfinalized_heights(&self) -> Result<BTreeSet<BlockHeight>, ChainError> {
         let mut heights = BTreeSet::new();
         let entries = self
@@ -1282,7 +1295,7 @@ where
             .index_values()
             .await?;
         for (_, per_recipient) in entries {
-            heights.extend(per_recipient);
+            heights.extend(per_recipient.into_iter().map(|cursor| cursor.height));
         }
         Ok(heights)
     }

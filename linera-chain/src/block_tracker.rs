@@ -403,18 +403,25 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .collect()
     }
 
-    /// Returns the subset of [`Self::recipients`] for which this block sent at least
-    /// one non-`SystemMessage::CheckpointAck` message. The chain-level bookkeeping
-    /// (`previous_message_blocks`, `unfinalized_message_blocks`) is updated only for
-    /// these recipients, so that `CheckpointAck`-only blocks don't pin a slot that
-    /// would never get trimmed (the recipient never acknowledges back).
-    pub fn non_checkpoint_ack_recipients(&self) -> BTreeSet<ChainId> {
-        self.messages
-            .iter()
-            .flatten()
-            .filter(|msg| !msg.message.is_checkpoint_ack())
-            .map(|msg| msg.destination)
-            .collect()
+    /// For each recipient that received at least one non-`SystemMessage::CheckpointAck`
+    /// message in this block, returns the transaction indices that produced such a
+    /// message. The chain-level bookkeeping (`previous_message_blocks`,
+    /// `unfinalized_message_blocks`) is updated only for these recipients, so that
+    /// `CheckpointAck`-only blocks don't pin a slot that would never get trimmed (the
+    /// recipient never acknowledges back). The transaction indices feed
+    /// `unfinalized_message_blocks` as full `(block.height, tx_index)` cursors, so a
+    /// later ack with a cursor past the last unfinalized bundle can fully evict the
+    /// recipient.
+    pub fn non_checkpoint_ack_tx_indices(&self) -> BTreeMap<ChainId, BTreeSet<u32>> {
+        let mut result = BTreeMap::<ChainId, BTreeSet<u32>>::new();
+        for (tx_idx, msgs) in (0u32..).zip(&self.messages) {
+            for msg in msgs {
+                if !msg.message.is_checkpoint_ack() {
+                    result.entry(msg.destination).or_default().insert(tx_idx);
+                }
+            }
+        }
+        result
     }
 
     /// Returns stream IDs for events published in the block.

@@ -114,18 +114,19 @@ pub struct SystemExecutionStateView<C> {
     /// message we sent that the recipient finalized, together with the hash of the
     /// recipient's block carrying the notification.
     pub finalized_sent_messages: MapView<C, ChainId, (Cursor, CryptoHash)>,
-    /// For each recipient chain, the heights of our blocks that sent messages to that
-    /// recipient and have not yet been acknowledged via [`SystemMessage::CheckpointAck`].
-    /// Maintained on-chain (as opposed to the local off-chain outbox in chain state)
-    /// so it is identical across validators and can feed the checkpoint oracle
-    /// response's `outbox_block_hashes`. We store heights only; the matching block
-    /// hashes are looked up from `block_hashes` at checkpoint-creation time, since the
-    /// current block's hash is unknown while we're still executing it.
+    /// For each recipient chain, the cursors `(block_height, transaction_index)` of
+    /// our outgoing bundles that haven't yet been acknowledged via
+    /// [`SystemMessage::CheckpointAck`]. Maintained on-chain (as opposed to the local
+    /// off-chain outbox in chain state) so it is identical across validators and can
+    /// feed the checkpoint oracle response's `outbox_block_hashes` (the unique heights
+    /// across all cursors). We store cursors rather than heights so that an ack at a
+    /// finer-grained cursor than the last bundle in a block can fully evict the entry
+    /// — important for high-fanout chains whose recipients only interact once.
     ///
-    /// Excludes blocks whose only messages to a given recipient were
+    /// Excludes bundles whose only messages to a given recipient were
     /// `SystemMessage::CheckpointAck`: those don't trigger a return notification
     /// from the recipient, so tracking them would accumulate forever.
-    pub unfinalized_message_blocks: MapView<C, ChainId, BTreeSet<BlockHeight>>,
+    pub unfinalized_message_blocks: MapView<C, ChainId, BTreeSet<Cursor>>,
     /// Chains from which we've received at least one non-`CheckpointAck` message
     /// since our last `SystemOperation::Checkpoint`. Determines whom to notify with a
     /// `SystemMessage::CheckpointAck` at the next checkpoint operation. Excluding
@@ -901,16 +902,15 @@ where
                     &context.origin,
                     (latest_received_cursor, context.origin_certificate_hash),
                 )?;
-                // Drop heights the recipient has consumed. Tracking is per-block: we
-                // retain every height `>= cursor.height` rather than comparing the full
-                // `(height, index)` cursor, because `next_cursor_to_remove` advances per
-                // bundle and never auto-jumps from `(H, last_index + 1)` to `(H + 1, 0)`.
-                // So a recipient that has finished block H still sits at `(H, *)` and we
-                // conservatively keep H here until a later ack moves the height forward.
-                if let Some(mut heights) =
+                // Drop every cursor the recipient has consumed. `split_off(&k)` on a
+                // `BTreeSet<Cursor>` returns the entries `>= k`, so this trims the
+                // strict prefix below `latest_received_cursor` and leaves any
+                // still-unfinalized bundles in place. A recipient that has consumed
+                // everything we ever sent ends up with an empty set and is evicted.
+                if let Some(mut cursors) =
                     self.unfinalized_message_blocks.get(&context.origin).await?
                 {
-                    let retained = heights.split_off(&latest_received_cursor.height);
+                    let retained = cursors.split_off(&latest_received_cursor);
                     if retained.is_empty() {
                         self.unfinalized_message_blocks.remove(&context.origin)?;
                     } else {

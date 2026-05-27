@@ -337,12 +337,33 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
     }
     .into_view()
     .await;
+    // cursor_a is (7, 3). We pre-seed unfinalized_message_blocks[origin_a] with
+    // bundles at:
+    //   * (5, 0) — fully behind the ack, dropped.
+    //   * (7, 2) — same height as the ack, but lower index — dropped (the
+    //     recipient has consumed past it).
+    //   * (7, 3) — the ack's exact position; this bundle (and any with
+    //     `cursor >= cursor_a`) is retained.
+    //   * (9, 0) — newer than the ack, retained.
     receiver.system.unfinalized_message_blocks.insert(
         &origin_a,
         std::collections::BTreeSet::from([
-            BlockHeight::from(5),
-            BlockHeight::from(7),
-            BlockHeight::from(9),
+            Cursor {
+                height: BlockHeight::from(5),
+                index: 0,
+            },
+            Cursor {
+                height: BlockHeight::from(7),
+                index: 2,
+            },
+            Cursor {
+                height: BlockHeight::from(7),
+                index: 3,
+            },
+            Cursor {
+                height: BlockHeight::from(9),
+                index: 0,
+            },
         ]),
     )?;
     let sender_cert_hash = CryptoHash::test_hash("sender block");
@@ -376,7 +397,6 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
             .await?,
         Some((cursor_a, sender_cert_hash))
     );
-    // cursor_a.height == 7, so heights 5 are dropped, 7 and 9 are retained.
     assert_eq!(
         receiver
             .system
@@ -384,8 +404,14 @@ async fn checkpoint_notifies_origins_and_receive_records_finalization() -> anyho
             .get(&origin_a)
             .await?,
         Some(std::collections::BTreeSet::from([
-            BlockHeight::from(7),
-            BlockHeight::from(9),
+            Cursor {
+                height: BlockHeight::from(7),
+                index: 3,
+            },
+            Cursor {
+                height: BlockHeight::from(9),
+                index: 0,
+            },
         ]))
     );
 
