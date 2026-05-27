@@ -4128,6 +4128,7 @@ version = "0.15.19"
 dependencies = [
  "convert_case",
  "proc-macro2",
+ "sha3",
  "syn 2.0.100",
 ]
 
