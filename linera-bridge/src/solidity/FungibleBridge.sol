@@ -29,6 +29,16 @@ contract FungibleBridge is Microchain {
         uint256 nonce
     );
 
+    /// Emitted when a Linera burn is released as an ERC-20 transfer to
+    /// `target`. `height` and `eventIndex` together identify the burn in
+    /// the source Linera block (matches the on-chain dedup key).
+    event BurnReleased(
+        uint64 indexed height,
+        uint32 indexed eventIndex,
+        address indexed target,
+        uint256 amount
+    );
+
     // WrappedFungible application ID on Linera,
     // used to identify Burn events in the block stream.
     bytes32 public immutable fungibleApplicationId;
@@ -108,7 +118,7 @@ contract FungibleBridge is Microchain {
                 bytes32 key = _burnKey(height, evt.index);
                 if (processedBurns[key]) continue;
 
-                _releaseBurn(evt, key);
+                _releaseBurn(evt, key, height);
             }
         }
     }
@@ -152,7 +162,7 @@ contract FungibleBridge is Microchain {
             bytes32 key = _burnKey(height, evt.index);
             if (processedBurns[key]) continue;
 
-            _releaseBurn(evt, key);
+            _releaseBurn(evt, key, height);
         }
     }
 
@@ -178,10 +188,13 @@ contract FungibleBridge is Microchain {
     /// the dedup flag BEFORE the external `token.transfer` call
     /// (checks-effects-interactions) so a malicious token that re-enters
     /// `addBlock` / `processBurns` cannot trigger a second release.
-    function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key) private {
+    function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key, uint64 height) private {
         WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
         processedBurns[key] = true;
-        _safeTransfer(address(burnEvt.target), burnEvt.amount.value);
+        address target = address(burnEvt.target);
+        uint256 amount = burnEvt.amount.value;
+        _safeTransfer(target, amount);
+        emit BurnReleased(height, evt.index, target, amount);
     }
 
     /// @dev Calls transfer and handles tokens that don't return a boolean.
