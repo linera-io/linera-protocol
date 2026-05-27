@@ -67,7 +67,7 @@ pub struct TransactionTracker {
 }
 
 /// Pre-block-computed inputs for a `SystemOperation::Checkpoint` transaction.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PreparedCheckpoint {
     /// The execution-state dump split into blobs at the current epoch's
     /// `maximum_blob_size`.

@@ -194,30 +194,6 @@ where
         Ok(())
     }
 
-    /// Convenience helper that combines [`Self::prepare_checkpoint`] and
-    /// [`Self::apply_checkpoint`] in a single call, with an empty origin-cursor list.
-    /// Production block-execution code invokes the two halves separately so the dump
-    /// runs before any block-level state mutation, and so the inbox snapshot is taken at
-    /// the same point; this helper is only used by unit tests that exercise the
-    /// operation in isolation.
-    #[cfg(test)]
-    pub async fn execute_checkpoint(
-        &mut self,
-        maximum_blob_size: u64,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), ExecutionError> {
-        let blobs = self.prepare_checkpoint(maximum_blob_size).await?;
-        self.apply_checkpoint(
-            PreparedCheckpoint {
-                blobs,
-                origin_cursors: Vec::new(),
-                outbox_block_hashes: Vec::new(),
-            },
-            txn_tracker,
-        )
-        .await
-    }
-
     /// Replaces the persisted execution state with the content of a checkpoint blob,
     /// recording the hash of the bytes as the new stored hash. The caller is
     /// contractually obliged to reload the view after this returns.

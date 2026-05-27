@@ -192,13 +192,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.oracle_responses()?,
             &self.blobs,
         );
-        // Cloning each blob is cheap — its bytes are behind an `Arc`.
+        // Cloning is cheap — blob bytes are behind an `Arc`.
         if let Some(prepared) = self.prepared_checkpoint.as_ref() {
-            tracker.set_prepared_checkpoint(PreparedCheckpoint {
-                blobs: prepared.blobs.clone(),
-                origin_cursors: prepared.origin_cursors.clone(),
-                outbox_block_hashes: prepared.outbox_block_hashes.clone(),
-            });
+            tracker.set_prepared_checkpoint(prepared.clone());
         }
         Ok(tracker)
     }

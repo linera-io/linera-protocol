@@ -966,12 +966,13 @@ where
             .multi_get_pairs(recipients)
             .await?
         {
-            // Only `Checkpoint`-only blocks are excluded from the chain-level
-            // tracking. Otherwise the recipient never acknowledges (a `Checkpoint`
-            // doesn't trigger a return `Checkpoint`), so the entry would never get
-            // trimmed. Off-chain outbox bookkeeping further down still queues these
-            // for delivery; only the `previous_message_blocks` /
-            // `unfinalized_message_blocks` chain skips them.
+            // Only `CheckpointAck`-only blocks are excluded from the chain-level
+            // tracking. Otherwise the recipient never acknowledges (a
+            // `CheckpointAck` doesn't trigger a return `CheckpointAck`), so the
+            // entry would never get trimmed. Off-chain outbox bookkeeping further
+            // down still queues these for delivery; only the
+            // `previous_message_blocks` / `unfinalized_message_blocks` chain skips
+            // them.
             if non_checkpoint_ack_recipients.contains(&recipient) {
                 chain
                     .previous_message_blocks
@@ -1524,13 +1525,12 @@ where
                     }
                     (Some(_), None) => {
                         // The outbox already has a previous height for this recipient,
-                        // but this block's body recorded no predecessor — legitimate when
-                        // earlier sends to this recipient were `CheckpointAck`-only (those
-                        // are added to the off-chain outbox but skipped in
-                        // `chain.previous_message_blocks`). Skip the optimistic preprocess
-                        // path; the in-order `apply_confirmed_block` will schedule this
-                        // block correctly when the tip catches up.
-                        continue;
+                        // but this block's body recorded no predecessor — that means
+                        // this is the first non-`CheckpointAck` send to this recipient,
+                        // even though earlier `CheckpointAck`-only blocks have already
+                        // been added to the off-chain outbox. We can still schedule:
+                        // the bundle will carry `previous_height = None`, which the
+                        // receiver accepts as "first ever".
                     }
                     (None, Some((_, prev_msg_block_height))) => {
                         // We have no previously processed block in the outbox, but we are

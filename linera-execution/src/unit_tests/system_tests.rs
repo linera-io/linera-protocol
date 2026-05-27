@@ -157,7 +157,16 @@ async fn execute_checkpoint_publishes_blob_and_records_oracle_response() -> anyh
     let pre_checkpoint_hash = view.crypto_hash_mut().await?;
 
     let mut txn_tracker = TransactionTracker::default();
-    view.execute_checkpoint(u64::MAX, &mut txn_tracker).await?;
+    let blobs = view.prepare_checkpoint(u64::MAX).await?;
+    view.apply_checkpoint(
+        PreparedCheckpoint {
+            blobs,
+            origin_cursors: Vec::new(),
+            outbox_block_hashes: Vec::new(),
+        },
+        &mut txn_tracker,
+    )
+    .await?;
 
     // The override hash takes effect immediately for the in-memory view.
     let post_checkpoint_hash = view.crypto_hash_mut().await?;
@@ -397,8 +406,7 @@ async fn execute_checkpoint_rejects_chain_with_published_events() -> anyhow::Res
     view.previous_event_blocks
         .insert(&StreamId::system(b"events"), BlockHeight::from(0))?;
 
-    let mut txn_tracker = TransactionTracker::default();
-    let result = view.execute_checkpoint(u64::MAX, &mut txn_tracker).await;
+    let result = view.prepare_checkpoint(u64::MAX).await;
     assert!(matches!(
         result,
         Err(crate::ExecutionError::CheckpointPreconditionFailed(_))
