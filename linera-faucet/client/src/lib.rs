@@ -38,8 +38,9 @@ pub use error::Error;
 
 mod error {
     // `impl_context!` generates a public `Error` newtype (with accessors) that cannot carry
-    // doc comments, so this wrapper module is exempt from the crate's `missing_docs` policy.
-    #![allow(missing_docs)]
+    // doc comments, so this wrapper module is exempted from the crate's `missing_docs` policy.
+    // `expect` (rather than `allow`) flags this if the macro ever stops generating such items.
+    #![expect(missing_docs)]
 
     use thiserror_context::Context;
 

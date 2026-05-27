@@ -5,9 +5,10 @@
 
 // The `GraphQLQuery` derive macro generates public items (per-query modules,
 // `Variables` and `ResponseData` structs, etc.) that cannot carry doc comments,
-// so this module of generated bindings is exempt from the crate's `missing_docs`
-// policy. The hand-written types and query structs are still documented below.
-#![allow(missing_docs)]
+// so this module of generated bindings is exempted from the crate's `missing_docs`
+// policy. `expect` (rather than `allow`) flags this if the generated code ever stops
+// producing undocumented items. The hand-written types and queries are still documented below.
+#![expect(missing_docs)]
 
 use graphql_client::GraphQLQuery;
 use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
