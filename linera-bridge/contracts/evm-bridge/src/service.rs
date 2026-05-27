@@ -106,6 +106,22 @@ impl EvmBridgeService {
             .expect("failed to check processed deposits")
     }
 
+    /// Whether a refund with the given hash has been processed.
+    ///
+    /// The hash is the hex-encoded keccak-256 of the refund key
+    /// (see [`evm_bridge::RefundKey::hash`]).
+    async fn is_refund_processed(&self, hash: String) -> bool {
+        let bytes: [u8; 32] = hex::decode(hash.strip_prefix("0x").unwrap_or(&hash))
+            .expect("invalid hex")
+            .try_into()
+            .expect("hash must be 32 bytes");
+        self.state
+            .processed_refunds
+            .contains(&bytes)
+            .await
+            .expect("failed to check processed refunds")
+    }
+
     /// Verifies that the given EVM block hash is finalized on the source chain.
     ///
     /// Makes the EVM JSON-RPC calls in the service runtime so that the contract

@@ -53,6 +53,25 @@ pub struct DepositProof {
     pub log_indices: Vec<u64>,
 }
 
+/// All data needed to submit a `RefundBurn` operation to the evm-bridge app.
+///
+/// Mirrors [`DepositProof`] but pins the single `BurnBlocked` log inside the
+/// receipt via `log_index` — `blockBurn` emits exactly one such event per
+/// transaction.
+#[derive(Debug, Clone)]
+pub struct BurnBlockedProof {
+    /// RLP-encoded block header (keccak256 of this = block hash).
+    pub block_header_rlp: Vec<u8>,
+    /// Canonical receipt bytes (EIP-2718 encoded, as stored in the receipts trie).
+    pub receipt_rlp: Vec<u8>,
+    /// MPT proof nodes for the receipt at `tx_index`.
+    pub proof_nodes: Vec<Vec<u8>>,
+    /// Transaction index within the block.
+    pub tx_index: u64,
+    /// Index of the single `BurnBlocked` log within the receipt.
+    pub log_index: u64,
+}
+
 /// Client interface for generating deposit proofs.
 ///
 /// Implementations query EVM chain data and construct the cryptographic
@@ -64,6 +83,22 @@ pub trait DepositProofClient {
     /// The implementation fetches the receipt, locates the `DepositInitiated`
     /// event log automatically, and constructs the MPT proof.
     async fn generate_deposit_proof(&self, tx_hash: B256) -> Result<DepositProof, ProofError>;
+}
+
+/// Client interface for generating `BurnBlocked` refund proofs.
+///
+/// Mirrors [`DepositProofClient`] but locates a single `BurnBlocked` log
+/// emitted by `FungibleBridge.blockBurn`.
+#[async_trait]
+pub trait BurnBlockedProofClient {
+    /// Generate a complete burn-blocked refund proof from a transaction hash.
+    ///
+    /// The implementation fetches the receipt, locates the (exactly one)
+    /// `BurnBlocked` event log automatically, and constructs the MPT proof.
+    async fn generate_burn_blocked_proof(
+        &self,
+        tx_hash: B256,
+    ) -> Result<BurnBlockedProof, ProofError>;
 }
 
 /// HTTP-based deposit proof client that queries an EVM JSON-RPC endpoint.
@@ -196,6 +231,131 @@ impl DepositProofClient for HttpDepositProofClient {
             proof_nodes,
             tx_index,
             log_indices,
+        })
+    }
+}
+
+#[async_trait]
+impl BurnBlockedProofClient for HttpDepositProofClient {
+    async fn generate_burn_blocked_proof(
+        &self,
+        tx_hash: B256,
+    ) -> Result<BurnBlockedProof, ProofError> {
+        // 1. Get transaction receipt → block hash, tx index
+        let receipt = self
+            .provider
+            .get_transaction_receipt(tx_hash)
+            .await
+            .map_err(|e| ProofError::Transient(e.into()))?
+            .ok_or_else(|| {
+                ProofError::Transient(anyhow::anyhow!(
+                    "transaction receipt not found for {tx_hash}"
+                ))
+            })?;
+
+        let block_hash = receipt.inner.block_hash.ok_or_else(|| {
+            ProofError::Transient(anyhow::anyhow!("receipt missing block_hash (pending tx?)"))
+        })?;
+        let tx_index = receipt.inner.transaction_index.ok_or_else(|| {
+            ProofError::Transient(anyhow::anyhow!("receipt missing transaction_index"))
+        })?;
+
+        // 2. Get full block → header RLP
+        let block = self
+            .provider
+            .get_block_by_hash(block_hash)
+            .await
+            .map_err(|e| ProofError::Transient(e.into()))?
+            .ok_or_else(|| {
+                ProofError::Transient(anyhow::anyhow!("block not found for hash {block_hash}"))
+            })?;
+
+        let mut block_header_rlp = Vec::new();
+        block.header.inner.encode(&mut block_header_rlp);
+
+        let computed_hash = alloy_primitives::keccak256(&block_header_rlp);
+        if computed_hash != block_hash {
+            return Err(ProofError::Permanent(anyhow::anyhow!(
+                "header RLP hash mismatch: computed {computed_hash}, expected {block_hash}. \
+                 This may indicate the RPC returned non-standard header fields."
+            )));
+        }
+
+        // 3. Get all block receipts
+        let all_receipts = self
+            .provider
+            .get_block_receipts(block.header.number.into())
+            .await
+            .map_err(|e| ProofError::Transient(e.into()))?
+            .ok_or_else(|| {
+                ProofError::Transient(anyhow::anyhow!(
+                    "block receipts not found for block {block_hash}"
+                ))
+            })?;
+
+        // 4. Encode each receipt to canonical EIP-2718 form (as stored in the trie).
+        let canonical_receipts: Vec<(u64, Vec<u8>)> = all_receipts
+            .into_iter()
+            .enumerate()
+            .map(|(idx, r)| {
+                let consensus_receipt = r.inner.inner.map_logs(|log| log.inner);
+                let encoded = consensus_receipt.encoded_2718();
+                (idx as u64, encoded)
+            })
+            .collect();
+
+        // 5. Build receipt trie and generate proof
+        let receipt_rlp = canonical_receipts
+            .iter()
+            .find(|(idx, _)| *idx == tx_index)
+            .map(|(_, rlp)| rlp.clone())
+            .ok_or_else(|| {
+                ProofError::Permanent(anyhow::anyhow!(
+                    "tx_index {tx_index} not found in block receipts"
+                ))
+            })?;
+
+        let (receipts_root, proof_nodes) =
+            crate::proof::build_receipt_proof(&canonical_receipts, tx_index);
+
+        if receipts_root != block.header.inner.receipts_root {
+            return Err(ProofError::Permanent(anyhow::anyhow!(
+                "receipts root mismatch: computed {receipts_root}, \
+                 header says {}. Receipt encoding may be incorrect.",
+                block.header.inner.receipts_root
+            )));
+        }
+
+        // Locate the single BurnBlocked log within the receipt. `blockBurn`
+        // emits exactly one such event per transaction; zero or more than one
+        // means the caller pointed at the wrong tx hash.
+        let logs =
+            crate::proof::decode_receipt_logs(&receipt_rlp).map_err(ProofError::Permanent)?;
+        let burn_blocked_sig = crate::proof::burn_blocked_event_signature();
+        let mut matching = logs
+            .iter()
+            .enumerate()
+            .filter(|(_, log)| log.topics.first() == Some(&burn_blocked_sig));
+        let log_index = match (matching.next(), matching.next()) {
+            (None, _) => {
+                return Err(ProofError::Permanent(anyhow::anyhow!(
+                    "no BurnBlocked event found in receipt for tx {tx_hash}"
+                )));
+            }
+            (Some(_), Some(_)) => {
+                return Err(ProofError::Permanent(anyhow::anyhow!(
+                    "expected exactly one BurnBlocked event in receipt for tx {tx_hash}, found multiple"
+                )));
+            }
+            (Some((idx, _)), None) => idx as u64,
+        };
+
+        Ok(BurnBlockedProof {
+            block_header_rlp,
+            receipt_rlp,
+            proof_nodes,
+            tx_index,
+            log_index,
         })
     }
 }

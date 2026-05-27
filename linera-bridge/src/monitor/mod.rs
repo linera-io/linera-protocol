@@ -48,6 +48,24 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
     Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
 }
 
+/// Queries the evm-bridge app to check whether a refund has been processed on Linera.
+pub async fn query_refund_processed<E: linera_core::environment::Environment>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    bridge_app_id: ApplicationId,
+    refund_key: &RefundKey,
+) -> anyhow::Result<bool> {
+    let hash_hex = format!("0x{}", hex::encode(refund_key.hash()));
+    let gql = format!(r#"{{ isRefundProcessed(hash: "{hash_hex}") }}"#);
+    let query = Query::user_without_abi(bridge_app_id, &GqlRequest { query: gql })?;
+    let (outcome, _) = chain_client.query_application(query, None).await?;
+    let response_bytes = match outcome.response {
+        QueryResponse::User(bytes) => bytes,
+        other => anyhow::bail!("unexpected query response: {other:?}"),
+    };
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
+    Ok(response["data"]["isRefundProcessed"].as_bool() == Some(true))
+}
+
 /// Queries the wrapped-fungible app for its declared source-ERC-20 decimals.
 pub async fn query_wrapped_fungible_decimals<E: linera_core::environment::Environment>(
     chain_client: &linera_core::client::ChainClient<E>,
@@ -670,10 +688,11 @@ pub struct StatusSummary {
     pub last_scanned_linera_height: BlockHeight,
 }
 
-/// Runs the deposit and burn processing loops concurrently. Each loop reads
-/// pending work from `MonitorState` (the SQLite WAL is the source of truth)
-/// and is woken either by a `Notify` signal from the corresponding scanner or
-/// by a periodic poll for items whose retry backoff has just elapsed.
+/// Runs the deposit, burn, and refund processing loops concurrently. Each loop
+/// reads pending work from `MonitorState` (the SQLite WAL is the source of
+/// truth) and is woken either by a `Notify` signal from the corresponding
+/// scanner or by a periodic poll for items whose retry backoff has just
+/// elapsed.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
@@ -682,6 +701,7 @@ pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'stati
     linera_client: Arc<crate::relay::linera::LineraClient<E>>,
     deposit_notify: Arc<tokio::sync::Notify>,
     burn_notify: Arc<tokio::sync::Notify>,
+    refund_notify: Arc<tokio::sync::Notify>,
     poll_interval: Duration,
     max_retries: u32,
 ) -> anyhow::Result<()> {
@@ -691,6 +711,9 @@ pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'stati
         ) => result,
         result = linera::process_pending_burns(
             &monitor, &evm_client, &linera_client, &burn_notify, poll_interval, max_retries,
+        ) => result,
+        result = evm::process_pending_refunds(
+            &monitor, &linera_client, &proof_client, &refund_notify, poll_interval, max_retries,
         ) => result,
     }
 }
