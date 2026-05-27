@@ -36,10 +36,7 @@ impl Display for Error {
                 write!(f, "Unexpected signature format received from JS")
             }
             Error::InvalidAccountOwnerType => {
-                write!(
-                    f,
-                    "Invalid account owner type provided. Expected AccountOwner::Address20"
-                )
+                write!(f, "Invalid account owner type provided")
             }
             Error::Unknown => write!(f, "An unknown error occurred"),
         }
@@ -79,6 +76,12 @@ extern "C" {
 
     #[wasm_bindgen(catch, method, js_name = "containsKey")]
     async fn contains_key(this: &Signer, owner: AccountOwner) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(catch, method, js_name = "getPublicKey")]
+    async fn get_public_key(
+        this: &Signer,
+        owner: AccountOwner,
+    ) -> Result<js_sys::JsString, JsValue>;
 }
 
 impl linera_base::crypto::Signer for Signer {
@@ -93,21 +96,48 @@ impl linera_base::crypto::Signer for Signer {
         owner: &AccountOwner,
         value: &CryptoHash,
     ) -> Result<AccountSignature, Self::Error> {
-        Ok(AccountSignature::EvmSecp256k1 {
-            signature: String::from(
-                self
-                    // Pass CryptoHash without serializing as that adds bytes
-                    // to the serialized value which we don't want for signing.
-                    .sign(*owner, value.as_bytes().0.to_vec())
-                    .await?,
-            )
-            .parse()
-            .map_err(|_| Error::UnexpectedSignatureFormat)?,
-            address: if let AccountOwner::Address20(address) = owner {
-                *address
-            } else {
-                return Err(Error::InvalidAccountOwnerType);
-            },
-        })
+        // We pass `CryptoHash` bytes (not BCS-serialized) to the JS layer because the JS
+        // signers sign the raw prehash directly.
+        let prehash_bytes = value.as_bytes().0.to_vec();
+        let sig_str: String = self.sign(*owner, prehash_bytes).await?.into();
+
+        match owner {
+            AccountOwner::Address20(address) => {
+                let signature = sig_str
+                    .parse()
+                    .map_err(|_| Error::UnexpectedSignatureFormat)?;
+                Ok(AccountSignature::EvmSecp256k1 {
+                    signature,
+                    address: *address,
+                })
+            }
+            AccountOwner::Address32(_) => {
+                let pub_str: String = self.get_public_key(*owner).await?.into();
+                let public_key = parse_ed25519_public_key(&pub_str).ok_or(Error::PublicKeyParse)?;
+                let signature =
+                    parse_ed25519_signature(&sig_str).ok_or(Error::UnexpectedSignatureFormat)?;
+                // Error early if signer returns a valid signature with the wrong public key.
+                if AccountOwner::from(public_key) != *owner {
+                    return Err(Error::InvalidAccountOwnerType);
+                }
+                Ok(AccountSignature::Ed25519 {
+                    signature,
+                    public_key,
+                })
+            }
+            AccountOwner::Reserved(_) => Err(Error::InvalidAccountOwnerType),
+        }
     }
+}
+
+fn parse_ed25519_public_key(hex_str: &str) -> Option<linera_base::crypto::Ed25519PublicKey> {
+    let trimmed = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+    let bytes = hex::decode(trimmed).ok()?;
+    linera_base::crypto::Ed25519PublicKey::from_slice(&bytes).ok()
+}
+
+fn parse_ed25519_signature(hex_str: &str) -> Option<linera_base::crypto::Ed25519Signature> {
+    let trimmed = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+    let bytes = hex::decode(trimmed).ok()?;
+    linera_base::crypto::Ed25519Signature::from_slice(&bytes).ok()
 }

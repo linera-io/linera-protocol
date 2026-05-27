@@ -36,6 +36,9 @@ pub use listener::Listener;
 pub mod faucet;
 pub mod lock;
 
+pub mod crypto;
+pub use crypto::account_owner_from_ed25519_public_key;
+
 pub mod signer;
 pub use signer::Signer;
 pub mod storage;
