@@ -240,20 +240,21 @@ async fn relayer_refunds_blocked_burn() -> anyhow::Result<()> {
         .await?
         .expect("create evm-bridge app committed");
 
-    // ── Publish & create wrapped-fungible app on chain A, pre-funding
-    //    owner_b on chain B with INITIAL_BALANCE_TOKENS so the burn
-    //    leaves a deterministic shortfall the refund must restore. ──
+    // ── Publish & create wrapped-fungible app on chain B so the
+    //    InitialState executes there, pre-funding owner_b on chain B
+    //    with INITIAL_BALANCE_TOKENS. The burn then leaves a
+    //    deterministic shortfall the refund must restore. ──
     let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm"))?;
     let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm"))?;
-    let (wf_module_id, _) = cc_a
+    let (wf_module_id, _) = cc_b
         .publish_module(wf_contract, wf_service, VmRuntime::Wasm)
         .await?
         .expect("publish wrapped-fungible module committed");
-    cc_a.synchronize_from_validators().await?;
-    cc_a.process_inbox().await?;
+    cc_b.synchronize_from_validators().await?;
+    cc_b.process_inbox().await?;
 
     let initial_balance = U128(INITIAL_BALANCE_TOKENS * 10u128.pow(18));
-    let (fungible_app_id, _) = cc_a
+    let (fungible_app_id, _) = cc_b
         .create_application_untyped(
             wf_module_id,
             serde_json::to_vec(&WrappedParameters {
