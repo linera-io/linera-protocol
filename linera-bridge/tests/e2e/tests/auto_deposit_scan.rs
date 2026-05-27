@@ -29,7 +29,7 @@ use alloy::{
 use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Amount, Bytecode},
+    data_types::{Bytecode, U128},
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
@@ -204,6 +204,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             wf_module_id,
             serde_json::to_vec(&WrappedParameters {
                 ticker_symbol: "wTEST".to_string(),
+                decimals: 18,
                 minter: Some(owner_a),
                 mint_chain_id: Some(chain_a),
                 evm_token_address: erc20_addr.0 .0,
@@ -449,7 +450,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
     // ══════════════════════════════════════════════════════════════════
     let evm_recipient = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
     let receiver: AccountOwner = format!("0x{evm_recipient}").parse()?;
-    let withdraw_amount = Amount::from_tokens(25);
+    let withdraw_amount = U128(25u128 * 10u128.pow(18));
 
     tracing::info!("Sending cross-chain withdrawal from chain B to Address20 on chain A...");
     cc_b.synchronize_from_validators().await?;

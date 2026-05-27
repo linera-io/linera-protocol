@@ -242,6 +242,39 @@ pub async fn deploy_linera_token_with_supply(
     .await
 }
 
+/// Deploys LineraToken with a custom `decimals()` value and initial supply.
+/// `supply_raw` is the raw token amount (i.e. `tokens * 10u128.pow(decimals)`).
+pub async fn deploy_linera_token_with_decimals(
+    compose: &DockerCompose,
+    project_name: &str,
+    compose_file: &std::path::Path,
+    decimals: u8,
+    supply_raw: u128,
+) -> anyhow::Result<Address> {
+    exec_ok(
+        compose,
+        "foundry-tools",
+        &format!(
+            "env TOKEN_DECIMALS={decimals} TOKEN_SUPPLY={supply_raw} \
+             forge script /contracts/script/DeployLineraToken.s.sol \
+             --root /contracts \
+             --rpc-url http://anvil:8545 \
+             --private-key {ANVIL_PRIVATE_KEY} \
+             --broadcast"
+        ),
+        project_name,
+        compose_file,
+    )
+    .await;
+    parse_broadcast_address(
+        compose,
+        project_name,
+        compose_file,
+        "DeployLineraToken.s.sol",
+    )
+    .await
+}
+
 /// Deploys FungibleBridge via the `DeployFungibleBridge.s.sol` forge
 /// script and returns the deployed contract address.
 pub async fn deploy_fungible_bridge(
@@ -419,7 +452,10 @@ where
     E: linera_core::environment::Environment,
 {
     use anyhow::Context as _;
-    use linera_base::{data_types::Bytecode, vm::VmRuntime};
+    use linera_base::{
+        data_types::{Bytecode, U128},
+        vm::VmRuntime,
+    };
 
     let repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -438,12 +474,13 @@ where
     chain_client.synchronize_from_validators().await?;
     chain_client.process_inbox().await?;
 
-    let initial_balance = linera_base::data_types::Amount::from_tokens(initial_balance_tokens);
+    let initial_balance = U128(initial_balance_tokens * 10u128.pow(18));
     let (fungible_app_id, _) = chain_client
         .create_application_untyped(
             wf_module_id,
             serde_json::to_vec(&wrapped_fungible::WrappedParameters {
                 ticker_symbol: "wTEST".to_string(),
+                decimals: 18,
                 minter: None,
                 mint_chain_id: Some(mint_chain_id),
                 evm_token_address: erc20_addr.0 .0,

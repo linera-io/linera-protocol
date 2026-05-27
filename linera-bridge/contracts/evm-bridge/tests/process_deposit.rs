@@ -16,7 +16,7 @@ use linera_bridge::proof::{
     ReceiptLog,
 };
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId},
+    linera_base_types::{AccountOwner, ApplicationId, U128},
     test::{ActiveChain, TestValidator},
 };
 use serde::Deserialize;
@@ -27,7 +27,7 @@ async fn query_balance(
     app_id: ApplicationId<WrappedFungibleTokenAbi>,
     chain: &ActiveChain,
     owner: AccountOwner,
-) -> Option<Amount> {
+) -> Option<U128> {
     use async_graphql::InputType;
     use linera_sdk::test::QueryOutcome;
 
@@ -37,11 +37,11 @@ async fn query_balance(
     );
     let QueryOutcome { response, .. } = chain.graphql_query(app_id, query).await;
     let balance = response["accounts"]["entry"]["value"].as_str()?;
-    Some(
+    Some(U128(
         balance
             .parse()
-            .expect("balance cannot be parsed as an Amount"),
-    )
+            .expect("balance cannot be parsed as u128"),
+    ))
 }
 
 /// Common setup for bridge integration tests.
@@ -84,6 +84,7 @@ impl TestBridge {
             .await;
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
+            decimals: 6,
             minter: Some(chain_owner),
             mint_chain_id: Some(chain.id()),
             evm_token_address: token_address,
@@ -220,6 +221,7 @@ impl TestBridge {
             .await;
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
+            decimals: 6,
             minter: Some(chain_owner),
             mint_chain_id: Some(chain.id()),
             evm_token_address: token_address,
@@ -298,7 +300,7 @@ async fn test_process_deposit() {
     // Verify tokens were minted
     assert_eq!(
         query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
-        Some(Amount::from_attos(1_000_000u128)),
+        Some(U128(1_000_000)),
     );
 
     // Second deposit with same proof should fail (replay)
@@ -633,7 +635,7 @@ async fn test_replay_different_log_index_succeeds() {
 
     assert_eq!(
         query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
-        Some(Amount::from_attos(1_000_000u128)),
+        Some(U128(1_000_000)),
     );
 
     // Process log_index: 1 — should also succeed (different DepositKey)
@@ -655,7 +657,7 @@ async fn test_replay_different_log_index_succeeds() {
     // Both deposits should have been minted
     assert_eq!(
         query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
-        Some(Amount::from_attos(2_000_000u128)),
+        Some(U128(2_000_000)),
     );
 }
 
@@ -753,6 +755,7 @@ async fn setup_bridge_with_anvil(
         .await;
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
+        decimals: 6,
         minter: Some(chain_owner),
         mint_chain_id: Some(chain.id()),
         evm_token_address: token_address,

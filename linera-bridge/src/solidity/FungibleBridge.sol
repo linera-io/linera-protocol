@@ -181,7 +181,7 @@ contract FungibleBridge is Microchain {
     function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key) private {
         WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
         processedBurns[key] = true;
-        require(token.transfer(address(burnEvt.target), burnEvt.amount.value), "token transfer failed");
+        require(token.transfer(address(burnEvt.target), burnEvt.amount), "token transfer failed");
     }
 
     /// @dev Calls transferFrom and handles tokens that don't return a boolean.
