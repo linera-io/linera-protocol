@@ -18,6 +18,14 @@ export default class Composite implements Signer {
     throw new Error(`no signer found for owner ${owner}`);
   }
 
+  async getPublicKey(owner: string): Promise<string> {
+    for (const signer of this.signers)
+      if (await signer.containsKey(owner))
+        return await signer.getPublicKey(owner);
+
+    throw new Error(`no signer found for owner ${owner}`);
+  }
+
   async containsKey(owner: string): Promise<boolean> {
     for (const signer of this.signers)
       if (await signer.containsKey(owner))
