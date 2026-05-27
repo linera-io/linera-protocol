@@ -40,6 +40,8 @@ pub struct WrappedParameters {
 /// to EVM to release the corresponding ERC-20 tokens.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BurnEvent {
+    /// The source account whose tokens were burned (for refund if release fails)
+    pub source: Account,
     /// The Ethereum address to receive the unlocked ERC-20 tokens
     pub target: [u8; 20],
     /// Amount of tokens burned, in raw sub-units of the source ERC-20.
