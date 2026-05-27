@@ -20,6 +20,7 @@ use crate::proof::{DepositKey, RefundKey};
 /// A write operation to be executed on the bridge chain.
 /// Sent to the main loop which serializes all chain mutations.
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum ChainOperation {
     ProcessInbox {
         response: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>>>,
