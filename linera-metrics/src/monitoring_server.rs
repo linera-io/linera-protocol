@@ -90,6 +90,8 @@ pub fn start_metrics(
     start_metrics_with_extras(address, shutdown_signal, memory_profiling, None);
 }
 
+/// Like `start_metrics`, but additionally merges `extra_routes` into the metrics server's
+/// router before serving.
 pub fn start_metrics_with_extras(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,

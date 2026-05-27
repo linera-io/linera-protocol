@@ -196,6 +196,7 @@ impl PersistentWallet {
             .map(|opt| opt.flatten())
     }
 
+    /// Removes the chain with the given ID, saving if it was present, and returns it.
     pub fn forget_chain(
         &self,
         chain_id: ChainId,
@@ -222,6 +223,7 @@ impl PersistentWallet {
         self.0.chains.chain_ids()
     }
 
+    /// Returns the list of all chain IDs for which we have a secret key.
     pub fn owned_chain_ids(&self) -> Vec<ChainId> {
         self.0.chains.owned_chain_ids()
     }
