@@ -29,6 +29,11 @@ contract FungibleBridge is Microchain {
         uint256 nonce
     );
 
+    /// Emitted when a Linera burn is released as an ERC-20 transfer to
+    /// `target`. `height` and `eventIndex` together identify the burn in
+    /// the source Linera block (matches the on-chain dedup key).
+    event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
+
     // WrappedFungible application ID on Linera,
     // used to identify Burn events in the block stream.
     bytes32 public immutable fungibleApplicationId;
@@ -108,7 +113,7 @@ contract FungibleBridge is Microchain {
                 bytes32 key = _burnKey(height, evt.index);
                 if (processedBurns[key]) continue;
 
-                _releaseBurn(evt, key);
+                _releaseBurn(evt, key, height);
             }
         }
     }
@@ -132,7 +137,7 @@ contract FungibleBridge is Microchain {
     /// - any position out of range (`"eventPos out of range"`)
     /// - any position whose event is not a matching burn for this app
     ///   (`"not a matching burn"`)
-    /// - any failed `token.transfer` (`"token transfer failed"`)
+    /// - any failed `token.transfer` (`"safeTransfer failed"`)
     function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
         require(eventPositionsInTx.length > 0, "empty positions");
         (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
@@ -152,7 +157,7 @@ contract FungibleBridge is Microchain {
             bytes32 key = _burnKey(height, evt.index);
             if (processedBurns[key]) continue;
 
-            _releaseBurn(evt, key);
+            _releaseBurn(evt, key, height);
         }
     }
 
@@ -178,10 +183,20 @@ contract FungibleBridge is Microchain {
     /// the dedup flag BEFORE the external `token.transfer` call
     /// (checks-effects-interactions) so a malicious token that re-enters
     /// `addBlock` / `processBurns` cannot trigger a second release.
-    function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key) private {
+    function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key, uint64 height) private {
         WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
         processedBurns[key] = true;
-        require(token.transfer(address(burnEvt.target), burnEvt.amount), "token transfer failed");
+        address target = address(burnEvt.target);
+        uint256 amount = burnEvt.amount;
+        _safeTransfer(target, amount);
+        emit BurnReleased(height, evt.index, target, amount);
+    }
+
+    /// @dev Calls transfer and handles tokens that don't return a boolean.
+    function _safeTransfer(address to, uint256 amount_) internal {
+        (bool success, bytes memory data) =
+            address(token).call(abi.encodeWithSelector(token.transfer.selector, to, amount_));
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "safeTransfer failed");
     }
 
     /// @dev Calls transferFrom and handles tokens that don't return a boolean.
