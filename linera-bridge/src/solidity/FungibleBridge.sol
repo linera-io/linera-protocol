@@ -32,12 +32,7 @@ contract FungibleBridge is Microchain {
     /// Emitted when a Linera burn is released as an ERC-20 transfer to
     /// `target`. `height` and `eventIndex` together identify the burn in
     /// the source Linera block (matches the on-chain dedup key).
-    event BurnReleased(
-        uint64 indexed height,
-        uint32 indexed eventIndex,
-        address indexed target,
-        uint256 amount
-    );
+    event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
 
     // WrappedFungible application ID on Linera,
     // used to identify Burn events in the block stream.
