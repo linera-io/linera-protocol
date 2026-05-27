@@ -187,7 +187,7 @@ contract FungibleBridge is Microchain {
         WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
         processedBurns[key] = true;
         address target = address(burnEvt.target);
-        uint256 amount = burnEvt.amount.value;
+        uint256 amount = burnEvt.amount;
         _safeTransfer(target, amount);
         emit BurnReleased(height, evt.index, target, amount);
     }
