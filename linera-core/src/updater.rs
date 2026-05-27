@@ -255,6 +255,7 @@ where
 
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
+        let mut sent_blocks = false;
         loop {
             match result {
                 Err(NodeError::EventsNotFound(event_ids))
@@ -285,6 +286,24 @@ where
                         .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
                         .await?;
                     sent_blobs = true;
+                }
+                Err(NodeError::BlocksNotFound(hashes)) if !sent_blocks => {
+                    // The validator has recorded these hashes as trusted by a
+                    // checkpoint cert it verified, but is missing the actual block
+                    // bytes. Upload each from local storage; the worker's
+                    // trust-mark accept path lets them through regardless of their
+                    // (possibly revoked) epoch.
+                    let storage = self.client.local_node.storage_client();
+                    let certificates = storage.read_certificates(&hashes).await?;
+                    for (hash, maybe_cert) in hashes.iter().zip(certificates) {
+                        let cert = maybe_cert.ok_or_else(|| {
+                            chain_client::Error::ReadCertificatesError(vec![*hash])
+                        })?;
+                        self.remote_node
+                            .handle_confirmed_certificate(cert, delivery)
+                            .await?;
+                    }
+                    sent_blocks = true;
                 }
                 result => {
                     if let Err(err) = &result {
@@ -806,13 +825,13 @@ where
         Ok(certificates_by_height.into_iter().flatten().collect())
     }
 
-    /// If we hold a checkpoint at a height the validator hasn't reached yet, pushes the
-    /// checkpoint certificate (and the pre-checkpoint sender blocks it certified via
-    /// `outbox_block_hashes`) so the validator can install our chain's execution state
-    /// without replaying every pre-checkpoint block. Mirrors the pull-side
-    /// `bootstrap_chain_from_checkpoint` + `download_pre_checkpoint_sender_blocks`.
-    /// Returns the validator's chain info after the push (unchanged if there's nothing
-    /// useful to push).
+    /// If we hold a checkpoint at a height the validator hasn't reached yet, pushes
+    /// the checkpoint certificate so the validator can install our chain's execution
+    /// state without replaying every pre-checkpoint block. The worker's first attempt
+    /// will report any pre-checkpoint sender blocks it doesn't yet have via
+    /// `BlocksNotFound`, which `send_confirmed_certificate` then uploads before
+    /// retrying. Returns the validator's chain info after the push (unchanged if
+    /// there's nothing useful to push).
     async fn push_checkpoint_if_useful(
         &mut self,
         chain_id: ChainId,
@@ -840,30 +859,8 @@ where
         else {
             return Ok(info);
         };
-        let info = self
-            .send_confirmed_certificate(&checkpoint_cert, delivery)
-            .await?;
-
-        let sender_block_heights = {
-            let chain = self.client.local_node.chain_state_view(chain_id).await?;
-            let mut heights = Vec::new();
-            for height in chain.collect_unfinalized_heights().await? {
-                if chain.block_hashes.get(&height).await?.is_some() {
-                    heights.push(height);
-                }
-            }
-            heights
-        };
-        if !sender_block_heights.is_empty() {
-            let certificates = self
-                .read_certificates_for_heights(chain_id, sender_block_heights)
-                .await?;
-            for certificate in certificates {
-                self.send_confirmed_certificate(&certificate, delivery)
-                    .await?;
-            }
-        }
-        Ok(info)
+        self.send_confirmed_certificate(&checkpoint_cert, delivery)
+            .await
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.

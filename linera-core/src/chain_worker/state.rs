@@ -593,17 +593,11 @@ where
 
         let blocks = self.read_confirmed_blocks(&hashes).await?;
 
-        // After a checkpoint restore on a fresh validator the outboxes can
-        // briefly reference pre-checkpoint sender block hashes whose certs
-        // haven't been written to storage yet. The per-recipient loop below
-        // already skips missing heights, so just drop the empty slots here
-        // and let the next `create_network_actions` (after the cert arrives
-        // via the fill-in branch) emit the cross-chain request.
-        let height_to_blocks = blocks
-            .into_iter()
-            .flatten()
-            .map(|block| (block.height(), block))
-            .collect::<HashMap<_, _>>();
+        let mut height_to_blocks = HashMap::new();
+        for (block, hash) in blocks.into_iter().zip(hashes) {
+            let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
+            height_to_blocks.insert(block.height(), block);
+        }
 
         let sender = self.chain.chain_id();
         let mut cross_chain_requests = Vec::new();
@@ -886,6 +880,35 @@ where
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
+        // Trust-mark accept path: an earlier checkpoint cert recorded this block's
+        // hash in `pre_checkpoint_block_trust`. Verify the cert against its own
+        // epoch's committee — which still works if that epoch has been revoked,
+        // because the admin chain's epoch event stream retains the committee blob
+        // hash — write it through to storage, and remove the trust mark. Tip and
+        // chain state are untouched: this is purely a "fill in a missing
+        // pre-checkpoint sender block" operation.
+        if self
+            .chain
+            .pre_checkpoint_block_trust
+            .contains(&block_hash)
+            .await?
+        {
+            if !self.storage.contains_certificate(block_hash).await? {
+                let committee = self.committee_for_epoch(block.header.epoch).await?;
+                certificate.check(&committee)?;
+                self.storage
+                    .write_blobs_and_certificate(&[], &certificate)
+                    .await?;
+            }
+            self.chain.pre_checkpoint_block_trust.remove(&block_hash)?;
+            self.save().await?;
+            return Ok((
+                self.chain_info_response().await?,
+                NetworkActions::default(),
+                BlockOutcome::Skipped,
+            ));
+        }
+
         // Check if we already processed this block.
         let tip = self.chain.tip_state.get().clone();
         if tip.next_block_height > height {
@@ -1068,6 +1091,26 @@ where
                 inbox_cursors.clone(),
             )
         };
+        // Every pre-checkpoint sender block the oracle response names must already
+        // be in storage before we touch any chain state. If some aren't, record
+        // their hashes as trusted-by-this-checkpoint and error with `BlocksNotFound`
+        // — the client uploads each missing cert (the trust-mark path at the top
+        // of `process_confirmed_block` accepts them regardless of their possibly
+        // revoked epoch), then retries the checkpoint. This way the worker never
+        // exposes a half-restored chain whose outboxes reference unknown blocks.
+        let mut missing_blocks = Vec::new();
+        for hash in &outbox_block_hashes {
+            if !self.storage.contains_certificate(*hash).await? {
+                missing_blocks.push(*hash);
+            }
+        }
+        if !missing_blocks.is_empty() {
+            for hash in &missing_blocks {
+                self.chain.pre_checkpoint_block_trust.insert(hash)?;
+            }
+            self.save().await?;
+            return Err(WorkerError::BlocksNotFound(missing_blocks));
+        }
         self.chain
             .execution_state
             .restore_from_content(&bytes)

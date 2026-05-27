@@ -4751,6 +4751,7 @@ where
 
     let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
     let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = producer.chain_id();
     let validator_0_key = builder.node(0).name();
 
     // Height 0: cross-chain transfer — becomes a pre-checkpoint sender block that the
@@ -4862,6 +4863,19 @@ where
             .await?,
         "validator 0 must not have received the pre-checkpoint non-sender block",
     );
+
+    // The trust-mark flow consumed every entry: the validator's first attempt at
+    // the checkpoint errored with `BlocksNotFound`, the client uploaded the missing
+    // sender block (entering the trust-mark accept path on the worker, which
+    // removed the entry), and the second attempt restored the chain cleanly.
+    {
+        let chain_view = validator_0_storage.load_chain(chain_id).await?;
+        let trusted = chain_view.pre_checkpoint_block_trust.indices().await?;
+        assert!(
+            trusted.is_empty(),
+            "validator 0's trust set should be empty after the flow, was {trusted:?}",
+        );
+    }
 
     Ok(())
 }

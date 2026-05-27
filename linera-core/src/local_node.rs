@@ -69,6 +69,9 @@ pub enum LocalNodeError {
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 
+    #[error("Blocks not found: {0:?}")]
+    BlocksNotFound(Vec<CryptoHash>),
+
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
 }
@@ -91,6 +94,7 @@ impl From<WorkerError> for LocalNodeError {
     fn from(error: WorkerError) -> Self {
         match error {
             WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            WorkerError::BlocksNotFound(hashes) => LocalNodeError::BlocksNotFound(hashes),
             WorkerError::EventsNotFound(event_ids) => LocalNodeError::EventsNotFound(event_ids),
             error => LocalNodeError::WorkerError(error),
         }

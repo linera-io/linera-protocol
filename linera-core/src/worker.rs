@@ -397,11 +397,12 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
-    /// Variant raised when a block-by-hash lookup hits an entry that the chain
-    /// state references (in `block_hashes`) but whose actual content the
-    /// validator doesn't have locally — typically a sender block of a
-    /// checkpoint-bootstrapped chain. The caller is expected to provide the
-    /// missing block via [`WorkerState::handle_upload_confirmed_block`].
+    /// Variant raised when the chain references these block hashes via a
+    /// verified-checkpoint trust mark (`pre_checkpoint_block_trust`) but the
+    /// actual content isn't in storage yet. The caller is expected to upload
+    /// each missing block via `handle_confirmed_certificate`; the trust-mark
+    /// accept path verifies the cert against its own (possibly revoked)
+    /// epoch's committee and writes it through.
     #[error("Blocks not found: {0:?}")]
     BlocksNotFound(Vec<CryptoHash>),
     #[error("Block hash at height {height} for chain {chain_id} not found")]

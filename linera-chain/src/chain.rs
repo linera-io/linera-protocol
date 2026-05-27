@@ -29,6 +29,7 @@ use linera_views::{
     map_view::{CustomMapView, MapView},
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
+    set_view::SetView,
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
@@ -254,6 +255,15 @@ where
     /// Maintained by `apply_confirmed_block` whenever a block starting with
     /// `SystemOperation::Checkpoint` is executed.
     pub latest_checkpoint_height: RegisterView<C, Option<BlockHeight>>,
+
+    /// Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
+    /// vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
+    /// in storage. The worker errors a checkpoint push with
+    /// `MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+    /// referenced cert (regardless of its own — possibly revoked — epoch) and
+    /// removes the entry. Once the set is empty, the checkpoint restoration can run
+    /// end-to-end.
+    pub pre_checkpoint_block_trust: SetView<C, CryptoHash>,
 }
 
 /// Block-chaining state.
