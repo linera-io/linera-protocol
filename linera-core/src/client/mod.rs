@@ -11,7 +11,7 @@ use std::{
 
 use custom_debug_derive::Debug;
 use futures::{
-    future::Future,
+    future::{Future, TryFutureExt as _},
     stream::{self, AbortHandle, FuturesOrdered, FuturesUnordered, StreamExt},
 };
 #[cfg(with_metrics)]
@@ -812,12 +812,6 @@ impl<Env: Environment> Client<Env> {
                         Ok((checked_certificates, unresolved, validator_key))
                     })
                 },
-                |errors| {
-                    errors
-                        .into_iter()
-                        .map(|(validator, _error)| validator)
-                        .collect::<BTreeSet<_>>()
-                },
                 timeout,
             )
             .await;
@@ -836,7 +830,14 @@ impl<Env: Environment> Client<Env> {
                     validators.retain(|node| node.public_key != validator_key);
                     remaining_event_ids = unresolved;
                 }
-                Err(_) => {
+                Err(errors) => {
+                    for (validator, error) in &errors {
+                        warn!(
+                            %validator,
+                            %error,
+                            "failed to download event certificates from validator",
+                        );
+                    }
                     // All validators failed; no point retrying.
                     return Err(NodeError::EventsNotFound(remaining_event_ids).into());
                 }
@@ -1379,18 +1380,24 @@ impl<Env: Environment> Client<Env> {
                     }
                     Ok(certificates_with_check_results)
                 },
-                |errors| {
-                    errors
-                        .into_iter()
-                        .map(|(validator, _error)| validator)
-                        .collect::<BTreeSet<_>>()
-                },
                 self.options.certificate_batch_download_timeout,
             )
             .await
             {
                 Ok(certificates_with_check_results) => certificates_with_check_results,
-                Err(faulty_validators) => {
+                Err(errors) => {
+                    let faulty_validators = errors
+                        .into_iter()
+                        .map(|(validator, error)| {
+                            warn!(
+                                %validator,
+                                %sender_chain_id,
+                                %error,
+                                "failed to download certificates from validator",
+                            );
+                            validator
+                        })
+                        .collect::<BTreeSet<_>>();
                     // filter out faulty validators and retry if any are left
                     nodes.retain(|node| !faulty_validators.contains(&node.public_key));
                     if nodes.is_empty() {
@@ -2068,9 +2075,19 @@ impl<Env: Environment> Client<Env> {
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, chain_client::Error>::Ok(blob)
                 },
-                move |_| chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id])),
                 timeout,
             )
+            .map_err(move |errors| {
+                for (validator, error) in &errors {
+                    warn!(
+                        %validator,
+                        %blob_id,
+                        %error,
+                        "failed to download certificate-for-blob from validator",
+                    );
+                }
+                chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+            })
         }))
         .buffer_unordered(self.options.max_joined_tasks)
         .collect::<Vec<_>>()
@@ -2189,19 +2206,18 @@ impl<'a, Env: Environment> EventSetDownloader<'a, Env> {
     }
 }
 
-/// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
-/// each subsequent node. Returns error `err` if all of the nodes fail.
-async fn communicate_concurrently<'a, A, E1, E2, F, G, R, V>(
+/// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay
+/// on each subsequent node. Returns the first `Ok` result; if all of the nodes fail, returns
+/// the collected `(validator, error)` pairs.
+async fn communicate_concurrently<'a, A, E, F, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
-    err: G,
     timeout: Duration,
-) -> Result<V, E2>
+) -> Result<V, Vec<(ValidatorPublicKey, E)>>
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
     RemoteNode<A>: Clone,
-    G: FnOnce(Vec<(ValidatorPublicKey, E1)>) -> E2,
-    R: Future<Output = Result<V, E1>> + 'a,
+    R: Future<Output = Result<V, E>> + 'a,
 {
     let mut nodes = nodes.to_vec();
     nodes.shuffle(&mut rand::thread_rng());
@@ -2224,7 +2240,7 @@ where
             Err(error) => errors.push(error),
         };
     }
-    Err(err(errors))
+    Err(errors)
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
