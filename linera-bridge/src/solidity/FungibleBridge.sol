@@ -34,6 +34,15 @@ contract FungibleBridge is Microchain {
     /// the source Linera block (matches the on-chain dedup key).
     event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
 
+    /// Emitted when a burn at `(height, eventIndex)` is administratively
+    /// blocked from settlement by `blocked_by`. Subsequent `addBlock` /
+    /// `processBurns` calls skip the burn instead of releasing tokens.
+    event BurnBlocked(
+        uint64 indexed height,
+        uint32 indexed eventIndex,
+        address indexed blocked_by
+    );
+
     // WrappedFungible application ID on Linera,
     // used to identify Burn events in the block stream.
     bytes32 public immutable fungibleApplicationId;
@@ -46,6 +55,11 @@ contract FungibleBridge is Microchain {
     /// position of the burn event within its stream. Set inside
     /// `_onBlock` after the burn's `token.transfer` succeeds.
     mapping(bytes32 => bool) internal processedBurns;
+
+    /// Per-burn block flag keyed identically to `processedBurns`. Once
+    /// set, `_onBlock` and `processBurns` skip the burn instead of
+    /// releasing tokens. One-way: there is no unblock entry point.
+    mapping(bytes32 => bool) internal blockedBurns;
 
     constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId)
         Microchain(_lightClient, _chainId)
@@ -61,6 +75,31 @@ contract FungibleBridge is Microchain {
     /// off-chain relayer pulls from the certificate.
     function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool) {
         return processedBurns[_burnKey(height, eventIndex)];
+    }
+
+    /// Returns whether the burn at `(height, eventIndex)` is blocked from
+    /// settlement. Blocked burns are silently skipped by `addBlock` and
+    /// `processBurns`.
+    function isBurnBlocked(uint64 height, uint32 eventIndex) external view returns (bool) {
+        return blockedBurns[_burnKey(height, eventIndex)];
+    }
+
+    /// Marks the burn at `(height, eventIndex)` as blocked. After this
+    /// call, `addBlock` and `processBurns` will skip the burn instead of
+    /// releasing tokens. No-op if the burn was already settled
+    /// (`processedBurns[key]` is set) — blocking after release has no
+    /// effect on the tokens already transferred. Idempotent on re-call.
+    /// Pre-emptive: the burn need not exist in any verified block yet.
+    /// One-way: there is no unblock entry point.
+    ///
+    /// Currently public (no access control). Access control will be
+    /// layered on in a follow-up — do not deploy to mainnet as-is.
+    function blockBurn(uint64 height, uint32 eventIndex) external {
+        bytes32 key = _burnKey(height, eventIndex);
+        if (processedBurns[key]) return;
+        if (blockedBurns[key]) return;
+        blockedBurns[key] = true;
+        emit BurnBlocked(height, eventIndex, msg.sender);
     }
 
     /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
@@ -100,7 +139,8 @@ contract FungibleBridge is Microchain {
     /// Idempotent: each burn's release is gated on
     /// `processedBurns[keccak256(abi.encode(height, evt.index))]`, so
     /// re-submitting the same cert is a no-op for burns already released
-    /// by a prior call.
+    /// by a prior call. Burns flagged in `blockedBurns` are silently
+    /// skipped.
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
         bytes32 burnsHash = keccak256("burns");
         uint64 height = blockValue.header.height.value;
@@ -112,6 +152,7 @@ contract FungibleBridge is Microchain {
 
                 bytes32 key = _burnKey(height, evt.index);
                 if (processedBurns[key]) continue;
+                if (blockedBurns[key]) continue;
 
                 _releaseBurn(evt, key, height);
             }
@@ -128,7 +169,8 @@ contract FungibleBridge is Microchain {
     /// Idempotent like `_onBlock`: positions already in `processedBurns` are
     /// skipped silently rather than reverted. Lets the relayer recover from
     /// overlap with a prior `addBlock` (or a racing/retrying `processBurns`)
-    /// instead of losing the whole chunk to a single duplicate.
+    /// instead of losing the whole chunk to a single duplicate. Positions
+    /// in `blockedBurns` are likewise skipped silently.
     ///
     /// Reverts (atomically — no `processedBurns` flag is set if the call
     /// reverts) on:
@@ -156,6 +198,7 @@ contract FungibleBridge is Microchain {
 
             bytes32 key = _burnKey(height, evt.index);
             if (processedBurns[key]) continue;
+            if (blockedBurns[key]) continue;
 
             _releaseBurn(evt, key, height);
         }

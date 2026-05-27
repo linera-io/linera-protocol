@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {FungibleBridge} from "../FungibleBridge.sol";
 import {BridgeTypes} from "../BridgeTypes.sol";
 import {WrappedFungibleTypes} from "../WrappedFungibleTypes.sol";
@@ -150,6 +150,7 @@ function _u32s_single(uint32 a) pure returns (uint32[] memory) {
 
 contract FungibleBridgeProcessBurnsTest is Test {
     event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
+    event BurnBlocked(uint64 indexed height, uint32 indexed eventIndex, address indexed by);
 
     // Deploy a bridge backed by `lc`, with a LineraToken that has
     // `supply` tokens pre-minted to the bridge.
@@ -278,5 +279,85 @@ contract FungibleBridgeProcessBurnsTest is Test {
         assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "pos 1 stays processed");
         assertEq(tok.balanceOf(RECIP_0), AMOUNT, "pos 0 released once to its recipient");
         assertEq(tok.balanceOf(recip1), AMOUNT, "pos 1 not double-released");
+    }
+
+    function test_blockBurn_prevents_processBurns_release() public {
+        // 2 burns. Block (HEIGHT, 5); then processBurns([0, 1]) — pos 0
+        // (stream index 5) silently skipped, pos 1 still released.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
+
+        bridge.blockBurn(HEIGHT, 5);
+        assertTrue(bridge.isBurnBlocked(HEIGHT, 5), "burn at index 5 should be blocked");
+
+        bridge.processBurns(hex"deadbeef", TX, _u32s(0, 1));
+
+        assertFalse(bridge.isBurnProcessed(HEIGHT, 5), "blocked burn must not be marked processed");
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "unblocked burn settles");
+        assertEq(tok.balanceOf(RECIP_0), 0, "blocked recipient holds no released tokens");
+        address recip1 = address(uint160(RECIP_0) + 1);
+        assertEq(tok.balanceOf(recip1), AMOUNT, "unblocked recipient receives release");
+    }
+
+    function test_blockBurn_prevents_addBlock_release() public {
+        // Same as above but through the addBlock path: block (HEIGHT, 5),
+        // addBlock(cert) — pos 0 skipped, pos 1 released.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
+
+        bridge.blockBurn(HEIGHT, 5);
+        bridge.addBlock(hex"deadbeef");
+
+        assertFalse(bridge.isBurnProcessed(HEIGHT, 5), "blocked burn must not be marked processed");
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "unblocked burn settles");
+        assertEq(tok.balanceOf(RECIP_0), 0, "blocked recipient holds no released tokens");
+    }
+
+    function test_blockBurn_after_settle_is_noop() public {
+        // Settle the burn, then attempt to block: must not flip the
+        // blocked flag and must not emit BurnBlocked.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+
+        bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "burn settled");
+
+        vm.recordLogs();
+        bridge.blockBurn(HEIGHT, 5);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertEq(logs.length, 0, "no event must fire when blocking a settled burn");
+        assertFalse(bridge.isBurnBlocked(HEIGHT, 5), "blocked flag must stay unset");
+    }
+
+    function test_blockBurn_idempotent_emits_once() public {
+        // First blockBurn sets the flag and emits. Second is a no-op
+        // (no second event, flag stays set).
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+
+        vm.expectEmit(true, true, true, true, address(bridge));
+        emit BurnBlocked(HEIGHT, 5, address(this));
+        bridge.blockBurn(HEIGHT, 5);
+        assertTrue(bridge.isBurnBlocked(HEIGHT, 5));
+
+        vm.recordLogs();
+        bridge.blockBurn(HEIGHT, 5);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertEq(logs.length, 0, "second blockBurn must be silent");
+    }
+
+    function test_blockBurn_preemptive_before_burn_seen() public {
+        // blockBurn does not require the burn to exist yet — caller can
+        // pre-block a future burn by (height, eventIndex).
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
+
+        // Block before any addBlock / processBurns has been called.
+        bridge.blockBurn(HEIGHT, 5);
+        assertTrue(bridge.isBurnBlocked(HEIGHT, 5));
+
+        bridge.addBlock(hex"deadbeef");
+        assertFalse(bridge.isBurnProcessed(HEIGHT, 5));
+        assertEq(tok.balanceOf(RECIP_0), 0);
     }
 }
