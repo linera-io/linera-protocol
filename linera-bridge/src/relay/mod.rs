@@ -304,6 +304,25 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .parse()
         .context("invalid --linera-fungible-address")?;
 
+    // ── Verify the configured Linera and EVM contracts agree on token decimals ──
+    let linera_decimals = monitor::query_wrapped_fungible_decimals(&chain_client, fungible_app_id)
+        .await
+        .context("failed to query wrapped-fungible decimals from Linera")?;
+    let evm_decimals = evm_client
+        .token_decimals()
+        .await
+        .context("failed to query ERC-20 decimals from EVM")?;
+    anyhow::ensure!(
+        linera_decimals == evm_decimals,
+        "token decimals mismatch between Linera wrapped-fungible ({linera_decimals}) and \
+         EVM ERC-20 ({evm_decimals}); the bridge would silently misinterpret amounts. \
+         Reconfigure both sides with matching `decimals` before starting the relayer."
+    );
+    tracing::info!(
+        decimals = linera_decimals,
+        "Verified Linera ↔ EVM token decimals match"
+    );
+
     let (op_tx, mut op_rx) = mpsc::channel::<linera::ChainOperation>(16);
     let linera_client = Arc::new(linera::LineraClient::new(
         chain_client.clone(),
