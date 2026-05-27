@@ -1808,6 +1808,7 @@ library BridgeTypes {
         CryptoHash[] execution_state_blobs;
         BlobId[] used_blobs;
         CryptoHash[] outbox_block_hashes;
+        tuple_ChainId_Cursor[] inbox_cursors;
     }
 
     function bcs_serialize_OracleResponse_Checkpoint(OracleResponse_Checkpoint memory input)
@@ -1817,7 +1818,8 @@ library BridgeTypes {
     {
         bytes memory result = bcs_serialize_seq_CryptoHash(input.execution_state_blobs);
         result = abi.encodePacked(result, bcs_serialize_seq_BlobId(input.used_blobs));
-        return abi.encodePacked(result, bcs_serialize_seq_CryptoHash(input.outbox_block_hashes));
+        result = abi.encodePacked(result, bcs_serialize_seq_CryptoHash(input.outbox_block_hashes));
+        return abi.encodePacked(result, bcs_serialize_seq_tuple_ChainId_Cursor(input.inbox_cursors));
     }
 
     function bcs_deserialize_offset_OracleResponse_Checkpoint(uint256 pos, bytes memory input)
@@ -1832,7 +1834,10 @@ library BridgeTypes {
         (new_pos, used_blobs) = bcs_deserialize_offset_seq_BlobId(new_pos, input);
         CryptoHash[] memory outbox_block_hashes;
         (new_pos, outbox_block_hashes) = bcs_deserialize_offset_seq_CryptoHash(new_pos, input);
-        return (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs, outbox_block_hashes));
+        tuple_ChainId_Cursor[] memory inbox_cursors;
+        (new_pos, inbox_cursors) = bcs_deserialize_offset_seq_tuple_ChainId_Cursor(new_pos, input);
+        return
+            (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs, outbox_block_hashes, inbox_cursors));
     }
 
     function bcs_deserialize_OracleResponse_Checkpoint(bytes memory input)
@@ -4771,6 +4776,49 @@ library BridgeTypes {
         return value;
     }
 
+    function bcs_serialize_seq_tuple_ChainId_Cursor(tuple_ChainId_Cursor[] memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        uint256 len = input.length;
+        bytes memory result = bcs_serialize_uleb128(len);
+        for (uint256 i = 0; i < len; i++) {
+            result = abi.encodePacked(result, bcs_serialize_tuple_ChainId_Cursor(input[i]));
+        }
+        return result;
+    }
+
+    function bcs_deserialize_offset_seq_tuple_ChainId_Cursor(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, tuple_ChainId_Cursor[] memory)
+    {
+        uint256 len;
+        uint256 new_pos;
+        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
+        tuple_ChainId_Cursor[] memory result;
+        result = new tuple_ChainId_Cursor[](len);
+        tuple_ChainId_Cursor memory value;
+        for (uint256 i = 0; i < len; i++) {
+            (new_pos, value) = bcs_deserialize_offset_tuple_ChainId_Cursor(new_pos, input);
+            result[i] = value;
+        }
+        return (new_pos, result);
+    }
+
+    function bcs_deserialize_seq_tuple_ChainId_Cursor(bytes memory input)
+        internal
+        pure
+        returns (tuple_ChainId_Cursor[] memory)
+    {
+        uint256 new_pos;
+        tuple_ChainId_Cursor[] memory value;
+        (new_pos, value) = bcs_deserialize_offset_seq_tuple_ChainId_Cursor(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     function bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(tuple_Secp256k1PublicKey_Secp256k1Signature[] memory input)
         internal
         pure
@@ -4901,6 +4949,45 @@ library BridgeTypes {
         uint256 new_pos;
         tuple_AccountOwner_uint64 memory value;
         (new_pos, value) = bcs_deserialize_offset_tuple_AccountOwner_uint64(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct tuple_ChainId_Cursor {
+        ChainId entry0;
+        Cursor entry1;
+    }
+
+    function bcs_serialize_tuple_ChainId_Cursor(tuple_ChainId_Cursor memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        bytes memory result = bcs_serialize_ChainId(input.entry0);
+        return abi.encodePacked(result, bcs_serialize_Cursor(input.entry1));
+    }
+
+    function bcs_deserialize_offset_tuple_ChainId_Cursor(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, tuple_ChainId_Cursor memory)
+    {
+        uint256 new_pos;
+        ChainId memory entry0;
+        (new_pos, entry0) = bcs_deserialize_offset_ChainId(pos, input);
+        Cursor memory entry1;
+        (new_pos, entry1) = bcs_deserialize_offset_Cursor(new_pos, input);
+        return (new_pos, tuple_ChainId_Cursor(entry0, entry1));
+    }
+
+    function bcs_deserialize_tuple_ChainId_Cursor(bytes memory input)
+        internal
+        pure
+        returns (tuple_ChainId_Cursor memory)
+    {
+        uint256 new_pos;
+        tuple_ChainId_Cursor memory value;
+        (new_pos, value) = bcs_deserialize_offset_tuple_ChainId_Cursor(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

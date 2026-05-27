@@ -372,6 +372,11 @@ OracleResponse:
           - outbox_block_hashes:
               SEQ:
                 TYPENAME: CryptoHash
+          - inbox_cursors:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ChainId
+                  - TYPENAME: Cursor
 OutgoingMessage:
   STRUCT:
     - destination:
