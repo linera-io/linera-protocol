@@ -593,11 +593,17 @@ where
 
         let blocks = self.read_confirmed_blocks(&hashes).await?;
 
-        let mut height_to_blocks = HashMap::new();
-        for (block, hash) in blocks.into_iter().zip(hashes) {
-            let block = block.ok_or_else(|| WorkerError::ReadCertificatesError(vec![hash]))?;
-            height_to_blocks.insert(block.height(), block);
-        }
+        // After a checkpoint restore on a fresh validator the outboxes can
+        // briefly reference pre-checkpoint sender block hashes whose certs
+        // haven't been written to storage yet. The per-recipient loop below
+        // already skips missing heights, so just drop the empty slots here
+        // and let the next `create_network_actions` (after the cert arrives
+        // via the fill-in branch) emit the cross-chain request.
+        let height_to_blocks = blocks
+            .into_iter()
+            .flatten()
+            .map(|block| (block.height(), block))
+            .collect::<HashMap<_, _>>();
 
         let sender = self.chain.chain_id();
         let mut cross_chain_requests = Vec::new();

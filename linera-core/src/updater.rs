@@ -761,6 +761,12 @@ where
             }
         };
 
+        // Push a checkpoint if we have one above the validator's tip, to skip past
+        // pre-checkpoint blocks. Mirrors `bootstrap_chain_from_checkpoint`.
+        let info = self
+            .push_checkpoint_if_useful(chain_id, info, delivery)
+            .await?;
+
         // Calculate which block heights the validator is still missing
         let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
             .map(BlockHeight)
@@ -798,6 +804,66 @@ where
             .await?;
 
         Ok(certificates_by_height.into_iter().flatten().collect())
+    }
+
+    /// If we hold a checkpoint at a height the validator hasn't reached yet, pushes the
+    /// checkpoint certificate (and the pre-checkpoint sender blocks it certified via
+    /// `outbox_block_hashes`) so the validator can install our chain's execution state
+    /// without replaying every pre-checkpoint block. Mirrors the pull-side
+    /// `bootstrap_chain_from_checkpoint` + `download_pre_checkpoint_sender_blocks`.
+    /// Returns the validator's chain info after the push (unchanged if there's nothing
+    /// useful to push).
+    async fn push_checkpoint_if_useful(
+        &mut self,
+        chain_id: ChainId,
+        info: Box<ChainInfo>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let local_query = ChainInfoQuery::new(chain_id).with_latest_checkpoint_height();
+        let local_info = self
+            .client
+            .local_node
+            .handle_chain_info_query(local_query)
+            .await?
+            .info;
+        let Some(checkpoint_height) = local_info.requested_latest_checkpoint_height else {
+            return Ok(info);
+        };
+        if checkpoint_height < info.next_block_height {
+            return Ok(info);
+        }
+        let Some(checkpoint_cert) = self
+            .read_certificates_for_heights(chain_id, vec![checkpoint_height])
+            .await?
+            .into_iter()
+            .next()
+        else {
+            return Ok(info);
+        };
+        let info = self
+            .send_confirmed_certificate(&checkpoint_cert, delivery)
+            .await?;
+
+        let sender_block_heights = {
+            let chain = self.client.local_node.chain_state_view(chain_id).await?;
+            let mut heights = Vec::new();
+            for height in chain.collect_unfinalized_heights().await? {
+                if chain.block_hashes.get(&height).await?.is_some() {
+                    heights.push(height);
+                }
+            }
+            heights
+        };
+        if !sender_block_heights.is_empty() {
+            let certificates = self
+                .read_certificates_for_heights(chain_id, sender_block_heights)
+                .await?;
+            for certificate in certificates {
+                self.send_confirmed_certificate(&certificate, delivery)
+                    .await?;
+            }
+        }
+        Ok(info)
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.

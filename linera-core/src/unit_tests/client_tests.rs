@@ -4727,3 +4727,141 @@ where
 
     Ok(())
 }
+
+/// Verifies the push side of the checkpoint flow: a validator that missed the whole
+/// chain is brought up to speed by the proposing client pushing only the latest
+/// checkpoint plus the pre-checkpoint sender blocks it certifies, not every
+/// pre-checkpoint block. The lagging validator's vote is needed for quorum.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_proposal_pushes_checkpoint_to_lagging_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+
+    // Validator 0 refuses everything for the duration of block production, so its
+    // storage holds only the chain description blob from `add_root_chain` and never
+    // sees any of the chain's certificates. We'll bring it back honest later.
+    builder.set_fault_type([0], FaultType::NoChains);
+
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let validator_0_key = builder.node(0).name();
+
+    // Height 0: cross-chain transfer — becomes a pre-checkpoint sender block that the
+    // checkpoint certifies via `outbox_block_hashes`. The recipient never consumes it.
+    let transfer_0 = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(transfer_0.block().header.height, BlockHeight::ZERO);
+
+    // Height 1: same-chain burn — no outgoing messages, so it's not referenced by any
+    // subsequent `outbox_block_hashes`. The push path must skip it.
+    let burn_1 = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_1.block().header.height, BlockHeight::from(1));
+
+    // Height 2: the checkpoint that will be pushed to validator 0.
+    let checkpoint = producer.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint.block().header.height, BlockHeight::from(2));
+    let outbox_block_hashes = match checkpoint
+        .block()
+        .body
+        .oracle_responses
+        .first()
+        .and_then(|t| t.first())
+    {
+        Some(OracleResponse::Checkpoint {
+            outbox_block_hashes,
+            ..
+        }) => outbox_block_hashes.clone(),
+        other => panic!("Expected OracleResponse::Checkpoint, got {other:?}"),
+    };
+    assert_eq!(outbox_block_hashes, vec![transfer_0.hash()]);
+
+    // Height 3: post-checkpoint burn — must be pushed to validator 0 as part of the
+    // post-checkpoint gap fill.
+    let burn_3 = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_3.block().header.height, BlockHeight::from(3));
+
+    let validator_0_storage = builder
+        .validator_storages
+        .get(&validator_0_key)
+        .expect("validator 0 storage")
+        .clone();
+    for cert in [&transfer_0, &burn_1, &checkpoint, &burn_3] {
+        assert!(
+            !validator_0_storage
+                .contains_certificate(cert.hash())
+                .await?,
+            "validator 0 should not yet hold height {}",
+            cert.block().header.height,
+        );
+    }
+
+    // Bring validator 0 back honest and take validator 1 offline. Quorum (3 of 4) for
+    // the next proposal now requires validators 0, 2, 3 — forcing the client to push
+    // enough state to validator 0 for it to vote.
+    builder.set_fault_type([0], FaultType::Honest);
+    builder.set_fault_type([1], FaultType::Offline);
+
+    // Height 4: a new block whose quorum needs validator 0.
+    let burn_4 = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_4.block().header.height, BlockHeight::from(4));
+
+    // Validator 0 received the checkpoint, the pre-checkpoint sender block it
+    // certifies, the post-checkpoint burn, and the newly committed proposal.
+    assert!(
+        validator_0_storage
+            .contains_certificate(checkpoint.hash())
+            .await?,
+        "validator 0 should have received the checkpoint",
+    );
+    assert!(
+        validator_0_storage
+            .contains_certificate(transfer_0.hash())
+            .await?,
+        "validator 0 should have received the pre-checkpoint sender block",
+    );
+    assert!(
+        validator_0_storage
+            .contains_certificate(burn_3.hash())
+            .await?,
+        "validator 0 should have received the post-checkpoint block",
+    );
+    assert!(
+        validator_0_storage
+            .contains_certificate(burn_4.hash())
+            .await?,
+        "validator 0 should have received the new block it voted on",
+    );
+
+    // The pre-checkpoint same-chain burn isn't referenced by `outbox_block_hashes`
+    // and must not have been pushed.
+    assert!(
+        !validator_0_storage
+            .contains_certificate(burn_1.hash())
+            .await?,
+        "validator 0 must not have received the pre-checkpoint non-sender block",
+    );
+
+    Ok(())
+}
