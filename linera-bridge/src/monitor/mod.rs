@@ -442,8 +442,10 @@ impl MonitorState {
         };
         let deposits = db.load_pending_deposits().await?;
         let burns = db.load_pending_burns().await?;
+        let refunds = db.load_pending_refunds(self.source_chain_id).await?;
         let n_deposits = deposits.len();
         let n_burns = burns.len();
+        let n_refunds = refunds.len();
         for d in deposits {
             self.deposits.insert(d.key.clone(), Tracked::new(d));
         }
@@ -451,9 +453,13 @@ impl MonitorState {
             self.burns
                 .insert((b.height, b.event_index), Tracked::new(b));
         }
+        for r in refunds {
+            self.refunds.insert(r.key.clone(), Tracked::new(r));
+        }
         tracing::info!(
             deposits = n_deposits,
             burns = n_burns,
+            refunds = n_refunds,
             "Recovered pending bridge requests from SQLite WAL"
         );
         Ok(())
@@ -553,6 +559,11 @@ impl MonitorState {
         match self.refunds.entry(pending.key.clone()) {
             Entry::Occupied(_) => false,
             Entry::Vacant(e) => {
+                if let Some(db) = &self.db {
+                    if let Err(error) = db.store_pending_refund(&pending).await {
+                        tracing::warn!(?error, "Failed to persist refund to SQLite");
+                    }
+                }
                 e.insert(Tracked::new(pending));
                 crate::relay::metrics::refund_detected();
                 true
@@ -564,6 +575,11 @@ impl MonitorState {
         if let Some(r) = self.refunds.get_mut(key) {
             r.forwarded = true;
             crate::relay::metrics::refund_completed();
+            if let Some(db) = &self.db {
+                if let Err(error) = db.mark_refund_completed(key).await {
+                    tracing::warn!(?key, ?error, "Failed to update refund status in SQLite");
+                }
+            }
         } else {
             tracing::warn!(refund_id = ?key, "Attempted to complete unknown refund");
         }
@@ -624,6 +640,11 @@ impl MonitorState {
         if let Some(r) = self.refunds.get_mut(key) {
             r.failed = true;
             crate::relay::metrics::refund_failed();
+            if let Some(db) = &self.db {
+                if let Err(error) = db.mark_refund_failed(key).await {
+                    tracing::warn!(?key, ?error, "Failed to update refund status in SQLite");
+                }
+            }
         }
     }
 

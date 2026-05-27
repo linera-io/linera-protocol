@@ -17,14 +17,18 @@ use std::path::Path;
 
 use alloy::primitives::{Address, B256, U256};
 use anyhow::{Context as _, Result};
-use linera_base::data_types::BlockHeight;
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{Amount, BlockHeight},
+    identifiers::{Account, ChainId},
+};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
 };
 
-use super::{PendingBurn, PendingDeposit};
-use crate::proof::DepositKey;
+use super::{PendingBurn, PendingDeposit, PendingRefund};
+use crate::proof::{DepositKey, RefundKey};
 
 /// Persistent SQLite store for bridging requests.
 pub struct BridgeDb {
@@ -128,6 +132,40 @@ impl BridgeDb {
                 created_at        TEXT NOT NULL,
                 finished_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
                 PRIMARY KEY (linera_height, event_index)
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS pending_refunds (
+                key               BLOB PRIMARY KEY,
+                evm_tx_hash       BLOB NOT NULL,
+                block_hash        BLOB NOT NULL,
+                tx_index          INTEGER NOT NULL,
+                log_index         INTEGER NOT NULL,
+                source_chain_id   BLOB NOT NULL,
+                source_owner_bcs  BLOB NOT NULL,
+                amount_bcs        BLOB NOT NULL,
+                retries           INTEGER NOT NULL DEFAULT 0,
+                status            TEXT NOT NULL DEFAULT 'pending'
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS finished_refunds (
+                key               BLOB PRIMARY KEY,
+                evm_tx_hash       BLOB NOT NULL,
+                block_hash        BLOB NOT NULL,
+                tx_index          INTEGER NOT NULL,
+                log_index         INTEGER NOT NULL,
+                source_chain_id   BLOB NOT NULL,
+                source_owner_bcs  BLOB NOT NULL,
+                amount_bcs        BLOB NOT NULL,
+                finished_at       INTEGER NOT NULL,
+                status            TEXT NOT NULL
             )",
         )
         .execute(&self.pool)
@@ -392,6 +430,148 @@ impl BridgeDb {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    /// Inserts a new pending refund. Ignores duplicates (idempotent).
+    pub async fn store_pending_refund(&self, refund: &PendingRefund) -> Result<()> {
+        let key_hash = refund.key.hash();
+        let source_chain_id_bytes = refund.source.chain_id.0.as_bytes().as_slice().to_vec();
+        let source_owner_bcs = bcs::to_bytes(&refund.source.owner)
+            .context("failed to serialize refund source owner")?;
+        let amount_bcs =
+            bcs::to_bytes(&refund.amount).context("failed to serialize refund amount")?;
+        sqlx::query(
+            "INSERT OR IGNORE INTO pending_refunds
+                (key, evm_tx_hash, block_hash, tx_index, log_index,
+                 source_chain_id, source_owner_bcs, amount_bcs)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(key_hash.as_slice())
+        .bind(refund.evm_tx_hash.as_slice())
+        .bind(refund.key.block_hash.as_slice())
+        .bind(refund.key.tx_index as i64)
+        .bind(refund.key.log_index as i64)
+        .bind(source_chain_id_bytes)
+        .bind(source_owner_bcs)
+        .bind(amount_bcs)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Atomically moves a refund from `pending_refunds` to `finished_refunds`
+    /// with the given terminal `status` (`"completed"` or `"failed"`).
+    ///
+    /// If `finished_refunds` already has a row for this key (replay scenario),
+    /// the existing record is preserved and a warning is logged. The matching
+    /// pending row is still deleted so the refund does not stay queued.
+    async fn update_refund_status(&self, key: &RefundKey, status: &str) -> Result<()> {
+        let key_hash = key.hash();
+        let finished_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let mut tx = self.pool.begin().await?;
+        let inserted = sqlx::query(
+            "INSERT OR IGNORE INTO finished_refunds
+                (key, evm_tx_hash, block_hash, tx_index, log_index,
+                 source_chain_id, source_owner_bcs, amount_bcs,
+                 finished_at, status)
+             SELECT key, evm_tx_hash, block_hash, tx_index, log_index,
+                    source_chain_id, source_owner_bcs, amount_bcs,
+                    ?, ?
+             FROM pending_refunds
+             WHERE key = ?",
+        )
+        .bind(finished_at)
+        .bind(status)
+        .bind(key_hash.as_slice())
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        let deleted = sqlx::query("DELETE FROM pending_refunds WHERE key = ?")
+            .bind(key_hash.as_slice())
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+        tx.commit().await?;
+        if deleted > 0 && inserted == 0 {
+            tracing::warn!(
+                ?key,
+                "Replay detected: refund already in finished_refunds, original record kept"
+            );
+        }
+        Ok(())
+    }
+
+    /// Marks a refund completed and moves it to `finished_refunds`.
+    pub async fn mark_refund_completed(&self, key: &RefundKey) -> Result<()> {
+        self.update_refund_status(key, "completed").await
+    }
+
+    /// Marks a refund failed and moves it to `finished_refunds`.
+    pub async fn mark_refund_failed(&self, key: &RefundKey) -> Result<()> {
+        self.update_refund_status(key, "failed").await
+    }
+
+    /// Loads every pending refund, used at relay startup to repopulate the
+    /// in-memory `MonitorState`. `source_chain_id` is the EVM chain id of the
+    /// configured source — it is not stored per row because a relayer instance
+    /// only ever services a single source chain.
+    pub async fn load_pending_refunds(&self, source_chain_id: u64) -> Result<Vec<PendingRefund>> {
+        let rows = sqlx::query(
+            "SELECT evm_tx_hash, block_hash, tx_index, log_index,
+                    source_chain_id, source_owner_bcs, amount_bcs
+             FROM pending_refunds",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            let evm_tx_hash: Vec<u8> = row.get(0);
+            let block_hash: Vec<u8> = row.get(1);
+            let tx_index: i64 = row.get(2);
+            let log_index: i64 = row.get(3);
+            let source_chain_id_bytes: Vec<u8> = row.get(4);
+            let source_owner_bcs: Vec<u8> = row.get(5);
+            let amount_bcs: Vec<u8> = row.get(6);
+
+            let block_hash = B256::try_from(block_hash.as_slice())
+                .context("invalid block_hash in refunds row")?;
+            let evm_tx_hash = B256::try_from(evm_tx_hash.as_slice())
+                .context("invalid evm_tx_hash in refunds row")?;
+            let source_chain_id_inner = CryptoHash::try_from(source_chain_id_bytes.as_slice())
+                .context("invalid source_chain_id in refunds row")?;
+            let owner = bcs::from_bytes(&source_owner_bcs)
+                .context("invalid source_owner_bcs in refunds row")?;
+            let amount: Amount =
+                bcs::from_bytes(&amount_bcs).context("invalid amount_bcs in refunds row")?;
+
+            out.push(PendingRefund {
+                key: RefundKey {
+                    source_chain_id,
+                    block_hash,
+                    tx_index: tx_index as u64,
+                    log_index: log_index as u64,
+                },
+                evm_tx_hash,
+                source: Account {
+                    chain_id: ChainId(source_chain_id_inner),
+                    owner,
+                },
+                amount,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Returns the number of rows currently in `pending_refunds`.
+    pub async fn pending_refunds_count(&self) -> Result<i64> {
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM pending_refunds")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count)
     }
 }
 
