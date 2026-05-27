@@ -361,9 +361,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
     }
 
     function test_blockBurn_chain_id_mismatch_reverts() public {
-        MockLightClientForBurns lc = new MockLightClientForBurns(
-            bytes32(uint256(0xDEAD)), HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0
-        );
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(bytes32(uint256(0xDEAD)), HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
         vm.expectRevert(bytes("chain id mismatch"));
         bridge.blockBurn(hex"deadbeef", TX, 0);
