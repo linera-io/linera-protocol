@@ -85,6 +85,7 @@ impl TestBridge {
             .await;
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
+            decimals: 6,
             minter: Some(chain_owner),
             mint_chain_id: Some(chain.id()),
             evm_token_address: token_address,
@@ -222,6 +223,7 @@ impl TestBridge {
             .await;
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
+            decimals: 6,
             minter: Some(chain_owner),
             mint_chain_id: Some(chain.id()),
             evm_token_address: token_address,
@@ -757,6 +759,7 @@ async fn setup_bridge_with_anvil(
         .await;
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
+        decimals: 6,
         minter: Some(chain_owner),
         mint_chain_id: Some(chain.id()),
         evm_token_address: token_address,

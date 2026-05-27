@@ -355,6 +355,54 @@ impl TryFrom<U256> for Amount {
     }
 }
 
+/// A `u128` newtype that serializes as a decimal string in human-readable
+/// formats (JSON / GraphQL) and as a bare `u128` in binary (BCS).
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Hash,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::Into,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    derive_more::FromStr,
+)]
+pub struct U128(pub u128);
+
+impl Serialize for U128 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.0.to_string())
+        } else {
+            self.0.serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for U128 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            s.parse().map(U128).map_err(serde::de::Error::custom)
+        } else {
+            u128::deserialize(deserializer).map(U128)
+        }
+    }
+}
+
 /// A block height to identify blocks in a chain.
 #[derive(
     Eq,
@@ -1910,6 +1958,7 @@ impl MessagePolicy {
 
 doc_scalar!(Bytecode, "A WebAssembly module's bytecode");
 doc_scalar!(Amount, "A non-negative amount of tokens.");
+doc_scalar!(U128, "A 128-bit unsigned integer.");
 doc_scalar!(
     Epoch,
     "A number identifying the configuration of the chain (aka the committee)"
