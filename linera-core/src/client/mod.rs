@@ -888,6 +888,54 @@ impl<Env: Environment> Client<Env> {
             ProcessConfirmedBlockMode::Execute,
         )
         .await?;
+        self.download_pre_checkpoint_sender_blocks(remote_node, chain_id)
+            .await?;
+        Ok(())
+    }
+
+    /// After a checkpoint bootstrap, downloads every pre-checkpoint sender block whose
+    /// hash the checkpoint certified via `outbox_block_hashes` (and which we don't
+    /// already have locally) and feeds it through `handle_confirmed_certificate`. The
+    /// worker's fill-in branch in `process_confirmed_block` verifies the cert against
+    /// its own epoch's committee and writes it through, so the node ends up with the
+    /// actual block bytes for every height referenced by `unfinalized_message_blocks`.
+    ///
+    /// Best-effort: any height the remote node can't serve is silently skipped, and the
+    /// caller can retry against another validator later.
+    async fn download_pre_checkpoint_sender_blocks(
+        &self,
+        remote_node: &RemoteNode<Env::ValidatorNode>,
+        chain_id: ChainId,
+    ) -> Result<(), chain_client::Error> {
+        let storage = self.storage_client();
+        let mut missing_heights = Vec::new();
+        {
+            let chain = self.local_node.chain_state_view(chain_id).await?;
+            for height in chain.collect_unfinalized_heights().await? {
+                let Some(hash) = chain.block_hashes.get(&height).await? else {
+                    continue;
+                };
+                if !storage.contains_certificate(hash).await? {
+                    missing_heights.push(height);
+                }
+            }
+        }
+        if missing_heights.is_empty() {
+            return Ok(());
+        }
+        let certificates = remote_node
+            .download_certificates_by_heights(chain_id, missing_heights)
+            .await?;
+        if certificates.is_empty() {
+            return Ok(());
+        }
+        self.process_certificates(
+            slice::from_ref(remote_node),
+            certificates,
+            None,
+            ProcessConfirmedBlockMode::Auto,
+        )
+        .await?;
         Ok(())
     }
 

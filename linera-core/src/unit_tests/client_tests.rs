@@ -4378,8 +4378,9 @@ where
         .unwrap_ok_committed();
     assert_eq!(transfer_cert.block().header.height, BlockHeight::ZERO);
 
-    // Height 1: the checkpoint. With the no-sent-messages precondition lifted this is
-    // now allowed even though height 0 sent a message.
+    // Height 1: the checkpoint. The chain has unfinalized outgoing messages, which is
+    // permitted; the checkpoint's oracle response lists the sender block hashes in
+    // `outbox_block_hashes`.
     let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
     let block = checkpoint_cert.block();
     assert_eq!(block.header.height, BlockHeight::from(1));
@@ -4456,53 +4457,28 @@ where
         );
     }
 
-    // The follower's chain state now references the height-0 transfer block via
-    // `block_hashes`, but its shared storage has no copy of the actual cert. A
-    // lookup must report `BlocksNotFound` listing the missing hash.
+    // Bootstrap fetches the pre-checkpoint sender block too: the worker's fill-in
+    // branch in `process_confirmed_block` verifies the cert against its own
+    // epoch's committee and writes it to storage, so a later `read_certificate`
+    // succeeds without an explicit upload step.
     let follower_storage = follower.storage_client();
-    assert!(
-        !follower_storage
-            .contains_certificate(transfer_cert.hash())
-            .await?,
-        "follower should not have the pre-checkpoint transfer block stored yet",
-    );
-    let local_node = &follower.client.local_node;
-    let blocks_not_found = local_node
-        .read_certificate(chain_id, BlockHeight::ZERO)
-        .await
-        .expect_err("expected BlocksNotFound for the missing pre-checkpoint block");
-    assert_matches!(
-        blocks_not_found,
-        LocalNodeError::WorkerError(WorkerError::BlocksNotFound(ref hashes))
-            if hashes == &vec![transfer_cert.hash()],
-        "expected BlocksNotFound with the transfer block's hash, got {blocks_not_found:?}",
-    );
-
-    // Re-processing the real transfer cert through the normal cert-handling
-    // path now fills in the missing block: signatures are verified against the
-    // cert's own epoch's committee (which still works even if the epoch is
-    // revoked), and the hash is already certified by the checkpoint's
-    // `outbox_block_hashes`, so we accept and store the cert despite the chain
-    // having long since advanced past height 0.
-    local_node
-        .handle_certificate(transfer_cert.clone(), &())
-        .await?;
     assert!(
         follower_storage
             .contains_certificate(transfer_cert.hash())
             .await?,
-        "uploaded cert should now be in storage",
+        "follower should have downloaded the pre-checkpoint transfer block during sync",
     );
+    let local_node = &follower.client.local_node;
     let reread = local_node
         .read_certificate(chain_id, BlockHeight::ZERO)
         .await?
-        .expect("read_certificate should return the just-uploaded cert");
+        .expect("read_certificate should return the fetched cert");
     assert_eq!(reread.hash(), transfer_cert.hash());
 
-    // Recipient consumes the transfer. Receiving a non-`Checkpoint` message
+    // Recipient consumes the transfer. Receiving a non-`CheckpointAck` message
     // marks the sender chain as owing us a `SystemMessage::CheckpointAck` at our
     // next own checkpoint — the on-chain `pending_checkpoint_ack_targets` set is
-    // what drives this. (A `Checkpoint` message wouldn't be inserted, which is
+    // what drives this. (A `CheckpointAck` message wouldn't be inserted, which is
     // how the otherwise-perpetual notification ping-pong is broken.)
     recipient.synchronize_from_validators().await?;
     recipient.process_inbox().await?;
