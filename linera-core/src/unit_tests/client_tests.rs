@@ -4300,8 +4300,7 @@ where
     let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first()) {
         Some(OracleResponse::Checkpoint {
             execution_state_blobs,
-            used_blobs: _,
-            outbox_block_hashes: _,
+            ..
         }) => execution_state_blobs.clone(),
         other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
     };
@@ -4603,6 +4602,128 @@ where
     // checkpoint #2's `outbox_block_hashes` and must not be downloaded.
     assert!(!storage.contains_certificate(checkpoint_1.hash()).await?);
     assert!(!storage.contains_certificate(burn_cert.hash()).await?);
+
+    Ok(())
+}
+
+/// Verifies the end-to-end `CheckpointAck` cycle now that recipients can also checkpoint
+/// after consuming incoming messages: producer sends, recipient consumes and
+/// checkpoints (sending the ack back), producer consumes the ack and trims its
+/// `unfinalized_message_blocks`, producer's next checkpoint emits no `CheckpointAck`
+/// back to the recipient (the otherwise-perpetual ping-pong is broken).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_ack_cycle_terminates<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let producer_id = producer.chain_id();
+    let recipient_id = recipient.chain_id();
+
+    // Producer.0: transfer to recipient.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Producer.1: checkpoint #1. unfinalized_message_blocks[recipient] = {(0, 0)}.
+    producer.checkpoint().await.unwrap().unwrap();
+
+    // Recipient.0: consume the transfer. Now the inbox's `next_cursor_to_remove[producer]`
+    // is past the transfer's cursor and `pending_checkpoint_ack_targets` contains the
+    // producer.
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+
+    // Recipient.1: checkpoint — only possible because we lifted the
+    // "no consumed incoming messages" precondition. The checkpoint's apply hook
+    // emits a `SystemMessage::CheckpointAck` to the producer.
+    let recipient_checkpoint = recipient.checkpoint().await.unwrap().unwrap();
+    let ack_to_producer = recipient_checkpoint
+        .block()
+        .body
+        .messages
+        .iter()
+        .flatten()
+        .find(|msg| {
+            msg.destination == producer_id
+                && matches!(
+                    &msg.message,
+                    Message::System(SystemMessage::CheckpointAck { .. })
+                )
+        })
+        .expect("recipient's checkpoint should send a CheckpointAck back to the producer");
+    let acked_cursor = match &ack_to_producer.message {
+        Message::System(SystemMessage::CheckpointAck {
+            latest_received_cursor,
+        }) => *latest_received_cursor,
+        _ => unreachable!(),
+    };
+
+    // Producer consumes the ack. Its `unfinalized_message_blocks[recipient]` is trimmed
+    // and — since the only consumed cursor was strictly below the ack — fully evicted.
+    producer.synchronize_from_validators().await?;
+    producer.process_inbox().await?;
+    {
+        let producer_state = producer
+            .client
+            .local_node
+            .chain_state_view(producer_id)
+            .await?;
+        assert!(
+            producer_state
+                .execution_state
+                .system
+                .unfinalized_message_blocks
+                .get(&recipient_id)
+                .await?
+                .is_none(),
+            "the CheckpointAck at {acked_cursor:?} should evict the recipient entirely",
+        );
+        assert!(
+            !producer_state
+                .execution_state
+                .system
+                .pending_checkpoint_ack_targets
+                .contains(&recipient_id)
+                .await?,
+            "consuming a CheckpointAck must not seed a fresh ack target — that's how \
+             the otherwise-perpetual notification ping-pong is broken",
+        );
+    }
+
+    // Producer's checkpoint #2: nothing left to certify, nothing to notify.
+    let checkpoint_2 = producer.checkpoint().await.unwrap().unwrap();
+    let block = checkpoint_2.block();
+    let outbox_block_hashes = match block.body.oracle_responses.first().and_then(|t| t.first()) {
+        Some(OracleResponse::Checkpoint {
+            outbox_block_hashes,
+            ..
+        }) => outbox_block_hashes.clone(),
+        other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
+    };
+    assert!(
+        outbox_block_hashes.is_empty(),
+        "all sent messages have been acked; checkpoint #2 has nothing left to certify",
+    );
+    assert!(
+        !block
+            .body
+            .messages
+            .iter()
+            .flatten()
+            .any(|msg| msg.destination == recipient_id),
+        "cycle should terminate: producer's next checkpoint must not notify the recipient",
+    );
 
     Ok(())
 }

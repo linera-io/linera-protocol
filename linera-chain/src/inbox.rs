@@ -78,6 +78,13 @@ where
     /// These bundles have been removed by anticipation and are waiting to be added.
     /// At least one of `added_bundles` and `removed_bundles` should be empty.
     pub removed_bundles: QueueView<C, MessageBundle>,
+    /// When this inbox was restored from a checkpoint, the sender's
+    /// `next_cursor_to_remove` at that time. Bundles with cursors strictly below this
+    /// are silently dropped from `add_bundle` / `remove_bundle`: their effects are
+    /// already baked into the restored execution state, so re-delivering them on this
+    /// validator (e.g. when a sender re-pushes) must be a no-op rather than re-enter
+    /// the inbox or the removed-by-anticipation queue.
+    pub restored_cursor: RegisterView<C, Cursor>,
 }
 
 #[derive(Error, Debug)]
@@ -169,6 +176,12 @@ where
     ) -> Result<bool, InboxError> {
         // Record the latest cursor.
         let cursor = bundle.cursor();
+        if cursor < *self.restored_cursor.get() {
+            // Bundle's effects are already in the restored execution state; treat the
+            // consumption as a no-op without touching `removed_bundles` so the queue
+            // doesn't fill with bundles a sender will never push again.
+            return Ok(true);
+        }
         ensure!(
             cursor >= *self.next_cursor_to_remove.get(),
             InboxError::IncorrectOrder {
@@ -230,6 +243,11 @@ where
     pub(crate) async fn add_bundle(&mut self, bundle: MessageBundle) -> Result<bool, InboxError> {
         // Record the latest cursor.
         let cursor = bundle.cursor();
+        if cursor < *self.restored_cursor.get() {
+            // The sender is re-delivering a bundle whose effects are already baked
+            // into our restored execution state. Silently drop it.
+            return Ok(false);
+        }
         ensure!(
             cursor >= *self.next_cursor_to_add.get(),
             InboxError::IncorrectOrder {

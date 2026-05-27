@@ -72,10 +72,17 @@ pub struct PreparedCheckpoint {
     /// The execution-state dump split into blobs at the current epoch's
     /// `maximum_blob_size`.
     pub blobs: Vec<Blob>,
-    /// For each chain we've received messages from, the position past the last bundle
-    /// we've consumed. Used to emit a `SystemMessage::CheckpointAck` to each origin so the
-    /// origin can later trim its outbox dump.
+    /// For each chain we've received messages from since our last own checkpoint, the
+    /// position past the last bundle we've consumed. Used to emit a
+    /// `SystemMessage::CheckpointAck` to each origin so the origin can later trim its
+    /// outbox dump. This is the delta over the previous checkpoint, filtered by
+    /// `pending_checkpoint_ack_targets` to break the notification ping-pong.
     pub origin_cursors: Vec<(ChainId, Cursor)>,
+    /// For *every* inbox with a non-default `next_cursor_to_remove`, the cursor itself.
+    /// A bootstrapping node uses these to seed each inbox's `restored_cursor`, so a
+    /// sender that hasn't seen the matching `CheckpointAck` yet and re-pushes an
+    /// already-consumed bundle is a silent no-op rather than a duplicate consumption.
+    pub inbox_cursors: Vec<(ChainId, Cursor)>,
     /// Hashes of every block on this chain that the chain's outboxes still reference,
     /// taken before the block runs. Included in the oracle response so the checkpoint
     /// block's certificate transitively certifies those older blocks.

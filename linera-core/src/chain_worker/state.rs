@@ -1029,11 +1029,12 @@ where
         blobs: BTreeMap<BlobId, Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
-        let (bytes, chain_id, height, previous_block_hash, outbox_block_hashes) = {
+        let (bytes, chain_id, height, previous_block_hash, outbox_block_hashes, inbox_cursors) = {
             let block = certificate.block();
             let Some(OracleResponse::Checkpoint {
                 execution_state_blobs,
                 outbox_block_hashes,
+                inbox_cursors,
                 ..
             }) = block.body.oracle_responses.first().and_then(|r| r.first())
             else {
@@ -1058,6 +1059,7 @@ where
                 block.header.height,
                 block.header.previous_block_hash,
                 outbox_block_hashes.clone(),
+                inbox_cursors.clone(),
             )
         };
         self.chain
@@ -1094,6 +1096,15 @@ where
         // bootstrapped validator would silently stop delivering pending
         // messages.
         self.chain.restore_outboxes_from_unfinalized().await?;
+        // Seed each inbox's `restored_cursor` with the producer's
+        // `next_cursor_to_remove` at checkpoint time. Senders that haven't
+        // received the matching `CheckpointAck` yet may re-push bundles whose
+        // effects are already baked into the restored execution state; the
+        // restored cursor lets the inbox silently drop them.
+        for (origin, cursor) in inbox_cursors {
+            let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+            inbox.restored_cursor.set(cursor);
+        }
         // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
         // (for outbox-referenced pre-checkpoint heights), and the outbox views.
         // The other `ChainStateView` fields are either (a) already default for

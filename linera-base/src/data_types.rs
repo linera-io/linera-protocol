@@ -1373,6 +1373,12 @@ pub enum OracleResponse {
         /// hash in this set, without trusting the (possibly revoked) validator
         /// signatures on the older block's own certificate.
         outbox_block_hashes: Vec<CryptoHash>,
+        /// For each chain whose messages we've consumed, the `next_cursor_to_remove`
+        /// of the corresponding inbox. A bootstrapping node uses these to seed each
+        /// inbox's `restored_cursor`, so subsequent sender re-pushes below that cursor
+        /// are silently dropped (their effects are already baked into the restored
+        /// execution state).
+        inbox_cursors: Vec<(ChainId, Cursor)>,
     },
 }
 

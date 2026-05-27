@@ -450,11 +450,13 @@ impl SqliteDatabase {
                     execution_state_blobs,
                     used_blobs,
                     outbox_block_hashes,
+                    inbox_cursors,
                 } => {
                     let serialized = bincode::serialize(&(
                         execution_state_blobs,
                         used_blobs,
                         outbox_block_hashes,
+                        inbox_cursors,
                     ))
                     .map_err(|e| {
                         SqliteError::Serialization(format!("Failed to serialize checkpoint: {e}"))

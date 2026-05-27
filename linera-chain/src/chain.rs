@@ -697,6 +697,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
         checkpoint_origin_cursors: Vec<(ChainId, Cursor)>,
+        checkpoint_inbox_cursors: Vec<(ChainId, Cursor)>,
         checkpoint_outbox_block_hashes: Vec<CryptoHash>,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
@@ -741,6 +742,7 @@ where
             Some(PreparedCheckpoint {
                 blobs,
                 origin_cursors: checkpoint_origin_cursors,
+                inbox_cursors: checkpoint_inbox_cursors,
                 outbox_block_hashes: checkpoint_outbox_block_hashes,
             })
         } else {
@@ -1166,13 +1168,15 @@ where
                 "Checkpoint must be the first transaction in its block",
             )
         );
-        let (origin_cursors, outbox_block_hashes) = if block.starts_with_checkpoint() {
+        let (origin_cursors, inbox_cursors, outbox_block_hashes) = if block.starts_with_checkpoint()
+        {
             self.check_checkpoint_preconditions().await?;
-            let cursors = self.collect_inbox_cursors().await?;
+            let origin_cursors = self.collect_inbox_cursors().await?;
+            let inbox_cursors = self.collect_all_inbox_cursors().await?;
             let hashes = self.collect_unfinalized_block_hashes().await?;
-            (cursors, hashes)
+            (origin_cursors, inbox_cursors, hashes)
         } else {
-            (Vec::new(), Vec::new())
+            (Vec::new(), Vec::new(), Vec::new())
         };
 
         Self::execute_block_inner(
@@ -1185,6 +1189,7 @@ where
             replaying_oracle_responses,
             policy,
             origin_cursors,
+            inbox_cursors,
             outbox_block_hashes,
         )
         .await
@@ -1213,6 +1218,25 @@ where
                 continue;
             };
             cursors.push((origin, *inbox.next_cursor_to_remove.get()));
+        }
+        Ok(cursors)
+    }
+
+    /// Snapshots `(origin, next_cursor_to_remove)` for every inbox with a non-default
+    /// `next_cursor_to_remove`. Recorded in the checkpoint's oracle response so a
+    /// bootstrapping node can seed each inbox's `restored_cursor` and silently drop
+    /// any sender re-pushes whose effects are already in the restored execution state.
+    async fn collect_all_inbox_cursors(&self) -> Result<Vec<(ChainId, Cursor)>, ChainError> {
+        let origins = self.inboxes.indices().await?;
+        let mut cursors = Vec::new();
+        for origin in origins {
+            let Some(inbox) = self.inboxes.try_load_entry(&origin).await? else {
+                continue;
+            };
+            let cursor = *inbox.next_cursor_to_remove.get();
+            if cursor != Cursor::default() {
+                cursors.push((origin, cursor));
+            }
         }
         Ok(cursors)
     }
@@ -1410,28 +1434,17 @@ where
     }
 
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
-    ///   * no inbox has consumed any incoming bundle (every `next_cursor_to_remove` is
-    ///     at default);
-    ///   * no event stream tracker is set.
+    /// no event stream tracker is set.
     ///
     /// The structural invariant that Checkpoint must be the *first* transaction in its
     /// block is enforced unconditionally in `execute_block`, independently of these
     /// preconditions. Sender-side event conditions (no events ever published) are
     /// validated inside `ExecutionStateView::prepare_checkpoint`. Outgoing messages
-    /// are no longer a precondition: the on-chain `unfinalized_message_blocks` map
-    /// captures everything a bootstrapping node needs.
+    /// and consumed incoming bundles are no longer preconditions: the on-chain
+    /// `unfinalized_message_blocks` map and the per-inbox `restored_cursor` (seeded
+    /// from the checkpoint's oracle response) together carry everything a
+    /// bootstrapping node needs.
     async fn check_checkpoint_preconditions(&self) -> Result<(), ChainError> {
-        let origins = self.inboxes.indices().await?;
-        for origin in &origins {
-            let Some(inbox) = self.inboxes.try_load_entry(origin).await? else {
-                continue;
-            };
-            ensure!(
-                *inbox.next_cursor_to_remove.get() == Cursor::default(),
-                ChainError::CheckpointPreconditionFailed("chain has consumed incoming messages")
-            );
-        }
-
         let mut had_event_tracker = false;
         self.next_expected_events
             .for_each_index_while(|_| {

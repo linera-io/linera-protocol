@@ -167,6 +167,7 @@ where
         let PreparedCheckpoint {
             blobs,
             origin_cursors,
+            inbox_cursors,
             outbox_block_hashes,
         } = prepared;
         let execution_state_blobs = blobs.iter().map(|blob| blob.id().hash).collect();
@@ -178,6 +179,7 @@ where
             execution_state_blobs,
             used_blobs,
             outbox_block_hashes,
+            inbox_cursors,
         })?;
         for (origin, latest_received_cursor) in origin_cursors {
             txn_tracker.add_outgoing_message(OutgoingMessage::new(
