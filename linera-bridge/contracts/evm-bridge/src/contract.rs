@@ -324,44 +324,9 @@ impl EvmBridgeContract {
         let (block_hash, receipts_root) =
             proof::decode_block_header(block_header_rlp).expect("invalid block header RLP");
 
-        // 1b. Finality check (cached when an earlier proof from the same block was processed).
-        if self.state.rpc_endpoint.get().is_empty() {
-            log::warn!("rpc_endpoint is empty — skipping block finality verification.");
-        } else if !self
-            .state
-            .verified_block_hashes
-            .contains(&block_hash.0)
-            .await
-            .expect("failed to check verified block hashes")
-        {
-            self.verify_block_hash(block_hash.0).await;
-        }
-
-        // 2. Verify receipt inclusion via MPT proof
-        let proof_bytes: Vec<Bytes> = proof_nodes
-            .iter()
-            .map(|n| Bytes::copy_from_slice(n))
-            .collect();
-        proof::verify_receipt_inclusion(receipts_root, tx_index, receipt_rlp, &proof_bytes)
-            .expect("receipt inclusion proof failed");
-
-        // 3. Decode receipt logs and parse the BurnBlocked event
-        let logs = proof::decode_receipt_logs(receipt_rlp).expect("failed to decode receipt logs");
-        assert!(
-            (log_index as usize) < logs.len(),
-            "log_index {} out of range (receipt has {} logs)",
-            log_index,
-            logs.len()
-        );
-        let bridge_contract_bytes =
-            self.state.bridge_contract_address.get().expect(
-                "bridge contract address not registered — call RegisterFungibleBridge first",
-            );
-        let bridge_contract = alloy_primitives::Address::from(bridge_contract_bytes);
-        let fields = proof::parse_burn_blocked_event(&logs[log_index as usize], bridge_contract)
-            .expect("failed to parse BurnBlocked event");
-
-        // 4. Replay protection
+        // 2. Replay protection — cheap; reject before the RPC finality call
+        //    and MPT verification so a duplicate proof is rejected without
+        //    cost.
         let refund_key = RefundKey {
             source_chain_id: params.source_chain_id,
             block_hash,
@@ -378,13 +343,51 @@ impl EvmBridgeContract {
                 .expect("failed to check processed refunds"),
             "refund already processed"
         );
+
+        // 3. Finality check (cached when an earlier proof from the same block was processed).
+        if self.state.rpc_endpoint.get().is_empty() {
+            log::warn!("rpc_endpoint is empty — skipping block finality verification.");
+        } else if !self
+            .state
+            .verified_block_hashes
+            .contains(&block_hash.0)
+            .await
+            .expect("failed to check verified block hashes")
+        {
+            self.verify_block_hash(block_hash.0).await;
+        }
+
+        // 4. Verify receipt inclusion via MPT proof
+        let proof_bytes: Vec<Bytes> = proof_nodes
+            .iter()
+            .map(|n| Bytes::copy_from_slice(n))
+            .collect();
+        proof::verify_receipt_inclusion(receipts_root, tx_index, receipt_rlp, &proof_bytes)
+            .expect("receipt inclusion proof failed");
+
+        // 5. Decode receipt logs and parse the BurnBlocked event
+        let logs = proof::decode_receipt_logs(receipt_rlp).expect("failed to decode receipt logs");
+        assert!(
+            (log_index as usize) < logs.len(),
+            "log_index {} out of range (receipt has {} logs)",
+            log_index,
+            logs.len()
+        );
+        let bridge_contract_bytes =
+            self.state.bridge_contract_address.get().expect(
+                "bridge contract address not registered — call RegisterFungibleBridge first",
+            );
+        let bridge_contract = alloy_primitives::Address::from(bridge_contract_bytes);
+        let fields = proof::parse_burn_blocked_event(&logs[log_index as usize], bridge_contract)
+            .expect("failed to parse BurnBlocked event");
+
+        // 6. Record the refund as processed and cache the verified block
+        //    hash so subsequent proofs from the same block skip the RPC
+        //    finality check.
         self.state
             .processed_refunds
             .insert(&refund_hash)
             .expect("failed to insert refund hash");
-
-        // 4b. Cache the verified block hash so subsequent proofs from the same
-        //     block skip the RPC finality check.
         if !self.state.rpc_endpoint.get().is_empty() {
             self.state
                 .verified_block_hashes
@@ -392,7 +395,7 @@ impl EvmBridgeContract {
                 .expect("failed to cache verified block hash");
         }
 
-        // 5. Mint refund to the original burner on the source Linera chain.
+        // 7. Mint refund to the original burner on the source Linera chain.
         let mint_op = WrappedFungibleOperation::Mint {
             target_account: Account {
                 chain_id: fields.source_chain_id,
