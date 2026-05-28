@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! GitHub access: resolving the repository and PR context, and querying workflow runs and jobs.
+
 use std::env;
 
 use anyhow::{anyhow, Context, Result};
@@ -17,16 +19,19 @@ use crate::performance_summary::PR_COMMENT_HEADER;
 const API_REQUEST_DELAY_MS: u64 = 100;
 const IGNORED_JOB_PREFIXES: &[&str] = &["lint-", "check-outdated-cli-md"];
 
+/// A GitHub repository, identified by its owner and name.
 pub struct GithubRepository {
     owner: String,
     name: String,
 }
 
 impl GithubRepository {
+    /// Returns the repository owner.
     pub fn owner(&self) -> &str {
         &self.owner
     }
 
+    /// Returns the repository name.
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -48,6 +53,7 @@ impl GithubRepository {
     }
 }
 
+/// The GitHub context for the PR being analyzed: repository, branches, commit and PR number.
 pub struct GithubContext {
     repository: GithubRepository,
     pr_commit_hash: String,
@@ -57,18 +63,22 @@ pub struct GithubContext {
 }
 
 impl GithubContext {
+    /// Returns the base branch the PR is targeting.
     pub fn base_branch(&self) -> &str {
         &self.base_branch
     }
 
+    /// Returns the PR's head branch.
     pub fn pr_branch(&self) -> &str {
         &self.pr_branch
     }
 
+    /// Returns the commit hash at the PR's head.
     pub fn pr_commit_hash(&self) -> &str {
         &self.pr_commit_hash
     }
 
+    /// Returns the repository the PR belongs to.
     pub fn repository(&self) -> &GithubRepository {
         &self.repository
     }
@@ -135,6 +145,7 @@ impl GithubContext {
     }
 }
 
+/// A GitHub client bound to a PR context, used to query workflow runs/jobs and post comments.
 pub struct Github {
     octocrab: Octocrab,
     context: GithubContext,
@@ -142,6 +153,7 @@ pub struct Github {
 }
 
 impl Github {
+    /// Builds a client from the environment, in local or CI mode, for the given PR number.
     pub fn new(is_local: bool, pr_number: Option<u64>) -> Result<Self> {
         let octocrab_builder = Octocrab::builder();
         let octocrab =
@@ -162,11 +174,12 @@ impl Github {
         })
     }
 
+    /// Returns the PR context this client is bound to.
     pub fn context(&self) -> &GithubContext {
         &self.context
     }
 
-    // Updates an existing comment or creates a new one in the PR.
+    /// Updates the tool's existing summary comment on the PR, or creates one if absent.
     pub async fn upsert_pr_comment(&self, body: String) -> Result<()> {
         let issue_handler = self.octocrab.issues(
             self.context.repository.owner.clone(),
@@ -268,6 +281,8 @@ impl Github {
         Ok(latest_runs)
     }
 
+    /// Returns the jobs of the latest successful run of each workflow on `branch` for `event`,
+    /// excluding jobs with ignored name prefixes.
     pub async fn latest_jobs(
         &self,
         branch: &str,
@@ -310,6 +325,7 @@ impl Github {
         Ok(jobs_filtered)
     }
 
+    /// Returns a workflows handler scoped to this client's repository.
     pub fn workflows_handler(&self) -> WorkflowsHandler<'_> {
         self.octocrab.workflows(
             self.context.repository.owner.clone(),
@@ -317,6 +333,7 @@ impl Github {
         )
     }
 
+    /// Lists all workflows defined in the repository.
     pub async fn workflows(
         &self,
         workflows_handler: &WorkflowsHandler<'_>,

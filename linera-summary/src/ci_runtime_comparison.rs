@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Comparison of per-job CI runtimes between a PR and its base branch.
+
 use std::collections::BTreeMap;
 
 use anyhow::{ensure, Result};
@@ -10,6 +12,7 @@ use tracing::warn;
 
 type WorkflowName = String;
 
+/// The runtime comparison for a single CI job between the base branch and the PR.
 #[derive(Serialize)]
 pub struct WorkflowJobRuntimeComparison {
     name: String,
@@ -20,30 +23,38 @@ pub struct WorkflowJobRuntimeComparison {
 }
 
 impl WorkflowJobRuntimeComparison {
+    /// Returns the job name.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Returns the name of the workflow the job belongs to.
     pub fn workflow_name(&self) -> &str {
         &self.workflow_name
     }
 
+    /// Returns the job's runtime on the base branch, in seconds.
     pub fn base_runtime(&self) -> u64 {
         self.base_runtime
     }
 
+    /// Returns the job's runtime on the PR, in seconds.
     pub fn pr_runtime(&self) -> u64 {
         self.pr_runtime
     }
 
+    /// Returns the PR runtime relative to the base, as a percentage difference.
     pub fn runtime_difference_pct(&self) -> f64 {
         self.runtime_difference_pct
     }
 }
 
-// The key is the name of the workflow, and the value is a list of per job comparisons.
+/// Per-job runtime comparisons, keyed by workflow name.
 #[derive(Serialize)]
-pub struct CiRuntimeComparison(pub BTreeMap<WorkflowName, Vec<WorkflowJobRuntimeComparison>>);
+pub struct CiRuntimeComparison(
+    /// The comparisons for each workflow's jobs, keyed by workflow name.
+    pub BTreeMap<WorkflowName, Vec<WorkflowJobRuntimeComparison>>,
+);
 
 impl CiRuntimeComparison {
     fn get_runtimes(jobs: Vec<Job>) -> Result<BTreeMap<String, BTreeMap<String, u64>>> {
@@ -66,6 +77,8 @@ impl CiRuntimeComparison {
         Ok(runtimes)
     }
 
+    /// Builds the comparison from the base-branch jobs and the PR jobs, matching them by
+    /// workflow and job name.
     pub fn from_jobs(base_jobs: Vec<Job>, pr_jobs: Vec<Job>) -> Result<Self> {
         let base_runtimes = Self::get_runtimes(base_jobs)?;
         let pr_runtimes = Self::get_runtimes(pr_jobs)?;

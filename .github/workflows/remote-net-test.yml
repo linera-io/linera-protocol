@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   remote-net-test:
-    if: ${{ github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 40
 

@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A keystore backed by a JSON file holding the client's signing keys.
+
 use std::path::Path;
 
 use linera_base::{

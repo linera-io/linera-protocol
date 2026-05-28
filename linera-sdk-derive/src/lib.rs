@@ -3,6 +3,8 @@
 
 //! The procedural macros for the crate `linera-sdk`.
 
+#![deny(missing_docs)]
+
 mod stable_enum;
 mod utils;
 
@@ -15,12 +17,17 @@ use syn::{
 
 use crate::utils::{concat, snakify};
 
+/// Derives `GraphQLMutationRoot` for an operation enum, generating a GraphQL mutation root
+/// whose mutations each schedule the corresponding operation. SDK paths in the generated code
+/// are resolved against the `linera_sdk` crate.
 #[proc_macro_derive(GraphQLMutationRoot)]
 pub fn derive_mutation_root(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemEnum);
     generate_mutation_root_code(input, "linera_sdk").into()
 }
 
+/// Like the `GraphQLMutationRoot` derive, but resolves SDK paths against `crate` instead of
+/// `linera_sdk`. Used within the `linera-sdk` crate itself.
 #[proc_macro_derive(GraphQLMutationRootInCrate)]
 pub fn derive_mutation_root_in_crate(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemEnum);
@@ -160,7 +167,7 @@ fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use syn::{__private::quote::quote, parse_quote, ItemEnum};
 
     use crate::generate_mutation_root_code;

@@ -27,6 +27,8 @@
 //! The [`Arc`] newtype enforces this structurally: it has no public constructor,
 //! so callers cannot bypass the cache by calling `std::sync::Arc::new` directly.
 
+#![deny(missing_docs)]
+
 mod arc;
 mod unique_value_cache;
 mod value_cache;

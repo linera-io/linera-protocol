@@ -45,6 +45,7 @@ pub enum InnerStorageConfig {
         /// The URI for accessing the database.
         uri: String,
     },
+    /// The dual RocksDB / ScyllaDB description.
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
     DualRocksDbScyllaDb {
         /// The path used.
@@ -279,6 +280,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
 }
 
 impl StorageConfig {
+    /// Appends a shard-specific subdirectory to the storage path, if applicable.
     #[allow(unused_variables)]
     pub fn maybe_append_shard_path(&mut self, shard: usize) -> std::io::Result<()> {
         match &mut self.inner_storage_config {

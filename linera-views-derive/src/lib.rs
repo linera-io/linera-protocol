@@ -3,6 +3,7 @@
 
 //! The procedural macros for the crate `linera-views`.
 
+#![deny(missing_docs)]
 #![allow(clippy::cast_possible_truncation)]
 
 use proc_macro::TokenStream;
@@ -459,6 +460,7 @@ fn to_token_stream(input: Result<TokenStream2, Error>) -> TokenStream {
     }
 }
 
+/// Derives the `View` trait for a struct whose fields are themselves views.
 #[proc_macro_derive(View, attributes(view))]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -472,6 +474,7 @@ fn derive_hash_view_token_stream2(input: &ItemStruct) -> Result<TokenStream2, Er
     Ok(stream)
 }
 
+/// Derives the `View` and `HashableView` traits for a struct.
 #[proc_macro_derive(HashableView, attributes(view))]
 pub fn derive_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -486,6 +489,7 @@ fn derive_root_view_token_stream2(input: &ItemStruct) -> Result<TokenStream2, Er
     Ok(stream)
 }
 
+/// Derives the `View` and `RootView` traits for a struct.
 #[proc_macro_derive(RootView, attributes(view))]
 pub fn derive_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -501,6 +505,7 @@ fn derive_crypto_hash_view_token_stream2(input: &ItemStruct) -> Result<TokenStre
     Ok(stream)
 }
 
+/// Derives the `View`, `HashableView` and `CryptoHashView` traits for a struct.
 #[proc_macro_derive(CryptoHashView, attributes(view))]
 pub fn derive_crypto_hash_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -517,6 +522,7 @@ fn derive_crypto_hash_root_view_token_stream2(input: &ItemStruct) -> Result<Toke
     Ok(stream)
 }
 
+/// Derives the `View`, `RootView`, `HashableView` and `CryptoHashView` traits for a struct.
 #[proc_macro_derive(CryptoHashRootView, attributes(view))]
 pub fn derive_crypto_hash_root_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -533,6 +539,7 @@ fn derive_hashable_root_view_token_stream2(input: &ItemStruct) -> Result<TokenSt
     Ok(stream)
 }
 
+/// Derives the `View`, `RootView` and `HashableView` traits for a struct (used in tests).
 #[proc_macro_derive(HashableRootView, attributes(view))]
 #[cfg(test)]
 pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
@@ -542,6 +549,7 @@ pub fn derive_hashable_root_view(input: TokenStream) -> TokenStream {
     to_token_stream(stream)
 }
 
+/// Derives the `ClonableView` trait for a struct whose fields are clonable views.
 #[proc_macro_derive(ClonableView, attributes(view))]
 pub fn derive_clonable_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
@@ -552,7 +560,7 @@ pub fn derive_clonable_view(input: TokenStream) -> TokenStream {
 }
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
 
     use quote::quote;
     use syn::{parse_quote, AngleBracketedGenericArguments};

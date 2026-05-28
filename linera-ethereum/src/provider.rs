@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A simplified JSON-RPC provider for accessing an Ethereum node over HTTP.
+
 use alloy::transports::http::reqwest::{header::CONTENT_TYPE, Client};
 use async_lock::Mutex;
 use async_trait::async_trait;
@@ -9,7 +11,9 @@ use crate::{client::JsonRpcClient, common::EthereumServiceError};
 
 /// The Ethereum endpoint and its provider used for accessing the Ethereum node.
 pub struct EthereumClientSimplified {
+    /// The URL of the Ethereum node.
     pub url: String,
+    /// The counter used to generate JSON-RPC request IDs.
     pub id: Mutex<u64>,
 }
 
