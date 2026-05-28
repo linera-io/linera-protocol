@@ -3,6 +3,8 @@
 
 //! The client component of the Linera faucet.
 
+#![deny(missing_docs)]
+
 // TODO(#3362): generate this code
 
 use std::collections::BTreeMap;
@@ -17,20 +19,38 @@ use linera_execution::{committee::ValidatorState, Committee, ResourceControlPoli
 use linera_version::VersionInfo;
 use thiserror_context::Context;
 
+/// The kinds of error that the faucet client can return.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ErrorInner {
+    /// A response from the faucet could not be parsed as JSON.
     #[error("JSON parsing error: {0:?}")]
     Json(#[from] serde_json::Error),
+    /// The faucet returned one or more GraphQL errors.
     #[error("GraphQL error: {0:?}")]
     GraphQl(Vec<serde_json::Value>),
+    /// An HTTP request to the faucet failed.
     #[error("HTTP error: {0:?}")]
     Http(#[from] reqwest::Error),
+    /// An arithmetic operation overflowed.
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
 }
 
-thiserror_context::impl_context!(Error(ErrorInner));
+pub use error::Error;
+
+mod error {
+    // `impl_context!` generates a public `Error` newtype (with accessors) that cannot carry
+    // doc comments, so this wrapper module is exempted from the crate's `missing_docs` policy.
+    // `expect` (rather than `allow`) flags this if the macro ever stops generating such items.
+    #![expect(missing_docs)]
+
+    use thiserror_context::Context;
+
+    use super::ErrorInner;
+
+    thiserror_context::impl_context!(Error(ErrorInner));
+}
 
 /// The result of a successful claim mutation.
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -61,10 +81,12 @@ pub struct Faucet {
 }
 
 impl Faucet {
+    /// Creates a faucet client querying the faucet service at the given URL.
     pub fn new(url: String) -> Self {
         Self { url }
     }
 
+    /// Returns the URL of the faucet service.
     pub fn url(&self) -> &str {
         &self.url
     }
@@ -127,6 +149,7 @@ impl Faucet {
         }
     }
 
+    /// Fetches the network's genesis configuration from the faucet.
     pub async fn genesis_config(&self) -> Result<GenesisConfig, Error> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
@@ -140,6 +163,7 @@ impl Faucet {
             .genesis_config)
     }
 
+    /// Fetches the faucet's version information.
     pub async fn version_info(&self) -> Result<VersionInfo, Error> {
         #[derive(serde::Deserialize)]
         struct Response {
@@ -149,6 +173,7 @@ impl Faucet {
         Ok(self.query::<Response>("query { version }").await?.version)
     }
 
+    /// Claims a new chain for the given owner, returning its chain description.
     pub async fn claim(
         &self,
         owner: &linera_base::identifiers::AccountOwner,
@@ -220,6 +245,7 @@ impl Faucet {
             .next_daily_claim)
     }
 
+    /// Returns the current validators' public keys and network addresses.
     pub async fn current_validators(&self) -> Result<Vec<(ValidatorPublicKey, String)>, Error> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
@@ -243,6 +269,7 @@ impl Faucet {
             .collect())
     }
 
+    /// Returns the current committee: its validators and resource-control policy.
     pub async fn current_committee(&self) -> Result<Committee, Error> {
         #[derive(serde::Deserialize)]
         struct CommitteeResponse {

@@ -3,4 +3,6 @@
 
 //! Plugins for Linera indexer.
 
+#![deny(missing_docs)]
+
 pub mod operations;

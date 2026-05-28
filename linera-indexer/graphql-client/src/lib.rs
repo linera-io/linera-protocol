@@ -3,5 +3,7 @@
 
 //! A GraphQL client for the indexer.
 
+#![deny(missing_docs)]
+
 pub mod indexer;
 pub mod operations;
