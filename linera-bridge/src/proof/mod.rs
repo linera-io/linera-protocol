@@ -123,13 +123,18 @@ pub struct DepositKey {
 }
 
 impl DepositKey {
+    /// Domain-separation tag prepended to the hash input so deposit and
+    /// refund key hashes can never collide even if their field layouts match.
+    const DOMAIN_TAG: u8 = 0x01;
+
     /// Deterministic keccak-256 hash of the deposit key fields.
     pub fn hash(&self) -> [u8; 32] {
-        let mut data = [0u8; 56];
-        data[0..8].copy_from_slice(&self.source_chain_id.to_le_bytes());
-        data[8..40].copy_from_slice(self.block_hash.as_slice());
-        data[40..48].copy_from_slice(&self.tx_index.to_le_bytes());
-        data[48..56].copy_from_slice(&self.log_index.to_le_bytes());
+        let mut data = [0u8; 57];
+        data[0] = Self::DOMAIN_TAG;
+        data[1..9].copy_from_slice(&self.source_chain_id.to_le_bytes());
+        data[9..41].copy_from_slice(self.block_hash.as_slice());
+        data[41..49].copy_from_slice(&self.tx_index.to_le_bytes());
+        data[49..57].copy_from_slice(&self.log_index.to_le_bytes());
         keccak256(data).0
     }
 }

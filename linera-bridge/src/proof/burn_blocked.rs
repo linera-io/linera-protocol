@@ -31,8 +31,9 @@ pub struct BurnBlockedFields {
 
 /// Replay-protection key for a refund.
 ///
-/// Independent from [`super::DepositKey`] so the deposit and refund domains
-/// cannot collide on-chain.
+/// Distinct from [`super::DepositKey`] both structurally and via the 1-byte
+/// domain tag mixed into [`RefundKey::hash`], so the two key spaces cannot
+/// collide even though their field layouts happen to match.
 #[derive(
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
@@ -44,13 +45,18 @@ pub struct RefundKey {
 }
 
 impl RefundKey {
+    /// Domain-separation tag prepended to the hash input so refund and
+    /// deposit key hashes can never collide even if their field layouts match.
+    const DOMAIN_TAG: u8 = 0x02;
+
     /// Deterministic keccak-256 hash of the refund key fields.
     pub fn hash(&self) -> [u8; 32] {
-        let mut data = [0u8; 56];
-        data[0..8].copy_from_slice(&self.source_chain_id.to_le_bytes());
-        data[8..40].copy_from_slice(self.block_hash.as_slice());
-        data[40..48].copy_from_slice(&self.tx_index.to_le_bytes());
-        data[48..56].copy_from_slice(&self.log_index.to_le_bytes());
+        let mut data = [0u8; 57];
+        data[0] = Self::DOMAIN_TAG;
+        data[1..9].copy_from_slice(&self.source_chain_id.to_le_bytes());
+        data[9..41].copy_from_slice(self.block_hash.as_slice());
+        data[41..49].copy_from_slice(&self.tx_index.to_le_bytes());
+        data[49..57].copy_from_slice(&self.log_index.to_le_bytes());
         keccak256(data).0
     }
 }
@@ -433,5 +439,26 @@ mod tests {
             }
             .hash()
         );
+    }
+
+    /// A `RefundKey` and `DepositKey` with identical field values must produce
+    /// distinct hashes thanks to the 1-byte domain tag. This guarantees the
+    /// `processed_deposits` and `processed_refunds` key spaces are disjoint
+    /// even if a future refactor stored them in a shared SetView.
+    #[test]
+    fn test_refund_and_deposit_key_hashes_are_domain_separated() {
+        let refund = RefundKey {
+            source_chain_id: 8453,
+            block_hash: B256::repeat_byte(0x11),
+            tx_index: 7,
+            log_index: 3,
+        };
+        let deposit = crate::proof::DepositKey {
+            source_chain_id: refund.source_chain_id,
+            block_hash: refund.block_hash,
+            tx_index: refund.tx_index,
+            log_index: refund.log_index,
+        };
+        assert_ne!(refund.hash(), deposit.hash());
     }
 }
