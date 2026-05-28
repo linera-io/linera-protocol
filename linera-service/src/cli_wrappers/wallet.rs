@@ -18,7 +18,7 @@ use std::{
 use anyhow::{bail, ensure, Context, Result};
 use async_graphql::InputType;
 use async_tungstenite::tungstenite::{client::IntoClientRequest as _, http::HeaderValue};
-use futures::{SinkExt as _, Stream, StreamExt as _, TryStreamExt as _};
+use futures::{Stream, StreamExt as _, TryStreamExt as _};
 use heck::ToKebabCase;
 use linera_base::{
     abi::ContractAbi,

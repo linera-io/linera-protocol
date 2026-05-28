@@ -104,7 +104,7 @@ async-graphql-derive = "=7.0.17"
 async-graphql-value = { version = "=7.0.17", features = ["raw_value"] }
 async-lock = "3.3.0"
 async-trait = "0.1.77"
-async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
+async-tungstenite = { version = "0.28", features = ["tokio-runtime"] }
 axum = "0.8.4"
 base64 = "0.22.0"
 bcs = "0.1.6"
@@ -178,7 +178,7 @@ num-format = "0.4.4"
 num-traits = "0.2.18"
 octocrab = "0.42.1"
 oneshot = "0.1.6"
-op-alloy-network = { version = "0.22.0", default-features = false }
+op-alloy-network = { version = "=0.22.0", default-features = false }
 opentelemetry = { version = "0.30.0", features = ["trace"] }
 opentelemetry-http = "0.30.0"
 opentelemetry-otlp = { version = "0.30.0", features = [
@@ -193,7 +193,7 @@ pprof_util = { version = "0.8.0", features = ["flamegraph", "symbolize"] }
 prettyplease = "0.2.16"
 proc-macro-error = "1.0.4"
 proc-macro2 = "1.0"
-prometheus = "0.13.3"
+prometheus = { version = "0.13.3", default-features = false }
 prometheus-parse = "0.2.5"
 proptest = { version = "1.6.0", default-features = false, features = ["alloc"] }
 prost = "0.14"
