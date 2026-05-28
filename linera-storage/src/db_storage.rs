@@ -41,6 +41,7 @@ use {
 
 use crate::{ChainRuntimeContext, Clock, Storage};
 
+/// Prometheus metrics counting storage reads, writes and cache hits.
 #[cfg(with_metrics)]
 pub mod metrics {
     use std::sync::LazyLock;
@@ -353,11 +354,17 @@ impl MultiPartitionBatch {
 /// Individual cache sizes for each `ValueCache` in `DbStorage`.
 #[derive(Clone, Copy, Debug)]
 pub struct StorageCacheConfig {
+    /// The maximum number of blobs held in the blob cache.
     pub blob_cache_size: usize,
+    /// The maximum number of confirmed blocks held in the confirmed-block cache.
     pub confirmed_block_cache_size: usize,
+    /// The maximum number of certificates held in the certificate cache.
     pub certificate_cache_size: usize,
+    /// The maximum number of raw certificates held in the raw-certificate cache.
     pub certificate_raw_cache_size: usize,
+    /// The maximum number of events held in the event cache.
     pub event_cache_size: usize,
+    /// The interval, in seconds, between cache cleanup passes.
     pub cache_cleanup_interval_secs: u64,
 }
 
@@ -417,15 +424,24 @@ pub struct DbStorage<Database, Clock = WallClock> {
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
+/// The root key identifying a storage partition.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RootKey {
+    /// The partition holding the state of the given chain.
     ChainState(ChainId),
+    /// The partition holding the certificate for the given confirmed block hash.
     ConfirmedBlock(CryptoHash),
+    /// The partition holding the blob with the given ID.
     Blob(BlobId),
+    /// The partition holding the events of the given chain.
     Event(ChainId),
+    /// An unused placeholder variant.
     Placeholder,
+    /// The partition holding the network description.
     NetworkDescription,
+    /// The partition holding the state of the block exporter with the given ID.
     BlockExporterState(u32),
+    /// The partition holding the height-to-hash certificate index of the given chain.
     BlockByHeight(ChainId),
 }
 
@@ -433,6 +449,7 @@ const CHAIN_ID_TAG: u8 = 0;
 const BLOB_ID_TAG: u8 = 2;
 
 impl RootKey {
+    /// Serializes the root key to its byte representation.
     pub fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
     }
@@ -1990,6 +2007,7 @@ where
     Database::Error: Send + Sync,
     Database::Store: KeyValueStore + Clone + 'static,
 {
+    /// Connects to the database, creating the given namespace if it does not exist.
     pub async fn maybe_create_and_connect(
         config: &Database::Config,
         namespace: &str,
@@ -2001,6 +2019,7 @@ where
         Ok(storage)
     }
 
+    /// Connects to an existing namespace in the database.
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
@@ -2062,6 +2081,7 @@ where
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
 {
+    /// Creates a storage instance backed by a fresh test namespace and a [`TestClock`].
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Database::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
@@ -2075,6 +2095,7 @@ where
         .unwrap()
     }
 
+    /// Recreates the given namespace and connects to it using the provided test clock.
     pub async fn new_for_testing(
         config: Database::Config,
         namespace: &str,
