@@ -54,6 +54,36 @@ pub(crate) async fn update_balance_metrics<
     update_linera_balance_metric(linera_client).await;
 }
 
+/// Polls the EVM RPC for the chain id with bounded exponential backoff
+/// so a brief RPC outage at startup does not kill the relayer. Backs
+/// off 1s, 2s, 4s, 8s, 16s; gives up after ~31s with the underlying
+/// error so the operator still sees a clean failure on a hard outage.
+async fn fetch_evm_chain_id_with_retry<P: alloy::providers::Provider>(
+    evm_client: &evm::EvmClient<P>,
+) -> Result<u64> {
+    let mut delay = Duration::from_secs(1);
+    let max_delay = Duration::from_secs(16);
+    let mut last_error: Option<anyhow::Error> = None;
+    for attempt in 1..=5 {
+        match evm_client.get_chain_id().await {
+            Ok(id) => return Ok(id),
+            Err(error) => {
+                tracing::warn!(
+                    attempt,
+                    ?delay,
+                    ?error,
+                    "EVM chain id query failed; retrying after backoff"
+                );
+                last_error = Some(error);
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(max_delay);
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("EVM chain id query failed")))
+        .context("failed to query EVM chain id for monitor state after retries")
+}
+
 pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
     evm_client: &evm::EvmClient<P>,
 ) {
@@ -317,10 +347,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let mut chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan/retry ──
-    let source_chain_id = evm_client
-        .get_chain_id()
-        .await
-        .context("failed to query EVM chain id for monitor state")?;
+    let source_chain_id = fetch_evm_chain_id_with_retry(&evm_client).await?;
     let mut monitor_state = MonitorState::new(monitor_start_block, source_chain_id);
     let default_sqlite_path = storage_dir
         .parent()
