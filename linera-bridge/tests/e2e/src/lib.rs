@@ -462,7 +462,7 @@ where
     chain_client.synchronize_from_validators().await?;
     chain_client.process_inbox().await?;
 
-    let initial_balance = U128(initial_balance_tokens * 10u128.pow(18));
+    let initial_balance = U128(initial_balance_tokens);
     let (fungible_app_id, _) = chain_client
         .create_application_untyped(
             wf_module_id,
