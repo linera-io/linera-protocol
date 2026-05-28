@@ -25,7 +25,6 @@ async fn setup_bridge() -> (ActiveChain, ApplicationId<EvmBridgeAbi>) {
     let bridge_params = BridgeParameters {
         source_chain_id: 8453u64,
         token_address: [0xA0; 20],
-        rpc_endpoint: String::new(),
     };
     let bridge_app_id = chain
         .create_application(
