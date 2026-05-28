@@ -2331,6 +2331,103 @@ where
     Ok(())
 }
 
+/// Exercises the lazy locking-block fetch on proposal rejection.
+///
+/// Sets up a state where validators 2 and 3 hold a `Regular` locking block at
+/// `MultiLeader(0)` but validators 0 and 1 do not. `client_a` — which has no
+/// local knowledge of the lock — proposes a new (different) block. All four
+/// validators reject the proposal with `ChainError` (each has
+/// `validated_vote @ ML(0)` from `client_b`'s earlier attempt, so a fresh
+/// proposal at the same round fails the strict-round check). The per-validator
+/// updater's `NodeError::ChainError` arm pulls manager state from each
+/// rejecter, absorbing the locking block from validators 2 and 3 into
+/// `client_a`'s local node. `process_pending_block_without_prepare` detects the
+/// snapshot advance and returns `LocalConsensusStateAdvanced`;
+/// `execute_operations` retries; the retry finalizes the absorbed locking block
+/// (`client_b`'s transfer) and the chain advances. The outcome is `Conflict`
+/// because the committed block is `client_b`'s transfer, not `client_a`'s
+/// intended burn.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "dynamodb", test_case(DynamoDbStorageBuilder::default(); "dynamo_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_lazy_pull_absorbs_locking_block_on_proposal_rejection<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client_a = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = client_a.chain_id();
+    let recipient_id = recipient.chain_id();
+    let owner_a = client_a.identity().await?;
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+
+    let owners = [(owner_a, 100), (owner_b, 100)];
+    let ownership = ChainOwnership::multiple(owners, 4, TimeoutConfig::default());
+    client_a.change_ownership(ownership).await?;
+
+    let info = client_a.chain_info().await?;
+    let mut client_b = builder
+        .make_client(chain_id, info.block_hash, info.next_block_height)
+        .await?;
+    client_b.set_preferred_owner(owner_b);
+
+    // Setup: `client_b` proposes a transfer at `MultiLeader(0)`. All four validators
+    // vote to validate, but validators 0 and 1 refuse to absorb the resulting
+    // validated certificate and validator 3 refuses to send its confirm vote. So
+    // validators 2 and 3 end up holding a `LockingBlock::Regular @ MultiLeader(0)`
+    // and a `confirmed_vote` for it; validators 0 and 1 hold only a
+    // `validated_vote @ MultiLeader(0)`. The block never reaches a confirmation
+    // quorum, so `client_b`'s transfer fails.
+    builder.set_fault_type([0, 1], FaultType::DontProcessValidated);
+    builder.set_fault_type([3], FaultType::DontSendConfirmVote);
+    client_b.synchronize_from_validators().await?;
+    let b_result = client_b
+        .transfer(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await;
+    assert!(b_result.is_err());
+
+    // Restore honest behavior. `client_a`'s local node has not been touched since
+    // `change_ownership` — it has no proposed block and no locking block.
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
+    assert!(
+        client_a
+            .chain_info_with_manager_values()
+            .await?
+            .manager
+            .requested_locking
+            .is_none(),
+        "client_a must not yet hold a locking block"
+    );
+
+    // `client_a` burns. The proposal goes out at `MultiLeader(0)`; every validator
+    // rejects it (each has `validated_vote @ ML(0)` from `client_b`'s transfer
+    // attempt, so a fresh proposal at the same round fails the strict-round check).
+    // The per-validator `NodeError::ChainError` arm pulls manager state, and
+    // `client_a`'s local node absorbs the locking block from validators 2/3. The
+    // retry then finalizes the locked block via `finalize_locking_block` and the
+    // chain advances to height 2 with `client_b`'s transfer committed — classified
+    // as `Conflict` because the committed block is not `client_a`'s intended burn.
+    let burn_result = client_a.burn(AccountOwner::CHAIN, Amount::ONE).await?;
+    assert_matches!(burn_result, ClientOutcome::Conflict(_));
+    assert_eq!(
+        client_a.chain_info().await?.next_block_height,
+        BlockHeight::from(2)
+    );
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]

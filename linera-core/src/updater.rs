@@ -609,6 +609,30 @@ where
                     )
                     .await?;
                 }
+                Err(error @ NodeError::ChainError { .. }) => {
+                    // The validator rejected the proposal because of its local chain
+                    // manager state — most commonly an incompatible confirmed vote tied
+                    // to a locking block we don't yet have. Pull manager values from
+                    // this validator so the local node absorbs whatever justified the
+                    // rejection (signatures are checked locally, so the source can't
+                    // fool us), then surface the error. If our local state actually
+                    // advanced, `execute_operations` will rebuild and re-propose; if
+                    // not, the error propagates as usual.
+                    tracing::debug!(
+                        remote_node = self.remote_node.address(),
+                        %chain_id,
+                        %error,
+                        "validator rejected proposal; pulling manager state",
+                    );
+                    if let Err(sync_err) = self
+                        .client
+                        .synchronize_chain_state_from(&self.remote_node, chain_id)
+                        .await
+                    {
+                        tracing::debug!(%sync_err, "failed to pull manager state from validator");
+                    }
+                    return Err(error.into());
+                }
                 Err(NodeError::BlobsNotFound(_) | NodeError::InactiveChain(_))
                     if !blob_ids.is_empty() =>
                 {
