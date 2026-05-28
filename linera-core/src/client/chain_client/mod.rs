@@ -282,7 +282,7 @@ pub enum Error {
     BlockProposalError(&'static str),
 
     #[error(
-        "A validator absorbed new chain manager state during the proposal; \
+        "A validator updated our chain manager state during the proposal; \
          retry with the refreshed local state"
     )]
     LocalConsensusStateAdvanced,
