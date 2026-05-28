@@ -1306,51 +1306,34 @@ impl ScyllaDbDatabaseInternal {
 
 #[cfg(with_testing)]
 impl crate::backends::DatabaseBackup for ScyllaDbDatabaseInternal {
-    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+    async fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
         use std::collections::BTreeMap;
 
         use futures::StreamExt as _;
 
-        let store = self.store.clone();
-        let dir = dir.to_path_buf();
-        // Run async CQL queries in a fresh thread with its own runtime to avoid
-        // nesting runtimes (backup_to is sync but ScyllaDB ops are async).
-        std::thread::scope(|s| {
-            s.spawn(|| -> anyhow::Result<()> {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("tokio runtime")
-                    .block_on(async move {
-                        let namespace = &store.namespace;
-                        let statement = store
-                            .session
-                            .prepare(format!(
-                                "SELECT root_key, k, v FROM {KEYSPACE}.\"{namespace}\""
-                            ))
-                            .await
-                            .map_err(|e| anyhow::anyhow!("{e}"))?;
-                        let rows = Box::pin(store.session.execute_iter(statement, &[]))
-                            .await
-                            .map_err(|e| anyhow::anyhow!("{e}"))?;
-                        let mut snapshot: BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>> =
-                            BTreeMap::new();
-                        let mut rows = rows
-                            .rows_stream::<(Vec<u8>, Vec<u8>, Vec<u8>)>()
-                            .map_err(|e| anyhow::anyhow!("{e}"))?;
-                        while let Some(row) = rows.next().await {
-                            let (root_key, k, v) = row.map_err(|e| anyhow::anyhow!("{e}"))?;
-                            snapshot.entry(root_key).or_default().insert(k, v);
-                        }
-                        let encoded =
-                            bcs::to_bytes(&snapshot).map_err(|e| anyhow::anyhow!("{e}"))?;
-                        std::fs::write(dir.join("scylladb_backup.bcs"), encoded)?;
-                        Ok(())
-                    })
-            })
-            .join()
-            .expect("backup thread panicked")
-        })
+        let namespace = &self.store.namespace;
+        let statement = self
+            .store
+            .session
+            .prepare(format!(
+                "SELECT root_key, k, v FROM {KEYSPACE}.\"{namespace}\""
+            ))
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let rows = Box::pin(self.store.session.execute_iter(statement, &[]))
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let mut snapshot: BTreeMap<Vec<u8>, BTreeMap<Vec<u8>, Vec<u8>>> = BTreeMap::new();
+        let mut rows = rows
+            .rows_stream::<(Vec<u8>, Vec<u8>, Vec<u8>)>()
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        while let Some(row) = rows.next().await {
+            let (root_key, k, v) = row.map_err(|e| anyhow::anyhow!("{e}"))?;
+            snapshot.entry(root_key).or_default().insert(k, v);
+        }
+        let encoded = bcs::to_bytes(&snapshot).map_err(|e| anyhow::anyhow!("{e}"))?;
+        std::fs::write(dir.join("scylladb_backup.bcs"), encoded)?;
+        Ok(())
     }
 }
 

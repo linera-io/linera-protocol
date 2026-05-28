@@ -358,7 +358,7 @@ impl TestKeyValueDatabase for MemoryDatabase {
 
 #[cfg(with_testing)]
 impl crate::backends::DatabaseBackup for MemoryDatabase {
-    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+    async fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
         use std::collections::BTreeMap;
         let databases = MEMORY_DATABASES
             .lock()

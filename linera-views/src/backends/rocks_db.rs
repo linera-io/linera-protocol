@@ -794,7 +794,7 @@ pub type RocksDbDatabase = LruCachingDatabase<ValueSplittingDatabase<RocksDbData
 
 #[cfg(with_testing)]
 impl crate::backends::DatabaseBackup for RocksDbDatabaseInternal {
-    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+    async fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
         use rocksdb::{
             backup::{BackupEngine, BackupEngineOptions},
             Env,

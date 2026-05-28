@@ -27,5 +27,8 @@ pub mod indexed_db;
 /// Serializes the contents of a database namespace to disk for test backup/restore.
 pub trait DatabaseBackup {
     /// Writes a snapshot of the namespace into `dir`.
-    fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()>;
+    fn backup_to(
+        &self,
+        dir: &std::path::Path,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
 }

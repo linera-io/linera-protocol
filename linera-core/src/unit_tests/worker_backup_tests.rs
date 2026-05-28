@@ -115,7 +115,10 @@ async fn memory_setup_backup_and_next_cert(
         .expect("at least one validator")
         .clone();
     let backup_dir = TempDir::new().expect("backup dir");
-    source_storage.backup_to(backup_dir.path()).expect("backup");
+    source_storage
+        .backup_to(backup_dir.path())
+        .await
+        .expect("backup");
 
     let cert1 = chain_a
         .transfer_to_account(
@@ -172,7 +175,10 @@ async fn memory_setup_stale_backup_and_two_certs() -> (
         .map(|(k, v)| (*k, v.clone()))
         .expect("at least one validator");
     let backup_dir = TempDir::new().expect("backup dir");
-    source_storage.backup_to(backup_dir.path()).expect("backup");
+    source_storage
+        .backup_to(backup_dir.path())
+        .await
+        .expect("backup");
     let validator_secret = builder
         .validator_key_pairs
         .get(&backup_validator_pub_key)
@@ -356,7 +362,10 @@ async fn rocksdb_setup_backup_and_next_cert(
         .expect("at least one validator")
         .clone();
     let backup_dir = TempDir::new().expect("backup dir");
-    source_storage.backup_to(backup_dir.path()).expect("backup");
+    source_storage
+        .backup_to(backup_dir.path())
+        .await
+        .expect("backup");
 
     let cert1 = chain_a
         .transfer_to_account(
@@ -411,7 +420,10 @@ async fn rocksdb_setup_stale_backup_and_two_certs() -> (
         .map(|(k, v)| (*k, v.clone()))
         .expect("at least one validator");
     let backup_dir = TempDir::new().expect("backup dir");
-    source_storage.backup_to(backup_dir.path()).expect("backup");
+    source_storage
+        .backup_to(backup_dir.path())
+        .await
+        .expect("backup");
     let validator_secret = builder
         .validator_key_pairs
         .get(&backup_validator_pub_key)
@@ -626,6 +638,7 @@ async fn scylladb_setup_backup_and_next_cert(
     let backup_dir = TempDir::new().expect("backup dir");
     source_storage
         .backup_to(backup_dir.path())
+        .await
         .expect("scylladb backup");
 
     let cert1 = chain_a
@@ -683,6 +696,7 @@ async fn scylladb_setup_stale_backup_and_two_certs() -> (
     let backup_dir = TempDir::new().expect("backup dir");
     source_storage
         .backup_to(backup_dir.path())
+        .await
         .expect("scylladb backup");
     let validator_secret = builder
         .validator_key_pairs

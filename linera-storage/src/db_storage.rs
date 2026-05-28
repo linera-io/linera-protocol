@@ -1592,8 +1592,8 @@ where
     Database: linera_views::backends::DatabaseBackup,
 {
     /// Backs up the underlying database to the given directory.
-    pub fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
-        self.database.backup_to(dir)
+    pub async fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        self.database.backup_to(dir).await
     }
 }
 
