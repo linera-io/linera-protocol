@@ -8,6 +8,8 @@
 //! [FOUNDRY]: https://book.getfoundry.sh/
 //! [SOLC]: https://soliditylang.org/
 
+#![deny(missing_docs)]
+
 pub mod client;
 pub mod common;
 
