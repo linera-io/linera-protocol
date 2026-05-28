@@ -4,6 +4,8 @@
 use linera_storage::{StorageCacheConfig, DEFAULT_CLEANUP_INTERVAL_SECS};
 use linera_views::lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig;
 
+/// Command-line options shared by all storage backends, controlling concurrency
+/// limits and cache sizes.
 #[derive(Clone, Debug, clap::Parser)]
 pub struct CommonStorageOptions {
     /// The maximal number of simultaneous queries to the database
@@ -76,11 +78,13 @@ pub struct CommonStorageOptions {
 }
 
 impl CommonStorageOptions {
+    /// Returns the options with their default values.
     pub fn with_defaults() -> Self {
         use clap::Parser as _;
         Self::parse_from(std::iter::empty::<String>())
     }
 
+    /// Builds the storage cache configuration from these options.
     pub fn storage_cache_config(&self) -> StorageCacheConfig {
         StorageCacheConfig {
             blob_cache_size: self.blob_cache_size,
@@ -92,6 +96,7 @@ impl CommonStorageOptions {
         }
     }
 
+    /// Builds the views storage cache configuration from these options.
     pub fn views_storage_cache_config(&self) -> ViewsStorageCacheConfig {
         ViewsStorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
