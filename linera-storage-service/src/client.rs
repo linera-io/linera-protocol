@@ -64,6 +64,7 @@ const MAX_KEY_SIZE: usize = 1000000;
 // * A key with empty value is stored at
 //   [`KeyPrefix::RootKey`] + namespace + root_key
 //   to indicate the existence of a root key.
+/// A database handle connected to a remote storage service.
 #[derive(Clone)]
 pub struct StorageServiceDatabaseInternal {
     channel: Channel,
@@ -72,6 +73,7 @@ pub struct StorageServiceDatabaseInternal {
     namespace: Vec<u8>,
 }
 
+/// A store within a namespace and root key, backed by a remote storage service.
 #[derive(Clone)]
 pub struct StorageServiceStoreInternal {
     channel: Channel,
