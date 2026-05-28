@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! RPC client traits for querying an Ethereum node.
+
 use std::fmt::Debug;
 
 use alloy::rpc::types::eth::{
@@ -20,6 +22,7 @@ use crate::common::{
 /// A basic RPC client for making JSON queries
 #[async_trait]
 pub trait JsonRpcClient {
+    /// The error type returned by the client's requests.
     type Error: From<serde_json::Error> + From<EthereumQueryError>;
 
     /// The inner function that has to be implemented and access the client
@@ -70,6 +73,7 @@ impl<'a, T> JsonRpcRequest<'a, T> {
     }
 }
 
+/// A JSON-RPC response as returned by an Ethereum node.
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcResponse {
     id: u64,
@@ -81,6 +85,7 @@ pub struct JsonRpcResponse {
 /// gas to be executed.
 #[async_trait]
 pub trait EthereumQueries {
+    /// The error type returned by the queries.
     type Error;
 
     /// Lists all the accounts of the Ethereum node.

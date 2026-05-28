@@ -3,7 +3,7 @@
 
 //! This crate provides the internal tool to summarize performance changes in PRs.
 
-#![allow(missing_docs)]
+#![deny(missing_docs)]
 
 pub mod ci_runtime_comparison;
 pub mod github;
