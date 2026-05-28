@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Building the performance summary and rendering it as a PR comment.
+
 use std::{collections::HashSet, time::Duration};
 
 use anyhow::{bail, Result};
@@ -9,8 +11,10 @@ use serde::Serialize;
 
 use crate::{ci_runtime_comparison::CiRuntimeComparison, github::Github};
 
+/// The Markdown header that identifies the tool's PR comment so it can be found and updated.
 pub const PR_COMMENT_HEADER: &str = "## Performance Summary for commit";
 
+/// A performance summary for a PR: the CI runtime comparison plus the GitHub client to post it.
 #[derive(Serialize)]
 pub struct PerformanceSummary {
     #[serde(skip_serializing)]
@@ -19,6 +23,8 @@ pub struct PerformanceSummary {
 }
 
 impl PerformanceSummary {
+    /// Fetches the latest base-branch and PR jobs for the tracked workflows and builds the
+    /// runtime comparison.
     pub async fn init(github: Github, tracked_workflows: HashSet<String>) -> Result<Self> {
         let workflows_handler = github.workflows_handler();
         let workflows = github
@@ -97,7 +103,7 @@ impl PerformanceSummary {
         markdown_content
     }
 
-    // Updates an existing comment or creates a new one in the PR.
+    /// Renders the summary as Markdown and posts it to the PR, updating any existing comment.
     pub async fn upsert_pr_comment(&self) -> Result<()> {
         self.github
             .upsert_pr_comment(self.format_comment_body())
