@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! An HTTP server exposing Prometheus metrics, optionally with memory-profiling endpoints.
+
 use std::fmt::Debug;
 
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Router};
@@ -14,7 +16,9 @@ use crate::memory_profiler::MemoryProfiler;
 /// Whether memory profiling endpoints should be enabled on the metrics server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryProfiling {
+    /// Memory-profiling endpoints are served.
     Enabled,
+    /// Memory-profiling endpoints are not served.
     Disabled,
 }
 
@@ -76,6 +80,8 @@ pub async fn start_metrics_with_profiling(
     start_metrics(address, shutdown_signal, memory_profiling);
 }
 
+/// Starts the metrics HTTP server on `address`, serving `/metrics` and, when profiling is
+/// enabled and available, the memory-profiling endpoints. Runs until `shutdown_signal` fires.
 pub fn start_metrics(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,
@@ -84,6 +90,8 @@ pub fn start_metrics(
     start_metrics_with_extras(address, shutdown_signal, memory_profiling, None);
 }
 
+/// Like `start_metrics`, but additionally merges `extra_routes` into the metrics server's
+/// router before serving.
 pub fn start_metrics_with_extras(
     address: impl ToSocketAddrs + Debug + Send + 'static,
     shutdown_signal: CancellationToken,

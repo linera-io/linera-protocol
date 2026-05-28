@@ -25,14 +25,19 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 use tracing::{error, info, trace};
 
+/// An error that can occur while activating or querying jemalloc memory profiling.
 #[derive(Debug, Error)]
 pub enum MemoryProfilerError {
+    /// jemalloc profiling is not activated; check the `malloc_conf` configuration.
     #[error("jemalloc profiling not activated - check malloc_conf configuration")]
     JemallocProfilingNotActivated,
+    /// The jemalloc profiling control is unavailable; jemalloc was not built with profiling.
     #[error("PROF_CTL not available - ensure jemalloc is built with profiling support")]
     ProfCtlNotAvailable,
+    /// Another profiler currently holds the profiling control.
     #[error("another profiler is already running")]
     AnotherProfilerAlreadyRunning,
+    /// Activating jemalloc profiling failed.
     #[error("failed to activate jemalloc profiling: {0}")]
     ActivationFailed(String),
 }
@@ -119,6 +124,7 @@ impl MemoryProfiler {
         }
     }
 
+    /// Checks that jemalloc profiling is available and currently activated.
     pub fn check_prof_ctl() -> Result<(), MemoryProfilerError> {
         if let Some(prof_ctl) = PROF_CTL.as_ref() {
             let prof_ctl = prof_ctl
