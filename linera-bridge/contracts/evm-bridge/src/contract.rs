@@ -201,58 +201,9 @@ impl EvmBridgeContract {
         let (block_hash, receipts_root) =
             proof::decode_block_header(block_header_rlp).expect("invalid block header RLP");
 
-        // 1b. Finality check: when an endpoint is configured, verify the block hash
-        //     is finalized. Uses cached result if a previous deposit from this block
-        //     was already processed.
-        if self.state.rpc_endpoint.get().is_empty() {
-            log::warn!("rpc_endpoint is empty — skipping block finality verification.");
-        } else if !self
-            .state
-            .verified_block_hashes
-            .contains(&block_hash.0)
-            .await
-            .expect("failed to check verified block hashes")
-        {
-            self.verify_block_hash(block_hash.0).await;
-        }
-
-        // 2. Verify receipt inclusion via MPT proof
-        let proof_bytes: Vec<Bytes> = proof_nodes
-            .iter()
-            .map(|n| Bytes::copy_from_slice(n))
-            .collect();
-        proof::verify_receipt_inclusion(receipts_root, tx_index, receipt_rlp, &proof_bytes)
-            .expect("receipt inclusion proof failed");
-
-        // 3. Decode receipt logs and parse the deposit event
-        let logs = proof::decode_receipt_logs(receipt_rlp).expect("failed to decode receipt logs");
-        assert!(
-            (log_index as usize) < logs.len(),
-            "log_index {} out of range (receipt has {} logs)",
-            log_index,
-            logs.len()
-        );
-        let bridge_contract_bytes =
-            self.state.bridge_contract_address.get().expect(
-                "bridge contract address not registered — call RegisterFungibleBridge first",
-            );
-        let bridge_contract = alloy_primitives::Address::from(bridge_contract_bytes);
-        let deposit = proof::parse_deposit_event(&logs[log_index as usize], bridge_contract)
-            .expect("failed to parse DepositInitiated event");
-
-        // 4. Validate deposit fields against bridge parameters
-        assert_eq!(
-            deposit.source_chain_id.as_limbs()[0],
-            params.source_chain_id,
-            "source chain ID mismatch"
-        );
-        assert_eq!(
-            deposit.token.as_slice(),
-            &params.token_address,
-            "token address mismatch"
-        );
-
-        // 5. Replay protection
+        // 2. Replay protection — cheap; reject before the RPC finality call
+        //    and MPT verification so a duplicate proof is rejected without
+        //    cost.
         let deposit_key = DepositKey {
             source_chain_id: params.source_chain_id,
             block_hash,
@@ -269,13 +220,65 @@ impl EvmBridgeContract {
                 .expect("failed to check processed deposits"),
             "deposit already processed"
         );
+
+        // 3. Finality check: when an endpoint is configured, verify the block hash
+        //    is finalized. Uses cached result if a previous deposit from this block
+        //    was already processed.
+        if self.state.rpc_endpoint.get().is_empty() {
+            log::warn!("rpc_endpoint is empty — skipping block finality verification.");
+        } else if !self
+            .state
+            .verified_block_hashes
+            .contains(&block_hash.0)
+            .await
+            .expect("failed to check verified block hashes")
+        {
+            self.verify_block_hash(block_hash.0).await;
+        }
+
+        // 4. Verify receipt inclusion via MPT proof
+        let proof_bytes: Vec<Bytes> = proof_nodes
+            .iter()
+            .map(|n| Bytes::copy_from_slice(n))
+            .collect();
+        proof::verify_receipt_inclusion(receipts_root, tx_index, receipt_rlp, &proof_bytes)
+            .expect("receipt inclusion proof failed");
+
+        // 5. Decode receipt logs and parse the deposit event
+        let logs = proof::decode_receipt_logs(receipt_rlp).expect("failed to decode receipt logs");
+        assert!(
+            (log_index as usize) < logs.len(),
+            "log_index {} out of range (receipt has {} logs)",
+            log_index,
+            logs.len()
+        );
+        let bridge_contract_bytes =
+            self.state.bridge_contract_address.get().expect(
+                "bridge contract address not registered — call RegisterFungibleBridge first",
+            );
+        let bridge_contract = alloy_primitives::Address::from(bridge_contract_bytes);
+        let deposit = proof::parse_deposit_event(&logs[log_index as usize], bridge_contract)
+            .expect("failed to parse DepositInitiated event");
+
+        // 6. Validate deposit fields against bridge parameters
+        assert_eq!(
+            deposit.source_chain_id.as_limbs()[0],
+            params.source_chain_id,
+            "source chain ID mismatch"
+        );
+        assert_eq!(
+            deposit.token.as_slice(),
+            &params.token_address,
+            "token address mismatch"
+        );
+
+        // 7. Record the deposit as processed and cache the verified block
+        //    hash so subsequent deposits from the same block skip the RPC
+        //    finality check.
         self.state
             .processed_deposits
             .insert(&deposit_hash)
             .expect("failed to insert deposit hash");
-
-        // 5b. Cache the verified block hash so subsequent deposits from the same
-        //     block skip the RPC finality check.
         if !self.state.rpc_endpoint.get().is_empty() {
             self.state
                 .verified_block_hashes
@@ -283,7 +286,7 @@ impl EvmBridgeContract {
                 .expect("failed to cache verified block hash");
         }
 
-        // 6. Convert deposit fields to Linera types and call Mint
+        // 8. Convert deposit fields to Linera types and call Mint
         let amount = U128(
             deposit
                 .amount
