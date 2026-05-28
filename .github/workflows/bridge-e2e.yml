@@ -5,7 +5,7 @@ on:
   merge_group:
   workflow_dispatch:
   push:
-    branches: [ 'testnet_*', 'main' ]
+    branches: [ 'testnet_*' ]
 
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   bridge-e2e:
-    if: ${{ github.event_name == 'merge_group' }}
+    if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     runs-on: linera-io-self-hosted-ci
     timeout-minutes: 60
 

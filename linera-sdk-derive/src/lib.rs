@@ -5,6 +5,7 @@
 
 #![deny(missing_docs)]
 
+mod stable_enum;
 mod utils;
 
 use proc_macro::TokenStream;
@@ -31,6 +32,34 @@ pub fn derive_mutation_root(input: TokenStream) -> TokenStream {
 pub fn derive_mutation_root_in_crate(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemEnum);
     generate_mutation_root_code(input, "crate").into()
+}
+
+/// Derive `linera_sdk::formats::StableEnum` for an `enum`. Expands to:
+///
+/// * `serde::Serialize` / `serde::Deserialize` impls in which the variant tag
+///   is the first 4 bytes of `Keccak-256(variant_name)` (read big-endian as
+///   `u32`), with the top 5 bits masked to `00001` so the ULEB128 encoding is
+///   always exactly 4 bytes; and
+/// * a `linera_sdk::formats::StableEnumTrace` impl exposing the per-variant
+///   tags and a `trace_all_variants` method that drives
+///   `serde_reflection::Tracer` without caller-supplied samples.
+#[proc_macro_derive(StableEnum)]
+pub fn derive_stable_enum(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemEnum);
+    stable_enum::generate_all(&input, stable_enum::CrateRoot::LineraSdk)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+/// Same as [`StableEnum`] but referring to the trait through `crate::...`
+/// instead of `::linera_sdk::...`. Used inside the `linera-sdk` crate itself
+/// (and only there).
+#[proc_macro_derive(StableEnumInCrate)]
+pub fn derive_stable_enum_in_crate(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemEnum);
+    stable_enum::generate_all(&input, stable_enum::CrateRoot::Crate)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
 
 fn generate_mutation_root_code(input: ItemEnum, crate_root: &str) -> TokenStream2 {
