@@ -49,6 +49,7 @@ impl StorageService {
         bail!("Failed to start child server");
     }
 
+    /// Starts the storage service child process and returns a guard that keeps it alive.
     pub async fn run(&self) -> Result<StorageServiceGuard> {
         self.wait_for_absence().await?;
         let mut command = self.command();
