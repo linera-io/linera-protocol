@@ -5,6 +5,7 @@
 
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
+    formats::StableEnum,
     graphql::GraphQLMutationRoot,
     linera_base_types::{ChainId, ContractAbi, ServiceAbi, Timestamp},
     views::{CustomSerialize, ViewError},
@@ -24,7 +25,7 @@ impl ServiceAbi for SocialAbi {
 }
 
 /// An operation that can be executed by the application.
-#[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
+#[derive(Debug, StableEnum, GraphQLMutationRoot)]
 pub enum Operation {
     /// Request to be subscribed to another chain.
     Subscribe { chain_id: ChainId },
@@ -111,7 +112,7 @@ pub enum Event {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
-    use linera_sdk::formats::{BcsApplication, Formats};
+    use linera_sdk::formats::{BcsApplication, Formats, TracerExt};
     use serde_reflection::{Samples, Tracer, TracerConfig};
 
     use super::{Comment, Event, Key, Message, Operation, OwnPost, Post, SocialAbi};
@@ -131,7 +132,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<Operation>(&samples)?;
             let (response, _) = tracer.trace_type::<()>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<Event>(&samples)?;

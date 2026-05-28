@@ -5,11 +5,11 @@ expression: "CallEvmCounterApplication::formats().unwrap()"
 REGISTRY:
   CallCounterOperation:
     ENUM:
-      0:
-        TestCallAddress: UNIT
-      1:
+      186772159:
         Increment:
           NEWTYPE: U64
+      238158983:
+        TestCallAddress: UNIT
   CallCounterRequest:
     ENUM:
       0:

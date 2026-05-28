@@ -3,12 +3,15 @@
 
 /*! ABI of the Publish-Read Data Blob Example Application */
 
-use linera_sdk::linera_base_types::{ContractAbi, DataBlobHash, ServiceAbi};
+use linera_sdk::{
+    formats::StableEnum,
+    linera_base_types::{ContractAbi, DataBlobHash, ServiceAbi},
+};
 use serde::{Deserialize, Serialize};
 
 pub struct PublishReadDataBlobAbi;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, StableEnum)]
 pub enum Operation {
     CreateDataBlob(Vec<u8>),
     ReadDataBlob(DataBlobHash, Vec<u8>),

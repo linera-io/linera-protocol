@@ -6,6 +6,7 @@
 use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
 use fungible::FungibleTokenAbi;
 use linera_sdk::{
+    formats::StableEnum,
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, ApplicationId, ContractAbi, ServiceAbi},
     views::{CustomSerialize, ViewError},
@@ -258,7 +259,7 @@ impl Parameters {
 }
 
 /// Operations that can be sent to the application.
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+#[derive(Debug, StableEnum, GraphQLMutationRoot)]
 pub enum Operation {
     /// The order that is going to be executed on the chain of the order book.
     ExecuteOrder { order: Order },
@@ -278,7 +279,7 @@ pub enum Message {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use linera_sdk::{
-        formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats, TracerExt},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
@@ -300,7 +301,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<Operation>(&samples)?;
             let (response, _) = tracer.trace_type::<()>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;

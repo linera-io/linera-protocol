@@ -1,6 +1,5 @@
 ---
 source: amm/tests/format.rs
-assertion_line: 13
 expression: "AmmApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -64,15 +63,7 @@ REGISTRY:
                 TYPENAME: AccountOwner
   Operation:
     ENUM:
-      0:
-        Swap:
-          STRUCT:
-            - owner:
-                TYPENAME: AccountOwner
-            - input_token_idx: U32
-            - input_amount:
-                TYPENAME: Amount
-      1:
+      172104243:
         AddLiquidity:
           STRUCT:
             - owner:
@@ -81,7 +72,22 @@ REGISTRY:
                 TYPENAME: Amount
             - max_token1_amount:
                 TYPENAME: Amount
-      2:
+      180705481:
+        CloseChain: UNIT
+      216209136:
+        Swap:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - input_token_idx: U32
+            - input_amount:
+                TYPENAME: Amount
+      239817469:
+        RemoveAllAddedLiquidity:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+      264884110:
         RemoveLiquidity:
           STRUCT:
             - owner:
@@ -89,13 +95,6 @@ REGISTRY:
             - token_to_remove_idx: U32
             - token_to_remove_amount:
                 TYPENAME: Amount
-      3:
-        RemoveAllAddedLiquidity:
-          STRUCT:
-            - owner:
-                TYPENAME: AccountOwner
-      4:
-        CloseChain: UNIT
   Parameters:
     STRUCT:
       - tokens:

@@ -3,13 +3,16 @@
 
 /*! ABI of the Cost Tracking Application */
 
-use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
+use linera_sdk::{
+    formats::StableEnum,
+    linera_base_types::{ContractAbi, ServiceAbi},
+};
 use serde::{Deserialize, Serialize};
 
 pub struct CostTrackingAbi;
 
 /// Operations that can be executed by the contract.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, StableEnum)]
 pub enum Operation {
     /// Run all cost tracking operations.
     RunAll,

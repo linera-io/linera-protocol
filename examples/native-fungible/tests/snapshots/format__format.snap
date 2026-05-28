@@ -1,6 +1,5 @@
 ---
 source: native-fungible/tests/format.rs
-assertion_line: 13
 expression: "NativeFungibleApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -43,23 +42,9 @@ REGISTRY:
         SIZE: 32
   FungibleOperation:
     ENUM:
-      0:
-        Balance:
-          STRUCT:
-            - owner:
-                TYPENAME: AccountOwner
-      1:
+      142627141:
         TickerSymbol: UNIT
-      2:
-        Approve:
-          STRUCT:
-            - owner:
-                TYPENAME: AccountOwner
-            - spender:
-                TYPENAME: AccountOwner
-            - allowance:
-                TYPENAME: Amount
-      3:
+      144297355:
         Transfer:
           STRUCT:
             - owner:
@@ -68,7 +53,30 @@ REGISTRY:
                 TYPENAME: Amount
             - target_account:
                 TYPENAME: Account
-      4:
+      158617459:
+        Approve:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - spender:
+                TYPENAME: AccountOwner
+            - allowance:
+                TYPENAME: Amount
+      204322437:
+        Claim:
+          STRUCT:
+            - source_account:
+                TYPENAME: Account
+            - amount:
+                TYPENAME: Amount
+            - target_account:
+                TYPENAME: Account
+      206964944:
+        Balance:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+      214048906:
         TransferFrom:
           STRUCT:
             - owner:
@@ -79,26 +87,17 @@ REGISTRY:
                 TYPENAME: Amount
             - target_account:
                 TYPENAME: Account
-      5:
-        Claim:
-          STRUCT:
-            - source_account:
-                TYPENAME: Account
-            - amount:
-                TYPENAME: Amount
-            - target_account:
-                TYPENAME: Account
   FungibleResponse:
     ENUM:
-      0:
-        Ok: UNIT
-      1:
+      142627141:
+        TickerSymbol:
+          NEWTYPE: STR
+      206964944:
         Balance:
           NEWTYPE:
             TYPENAME: Amount
-      2:
-        TickerSymbol:
-          NEWTYPE: STR
+      211312752:
+        Ok: UNIT
   Message:
     ENUM:
       0:

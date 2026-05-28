@@ -41,7 +41,7 @@ serde = { version = "1.0.197", features = ["derive"] }
 wrapped-fungible = { path = "../../../examples/wrapped-fungible" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-serde-reflection = "0.5.2"
+serde-reflection = "0.6.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 alloy-primitives = { version = "1.0.0", default-features = false, features = [
@@ -50,6 +50,7 @@ alloy-primitives = { version = "1.0.0", default-features = false, features = [
 ] }
 async-graphql = { version = "=7.0.17", features = ["raw_value"] }
 fungible = { path = "../../../examples/fungible", features = ["test"] }
+insta = { version = "1.36.1", features = ["yaml"] }
 linera-bridge = { path = "../..", default-features = false, features = [
     "chain",
     "testing",

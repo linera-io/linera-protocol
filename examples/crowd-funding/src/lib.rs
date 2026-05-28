@@ -5,6 +5,7 @@
 
 use async_graphql::{Request, Response, SimpleObject};
 use linera_sdk::{
+    formats::StableEnum,
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, ContractAbi, ServiceAbi, Timestamp},
 };
@@ -44,7 +45,7 @@ impl std::fmt::Display for InstantiationArgument {
 }
 
 /// Operations that can be executed by the application.
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
+#[derive(Debug, StableEnum, GraphQLMutationRoot)]
 pub enum Operation {
     /// Pledge some tokens to the campaign (from an account on the current chain to the campaign chain).
     Pledge { owner: AccountOwner, amount: Amount },
@@ -65,7 +66,7 @@ pub enum Message {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use linera_sdk::{
-        formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats, TracerExt},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
@@ -87,7 +88,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<Operation>(&samples)?;
             let (response, _) = tracer.trace_type::<()>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;

@@ -7,6 +7,7 @@ use std::fmt::{Display, Formatter};
 
 use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
+    formats::StableEnum,
     linera_base_types::{Account, AccountOwner, ApplicationId, ChainId, ContractAbi, ServiceAbi},
     ToBcsBytes,
 };
@@ -33,7 +34,7 @@ impl ServiceAbi for GenNftAbi {
 }
 
 /// An operation.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, StableEnum)]
 pub enum Operation {
     /// Mints a token
     Mint {
@@ -143,7 +144,7 @@ impl Nft {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use linera_sdk::{
-        formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats, TracerExt},
         linera_base_types::{Account, AccountOwner},
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
@@ -165,7 +166,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<Operation>(&samples)?;
             let (response, _) = tracer.trace_type::<()>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
