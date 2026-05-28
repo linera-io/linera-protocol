@@ -127,7 +127,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     // (`SYNTHETIC_APP_ID_BYTES32`) below so `_onBlock` rejects every
     // burn event the relayer forwards.
     let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000).await?;
+        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
     let real_app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     assert_ne!(
         real_app_id_bytes32, SYNTHETIC_APP_ID_BYTES32,

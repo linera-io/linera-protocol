@@ -421,7 +421,7 @@ where
     chain_client.synchronize_from_validators().await?;
     chain_client.process_inbox().await?;
 
-    let initial_balance = linera_base::data_types::Amount::from_tokens(initial_balance_tokens);
+    let initial_balance = linera_base::data_types::Amount::from_attos(initial_balance_tokens);
     let (fungible_app_id, _) = chain_client
         .create_application_untyped(
             wf_module_id,

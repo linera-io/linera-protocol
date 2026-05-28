@@ -40,11 +40,10 @@ sol! {
 /// constraint.
 const MAX_SEARCH_N: u32 = 1000;
 
-/// Chain-B pre-funded balance: enough wrapped-fungible to issue
-/// `MAX_SEARCH_N * doubling_plus_bisect_iterations * BURN_AMOUNT_TOKENS`
-/// `Transfer` ops. Sized well above the worst case so the test never
-/// runs out of source-chain balance regardless of `BURN_AMOUNT_TOKENS`.
-const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(32);
+/// Chain-B pre-funded balance in raw ERC-20 sub-units. Worst-case burn
+/// total is `MAX_SEARCH_N * ~10 iterations * BURN_AMOUNT_TOKENS * 10^18`
+/// ≈ 10^37 raw; 10^38 gives 10× headroom and still fits in `u128`.
+const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(38);
 
 /// Each burn moves exactly this many wrapped-fungible tokens to a fresh
 /// `Address20`. Constant token amount keeps per-burn EVM gas constant

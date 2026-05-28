@@ -118,7 +118,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
 
     let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000).await?;
+        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
 
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
