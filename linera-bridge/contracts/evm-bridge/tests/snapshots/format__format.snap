@@ -1,5 +1,5 @@
 ---
-source: evm-bridge/tests/format.rs
+source: tests/format.rs
 expression: "EvmBridgeApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -33,6 +33,10 @@ REGISTRY:
                   SEQ: U8
             - tx_index: U64
             - log_index: U64
+      227044149:
+        SetRpcEndpoint:
+          STRUCT:
+            - rpc_endpoint: STR
       230758129:
         RegisterFungibleBridge:
           STRUCT:
@@ -47,7 +51,6 @@ REGISTRY:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
-      - rpc_endpoint: STR
   CryptoHash:
     NEWTYPESTRUCT:
       TUPLEARRAY:
