@@ -943,6 +943,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner_a = client.identity().await?;
@@ -975,8 +976,7 @@ where
 
     // Owner `b`'s client retries the pending block. The signer still holds owner `a`'s key,
     // so the proposal is signed as `a` and the worker accepts it.
-    let certificate = client
-        .process_pending_block()
+    let certificate = run_through_timeouts(&clock, || client.process_pending_block())
         .await
         .unwrap_ok_committed()
         .expect("the pending block should be committed");
