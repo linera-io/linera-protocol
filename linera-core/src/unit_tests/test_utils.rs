@@ -1468,38 +1468,3 @@ impl<T, E: std::fmt::Debug> ClientOutcomeResultExt<T, E> for Result<ClientOutcom
         }
     }
 }
-
-/// Repeatedly runs `op`, advancing `clock` past each returned `WaitForTimeout`,
-/// until the operation produces some other `ClientOutcome` or an error.
-///
-/// Multi-leader rounds use a short, fixed timeout: when an honest client detects
-/// contention there, the chain client surfaces `WaitForTimeout`. Tests that
-/// previously expected the legacy "skip-the-round" behavior should call this
-/// helper so they can let the (mock) clock advance and observe the eventual
-/// resolution (commit, conflict, or error).
-///
-/// Bounded at 16 iterations to avoid livelocks on broken setups.
-pub(crate) async fn run_through_timeouts<T, F, Fut, E>(
-    clock: &TestClock,
-    mut op: F,
-) -> Result<ClientOutcome<T>, E>
-where
-    F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<ClientOutcome<T>, E>>,
-    E: std::fmt::Debug,
-{
-    for _ in 0..16 {
-        match op().await? {
-            ClientOutcome::WaitForTimeout(timeout) => {
-                let target = timeout
-                    .timestamp
-                    .saturating_add(linera_base::data_types::TimeDelta::from_millis(1));
-                if clock.current_time() < target {
-                    clock.set(target);
-                }
-            }
-            outcome => return Ok(outcome),
-        }
-    }
-    panic!("run_through_timeouts: too many WaitForTimeout iterations");
-}

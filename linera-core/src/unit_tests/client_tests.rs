@@ -28,7 +28,7 @@ use linera_execution::{
     committee::Committee, system::SystemOperation, ExecutionError, Message, MessageKind, Operation,
     QueryOutcome, ResourceControlPolicy, SystemMessage, SystemQuery, SystemResponse,
 };
-use linera_storage::Storage;
+use linera_storage::{Storage, TestClock};
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
@@ -53,13 +53,39 @@ use crate::{
         ValidatorNode,
     },
     test_utils::{
-        run_through_timeouts, ClientOutcomeResultExt as _, FaultType, MemoryStorageBuilder,
-        StorageBuilder, TestBuilder,
+        ClientOutcomeResultExt as _, FaultType, MemoryStorageBuilder, StorageBuilder, TestBuilder,
     },
     updater::CommunicationError,
     worker::{Notification, Reason, WorkerError},
     Environment,
 };
+
+/// Repeatedly runs `op`, advancing `clock` past each returned `WaitForTimeout`,
+/// until the operation produces some other `ClientOutcome` or an error.
+///
+/// Bounded at 16 iterations to avoid livelocks on broken setups.
+async fn run_through_timeouts<T, F, Fut, E>(
+    clock: &TestClock,
+    mut op: F,
+) -> Result<ClientOutcome<T>, E>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<ClientOutcome<T>, E>>,
+    E: std::fmt::Debug,
+{
+    for _ in 0..16 {
+        match op().await? {
+            ClientOutcome::WaitForTimeout(timeout) => {
+                let target = timeout.timestamp.saturating_add(TimeDelta::from_millis(1));
+                if clock.current_time() < target {
+                    clock.set(target);
+                }
+            }
+            outcome => return Ok(outcome),
+        }
+    }
+    panic!("run_through_timeouts: too many WaitForTimeout iterations");
+}
 
 /// A test to ensure that our chain client listener remains `Send`.  This is a bit of a
 /// hack, but requires that we not hold a `std::sync::Mutex` over `await` points, a
