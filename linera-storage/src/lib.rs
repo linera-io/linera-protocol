@@ -3,6 +3,8 @@
 
 //! This module defines the storage abstractions for individual chains and certificates.
 
+#![deny(missing_docs)]
+
 mod db_storage;
 
 use std::sync::Arc as StdArc;
@@ -64,6 +66,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
     /// Returns the current wall clock time.
     fn clock(&self) -> &Self::Clock;
 
+    /// Returns the thread pool used to run blocking work such as bytecode decompression.
     fn thread_pool(&self) -> &StdArc<linera_execution::ThreadPool>;
 
     /// Loads the view of a chain state.
@@ -419,6 +422,7 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
         }
     }
 
+    /// Returns the storage context used by the block exporter with the given ID.
     async fn block_exporter_context(
         &self,
         block_exporter_id: u32,
@@ -506,7 +510,9 @@ pub trait Storage: linera_base::util::traits::AutoTraits + Sized {
 
 /// The result of processing the obtained read certificates.
 pub enum ResultReadCertificates {
+    /// All requested certificates were found.
     Certificates(Vec<ConfirmedBlockCertificate>),
+    /// Some hashes did not correspond to a stored certificate.
     InvalidHashes(Vec<CryptoHash>),
 }
 
@@ -644,8 +650,10 @@ impl<S: Storage> ExecutionRuntimeContext for ChainRuntimeContext<S> {
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait Clock {
+    /// Returns the current time.
     fn current_time(&self) -> Timestamp;
 
+    /// Waits until the given timestamp is reached.
     async fn sleep_until(&self, timestamp: Timestamp);
 }
 

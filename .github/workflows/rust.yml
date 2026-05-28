@@ -53,31 +53,6 @@ jobs:
             paths:
               - '!docker/**'
               - '!configuration/**'
-              - '!kubernetes/**'
-              - '!docs/**'
-              - '!mdbook/**'
-              - '!CONTRIBUTING.md'
-              - '!INSTALL.md'
-              - '!README.md'
-              # Workflow-only PRs don't need heavy code tests; merge to main
-              # validates the workflow itself by running it for real.
-              - '!.github/workflows/**'
-  changed-files-kubernetes:
-    runs-on: ubuntu-latest
-    outputs:
-      should-run: ${{ steps.files-changed.outputs.paths }}
-    steps:
-      - uses: actions/checkout@v6.0.2
-        with:
-          fetch-depth: 0
-      - name: Filter paths
-        uses: dorny/paths-filter@v4.0.1
-        id: files-changed
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            paths:
-              - '!configuration/**'
               - '!docs/**'
               - '!mdbook/**'
               - '!CONTRIBUTING.md'
@@ -506,7 +481,6 @@ jobs:
     - name: Run clippy
       run: |
         cargo clippy --locked --all-targets --all-features --workspace
-        cargo clippy --locked --no-default-features --features kubernetes
         cargo clippy --locked --no-default-features
         cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features web-default \
           -p linera-client \

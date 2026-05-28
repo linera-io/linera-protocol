@@ -49,7 +49,6 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
                   owner
                 }
                 kind
-                index
                 message
                 messageMetadata {
                   messageType
@@ -89,7 +88,6 @@ query ChainInbox($chainId: ChainId!, $origin: ChainId!) {
                   owner
                 }
                 kind
-                index
                 message
                 messageMetadata {
                   messageType
@@ -191,7 +189,6 @@ query Chain(
                   owner
                 }
                 kind
-                index
                 message
                 messageMetadata {
                   messageType
@@ -231,7 +228,6 @@ query Chain(
                   owner
                 }
                 kind
-                index
                 message
                 messageMetadata {
                   messageType
@@ -348,7 +344,6 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                   owner
                 }
                 kind
-                index
                 message
                 messageMetadata {
                   messageType
@@ -528,7 +523,6 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                   owner
                 }
                 kind
-                index
                 message
                 messageMetadata {
                   messageType

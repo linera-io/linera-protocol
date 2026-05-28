@@ -3,6 +3,8 @@
 
 //! Storage configuration and runtime infrastructure for the Linera protocol.
 
+#![deny(missing_docs)]
+
 mod common_options;
 mod storage_config;
 mod store_config;

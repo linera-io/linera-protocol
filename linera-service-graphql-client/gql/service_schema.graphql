@@ -300,8 +300,7 @@ type ChainManager {
 	the round to which the timeout applies.
 	
 	Having a leader timeout certificate in any given round causes the next one to become
-	current. Seeing a validated block certificate or a valid proposal in any round causes that
-	round to become current, unless a higher one already is.
+	current. A locking block from a higher round also causes that round to become current.
 	"""
 	currentRound: Round!
 }
@@ -1324,10 +1323,6 @@ type PostedMessage {
 	The kind of message being sent.
 	"""
 	kind: MessageKind!
-	"""
-	The index of the message in the sending block.
-	"""
-	index: Int!
 	"""
 	The message itself.
 	"""

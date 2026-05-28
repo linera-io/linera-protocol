@@ -3,11 +3,11 @@
 
 #![allow(dead_code)]
 
-use std::{cmp::min, collections::BTreeSet};
+use std::cmp::min;
 
 use async_graphql::SimpleObject;
 use linera_sdk::{
-    linera_base_types::{Account, AccountOwner, Amount},
+    linera_base_types::{Account, AccountOwner, Amount, NonCanonicalBTreeSet},
     views::{linera_views, linera_views::context::Context as _},
     KeyValueStore,
 };
@@ -54,7 +54,7 @@ pub struct KeyBook {
 #[derive(Default, Clone, Debug, Serialize, Deserialize, SimpleObject)]
 pub struct AccountInfo {
     /// The list of orders
-    pub orders: BTreeSet<OrderId>,
+    pub orders: NonCanonicalBTreeSet<OrderId>,
 }
 
 /// The price level is contained in a QueueView

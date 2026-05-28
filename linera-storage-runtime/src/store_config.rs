@@ -27,51 +27,69 @@ use {linera_storage::ChainStatesFirstAssignment, linera_views::backends::dual::D
 pub enum StoreConfig {
     /// The memory key value store
     Memory {
+        /// The store configuration.
         config: linera_views::memory::MemoryStoreConfig,
+        /// The namespace used.
         namespace: String,
+        /// The path to the genesis configuration used to initialize the store.
         genesis_path: PathBuf,
     },
     /// The storage service key-value store
     #[cfg(feature = "storage-service")]
     StorageService {
+        /// The store configuration.
         config: linera_storage_service::common::StorageServiceStoreConfig,
+        /// The namespace used.
         namespace: String,
     },
     /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
     RocksDb {
+        /// The store configuration.
         config: linera_views::rocks_db::RocksDbStoreConfig,
+        /// The namespace used.
         namespace: String,
     },
     /// The ScyllaDB key value store
     #[cfg(feature = "scylladb")]
     ScyllaDb {
+        /// The store configuration.
         config: linera_views::scylla_db::ScyllaDbStoreConfig,
+        /// The namespace used.
         namespace: String,
     },
+    /// The dual RocksDB / ScyllaDB key value store
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
     DualRocksDbScyllaDb {
+        /// The store configuration.
         config: linera_views::backends::dual::DualStoreConfig<
             linera_views::rocks_db::RocksDbStoreConfig,
             linera_views::scylla_db::ScyllaDbStoreConfig,
         >,
+        /// The namespace used.
         namespace: String,
     },
 }
 
+/// A job that can be run against a high-level [`Storage`].
 #[async_trait]
 pub trait Runnable {
+    /// The type produced by running the job.
     type Output;
 
+    /// Runs the job against the given `storage`.
     async fn run<S>(self, storage: S) -> Self::Output
     where
         S: Storage + Clone + Send + Sync + 'static;
 }
 
+/// A job that can be run against a low-level key-value store.
 #[async_trait]
 pub trait RunnableWithStore {
+    /// The type produced by running the job.
     type Output;
 
+    /// Runs the job against a store built from the given configuration.
     async fn run<D>(
         self,
         config: D::Config,
@@ -90,6 +108,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: impl Into<PathBuf>) -> anyhow
 }
 
 impl StoreConfig {
+    /// Connects to the configured storage and runs the given [`Runnable`] job against it.
     pub async fn run_with_storage<Job>(
         self,
         wasm_runtime: Option<WasmRuntime>,
@@ -169,6 +188,8 @@ impl StoreConfig {
         }
     }
 
+    /// Connects to the configured key-value store and runs the given
+    /// [`RunnableWithStore`] job against it.
     #[allow(unused_variables)]
     pub async fn run_with_store<Job>(
         self,
@@ -206,6 +227,7 @@ impl StoreConfig {
     }
 }
 
+/// A [`RunnableWithStore`] job that migrates the storage schema.
 pub struct StorageMigration;
 
 #[async_trait]
@@ -228,6 +250,7 @@ impl RunnableWithStore for StorageMigration {
     }
 }
 
+/// A [`RunnableWithStore`] job that asserts the storage is at schema version 1.
 pub struct AssertStorageV1;
 
 #[async_trait]

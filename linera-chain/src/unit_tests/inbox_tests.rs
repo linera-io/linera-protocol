@@ -24,7 +24,7 @@ fn make_bundle(
         height: BlockHeight::from(height),
         timestamp: Timestamp::default(),
         transaction_index: index,
-        messages: vec![message.to_posted(index, MessageKind::Simple)],
+        messages: vec![message.to_posted(MessageKind::Simple)],
     }
 }
 

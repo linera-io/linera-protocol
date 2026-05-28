@@ -706,7 +706,6 @@ dependencies = [
  "async-graphql",
  "futures",
  "linera-sdk",
- "serde",
  "serde-reflection",
  "serde_json",
 ]
@@ -2476,6 +2475,7 @@ version = "0.16.0"
 dependencies = [
  "convert_case",
  "proc-macro2",
+ "sha3",
  "syn 2.0.117",
 ]
 
@@ -3845,9 +3845,9 @@ dependencies = [
 
 [[package]]
 name = "serde-reflection"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68fb2363ca88876b3e16442b02dde5305646fd50df297c79a4b54fc5f5cf51d4"
+checksum = "af0fdf9c543af37502581e3d6cf4e6cd1628d6616d6a1f8f4ca88aae3a405f5c"
 dependencies = [
  "erased-discriminant",
  "once_cell",

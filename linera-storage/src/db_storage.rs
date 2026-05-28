@@ -45,6 +45,7 @@ use {
 
 use crate::{ChainRuntimeContext, Clock, Storage};
 
+/// Prometheus metrics for storage operations.
 #[cfg(with_metrics)]
 pub mod metrics {
     use std::sync::LazyLock;
@@ -412,11 +413,17 @@ impl MultiPartitionBatch {
 /// Individual cache sizes for each `ValueCache` in `DbStorage`.
 #[derive(Clone, Copy, Debug)]
 pub struct StorageCacheConfig {
+    /// The maximum number of blobs to cache.
     pub blob_cache_size: usize,
+    /// The maximum number of confirmed blocks to cache.
     pub confirmed_block_cache_size: usize,
+    /// The maximum number of assembled certificates to cache.
     pub certificate_cache_size: usize,
+    /// The maximum number of raw (serialized) certificates to cache.
     pub certificate_raw_cache_size: usize,
+    /// The maximum number of events to cache.
     pub event_cache_size: usize,
+    /// The interval, in seconds, between cache cleanup passes.
     pub cache_cleanup_interval_secs: u64,
 }
 
@@ -476,15 +483,24 @@ pub struct DbStorage<Database, Clock = WallClock> {
     execution_runtime_config: ExecutionRuntimeConfig,
 }
 
+/// The partition key under which a group of related entries is stored.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RootKey {
+    /// The network description.
     NetworkDescription,
+    /// The state of a block exporter, keyed by its ID.
     BlockExporterState(u32),
+    /// The state of a chain.
     ChainState(ChainId),
+    /// A certificate and confirmed block, keyed by block hash.
     BlockHash(CryptoHash),
+    /// A blob and its state, keyed by blob ID.
     BlobId(BlobId),
+    /// The events of a chain.
     Event(ChainId),
+    /// The block-height-to-hash index of a chain.
     BlockByHeight(ChainId),
+    /// The event-to-block-height index of a chain.
     EventBlockHeight(ChainId),
 }
 
@@ -493,6 +509,7 @@ const BLOB_ID_TAG: u8 = 4;
 const EVENT_ID_TAG: u8 = 5;
 
 impl RootKey {
+    /// Returns the serialized bytes of this root key.
     pub fn bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).unwrap()
     }
@@ -1546,6 +1563,7 @@ where
     Database::Error: Send + Sync,
     Database::Store: KeyValueStore + Clone + 'static,
 {
+    /// Connects to the storage in the given namespace, creating it if it does not exist.
     pub async fn maybe_create_and_connect(
         config: &Database::Config,
         namespace: &str,
@@ -1556,6 +1574,7 @@ where
         Ok(Self::new(database, wasm_runtime, cache_sizes, WallClock))
     }
 
+    /// Connects to the existing storage in the given namespace.
     pub async fn connect(
         config: &Database::Config,
         namespace: &str,
@@ -1568,12 +1587,24 @@ where
 }
 
 #[cfg(with_testing)]
+impl<Database, C> DbStorage<Database, C>
+where
+    Database: linera_views::backends::DatabaseBackup,
+{
+    /// Backs up the underlying database to the given directory.
+    pub fn backup_to(&self, dir: &std::path::Path) -> anyhow::Result<()> {
+        self.database.backup_to(dir)
+    }
+}
+
+#[cfg(with_testing)]
 impl<Database> DbStorage<Database, TestClock>
 where
     Database: TestKeyValueDatabase + Clone + Send + Sync + 'static,
     Database::Store: KeyValueStore + Clone + Send + Sync + 'static,
     Database::Error: Send + Sync,
 {
+    /// Creates a test storage in a fresh random namespace with a `TestClock`.
     pub async fn make_test_storage(wasm_runtime: Option<WasmRuntime>) -> Self {
         let config = Database::new_test_config().await.unwrap();
         let namespace = generate_test_namespace();
@@ -1587,6 +1618,7 @@ where
         .unwrap()
     }
 
+    /// Recreates the storage in the given namespace and connects to it, for testing.
     pub async fn new_for_testing(
         config: Database::Config,
         namespace: &str,
@@ -1594,6 +1626,22 @@ where
         clock: TestClock,
     ) -> Result<Self, Database::Error> {
         let database = Database::recreate_and_connect(&config, namespace).await?;
+        Ok(Self::new(
+            database,
+            wasm_runtime,
+            DEFAULT_STORAGE_CACHE_CONFIG,
+            clock,
+        ))
+    }
+
+    /// Connects to the existing storage in the given namespace, for testing.
+    pub async fn connect_for_testing(
+        config: Database::Config,
+        namespace: &str,
+        wasm_runtime: Option<WasmRuntime>,
+        clock: TestClock,
+    ) -> Result<Self, Database::Error> {
+        let database = Database::connect(&config, namespace).await?;
         Ok(Self::new(
             database,
             wasm_runtime,

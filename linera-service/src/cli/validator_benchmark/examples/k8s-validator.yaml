@@ -1,0 +1,253 @@
+metadata:
+  tool_version: 0.15.18
+  candidate:
+    address: grpcs:k8s-validator-1.infra.linera.net:443
+    public_key: 02bf16cbc02a2ac4c04f07d62c156764d8227b5ae7f9f72811db5ef9a10e4114f1
+    version_info: 'VersionInfo { crate_version: Pretty { value: CrateVersion { major: 0, minor: 15, patch: 17 }, _phantom: PhantomData<fn(semver::Version) -> semver::Version> }, git_commit: "ec344b2e3abfeff9606bc9202567636827e41883", git_dirty: false, rpc_hash: "Dkm4Oqv4jN/LcTL1GBBH1eB7TWhYZWTxz/jWgUAN/vY", graphql_hash: "qLS1+EhLpmWSmZBCegXBpE4Wfk6NPHWkSg6hNlJGn5o", wit_hash: "LBDK3ZORkwFJX1WI+P0neR3xZNtvhufYjvfROgBR3QM" }'
+    network_description:
+      admin_chain_id: 8fd4233c5d03554f87d47a711cf70619727ca3d148353446cab81fb56922c9b7
+      genesis_committee_blob_hash: c28e933281c6be5548340b76c4e4908a17e40260513f30d3c286a2258e725d08
+      genesis_config_hash: 5c7d9d274b85444d8fe9824c300b4bc2d8fc3c0fdb937f80180f8cf63b095589
+      genesis_timestamp: 1755888091339336
+      name: testnet-conway
+  observer:
+    location: OVH US-EAST
+    hostname: ''
+    started_at: 2026-05-23T02:58:20.492457166+00:00
+    ended_at: 2026-05-23T03:06:34.049986271+00:00
+    duration_secs: 493
+  config:
+    abort_on_preflight_fail: false
+    address: grpcs:k8s-validator-1.infra.linera.net:443
+    baseline_requests: 200
+    bulk_batch_size: 100
+    bulk_concurrency:
+    - 1
+    - 8
+    bulk_height_range: auto
+    chain:
+    - 192907fcb85eec2b071f30a097c9152bd6a108486592ab52b53a80e01eaab304
+    deep: false
+    deep_blocks: 1000
+    deep_chain: null
+    no_progress: false
+    observer_location: OVH US-EAST
+    output:
+    - md
+    - md:k8s-validator.md
+    - json:k8s-validator.json
+    - yaml:k8s-validator.yaml
+    public_key: 02bf16cbc02a2ac4c04f07d62c156764d8227b5ae7f9f72811db5ef9a10e4114f1
+    rpc_timeout_secs: 30
+    skip_bulk_download: false
+    skip_preflight: false
+    skip_read_baseline: false
+    skip_read_stress: false
+    skip_tip_lag: false
+    stress_duration_secs: 30
+    stress_levels:
+    - 1
+    - 2
+    - 4
+    - 8
+    - 16
+    - 32
+    - 64
+    tip_lag_interval_secs: 120
+    tip_lag_samples: 3
+  chains_tested:
+  - 192907fcb85eec2b071f30a097c9152bd6a108486592ab52b53a80e01eaab304
+  complete: true
+layers:
+  preflight:
+    status: ok
+    rtt_ms:
+      count: 10
+      min: 94.850171
+      max: 106.72019300000001
+      mean: 97.09339070000001
+      stddev: 3.55941285479912
+      p50: 95.134075
+      p95: 106.72019300000001
+      p99: 106.72019300000001
+      errors: []
+    version_match: null
+    network_description_match: null
+    errors: []
+  read_baseline:
+    per_chain:
+    - chain_id: 192907fcb85eec2b071f30a097c9152bd6a108486592ab52b53a80e01eaab304
+      latency_ms:
+        count: 200
+        min: 95.3556
+        max: 137.247401
+        mean: 100.53780622000002
+        stddev: 6.6137773224480965
+        p50: 97.67243
+        p95: 114.06711899999999
+        p99: 123.57137
+        errors: []
+  read_stress:
+    per_chain:
+    - chain_id: 192907fcb85eec2b071f30a097c9152bd6a108486592ab52b53a80e01eaab304
+      levels:
+      - concurrency: 1
+        duration_secs: 30
+        completed: 302
+        throughput_per_sec: 10.066666666666666
+        latency_ms:
+          count: 302
+          min: 95.31058200000001
+          max: 149.392306
+          mean: 99.66148125827824
+          stddev: 7.2628125333481925
+          p50: 96.628676
+          p95: 112.36879900000001
+          p99: 137.831891
+          errors: []
+      - concurrency: 2
+        duration_secs: 30
+        completed: 596
+        throughput_per_sec: 19.866666666666667
+        latency_ms:
+          count: 596
+          min: 94.950283
+          max: 163.578948
+          mean: 100.91981403523481
+          stddev: 9.062653221917966
+          p50: 97.005559
+          p95: 119.355737
+          p99: 149.253568
+          errors: []
+      - concurrency: 4
+        duration_secs: 30
+        completed: 1197
+        throughput_per_sec: 39.9
+        latency_ms:
+          count: 1197
+          min: 94.93608300000001
+          max: 156.485869
+          mean: 100.42633560401003
+          stddev: 7.796845146623507
+          p50: 97.272514
+          p95: 116.466524
+          p99: 135.489842
+          errors: []
+      - concurrency: 8
+        duration_secs: 30
+        completed: 2357
+        throughput_per_sec: 78.56666666666666
+        latency_ms:
+          count: 2357
+          min: 94.80878299999999
+          max: 153.55592900000002
+          mean: 102.11025111327952
+          stddev: 8.241994848669767
+          p50: 98.65206
+          p95: 119.10541099999999
+          p99: 133.78422700000002
+          errors: []
+      - concurrency: 16
+        duration_secs: 30
+        completed: 4727
+        throughput_per_sec: 157.56666666666666
+        latency_ms:
+          count: 4727
+          min: 94.72073400000001
+          max: 193.595182
+          mean: 101.67047782695151
+          stddev: 9.107283071932791
+          p50: 98.563967
+          p95: 117.346572
+          p99: 134.89354600000001
+          errors: []
+      - concurrency: 32
+        duration_secs: 30
+        completed: 9360
+        throughput_per_sec: 312.0
+        latency_ms:
+          count: 9360
+          min: 94.599694
+          max: 178.36839099999997
+          mean: 102.61951057873942
+          stddev: 8.699803161471314
+          p50: 99.524147
+          p95: 119.727474
+          p99: 134.39916
+          errors: []
+      - concurrency: 64
+        duration_secs: 30
+        completed: 18281
+        throughput_per_sec: 609.3666666666667
+        latency_ms:
+          count: 18281
+          min: 94.57634800000001
+          max: 207.517057
+          mean: 105.20805079328186
+          stddev: 13.160930721428835
+          p50: 100.32659100000001
+          p95: 130.742416
+          p99: 158.83643
+          errors: []
+  bulk_download:
+    per_chain:
+    - chain_id: 192907fcb85eec2b071f30a097c9152bd6a108486592ab52b53a80e01eaab304
+      runs:
+      - concurrency: 1
+        batch_size: 100
+        heights_range:
+        - 725408
+        - 735408
+        bytes_in: 15125766
+        certs_received: 10000
+        duration_secs: 17.124892801
+        mb_per_sec: 0.8423442247374858
+        certs_per_sec: 583.9452612174048
+        latency_ms:
+          count: 100
+          min: 105.92846999999999
+          max: 533.069062
+          mean: 170.75971844000003
+          stddev: 125.17326004890931
+          p50: 112.790709
+          p95: 503.955802
+          p99: 527.927853
+          errors: []
+      - concurrency: 8
+        batch_size: 100
+        heights_range:
+        - 725408
+        - 735408
+        bytes_in: 15125766
+        certs_received: 10000
+        duration_secs: 1.799364833
+        mb_per_sec: 8.016748068884205
+        certs_per_sec: 5557.516639539659
+        latency_ms:
+          count: 100
+          min: 106.06916199999999
+          max: 301.460022
+          mean: 135.67794818000002
+          stddev: 35.8861191168069
+          p50: 122.36955400000001
+          p95: 207.43687
+          p99: 295.19854200000003
+          errors: []
+  tip_lag:
+    per_chain:
+    - chain_id: 192907fcb85eec2b071f30a097c9152bd6a108486592ab52b53a80e01eaab304
+      samples:
+      - t_secs: 0
+        candidate_tip: 735408
+        reference_tip: 1169211
+        lag_blocks: 433803
+      - t_secs: 121
+        candidate_tip: 735460
+        reference_tip: 1169234
+        lag_blocks: 433774
+      - t_secs: 241
+        candidate_tip: 735525
+        reference_tip: 1169265
+        lag_blocks: 433740
+      trend: converging
+  partial_sync: null

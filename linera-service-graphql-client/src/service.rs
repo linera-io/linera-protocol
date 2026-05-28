@@ -8,6 +8,9 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
+// The `GraphQLQuery` derives and the `pub use types::*` re-exports generate
+// public items that cannot carry doc comments.
+#![expect(missing_docs)]
 
 use graphql_client::GraphQLQuery;
 use linera_base::{
@@ -17,6 +20,7 @@ use linera_base::{
 };
 use thiserror::Error;
 
+/// The GraphQL `JSONObject` scalar, represented as an arbitrary JSON value.
 pub type JSONObject = serde_json::Value;
 
 #[cfg(target_arch = "wasm32")]
@@ -92,8 +96,10 @@ mod types {
 }
 
 pub use types::*;
+/// The GraphQL representation of an application ID, as a string.
 pub type ApplicationId = String;
 
+/// GraphQL query for a single chain.
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "gql/service_schema.graphql",
@@ -102,6 +108,7 @@ pub type ApplicationId = String;
 )]
 pub struct Chain;
 
+/// GraphQL query for the list of chains.
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "gql/service_schema.graphql",
@@ -110,6 +117,7 @@ pub struct Chain;
 )]
 pub struct Chains;
 
+/// GraphQL query for the applications on a chain.
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "gql/service_schema.graphql",
@@ -118,6 +126,7 @@ pub struct Chains;
 )]
 pub struct Applications;
 
+/// GraphQL query for a range of blocks.
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "gql/service_schema.graphql",
@@ -126,6 +135,7 @@ pub struct Applications;
 )]
 pub struct Blocks;
 
+/// GraphQL query for a single block.
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "gql/service_schema.graphql",
@@ -134,6 +144,7 @@ pub struct Blocks;
 )]
 pub struct Block;
 
+/// GraphQL subscription for node notifications.
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "gql/service_schema.graphql",
@@ -150,10 +161,13 @@ pub struct Notifications;
 )]
 pub struct Transfer;
 
+/// An error that occurs while converting GraphQL responses into native types.
 #[derive(Error, Debug)]
 pub enum ConversionError {
+    /// A `serde_json` error.
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
+    /// The response contained an unexpected or unknown certificate type.
     #[error("Unexpected certificate type: {0}")]
     UnexpectedCertificateType(String),
 }
@@ -541,7 +555,6 @@ mod from {
                                     owner: rgt.owner,
                                 }),
                                 kind: msg.kind,
-                                index: msg.index as u32,
                                 message: msg.message,
                             })
                             .collect(),

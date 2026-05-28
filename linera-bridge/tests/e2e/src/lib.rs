@@ -299,7 +299,9 @@ pub async fn wait_for_light_client(
     compose_file: &std::path::Path,
 ) {
     tracing::info!("Waiting for LightClient deployment (bridge-init)...");
-    for attempt in 0..60 {
+    // Allow up to 5 minutes: Scylla start_period (60s) + health retries +
+    // linera-network start_period (60s) + bridge-init deployment time.
+    for attempt in 0..150 {
         let result = exec_output(
             compose,
             "foundry-tools",
@@ -349,8 +351,13 @@ pub async fn start_compose(compose_file: &std::path::Path, project_name: &str) -
     }
 
     tracing::info!("Starting docker compose stack...");
-    let mut compose =
-        DockerCompose::with_local_client(&[compose_file_str]).with_project_name(project_name);
+    // `with_wait(false)` skips `docker compose up --wait --wait-timeout 60`.
+    // testcontainers 0.27 hard-codes a 60s wait-timeout which is shorter than
+    // Scylla's `start_period: 60s`.  We perform our own readiness polling in
+    // `wait_for_light_client` instead.
+    let mut compose = DockerCompose::with_local_client(&[compose_file_str])
+        .with_project_name(project_name)
+        .with_wait(false);
     compose.with_remove_volumes(true);
     if let Err(e) = compose.up().await {
         dump_compose_logs(project_name, compose_file);
@@ -545,7 +552,7 @@ pub async fn set_anvil_block_gas_limit(
 /// to the head block (no per-height search loop needed in tests).
 pub async fn fetch_latest_cert<E>(
     chain_client: &linera_core::client::ChainClient<E>,
-) -> anyhow::Result<std::sync::Arc<linera_chain::types::ConfirmedBlockCertificate>>
+) -> anyhow::Result<linera_storage::Arc<linera_chain::types::ConfirmedBlockCertificate>>
 where
     E: linera_core::environment::Environment,
 {

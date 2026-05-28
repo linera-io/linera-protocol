@@ -36,9 +36,11 @@ sol!(
     "./contracts/EventNumerics.json"
 );
 
+/// An Ethereum client wrapping a configured `alloy` provider, used in tests.
 #[expect(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct EthereumClient {
+    /// The underlying `alloy` provider used to talk to the node.
     pub provider: FillProvider<
         JoinFill<
             JoinFill<
@@ -70,13 +72,19 @@ impl EthereumClient {
     }
 }
 
+/// A running Anvil node together with a client connected to it, for tests.
 pub struct AnvilTest {
+    /// The running Anvil instance.
     pub anvil_instance: AnvilInstance,
+    /// The HTTP endpoint of the Anvil node.
     pub endpoint: String,
+    /// A client connected to the Anvil node.
     pub ethereum_client: EthereumClient,
+    /// The parsed RPC URL of the Anvil node.
     pub rpc_url: Url,
 }
 
+/// Spawns a fresh Anvil node and returns an [`AnvilTest`] connected to it.
 pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
     let port = get_free_port().await?;
     let anvil_instance = Anvil::new().port(port).try_spawn()?;
@@ -92,18 +100,23 @@ pub async fn get_anvil() -> anyhow::Result<AnvilTest> {
 }
 
 impl AnvilTest {
+    /// Returns the Anvil account address at the given `index` as a hexadecimal string.
     pub fn get_address(&self, index: usize) -> String {
         let address = self.anvil_instance.addresses()[index];
         format!("{address:?}")
     }
 }
 
+/// A deployed `SimpleToken` contract together with the Anvil node it lives on.
 pub struct SimpleTokenContractFunction {
+    /// The address of the deployed contract.
     pub contract_address: String,
+    /// The Anvil node hosting the contract.
     pub anvil_test: AnvilTest,
 }
 
 impl SimpleTokenContractFunction {
+    /// Deploys a new `SimpleToken` contract on `anvil_test` and returns a handle to it.
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // 2: initializing the contract
         let initial_supply = U256::from(1000);
@@ -118,6 +131,7 @@ impl SimpleTokenContractFunction {
         })
     }
 
+    /// Returns the token balance of address `to` at the given `block`.
     // Only the balanceOf operation is of interest for this contract
     pub async fn balance_of(&self, to: &str, block: u64) -> anyhow::Result<U256> {
         // Getting the simple_token
@@ -143,6 +157,7 @@ impl SimpleTokenContractFunction {
         Ok(balance)
     }
 
+    /// Transfers `value` tokens from address `from` to address `to`.
     pub async fn transfer(&self, from: &str, to: &str, value: U256) -> anyhow::Result<()> {
         // Getting the simple_token
         let contract_address = self.contract_address.parse::<Address>()?;
@@ -159,12 +174,16 @@ impl SimpleTokenContractFunction {
     }
 }
 
+/// A deployed `EventNumerics` contract together with the Anvil node it lives on.
 pub struct EventNumericsContractFunction {
+    /// The address of the deployed contract.
     pub contract_address: String,
+    /// The Anvil node hosting the contract.
     pub anvil_test: AnvilTest,
 }
 
 impl EventNumericsContractFunction {
+    /// Deploys a new `EventNumerics` contract on `anvil_test` and returns a handle to it.
     pub async fn new(anvil_test: AnvilTest) -> anyhow::Result<Self> {
         // Deploying the event numerics contract
         let initial_supply = U256::from(0);

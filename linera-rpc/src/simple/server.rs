@@ -10,7 +10,7 @@ use linera_core::{
     data_types::CrossChainRequest,
     node::NodeError,
     worker::{NetworkActions, Notification, WorkerError, WorkerState},
-    JoinSetExt as _,
+    JoinSetExt as _, ProcessConfirmedBlockMode,
 };
 use linera_storage::Storage;
 use tokio::{sync, sync::oneshot, task::JoinSet};
@@ -296,7 +296,11 @@ where
                 match self
                     .server
                     .state
-                    .handle_confirmed_certificate(request.certificate, sender)
+                    .handle_confirmed_certificate(
+                        request.certificate,
+                        ProcessConfirmedBlockMode::Auto,
+                        sender,
+                    )
                     .await
                 {
                     Ok((info, actions)) => {

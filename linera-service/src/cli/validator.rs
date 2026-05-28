@@ -21,6 +21,8 @@ use linera_core::{
 use linera_execution::committee::{Committee, ValidatorState};
 use serde::{Deserialize, Serialize};
 
+use crate::cli::validator_benchmark::Benchmark;
+
 /// Type alias for the complex ClientContext type used throughout validator operations.
 /// This alias helps avoid clippy's type_complexity warnings while maintaining type safety.
 /// Uses generic Environment trait to avoid coupling to implementation details.
@@ -79,6 +81,7 @@ pub struct QueryBatch {
 pub enum Command {
     Add(Add),
     BatchQuery(BatchQuery),
+    Benchmark(Benchmark),
     Update(Update),
     List(List),
     Query(Query),
@@ -247,6 +250,7 @@ impl Command {
         match self {
             Add(command) => command.run(context).await,
             BatchQuery(command) => Box::pin(command.run(context)).await,
+            Benchmark(command) => Box::pin(command.run(context)).await,
             Update(command) => command.run(context).await,
             List(command) => command.run(context).await,
             Query(command) => command.run(context).await,

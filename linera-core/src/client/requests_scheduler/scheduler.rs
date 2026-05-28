@@ -20,7 +20,7 @@ use linera_base::{
 };
 use linera_chain::types::ConfirmedBlockCertificate;
 use rand::distributions::{Distribution, WeightedIndex};
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use super::{
     cache::{RequestsCache, SubsumingKey},
@@ -314,11 +314,23 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 })
                 .await
             },
-            |errors| errors.last().cloned().unwrap(),
             timeout,
         )
         .await
-        .map_err(|(_validator, error)| error)
+        .map_err(|errors| {
+            for (validator, error) in &errors {
+                warn!(
+                    %validator,
+                    %blob_id,
+                    %error,
+                    "failed to download blob from validator",
+                );
+            }
+            errors
+                .into_iter()
+                .last()
+                .map_or(NodeError::NoValidators, |(_, error)| error)
+        })
     }
 
     /// Downloads the blobs with the given IDs. This is done in one concurrent task per blob.
@@ -400,11 +412,23 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 })
                 .await
             },
-            |errors| errors.last().cloned().unwrap(),
             timeout,
         )
         .await
-        .map_err(|(_validator, error)| error)
+        .map_err(|errors| {
+            for (validator, error) in &errors {
+                warn!(
+                    %validator,
+                    %chain_id,
+                    %error,
+                    "failed to download certificates from validator",
+                );
+            }
+            errors
+                .into_iter()
+                .last()
+                .map_or(NodeError::NoValidators, |(_, error)| error)
+        })
     }
 
     pub async fn download_certificates_by_heights(
