@@ -672,6 +672,13 @@ impl MonitorState {
             deposits_completed: self.deposits.values().filter(|d| d.forwarded).count(),
             burns_pending: self.burns.values().filter(|b| !b.forwarded).count(),
             burns_forwarded: self.burns.values().filter(|b| b.forwarded).count(),
+            refunds_pending: self
+                .refunds
+                .values()
+                .filter(|r| !r.forwarded && !r.failed)
+                .count(),
+            refunds_completed: self.refunds.values().filter(|r| r.forwarded).count(),
+            refunds_failed: self.refunds.values().filter(|r| r.failed).count(),
             last_scanned_evm_block: self.last_scanned_evm_block,
             last_scanned_linera_height: self.last_scanned_linera_height,
         }
@@ -684,6 +691,9 @@ pub struct StatusSummary {
     pub deposits_completed: usize,
     pub burns_pending: usize,
     pub burns_forwarded: usize,
+    pub refunds_pending: usize,
+    pub refunds_completed: usize,
+    pub refunds_failed: usize,
     pub last_scanned_evm_block: u64,
     pub last_scanned_linera_height: BlockHeight,
 }
@@ -740,7 +750,11 @@ fn retry_eligible(retry_count: u32, last_retry_at: Option<Instant>, max_retries:
 #[cfg(test)]
 mod tests {
     use alloy::primitives::{Address, B256, U256};
-    use linera_base::data_types::BlockHeight;
+    use linera_base::{
+        crypto::CryptoHash,
+        data_types::{Amount, BlockHeight},
+        identifiers::{AccountOwner, ChainId},
+    };
 
     use super::*;
 
@@ -859,11 +873,32 @@ mod tests {
             })
             .await;
 
+        let refund_key = RefundKey {
+            source_chain_id: 1,
+            block_hash: B256::ZERO,
+            tx_index: 0,
+            log_index: 1,
+        };
+        state
+            .track_refund(PendingRefund {
+                key: refund_key.clone(),
+                evm_tx_hash: B256::ZERO,
+                source: Account {
+                    chain_id: ChainId(CryptoHash::from([0u8; 32])),
+                    owner: AccountOwner::CHAIN,
+                },
+                amount: Amount::ZERO,
+            })
+            .await;
+
         let summary = state.status_summary();
         assert_eq!(summary.deposits_pending, 1);
         assert_eq!(summary.deposits_completed, 0);
         assert_eq!(summary.burns_pending, 1);
         assert_eq!(summary.burns_forwarded, 0);
+        assert_eq!(summary.refunds_pending, 1);
+        assert_eq!(summary.refunds_completed, 0);
+        assert_eq!(summary.refunds_failed, 0);
         assert_eq!(summary.last_scanned_evm_block, 100);
     }
 

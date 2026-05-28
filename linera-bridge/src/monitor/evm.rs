@@ -46,10 +46,13 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
 
         let summary = monitor.read().await.status_summary();
         tracing::trace!(
-            pending = summary.deposits_pending,
-            completed = summary.deposits_completed,
+            deposits_pending = summary.deposits_pending,
+            deposits_completed = summary.deposits_completed,
+            refunds_pending = summary.refunds_pending,
+            refunds_completed = summary.refunds_completed,
+            refunds_failed = summary.refunds_failed,
             last_block = summary.last_scanned_evm_block,
-            "EVM deposit scan complete"
+            "EVM scan complete"
         );
 
         tokio::time::sleep(scan_interval).await;
