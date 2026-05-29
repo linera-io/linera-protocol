@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![recursion_limit = "512"]
+#![deny(missing_docs)]
 
 //! The server component of the Linera faucet.
 
@@ -229,9 +230,12 @@ pub struct InitialClaim {
     pub timestamp: Timestamp,
 }
 
+/// A validator in the current committee.
 #[derive(Debug, Deserialize, SimpleObject)]
 pub struct Validator {
+    /// The validator's public key.
     pub public_key: ValidatorPublicKey,
+    /// The validator's network address.
     pub network_address: String,
 }
 
@@ -1133,18 +1137,30 @@ where
     }
 }
 
+/// The configuration for running a faucet service.
 pub struct FaucetConfig {
+    /// The port on which to serve the faucet's GraphQL API.
     pub port: u16,
+    /// The port on which to serve metrics.
     #[cfg(feature = "metrics")]
     pub metrics_port: u16,
+    /// The ID of the chain funding the faucet.
     pub chain_id: ChainId,
+    /// The amount of tokens granted on an initial claim (chain creation).
     pub initial_claim_amount: Amount,
+    /// The amount of tokens granted on a daily claim.
     pub daily_claim_amount: Amount,
+    /// The time at which the faucet's balance must reach zero.
     pub end_timestamp: Timestamp,
+    /// The genesis configuration of the network.
     pub genesis_config: std::sync::Arc<GenesisConfig>,
+    /// The configuration of the embedded chain listener.
     pub chain_listener_config: ChainListenerConfig,
+    /// The path to the faucet's local database.
     pub storage_path: PathBuf,
+    /// The maximum number of claim requests processed in a single batch.
     pub max_batch_size: usize,
+    /// Whether to enable memory profiling on the metrics server.
     pub enable_memory_profiling: bool,
 }
 

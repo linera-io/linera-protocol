@@ -10,10 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{
-    stream::{FuturesUnordered, TryStreamExt},
-    Future, StreamExt,
-};
+use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round, TimeDelta},
@@ -1038,36 +1035,32 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        chain_heights
-            .into_iter()
-            .map(|(chain_id, heights)| {
-                let mut updater = self.clone();
-                async move {
-                    // Get all block hashes for this chain at the specified heights in one call
-                    let heights_vec: Vec<_> = heights.into_iter().collect();
-                    let certificates = updater
-                        .client
-                        .local_node
-                        .storage_client()
-                        .read_certificates_by_heights(chain_id, &heights_vec)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>();
+        future::try_join_all(chain_heights.into_iter().map(|(chain_id, heights)| {
+            let mut updater = self.clone();
+            async move {
+                // Get all block hashes for this chain at the specified heights in one call
+                let heights_vec = heights.into_iter().collect::<Vec<_>>();
+                let certificates = updater
+                    .client
+                    .local_node
+                    .storage_client()
+                    .read_certificates_by_heights(chain_id, &heights_vec)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
 
-                    // Send each certificate
-                    for certificate in certificates {
-                        updater
-                            .send_confirmed_certificate(&certificate, delivery)
-                            .await?;
-                    }
-
-                    Ok::<_, chain_client::Error>(())
+                // Send each certificate
+                for certificate in certificates {
+                    updater
+                        .send_confirmed_certificate(&certificate, delivery)
+                        .await?;
                 }
-            })
-            .collect::<FuturesUnordered<_>>()
-            .try_collect::<Vec<_>>()
-            .await?;
+
+                Ok::<_, chain_client::Error>(())
+            }
+        }))
+        .await?;
         Ok(())
     }
 
@@ -1076,19 +1069,15 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        chain_heights
-            .into_iter()
-            .map(|(chain_id, height)| {
-                let mut updater = self.clone();
-                async move {
-                    updater
-                        .send_chain_information(chain_id, height, delivery, None)
-                        .await
-                }
-            })
-            .collect::<FuturesUnordered<_>>()
-            .try_collect::<Vec<_>>()
-            .await?;
+        future::try_join_all(chain_heights.into_iter().map(|(chain_id, height)| {
+            let mut updater = self.clone();
+            async move {
+                updater
+                    .send_chain_information(chain_id, height, delivery, None)
+                    .await
+            }
+        }))
+        .await?;
         Ok(())
     }
 

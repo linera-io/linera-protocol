@@ -2107,6 +2107,11 @@ where
     );
     let owner0 = client.identity().await.unwrap();
     let owner1 = AccountSecretKey::generate().public().into();
+    // The observer needs to fully execute the client's chain to see its manager
+    // state; otherwise the client chain would only be preprocessed.
+    observer
+        .client
+        .extend_chain_mode(chain_id, ListeningMode::FollowChain);
 
     let owners = [(owner0, 100), (owner1, 100)];
     let ownership = ChainOwnership::multiple(owners, 0, TimeoutConfig::default());
