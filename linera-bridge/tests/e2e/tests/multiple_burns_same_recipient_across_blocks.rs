@@ -25,9 +25,7 @@
 use std::time::Duration;
 
 use alloy::{primitives::U256, providers::ProviderBuilder, sol};
-use linera_base::{
-    crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner,
-};
+use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
@@ -230,9 +228,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     let settle_result = wait_for_relay_metrics(
         &http,
         &relay_url,
-        |_detected, completed, pending, _failed| {
-            pending == 0 && completed >= i64::from(NUM_BURNS)
-        },
+        |_detected, completed, pending, _failed| pending == 0 && completed >= i64::from(NUM_BURNS),
         Duration::from_secs(240),
     )
     .await;
@@ -282,8 +278,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     // means at least one `PendingBurn` was marked complete without
     // its `token.transfer` actually landing on-chain — the UI-demo bug.
     assert_eq!(
-        token_balance,
-        expected_balance,
+        token_balance, expected_balance,
         "recipient must accumulate every burn; got {token_balance}, expected {expected_balance}"
     );
 
