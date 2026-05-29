@@ -282,12 +282,6 @@ pub enum Error {
     BlockProposalError(&'static str),
 
     #[error(
-        "A validator updated our chain manager state during the proposal; \
-         retry with the refreshed local state"
-    )]
-    LocalConsensusStateAdvanced,
-
-    #[error(
         "Cannot accept a certificate from a committee that was retired. \
          Try a newer certificate from the same origin"
     )]
@@ -1408,11 +1402,6 @@ impl<Env: Environment> ChainClient<Env> {
                     );
                     self.synchronize_chain_state(self.chain_id).await?;
                 }
-                // A per-validator updater absorbed new state (e.g. a locking block we
-                // didn't have) while we were calling. Rebuild and retry — strict
-                // progress, since the local node verified signatures on whatever it
-                // stored, so termination doesn't need an explicit bound.
-                Err(Error::LocalConsensusStateAdvanced) => continue,
                 Err(err) => return Err(err),
             };
         };
@@ -1999,36 +1988,40 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// On error, compares the chain manager's snapshot just before the failing network
     /// call against the current state. If a per-validator updater absorbed new info
-    /// (e.g. a locking block we didn't have) while we were calling, surfaces
-    /// [`Error::LocalConsensusStateAdvanced`] so the caller can retry with the
+    /// (e.g. a locking block we didn't have) while we were calling, retries with the
     /// refreshed state. The snapshot is updated after our own local proposal handling
     /// so that doesn't count as "new info from a validator".
+    ///
+    /// Retrying terminates without an explicit bound: each retry corresponds to local
+    /// consensus state that actually advanced (verified by the local node, which checks
+    /// signatures and quorums), and that state is monotone.
     #[instrument(level = "debug", skip(self, proposal_guard), fields(chain_id = %self.chain_id))]
     async fn process_pending_block_without_prepare(
         &self,
         proposal_guard: &mut Option<PendingProposal>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, Error> {
-        let mut snapshot = self.consensus_state_snapshot().await?;
-        let result = self
-            .process_pending_block_inner(proposal_guard, &mut snapshot)
-            .await;
-        match result {
-            Ok(outcome) => Ok(outcome),
-            Err(err) => {
-                if let Ok(current) = self.consensus_state_snapshot().await {
-                    if current != snapshot {
-                        tracing::debug!(
-                            chain_id = %self.chain_id,
-                            ?snapshot,
-                            ?current,
-                            %err,
-                            "local consensus state advanced during process_pending_block; retrying"
-                        );
-                        return Err(Error::LocalConsensusStateAdvanced);
-                    }
-                }
-                Err(err)
+        loop {
+            let mut snapshot = self.consensus_state_snapshot().await?;
+            let err = match self
+                .process_pending_block_inner(proposal_guard, &mut snapshot)
+                .await
+            {
+                Ok(outcome) => return Ok(outcome),
+                Err(err) => err,
+            };
+            let Ok(current) = self.consensus_state_snapshot().await else {
+                return Err(err);
+            };
+            if current == snapshot {
+                return Err(err);
             }
+            tracing::debug!(
+                chain_id = %self.chain_id,
+                ?snapshot,
+                ?current,
+                %err,
+                "local consensus state advanced during process_pending_block; retrying"
+            );
         }
     }
 

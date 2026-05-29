@@ -2347,8 +2347,7 @@ where
 /// updater's `NodeError::ChainError` arm pulls manager state from each
 /// rejecter, absorbing the locking block from validators 2 and 3 into
 /// `client_a`'s local node. `process_pending_block_without_prepare` detects the
-/// snapshot advance and returns `LocalConsensusStateAdvanced`;
-/// `execute_operations` retries; the retry finalizes the absorbed locking block
+/// snapshot advance and retries; the retry finalizes the absorbed locking block
 /// (`client_b`'s transfer) and the chain advances. The outcome is `Conflict`
 /// because the committed block is `client_b`'s transfer, not `client_a`'s
 /// intended burn.
