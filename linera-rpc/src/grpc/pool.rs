@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use linera_base::time::Duration;
 
 use super::{transport, GrpcError};
@@ -9,14 +11,14 @@ use super::{transport, GrpcError};
 #[derive(Clone, Default)]
 pub struct GrpcConnectionPool {
     options: transport::Options,
-    channels: papaya::HashMap<String, transport::Channel>,
+    channels: Arc<papaya::HashMap<String, transport::Channel>>,
 }
 
 impl GrpcConnectionPool {
     pub fn new(options: transport::Options) -> Self {
         Self {
             options,
-            channels: papaya::HashMap::default(),
+            channels: Arc::new(papaya::HashMap::default()),
         }
     }
 
