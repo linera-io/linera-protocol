@@ -24,8 +24,6 @@ REGISTRY:
             TUPLEARRAY:
               CONTENT: U8
               SIZE: 20
-  Amount:
-    NEWTYPESTRUCT: U128
   ApplicationId:
     STRUCT:
       - application_description_hash:
@@ -36,8 +34,7 @@ REGISTRY:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
-      - amount:
-          TYPENAME: Amount
+      - amount: U128
   ChainId:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash
@@ -53,8 +50,7 @@ REGISTRY:
           NEWTYPE: STR
       206964944:
         Balance:
-          NEWTYPE:
-            TYPENAME: Amount
+          NEWTYPE: U128
       211312752:
         Ok: UNIT
   Message:
@@ -64,8 +60,7 @@ REGISTRY:
           STRUCT:
             - target:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - source:
                 TYPENAME: AccountOwner
       1:
@@ -73,8 +68,7 @@ REGISTRY:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
   WrappedFungibleOperation:
@@ -86,8 +80,7 @@ REGISTRY:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
       158617459:
@@ -97,22 +90,19 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - allowance:
-                TYPENAME: Amount
+            - allowance: U128
       198295567:
         MintAndTransfer:
           STRUCT:
             - target_account:
                 TYPENAME: Account
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
       204322437:
         Claim:
           STRUCT:
             - source_account:
                 TYPENAME: Account
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
       206964944:
@@ -127,8 +117,7 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - spender:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
             - target_account:
                 TYPENAME: Account
       239329758:
@@ -136,11 +125,11 @@ REGISTRY:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
-            - amount:
-                TYPENAME: Amount
+            - amount: U128
   WrappedParameters:
     STRUCT:
       - ticker_symbol: STR
+      - decimals: U8
       - minter:
           OPTION:
             TYPENAME: AccountOwner

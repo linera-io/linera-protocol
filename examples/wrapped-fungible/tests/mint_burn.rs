@@ -81,7 +81,7 @@ async fn test_mint_from_unauthorized_signer() {
         .try_add_block(|block| {
             block.with_operation(
                 application_id,
-                WrappedFungibleOperation::Mint {
+                WrappedFungibleOperation::MintAndTransfer {
                     target_account: Account {
                         chain_id: chain.id(),
                         owner: chain_owner,
@@ -337,7 +337,7 @@ async fn test_mint_on_wrong_chain() {
         .try_add_block(|block| {
             block.with_operation(
                 application_id,
-                WrappedFungibleOperation::Mint {
+                WrappedFungibleOperation::MintAndTransfer {
                     target_account: Account {
                         chain_id: minter_chain.id(),
                         owner: minter_account,
@@ -372,7 +372,7 @@ async fn test_direct_mint_without_bridge_is_rejected() {
         .try_add_block(|block| {
             block.with_operation(
                 application_id,
-                WrappedFungibleOperation::Mint {
+                WrappedFungibleOperation::MintAndTransfer {
                     target_account: Account {
                         chain_id: minter_chain.id(),
                         owner: minter_account,

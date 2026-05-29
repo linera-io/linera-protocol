@@ -71,7 +71,7 @@ impl InitialStateBuilder {
 }
 
 /// Response variants returned by the wrapped fungible token application.
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, StableEnumInCrate, Default)]
 pub enum FungibleResponse {
     #[default]
     Ok,
@@ -111,8 +111,9 @@ pub enum WrappedFungibleOperation {
         amount: U128,
         target_account: Account,
     },
-    /// Mints new tokens to a target account. Only the authorized minter can call this.
-    Mint {
+    /// Mints new tokens and transfers them to a target account. Only the authorized
+    /// minter can call this.
+    MintAndTransfer {
         target_account: Account,
         amount: U128,
     },

@@ -1,9 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fungible::OwnerSpender;
 use linera_sdk::{
-    linera_base_types::{AccountOwner, U128},
+    linera_base_types::{AccountOwner, OwnerSpender, U128},
     views::{linera_views, MapView, RootView, ViewStorageContext},
 };
 use wrapped_fungible::InitialState;

@@ -270,7 +270,7 @@ impl EvmBridgeContract {
                 .expect("deposit amount exceeds u128"),
         );
 
-        let mint_op = WrappedFungibleOperation::Mint {
+        let mint_op = WrappedFungibleOperation::MintAndTransfer {
             target_account: Account {
                 chain_id: deposit.target_chain_id,
                 owner: deposit.target_account_owner,
