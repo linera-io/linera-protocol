@@ -1115,14 +1115,21 @@ where
         // bootstrapped validator would silently stop delivering pending
         // messages.
         self.chain.restore_outboxes_from_unfinalized().await?;
-        // Seed each inbox's `restored_cursor` with the producer's
-        // `next_cursor_to_remove` at checkpoint time. Senders that haven't
-        // received the matching `CheckpointAck` yet may re-push bundles whose
-        // effects are already baked into the restored execution state; the
-        // restored cursor lets the inbox silently drop them.
+        // Seed each inbox's `restored_cursor` (so the inbox silently drops
+        // sender re-pushes whose effects are already baked into the restored
+        // execution state), `next_cursor_to_remove` (so the producer's
+        // pre-block snapshot in `collect_all_inbox_cursors` — which feeds the
+        // certified `OracleResponse::Checkpoint.inbox_cursors` — matches what
+        // this follower will recompute when re-executing the checkpoint), and
+        // `next_cursor_to_add` (so `next_block_height_to_receive` reflects what
+        // the producer had already consumed — otherwise the first post-bootstrap
+        // cross-chain update from this origin trips the inbox-gap check in
+        // `process_cross_chain_update`).
         for (origin, cursor) in inbox_cursors {
             let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
             inbox.restored_cursor.set(cursor);
+            inbox.next_cursor_to_remove.set(cursor);
+            inbox.next_cursor_to_add.set(cursor);
         }
         // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
         // (for outbox-referenced pre-checkpoint heights), and the outbox views.

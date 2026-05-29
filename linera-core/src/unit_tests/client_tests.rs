@@ -4606,6 +4606,111 @@ where
     Ok(())
 }
 
+/// Verifies that a fresh follower can bootstrap a chain that consumed incoming
+/// messages before checkpointing. The checkpoint pre-block hook records each
+/// inbox's `next_cursor_to_remove` in `OracleResponse::Checkpoint.inbox_cursors`,
+/// so re-executing the checkpoint requires the follower to seed both
+/// `restored_cursor` *and* `next_cursor_to_remove` from the oracle response —
+/// `collect_all_inbox_cursors` reads the latter, and a mismatch raises
+/// `OracleResponseMismatch`.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_bootstrap_after_consuming_messages<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let recipient_id = recipient.chain_id();
+
+    // Producer sends a transfer; recipient consumes it. This advances the
+    // recipient's `inbox[producer].next_cursor_to_remove` past `Cursor::default()`,
+    // which the checkpoint's pre-block hook will snapshot into the oracle response.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+
+    let checkpoint_cert = recipient.checkpoint().await.unwrap().unwrap();
+    let inbox_cursors = match checkpoint_cert
+        .block()
+        .body
+        .oracle_responses
+        .first()
+        .and_then(|t| t.first())
+    {
+        Some(OracleResponse::Checkpoint { inbox_cursors, .. }) => inbox_cursors.clone(),
+        other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
+    };
+    assert!(
+        !inbox_cursors.is_empty(),
+        "recipient consumed messages, so inbox_cursors must record the producer's cursor",
+    );
+
+    let recipient_state_hash = recipient
+        .chain_info()
+        .await?
+        .state_hash
+        .expect("recipient should expose a state hash after the checkpoint");
+
+    // Producer sends a follow-up transfer to the recipient. The matching
+    // cross-chain update declares `sender_previous_height = Some(0)` (the
+    // pre-checkpoint transfer's height), which the follower's inbox-gap check
+    // must accept rather than reject.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Fresh follower for the recipient chain (non-follow-only so it goes through
+    // `find_received_certificates`, which is where local cross-chain delivery
+    // and the inbox-gap check fire). Bootstrapping replays the checkpoint block,
+    // whose Checkpoint operation handler recomputes `inbox_cursors` from the
+    // (just-seeded) inbox state — if only `restored_cursor` were seeded, the
+    // recomputed vector would be empty and `replay_oracle_response` would fail.
+    let follower = builder
+        .make_client_with_options(
+            recipient_id,
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            false,
+        )
+        .await?;
+    follower.synchronize_from_validators().await?;
+    let follower_info = follower.chain_info().await?;
+    assert_eq!(follower_info.state_hash, Some(recipient_state_hash));
+    let pre_balance = follower.local_balance().await?;
+
+    // Drive the post-bootstrap cross-chain delivery. Without seeding
+    // `next_cursor_to_add`, `process_cross_chain_update` would reject the
+    // follow-up bundle as an inbox gap (its `sender_previous_height = 0` would
+    // be `>= next_height_to_receive = 0`).
+    follower.process_inbox().await?;
+    assert_eq!(
+        follower.local_balance().await?,
+        pre_balance + Amount::ONE,
+        "follower should accept and consume the post-bootstrap follow-up transfer",
+    );
+
+    Ok(())
+}
+
 /// Verifies the end-to-end `CheckpointAck` cycle now that recipients can also checkpoint
 /// after consuming incoming messages: producer sends, recipient consumes and
 /// checkpoints (sending the ack back), producer consumes the ack and trims its
