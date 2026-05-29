@@ -38,7 +38,7 @@ use linera_chain::{
         BlockProposal, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight, IncomingBundle,
         ProposedBlock, Transaction,
     },
-    manager::LockingBlock,
+    manager::{ChainManagerInfo, LockingBlock},
     types::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, Timeout, TimeoutCertificate,
         ValidatedBlock,
@@ -222,6 +222,10 @@ pub struct ChainClient<Env: Environment> {
     /// Sender chain IDs whose bundles were discarded due to the never-reject policy.
     /// These origins are excluded from `process_inbox` until the client is restarted.
     skipped_origins: Arc<papaya::HashSet<ChainId>>,
+    /// The `(round, timestamp)` at which we first observed the current multi-leader round
+    /// while computing the jitter target, used to anchor the proposal delay when the
+    /// round's start cannot be derived from its timeout (see `multi_leader_jitter_target`).
+    jitter_round_anchor: Arc<std::sync::Mutex<Option<(Round, Timestamp)>>>,
 }
 
 impl<Env: Environment> Clone for ChainClient<Env> {
@@ -235,8 +239,61 @@ impl<Env: Environment> Clone for ChainClient<Env> {
             initial_block_hash: self.initial_block_hash,
             timing_sender: self.timing_sender.clone(),
             skipped_origins: self.skipped_origins.clone(),
+            jitter_round_anchor: self.jitter_round_anchor.clone(),
         }
     }
+}
+
+/// Returns the timestamp at which `owner` should propose in `round`, to spread out
+/// concurrent proposals from honest clients in a multi-leader round. Returns `None` if the
+/// owner should propose immediately (jitter disabled, the round is not a multi-leader round,
+/// the owner is the preferred proposer, or the jitter target is already in the past).
+///
+/// The delay is deterministic per `(owner, round)` and is anchored at the round's start time,
+/// so that retrying after an interrupting notification does not extend the wait further. The
+/// round start is derived from the round timeout when available; otherwise — e.g. a non-final
+/// multi-leader round, which has no timeout — it is anchored to the time the round was first
+/// observed, remembered in `round_anchor`. Anchoring to the current time in that case would
+/// make `propose_at` recede by `delay` on every call, so the owner would never reach it and
+/// never propose (the liveness bug this guards against).
+pub(crate) fn multi_leader_jitter_target(
+    jitter_enabled: bool,
+    manager: &ChainManagerInfo,
+    owner: &AccountOwner,
+    round: Round,
+    now: Timestamp,
+    round_anchor: &std::sync::Mutex<Option<(Round, Timestamp)>>,
+) -> Option<Timestamp> {
+    if !jitter_enabled {
+        return None;
+    }
+    let ownership = &manager.ownership;
+    let delay = ownership.multi_leader_proposal_delay(owner, round)?;
+    if delay == TimeDelta::ZERO {
+        return None;
+    }
+    let derived_start = if round == manager.current_round {
+        match (manager.round_timeout, ownership.round_timeout(round)) {
+            (Some(end), Some(duration)) => Some(end.saturating_sub(duration)),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let round_start = derived_start.unwrap_or_else(|| {
+        let mut anchor = round_anchor
+            .lock()
+            .expect("jitter_round_anchor mutex poisoned");
+        match *anchor {
+            Some((remembered_round, start)) if remembered_round == round => start,
+            _ => {
+                *anchor = Some((round, now));
+                now
+            }
+        }
+    });
+    let propose_at = round_start.saturating_add(delay);
+    (propose_at > now).then_some(propose_at)
 }
 
 /// Error type for [`ChainClient`].
@@ -379,6 +436,7 @@ impl<Env: Environment> ChainClient<Env> {
             initial_next_block_height,
             timing_sender,
             skipped_origins: Arc::new(papaya::HashSet::new()),
+            jitter_round_anchor: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -2302,39 +2360,24 @@ impl<Env: Environment> ChainClient<Env> {
         ))
     }
 
-    /// Returns the timestamp at which `owner` should propose in `round`, to spread out
-    /// concurrent proposals from honest clients in a multi-leader round. Returns `None` if
-    /// the owner should propose immediately (either because the round is not a multi-leader
-    /// round, the owner is the preferred proposer, or the jitter target is already in the past).
-    ///
-    /// The delay is deterministic per `(owner, round)` and is anchored at the round's start
-    /// time when known, so that retrying after an interrupting notification does not extend
-    /// the wait further.
+    /// Returns the timestamp at which `owner` should propose in `round`, reading the current
+    /// time and the per-round anchor from this client and delegating to
+    /// [`multi_leader_jitter_target`].
     fn multi_leader_jitter_target(
         &self,
         info: &ChainInfo,
         owner: &AccountOwner,
         round: Round,
     ) -> Option<Timestamp> {
-        if !self.options.multi_leader_jitter {
-            return None;
-        }
-        let ownership = &info.manager.ownership;
-        let delay = ownership.multi_leader_proposal_delay(owner, round)?;
-        if delay == TimeDelta::ZERO {
-            return None;
-        }
         let now = self.storage_client().clock().current_time();
-        let round_start = if round == info.manager.current_round {
-            match (info.manager.round_timeout, ownership.round_timeout(round)) {
-                (Some(end), Some(duration)) => end.saturating_sub(duration),
-                _ => now,
-            }
-        } else {
-            now
-        };
-        let propose_at = round_start.saturating_add(delay);
-        (propose_at > now).then_some(propose_at)
+        multi_leader_jitter_target(
+            self.options.multi_leader_jitter,
+            &info.manager,
+            owner,
+            round,
+            now,
+            &self.jitter_round_anchor,
+        )
     }
 
     /// Clears the information on any operation that previously failed.
