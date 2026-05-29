@@ -71,7 +71,7 @@ impl InitialStateBuilder {
 }
 
 /// Response variants returned by the wrapped fungible token application.
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Default, StableEnumInCrate)]
 pub enum FungibleResponse {
     #[default]
     Ok,
