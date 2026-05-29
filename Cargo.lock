@@ -12532,7 +12532,6 @@ name = "wrapped-fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "fungible",
  "hex",
  "linera-sdk",
  "serde-reflection",
