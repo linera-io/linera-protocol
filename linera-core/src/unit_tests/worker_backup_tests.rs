@@ -573,12 +573,18 @@ async fn restore_scylladb_backup(
             let store = db
                 .open_shared(actual_root_key)
                 .expect("open scylladb store");
-            if !kv_pairs.is_empty() {
+            // The empty key is the reserved writetime sentinel; `write_batch`
+            // rejects zero-length keys and writes its own sentinel, so drop it.
+            let insertions: Vec<(Vec<u8>, Vec<u8>)> = kv_pairs
+                .into_iter()
+                .filter(|(key, _)| !key.is_empty())
+                .collect();
+            if !insertions.is_empty() {
                 let batch = UnorderedBatch {
                     key_prefix_deletions: vec![],
                     simple_unordered_batch: SimpleUnorderedBatch {
                         deletions: vec![],
-                        insertions: kv_pairs.into_iter().collect(),
+                        insertions,
                     },
                 };
                 store
