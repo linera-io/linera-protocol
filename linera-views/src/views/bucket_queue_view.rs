@@ -366,14 +366,21 @@ where
                 }
                 all_data.extend(std::mem::take(&mut self.new_back_values));
                 self.stored_buckets.clear();
+                // Mirror the `post_load` shape: keep only the front and back buckets
+                // loaded; middles are `NotLoaded` (they were just written and each holds
+                // exactly N). This avoids re-cloning the middle data that `pre_save`
+                // already serialized into the batch.
+                let num_chunks = all_data.chunks(N).len();
                 for (i, chunk) in all_data.chunks(N).enumerate() {
-                    let i = u32::try_from(i).expect("verified in pre_save");
-                    self.stored_buckets.push_back(Bucket {
-                        index: i,
-                        state: State::Loaded {
+                    let state = if i == 0 || i == num_chunks - 1 {
+                        State::Loaded {
                             data: chunk.to_vec(),
-                        },
-                    });
+                        }
+                    } else {
+                        State::NotLoaded { length: N }
+                    };
+                    let i = u32::try_from(i).expect("verified in pre_save");
+                    self.stored_buckets.push_back(Bucket { index: i, state });
                 }
                 self.cursor = (!self.stored_buckets.is_empty()).then_some(Cursor {
                     offset: 0,
@@ -396,13 +403,22 @@ where
                     let mut merged = back_data;
                     merged.extend(std::mem::take(&mut self.new_back_values));
                     let new_start = first_index + old_remaining_without_back;
+                    // Only the last chunk becomes the new back (loaded); the chunks
+                    // before it are middles, left NotLoaded since they were just written
+                    // and each holds exactly N. The pre-existing front is untouched.
+                    let num_chunks = merged.chunks(N).len();
                     for (i, chunk) in merged.chunks(N).enumerate() {
+                        let state = if i == num_chunks - 1 {
+                            State::Loaded {
+                                data: chunk.to_vec(),
+                            }
+                        } else {
+                            State::NotLoaded { length: N }
+                        };
                         let i = u32::try_from(i).expect("verified in pre_save");
                         self.stored_buckets.push_back(Bucket {
                             index: new_start + i,
-                            state: State::Loaded {
-                                data: chunk.to_vec(),
-                            },
+                            state,
                         });
                     }
                 }
@@ -561,19 +577,8 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
         Ok(num_buckets)
     }
 
-    /// Gets the number of entries in the container that are stored
-    /// ```rust
-    /// # tokio_test::block_on(async {
-    /// # use linera_views::context::MemoryContext;
-    /// # use linera_views::bucket_queue_view::BucketQueueView;
-    /// # use crate::linera_views::views::View;
-    /// # let context = MemoryContext::new_for_testing(());
-    /// let mut queue = BucketQueueView::<_, u8, 5>::load(context).await.unwrap();
-    /// queue.push_back(34);
-    /// assert_eq!(queue.stored_count(), 0);
-    /// # })
-    /// ```
-    pub fn stored_count(&self) -> usize {
+    /// Gets the number of entries that are in the container and in storage.
+    fn stored_count(&self) -> usize {
         if self.delete_storage_first {
             return 0;
         }
@@ -597,7 +602,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
         front_count + num_middles * N + back_count
     }
 
-    /// The total number of entries of the container
+    /// The total number of entries of the container.
     /// ```rust
     /// # tokio_test::block_on(async {
     /// # use linera_views::context::MemoryContext;
