@@ -3,12 +3,14 @@
 
 /*! ABI of the Time Expiry Test Application */
 
-use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi, TimeDelta};
-use serde::{Deserialize, Serialize};
+use linera_sdk::{
+    formats::StableEnum,
+    linera_base_types::{ContractAbi, ServiceAbi, TimeDelta},
+};
 
 pub struct TimeExpiryAbi;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, StableEnum)]
 pub enum TimeExpiryOperation {
     /// Expire the operation after the given time delta from block timestamp.
     ExpireAfter(TimeDelta),

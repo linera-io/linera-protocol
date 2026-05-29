@@ -6,7 +6,6 @@ edition = "2021"
 
 [dependencies]
 linera-sdk.workspace = true
-serde.workspace = true
 
 [[bin]]
 name = "time_expiry_contract"

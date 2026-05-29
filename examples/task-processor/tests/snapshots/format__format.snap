@@ -1,6 +1,5 @@
 ---
 source: task-processor/tests/format.rs
-assertion_line: 13
 expression: "TaskProcessorApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -21,22 +20,22 @@ REGISTRY:
             - input: STR
   TaskProcessorOperation:
     ENUM:
-      0:
-        RequestTask:
+      232622982:
+        StoreResult:
           STRUCT:
-            - operator: STR
-            - input: STR
-      1:
+            - result: STR
+      246270749:
         RequestTaskOn:
           STRUCT:
             - chain_id:
                 TYPENAME: ChainId
             - operator: STR
             - input: STR
-      2:
-        StoreResult:
+      266969411:
+        RequestTask:
           STRUCT:
-            - result: STR
+            - operator: STR
+            - input: STR
 OPERATION:
   TYPENAME: TaskProcessorOperation
 RESPONSE: UNIT

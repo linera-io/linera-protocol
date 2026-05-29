@@ -44,17 +44,17 @@ REGISTRY:
                 TYPENAME: Amount
   Operation:
     ENUM:
-      0:
+      202450794:
+        Cancel: UNIT
+      229616410:
         Pledge:
           STRUCT:
             - owner:
                 TYPENAME: AccountOwner
             - amount:
                 TYPENAME: Amount
-      1:
+      255551373:
         Collect: UNIT
-      2:
-        Cancel: UNIT
   Timestamp:
     NEWTYPESTRUCT: U64
 OPERATION:

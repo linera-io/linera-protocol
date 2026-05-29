@@ -27,7 +27,7 @@ impl ServiceAbi for EvmBridgeAbi {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
-    use linera_sdk::formats::{BcsApplication, Formats};
+    use linera_sdk::formats::{BcsApplication, Formats, TracerExt};
     use serde_reflection::{Samples, Tracer, TracerConfig};
 
     use super::{BridgeOperation, BridgeParameters, EvmBridgeAbi};
@@ -47,7 +47,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<BridgeOperation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<BridgeOperation>(&samples)?;
             let (response, _) = tracer.trace_type::<()>(&samples)?;
             let (message, _) = tracer.trace_type::<()>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;

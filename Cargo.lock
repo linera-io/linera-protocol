@@ -3266,7 +3266,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "linera-sdk",
- "serde",
  "tokio",
 ]
 
@@ -3298,7 +3297,6 @@ dependencies = [
  "async-graphql",
  "event-emitter",
  "linera-sdk",
- "serde",
  "tokio",
 ]
 
@@ -5100,6 +5098,7 @@ dependencies = [
  "linera-client",
  "linera-core",
  "linera-execution",
+ "linera-sdk",
  "linera-storage",
  "linera-views",
  "linera-wallet-json",
@@ -10340,7 +10339,6 @@ name = "time-expiry"
 version = "0.1.0"
 dependencies = [
  "linera-sdk",
- "serde",
 ]
 
 [[package]]

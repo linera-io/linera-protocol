@@ -1,6 +1,5 @@
 ---
 source: hex-game/tests/format.rs
-assertion_line: 13
 expression: "HexApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -55,12 +54,12 @@ REGISTRY:
         SIZE: 32
   HexOutcome:
     ENUM:
-      0:
+      211312752:
+        Ok: UNIT
+      219530868:
         Winner:
           NEWTYPE:
             TYPENAME: Player
-      1:
-        Ok: UNIT
   Message:
     ENUM:
       0:
@@ -83,14 +82,7 @@ REGISTRY:
                 TYPENAME: AccountOwner
   Operation:
     ENUM:
-      0:
-        MakeMove:
-          STRUCT:
-            - x: U16
-            - y: U16
-      1:
-        ClaimVictory: UNIT
-      2:
+      162697236:
         Start:
           STRUCT:
             - players:
@@ -104,6 +96,13 @@ REGISTRY:
             - timeouts:
                 OPTION:
                   TYPENAME: Timeouts
+      201981744:
+        ClaimVictory: UNIT
+      237661708:
+        MakeMove:
+          STRUCT:
+            - x: U16
+            - y: U16
   Player:
     ENUM:
       0:

@@ -3,7 +3,10 @@
 
 /*! ABI of the Counter Example Application that does not use GraphQL */
 
-use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
+use linera_sdk::{
+    formats::StableEnum,
+    linera_base_types::{ContractAbi, ServiceAbi},
+};
 use serde::{Deserialize, Serialize};
 
 pub struct CallCounterAbi;
@@ -26,7 +29,7 @@ pub enum CallCounterRequest {
     Increment(u64),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, StableEnum)]
 pub enum CallCounterOperation {
     TestCallAddress,
     Increment(u64),
@@ -34,7 +37,7 @@ pub enum CallCounterOperation {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
-    use linera_sdk::formats::{BcsApplication, Formats};
+    use linera_sdk::formats::{BcsApplication, Formats, TracerExt};
     use serde_reflection::{Samples, Tracer, TracerConfig};
 
     use super::{CallCounterAbi, CallCounterOperation, CallCounterRequest};
@@ -54,7 +57,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<CallCounterOperation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<CallCounterOperation>(&samples)?;
             let (response, _) = tracer.trace_type::<u64>(&samples)?;
             let (message, _) = tracer.trace_type::<()>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
