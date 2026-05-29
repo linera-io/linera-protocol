@@ -28,7 +28,7 @@ This replaces the previous flow where the relayer had to propose a separate `Bur
 
 All standard fungible operations are supported (`Transfer`, `TransferFrom`, `Approve`, `Claim`, `Balance`, `TickerSymbol`), plus:
 
-- `Mint { target_account, amount }` - Creates new tokens (subject to authorization checks)
+- `MintAndTransfer { target_account, amount }` - Creates new tokens (subject to authorization checks)
 - `Burn { owner, amount }` - Rejected at the contract level. Burning happens automatically via cross-chain transfer to an Address20 on the bridge chain.
 
 ## Deployment

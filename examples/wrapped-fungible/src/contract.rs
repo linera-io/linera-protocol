@@ -117,7 +117,7 @@ impl Contract for WrappedFungibleTokenContract {
                 FungibleResponse::Ok
             }
 
-            WrappedFungibleOperation::Mint {
+            WrappedFungibleOperation::MintAndTransfer {
                 target_account,
                 amount,
             } => self.execute_mint(target_account, amount).await,

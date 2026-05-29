@@ -76,8 +76,8 @@ WrappedFungibleOperation:
           - spender:
               TYPENAME: AccountOwner
           - allowance: U128
-    189683137:
-      Mint:
+    198295567:
+      MintAndTransfer:
         STRUCT:
           - target_account:
               TYPENAME: Account
