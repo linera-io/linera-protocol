@@ -3322,6 +3322,7 @@ library BridgeTypes {
 
     struct TimeoutConfig {
         opt_TimeDelta fast_round_duration;
+        TimeDelta multi_leader_round_duration;
         TimeDelta base_timeout;
         TimeDelta timeout_increment;
         TimeDelta fallback_duration;
@@ -3329,6 +3330,7 @@ library BridgeTypes {
 
     function bcs_serialize_TimeoutConfig(TimeoutConfig memory input) internal pure returns (bytes memory) {
         bytes memory result = bcs_serialize_opt_TimeDelta(input.fast_round_duration);
+        result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.multi_leader_round_duration));
         result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.base_timeout));
         result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.timeout_increment));
         return abi.encodePacked(result, bcs_serialize_TimeDelta(input.fallback_duration));
@@ -3342,13 +3344,20 @@ library BridgeTypes {
         uint256 new_pos;
         opt_TimeDelta memory fast_round_duration;
         (new_pos, fast_round_duration) = bcs_deserialize_offset_opt_TimeDelta(pos, input);
+        TimeDelta memory multi_leader_round_duration;
+        (new_pos, multi_leader_round_duration) = bcs_deserialize_offset_TimeDelta(new_pos, input);
         TimeDelta memory base_timeout;
         (new_pos, base_timeout) = bcs_deserialize_offset_TimeDelta(new_pos, input);
         TimeDelta memory timeout_increment;
         (new_pos, timeout_increment) = bcs_deserialize_offset_TimeDelta(new_pos, input);
         TimeDelta memory fallback_duration;
         (new_pos, fallback_duration) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        return (new_pos, TimeoutConfig(fast_round_duration, base_timeout, timeout_increment, fallback_duration));
+        return (
+            new_pos,
+            TimeoutConfig(
+                fast_round_duration, multi_leader_round_duration, base_timeout, timeout_increment, fallback_duration
+            )
+        );
     }
 
     function bcs_deserialize_TimeoutConfig(bytes memory input) internal pure returns (TimeoutConfig memory) {

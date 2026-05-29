@@ -554,6 +554,8 @@ TimeoutConfig:
     - fast_round_duration:
         OPTION:
           TYPENAME: TimeDelta
+    - multi_leader_round_duration:
+        TYPENAME: TimeDelta
     - base_timeout:
         TYPENAME: TimeDelta
     - timeout_increment:
