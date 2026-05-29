@@ -66,51 +66,26 @@ struct BucketLayout {
     first_index: u32,
 }
 
-/// The position of a value in the stored bucket.
+/// The position of the queue's front value within the stored buckets.
 #[derive(Copy, Clone, Debug, Allocative)]
 struct Cursor {
-    /// The offset of the bucket in the vector of stored buckets.
+    /// The offset of the current front bucket from the front bucket of the saved
+    /// layout (`0` = the saved `stored_front` bucket).
     offset: usize,
-    /// The position of the value in the stored bucket.
+    /// The position of the value within that bucket.
     position: usize,
-}
-
-/// The state of a stored bucket in memory.
-#[derive(Clone, Debug, Allocative)]
-enum State<T> {
-    Loaded { data: Vec<T> },
-    NotLoaded { length: usize },
-}
-
-impl<T> Bucket<T> {
-    fn len(&self) -> usize {
-        match &self.state {
-            State::Loaded { data } => data.len(),
-            State::NotLoaded { length } => *length,
-        }
-    }
-
-    fn is_loaded(&self) -> bool {
-        match self.state {
-            State::Loaded { .. } => true,
-            State::NotLoaded { .. } => false,
-        }
-    }
-}
-
-/// A stored bucket.
-#[derive(Clone, Debug, Allocative)]
-struct Bucket<T> {
-    /// The index in storage.
-    index: u32,
-    /// The state of the bucket.
-    state: State<T>,
 }
 
 /// A view that supports a FIFO queue for values of type `T`.
 /// The size `N` has to be chosen by taking into account the size of the type `T`
 /// and the basic size of a block. For example a total size of 100 bytes to 10 KB
 /// seems adequate.
+///
+/// Only the endpoints of the stored sequence are materialized: `stored_front` and
+/// `stored_back` are kept in memory, while the middle buckets live solely in storage
+/// (each holds exactly `N` elements, so they are tracked by `stored_num_buckets` alone
+/// and read back lazily). The sole exception is `current_middle`, which holds the bucket
+/// the cursor currently points into once `delete_front` has advanced past the front.
 //#[allocative(bound = "T: Allocative")]
 #[derive(Debug, Allocative)]
 #[allocative(bound = "C, T: Allocative, const N: usize")]
@@ -118,23 +93,35 @@ pub struct BucketQueueView<C, T, const N: usize> {
     /// The view context.
     #[allocative(skip)]
     context: C,
-    /// The stored buckets. Some buckets may not be loaded. The first one is always loaded.
-    stored_buckets: VecDeque<Bucket<T>>,
-    /// The newly inserted back values.
+    /// The newly inserted back values, not yet persisted.
     new_back_values: VecDeque<T>,
-    /// Position of the front value within the first stored bucket, as of the last save.
-    /// Together with `stored_buckets`, this is the anchor that `rollback` restores the
-    /// `cursor` to (it reads neither storage nor `cursor`), so in-memory mutations such
-    /// as `clear` must leave both intact.
-    stored_front_position: u32,
-    /// Position of the queue's front value within `stored_buckets`, or `None` when no
-    /// stored value remains (so the front, if any, is the first of `new_back_values`).
+    /// Storage index of the front bucket (the bucket at cursor offset `0`).
+    stored_first_index: u32,
+    /// The total number of stored buckets (front + middles + back).
+    stored_num_buckets: u32,
+    /// The front bucket's data, fully materialized; empty iff `stored_num_buckets == 0`.
     ///
-    /// When this is `Some`, the bucket at `cursor.offset` is always `Loaded`. Note that
-    /// `None` does not imply `stored_buckets` is empty: after enough `delete_front`s the
-    /// cursor walks off the end and becomes `None` while the consumed buckets remain in
-    /// `stored_buckets` until the next save.
+    /// This is the saved front bucket and the anchor that `rollback` restores to: it is
+    /// never mutated by `delete_front`, so `rollback` (which is synchronous and reads
+    /// neither storage nor the live cursor) can rebuild the cursor from it together with
+    /// `stored_front_position`. In-memory mutations such as `clear` must leave it intact.
+    stored_front: Vec<T>,
+    /// The back bucket's data, fully materialized; empty when `stored_num_buckets < 2`
+    /// (a single stored bucket is represented by `stored_front` alone).
+    stored_back: Vec<T>,
+    /// Position of the front value within `stored_front`, as of the last save.
+    stored_front_position: u32,
+    /// The live cursor over the stored buckets, or `None` when no stored value remains
+    /// (so the front, if any, is the first of `new_back_values`).
+    ///
+    /// `None` does not imply `stored_num_buckets == 0`: after enough `delete_front`s the
+    /// cursor walks off the end and becomes `None` while the saved layout stays untouched
+    /// until the next save.
     cursor: Option<Cursor>,
+    /// The data of the middle bucket the cursor currently points into, materialized when
+    /// `delete_front` has advanced strictly inside the middles (`0 < cursor.offset <
+    /// stored_num_buckets - 1`). `None` otherwise.
+    current_middle: Option<Vec<T>>,
     /// Whether the storage is to be deleted or not.
     delete_storage_first: bool,
 }
@@ -166,57 +153,55 @@ where
         let front = from_bytes_option::<Vec<T>>(value_front)?;
         let back = from_bytes_option::<Vec<T>>(value_back)?;
         let layout = from_bytes_option_or_default::<BucketLayout>(value_layout)?;
-        let mut stored_buckets = VecDeque::new();
-        if let Some(front_data) = front {
-            // Front bucket (always loaded).
-            stored_buckets.push_back(Bucket {
-                index: layout.first_index,
-                state: State::Loaded { data: front_data },
-            });
-            // Middle buckets (NotLoaded, all have exactly N elements).
-            let num_middles = layout.num_buckets.saturating_sub(2);
-            for p in 1..=num_middles {
-                stored_buckets.push_back(Bucket {
-                    index: layout.first_index + p,
-                    state: State::NotLoaded { length: N },
-                });
-            }
-            // Back bucket (always loaded, separate from front if num_buckets >= 2).
-            if let Some(back_data) = back {
-                stored_buckets.push_back(Bucket {
-                    index: layout.first_index + layout.num_buckets - 1,
-                    state: State::Loaded { data: back_data },
-                });
-            }
-        }
-        let cursor = if layout.num_buckets == 0 {
-            None
-        } else {
-            Some(Cursor {
-                offset: 0,
-                position: layout.front_position as usize,
-            })
-        };
+        // The front bucket is present iff there is stored data. The middle buckets are
+        // read back lazily and the back bucket is materialized only when `num_buckets >= 2`.
+        let (stored_first_index, stored_num_buckets, stored_front, stored_back, cursor) =
+            match front {
+                Some(front) => {
+                    let back = if layout.num_buckets >= 2 {
+                        back.unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    };
+                    let cursor = Cursor {
+                        offset: 0,
+                        position: layout.front_position as usize,
+                    };
+                    (
+                        layout.first_index,
+                        layout.num_buckets,
+                        front,
+                        back,
+                        Some(cursor),
+                    )
+                }
+                None => (0, 0, Vec::new(), Vec::new(), None),
+            };
         Ok(Self {
             context,
-            stored_buckets,
-            stored_front_position: layout.front_position,
             new_back_values: VecDeque::new(),
+            stored_first_index,
+            stored_num_buckets,
+            stored_front,
+            stored_back,
+            stored_front_position: layout.front_position,
             cursor,
+            current_middle: None,
             delete_storage_first: false,
         })
     }
 
     fn rollback(&mut self) {
+        // The saved layout (`stored_front`, `stored_back`, `stored_first_index`,
+        // `stored_num_buckets`, `stored_front_position`) is never mutated outside of a
+        // save, so restoring the last-saved state only requires resetting the live cursor
+        // and dropping the pending back values.
         self.delete_storage_first = false;
-        self.cursor = if self.stored_buckets.is_empty() {
-            None
-        } else {
-            Some(Cursor {
-                offset: 0,
-                position: self.stored_front_position as usize,
-            })
-        };
+        self.cursor = (self.stored_num_buckets > 0).then_some(Cursor {
+            offset: 0,
+            position: self.stored_front_position as usize,
+        });
+        self.current_middle = None;
         self.new_back_values.clear();
     }
 
@@ -224,7 +209,7 @@ where
         if self.delete_storage_first {
             return true;
         }
-        if !self.stored_buckets.is_empty() {
+        if self.stored_num_buckets > 0 {
             let Some(cursor) = self.cursor else {
                 return true;
             };
@@ -250,7 +235,7 @@ where
                     &BucketLayout {
                         front_position: plan.cursor_position,
                         num_buckets: 1,
-                        first_index: self.stored_buckets[0].index,
+                        first_index: self.stored_first_index,
                     },
                 )?;
                 Ok(false)
@@ -260,10 +245,7 @@ where
                     batch.delete_key_prefix(self.context.base_key().bytes.clone());
                 }
                 let mut all_data = Vec::new();
-                if let Some(bucket) = self.stored_buckets.get(plan.remaining_start) {
-                    let State::Loaded { data } = &bucket.state else {
-                        unreachable!("front bucket is always loaded");
-                    };
+                if let Some(data) = self.current_front_data() {
                     all_data.extend(data[plan.cursor_position as usize..].iter().cloned());
                 }
                 all_data.extend(self.new_back_values.iter().cloned());
@@ -286,33 +268,29 @@ where
                 new_first_index,
                 remaining_count,
             } => {
-                // Delete consumed middle keys (offsets 1..remaining_start).
-                // Offset 0 was at KeyTag::Front (will be overwritten if front moved).
-                // The last offset is the back bucket (preserved since remaining_count >= 2).
-                for i in 1..plan.remaining_start {
-                    let key = self.get_middle_key(self.stored_buckets[i].index)?;
-                    batch.delete_key(key);
+                // Delete the keys of the consumed middle buckets (relative offsets
+                // 1..remaining_offset). Offset 0 was the old front (its KeyTag::Front is
+                // overwritten below if the front moved). The back is preserved since
+                // remaining_count >= 2.
+                for offset in 1..plan.remaining_offset {
+                    let index = self.stored_first_index
+                        + u32::try_from(offset).map_err(|_| ArithmeticError::Overflow)?;
+                    batch.delete_key(self.get_middle_key(index)?);
                 }
                 // Promote the new front bucket if the cursor crossed buckets.
-                if plan.remaining_start > 0 {
-                    let bucket = &self.stored_buckets[plan.remaining_start];
-                    let State::Loaded { data } = &bucket.state else {
-                        unreachable!("front bucket is always loaded");
-                    };
-                    batch.put_key_value(self.front_key(), data)?;
-                    batch.delete_key(self.get_middle_key(bucket.index)?);
+                if plan.remaining_offset > 0 {
+                    let data = self
+                        .current_front_data()
+                        .expect("Patch implies a live cursor within the stored buckets");
+                    batch.put_key_value(self.front_key(), &data.to_vec())?;
+                    batch.delete_key(self.get_middle_key(new_first_index)?);
                 }
 
                 let num_buckets = if self.new_back_values.is_empty() {
                     remaining_count
                 } else {
                     // Merge old back + new values, re-chunk into full-N middles + new back.
-                    let State::Loaded { data: back_data } =
-                        &self.stored_buckets.back().unwrap().state
-                    else {
-                        unreachable!("back bucket is always loaded");
-                    };
-                    let mut merged = back_data.clone();
+                    let mut merged = self.stored_back.clone();
                     merged.extend(self.new_back_values.iter().cloned());
                     let chunks = merged.chunks(N).collect::<Vec<_>>();
                     let num_new_chunks =
@@ -345,86 +323,86 @@ where
         self.delete_storage_first = false;
         match plan.case {
             SaveCase::Empty => {
-                self.stored_buckets.clear();
+                self.stored_first_index = 0;
+                self.stored_num_buckets = 0;
+                self.stored_front = Vec::new();
+                self.stored_back = Vec::new();
                 self.cursor = None;
+                self.current_middle = None;
                 self.stored_front_position = 0;
             }
             SaveCase::MetadataOnly => {
+                // The single front bucket survives unchanged; only the cursor advanced.
                 self.cursor = Some(Cursor {
                     offset: 0,
                     position: plan.cursor_position as usize,
                 });
+                self.current_middle = None;
                 self.stored_front_position = plan.cursor_position;
             }
             SaveCase::Rewrite => {
                 let mut all_data = Vec::new();
-                if let Some(bucket) = self.stored_buckets.get(plan.remaining_start) {
-                    let State::Loaded { data } = &bucket.state else {
-                        unreachable!("front bucket is always loaded");
-                    };
+                if let Some(data) = self.current_front_data() {
                     all_data.extend(data[plan.cursor_position as usize..].iter().cloned());
                 }
                 all_data.extend(std::mem::take(&mut self.new_back_values));
-                self.stored_buckets.clear();
-                // Mirror the `post_load` shape: keep only the front and back buckets
-                // loaded; middles are `NotLoaded` (they were just written and each holds
-                // exactly N). This avoids re-cloning the middle data that `pre_save`
-                // already serialized into the batch.
+                // Mirror the `post_load` shape: only the front and back are materialized;
+                // the middles were written by `pre_save` and are read back lazily.
                 let num_chunks = all_data.chunks(N).len();
-                for (i, chunk) in all_data.chunks(N).enumerate() {
-                    let state = if i == 0 || i == num_chunks - 1 {
-                        State::Loaded {
-                            data: chunk.to_vec(),
-                        }
-                    } else {
-                        State::NotLoaded { length: N }
-                    };
-                    let i = u32::try_from(i).expect("verified in pre_save");
-                    self.stored_buckets.push_back(Bucket { index: i, state });
-                }
-                self.cursor = (!self.stored_buckets.is_empty()).then_some(Cursor {
-                    offset: 0,
-                    position: 0,
-                });
+                self.stored_first_index = 0;
+                self.stored_num_buckets = u32::try_from(num_chunks).expect("verified in pre_save");
+                self.current_middle = None;
                 self.stored_front_position = 0;
-            }
-            SaveCase::Patch { .. } => {
-                for _ in 0..plan.remaining_start {
-                    self.stored_buckets.pop_front();
-                }
-                if !self.new_back_values.is_empty() {
-                    let back = self.stored_buckets.pop_back().unwrap();
-                    let State::Loaded { data: back_data } = back.state else {
-                        unreachable!("back bucket is always loaded");
+                if num_chunks == 0 {
+                    self.stored_front = Vec::new();
+                    self.stored_back = Vec::new();
+                    self.cursor = None;
+                } else {
+                    self.stored_back = if num_chunks >= 2 {
+                        all_data[(num_chunks - 1) * N..].to_vec()
+                    } else {
+                        Vec::new()
                     };
-                    let first_index = self.stored_buckets[0].index;
-                    let old_remaining_without_back =
-                        u32::try_from(self.stored_buckets.len()).expect("verified in pre_save");
-                    let mut merged = back_data;
-                    merged.extend(std::mem::take(&mut self.new_back_values));
-                    let new_start = first_index + old_remaining_without_back;
-                    // Only the last chunk becomes the new back (loaded); the chunks
-                    // before it are middles, left NotLoaded since they were just written
-                    // and each holds exactly N. The pre-existing front is untouched.
-                    let num_chunks = merged.chunks(N).len();
-                    for (i, chunk) in merged.chunks(N).enumerate() {
-                        let state = if i == num_chunks - 1 {
-                            State::Loaded {
-                                data: chunk.to_vec(),
-                            }
-                        } else {
-                            State::NotLoaded { length: N }
-                        };
-                        let i = u32::try_from(i).expect("verified in pre_save");
-                        self.stored_buckets.push_back(Bucket {
-                            index: new_start + i,
-                            state,
-                        });
-                    }
+                    all_data.truncate(N); // keep only the front chunk
+                    self.stored_front = all_data;
+                    self.cursor = Some(Cursor {
+                        offset: 0,
+                        position: 0,
+                    });
                 }
+            }
+            SaveCase::Patch {
+                new_first_index,
+                remaining_count,
+            } => {
+                let cursor = self.cursor.expect("Patch implies a live cursor");
+                // Promote the current front bucket to the new saved front. With >= 2
+                // buckets surviving the cursor is never on the back, so a moved front is
+                // always the materialized `current_middle`.
+                if plan.remaining_offset > 0 {
+                    self.stored_front = self
+                        .current_middle
+                        .take()
+                        .expect("the middle the cursor points into is loaded");
+                }
+                self.current_middle = None;
+                self.stored_first_index = new_first_index;
+                self.stored_num_buckets = if self.new_back_values.is_empty() {
+                    remaining_count
+                } else {
+                    // Merge old back + new values; the last chunk is the new back and the
+                    // earlier chunks are new middles (storage-only).
+                    let mut merged = std::mem::take(&mut self.stored_back);
+                    merged.extend(std::mem::take(&mut self.new_back_values));
+                    let num_new_chunks =
+                        u32::try_from(merged.chunks(N).len()).expect("verified in pre_save");
+                    let back_start = (num_new_chunks as usize - 1) * N;
+                    self.stored_back = merged.split_off(back_start);
+                    (remaining_count - 1) + num_new_chunks
+                };
                 self.cursor = Some(Cursor {
                     offset: 0,
-                    position: plan.cursor_position as usize,
+                    position: cursor.position,
                 });
                 self.stored_front_position = plan.cursor_position;
             }
@@ -432,9 +410,12 @@ where
     }
 
     fn clear(&mut self) {
+        // Leaves the saved layout in place (the `rollback` anchor); the next save sees
+        // `delete_storage_first` and wipes storage regardless.
         self.delete_storage_first = true;
         self.new_back_values.clear();
         self.cursor = None;
+        self.current_middle = None;
     }
 }
 
@@ -445,10 +426,14 @@ where
     fn clone_unchecked(&mut self) -> Result<Self, ViewError> {
         Ok(BucketQueueView {
             context: self.context.clone(),
-            stored_buckets: self.stored_buckets.clone(),
             new_back_values: self.new_back_values.clone(),
+            stored_first_index: self.stored_first_index,
+            stored_num_buckets: self.stored_num_buckets,
+            stored_front: self.stored_front.clone(),
+            stored_back: self.stored_back.clone(),
             stored_front_position: self.stored_front_position,
             cursor: self.cursor,
+            current_middle: self.current_middle.clone(),
             delete_storage_first: self.delete_storage_first,
         })
     }
@@ -479,10 +464,12 @@ enum SaveCase {
 #[derive(Debug)]
 struct SavePlan {
     case: SaveCase,
-    /// Offset within `stored_buckets` of the first surviving bucket.
-    remaining_start: usize,
+    /// Relative bucket offset of the first surviving bucket (`cursor.offset`, or
+    /// `stored_num_buckets` when everything is dropped).
+    remaining_offset: usize,
     /// Position of the cursor within the front bucket, validated as `u32` (the type
-    /// stored in `BucketLayout`). Cast to `usize` at the few sites that index a bucket.
+    /// stored in `BucketLayout`). Cast to `usize` at the few sites that index into a
+    /// bucket's data.
     cursor_position: u32,
     /// True if there is any existing storage to clear (for `Empty`/`Rewrite`).
     has_storage: bool,
@@ -509,37 +496,67 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
             .derive_tag_key(KeyTag::Middle as u8, &index)?)
     }
 
+    /// The data of the bucket the live cursor points into (the queue front within the
+    /// stored buckets), or `None` when the stored portion is exhausted.
+    fn current_front_data(&self) -> Option<&[T]> {
+        let cursor = self.cursor?;
+        let num_buckets = self.stored_num_buckets as usize;
+        Some(if cursor.offset == 0 {
+            &self.stored_front
+        } else if cursor.offset + 1 == num_buckets {
+            &self.stored_back
+        } else {
+            self.current_middle
+                .as_deref()
+                .expect("the middle bucket the cursor points into is loaded")
+        })
+    }
+
+    /// The number of elements in the stored bucket at relative `offset`. Middle buckets
+    /// always hold exactly `N` (invariant), so they need not be materialized.
+    fn bucket_len(&self, offset: usize) -> usize {
+        if offset == 0 {
+            self.stored_front.len()
+        } else if offset + 1 == self.stored_num_buckets as usize {
+            self.stored_back.len()
+        } else {
+            N
+        }
+    }
+
     /// Classifies the pending save based on the current view state.
     /// Called once by `pre_save` and once by `post_save`; since `&self` is
     /// unchanged between the two it returns the same plan both times.
     fn save_plan(&self) -> Result<SavePlan, ViewError> {
-        let remaining_start = match (self.delete_storage_first, self.cursor) {
-            (true, _) => self.stored_buckets.len(),
-            (false, Some(c)) => c.offset,
-            (false, None) => self.stored_buckets.len(),
+        let num_buckets = self.stored_num_buckets as usize;
+        let remaining_offset = if self.delete_storage_first {
+            num_buckets
+        } else {
+            self.cursor.map_or(num_buckets, |c| c.offset)
         };
-        let remaining_count = self.stored_buckets.len() - remaining_start;
+        let remaining_count = num_buckets - remaining_offset;
         let cursor_position = u32::try_from(self.cursor.map_or(0, |c| c.position))
             .map_err(|_| ArithmeticError::Overflow)?;
-        let has_storage = !self.stored_buckets.is_empty() || self.delete_storage_first;
+        let has_storage = self.stored_num_buckets > 0 || self.delete_storage_first;
         let new_back_empty = self.new_back_values.is_empty();
 
         let case = if remaining_count == 0 && new_back_empty {
             SaveCase::Empty
-        } else if remaining_count == 1 && remaining_start == 0 && new_back_empty {
+        } else if remaining_count == 1 && remaining_offset == 0 && new_back_empty {
             SaveCase::MetadataOnly
         } else if remaining_count <= 1 {
             SaveCase::Rewrite
         } else {
             SaveCase::Patch {
-                new_first_index: self.stored_buckets[remaining_start].index,
+                new_first_index: self.stored_first_index
+                    + u32::try_from(remaining_offset).map_err(|_| ArithmeticError::Overflow)?,
                 remaining_count: u32::try_from(remaining_count)
                     .map_err(|_| ArithmeticError::Overflow)?,
             }
         };
         Ok(SavePlan {
             case,
-            remaining_start,
+            remaining_offset,
             cursor_position,
             has_storage,
         })
@@ -585,19 +602,14 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
         let Some(cursor) = self.cursor else {
             return 0;
         };
-        let remaining = self.stored_buckets.len() - cursor.offset;
-        if remaining == 0 {
-            return 0;
-        }
-        // Front bucket: count valid elements after cursor position.
-        let front = &self.stored_buckets[cursor.offset];
-        let front_count = front.len() - cursor.position;
+        let remaining = self.stored_num_buckets as usize - cursor.offset;
+        // Current front bucket: count the valid elements after the cursor position.
+        let front_count = self.bucket_len(cursor.offset) - cursor.position;
         if remaining == 1 {
             return front_count;
         }
-        // Back bucket (always loaded, so len() is cheap).
-        let back_count = self.stored_buckets.back().unwrap().len();
-        // Middle buckets: all have exactly N elements (invariant).
+        // Back bucket plus the full middles between the cursor and the back.
+        let back_count = self.stored_back.len();
         let num_middles = remaining - 2;
         front_count + num_middles * N + back_count
     }
@@ -635,12 +647,11 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// ```
     pub fn front(&self) -> Option<&T> {
         match self.cursor {
-            Some(Cursor { offset, position }) => {
-                let bucket = &self.stored_buckets[offset];
-                let State::Loaded { data } = &bucket.state else {
-                    unreachable!("The front bucket should always be loaded");
-                };
-                Some(&data[position])
+            Some(cursor) => {
+                let data = self
+                    .current_front_data()
+                    .expect("cursor is Some, so the current front is available");
+                Some(&data[cursor.position])
             }
             None => self.new_back_values.front(),
         }
@@ -663,17 +674,20 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// ```
     pub fn front_mut(&mut self) -> Option<&mut T> {
         match self.cursor {
-            Some(Cursor { offset, position }) => {
-                let bucket = self
-                    .stored_buckets
-                    .get_mut(offset)
-                    .expect("cursor.offset must be a valid index into stored_buckets");
-                let State::Loaded { data } = &mut bucket.state else {
-                    unreachable!("The front bucket should always be loaded");
+            Some(cursor) => {
+                let num_buckets = self.stored_num_buckets as usize;
+                let data = if cursor.offset == 0 {
+                    &mut self.stored_front
+                } else if cursor.offset + 1 == num_buckets {
+                    &mut self.stored_back
+                } else {
+                    self.current_middle
+                        .as_mut()
+                        .expect("the middle bucket the cursor points into is loaded")
                 };
                 Some(
-                    data.get_mut(position)
-                        .expect("cursor.position must be a valid index within the front bucket"),
+                    data.get_mut(cursor.position)
+                        .expect("cursor.position must be a valid position within the front bucket"),
                 )
             }
             None => self.new_back_values.front_mut(),
@@ -694,42 +708,48 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
     /// # })
     /// ```
     pub async fn delete_front(&mut self) -> Result<(), ViewError> {
-        match self.cursor {
-            Some(cursor) => {
-                let mut offset = cursor.offset;
-                let mut position = cursor.position + 1;
-                if self.stored_buckets[offset].len() == position {
-                    offset += 1;
-                    position = 0;
-                }
-                if offset == self.stored_buckets.len() {
-                    self.cursor = None;
-                } else {
-                    // Ensure the bucket at the new cursor is loaded BEFORE advancing the
-                    // cursor: a failed load must leave the view's invariant intact (the
-                    // bucket at `cursor.offset` is always `Loaded`).
-                    let bucket = &self.stored_buckets[offset];
-                    if !bucket.is_loaded() {
-                        let key = self.get_middle_key(bucket.index)?;
-                        let data =
-                            self.context
-                                .store()
-                                .read_value(&key)
-                                .await?
-                                .ok_or_else(|| {
-                                    ViewError::MissingEntries(
-                                        "BucketQueueView::delete_front".into(),
-                                    )
-                                })?;
-                        self.stored_buckets[offset].state = State::Loaded { data };
-                    }
-                    self.cursor = Some(Cursor { offset, position });
-                }
+        let Some(cursor) = self.cursor else {
+            self.new_back_values.pop_front();
+            return Ok(());
+        };
+        let current_len = self
+            .current_front_data()
+            .expect("cursor points into the stored buckets")
+            .len();
+        let num_buckets = self.stored_num_buckets as usize;
+        let mut offset = cursor.offset;
+        let mut position = cursor.position + 1;
+        if position == current_len {
+            offset += 1;
+            position = 0;
+            if offset == num_buckets {
+                // The stored portion is now exhausted.
+                self.cursor = None;
+                self.current_middle = None;
+                return Ok(());
             }
-            None => {
-                self.new_back_values.pop_front();
+            // The cursor crossed into the bucket at `offset` (>= 1). Materialize it as the
+            // new front *before* moving the cursor, so a failed load leaves the view's
+            // invariant intact (the current front bucket is always materialized).
+            if offset + 1 == num_buckets {
+                // The back bucket is already materialized.
+                self.current_middle = None;
+            } else {
+                let index = self.stored_first_index
+                    + u32::try_from(offset).map_err(|_| ArithmeticError::Overflow)?;
+                let key = self.get_middle_key(index)?;
+                let data = self
+                    .context
+                    .store()
+                    .read_value(&key)
+                    .await?
+                    .ok_or_else(|| {
+                        ViewError::MissingEntries("BucketQueueView::delete_front".into())
+                    })?;
+                self.current_middle = Some(data);
             }
         }
+        self.cursor = Some(Cursor { offset, position });
         Ok(())
     }
 
@@ -790,14 +810,14 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         if self.cursor.is_none() {
             return Ok(None);
         }
-        let Some(bucket) = self.stored_buckets.back() else {
-            return Ok(None);
+        // The last stored element is the back bucket's last (or the front's, for a
+        // single stored bucket).
+        let last = if self.stored_num_buckets >= 2 {
+            self.stored_back.last()
+        } else {
+            self.stored_front.last()
         };
-        // Back bucket is always loaded (invariant).
-        let State::Loaded { data } = &bucket.state else {
-            unreachable!("back bucket should always be loaded");
-        };
-        Ok(data.last().cloned())
+        Ok(last.cloned())
     }
 
     async fn read_context(
@@ -811,41 +831,43 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
         let mut elements = Vec::<T>::new();
         let mut count_remain = count;
         if let Some(cursor) = cursor {
+            let num_buckets = self.stored_num_buckets as usize;
+            // First pass: gather the storage keys of the middle buckets we will read.
             let mut keys = Vec::new();
             let mut position = cursor.position;
-            for bucket in self.stored_buckets.range(cursor.offset..) {
-                let size = bucket.len() - position;
-                if !bucket.is_loaded() {
-                    let key = self.get_middle_key(bucket.index)?;
-                    keys.push(key);
-                };
-                if size >= count_remain {
+            let mut remain = count;
+            for offset in cursor.offset..num_buckets {
+                if offset != 0 && offset + 1 != num_buckets {
+                    let index = self.stored_first_index
+                        + u32::try_from(offset).map_err(|_| ArithmeticError::Overflow)?;
+                    keys.push(self.get_middle_key(index)?);
+                }
+                let size = self.bucket_len(offset) - position;
+                if size >= remain {
                     break;
                 }
-                count_remain -= size;
+                remain -= size;
                 position = 0;
             }
             let values = self.context.store().read_multi_values_bytes(&keys).await?;
+            // Second pass: assemble the elements, reading middles from `values`.
             let mut value_pos = 0;
-            count_remain = count;
             let mut position = cursor.position;
-            for bucket in self.stored_buckets.range(cursor.offset..) {
-                let size = bucket.len() - position;
-                let data = match &bucket.state {
-                    State::Loaded { data } => data,
-                    State::NotLoaded { .. } => {
-                        let value = match &values[value_pos] {
-                            Some(value) => value,
-                            None => {
-                                return Err(ViewError::MissingEntries(
-                                    "BucketQueueView::read_context".into(),
-                                ));
-                            }
-                        };
-                        value_pos += 1;
-                        &bcs::from_bytes::<Vec<T>>(value)?
-                    }
+            for offset in cursor.offset..num_buckets {
+                let read_buf;
+                let data: &[T] = if offset == 0 {
+                    &self.stored_front
+                } else if offset + 1 == num_buckets {
+                    &self.stored_back
+                } else {
+                    let value = values[value_pos].as_ref().ok_or_else(|| {
+                        ViewError::MissingEntries("BucketQueueView::read_context".into())
+                    })?;
+                    value_pos += 1;
+                    read_buf = bcs::from_bytes::<Vec<T>>(value)?;
+                    &read_buf
                 };
+                let size = data.len() - position;
                 elements.extend(data[position..].iter().take(count_remain).cloned());
                 if size >= count_remain {
                     return Ok(elements);
@@ -906,9 +928,10 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             let Some(cursor) = self.cursor else {
                 unreachable!("Cursor should be Some when stored_count > 0");
             };
+            let num_buckets = self.stored_num_buckets as usize;
             let mut position = cursor.position;
-            for (offset, bucket) in self.stored_buckets.iter().enumerate().skip(cursor.offset) {
-                let size = bucket.len() - position;
+            for offset in cursor.offset..num_buckets {
+                let size = self.bucket_len(offset) - position;
                 if increment < size {
                     return self
                         .read_context(
@@ -935,6 +958,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 self.new_back_values.push_back(elt);
             }
             self.cursor = None;
+            self.current_middle = None;
             self.delete_storage_first = true;
         }
         Ok(())
@@ -1043,11 +1067,10 @@ mod tests {
         store::WritableKeyValueStore as _,
     };
 
-    /// Regression test: a failed load while advancing the cursor in
-    /// `delete_front` must not leave the view in a state where the bucket at
-    /// `cursor.offset` is `NotLoaded`. Previously the cursor was advanced
-    /// before the load was attempted, so a subsequent `pre_save` would hit
-    /// `unreachable!("The front bucket is always loaded.")`.
+    /// Regression test: a failed load while advancing the cursor in `delete_front`
+    /// must not leave the view in a state where the current front bucket is not
+    /// materialized. The next bucket is loaded *before* the cursor advances, so a
+    /// failed load leaves the cursor (and `current_middle`) untouched.
     #[tokio::test]
     async fn delete_front_load_failure_preserves_invariant() -> Result<(), ViewError> {
         let context = MemoryContext::new_for_testing(());
@@ -1099,9 +1122,9 @@ mod tests {
         Ok(())
     }
 
-    /// Middle buckets must always contain exactly `N` elements after save —
-    /// this is the invariant that makes the new `BucketLayout` metadata O(1).
-    /// Verify the in-memory state directly after several save patterns.
+    /// Middle buckets must always contain exactly `N` elements after save — this is
+    /// the invariant that lets the layout track them by count alone. Read the middle
+    /// bucket keys back from storage and check each holds `N` elements.
     #[tokio::test]
     async fn middle_buckets_are_always_full() -> Result<(), ViewError> {
         const N: usize = 4;
@@ -1124,21 +1147,21 @@ mod tests {
         }
         save(&context, &mut view).await?;
 
-        // After all this, every middle bucket in storage must have exactly N
-        // elements. Reload and inspect the in-memory state.
-        let view = BucketQueueView::<_, u32, N>::load(context).await?;
-        let len = view.stored_buckets.len();
-        for (offset, bucket) in view.stored_buckets.iter().enumerate() {
-            let is_endpoint = offset == 0 || offset == len - 1;
-            if !is_endpoint {
-                let State::NotLoaded { length } = bucket.state else {
-                    panic!("middle bucket at offset {offset} should be NotLoaded");
-                };
-                assert_eq!(
-                    length, N,
-                    "middle at offset {offset} should hold N elements"
-                );
-            }
+        // After all this, every middle bucket in storage must hold exactly N elements.
+        let view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        let first_index = view.stored_first_index;
+        for offset in 1..view.stored_num_buckets.saturating_sub(1) {
+            let key = view.get_middle_key(first_index + offset)?;
+            let data = context
+                .store()
+                .read_value::<Vec<u32>>(&key)
+                .await?
+                .expect("middle bucket should be present in storage");
+            assert_eq!(
+                data.len(),
+                N,
+                "middle at offset {offset} should hold N elements"
+            );
         }
         Ok(())
     }
@@ -1272,8 +1295,8 @@ mod tests {
 
     /// `clear()` followed by `rollback()` must restore the last-saved state,
     /// including a non-zero saved front position. `rollback` is synchronous and
-    /// rebuilds the cursor purely from the in-memory `stored_buckets` and
-    /// `stored_front_position`, so `clear` must preserve both.
+    /// rebuilds the cursor purely from the in-memory saved layout, so `clear` must
+    /// preserve it.
     #[tokio::test]
     async fn rollback_after_clear_restores_front_position() -> Result<(), ViewError> {
         const N: usize = 5;
