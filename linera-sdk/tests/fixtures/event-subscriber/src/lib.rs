@@ -3,10 +3,10 @@
 
 use async_graphql::{Request, Response};
 use linera_sdk::{
+    formats::StableEnum,
     graphql::GraphQLMutationRoot,
     linera_base_types::{ApplicationId, ChainId, ContractAbi, ServiceAbi},
 };
-use serde::{Deserialize, Serialize};
 
 pub struct EventSubscriberAbi;
 
@@ -20,7 +20,7 @@ impl ServiceAbi for EventSubscriberAbi {
     type QueryResponse = Response;
 }
 
-#[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
+#[derive(Debug, StableEnum, GraphQLMutationRoot)]
 pub enum Operation {
     Subscribe {
         chain_id: ChainId,

@@ -1,8 +1,9 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_sdk::linera_base_types::{
-    Account, AccountOwner, Amount, ContractAbi, ModuleId, ServiceAbi,
+use linera_sdk::{
+    formats::StableEnum,
+    linera_base_types::{Account, AccountOwner, Amount, ContractAbi, ModuleId, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +19,7 @@ impl ServiceAbi for ContractTransferAbi {
     type QueryResponse = ();
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, StableEnum)]
 pub enum Operation {
     DirectTransfer {
         source: AccountOwner,

@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use async_graphql::{scalar, Request, Response, SimpleObject};
-use linera_sdk_derive::GraphQLMutationRootInCrate;
+use linera_sdk_derive::{GraphQLMutationRootInCrate, StableEnumInCrate};
 use serde::{Deserialize, Serialize};
 
 use crate::linera_base_types::{
@@ -27,7 +27,7 @@ impl ServiceAbi for ControllerAbi {
 /// Service are identified by the blob ID of the description.
 pub type ManagedServiceId = DataBlobHash;
 
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+#[derive(Debug, StableEnumInCrate, GraphQLMutationRootInCrate)]
 pub enum Operation {
     /// Worker commands
     ExecuteWorkerCommand {

@@ -6,6 +6,7 @@
 use async_graphql::{scalar, Request, Response};
 use linera_sdk::{
     abis::fungible::FungibleTokenAbi,
+    formats::StableEnum,
     graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, Amount, ApplicationId, ContractAbi, ServiceAbi},
 };
@@ -24,7 +25,7 @@ impl ServiceAbi for AmmAbi {
 }
 
 /// Operations that can be sent to the application.
-#[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
+#[derive(Debug, StableEnum, GraphQLMutationRoot)]
 pub enum Operation {
     // TODO(#969): Need to also implement Swap Bids here
     /// Swap operation
@@ -72,8 +73,6 @@ pub enum Operation {
     CloseChain,
 }
 
-scalar!(Operation);
-
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
     Swap {
@@ -108,7 +107,7 @@ scalar!(Parameters);
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use linera_sdk::{
-        formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats, TracerExt},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
@@ -130,7 +129,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<Operation>(&samples)?;
             let (response, _) = tracer.trace_type::<()>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;

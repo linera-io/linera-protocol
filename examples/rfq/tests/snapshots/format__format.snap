@@ -1,6 +1,5 @@
 ---
 source: rfq/tests/format.rs
-assertion_line: 13
 expression: "RfqApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -92,25 +91,12 @@ REGISTRY:
                 TYPENAME: RequestId
   Operation:
     ENUM:
-      0:
-        RequestQuote:
-          STRUCT:
-            - target:
-                TYPENAME: ChainId
-            - token_pair:
-                TYPENAME: TokenPair
-            - amount:
-                TYPENAME: Amount
-      1:
-        ProvideQuote:
+      158097266:
+        FinalizeDeal:
           STRUCT:
             - request_id:
                 TYPENAME: RequestId
-            - quote:
-                TYPENAME: Amount
-            - quoter_owner:
-                TYPENAME: AccountOwner
-      2:
+      172696644:
         AcceptQuote:
           STRUCT:
             - request_id:
@@ -119,12 +105,25 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - fee_budget:
                 TYPENAME: Amount
-      3:
-        FinalizeDeal:
+      201112244:
+        RequestQuote:
+          STRUCT:
+            - target:
+                TYPENAME: ChainId
+            - token_pair:
+                TYPENAME: TokenPair
+            - amount:
+                TYPENAME: Amount
+      218120201:
+        ProvideQuote:
           STRUCT:
             - request_id:
                 TYPENAME: RequestId
-      4:
+            - quote:
+                TYPENAME: Amount
+            - quoter_owner:
+                TYPENAME: AccountOwner
+      232493860:
         CancelRequest:
           STRUCT:
             - request_id:

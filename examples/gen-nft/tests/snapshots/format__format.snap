@@ -1,6 +1,5 @@
 ---
 source: gen-nft/tests/format.rs
-assertion_line: 13
 expression: "GenNftApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -70,13 +69,7 @@ REGISTRY:
           TYPENAME: AccountOwner
   Operation:
     ENUM:
-      0:
-        Mint:
-          STRUCT:
-            - minter:
-                TYPENAME: AccountOwner
-            - prompt: STR
-      1:
+      144297355:
         Transfer:
           STRUCT:
             - source_owner:
@@ -85,7 +78,13 @@ REGISTRY:
                 TYPENAME: TokenId
             - target_account:
                 TYPENAME: Account
-      2:
+      189683137:
+        Mint:
+          STRUCT:
+            - minter:
+                TYPENAME: AccountOwner
+            - prompt: STR
+      204322437:
         Claim:
           STRUCT:
             - source_account:

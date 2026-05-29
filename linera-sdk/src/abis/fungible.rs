@@ -11,11 +11,11 @@ use linera_base::{
     data_types::Amount,
     identifiers::{Account, AccountOwner},
 };
-use linera_sdk_derive::GraphQLMutationRootInCrate;
+use linera_sdk_derive::{GraphQLMutationRootInCrate, StableEnumInCrate};
 use serde::{Deserialize, Serialize};
 
 /// An operation
-#[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+#[derive(Debug, StableEnumInCrate, GraphQLMutationRootInCrate)]
 pub enum FungibleOperation {
     /// Requests an account balance.
     Balance {
@@ -80,7 +80,7 @@ impl ServiceAbi for FungibleTokenAbi {
 }
 
 /// A native fungible response
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, StableEnumInCrate, Default)]
 pub enum FungibleResponse {
     /// OK response
     #[default]

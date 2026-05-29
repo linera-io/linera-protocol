@@ -1,6 +1,5 @@
 ---
 source: non-fungible/tests/format.rs
-assertion_line: 13
 expression: "NonFungibleApplication::formats().unwrap()"
 ---
 REGISTRY:
@@ -77,15 +76,7 @@ REGISTRY:
           SEQ: U8
   Operation:
     ENUM:
-      0:
-        Mint:
-          STRUCT:
-            - minter:
-                TYPENAME: AccountOwner
-            - name: STR
-            - blob_hash:
-                TYPENAME: DataBlobHash
-      1:
+      144297355:
         Transfer:
           STRUCT:
             - source_owner:
@@ -94,7 +85,15 @@ REGISTRY:
                 TYPENAME: TokenId
             - target_account:
                 TYPENAME: Account
-      2:
+      189683137:
+        Mint:
+          STRUCT:
+            - minter:
+                TYPENAME: AccountOwner
+            - name: STR
+            - blob_hash:
+                TYPENAME: DataBlobHash
+      204322437:
         Claim:
           STRUCT:
             - source_account:

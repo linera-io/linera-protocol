@@ -3,8 +3,9 @@
 
 /*! ABI of the Requests For Quotes Example Application */
 
-use async_graphql::{scalar, InputObject, Request, Response, SimpleObject};
+use async_graphql::{InputObject, Request, Response, SimpleObject};
 use linera_sdk::{
+    formats::StableEnum,
     graphql::GraphQLMutationRoot,
     linera_base_types::{
         Account, AccountOwner, Amount, ApplicationId, ChainId, ContractAbi, ServiceAbi,
@@ -77,7 +78,7 @@ pub struct Tokens {
 }
 
 /// Operations that can be sent to the application.
-#[derive(Debug, Serialize, Deserialize, GraphQLMutationRoot)]
+#[derive(Debug, StableEnum, GraphQLMutationRoot)]
 pub enum Operation {
     RequestQuote {
         target: ChainId,
@@ -101,8 +102,6 @@ pub enum Operation {
         request_id: RequestId,
     },
 }
-
-scalar!(Operation);
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
@@ -165,7 +164,7 @@ impl Message {
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use linera_sdk::{
-        formats::{BcsApplication, Formats},
+        formats::{BcsApplication, Formats, TracerExt},
         linera_base_types::AccountOwner,
     };
     use serde_reflection::{Samples, Tracer, TracerConfig};
@@ -187,7 +186,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<Operation>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<Operation>(&samples)?;
             let (response, _) = tracer.trace_type::<()>(&samples)?;
             let (message, _) = tracer.trace_type::<Message>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;
