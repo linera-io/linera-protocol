@@ -167,6 +167,37 @@ where
             .observe(self.added_bundles.count() as f64);
     }
 
+    /// Reconciles this inbox with the producer's snapshot at checkpoint time.
+    ///
+    /// `next_cursor_to_remove` is chain-state-derived and takes the snapshot's
+    /// value unconditionally — a lagging validator's higher pre-restore advancement
+    /// is being rolled back along with the execution state. `restored_cursor` and
+    /// `next_cursor_to_add` only ratchet up: a lagging validator may already have
+    /// received bundles past the snapshot (or been bootstrapped from an even later
+    /// checkpoint), and forgetting those deliveries would either lose them or trip
+    /// the inbox-gap check on the next cross-chain update. Pre-existing
+    /// `added_bundles` entries strictly below the cutoff are dropped — their
+    /// effects are baked into the restored execution state — and the
+    /// anticipated-remove queue is cleared since it came from pre-restore blocks
+    /// the rollback has invalidated.
+    pub async fn restore_from_checkpoint(&mut self, cursor: Cursor) -> Result<(), ViewError> {
+        if *self.restored_cursor.get() < cursor {
+            self.restored_cursor.set(cursor);
+        }
+        if *self.next_cursor_to_add.get() < cursor {
+            self.next_cursor_to_add.set(cursor);
+        }
+        self.next_cursor_to_remove.set(cursor);
+        while let Some(front) = self.added_bundles.front().await? {
+            if front.cursor() >= cursor {
+                break;
+            }
+            self.added_bundles.delete_front();
+        }
+        self.removed_bundles.clear();
+        Ok(())
+    }
+
     /// Consumes a bundle from the inbox.
     ///
     /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
