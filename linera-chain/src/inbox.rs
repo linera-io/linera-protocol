@@ -170,20 +170,29 @@ where
     /// Reconciles this inbox with the producer's snapshot at checkpoint time.
     ///
     /// `next_cursor_to_remove` is chain-state-derived and takes the snapshot's
-    /// value unconditionally — a lagging validator's higher pre-restore advancement
-    /// is being rolled back along with the execution state. `restored_cursor` and
-    /// `next_cursor_to_add` only ratchet up: a lagging validator may already have
-    /// received bundles past the snapshot (or been bootstrapped from an even later
-    /// checkpoint), and forgetting those deliveries would either lose them or trip
-    /// the inbox-gap check on the next cross-chain update. Pre-existing
-    /// `added_bundles` entries strictly below the cutoff are dropped — their
-    /// effects are baked into the restored execution state — and the
-    /// anticipated-remove queue is cleared since it came from pre-restore blocks
-    /// the rollback has invalidated.
-    pub async fn restore_from_checkpoint(&mut self, cursor: Cursor) -> Result<(), ViewError> {
-        if *self.restored_cursor.get() < cursor {
-            self.restored_cursor.set(cursor);
-        }
+    /// value (a lagging validator's higher pre-restore advancement is being
+    /// rolled back along with the execution state). `next_cursor_to_add` only
+    /// ratchets up — a lagging validator may already have received bundles past
+    /// the snapshot, and forgetting those deliveries would either lose them or
+    /// trip the inbox-gap check on the next cross-chain update. Pre-existing
+    /// `added_bundles` entries strictly below the cutoff are dropped (their
+    /// effects are baked into the restored execution state) and the
+    /// anticipated-remove queue is cleared since it came from pre-restore
+    /// blocks the rollback has invalidated.
+    ///
+    /// Errors if `restored_cursor` already sits past `cursor`: that means a
+    /// later checkpoint has already bootstrapped this inbox, and the chain
+    /// worker's dispatch should never have routed an earlier one here.
+    pub async fn restore_from_checkpoint(&mut self, cursor: Cursor) -> Result<(), ChainError> {
+        ensure!(
+            *self.restored_cursor.get() <= cursor,
+            ChainError::InternalError(format!(
+                "cannot restore inbox at cursor {cursor:?}: already bootstrapped \
+                 from a later checkpoint at cursor {previous:?}",
+                previous = *self.restored_cursor.get(),
+            ))
+        );
+        self.restored_cursor.set(cursor);
         if *self.next_cursor_to_add.get() < cursor {
             self.next_cursor_to_add.set(cursor);
         }

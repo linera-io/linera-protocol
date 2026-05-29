@@ -394,9 +394,8 @@ async fn test_inbox_restore_from_checkpoint() {
         assert_eq!(view.removed_bundles.count(), 0);
     }
 
-    // The ratcheting fields are never lowered. Bootstrapping from an earlier
-    // checkpoint leaves the higher pre-restore values in place, while
-    // `next_cursor_to_remove` still takes the new snapshot value.
+    // Attempting to restore from an earlier checkpoint than one we've already
+    // bootstrapped from is a dispatch-level invariant violation.
     {
         let mut view = InboxStateView::new().await;
         let later = Cursor {
@@ -404,9 +403,9 @@ async fn test_inbox_restore_from_checkpoint() {
             index: 0,
         };
         view.restore_from_checkpoint(later).await.unwrap();
-        view.restore_from_checkpoint(cutoff).await.unwrap();
-        assert_eq!(*view.restored_cursor.get(), later);
-        assert_eq!(*view.next_cursor_to_add.get(), later);
-        assert_eq!(*view.next_cursor_to_remove.get(), cutoff);
+        assert_matches!(
+            view.restore_from_checkpoint(cutoff).await,
+            Err(ChainError::InternalError(_))
+        );
     }
 }
