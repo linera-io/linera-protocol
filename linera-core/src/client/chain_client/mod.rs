@@ -145,6 +145,16 @@ struct CircuitBreakerState {
     probe_interval: Duration,
 }
 
+/// A fingerprint of the chain manager's observable consensus state, used to detect
+/// whether a per-validator updater absorbed new info during a proposal attempt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ConsensusStateSnapshot {
+    next_block_height: BlockHeight,
+    current_round: Round,
+    lock_round: Option<Round>,
+    timeout_round: Option<Round>,
+}
+
 #[cfg(with_testing)]
 impl Options {
     pub fn test_default() -> Self {
@@ -552,9 +562,7 @@ impl<Env: Environment> ChainClient<Env> {
     /// compares against the post-call state. A change means a per-validator updater
     /// absorbed something we didn't have. The local node verifies signatures on
     /// anything it stores, so a single dishonest validator can't fake this.
-    async fn consensus_state_snapshot(
-        &self,
-    ) -> Result<(BlockHeight, Round, Option<Round>, Option<Round>), Error> {
+    async fn consensus_state_snapshot(&self) -> Result<ConsensusStateSnapshot, Error> {
         let info = self.chain_info_with_manager_values().await?;
         let lock_round = info
             .manager
@@ -562,12 +570,12 @@ impl<Env: Environment> ChainClient<Env> {
             .as_deref()
             .map(LockingBlock::round);
         let timeout_round = info.manager.timeout.as_deref().map(|cert| cert.round);
-        Ok((
-            info.next_block_height,
-            info.manager.current_round,
+        Ok(ConsensusStateSnapshot {
+            next_block_height: info.next_block_height,
+            current_round: info.manager.current_round,
             lock_round,
             timeout_round,
-        ))
+        })
     }
 
     /// Returns the chain's description. Fetches it from the validators if necessary.
@@ -2001,13 +2009,20 @@ impl<Env: Environment> ChainClient<Env> {
         proposal_guard: &mut Option<PendingProposal>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, Error> {
         loop {
-            let mut snapshot = self.consensus_state_snapshot().await?;
+            // `process_pending_block_inner` records the baseline snapshot itself, after
+            // the initial timeout request, so that absorbing a timeout certificate isn't
+            // counted as new info. It stays `None` only if the call fails before that
+            // point, in which case there is no baseline to retry against.
+            let mut snapshot = None;
             let err = match self
                 .process_pending_block_inner(proposal_guard, &mut snapshot)
                 .await
             {
                 Ok(outcome) => return Ok(outcome),
                 Err(err) => err,
+            };
+            let Some(snapshot) = snapshot else {
+                return Err(err);
             };
             let Ok(current) = self.consensus_state_snapshot().await else {
                 return Err(err);
@@ -2028,7 +2043,7 @@ impl<Env: Environment> ChainClient<Env> {
     async fn process_pending_block_inner(
         &self,
         proposal_guard: &mut Option<PendingProposal>,
-        snapshot: &mut (BlockHeight, Round, Option<Round>, Option<Round>),
+        snapshot: &mut Option<ConsensusStateSnapshot>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, Error> {
         let process_start = linera_base::time::Instant::now();
         tracing::debug!("process_pending_block_without_prepare started");
@@ -2037,7 +2052,7 @@ impl<Env: Environment> ChainClient<Env> {
         // validators), bake the resulting state into the snapshot. The rest of this
         // iteration will propose in the round the timeout produced, so a state diff
         // from just that absorption isn't a retry signal.
-        *snapshot = self.consensus_state_snapshot().await?;
+        *snapshot = Some(self.consensus_state_snapshot().await?);
 
         // Clear stale pending proposals whose height has already been committed.
         if let Some(pending) = &*proposal_guard {
@@ -2200,7 +2215,7 @@ impl<Env: Environment> ChainClient<Env> {
         // `proposed`/`signed_proposal`, and thereby bump `current_round`. None of that
         // is "new info from a validator", so fold it into the snapshot before the
         // network calls below.
-        *snapshot = self.consensus_state_snapshot().await?;
+        *snapshot = Some(self.consensus_state_snapshot().await?);
         let committee = self.local_committee().await?;
         let block = Block::new(proposed_block, outcome);
         // Send the query to validators.

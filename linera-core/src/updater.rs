@@ -615,6 +615,7 @@ where
                     // fool us), then surface the error. If our local state actually
                     // advanced, `execute_operations` will rebuild and re-propose; if
                     // not, the error propagates as usual.
+                    self.warn_if_unexpected(&error);
                     tracing::debug!(
                         remote_node = self.remote_node.address(),
                         %chain_id,
