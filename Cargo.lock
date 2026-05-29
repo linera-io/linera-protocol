@@ -6228,6 +6228,7 @@ version = "0.16.0"
 dependencies = [
  "console_error_panic_hook",
  "futures",
+ "hex",
  "js-sys",
  "linera-base",
  "linera-client",
