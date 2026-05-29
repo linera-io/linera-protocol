@@ -107,6 +107,12 @@ jobs:
         run: cargo build --locked --release --target wasm32-unknown-unknown -p wrapped-fungible
         working-directory: examples
 
+      - name: Run evm-bridge contract integration tests
+        working-directory: linera-bridge/contracts/evm-bridge
+        env:
+          RUSTFLAGS: ""
+        run: cargo test --locked
+
       - name: Build linera-bridge binary for local relay tests
         run: cargo build --locked -p linera-bridge --features linera-bridge/relay
 
@@ -145,3 +151,9 @@ jobs:
         env:
           RUSTFLAGS: ""
         run: cargo test --locked -p linera-bridge --test anvil_deposit_proof -- --ignored --nocapture
+
+      - name: Run evm-bridge contract integration tests (anvil)
+        working-directory: linera-bridge/contracts/evm-bridge
+        env:
+          RUSTFLAGS: ""
+        run: cargo test --locked -- --ignored --nocapture
