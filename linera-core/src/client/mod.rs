@@ -996,7 +996,10 @@ impl<Env: Environment> Client<Env> {
 
     /// Downloads each missing pre-checkpoint sender block from `nodes` and feeds it
     /// through the local worker. The worker's trust-mark accept path verifies the
-    /// cert against its own epoch's committee and writes it to storage.
+    /// cert against its own epoch's committee and writes it to storage. Routing
+    /// through `handle_certificate_with_retry` ensures the sender block's own
+    /// blob/event dependencies (e.g. a `ChainDescription` blob or an admin-chain
+    /// epoch event for a revoked epoch) get resolved before the cert is accepted.
     async fn download_pre_checkpoint_blocks(
         &self,
         nodes: &[RemoteNode<Env::ValidatorNode>],
@@ -1007,7 +1010,12 @@ impl<Env: Environment> Client<Env> {
             for node in nodes {
                 match node.node.download_certificate(*hash).await {
                     Ok(certificate) => {
-                        self.handle_certificate(certificate).await?;
+                        Box::pin(self.handle_certificate_with_retry(
+                            &certificate,
+                            nodes,
+                            ProcessConfirmedBlockMode::Auto,
+                        ))
+                        .await?;
                         last_error = None;
                         break;
                     }
