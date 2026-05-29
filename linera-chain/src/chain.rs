@@ -1259,6 +1259,17 @@ where
     /// certified checkpoint blob, so without this a bootstrapped node would
     /// silently stop pushing pending messages forward.
     pub async fn restore_outboxes_from_unfinalized(&mut self) -> Result<(), ChainError> {
+        // A lagging validator hit by a checkpoint push may already have outbox
+        // queues from blocks it processed before the gap. Clear them so the
+        // rebuild from `unfinalized_message_blocks` doesn't append duplicate
+        // heights onto stale queues (the counters/nonempty set below `set`
+        // wholesale, but the queues are appended to per recipient).
+        let prior_recipients = self.outboxes.indices().await?;
+        for recipient in prior_recipients {
+            let mut outbox = self.outboxes.try_load_entry_mut(&recipient).await?;
+            outbox.queue.clear();
+            outbox.next_height_to_schedule.set(BlockHeight::ZERO);
+        }
         let mut new_counters = BTreeMap::<BlockHeight, u32>::new();
         let mut new_nonempty = BTreeSet::new();
         let entries = self
