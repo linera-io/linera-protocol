@@ -51,10 +51,10 @@ sol! {
 const NUM_BURNS: usize = 8;
 const BURN_AMOUNT_TOKENS: u128 = 1;
 /// Per-block gas ceiling sized to live between `processBurns(cert, tx, [single])`
-/// (which is dominated by cert verification, ~2–2.5M gas) and `addBlock(cert)`
-/// for `NUM_BURNS` burns (~3.3M gas observed in `burns_per_evm_tx`). The
-/// relayer must therefore route through chunked `processBurns` per tx.
-const ANVIL_BLOCK_GAS_LIMIT: u64 = 3_000_000;
+/// (dominated by cert verification, ~3.0M gas) and `addBlock(cert)` for
+/// `NUM_BURNS` burns (~3.4M gas). The relayer must therefore route through
+/// chunked `processBurns` per tx.
+const ANVIL_BLOCK_GAS_LIMIT: u64 = 3_200_000;
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary.
