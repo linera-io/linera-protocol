@@ -138,11 +138,11 @@ impl<P: Provider> EvmClient<P> {
         Ok(())
     }
 
-    /// Dry-runs `addBlock(cert)` against the EVM to estimate the gas it
-    /// would consume. `Ok(g)` means the call would fit under the node's
-    /// current block gas limit (the value is the estimate); a gas-exceeded
-    /// RPC error indicates the call would not fit. Other RPC errors bubble
-    /// up. Classification is done by `relay::settlement::estimate_fits`.
+    /// Dry-runs `addBlock(cert)` against the EVM. `Ok(_)` means the call
+    /// fits under the node's current block gas limit; any error covers
+    /// both a real contract revert and the over-block-gas-limit case
+    /// (some nodes return identical empty-data reverts for both). The
+    /// caller treats any error as "route to chunked `processBurns`".
     pub async fn estimate_add_block_gas(
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,

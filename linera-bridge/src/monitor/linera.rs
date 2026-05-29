@@ -16,7 +16,6 @@ use crate::relay::{
     self,
     evm::EvmClient,
     linera::{find_burn_events, LineraClient},
-    settlement::estimate_fits,
 };
 
 /// Background task that scans Linera block history for BurnEvent stream
@@ -103,37 +102,20 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 
             persist_cert_bytes(monitor, height, &event_indices, &cert).await;
 
-            match estimate_fits(evm_client.estimate_add_block_gas(&cert).await) {
-                Ok(true) => {
-                    submit_addblock(
-                        monitor,
-                        evm_client,
-                        &cert,
-                        height,
-                        &event_indices,
-                        max_retries,
-                    )
-                    .await;
-                    relay::update_balance_metrics(evm_client, linera_client).await;
-                }
-                Ok(false) => {
-                    submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
-                    relay::update_balance_metrics(evm_client, linera_client).await;
-                }
-                Err(error) => {
-                    // Bumping the retry counter is critical: an `eth_estimateGas`
-                    // revert is typically deterministic (the cert is invalid for
-                    // the configured bridge), and without this the burn would be
-                    // re-polled every scan interval forever. After `max_retries`
-                    // the burns at this height transition to `failed` and stop
-                    // being yielded by `pending_burns_by_height_and_tx`.
-                    tracing::warn!(?height, ?error, "estimate_add_block_gas failed");
-                    let mut state = monitor.write().await;
-                    for ei in &event_indices {
-                        state.mark_burn_retried(height, *ei, max_retries).await;
-                    }
-                }
+            if evm_client.estimate_add_block_gas(&cert).await.is_ok() {
+                submit_addblock(
+                    monitor,
+                    evm_client,
+                    &cert,
+                    height,
+                    &event_indices,
+                    max_retries,
+                )
+                .await;
+            } else {
+                submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
             }
+            relay::update_balance_metrics(evm_client, linera_client).await;
         }
     }
 }
@@ -214,10 +196,10 @@ async fn split_to_fit<P: Provider>(
     let mut chunks: Vec<Vec<u32>> = Vec::new();
     let mut oversized: Vec<u32> = Vec::new();
     while let Some(slice) = stack.pop() {
-        let est = evm_client
+        let fits = evm_client
             .estimate_process_burns_gas(cert, tx_index, &slice)
-            .await;
-        let fits = estimate_fits(est).unwrap_or(false);
+            .await
+            .is_ok();
         if fits {
             chunks.push(slice);
             continue;
