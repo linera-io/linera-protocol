@@ -16,7 +16,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
-    crypto::{BcsHashable, CryptoHash},
     data_types::{Round, TimeDelta},
     doc_scalar,
     identifiers::AccountOwner,
@@ -217,78 +216,7 @@ impl ChainOwnership {
     pub fn is_super_owner_no_regular_owners(&self, owner: &AccountOwner) -> bool {
         self.owners.is_empty() && self.super_owners.contains(owner)
     }
-
-    /// Returns whether `owner` has the lowest `hash(owner, round)` among the eligible
-    /// multi-leader proposers, and should therefore propose immediately rather than wait
-    /// out a jitter delay. Returns `false` for `open_multi_leader_rounds`, where the set
-    /// of proposers is unbounded.
-    ///
-    /// This is a gentle-clients convention; it is not enforced by the protocol.
-    fn is_preferred_multi_leader_proposer(&self, owner: &AccountOwner, round_index: u32) -> bool {
-        if self.open_multi_leader_rounds || !self.can_propose_in_multi_leader_round(owner) {
-            return false;
-        }
-        let our_priority = multi_leader_priority(owner, round_index);
-        self.all_owners().all(|other| {
-            other == owner || multi_leader_priority(other, round_index) >= our_priority
-        })
-    }
-
-    /// Returns the deterministic delay this owner should wait before proposing in `round`,
-    /// to spread out concurrent proposals from honest clients. The preferred owner returns
-    /// `TimeDelta::ZERO`; others return `hash(owner, round) mod round_duration`. Returns
-    /// `None` outside of multi-leader rounds, in the first multi-leader round (where
-    /// honest clients all attempt to propose immediately), and `Some(ZERO)` if the round
-    /// has no configured timeout.
-    ///
-    /// The duration used to bound the jitter is taken from the single-leader round with
-    /// the same index, so the jitter remains active even for multi-leader rounds whose
-    /// own timeout is not configured.
-    pub fn multi_leader_proposal_delay(
-        &self,
-        owner: &AccountOwner,
-        round: Round,
-    ) -> Option<TimeDelta> {
-        let Round::MultiLeader(round_index) = round else {
-            return None;
-        };
-        if round_index == 0 {
-            return None;
-        }
-        let round_duration = self
-            .round_timeout(Round::SingleLeader(round_index))
-            .unwrap_or(TimeDelta::ZERO);
-        if round_duration == TimeDelta::ZERO
-            || self.is_preferred_multi_leader_proposer(owner, round_index)
-        {
-            return Some(TimeDelta::ZERO);
-        }
-        let priority = multi_leader_priority(owner, round_index);
-        let prefix = <[u8; 8]>::try_from(&priority.as_bytes().as_slice()[..8])
-            .expect("hash is at least 8 bytes long");
-        let hash_u64 = u64::from_le_bytes(prefix);
-        Some(TimeDelta::from_micros(
-            hash_u64 % round_duration.as_micros(),
-        ))
-    }
 }
-
-/// Returns the deterministic priority of `owner` in the multi-leader round with the
-/// given index. The owner with the lowest priority is preferred to propose first.
-fn multi_leader_priority(owner: &AccountOwner, round_index: u32) -> CryptoHash {
-    CryptoHash::new(&MultiLeaderPriorityInput {
-        round: round_index,
-        owner: *owner,
-    })
-}
-
-#[derive(Serialize, Deserialize)]
-struct MultiLeaderPriorityInput {
-    round: u32,
-    owner: AccountOwner,
-}
-
-impl BcsHashable<'_> for MultiLeaderPriorityInput {}
 
 /// Errors that can happen when attempting to close a chain.
 #[derive(Clone, Copy, Debug, Error, WitStore, WitType)]
@@ -369,64 +297,6 @@ mod tests {
             ownership.round_timeout(Round::SingleLeader(8)),
             Some(TimeDelta::from_secs(18))
         );
-    }
-
-    #[test]
-    fn test_multi_leader_proposal_delay() {
-        let owner_a = AccountOwner::from(Ed25519SecretKey::generate().public());
-        let owner_b = AccountOwner::from(Ed25519SecretKey::generate().public());
-        let owner_c = AccountOwner::from(Ed25519SecretKey::generate().public());
-        let mut ownership = ChainOwnership::multiple(
-            [(owner_a, 100), (owner_b, 100), (owner_c, 100)],
-            10,
-            TimeoutConfig {
-                fast_round_duration: None,
-                base_timeout: TimeDelta::from_secs(10),
-                timeout_increment: TimeDelta::ZERO,
-                fallback_duration: TimeDelta::MAX,
-            },
-        );
-
-        // No jitter in MultiLeader(0): all clients race; lowest-hash recovery kicks in
-        // only from MultiLeader(1) onwards.
-        for owner in [owner_a, owner_b, owner_c] {
-            assert_eq!(
-                ownership.multi_leader_proposal_delay(&owner, Round::MultiLeader(0)),
-                None
-            );
-        }
-
-        // Outside multi-leader rounds, no delay is computed.
-        assert_eq!(
-            ownership.multi_leader_proposal_delay(&owner_a, Round::SingleLeader(1)),
-            None
-        );
-
-        // In MultiLeader(1) exactly one owner is preferred (delay = 0); the others
-        // get a deterministic, bounded delay.
-        let delays = [owner_a, owner_b, owner_c].map(|owner| {
-            ownership
-                .multi_leader_proposal_delay(&owner, Round::MultiLeader(1))
-                .expect("delay should be defined in a multi-leader round")
-        });
-        let zero_count = delays.iter().filter(|d| **d == TimeDelta::ZERO).count();
-        assert_eq!(
-            zero_count, 1,
-            "exactly one owner should be the preferred proposer"
-        );
-        for delay in delays {
-            assert!(delay < TimeDelta::from_secs(10));
-        }
-
-        // Open multi-leader rounds have no fixed proposer set; nobody is preferred,
-        // so every owner waits its own deterministic jitter.
-        ownership.open_multi_leader_rounds = true;
-        for owner in [owner_a, owner_b, owner_c] {
-            let delay = ownership
-                .multi_leader_proposal_delay(&owner, Round::MultiLeader(1))
-                .expect("delay should be defined in a multi-leader round");
-            assert!(delay > TimeDelta::ZERO && delay < TimeDelta::from_secs(10));
-        }
     }
 }
 
