@@ -61,20 +61,9 @@ pub struct InitializeOptions {
     pub log: String,
     /// Whether to enable performance reporting through the Performance API.
     pub profiling: bool,
-    /// Disable the multi-leader jitter delay applied by clients before re-proposing
-    /// in multi-leader rounds with index `>= 1`. Settable via the
-    /// `LINERA_DISABLE_MULTI_LEADER_JITTER` URL search param for debugging.
-    pub disable_multi_leader_jitter: bool,
 }
 
 static INITIALIZED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
-static DISABLE_MULTI_LEADER_JITTER: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-
-/// Returns whether the multi-leader jitter delay should be disabled for all chain
-/// clients in this session, as configured by [`initialize`]. Defaults to `false`.
-pub(crate) fn multi_leader_jitter_disabled() -> bool {
-    DISABLE_MULTI_LEADER_JITTER.get().copied().unwrap_or(false)
-}
 
 #[wasm_bindgen]
 pub fn initialize(options: Option<InitializeOptions>) {
@@ -88,9 +77,6 @@ pub fn initialize(options: Option<InitializeOptions>) {
     }
 
     let options = options.unwrap_or_default();
-    DISABLE_MULTI_LEADER_JITTER
-        .set(options.disable_multi_leader_jitter)
-        .ok();
     // If no log filter is provided, disable the user application log by default, to avoid
     // overwhelming the console with logs from the client library itself.
     let log_filter = if options.log.is_empty() {

@@ -16,16 +16,13 @@ function isBrokenSafari(): boolean {
 
 export async function initialize(options?: wasm.InitializeOptions) {
   if (window.location) {
-    // Allow overriding the application's log filters using the `LINERA_LOG`,
-    // `LINERA_PROFILING`, and `LINERA_DISABLE_MULTI_LEADER_JITTER` search params,
-    // for debugging.
+    // Allow overriding the application's log filters using the `LINERA_LOG` and
+    // `LINERA_PROFILING` search params, for debugging.
     const params = new URL(window.location.href).searchParams;
     const log = params.get('LINERA_LOG');
 
     if (!options) options = {};
     if (params.get('LINERA_PROFILING')) options.profiling = true;
-    if (params.get('LINERA_DISABLE_MULTI_LEADER_JITTER'))
-      options.disableMultiLeaderJitter = true;
     if (log) options.log = log;
   }
 
