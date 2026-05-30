@@ -75,7 +75,7 @@ use custom_debug_derive::Debug;
 use futures::future::Either;
 use linera_base::{
     crypto::{AccountPublicKey, CryptoError, ValidatorSecretKey},
-    data_types::{Blob, BlockHeight, Epoch, NonCanonicalBTreeMap, Round, Timestamp},
+    data_types::{Blob, BlockHeight, Epoch, Round, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId},
     ownership::ChainOwnership,
@@ -202,7 +202,7 @@ where
     #[cfg_attr(with_graphql, graphql(skip))]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
-    pub fallback_owners: RegisterView<C, NonCanonicalBTreeMap<AccountOwner, u64>>,
+    pub fallback_owners: RegisterView<C, BTreeMap<AccountOwner, u64>>,
 }
 
 #[cfg(with_graphql)]
@@ -239,7 +239,7 @@ where
 
         let fallback_owners = fallback_owners
             .map(|(pub_key, weight)| (AccountOwner::from(pub_key), weight))
-            .collect::<NonCanonicalBTreeMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
         let fallback_distribution = calculate_distribution(fallback_owners.iter());
 
         let current_round = ownership.first_round();
