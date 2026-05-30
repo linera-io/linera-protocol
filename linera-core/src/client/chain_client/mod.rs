@@ -21,7 +21,7 @@ use linera_base::{
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -124,10 +124,6 @@ pub struct Options {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
-    /// Whether to apply the multi-leader jitter delay before proposing in a multi-leader
-    /// round with index `>= 1`, to spread out concurrent proposals across honest clients.
-    /// The owner with the lowest `hash(owner, round)` still proposes immediately.
-    pub multi_leader_jitter: bool,
     /// Initial probe interval for the notification circuit breaker. When a validator's
     /// notification stream exhausts retries, the circuit breaker waits this long before
     /// probing again. Doubles on each failed probe.
@@ -172,7 +168,6 @@ impl Options {
             max_concurrent_batch_downloads: DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
-            multi_leader_jitter: false,
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
             max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
@@ -1428,7 +1423,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
         {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(self.classify_committed(certificate, &operations));
+                return Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ClientOutcome::WaitForTimeout(timeout))
@@ -1442,9 +1437,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect pending messages and epoch changes after acquiring the lock to avoid
         // race conditions where messages valid for one block height are proposed at a
         // different height.
-        let transactions = self
-            .prepend_epochs_messages_and_events(operations.clone())
-            .await?;
+        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
 
         if transactions.is_empty() {
             return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
@@ -1452,15 +1445,19 @@ impl<Env: Environment> ChainClient<Env> {
             )));
         }
 
-        self.new_pending_block(transactions, blobs, &mut proposal_guard)
+        let block = self
+            .new_pending_block(transactions, blobs, &mut proposal_guard)
             .await?;
 
         match self
             .process_pending_block_without_prepare(&mut proposal_guard)
             .await?
         {
+            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
+                Ok(ClientOutcome::Committed(certificate))
+            }
             ClientOutcome::Committed(Some(certificate)) => {
-                Ok(self.classify_committed(certificate, &operations))
+                Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             // Unreachable: We just set the pending proposal in the guard.
             ClientOutcome::Committed(None) => {
@@ -1468,47 +1465,6 @@ impl<Env: Environment> ChainClient<Env> {
             }
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
             ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
-        }
-    }
-
-    /// Returns `Committed` if the committed block reflects our request — same
-    /// authenticated signer, and our `operations`. All other transactions must be ones that
-    /// are added automatically, to process messages, streams or new epochs.
-    fn classify_committed(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-        operations: &[Operation],
-    ) -> ClientOutcome<ConfirmedBlockCertificate> {
-        let block = certificate.block();
-        if self.preferred_owner.is_none()
-            || block.header.authenticated_signer != self.preferred_owner
-        {
-            return ClientOutcome::Conflict(Box::new(certificate));
-        }
-        let mut operations_iter = operations.iter().peekable();
-        for tx in &block.body.transactions {
-            let is_expected = match tx {
-                Transaction::ReceiveMessages(_) => true,
-                Transaction::ExecuteOperation(op) if Some(&op) == operations_iter.peek() => {
-                    operations_iter.next();
-                    true
-                }
-                Transaction::ExecuteOperation(Operation::System(op)) => matches!(
-                    **op,
-                    SystemOperation::ProcessNewEpoch(_)
-                        | SystemOperation::ProcessRemovedEpoch(_)
-                        | SystemOperation::UpdateStreams(_)
-                ),
-                Transaction::ExecuteOperation(Operation::User { .. }) => false,
-            };
-            if !is_expected {
-                return ClientOutcome::Conflict(Box::new(certificate));
-            }
-        }
-        if operations_iter.next().is_some() {
-            ClientOutcome::Conflict(Box::new(certificate))
-        } else {
-            ClientOutcome::Committed(certificate)
         }
     }
 
@@ -2285,13 +2241,6 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
         if manager.should_propose(identity, round, seed, &current_committee) {
-            if let Some(wait_until) = self.multi_leader_jitter_target(info, identity, round) {
-                return Ok(Either::Right(RoundTimeout {
-                    timestamp: wait_until,
-                    current_round: round,
-                    next_block_height: info.next_block_height,
-                }));
-            }
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
@@ -2300,41 +2249,6 @@ impl<Env: Environment> ChainClient<Env> {
         Err(Error::BlockProposalError(
             "Not a leader in the current round",
         ))
-    }
-
-    /// Returns the timestamp at which `owner` should propose in `round`, to spread out
-    /// concurrent proposals from honest clients in a multi-leader round. Returns `None` if
-    /// the owner should propose immediately (either because the round is not a multi-leader
-    /// round, the owner is the preferred proposer, or the jitter target is already in the past).
-    ///
-    /// The delay is deterministic per `(owner, round)` and is anchored at the round's start
-    /// time when known, so that retrying after an interrupting notification does not extend
-    /// the wait further.
-    fn multi_leader_jitter_target(
-        &self,
-        info: &ChainInfo,
-        owner: &AccountOwner,
-        round: Round,
-    ) -> Option<Timestamp> {
-        if !self.options.multi_leader_jitter {
-            return None;
-        }
-        let ownership = &info.manager.ownership;
-        let delay = ownership.multi_leader_proposal_delay(owner, round)?;
-        if delay == TimeDelta::ZERO {
-            return None;
-        }
-        let now = self.storage_client().clock().current_time();
-        let round_start = if round == info.manager.current_round {
-            match (info.manager.round_timeout, ownership.round_timeout(round)) {
-                (Some(end), Some(duration)) => end.saturating_sub(duration),
-                _ => now,
-            }
-        } else {
-            now
-        };
-        let propose_at = round_start.saturating_add(delay);
-        (propose_at > now).then_some(propose_at)
     }
 
     /// Clears the information on any operation that previously failed.
