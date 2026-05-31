@@ -14,10 +14,16 @@ use linera_base::{
     identifiers::AccountOwner,
 };
 use linera_bridge_e2e::{
-    compose_file_path, create_extra_wallet, dump_compose_logs, exec_ok, extra_wallet_env,
-    light_client_address, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
+    compose_file_path, create_extra_wallet, deploy_fungible_bridge, deploy_linera_token,
+    dump_compose_logs, exec_ok, extra_wallet_env, light_client_address,
+    publish_and_create_wrapped_fungible, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
+use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
+use linera_core::environment::wallet::Memory;
+use linera_execution::WasmRuntime;
 use linera_faucet_client::Faucet;
+use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 sol! {
     #[sol(rpc)]
@@ -56,11 +62,80 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
 
     // Claim a chain for the relay so it can listen for admin chain notifications.
     let faucet = Faucet::new("http://localhost:8080".to_string());
+    let genesis_config = faucet.genesis_config().await?;
+    let relay_genesis_config = genesis_config.clone();
+
+    let config = MemoryStoreConfig {
+        max_stream_queries: 10,
+        kill_on_drop: true,
+    };
+    let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(
+        &config,
+        "committee-rotation-e2e-test",
+        Some(WasmRuntime::default()),
+        StorageCacheConfig {
+            blob_cache_size: 1000,
+            confirmed_block_cache_size: 1000,
+            certificate_cache_size: 1000,
+            certificate_raw_cache_size: 1000,
+            event_cache_size: 1000,
+            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+        },
+    )
+    .await?;
+    genesis_config.initialize_storage(&mut storage).await?;
+
     let mut signer = InMemorySigner::new(None);
+    let mut ctx = ClientContext::new(
+        storage,
+        Memory::default(),
+        signer.clone(),
+        &Default::default(),
+        None,
+        genesis_config,
+        linera_core::worker::DEFAULT_BLOCK_CACHE_SIZE,
+        linera_core::worker::DEFAULT_EXECUTION_STATE_CACHE_SIZE,
+    )
+    .await?;
+
     let relay_owner = AccountOwner::from(signer.generate_new());
     let relay_chain_desc = faucet.claim(&relay_owner).await?;
     let relay_chain_id = relay_chain_desc.id();
+    ctx.extend_with_chain(relay_chain_desc, Some(relay_owner))
+        .await?;
+    let cc = ctx.make_chain_client(relay_chain_id).await?;
+    cc.synchronize_from_validators().await?;
     tracing::info!(%relay_chain_id, %relay_owner, "Relay chain claimed");
+
+    // Deploy EVM token and bridge contracts, then the Linera wrapped-fungible app
+    // so the relay's startup decimal-check passes.
+    let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
+    tracing::info!(%erc20_addr, "LineraToken deployed");
+
+    let fungible_app_id = publish_and_create_wrapped_fungible(
+        &cc,
+        relay_owner,
+        relay_chain_id,
+        erc20_addr,
+        0, // no initial balance needed
+    )
+    .await?;
+    tracing::info!(%fungible_app_id, "wrapped-fungible app created");
+
+    let chain_id_bytes32 = format!("0x{relay_chain_id}");
+    let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    let light_client = light_client_address();
+    let bridge_addr = deploy_fungible_bridge(
+        &compose,
+        project_name,
+        &compose_file,
+        light_client,
+        &chain_id_bytes32,
+        erc20_addr,
+        &app_id_bytes32,
+    )
+    .await?;
+    tracing::info!(%bridge_addr, "FungibleBridge deployed");
 
     let relay_dir = tempfile::tempdir()?;
     let keystore_path = relay_dir.path().join("keystore.json");
@@ -71,16 +146,18 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
     }
 
     // Start the relay as an in-process background task.
-    let light_client = light_client_address();
     let wallet_path = relay_dir.path().join("wallet.json");
     let storage_config = format!("rocksdb:{}", relay_dir.path().join("client.db").display());
     let relay_port = 3003u16;
 
     // Pre-bootstrap the relay's wallet — `linera_bridge::relay::run` no longer
     // auto-creates one from a faucet; it expects an existing wallet on disk.
-    let relay_genesis_config = faucet.genesis_config().await?;
     linera_wallet_json::PersistentWallet::create(&wallet_path, relay_genesis_config)?;
 
+    let bridge_addr_str = format!("{bridge_addr}");
+    let fungible_app_str = format!("{fungible_app_id}");
+    // evm-bridge app is not needed for committee relay; use a placeholder that parses.
+    let dummy_bridge_app = "0000000000000000000000000000000000000000000000000000000000000000";
     let relay_handle = tokio::spawn(async move {
         Box::pin(linera_bridge::relay::run(
             "http://localhost:8545",
@@ -89,10 +166,9 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             Some(&storage_config),
             relay_chain_id,
             relay_owner,
-            // Dummy values — committee relay only needs the LightClient, not the bridge apps.
-            "0x0000000000000000000000000000000000000000",
-            "0000000000000000000000000000000000000000000000000000000000000000",
-            "0000000000000000000000000000000000000000000000000000000000000000",
+            &bridge_addr_str,
+            dummy_bridge_app,
+            &fungible_app_str,
             ANVIL_PRIVATE_KEY,
             Some(&light_client.to_string()),
             relay_port,
