@@ -9,7 +9,6 @@ test = []
 
 [dependencies]
 async-graphql.workspace = true
-fungible.workspace = true
 hex.workspace = true
 linera-sdk.workspace = true
 

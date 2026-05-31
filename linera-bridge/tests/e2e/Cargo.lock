@@ -2940,17 +2940,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
-name = "fungible"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "futures",
- "linera-sdk",
- "serde",
- "serde-reflection",
-]
-
-[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9285,7 +9274,6 @@ name = "wrapped-fungible"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "fungible",
  "hex",
  "linera-sdk",
  "serde-reflection",

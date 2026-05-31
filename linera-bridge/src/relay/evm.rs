@@ -21,7 +21,13 @@ sol! {
         function addBlock(bytes calldata data) external;
         function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external;
         function lightClient() external view returns (address);
+        function token() external view returns (address);
         function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool);
+    }
+
+    #[sol(rpc)]
+    interface IERC20Decimals {
+        function decimals() external view returns (uint8);
     }
 }
 
@@ -78,6 +84,23 @@ impl<P: Provider> EvmClient<P> {
     /// Returns the relayer's ETH balance in wei.
     pub async fn get_relayer_balance(&self) -> Result<U256> {
         Ok(self.provider.get_balance(self.relayer_addr).await?)
+    }
+
+    /// Returns the decimals of the ERC-20 bridged by the configured `FungibleBridge`.
+    pub async fn token_decimals(&self) -> Result<u8> {
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        let token_addr = bridge
+            .token()
+            .call()
+            .await
+            .context("failed to query FungibleBridge.token()")?;
+        let token = IERC20Decimals::new(token_addr, &self.provider);
+        let decimals = token
+            .decimals()
+            .call()
+            .await
+            .context("failed to query ERC-20 decimals()")?;
+        Ok(decimals)
     }
 
     /// Queries `DepositInitiated` events in chunked ranges.

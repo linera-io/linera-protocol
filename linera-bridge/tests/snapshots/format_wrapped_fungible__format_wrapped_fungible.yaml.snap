@@ -23,16 +23,13 @@ AccountOwner:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
-Amount:
-  NEWTYPESTRUCT: U128
 BurnEvent:
   STRUCT:
     - target:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 20
-    - amount:
-        TYPENAME: Amount
+    - amount: U128
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -48,8 +45,7 @@ Message:
         STRUCT:
           - target:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - source:
               TYPENAME: AccountOwner
     1:
@@ -57,8 +53,7 @@ Message:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
 WrappedFungibleOperation:
@@ -70,8 +65,7 @@ WrappedFungibleOperation:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
     158617459:
@@ -81,22 +75,19 @@ WrappedFungibleOperation:
               TYPENAME: AccountOwner
           - spender:
               TYPENAME: AccountOwner
-          - allowance:
-              TYPENAME: Amount
+          - allowance: U128
     198295567:
       MintAndTransfer:
         STRUCT:
           - target_account:
               TYPENAME: Account
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
     204322437:
       Claim:
         STRUCT:
           - source_account:
               TYPENAME: Account
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
     206964944:
@@ -111,8 +102,7 @@ WrappedFungibleOperation:
               TYPENAME: AccountOwner
           - spender:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
     239329758:
@@ -120,5 +110,4 @@ WrappedFungibleOperation:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128

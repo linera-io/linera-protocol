@@ -17,7 +17,7 @@
 use std::time::Duration;
 
 use alloy::{primitives::U256, providers::ProviderBuilder, sol};
-use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
+use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
@@ -108,7 +108,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
 
     let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000).await?;
+        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
 
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
@@ -144,7 +144,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
         "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC".parse()?,
         "0x90F79bf6EB2c4f870365E785982E1f101E93b906".parse()?,
     ];
-    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
+    let burn_amount = U128(BURN_AMOUNT_TOKENS * 10u128.pow(18));
 
     // Bundle every Transfer into a SINGLE chain-B block, then drive
     // chain A's inbox once. The N Credit messages travel together
