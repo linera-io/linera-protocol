@@ -31,7 +31,7 @@ pub(crate) mod metrics {
             "outbox_size",
             "Outbox size",
             &[],
-            exponential_bucket_interval(1.0, 10_000.0),
+            exponential_bucket_interval(1.0, 1_000_000.0),
         )
     });
 }
