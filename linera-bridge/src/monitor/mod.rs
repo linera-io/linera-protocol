@@ -760,12 +760,7 @@ mod tests {
 
     #[test]
     fn test_deposit_key_hash_matches_evm_bridge() {
-        let key = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 5,
-            log_index: 0,
-        };
+        let key = DepositKey::new(8453, B256::from([0xAA; 32]), 5, 0);
         let hash = key.hash();
         assert_eq!(hash, key.hash());
         assert_ne!(hash, [0u8; 32]);
@@ -773,18 +768,8 @@ mod tests {
 
     #[test]
     fn test_deposit_key_different_log_index_different_hash() {
-        let key1 = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 5,
-            log_index: 0,
-        };
-        let key2 = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 5,
-            log_index: 1,
-        };
+        let key1 = DepositKey::new(8453, B256::from([0xAA; 32]), 5, 0);
+        let key2 = DepositKey::new(8453, B256::from([0xAA; 32]), 5, 1);
         assert_ne!(key1.hash(), key2.hash());
     }
 
@@ -792,12 +777,7 @@ mod tests {
     async fn test_monitor_state_track_and_complete() {
         let mut state = MonitorState::new(0, 0);
 
-        let key = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 1,
-            log_index: 0,
-        };
+        let key = DepositKey::new(8453, B256::from([0xAA; 32]), 1, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -846,12 +826,7 @@ mod tests {
     async fn test_status_summary() {
         let mut state = MonitorState::new(100, 0);
 
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::ZERO,
-            tx_index: 0,
-            log_index: 0,
-        };
+        let key = DepositKey::new(1, B256::ZERO, 0, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -873,12 +848,7 @@ mod tests {
             })
             .await;
 
-        let refund_key = RefundKey {
-            source_chain_id: 1,
-            block_hash: B256::ZERO,
-            tx_index: 0,
-            log_index: 1,
-        };
+        let refund_key = RefundKey::new(1, B256::ZERO, 0, 1);
         state
             .track_refund(PendingRefund {
                 key: refund_key.clone(),
@@ -927,12 +897,7 @@ mod tests {
     #[tokio::test]
     async fn test_deposits_ready_for_retry() {
         let mut state = MonitorState::new(0, 0);
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::ZERO,
-            tx_index: 0,
-            log_index: 0,
-        };
+        let key = DepositKey::new(1, B256::ZERO, 0, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -959,12 +924,7 @@ mod tests {
     #[tokio::test]
     async fn next_deposit_for_retry_returns_pending_then_respects_backoff() {
         let mut state = MonitorState::new(0, 0);
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::ZERO,
-            tx_index: 0,
-            log_index: 0,
-        };
+        let key = DepositKey::new(1, B256::ZERO, 0, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -998,12 +958,7 @@ mod tests {
         for i in 0..128u64 {
             state
                 .track_deposit(PendingDeposit {
-                    key: DepositKey {
-                        source_chain_id: 1,
-                        block_hash: B256::ZERO,
-                        tx_index: i,
-                        log_index: 0,
-                    },
+                    key: DepositKey::new(1, B256::ZERO, i, 0),
                     tx_hash: B256::ZERO,
                     depositor: Address::ZERO,
                     amount: U256::ZERO,
@@ -1023,12 +978,7 @@ mod tests {
     #[tokio::test]
     async fn load_from_db_recovers_pending_items_on_startup() {
         let db = db::BridgeDb::open_in_memory().await.unwrap();
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 7,
-            log_index: 0,
-        };
+        let key = DepositKey::new(1, B256::from([0xAA; 32]), 7, 0);
         db.insert_deposit(&PendingDeposit {
             key: key.clone(),
             tx_hash: B256::from([0xBB; 32]),

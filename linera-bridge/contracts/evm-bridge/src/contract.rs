@@ -204,12 +204,7 @@ impl EvmBridgeContract {
         // 2. Replay protection — cheap; reject before the RPC finality call
         //    and MPT verification so a duplicate proof is rejected without
         //    cost.
-        let deposit_key = DepositKey {
-            source_chain_id: params.source_chain_id,
-            block_hash,
-            tx_index,
-            log_index,
-        };
+        let deposit_key = DepositKey::new(params.source_chain_id, block_hash, tx_index, log_index);
         let deposit_hash = deposit_key.hash();
         assert!(
             !self
@@ -330,12 +325,7 @@ impl EvmBridgeContract {
         // 2. Replay protection — cheap; reject before the RPC finality call
         //    and MPT verification so a duplicate proof is rejected without
         //    cost.
-        let refund_key = RefundKey {
-            source_chain_id: params.source_chain_id,
-            block_hash,
-            tx_index,
-            log_index,
-        };
+        let refund_key = RefundKey::new(params.source_chain_id, block_hash, tx_index, log_index);
         let refund_hash = refund_key.hash();
         assert!(
             !self

@@ -474,14 +474,14 @@ async fn relayer_refunds_blocked_burn() -> anyhow::Result<()> {
     );
 
     // Snapshot the BurnBlocked tx coordinates for the RefundKey poll.
-    let refund_key = RefundKey {
-        source_chain_id: 31337,
-        block_hash: block_burn_receipt.block_hash.context("block_hash missing")?,
-        tx_index: block_burn_receipt
+    let refund_key = RefundKey::new(
+        31337,
+        block_burn_receipt.block_hash.context("block_hash missing")?,
+        block_burn_receipt
             .transaction_index
             .context("transaction_index missing")?,
         log_index,
-    };
+    );
 
     // ── Now spawn the relayer. Its EVM scanner picks up the
     //    BurnBlocked log, builds a refund proof, and submits

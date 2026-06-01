@@ -16,7 +16,7 @@ use linera_base::{
     identifiers::{AccountOwner, ChainId},
 };
 
-use crate::proof::ReceiptLog;
+use crate::proof::{KeyDomain, ReceiptLog};
 
 /// Parsed `BurnBlocked` event data.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,13 +31,15 @@ pub struct BurnBlockedFields {
 
 /// Replay-protection key for a refund.
 ///
-/// Distinct from [`super::DepositKey`] both structurally and via the 1-byte
-/// domain tag mixed into [`RefundKey::hash`], so the two key spaces cannot
-/// collide even though their field layouts happen to match.
+/// Distinct from [`super::DepositKey`] via the [`KeyDomain`] tag mixed into
+/// [`RefundKey::hash`], so the two key spaces cannot collide even though
+/// their field layouts happen to match.
 #[derive(
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
 pub struct RefundKey {
+    #[serde(skip, default = "KeyDomain::refund")]
+    _domain: KeyDomain,
     pub source_chain_id: u64,
     pub block_hash: B256,
     pub tx_index: u64,
@@ -45,14 +47,20 @@ pub struct RefundKey {
 }
 
 impl RefundKey {
-    /// Domain-separation tag prepended to the hash input so refund and
-    /// deposit key hashes can never collide even if their field layouts match.
-    const DOMAIN_TAG: u8 = 0x02;
+    pub fn new(source_chain_id: u64, block_hash: B256, tx_index: u64, log_index: u64) -> Self {
+        Self {
+            _domain: KeyDomain::Refund,
+            source_chain_id,
+            block_hash,
+            tx_index,
+            log_index,
+        }
+    }
 
     /// Deterministic keccak-256 hash of the refund key fields.
     pub fn hash(&self) -> [u8; 32] {
         let mut data = [0u8; 57];
-        data[0] = Self::DOMAIN_TAG;
+        data[0] = self._domain as u8;
         data[1..9].copy_from_slice(&self.source_chain_id.to_le_bytes());
         data[9..41].copy_from_slice(self.block_hash.as_slice());
         data[41..49].copy_from_slice(&self.tx_index.to_le_bytes());
@@ -423,42 +431,28 @@ mod tests {
 
     #[test]
     fn test_refund_key_hash_is_deterministic() {
-        let key = RefundKey {
-            source_chain_id: 8453,
-            block_hash: B256::repeat_byte(0x11),
-            tx_index: 7,
-            log_index: 3,
-        };
+        let key = RefundKey::new(8453, B256::repeat_byte(0x11), 7, 3);
         let h = key.hash();
         assert_eq!(h, key.hash(), "hash must be deterministic");
         assert_ne!(
             h,
-            RefundKey {
-                source_chain_id: 1,
-                ..key.clone()
-            }
-            .hash()
+            RefundKey::new(1, key.block_hash, key.tx_index, key.log_index).hash()
         );
     }
 
     /// A `RefundKey` and `DepositKey` with identical field values must produce
-    /// distinct hashes thanks to the 1-byte domain tag. This guarantees the
+    /// distinct hashes thanks to [`KeyDomain`]. This guarantees the
     /// `processed_deposits` and `processed_refunds` key spaces are disjoint
     /// even if a future refactor stored them in a shared SetView.
     #[test]
     fn test_refund_and_deposit_key_hashes_are_domain_separated() {
-        let refund = RefundKey {
-            source_chain_id: 8453,
-            block_hash: B256::repeat_byte(0x11),
-            tx_index: 7,
-            log_index: 3,
-        };
-        let deposit = crate::proof::DepositKey {
-            source_chain_id: refund.source_chain_id,
-            block_hash: refund.block_hash,
-            tx_index: refund.tx_index,
-            log_index: refund.log_index,
-        };
+        let refund = RefundKey::new(8453, B256::repeat_byte(0x11), 7, 3);
+        let deposit = crate::proof::DepositKey::new(
+            refund.source_chain_id,
+            refund.block_hash,
+            refund.tx_index,
+            refund.log_index,
+        );
         assert_ne!(refund.hash(), deposit.hash());
     }
 }

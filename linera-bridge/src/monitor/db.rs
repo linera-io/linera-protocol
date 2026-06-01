@@ -346,13 +346,13 @@ impl BridgeDb {
             let nonce: String = row.get(7);
 
             out.push(PendingDeposit {
-                key: DepositKey {
-                    source_chain_id: source_chain_id as u64,
-                    block_hash: B256::try_from(block_hash.as_slice())
+                key: DepositKey::new(
+                    source_chain_id as u64,
+                    B256::try_from(block_hash.as_slice())
                         .context("invalid block_hash in deposits row")?,
-                    tx_index: tx_index as u64,
-                    log_index: log_index as u64,
-                },
+                    tx_index as u64,
+                    log_index as u64,
+                ),
                 tx_hash: B256::try_from(tx_hash.as_slice())
                     .context("invalid tx_hash in deposits row")?,
                 depositor: Address::try_from(depositor.as_slice())
@@ -549,12 +549,12 @@ impl BridgeDb {
                 bcs::from_bytes(&amount_bcs).context("invalid amount_bcs in refunds row")?;
 
             out.push(PendingRefund {
-                key: RefundKey {
+                key: RefundKey::new(
                     source_chain_id,
                     block_hash,
-                    tx_index: tx_index as u64,
-                    log_index: log_index as u64,
-                },
+                    tx_index as u64,
+                    log_index as u64,
+                ),
                 evm_tx_hash,
                 source: Account {
                     chain_id: ChainId(source_chain_id_inner),
@@ -599,12 +599,7 @@ mod tests {
     }
 
     fn test_deposit_key() -> DepositKey {
-        DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 5,
-            log_index: 0,
-        }
+        DepositKey::new(8453, B256::from([0xAA; 32]), 5, 0)
     }
 
     fn test_deposit() -> PendingDeposit {

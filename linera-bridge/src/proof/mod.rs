@@ -83,6 +83,31 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 
+/// Domain tag for storage key hash inputs.
+///
+/// Every replay-protection key type picks one unique variant. Assignments here
+/// are permanent: changing or reusing a discriminant would silently invalidate
+/// all previously stored hashes.
+///
+/// Add a new variant when introducing a new key type; the compiler then ensures
+/// you cannot forget to assign a tag.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum KeyDomain {
+    Deposit = 0x01,
+    Refund = 0x02,
+}
+
+impl KeyDomain {
+    fn deposit() -> Self {
+        KeyDomain::Deposit
+    }
+
+    fn refund() -> Self {
+        KeyDomain::Refund
+    }
+}
+
 /// A decoded log from an EVM transaction receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReceiptLog {
@@ -116,6 +141,8 @@ pub struct DepositEvent {
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
 pub struct DepositKey {
+    #[serde(skip, default = "KeyDomain::deposit")]
+    _domain: KeyDomain,
     pub source_chain_id: u64,
     pub block_hash: B256,
     pub tx_index: u64,
@@ -123,14 +150,20 @@ pub struct DepositKey {
 }
 
 impl DepositKey {
-    /// Domain-separation tag prepended to the hash input so deposit and
-    /// refund key hashes can never collide even if their field layouts match.
-    const DOMAIN_TAG: u8 = 0x01;
+    pub fn new(source_chain_id: u64, block_hash: B256, tx_index: u64, log_index: u64) -> Self {
+        Self {
+            _domain: KeyDomain::Deposit,
+            source_chain_id,
+            block_hash,
+            tx_index,
+            log_index,
+        }
+    }
 
     /// Deterministic keccak-256 hash of the deposit key fields.
     pub fn hash(&self) -> [u8; 32] {
         let mut data = [0u8; 57];
-        data[0] = Self::DOMAIN_TAG;
+        data[0] = self._domain as u8;
         data[1..9].copy_from_slice(&self.source_chain_id.to_le_bytes());
         data[9..41].copy_from_slice(self.block_hash.as_slice());
         data[41..49].copy_from_slice(&self.tx_index.to_le_bytes());

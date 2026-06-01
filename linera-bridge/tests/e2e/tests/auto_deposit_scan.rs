@@ -401,14 +401,14 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         .map(|i| i as u64)
         .expect("DepositInitiated event not found in deposit receipt");
 
-    let deposit_key = linera_bridge::proof::DepositKey {
-        source_chain_id: 31337,
-        block_hash: deposit_receipt.block_hash.unwrap(),
-        tx_index: deposit_receipt
+    let deposit_key = linera_bridge::proof::DepositKey::new(
+        31337,
+        deposit_receipt.block_hash.unwrap(),
+        deposit_receipt
             .transaction_index
             .expect("transaction_index missing"),
         log_index,
-    };
+    );
 
     // Wait for relay to auto-process the deposit.
     tracing::info!("Waiting for relay scanner to auto-process the deposit...");

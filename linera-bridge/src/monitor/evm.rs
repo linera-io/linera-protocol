@@ -184,12 +184,12 @@ async fn evm_scan_iteration(
             }
         };
 
-        let key = DepositKey {
-            source_chain_id: deposit.source_chain_id.to::<u64>(),
+        let key = DepositKey::new(
+            deposit.source_chain_id.to::<u64>(),
             block_hash,
             tx_index,
             log_index,
-        };
+        );
 
         let was_new = monitor
             .write()
@@ -240,12 +240,7 @@ async fn evm_scan_iteration(
             }
         };
 
-        let key = RefundKey {
-            source_chain_id,
-            block_hash,
-            tx_index,
-            log_index,
-        };
+        let key = RefundKey::new(source_chain_id, block_hash, tx_index, log_index);
         let was_new = monitor
             .write()
             .await
