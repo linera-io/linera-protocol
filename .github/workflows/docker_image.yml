@@ -88,6 +88,13 @@ jobs:
             local BUILD_NAME=$5
             local TARGET=$6
             local LOG_FILE="/tmp/${BUILD_NAME}.log"
+            # Only pass --build-arg build_features when a 7th arg is given (even
+            # if empty), so callers can override the Dockerfile default of
+            # scylladb,metrics,jemalloc with a smaller feature set.
+            local features_arg=()
+            if [[ $# -ge 7 ]]; then
+                features_arg=(--build-arg "build_features=${7}")
+            fi
 
             {
               echo "========================================"
@@ -104,6 +111,7 @@ jobs:
                 --build-arg "build_date=${BUILD_DATE}" \
                 --build-arg "build_flag=--release" \
                 --build-arg "build_folder=release" \
+                "${features_arg[@]+"${features_arg[@]}"}" \
                 .
 
               echo "Pushing ${BUILD_NAME} images..."
@@ -124,8 +132,12 @@ jobs:
           # linera-tests shares the Dockerfile and chef cache mounts with
           # linera; --target tests builds the overlay stage that bundles
           # the remote-net integration test binary on top of the runtime.
+          # Build with no extra features: the linera binary here is a client-side
+          # tool used by the test harness and does not need a DB backend,
+          # metrics, or a custom allocator. Without `metrics`, `linera service`
+          # does not require --metrics-port, which the test harness does not pass.
           build_and_push "docker/Dockerfile" \
-            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" &
+            "${LINERA_TESTS_IMAGE_BRANCH}" "${LINERA_TESTS_IMAGE_SHORT}" "${LINERA_TESTS_IMAGE_LONG}" "LineraTests" "tests" "" &
           PID_LINERA_TESTS=$!
 
           build_and_push "docker/Dockerfile.indexer" \
