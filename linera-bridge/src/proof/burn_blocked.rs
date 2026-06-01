@@ -39,7 +39,7 @@ pub struct BurnBlockedFields {
 )]
 pub struct RefundKey {
     #[serde(skip, default = "KeyDomain::refund")]
-    _domain: KeyDomain,
+    domain: KeyDomain,
     pub source_chain_id: u64,
     pub block_hash: B256,
     pub tx_index: u64,
@@ -49,7 +49,7 @@ pub struct RefundKey {
 impl RefundKey {
     pub fn new(source_chain_id: u64, block_hash: B256, tx_index: u64, log_index: u64) -> Self {
         Self {
-            _domain: KeyDomain::Refund,
+            domain: KeyDomain::Refund,
             source_chain_id,
             block_hash,
             tx_index,
@@ -60,7 +60,7 @@ impl RefundKey {
     /// Deterministic keccak-256 hash of the refund key fields.
     pub fn hash(&self) -> [u8; 32] {
         let mut data = [0u8; 57];
-        data[0] = self._domain as u8;
+        data[0] = self.domain as u8;
         data[1..9].copy_from_slice(&self.source_chain_id.to_le_bytes());
         data[9..41].copy_from_slice(self.block_hash.as_slice());
         data[41..49].copy_from_slice(&self.tx_index.to_le_bytes());

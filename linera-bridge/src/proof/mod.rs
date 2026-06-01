@@ -142,7 +142,7 @@ pub struct DepositEvent {
 )]
 pub struct DepositKey {
     #[serde(skip, default = "KeyDomain::deposit")]
-    _domain: KeyDomain,
+    domain: KeyDomain,
     pub source_chain_id: u64,
     pub block_hash: B256,
     pub tx_index: u64,
@@ -152,7 +152,7 @@ pub struct DepositKey {
 impl DepositKey {
     pub fn new(source_chain_id: u64, block_hash: B256, tx_index: u64, log_index: u64) -> Self {
         Self {
-            _domain: KeyDomain::Deposit,
+            domain: KeyDomain::Deposit,
             source_chain_id,
             block_hash,
             tx_index,
@@ -163,7 +163,7 @@ impl DepositKey {
     /// Deterministic keccak-256 hash of the deposit key fields.
     pub fn hash(&self) -> [u8; 32] {
         let mut data = [0u8; 57];
-        data[0] = self._domain as u8;
+        data[0] = self.domain as u8;
         data[1..9].copy_from_slice(&self.source_chain_id.to_le_bytes());
         data[9..41].copy_from_slice(self.block_hash.as_slice());
         data[41..49].copy_from_slice(&self.tx_index.to_le_bytes());
