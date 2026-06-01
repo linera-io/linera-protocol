@@ -27,7 +27,35 @@ permissions:
   contents: read
 
 jobs:
+  # paths-ignore within a pull_request doesn't work well with merge_group, so we need to use a custom filter.
+  changed-files:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.files-changed.outputs.paths }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Filter paths
+        uses: dorny/paths-filter@v4.0.1
+        id: files-changed
+        with:
+          predicate-quantifier: 'every'
+          filters: |
+            paths:
+              - '!docker/**'
+              - '!configuration/**'
+              - '!docs/**'
+              - '!mdbook/**'
+              - '!CONTRIBUTING.md'
+              - '!INSTALL.md'
+              - '!README.md'
+              # Workflow-only PRs don't need heavy code tests; merge to main
+              # validates the workflow itself by running it for real.
+              - '!.github/workflows/**'
   bridge-check:
+    needs: changed-files
+    if: needs.changed-files.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
