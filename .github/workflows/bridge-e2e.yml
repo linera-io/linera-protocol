@@ -38,6 +38,12 @@ jobs:
           submodules: recursive
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: |
+            . -> target
+            linera-bridge/contracts/evm-bridge -> target
+            linera-bridge/tests/e2e -> target
+            examples -> target
 
       - name: Install Protoc
         uses: ./.github/actions/install-protoc
