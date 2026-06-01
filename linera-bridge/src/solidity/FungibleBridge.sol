@@ -96,9 +96,11 @@ contract FungibleBridge is Microchain {
     /// off-chain relayer can build a Linera-side refund proof without
     /// going back to the cert.
     ///
-    /// No-op if the burn was already settled (`processedBurns[key]`) or
-    /// already blocked (`blockedBurns[key]`). One-way — no unblock entry
-    /// point. Currently public (no access control); see follow-up.
+    /// Reverts with `"already processed"` if the burn was already settled —
+    /// the caller intended to block, not process, so the mismatch is signalled
+    /// loudly. No-op if the burn is already blocked (idempotent re-block).
+    /// One-way — no unblock entry point. Currently public (no access control);
+    /// see follow-up.
     function blockBurn(bytes calldata cert, uint32 txIndex, uint32 eventPosInTx) external {
         (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(cert);
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
@@ -113,7 +115,7 @@ contract FungibleBridge is Microchain {
 
         uint64 height = blockValue.header.height.value;
         bytes32 key = _burnKey(height, evt.index);
-        if (processedBurns[key]) return;
+        require(!processedBurns[key], "already processed");
         if (blockedBurns[key]) return;
         blockedBurns[key] = true;
 
@@ -195,8 +197,7 @@ contract FungibleBridge is Microchain {
     /// Idempotent like `_onBlock`: positions already in `processedBurns` are
     /// skipped silently rather than reverted. Lets the relayer recover from
     /// overlap with a prior `addBlock` (or a racing/retrying `processBurns`)
-    /// instead of losing the whole chunk to a single duplicate. Positions
-    /// in `blockedBurns` are likewise skipped silently.
+    /// instead of losing the whole chunk to a single duplicate.
     ///
     /// Reverts (atomically — no `processedBurns` flag is set if the call
     /// reverts) on:
@@ -205,6 +206,8 @@ contract FungibleBridge is Microchain {
     /// - any position out of range (`"eventPos out of range"`)
     /// - any position whose event is not a matching burn for this app
     ///   (`"not a matching burn"`)
+    /// - any position already in `blockedBurns` (`"burn blocked"`) — caller
+    ///   intent (process) conflicts with the existing block
     /// - any failed `token.transfer` (`"safeTransfer failed"`)
     function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
         require(eventPositionsInTx.length > 0, "empty positions");
@@ -224,7 +227,7 @@ contract FungibleBridge is Microchain {
 
             bytes32 key = _burnKey(height, evt.index);
             if (processedBurns[key]) continue;
-            if (blockedBurns[key]) continue;
+            require(!blockedBurns[key], "burn blocked");
 
             _releaseBurn(evt, key, height);
         }

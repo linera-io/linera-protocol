@@ -384,22 +384,25 @@ contract FungibleBridgeProcessBurnsTest is Test {
         assertEq(tok.balanceOf(recip1), AMOUNT, "pos 1 not double-released");
     }
 
-    function test_blockBurn_prevents_processBurns_release() public {
-        // 2 burns. Block (HEIGHT, 5) at position 0; then processBurns([0, 1]) —
-        // pos 0 (stream index 5) silently skipped, pos 1 still released.
+    function test_processBurns_reverts_on_blocked_position() public {
+        // 2 burns. Block (HEIGHT, 5) at position 0; then processBurns([0, 1])
+        // must revert with "burn blocked" — caller's intent (process) conflicts
+        // with the existing block. Revert is atomic: neither position is
+        // marked processed and no tokens are released.
         MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.blockBurn(hex"deadbeef", TX, 0);
         assertTrue(bridge.isBurnBlocked(HEIGHT, 5), "burn at index 5 should be blocked");
 
+        vm.expectRevert(bytes("burn blocked"));
         bridge.processBurns(hex"deadbeef", TX, _u32s(0, 1));
 
         assertFalse(bridge.isBurnProcessed(HEIGHT, 5), "blocked burn must not be marked processed");
-        assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "unblocked burn settles");
+        assertFalse(bridge.isBurnProcessed(HEIGHT, 6), "unblocked burn must also be rolled back");
         assertEq(tok.balanceOf(RECIP_0), 0, "blocked recipient holds no released tokens");
         address recip1 = address(uint160(RECIP_0) + 1);
-        assertEq(tok.balanceOf(recip1), AMOUNT, "unblocked recipient receives release");
+        assertEq(tok.balanceOf(recip1), 0, "unblocked recipient holds no tokens - batch reverted");
     }
 
     function test_blockBurn_prevents_addBlock_release() public {
@@ -462,20 +465,20 @@ contract FungibleBridgeProcessBurnsTest is Test {
         bridge.blockBurn(hex"deadbeef", 0, 0);
     }
 
-    function test_blockBurn_already_processed_is_silent_noop() public {
+    function test_blockBurn_reverts_on_already_processed() public {
         // After processBurns has settled (HEIGHT, 5), blockBurn for the same
-        // position must be a silent no-op: no BurnBlocked event, no flip of
-        // the blocked flag. Matches the early `if (processedBurns[key]) return;`
-        // in FungibleBridge.blockBurn.
+        // position must revert with "already processed" — the caller intended
+        // to block, but the burn has already been processed. Surfacing the
+        // mismatch is more useful than a silent no-op.
         MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
         assertTrue(bridge.isBurnProcessed(HEIGHT, 5));
-        vm.recordLogs();
+
+        vm.expectRevert(bytes("already processed"));
         bridge.blockBurn(hex"deadbeef", TX, 0);
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        assertEq(logs.length, 0, "no event when blocking a settled burn");
-        assertFalse(bridge.isBurnBlocked(HEIGHT, 5));
+
+        assertFalse(bridge.isBurnBlocked(HEIGHT, 5), "blocked flag must not flip after revert");
     }
 
     /// blockBurn must emit a BurnBlocked event whose `source_owner_bcs` field
