@@ -30,11 +30,14 @@ jobs:
   long-faucet-chain-test:
     if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 40
+    timeout-minutes: 55
 
     steps:
     - uses: actions/checkout@v6.0.2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        cache-workspaces: |
+          -> target
     - name: Clear up some space
       run: |
         sudo rm -rf /usr/share/dotnet

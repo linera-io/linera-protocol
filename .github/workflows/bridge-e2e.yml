@@ -29,7 +29,7 @@ jobs:
   bridge-e2e:
     if: ${{ github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     runs-on: linera-io-self-hosted-ci
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v6.0.2
@@ -38,6 +38,12 @@ jobs:
           submodules: recursive
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache-workspaces: |
+            . -> target
+            linera-bridge/contracts/evm-bridge -> target
+            linera-bridge/tests/e2e -> target
+            examples -> target
 
       - name: Install Protoc
         uses: ./.github/actions/install-protoc
