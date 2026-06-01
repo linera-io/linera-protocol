@@ -159,7 +159,16 @@ pub(crate) mod metrics {
             "num_outboxes",
             "Number of outboxes",
             &[],
-            exponential_bucket_interval(1.0, 10_000.0),
+            exponential_bucket_interval(1.0, 1_000_000.0),
+        )
+    });
+
+    pub static OUTBOX_COUNTERS_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "outbox_counters_size",
+            "Number of entries in the outbox_counters map (in-flight message heights)",
+            &[],
+            exponential_bucket_interval(1.0, 1_000_000.0),
         )
     });
 
@@ -460,6 +469,10 @@ where
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.nonempty_outboxes.get().len() as f64);
+        #[cfg(with_metrics)]
+        metrics::OUTBOX_COUNTERS_SIZE
+            .with_label_values(&[])
+            .observe(self.outbox_counters.get().len() as f64);
         Ok(true)
     }
 
@@ -1400,6 +1413,10 @@ where
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(nonempty_outboxes.len() as f64);
+        #[cfg(with_metrics)]
+        metrics::OUTBOX_COUNTERS_SIZE
+            .with_label_values(&[])
+            .observe(outbox_counters.len() as f64);
         Ok(targets)
     }
 }
