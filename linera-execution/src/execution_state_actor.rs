@@ -812,6 +812,8 @@ where
     }
 
     // TODO(#5034): unify with `contract_and_dependencies`
+    // On the web, `all_installed_services` is used instead (see #2927).
+    #[cfg(not(web))]
     pub(crate) async fn service_and_dependencies(
         &mut self,
         application: ApplicationId,
@@ -836,6 +838,8 @@ where
     }
 
     // TODO(#5034): unify with `service_and_dependencies`
+    // On the web, `all_installed_contracts` is used instead (see #2927).
+    #[cfg(not(web))]
     #[instrument(skip_all, fields(application_id = %application))]
     async fn contract_and_dependencies(
         &mut self,
@@ -857,6 +861,68 @@ where
         codes.reverse();
         descriptions.reverse();
 
+        Ok((codes, descriptions))
+    }
+
+    /// Every application installed on this chain — i.e. whose
+    /// `ApplicationDescription` blob the chain has used — including applications
+    /// created earlier in the current block. Used on the web to eagerly preload
+    /// all modules before synchronous execution, since the web build cannot load
+    /// a module dynamically mid-execution (see #2927).
+    #[cfg(web)]
+    async fn installed_application_ids(&self) -> Result<Vec<ApplicationId>, ExecutionError> {
+        let mut ids = std::collections::BTreeSet::new();
+        for blob_id in self.state.system.used_blobs.indices().await? {
+            if blob_id.blob_type == BlobType::ApplicationDescription {
+                ids.insert(ApplicationId::new(blob_id.hash));
+            }
+        }
+        for blob_id in self.txn_tracker.created_blobs().keys() {
+            if blob_id.blob_type == BlobType::ApplicationDescription {
+                ids.insert(ApplicationId::new(blob_id.hash));
+            }
+        }
+        Ok(ids.into_iter().collect())
+    }
+
+    /// Loads `application` plus the contract module of every application installed
+    /// on the chain. Used on the web in place of `contract_and_dependencies`, so a
+    /// cross-application call to any installed application finds its module already
+    /// preloaded even if it was not declared in `required_application_ids` (#2927).
+    #[cfg(web)]
+    async fn all_installed_contracts(
+        &mut self,
+        application: ApplicationId,
+    ) -> Result<(Vec<UserContractCode>, Vec<ApplicationDescription>), ExecutionError> {
+        let mut codes = vec![];
+        let mut descriptions = vec![];
+        let mut seen = std::collections::BTreeSet::new();
+        for id in std::iter::once(application).chain(self.installed_application_ids().await?) {
+            if seen.insert(id) {
+                let (code, description) = self.load_contract(id).await?;
+                codes.push(code);
+                descriptions.push(description);
+            }
+        }
+        Ok((codes, descriptions))
+    }
+
+    /// Service counterpart of [`Self::all_installed_contracts`] (#2927).
+    #[cfg(web)]
+    pub(crate) async fn all_installed_services(
+        &mut self,
+        application: ApplicationId,
+    ) -> Result<(Vec<UserServiceCode>, Vec<ApplicationDescription>), ExecutionError> {
+        let mut codes = vec![];
+        let mut descriptions = vec![];
+        let mut seen = std::collections::BTreeSet::new();
+        for id in std::iter::once(application).chain(self.installed_application_ids().await?) {
+            if seen.insert(id) {
+                let (code, description) = self.load_service(id).await?;
+                codes.push(code);
+                descriptions.push(description);
+            }
+        }
         Ok((codes, descriptions))
     }
 
@@ -892,6 +958,14 @@ where
         let (execution_state_sender, mut execution_state_receiver) =
             futures::channel::mpsc::unbounded();
 
+        // On the web, modules cannot be loaded dynamically mid-execution (#2927),
+        // so eagerly preload every installed application's module. Natively, only
+        // the target and its declared dependencies are loaded; undeclared callees
+        // are then fetched lazily during the call.
+        #[cfg(web)]
+        let (codes, descriptions): (Vec<_>, Vec<_>) =
+            self.all_installed_contracts(application_id).await?;
+        #[cfg(not(web))]
         let (codes, descriptions): (Vec<_>, Vec<_>) =
             self.contract_and_dependencies(application_id).await?;
 

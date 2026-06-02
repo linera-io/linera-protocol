@@ -304,17 +304,11 @@ print(json.dumps({'rpc_endpoint': os.environ.get('EVM_RPC_URL', '')}))
 ")
 
 for attempt in 1 2 3; do
-    # The bridge calls the wrapped-fungible app (escrow transfer + burn), so it is
-    # declared as a required application dependency. This makes the wrapped module
-    # load eagerly with the bridge — required on the web client, which cannot load
-    # modules dynamically mid-execution (#2927). Removed in a follow-up commit that
-    # adds generalized module preloading.
     BRIDGE_APP_OUTPUT=$(linera_exec publish-and-create \
         "$EVM_BRIDGE_WASM_DIR/evm_bridge_contract.wasm" \
         "$EVM_BRIDGE_WASM_DIR/evm_bridge_service.wasm" \
         --json-parameters "$BRIDGE_PARAMS" \
-        --json-argument "$BRIDGE_ARGUMENT" \
-        --required-application-ids "$WRAPPED_APP_ID" 2>&1) && break
+        --json-argument "$BRIDGE_ARGUMENT" 2>&1) && break
     echo "  Attempt $attempt failed:" >&2
     echo "$BRIDGE_APP_OUTPUT" >&2
     sleep 2
