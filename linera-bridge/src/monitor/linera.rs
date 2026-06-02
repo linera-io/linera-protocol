@@ -121,17 +121,23 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                     relay::update_balance_metrics(evm_client, linera_client).await;
                 }
                 Err(error) => {
-                    // Bumping the retry counter is critical: an `eth_estimateGas`
-                    // revert is typically deterministic (the cert is invalid for
-                    // the configured bridge), and without this the burn would be
-                    // re-polled every scan interval forever. After `max_retries`
-                    // the burns at this height transition to `failed` and stop
-                    // being yielded by `pending_burns_by_height_and_tx`.
-                    tracing::warn!(?height, ?error, "estimate_add_block_gas failed");
-                    let mut state = monitor.write().await;
-                    for ei in &event_indices {
-                        state.mark_burn_retried(height, *ei, max_retries).await;
-                    }
+                    // `eth_estimateGas` on the whole-block `addBlock` reverted.
+                    // This happens when the block is too large to even estimate
+                    // (it would exceed the EVM block gas limit) — common now that
+                    // a bridge-driven burn adds a funding `Credit` plus a
+                    // `BridgeMessage::Burn` to the block — but also for a
+                    // genuinely invalid cert. Either way, fall back to the per-tx
+                    // chunked `processBurns` path: it estimates each chunk
+                    // independently, submits the ones that fit, and marks any
+                    // single burn that still can't fit as `failed` (so an invalid
+                    // cert terminates instead of being re-polled forever).
+                    tracing::warn!(
+                        ?height,
+                        ?error,
+                        "estimate_add_block_gas failed; falling back to chunked processBurns"
+                    );
+                    submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
+                    relay::update_balance_metrics(evm_client, linera_client).await;
                 }
             }
         }
