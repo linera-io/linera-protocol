@@ -22,9 +22,9 @@ async function freshChain() {
   return { chain, owner };
 }
 
-test("nextRound reports a well-formed multi-leader round for a fresh chain", async () => {
+test("nextRoundInfo reports a well-formed multi-leader round for a fresh chain", async () => {
   const { chain } = await freshChain();
-  const round = await chain.nextRound();
+  const round = await chain.nextRoundInfo();
 
   expect(VALID_ROUND_KINDS).toContain(round.kind);
   expect(round.number).toBeGreaterThanOrEqual(0);
@@ -68,17 +68,17 @@ test("clearPendingProposal is a no-op when nothing is pending", async () => {
   // No proposal has failed, so there is nothing to clear; this should resolve.
   await chain.clearPendingProposal();
   // The round structure is unchanged.
-  expect((await chain.nextRound()).kind).toBe("multiLeader");
+  expect((await chain.nextRoundInfo()).kind).toBe("multiLeader");
 }, 150000);
 
 test("setMultiLeaderRounds changes the round structure", async () => {
   const { chain, owner } = await freshChain();
-  expect((await chain.nextRound()).kind).toBe("multiLeader");
+  expect((await chain.nextRoundInfo()).kind).toBe("multiLeader");
 
   // With zero multi-leader rounds, an owner-based chain starts directly in a
   // single-leader round, where the sole owner is the designated leader.
   await chain.setMultiLeaderRounds(0);
-  const single = await chain.nextRound();
+  const single = await chain.nextRoundInfo();
   expect(single.kind).toBe("singleLeader");
   // The serialized leader is lowercase, while `owner` is an EIP-55 checksummed
   // address; they denote the same account, so compare case-insensitively.
@@ -87,5 +87,5 @@ test("setMultiLeaderRounds changes the round structure", async () => {
 
   // Restoring multi-leader rounds brings back the multi-leader round.
   await chain.setMultiLeaderRounds(3);
-  expect((await chain.nextRound()).kind).toBe("multiLeader");
+  expect((await chain.nextRoundInfo()).kind).toBe("multiLeader");
 }, 150000);

@@ -155,7 +155,7 @@ impl Chain {
     /// Synchronizes this chain with the validators, downloading any blocks and state that
     /// the local node is missing.
     ///
-    /// Reads such as [`balance`](Self::balance), [`nextRound`](Self::next_round),
+    /// Reads such as [`balance`](Self::balance), [`nextRoundInfo`](Self::next_round_info),
     /// [`isOwner`](Self::is_owner) and [`ownerWeight`](Self::owner_weight) operate on the
     /// local node, so call this after first connecting to a chain (for example one just
     /// claimed from the faucet) to make sure they observe the chain's current state.
@@ -215,13 +215,21 @@ impl Chain {
     /// offline mid-round) it stays queued and is retried before any new block. Call this
     /// to drop it so a fresh block can be proposed instead.
     ///
-    /// Importantly, this should never be used to clear a proposal already submitted in
-    /// the fast round.
+    /// Importantly, this must never be used to clear a proposal already submitted in the
+    /// fast round: fast-round proposals are final, so clearing one is rejected with an
+    /// error.
     ///
     /// # Errors
-    /// If the wallet fails to persist the cleared state.
+    /// If the chain is currently in the fast round, or the wallet fails to persist the
+    /// cleared state.
     #[wasm_bindgen(js_name = clearPendingProposal)]
     pub async fn clear_pending_proposal(&self) -> JsResult<()> {
+        let info = self.chain_client.chain_info().await?;
+        if info.manager.current_round == Round::Fast {
+            return Err(JsError::new(
+                "cannot clear a pending proposal in the fast round",
+            ));
+        }
         self.chain_client.clear_pending_proposal().await;
         // Fast-round proposals are also persisted in the wallet across sessions, so
         // refresh the persisted copy to keep it from coming back on reload.
@@ -244,21 +252,15 @@ impl Chain {
     ///
     /// # Errors
     /// If the chain information cannot be retrieved.
-    #[wasm_bindgen(js_name = nextRound)]
-    pub async fn next_round(&self) -> JsResult<RoundInfo> {
+    #[wasm_bindgen(js_name = nextRoundInfo)]
+    pub async fn next_round_info(&self) -> JsResult<RoundInfo> {
         let info = self.chain_client.chain_info().await?;
         let manager = &info.manager;
         let round = manager.current_round;
         let identity = self.chain_client.identity().await?;
-        let can_propose = match manager.leader {
-            Some(leader) => leader == identity,
-            None => match round {
-                Round::Fast => manager.ownership.super_owners.contains(&identity),
-                _ => manager
-                    .ownership
-                    .can_propose_in_multi_leader_round(&identity),
-            },
-        };
+        let can_propose = manager
+            .ownership
+            .can_propose(&identity, round, manager.leader.as_ref());
         let (kind, number) = match round {
             Round::Fast => ("fast", 0),
             Round::MultiLeader(number) => ("multiLeader", number),
