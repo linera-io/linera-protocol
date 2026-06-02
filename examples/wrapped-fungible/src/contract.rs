@@ -6,12 +6,12 @@
 mod state;
 
 use linera_sdk::{
-    linera_base_types::{AccountOwner, StreamName, WithContractAbi, U128},
+    linera_base_types::{AccountOwner, WithContractAbi, U128},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
 use wrapped_fungible::{
-    Account, BurnEvent, FungibleResponse, InitialState, Message, WrappedFungibleOperation,
+    Account, FungibleResponse, InitialState, Message, WrappedFungibleOperation,
     WrappedFungibleTokenAbi, WrappedParameters,
 };
 
@@ -32,7 +32,7 @@ impl Contract for WrappedFungibleTokenContract {
     type Message = Message;
     type Parameters = WrappedParameters;
     type InstantiationArgument = InitialState;
-    type EventValue = BurnEvent;
+    type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = WrappedFungibleTokenState::load(runtime.root_view_storage_context())
@@ -120,10 +120,32 @@ impl Contract for WrappedFungibleTokenContract {
             WrappedFungibleOperation::Mint {
                 target_account,
                 amount,
-            } => self.execute_mint(target_account, amount).await,
+            } => {
+                self.require_authorized_chain();
+                self.execute_mint(target_account, amount).await;
+                FungibleResponse::Ok
+            }
 
-            WrappedFungibleOperation::Burn { .. } => {
-                panic!("Operation::Burn is not supported; burning happens automatically on cross-chain transfer to an Address20 on the bridge chain");
+            WrappedFungibleOperation::Burn { owner, amount } => {
+                self.require_authorized_chain();
+                self.state.debit(owner, amount).await;
+                FungibleResponse::Ok
+            }
+
+            WrappedFungibleOperation::RegisterAuthorizedCaller { app_id } => {
+                self.runtime
+                    .authenticated_signer()
+                    .expect("RegisterAuthorizedCaller requires an authenticated signer");
+                // The authorized caller is only consulted by `Mint`/`Burn`, which
+                // runs only on the mint chain. Restrict registration to that chain
+                // so it cannot be set (even inertly) on user-owned chains.
+                let mint_chain_id = self.runtime.application_parameters().mint_chain_id;
+                assert!(
+                    self.runtime.chain_id() == mint_chain_id,
+                    "the authorized caller may only be registered on the mint chain"
+                );
+                self.state.authorized_caller_id.set(Some(app_id));
+                FungibleResponse::Ok
             }
         }
     }
@@ -139,21 +161,11 @@ impl Contract for WrappedFungibleTokenContract {
                     .runtime
                     .message_is_bouncing()
                     .expect("Delivery status is available when executing a message");
-                let on_mint_chain = self
-                    .runtime
-                    .application_parameters()
-                    .mint_chain_id
-                    .is_some_and(|id| self.runtime.chain_id() == id);
+                // A bouncing Credit returns funds to the original `source`
+                // (e.g. when a driven burn is rejected and the funding transfer
+                // bounces back). Otherwise credit the `target`.
                 if is_bouncing {
                     self.state.credit(source, amount).await;
-                } else if let (true, AccountOwner::Address20(addr)) = (on_mint_chain, target) {
-                    self.runtime.emit(
-                        StreamName::from("burns"),
-                        &BurnEvent {
-                            target: addr,
-                            amount,
-                        },
-                    );
                 } else {
                     self.state.credit(target, amount).await;
                 }
@@ -182,37 +194,35 @@ impl Contract for WrappedFungibleTokenContract {
 }
 
 impl WrappedFungibleTokenContract {
-    /// Checks the configured minting restrictions. Each check is only
-    /// enforced when the corresponding parameter is `Some`.
-    fn require_mint_authorized(&mut self) {
-        let params: WrappedParameters = self.runtime.application_parameters();
-        if let Some(bridge_app_id) = params.bridge_app_id {
-            let caller = self.runtime.authenticated_caller_id();
-            assert!(
-                caller == Some(bridge_app_id),
-                "minting is only allowed via the bridge application"
-            );
-        }
-        if let Some(minter) = params.minter {
-            let signer = self
-                .runtime
-                .authenticated_signer()
-                .expect("minter is configured but no authenticated signer");
-            assert!(
-                signer == minter,
-                "only the minter can perform this operation"
-            );
-        }
-        if let Some(mint_chain_id) = params.mint_chain_id {
-            assert!(
-                self.runtime.chain_id() == mint_chain_id,
-                "minting is only allowed on the designated mint chain"
-            );
-        }
+    /// Enforces the authorization shared by `Mint` and `Burn`: the
+    /// cross-application caller must be the registered authorized caller (set via
+    /// `RegisterAuthorizedCaller`), and the operation must run on the designated
+    /// `mint_chain_id`. Both are **mandatory**: `Mint` and `Burn` may be driven
+    /// only by the authorized caller, so a wrapped token with no caller registered
+    /// — or no mint chain configured — must never change supply. Requiring
+    /// registration also removes any setup window in which an impostor application
+    /// could mint or burn.
+    ///
+    /// There is intentionally no signer check: the authorized caller is the sole
+    /// caller and is trusted to act only on its own validated input, so the
+    /// authenticated signer — whoever relayed the request — is irrelevant to
+    /// safety. Omitting it makes relaying permissionless.
+    fn require_authorized_chain(&mut self) {
+        let authorized_caller_id = (*self.state.authorized_caller_id.get())
+            .expect("authorized caller not registered — call RegisterAuthorizedCaller first");
+        let caller = self.runtime.authenticated_caller_id();
+        assert!(
+            caller == Some(authorized_caller_id),
+            "only the authorized caller may mint or burn"
+        );
+        let mint_chain_id = self.runtime.application_parameters().mint_chain_id;
+        assert!(
+            self.runtime.chain_id() == mint_chain_id,
+            "minting and burning are only allowed on the designated mint chain"
+        );
     }
 
-    async fn execute_mint(&mut self, target_account: Account, amount: U128) -> FungibleResponse {
-        self.require_mint_authorized();
+    async fn execute_mint(&mut self, target_account: Account, amount: U128) {
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
         } else {
@@ -230,7 +240,6 @@ impl WrappedFungibleTokenContract {
                 .with_tracking()
                 .send_to(target_account.chain_id);
         }
-        FungibleResponse::Ok
     }
 
     async fn claim(&mut self, source_account: Account, amount: U128, target_account: Account) {

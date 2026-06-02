@@ -6,11 +6,11 @@
 use std::sync::Arc;
 
 use alloy_primitives::B256;
-use async_graphql::{EmptyMutation, EmptySubscription, Object, Request, Response, Schema};
-use evm_bridge::{BridgeParameters, EvmBridgeAbi};
+use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use evm_bridge::{BridgeOperation, BridgeParameters, EvmBridgeAbi};
 use linera_sdk::{
     ethereum::{EthereumQueries, ServiceEthereumClient},
-    linera_base_types::{ApplicationId, WithServiceAbi},
+    linera_base_types::{WithServiceAbi, U128},
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Service, ServiceRuntime,
 };
@@ -23,7 +23,6 @@ use linera_sdk::{
 pub struct BridgeState {
     pub processed_deposits: SetView<[u8; 32]>,
     pub verified_block_hashes: SetView<[u8; 32]>,
-    pub fungible_app_id: RegisterView<Option<ApplicationId>>,
     pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
     pub rpc_endpoint: RegisterView<String>,
 }
@@ -55,8 +54,106 @@ impl Service for EvmBridgeService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(self.clone(), EmptyMutation, EmptySubscription).finish();
+        let schema = Schema::build(
+            self.clone(),
+            MutationRoot {
+                runtime: self.runtime.clone(),
+            },
+            EmptySubscription,
+        )
+        .finish();
         schema.execute(request).await
+    }
+}
+
+/// Decodes a hex string (optional `0x` prefix) into bytes.
+fn decode_hex(label: &str, s: &str) -> async_graphql::Result<Vec<u8>> {
+    hex::decode(s.strip_prefix("0x").unwrap_or(s))
+        .map_err(|e| async_graphql::Error::new(format!("invalid {label} hex: {e}")))
+}
+
+/// Decodes a hex string into a fixed-size byte array.
+fn decode_hex_array<const N: usize>(label: &str, s: &str) -> async_graphql::Result<[u8; N]> {
+    decode_hex(label, s)?.as_slice().try_into().map_err(|_| {
+        async_graphql::Error::new(format!(
+            "{label} must be exactly {N} bytes ({} hex chars)",
+            N * 2
+        ))
+    })
+}
+
+/// GraphQL mutation root: schedules bridge operations submitted by a client (the
+/// demo UI, an admin tool, or a custom relayer). The application bytecode — and
+/// thus this interface — cannot change after deployment, so every
+/// [`BridgeOperation`] is exposed; on-chain authorization still gates each.
+/// Byte-array arguments are hex-encoded strings (with or without `0x`).
+pub struct MutationRoot {
+    runtime: Arc<ServiceRuntime<EvmBridgeService>>,
+}
+
+#[Object]
+impl MutationRoot {
+    /// Burns `amount` wrapped tokens from the operation's authenticated signer
+    /// and releases the corresponding ERC-20 to `evm_target` (20-byte EVM
+    /// address) on the source chain.
+    async fn burn(&self, amount: U128, evm_target: String) -> async_graphql::Result<[u8; 0]> {
+        let evm_target = decode_hex_array::<20>("evm_target", &evm_target)?;
+        self.runtime
+            .schedule_operation(&BridgeOperation::Burn { amount, evm_target });
+        Ok([])
+    }
+
+    /// Verifies a deposit proof from the source chain and mints wrapped tokens.
+    /// `block_header_rlp`, `receipt_rlp`, and each `proof_nodes` entry are
+    /// hex-encoded; `tx_index`/`log_index` select the log within the block.
+    async fn process_deposit(
+        &self,
+        block_header_rlp: String,
+        receipt_rlp: String,
+        proof_nodes: Vec<String>,
+        tx_index: u64,
+        log_index: u64,
+    ) -> async_graphql::Result<[u8; 0]> {
+        let block_header_rlp = decode_hex("block_header_rlp", &block_header_rlp)?;
+        let receipt_rlp = decode_hex("receipt_rlp", &receipt_rlp)?;
+        let proof_nodes = proof_nodes
+            .iter()
+            .map(|n| decode_hex("proof_nodes", n))
+            .collect::<async_graphql::Result<Vec<_>>>()?;
+        self.runtime
+            .schedule_operation(&BridgeOperation::ProcessDeposit {
+                block_header_rlp,
+                receipt_rlp,
+                proof_nodes,
+                tx_index,
+                log_index,
+            });
+        Ok([])
+    }
+
+    /// Verifies that an EVM block hash (32 bytes) is authentic and finalized.
+    async fn verify_block_hash(&self, block_hash: String) -> async_graphql::Result<[u8; 0]> {
+        let block_hash = decode_hex_array::<32>("block_hash", &block_hash)?;
+        self.runtime
+            .schedule_operation(&BridgeOperation::VerifyBlockHash { block_hash });
+        Ok([])
+    }
+
+    /// Registers the EVM `FungibleBridge` contract address (20 bytes). One-shot,
+    /// chain-owner-only.
+    async fn register_fungible_bridge(&self, address: String) -> async_graphql::Result<[u8; 0]> {
+        let address = decode_hex_array::<20>("address", &address)?;
+        self.runtime
+            .schedule_operation(&BridgeOperation::RegisterFungibleBridge { address });
+        Ok([])
+    }
+
+    /// Sets the EVM JSON-RPC endpoint used for finality verification (empty
+    /// string disables it). Chain-owner-only.
+    async fn set_rpc_endpoint(&self, rpc_endpoint: String) -> async_graphql::Result<[u8; 0]> {
+        self.runtime
+            .schedule_operation(&BridgeOperation::SetRpcEndpoint { rpc_endpoint });
+        Ok([])
     }
 }
 

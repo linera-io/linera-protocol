@@ -34,9 +34,12 @@ contract FungibleBridge is Microchain {
     /// the source Linera block (matches the on-chain dedup key).
     event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
 
-    // WrappedFungible application ID on Linera,
-    // used to identify Burn events in the block stream.
+    // WrappedFungible application ID on Linera. Required deposit target
+    // (see `deposit`), on whose behalf the released ERC-20 is bridged.
     bytes32 public immutable fungibleApplicationId;
+    // EVM bridge application ID on Linera, whose "burns" stream this contract
+    // matches Burn events against when releasing ERC-20 tokens.
+    bytes32 public immutable bridgeApplicationId;
     // The ERC-20 token being bridged.
     IERC20 public immutable token;
     uint256 public depositNonce;
@@ -47,12 +50,18 @@ contract FungibleBridge is Microchain {
     /// `_onBlock` after the burn's `token.transfer` succeeds.
     mapping(bytes32 => bool) internal processedBurns;
 
-    constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId)
-        Microchain(_lightClient, _chainId)
-    {
+    constructor(
+        address _lightClient,
+        bytes32 _chainId,
+        address _token,
+        bytes32 _fungibleApplicationId,
+        bytes32 _bridgeApplicationId
+    ) Microchain(_lightClient, _chainId) {
         require(_fungibleApplicationId != bytes32(0), "fungibleApplicationId must be non-zero");
+        require(_bridgeApplicationId != bytes32(0), "bridgeApplicationId must be non-zero");
         token = IERC20(_token);
         fungibleApplicationId = _fungibleApplicationId;
+        bridgeApplicationId = _bridgeApplicationId;
     }
 
     /// Returns whether the burn at `(height, eventIndex)` has already been
@@ -96,7 +105,7 @@ contract FungibleBridge is Microchain {
     }
 
     /// Processes a Linera block and releases ERC-20 tokens for any BurnEvent
-    /// events on the "burns" stream from the wrapped-fungible application.
+    /// events on the "burns" stream from the bridge application.
     /// Idempotent: each burn's release is gated on
     /// `processedBurns[keccak256(abi.encode(height, evt.index))]`, so
     /// re-submitting the same cert is a no-op for burns already released
@@ -167,12 +176,12 @@ contract FungibleBridge is Microchain {
         return keccak256(abi.encode(height, eventIndex));
     }
 
-    /// Returns true if `evt` belongs to the configured wrapped-fungible
-    /// application's "burns" stream.
+    /// Returns true if `evt` belongs to the configured bridge application's
+    /// "burns" stream.
     function _isMatchingBurn(BridgeTypes.Event memory evt, bytes32 burnsHash) private view returns (bool) {
         // choice == 1 is User application
         if (evt.stream_id.application_id.choice != 1) return false;
-        if (evt.stream_id.application_id.user.application_description_hash.value != fungibleApplicationId) {
+        if (evt.stream_id.application_id.user.application_description_hash.value != bridgeApplicationId) {
             return false;
         }
         if (keccak256(evt.stream_id.stream_name.value) != burnsHash) return false;

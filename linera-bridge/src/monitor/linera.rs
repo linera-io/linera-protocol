@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Linera-side monitoring: scans for BurnEvent stream events (auto-burns),
+//! Linera-side monitoring: scans for BurnEvent stream events,
 //! forwards certificates to EVM, checks EVM for completion via ERC-20
 //! Transfer events, and retries unforwarded burns.
 
@@ -341,7 +341,10 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
         return Ok(());
     }
 
-    let fungible_app_id = linera_client.fungible_app_id();
+    // Burns are now driven by the bridge application, which emits the
+    // `BurnEvent` on its own "burns" stream — so scan the bridge app's events,
+    // not the wrapped-fungible app's.
+    let bridge_app_id = linera_client.bridge_app_id();
 
     let mut blocks = Vec::new();
     let mut hash = info.block_hash;
@@ -359,7 +362,7 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     let mut new_burns = Vec::new();
     for (block_hash, block) in &blocks {
         let height = block.block().header.height;
-        let burn_events = find_burn_events(&block.block().body.events, fungible_app_id);
+        let burn_events = find_burn_events(&block.block().body.events, bridge_app_id);
         for (tx_index, event_pos_in_tx, event_index, burn_event) in burn_events {
             new_burns.push((
                 height,
