@@ -231,8 +231,10 @@ impl Chain {
             ));
         }
         self.chain_client.clear_pending_proposal().await;
-        // Fast-round proposals are also persisted in the wallet across sessions, so
-        // refresh the persisted copy to keep it from coming back on reload.
+        // Of all proposals, only fast-round ones are persisted in the wallet across
+        // sessions. The guard above forbids clearing one while the chain is still in the
+        // fast round, but a stuck fast-round proposal can outlive the fast round itself;
+        // refresh the persisted copy so that clearing it here is not undone on reload.
         self.client
             .context
             .lock()
