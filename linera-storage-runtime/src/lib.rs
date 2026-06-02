@@ -3,6 +3,8 @@
 
 //! Storage configuration and runtime infrastructure for the Linera protocol.
 
+#![deny(missing_docs)]
+
 use std::{fmt, path::PathBuf, str::FromStr};
 
 use anyhow::{anyhow, bail};
@@ -45,6 +47,7 @@ use {
     tracing::debug,
 };
 
+/// Command-line options shared by all storage backends.
 #[derive(Clone, Debug, clap::Parser)]
 pub struct CommonStorageOptions {
     /// The maximal number of simultaneous queries to the database
@@ -121,6 +124,7 @@ pub struct CommonStorageOptions {
 }
 
 impl CommonStorageOptions {
+    /// Builds the storage-level cache configuration from these options.
     pub fn storage_cache_sizes(&self) -> StorageCacheSizes {
         StorageCacheSizes {
             blob_cache_size: self.blob_cache_size,
@@ -132,6 +136,7 @@ impl CommonStorageOptions {
         }
     }
 
+    /// Builds the views-level cache configuration from these options.
     pub fn storage_cache_config(&self) -> ViewsStorageCacheConfig {
         ViewsStorageCacheConfig {
             max_cache_size: self.storage_max_cache_size,
@@ -157,37 +162,51 @@ impl CommonStorageOptions {
 pub enum StoreConfig {
     /// The memory key value store
     Memory {
+        /// The store configuration.
         config: MemoryStoreConfig,
+        /// The namespace used.
         namespace: String,
+        /// The path to the genesis configuration.
         genesis_path: PathBuf,
     },
     /// The storage service key-value store
     #[cfg(feature = "storage-service")]
     StorageService {
+        /// The store configuration.
         config: StorageServiceStoreConfig,
+        /// The namespace used.
         namespace: String,
     },
     /// The RocksDB key value store
     #[cfg(feature = "rocksdb")]
     RocksDb {
+        /// The store configuration.
         config: RocksDbStoreConfig,
+        /// The namespace used.
         namespace: String,
     },
     /// The DynamoDB key value store
     #[cfg(feature = "dynamodb")]
     DynamoDb {
+        /// The store configuration.
         config: DynamoDbStoreConfig,
+        /// The namespace used.
         namespace: String,
     },
     /// The ScyllaDB key value store
     #[cfg(feature = "scylladb")]
     ScyllaDb {
+        /// The store configuration.
         config: ScyllaDbStoreConfig,
+        /// The namespace used.
         namespace: String,
     },
+    /// The dual RocksDB and ScyllaDB key value store
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
     DualRocksDbScyllaDb {
+        /// The store configuration.
         config: DualStoreConfig<RocksDbStoreConfig, ScyllaDbStoreConfig>,
+        /// The namespace used.
         namespace: String,
     },
 }
@@ -228,6 +247,7 @@ pub enum InnerStorageConfig {
         /// The URI for accessing the database.
         uri: String,
     },
+    /// The dual RocksDB and ScyllaDB description.
     #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
     DualRocksDbScyllaDb {
         /// The path used.
@@ -483,6 +503,7 @@ example service:tcp:127.0.0.1:7878:table_do_my_test"
 }
 
 impl StorageConfig {
+    /// Appends a per-shard subdirectory to the path, for backends that store data on disk.
     #[allow(unused_variables)]
     pub fn maybe_append_shard_path(&mut self, shard: usize) -> std::io::Result<()> {
         match &mut self.inner_storage_config {
@@ -654,19 +675,25 @@ impl fmt::Display for StorageConfig {
     }
 }
 
+/// A job that runs against a connected, high-level [`Storage`].
 #[async_trait]
 pub trait Runnable {
+    /// The type produced by running the job.
     type Output;
 
+    /// Runs the job against the given storage.
     async fn run<S>(self, storage: S) -> Self::Output
     where
         S: Storage + Clone + Send + Sync + 'static;
 }
 
+/// A job that runs directly against a key-value store, without a full [`Storage`].
 #[async_trait]
 pub trait RunnableWithStore {
+    /// The type produced by running the job.
     type Output;
 
+    /// Runs the job against the store described by the given config and namespace.
     async fn run<D>(
         self,
         config: D::Config,
@@ -685,6 +712,7 @@ fn read_json<T: serde::de::DeserializeOwned>(path: impl Into<PathBuf>) -> anyhow
 }
 
 impl StoreConfig {
+    /// Connects to the storage backend and runs the given job against it.
     pub async fn run_with_storage<Job>(
         self,
         wasm_runtime: Option<WasmRuntime>,
@@ -776,6 +804,7 @@ impl StoreConfig {
         }
     }
 
+    /// Connects to the key-value store and runs the given store-level job against it.
     #[allow(unused_variables)]
     pub async fn run_with_store<Job>(
         self,
@@ -817,6 +846,7 @@ impl StoreConfig {
     }
 }
 
+/// A store-level job that migrates the storage to the latest version if needed.
 pub struct StorageMigration;
 
 #[async_trait]
@@ -845,6 +875,7 @@ impl RunnableWithStore for StorageMigration {
     }
 }
 
+/// A store-level job that asserts the storage is already at version 1.
 pub struct AssertStorageV1;
 
 #[async_trait]

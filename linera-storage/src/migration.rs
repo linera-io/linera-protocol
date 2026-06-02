@@ -157,6 +157,7 @@ where
         Ok(())
     }
 
+    /// Migrates the storage to the latest schema version if it is out of date.
     pub async fn migrate_if_needed(&self) -> Result<(), ViewError> {
         loop {
             if matches!(

@@ -1,0 +1,62 @@
+name: Bridge check
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'mdbook/**'
+      - 'kubernetes/**'
+      - 'docker/dashboards/**'
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.run_id }}'
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTFLAGS: -D warnings
+  RUSTUP_MAX_RETRIES: 10
+  RUST_LOG: warn
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          submodules: recursive
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: Install Protoc
+        uses: ./.github/actions/install-protoc
+
+      - name: cargo check linera-bridge (default)
+        run: cargo check --locked -p linera-bridge --all-targets
+
+      - name: cargo check linera-bridge (relay)
+        run: cargo check --locked -p linera-bridge --features relay --all-targets
+
+      - name: cargo check evm-bridge contract (wasm32)
+        working-directory: linera-bridge/contracts/evm-bridge
+        run: cargo check --locked --target wasm32-unknown-unknown --all-targets
+
+      - name: cargo check wrapped-fungible (wasm32)
+        working-directory: examples
+        run: cargo check --locked --target wasm32-unknown-unknown -p wrapped-fungible --all-targets
+
+      - name: cargo check bridge e2e (separate workspace)
+        working-directory: linera-bridge/tests/e2e
+        run: cargo check --locked --all-targets

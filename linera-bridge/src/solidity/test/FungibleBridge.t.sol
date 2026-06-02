@@ -78,7 +78,7 @@ contract MockLightClientForBurns {
     function _encodeBurn(address target, uint128 amount) private pure returns (bytes memory) {
         WrappedFungibleTypes.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(target);
-        burnEvt.amount = BridgeTypes.Amount(amount);
+        burnEvt.amount = amount;
         return WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
     }
 }
@@ -119,7 +119,7 @@ contract MockLightClientForNonBurn {
         evt.index = 5;
         WrappedFungibleTypes.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(recipBase);
-        burnEvt.amount = BridgeTypes.Amount(amountPerBurn);
+        burnEvt.amount = amountPerBurn;
         evt.value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
         b.body.events[0][0] = evt;
 
@@ -149,10 +149,12 @@ function _u32s_single(uint32 a) pure returns (uint32[] memory) {
 // ------------------------------------------------------------------
 
 contract FungibleBridgeProcessBurnsTest is Test {
+    event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
+
     // Deploy a bridge backed by `lc`, with a LineraToken that has
     // `supply` tokens pre-minted to the bridge.
     function _deployBridge(address lc, uint256 supply) internal returns (FungibleBridge bridge, LineraToken tok) {
-        tok = new LineraToken("Test", "TST", supply);
+        tok = new LineraToken("Test", "TST", 18, supply);
         bridge = new FungibleBridge(lc, CHAIN_ID, address(tok), APP_ID);
         // Send all tokens to the bridge so transfer() calls succeed.
         tok.transfer(address(bridge), supply);
@@ -238,6 +240,23 @@ contract FungibleBridgeProcessBurnsTest is Test {
         uint32[] memory empty = new uint32[](0);
         vm.expectRevert(bytes("empty positions"));
         bridge.processBurns(hex"deadbeef", TX, empty);
+    }
+
+    function test_processBurns_emits_BurnReleased() public {
+        // Settle two burns; each release emits BurnReleased with
+        // (height, evt.index, target, amount). Recipients are
+        // RECIP_0 and RECIP_0+1; stream indices are 5 and 6.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+
+        address recip1 = address(uint160(RECIP_0) + 1);
+
+        vm.expectEmit(true, true, true, true, address(bridge));
+        emit BurnReleased(HEIGHT, 5, RECIP_0, AMOUNT);
+        vm.expectEmit(true, true, true, true, address(bridge));
+        emit BurnReleased(HEIGHT, 6, recip1, AMOUNT);
+
+        bridge.processBurns(hex"deadbeef", TX, _u32s(0, 1));
     }
 
     function test_processBurns_partial_overlap_releases_remaining() public {

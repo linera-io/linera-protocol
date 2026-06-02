@@ -17,7 +17,7 @@ use alloy::{
 use anyhow::Context as _;
 use linera_base::{
     crypto::InMemorySigner,
-    data_types::{Amount, Bytecode},
+    data_types::{Bytecode, U128},
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
@@ -185,6 +185,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     tracing::info!("Creating wrapped-fungible application...");
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wTEST".to_string(),
+        decimals: 18,
         minter: Some(owner),
         mint_chain_id: Some(chain_id),
         evm_token_address: erc20_addr.0 .0,
@@ -368,10 +369,10 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     let balance_str = response["data"]["accounts"]["entry"]["value"]
         .as_str()
         .context("no balance in GraphQL response")?;
-    let balance: Amount = balance_str.parse()?;
+    let balance: U128 = balance_str.parse()?;
     assert_eq!(
         balance,
-        Amount::from_tokens(100),
+        U128(100u128 * 10u128.pow(18)),
         "wrapped-fungible balance should match the 100-token deposit"
     );
 

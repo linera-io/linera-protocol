@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A [`Persist`] backend that atomically saves the value to a locked file on disk.
+
 use std::{
     io::{self, BufRead as _, Write as _},
     path::Path,
@@ -22,7 +24,20 @@ enum ErrorInner {
     JsonError(#[from] serde_json::Error),
 }
 
-thiserror_context::impl_context!(Error(ErrorInner));
+pub use error::Error;
+
+mod error {
+    // `impl_context!` generates a public `Error` newtype (with accessors) that cannot carry
+    // doc comments, so this wrapper module is exempted from the crate's `missing_docs` policy.
+    // `expect` (rather than `allow`) flags this if the macro ever stops generating such items.
+    #![expect(missing_docs)]
+
+    use thiserror_context::Context;
+
+    use super::ErrorInner;
+
+    thiserror_context::impl_context!(Error(ErrorInner));
+}
 
 /// Utility: run a fallible cleanup function if an operation failed, attaching the
 /// original operation as context to its error.
@@ -165,6 +180,7 @@ impl<T: serde::Serialize + serde::de::DeserializeOwned> File<T> {
         Ok(me)
     }
 
+    /// Atomically writes the current value to the file, via a temporary staging file.
     pub fn save(&self) -> Result<(), Error> {
         let mut temp_file_path = self.path.clone();
         temp_file_path.set_extension("json.new");

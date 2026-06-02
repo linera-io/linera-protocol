@@ -65,7 +65,7 @@ use crate::test_utils::RocksDbStorageBuilder;
 #[cfg(feature = "scylladb")]
 use crate::test_utils::ScyllaDbStorageBuilder;
 use crate::{
-    chain_worker::CrossChainUpdateHelper,
+    chain_worker::{CrossChainUpdateHelper, ProcessConfirmedBlockMode},
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
@@ -1034,7 +1034,7 @@ where
     drop(chain);
 
     env.worker()
-        .handle_confirmed_certificate(certificate0, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     drop(chain);
@@ -1128,11 +1128,11 @@ where
     // The worker handles certificates 0 and 2 - this should succeed, and the worker
     // should now have block 0 fully processed, and block 2 preprocessed.
     env.worker()
-        .handle_confirmed_certificate(certificate0, None)
+        .handle_confirmed_certificate(certificate0, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     env.worker()
-        .handle_confirmed_certificate(certificate2.clone(), None)
+        .handle_confirmed_certificate(certificate2.clone(), ProcessConfirmedBlockMode::Auto, None)
         .await?;
 
     {
@@ -1158,7 +1158,7 @@ where
 
     // Handle the certificate in the gap.
     env.worker()
-        .handle_confirmed_certificate(certificate1, None)
+        .handle_confirmed_certificate(certificate1, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1170,7 +1170,7 @@ where
     // ...and the one that has been preprocessed before, again, as it is not automatically
     // re-processed.
     env.worker()
-        .handle_confirmed_certificate(certificate2, None)
+        .handle_confirmed_certificate(certificate2, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     {
@@ -1270,7 +1270,11 @@ where
     // Missing earlier blocks, but the certificate will be preprocessed.
     assert_matches!(
         env.worker()
-            .handle_confirmed_certificate(certificate1.clone(), None)
+            .handle_confirmed_certificate(
+                certificate1.clone(),
+                ProcessConfirmedBlockMode::Auto,
+                None
+            )
             .await,
         Ok(_)
     );
@@ -1510,7 +1514,11 @@ where
             .with(block_proposal.content.block),
         ));
         env.worker()
-            .handle_confirmed_certificate(certificate.clone(), None)
+            .handle_confirmed_certificate(
+                certificate.clone(),
+                ProcessConfirmedBlockMode::Execute,
+                None,
+            )
             .await?;
 
         // Then receive the next two messages.
@@ -4327,7 +4335,7 @@ where
     );
     let certificate = env.make_certificate(value);
     env.worker()
-        .handle_confirmed_certificate(certificate, None)
+        .handle_confirmed_certificate(certificate, ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     for _ in query_contexts_after_new_block.clone() {
@@ -4421,7 +4429,11 @@ where
     ));
 
     env.worker()
-        .handle_confirmed_certificate(certificate_chain_2.clone(), None)
+        .handle_confirmed_certificate(
+            certificate_chain_2.clone(),
+            ProcessConfirmedBlockMode::Execute,
+            None,
+        )
         .await?;
 
     // Now try to stage a block with the earlier message (transaction_index: 0).
@@ -4520,10 +4532,10 @@ where
 
     // Step 2: Process both certs on chain_1 (adds heights 0, 1 to outbox for chain_2).
     env.worker()
-        .process_confirmed_block(cert_0.clone(), None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
     env.worker()
-        .process_confirmed_block(cert_1.clone(), None)
+        .process_confirmed_block(cert_1.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Step 3: Deliver height 0 to chain_2 and confirm it on chain_1.
@@ -4577,7 +4589,7 @@ where
         .await;
     // Process cert_2 on chain_1 so the block is in confirmed_log.
     env.worker()
-        .process_confirmed_block(cert_2.clone(), None)
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Now manually deliver height 2's cross-chain update to chain_2.
@@ -4906,9 +4918,16 @@ where
         .await;
 
     // Process all three blocks on chain_1.
-    env.worker().process_confirmed_block(cert_0, None).await?;
-    env.worker().process_confirmed_block(cert_1, None).await?;
-    let (_, actions, _) = env.worker().process_confirmed_block(cert_2, None).await?;
+    env.worker()
+        .process_confirmed_block(cert_0, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    let (_, actions, _) = env
+        .worker()
+        .process_confirmed_block(cert_2, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
 
     // With chunk_limit=1, only the first chunk (height 0) should be returned.
     // The remaining heights stay in the outbox for delivery after confirmation.
@@ -5024,11 +5043,13 @@ where
 
     // Process all three blocks on chain_1.
     env.worker()
-        .process_confirmed_block(cert_0.clone(), None)
+        .process_confirmed_block(cert_0.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
-    env.worker().process_confirmed_block(cert_1, None).await?;
     env.worker()
-        .process_confirmed_block(cert_2.clone(), None)
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_2.clone(), ProcessConfirmedBlockMode::Execute, None)
         .await?;
 
     // Deliver height 0 to chain_2 and confirm it.

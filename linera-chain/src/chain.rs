@@ -11,7 +11,7 @@ use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
-        OracleResponse, Timestamp,
+        NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
     },
     ensure,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
@@ -159,7 +159,16 @@ pub(crate) mod metrics {
             "num_outboxes",
             "Number of outboxes",
             &[],
-            exponential_bucket_interval(1.0, 10_000.0),
+            exponential_bucket_interval(1.0, 1_000_000.0),
+        )
+    });
+
+    pub static OUTBOX_COUNTERS_SIZE: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "outbox_counters_size",
+            "Number of entries in the outbox_counters map (in-flight message heights)",
+            &[],
+            exponential_bucket_interval(1.0, 1_000_000.0),
         )
     });
 
@@ -262,9 +271,9 @@ where
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
-    pub outbox_counters: RegisterView<C, BTreeMap<BlockHeight, u32>>,
+    pub outbox_counters: RegisterView<C, NonCanonicalBTreeMap<BlockHeight, u32>>,
     /// Outboxes with at least one pending message. This allows us to avoid loading all outboxes.
-    pub nonempty_outboxes: RegisterView<C, BTreeSet<ChainId>>,
+    pub nonempty_outboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
     /// Blocks that have been verified but not executed yet, and that may not be contiguous.
     pub preprocessed_blocks: MapView<C, BlockHeight, CryptoHash>,
@@ -276,7 +285,7 @@ where
     /// Inboxes with at least one pending added bundle. This allows us to avoid loading all
     /// inboxes. `None` means the set hasn't been computed yet for this chain (backwards
     /// compatibility with pre-existing database entries).
-    pub nonempty_inboxes: RegisterView<C, Option<BTreeSet<ChainId>>>,
+    pub nonempty_inboxes: RegisterView<C, Option<NonCanonicalBTreeSet<ChainId>>>,
 
     /// The local wall-clock time when block 0 was last executed. Used to prevent
     /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
@@ -460,6 +469,10 @@ where
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(self.nonempty_outboxes.get().len() as f64);
+        #[cfg(with_metrics)]
+        metrics::OUTBOX_COUNTERS_SIZE
+            .with_label_values(&[])
+            .observe(self.outbox_counters.get().len() as f64);
         Ok(true)
     }
 
@@ -1400,6 +1413,10 @@ where
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
             .observe(nonempty_outboxes.len() as f64);
+        #[cfg(with_metrics)]
+        metrics::OUTBOX_COUNTERS_SIZE
+            .with_label_values(&[])
+            .observe(outbox_counters.len() as f64);
         Ok(targets)
     }
 }

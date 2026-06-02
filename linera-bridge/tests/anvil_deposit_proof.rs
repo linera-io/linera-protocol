@@ -49,6 +49,13 @@ alloy_sol_types::sol! {
         bytes32 target_account_owner,
         uint256 amount
     ) external;
+
+    struct LineraTokenConstructorArgs {
+        string name;
+        string symbol;
+        uint8 decimals_;
+        uint256 initialSupply;
+    }
 }
 
 /// Compiles a Solidity contract via `solc`, returning deployment bytecode.
@@ -174,7 +181,13 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     let initial_supply = U256::from(1_000_000_000u64);
     let mut erc20_deploy = erc20_bytecode;
     erc20_deploy.extend_from_slice(
-        &("TestToken".to_string(), "TT".to_string(), initial_supply).abi_encode_params(),
+        &LineraTokenConstructorArgs {
+            name: "TestToken".to_string(),
+            symbol: "TT".to_string(),
+            decimals_: 18,
+            initialSupply: initial_supply,
+        }
+        .abi_encode_params(),
     );
 
     let tx = TransactionRequest::default()

@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr as _;
+use std::{str::FromStr as _, sync::Arc};
 
 use linera_base::time::{Duration, Instant};
 use linera_core::node::{NodeError, ValidatorNodeProvider};
@@ -22,7 +22,7 @@ pub struct GrpcNodeProvider {
     /// Shared across all `GrpcClient` instances. When a subscription to a validator
     /// fails, the failure time is recorded here so that other chains (which share the
     /// same provider) skip retrying the same dead validator.
-    subscription_cooldowns: papaya::HashMap<String, Instant>,
+    subscription_cooldowns: Arc<papaya::HashMap<String, Instant>>,
 }
 
 impl GrpcNodeProvider {
@@ -37,7 +37,7 @@ impl GrpcNodeProvider {
             retry_delay,
             max_retries,
             max_backoff,
-            subscription_cooldowns: papaya::HashMap::new(),
+            subscription_cooldowns: Arc::new(papaya::HashMap::new()),
         }
     }
 }

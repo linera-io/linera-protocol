@@ -11,7 +11,7 @@ use fungible::Account;
 use linera_bridge::proof;
 use linera_sdk::{
     ethereum::{ContractEthereumClient, EthereumQueries},
-    linera_base_types::{Amount, ApplicationId, WithContractAbi},
+    linera_base_types::{ApplicationId, U128, WithContractAbi},
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
@@ -267,7 +267,12 @@ impl EvmBridgeContract {
         }
 
         // 6. Convert deposit fields to Linera types and call Mint
-        let amount = Amount::try_from(deposit.amount).expect("deposit amount exceeds u128");
+        let amount = U128(
+            deposit
+                .amount
+                .try_into()
+                .expect("deposit amount exceeds u128"),
+        );
 
         let mint_op = WrappedFungibleOperation::Mint {
             target_account: Account {

@@ -26,7 +26,7 @@ use alloy::{
     rpc::types::Filter,
     sol,
 };
-use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
+use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible,
@@ -126,7 +126,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
 
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
     let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000).await?;
+        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
 
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
@@ -167,7 +167,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
         "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955".parse()?,
         "0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f".parse()?,
     ];
-    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
+    let burn_amount = U128(BURN_AMOUNT_TOKENS * 10u128.pow(18));
 
     // Bundle every Transfer into one chain-B block; chain-A's
     // process_inbox produces a single chain-A block with N BurnEvents.

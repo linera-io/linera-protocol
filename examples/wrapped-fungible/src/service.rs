@@ -3,21 +3,25 @@
 
 #![cfg_attr(target_arch = "wasm32", no_main)]
 
+mod state;
+
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
-use fungible::{state::FungibleTokenState, OwnerSpender};
+use fungible::OwnerSpender;
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, Amount, WithServiceAbi},
+    linera_base_types::{AccountOwner, WithServiceAbi, U128},
     views::{MapView, View},
     Service, ServiceRuntime,
 };
 use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters};
 
+use crate::state::WrappedFungibleTokenState;
+
 #[derive(Clone)]
 pub struct WrappedFungibleTokenService {
-    state: Arc<FungibleTokenState>,
+    state: Arc<WrappedFungibleTokenState>,
     runtime: Arc<ServiceRuntime<Self>>,
 }
 
@@ -31,7 +35,7 @@ impl Service for WrappedFungibleTokenService {
     type Parameters = WrappedParameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = FungibleTokenState::load(runtime.root_view_storage_context())
+        let state = WrappedFungibleTokenState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
         WrappedFungibleTokenService {
@@ -53,17 +57,23 @@ impl Service for WrappedFungibleTokenService {
 
 #[Object]
 impl WrappedFungibleTokenService {
-    async fn accounts(&self) -> &MapView<AccountOwner, Amount> {
+    async fn accounts(&self) -> &MapView<AccountOwner, U128> {
         &self.state.accounts
     }
 
-    async fn allowances(&self) -> &MapView<OwnerSpender, Amount> {
+    async fn allowances(&self) -> &MapView<OwnerSpender, U128> {
         &self.state.allowances
     }
 
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
         let params: WrappedParameters = self.runtime.application_parameters();
         Ok(params.ticker_symbol)
+    }
+
+    /// The number of decimal places used by the source ERC-20.
+    async fn decimals(&self) -> u8 {
+        let params: WrappedParameters = self.runtime.application_parameters();
+        params.decimals
     }
 
     /// The ERC-20 token address on the source EVM chain (hex-encoded).

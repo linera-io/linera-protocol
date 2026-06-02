@@ -21,7 +21,7 @@ use linera_base::{
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
+        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
     },
     ensure,
     identifiers::{
@@ -124,10 +124,6 @@ pub struct Options {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
-    /// Whether to apply the multi-leader jitter delay before proposing in a multi-leader
-    /// round with index `>= 1`, to spread out concurrent proposals across honest clients.
-    /// The owner with the lowest `hash(owner, round)` still proposes immediately.
-    pub multi_leader_jitter: bool,
     /// Initial probe interval for the notification circuit breaker. When a validator's
     /// notification stream exhausts retries, the circuit breaker waits this long before
     /// probing again. Doubles on each failed probe.
@@ -143,6 +139,16 @@ pub struct Options {
 struct CircuitBreakerState {
     next_probe_at: Instant,
     probe_interval: Duration,
+}
+
+/// A fingerprint of the chain manager's observable consensus state, used to detect
+/// whether a per-validator updater absorbed new info during a proposal attempt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ConsensusStateSnapshot {
+    next_block_height: BlockHeight,
+    current_round: Round,
+    lock_round: Option<Round>,
+    timeout_round: Option<Round>,
 }
 
 #[cfg(with_testing)]
@@ -172,7 +178,6 @@ impl Options {
             max_concurrent_batch_downloads: DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
-            multi_leader_jitter: false,
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
             max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
@@ -542,6 +547,30 @@ impl<Env: Environment> ChainClient<Env> {
             .handle_chain_info_query(query)
             .await?;
         Ok(response.info)
+    }
+
+    /// Returns a fingerprint of the chain manager's observable state: height,
+    /// current round, locking block round, and timeout certificate round.
+    ///
+    /// [`Self::process_pending_block_without_prepare`] takes one snapshot just before
+    /// each network call (re-taking it after our own local proposal handling) and
+    /// compares against the post-call state. A change means a per-validator updater
+    /// absorbed something we didn't have. The local node verifies signatures on
+    /// anything it stores, so a single dishonest validator can't fake this.
+    async fn consensus_state_snapshot(&self) -> Result<ConsensusStateSnapshot, Error> {
+        let info = self.chain_info_with_manager_values().await?;
+        let lock_round = info
+            .manager
+            .requested_locking
+            .as_deref()
+            .map(LockingBlock::round);
+        let timeout_round = info.manager.timeout.as_deref().map(|cert| cert.round);
+        Ok(ConsensusStateSnapshot {
+            next_block_height: info.next_block_height,
+            current_round: info.manager.current_round,
+            lock_round,
+            timeout_round,
+        })
     }
 
     /// Returns the chain's description. Fetches it from the validators if necessary.
@@ -1428,7 +1457,7 @@ impl<Env: Environment> ChainClient<Env> {
             .await?
         {
             ClientOutcome::Committed(Some(certificate)) => {
-                return Ok(self.classify_committed(certificate, &operations));
+                return Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             ClientOutcome::WaitForTimeout(timeout) => {
                 return Ok(ClientOutcome::WaitForTimeout(timeout))
@@ -1442,9 +1471,7 @@ impl<Env: Environment> ChainClient<Env> {
         // Collect pending messages and epoch changes after acquiring the lock to avoid
         // race conditions where messages valid for one block height are proposed at a
         // different height.
-        let transactions = self
-            .prepend_epochs_messages_and_events(operations.clone())
-            .await?;
+        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
 
         if transactions.is_empty() {
             return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
@@ -1452,15 +1479,19 @@ impl<Env: Environment> ChainClient<Env> {
             )));
         }
 
-        self.new_pending_block(transactions, blobs, &mut proposal_guard)
+        let block = self
+            .new_pending_block(transactions, blobs, &mut proposal_guard)
             .await?;
 
         match self
             .process_pending_block_without_prepare(&mut proposal_guard)
             .await?
         {
+            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
+                Ok(ClientOutcome::Committed(certificate))
+            }
             ClientOutcome::Committed(Some(certificate)) => {
-                Ok(self.classify_committed(certificate, &operations))
+                Ok(ClientOutcome::Conflict(Box::new(certificate)))
             }
             // Unreachable: We just set the pending proposal in the guard.
             ClientOutcome::Committed(None) => {
@@ -1468,47 +1499,6 @@ impl<Env: Environment> ChainClient<Env> {
             }
             ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
             ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
-        }
-    }
-
-    /// Returns `Committed` if the committed block reflects our request — same
-    /// authenticated signer, and our `operations`. All other transactions must be ones that
-    /// are added automatically, to process messages, streams or new epochs.
-    fn classify_committed(
-        &self,
-        certificate: ConfirmedBlockCertificate,
-        operations: &[Operation],
-    ) -> ClientOutcome<ConfirmedBlockCertificate> {
-        let block = certificate.block();
-        if self.preferred_owner.is_none()
-            || block.header.authenticated_signer != self.preferred_owner
-        {
-            return ClientOutcome::Conflict(Box::new(certificate));
-        }
-        let mut operations_iter = operations.iter().peekable();
-        for tx in &block.body.transactions {
-            let is_expected = match tx {
-                Transaction::ReceiveMessages(_) => true,
-                Transaction::ExecuteOperation(op) if Some(&op) == operations_iter.peek() => {
-                    operations_iter.next();
-                    true
-                }
-                Transaction::ExecuteOperation(Operation::System(op)) => matches!(
-                    **op,
-                    SystemOperation::ProcessNewEpoch(_)
-                        | SystemOperation::ProcessRemovedEpoch(_)
-                        | SystemOperation::UpdateStreams(_)
-                ),
-                Transaction::ExecuteOperation(Operation::User { .. }) => false,
-            };
-            if !is_expected {
-                return ClientOutcome::Conflict(Box::new(certificate));
-            }
-        }
-        if operations_iter.next().is_some() {
-            ClientOutcome::Conflict(Box::new(certificate))
-        } else {
-            ClientOutcome::Committed(certificate)
         }
     }
 
@@ -1959,14 +1949,66 @@ impl<Env: Environment> ChainClient<Env> {
     ///
     /// The caller must hold the proposal mutex via `proposal_guard`. The pending proposal
     /// is read from and cleared through the guard, ensuring synchronization.
+    ///
+    /// On error, compares the chain manager's snapshot just before the failing network
+    /// call against the current state. If a per-validator updater absorbed new info
+    /// (e.g. a locking block we didn't have) while we were calling, retries with the
+    /// refreshed state. The snapshot is updated after our own local proposal handling
+    /// so that doesn't count as "new info from a validator".
+    ///
+    /// Retrying terminates without an explicit bound: each retry corresponds to local
+    /// consensus state that actually advanced (verified by the local node, which checks
+    /// signatures and quorums), and that state is monotone.
     #[instrument(level = "debug", skip(self, proposal_guard), fields(chain_id = %self.chain_id))]
     async fn process_pending_block_without_prepare(
         &self,
         proposal_guard: &mut Option<PendingProposal>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, Error> {
+        loop {
+            // `process_pending_block_inner` records the baseline snapshot itself, after
+            // the initial timeout request, so that absorbing a timeout certificate isn't
+            // counted as new info. It stays `None` only if the call fails before that
+            // point, in which case there is no baseline to retry against.
+            let mut snapshot = None;
+            let err = match self
+                .process_pending_block_inner(proposal_guard, &mut snapshot)
+                .await
+            {
+                Ok(outcome) => return Ok(outcome),
+                Err(err) => err,
+            };
+            let Some(snapshot) = snapshot else {
+                return Err(err);
+            };
+            let Ok(current) = self.consensus_state_snapshot().await else {
+                return Err(err);
+            };
+            if current == snapshot {
+                return Err(err);
+            }
+            tracing::debug!(
+                chain_id = %self.chain_id,
+                ?snapshot,
+                ?current,
+                %err,
+                "local consensus state advanced during process_pending_block; retrying"
+            );
+        }
+    }
+
+    async fn process_pending_block_inner(
+        &self,
+        proposal_guard: &mut Option<PendingProposal>,
+        snapshot: &mut Option<ConsensusStateSnapshot>,
+    ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, Error> {
         let process_start = linera_base::time::Instant::now();
         tracing::debug!("process_pending_block_without_prepare started");
         let info = self.request_leader_timeout_if_needed().await?;
+        // After the timeout request (which may itself absorb a timeout cert from
+        // validators), bake the resulting state into the snapshot. The rest of this
+        // iteration will propose in the round the timeout produced, so a state diff
+        // from just that absorption isn't a retry signal.
+        *snapshot = Some(self.consensus_state_snapshot().await?);
 
         // Clear stale pending proposals whose height has already been committed.
         if let Some(pending) = &*proposal_guard {
@@ -2125,6 +2167,11 @@ impl<Env: Environment> ChainClient<Env> {
                 }
             }
         }
+        // The local handle of our own proposal can set a Fast lock, advance
+        // `proposed`/`signed_proposal`, and thereby bump `current_round`. None of that
+        // is "new info from a validator", so fold it into the snapshot before the
+        // network calls below.
+        *snapshot = Some(self.consensus_state_snapshot().await?);
         let committee = self.local_committee().await?;
         let block = Block::new(proposed_block, outcome);
         // Send the query to validators.
@@ -2285,13 +2332,6 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
         if manager.should_propose(identity, round, seed, &current_committee) {
-            if let Some(wait_until) = self.multi_leader_jitter_target(info, identity, round) {
-                return Ok(Either::Right(RoundTimeout {
-                    timestamp: wait_until,
-                    current_round: round,
-                    next_block_height: info.next_block_height,
-                }));
-            }
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
@@ -2300,41 +2340,6 @@ impl<Env: Environment> ChainClient<Env> {
         Err(Error::BlockProposalError(
             "Not a leader in the current round",
         ))
-    }
-
-    /// Returns the timestamp at which `owner` should propose in `round`, to spread out
-    /// concurrent proposals from honest clients in a multi-leader round. Returns `None` if
-    /// the owner should propose immediately (either because the round is not a multi-leader
-    /// round, the owner is the preferred proposer, or the jitter target is already in the past).
-    ///
-    /// The delay is deterministic per `(owner, round)` and is anchored at the round's start
-    /// time when known, so that retrying after an interrupting notification does not extend
-    /// the wait further.
-    fn multi_leader_jitter_target(
-        &self,
-        info: &ChainInfo,
-        owner: &AccountOwner,
-        round: Round,
-    ) -> Option<Timestamp> {
-        if !self.options.multi_leader_jitter {
-            return None;
-        }
-        let ownership = &info.manager.ownership;
-        let delay = ownership.multi_leader_proposal_delay(owner, round)?;
-        if delay == TimeDelta::ZERO {
-            return None;
-        }
-        let now = self.storage_client().clock().current_time();
-        let round_start = if round == info.manager.current_round {
-            match (info.manager.round_timeout, ownership.round_timeout(round)) {
-                (Some(end), Some(duration)) => end.saturating_sub(duration),
-                _ => now,
-            }
-        } else {
-            now
-        };
-        let propose_at = round_start.saturating_add(delay);
-        (propose_at > now).then_some(propose_at)
     }
 
     /// Discards the pending block proposal, if any, so that a fresh block can be
@@ -2651,12 +2656,12 @@ impl<Env: Environment> ChainClient<Env> {
         .await?
         .try_map(|certificate| {
             // The first message of the only operation created the application.
-            let mut creation: Vec<_> = certificate
+            let mut creation = certificate
                 .block()
                 .created_blob_ids()
                 .into_iter()
                 .filter(|blob_id| blob_id.blob_type == BlobType::ApplicationDescription)
-                .collect();
+                .collect::<Vec<_>>();
             if creation.len() > 1 {
                 return Err(Error::InternalError(
                     "Unexpected number of application descriptions published",
@@ -3051,11 +3056,8 @@ impl<Env: Environment> ChainClient<Env> {
             }
             Reason::NewRound { height, round } => {
                 let chain_id = notification.chain_id;
-                // The validator may hold a locking block whose round is below both its
-                // current round and ours, so we only short-circuit when strictly past its
-                // height.
                 if let Some(info) = self.maybe_local_chain_info(chain_id, &local_node).await? {
-                    if info.next_block_height > height {
+                    if (info.next_block_height, info.manager.current_round) >= (height, round) {
                         debug!(
                             chain_id = %self.chain_id,
                             "Accepting redundant notification for new round"
@@ -3207,11 +3209,11 @@ impl<Env: Environment> ChainClient<Env> {
             } else {
                 self.local_committee().await?
             };
-            let nodes: HashMap<_, _> = self
+            let nodes = self
                 .client
                 .validator_node_provider()
                 .make_nodes(&committee)?
-                .collect();
+                .collect::<HashMap<_, _>>();
             (nodes, self.client.local_node.clone())
         };
 

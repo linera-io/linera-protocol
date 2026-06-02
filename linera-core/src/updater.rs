@@ -10,10 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use futures::{
-    stream::{FuturesUnordered, TryStreamExt},
-    Future, StreamExt,
-};
+use futures::{future, Future, StreamExt};
 use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{BlockHeight, Round, TimeDelta},
@@ -609,6 +606,31 @@ where
                     )
                     .await?;
                 }
+                Err(error @ NodeError::ChainError { .. }) => {
+                    // The validator rejected the proposal because of its local chain
+                    // manager state — most commonly an incompatible confirmed vote tied
+                    // to a locking block we don't yet have. Pull manager values from
+                    // this validator so the local node absorbs whatever justified the
+                    // rejection (signatures are checked locally, so the source can't
+                    // fool us), then surface the error. If our local state actually
+                    // advanced, `execute_operations` will rebuild and re-propose; if
+                    // not, the error propagates as usual.
+                    self.warn_if_unexpected(&error);
+                    tracing::debug!(
+                        remote_node = self.remote_node.address(),
+                        %chain_id,
+                        %error,
+                        "validator rejected proposal; pulling manager state",
+                    );
+                    if let Err(sync_err) = self
+                        .client
+                        .synchronize_chain_state_from(&self.remote_node, chain_id)
+                        .await
+                    {
+                        tracing::debug!(%sync_err, "failed to pull manager state from validator");
+                    }
+                    return Err(error.into());
+                }
                 Err(NodeError::BlobsNotFound(_) | NodeError::InactiveChain(_))
                     if !blob_ids.is_empty() =>
                 {
@@ -894,14 +916,12 @@ where
     ) -> Result<(), chain_client::Error> {
         let target_round = manager.current_round;
 
-        // First, push the locking certificate. A remote with an older lock rotates to this
-        // one (and one already locked at this round becomes able to accept a proposal
-        // carrying the cert). Pushing it does not necessarily advance the remote's current
-        // round — e.g. if the remote already holds this exact cert as its lock,
-        // `process_validated_block` returns `Skip` — so only early-return when the
-        // response shows the remote has actually reached our current round.
+        // First, push the locking certificate if it justifies our current round. A
+        // locking block from an earlier round is not enough on its own to advance the
+        // remote: the remote may still be ahead via a timeout or signed proposal, and
+        // pushing a stale lock would not move them. Push only the current-round lock.
         if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.as_deref() {
-            if validated.round >= remote_round {
+            if validated.round == target_round {
                 match self
                     .remote_node
                     .handle_optimized_validated_certificate(
@@ -1016,36 +1036,32 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        chain_heights
-            .into_iter()
-            .map(|(chain_id, heights)| {
-                let mut updater = self.clone();
-                async move {
-                    // Get all block hashes for this chain at the specified heights in one call
-                    let heights_vec: Vec<_> = heights.into_iter().collect();
-                    let certificates = updater
-                        .client
-                        .local_node
-                        .storage_client()
-                        .read_certificates_by_heights(chain_id, &heights_vec)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<_>>();
+        future::try_join_all(chain_heights.into_iter().map(|(chain_id, heights)| {
+            let mut updater = self.clone();
+            async move {
+                // Get all block hashes for this chain at the specified heights in one call
+                let heights_vec = heights.into_iter().collect::<Vec<_>>();
+                let certificates = updater
+                    .client
+                    .local_node
+                    .storage_client()
+                    .read_certificates_by_heights(chain_id, &heights_vec)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
 
-                    // Send each certificate
-                    for certificate in certificates {
-                        updater
-                            .send_confirmed_certificate(&certificate, delivery)
-                            .await?;
-                    }
-
-                    Ok::<_, chain_client::Error>(())
+                // Send each certificate
+                for certificate in certificates {
+                    updater
+                        .send_confirmed_certificate(&certificate, delivery)
+                        .await?;
                 }
-            })
-            .collect::<FuturesUnordered<_>>()
-            .try_collect::<Vec<_>>()
-            .await?;
+
+                Ok::<_, chain_client::Error>(())
+            }
+        }))
+        .await?;
         Ok(())
     }
 
@@ -1054,19 +1070,15 @@ where
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
         delivery: CrossChainMessageDelivery,
     ) -> Result<(), chain_client::Error> {
-        chain_heights
-            .into_iter()
-            .map(|(chain_id, height)| {
-                let mut updater = self.clone();
-                async move {
-                    updater
-                        .send_chain_information(chain_id, height, delivery, None)
-                        .await
-                }
-            })
-            .collect::<FuturesUnordered<_>>()
-            .try_collect::<Vec<_>>()
-            .await?;
+        future::try_join_all(chain_heights.into_iter().map(|(chain_id, height)| {
+            let mut updater = self.clone();
+            async move {
+                updater
+                    .send_chain_information(chain_id, height, delivery, None)
+                    .await
+            }
+        }))
+        .await?;
         Ok(())
     }
 

@@ -23,16 +23,13 @@ AccountOwner:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
-Amount:
-  NEWTYPESTRUCT: U128
 BurnEvent:
   STRUCT:
     - target:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 20
-    - amount:
-        TYPENAME: Amount
+    - amount: U128
 ChainId:
   NEWTYPESTRUCT:
     TYPENAME: CryptoHash
@@ -48,8 +45,7 @@ Message:
         STRUCT:
           - target:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - source:
               TYPENAME: AccountOwner
     1:
@@ -57,8 +53,7 @@ Message:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
 WrappedFungibleOperation:
@@ -77,15 +72,13 @@ WrappedFungibleOperation:
               TYPENAME: AccountOwner
           - spender:
               TYPENAME: AccountOwner
-          - allowance:
-              TYPENAME: Amount
+          - allowance: U128
     3:
       Transfer:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
     4:
@@ -95,8 +88,7 @@ WrappedFungibleOperation:
               TYPENAME: AccountOwner
           - spender:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
     5:
@@ -104,8 +96,7 @@ WrappedFungibleOperation:
         STRUCT:
           - source_account:
               TYPENAME: Account
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
           - target_account:
               TYPENAME: Account
     6:
@@ -113,12 +104,10 @@ WrappedFungibleOperation:
         STRUCT:
           - target_account:
               TYPENAME: Account
-          - amount:
-              TYPENAME: Amount
+          - amount: U128
     7:
       Burn:
         STRUCT:
           - owner:
               TYPENAME: AccountOwner
-          - amount:
-              TYPENAME: Amount
+          - amount: U128

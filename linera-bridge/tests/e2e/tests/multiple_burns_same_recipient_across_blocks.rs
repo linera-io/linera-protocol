@@ -25,7 +25,7 @@
 use std::time::Duration;
 
 use alloy::{primitives::U256, providers::ProviderBuilder, sol};
-use linera_base::{crypto::InMemorySigner, data_types::Amount, identifiers::AccountOwner};
+use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
@@ -116,7 +116,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
 
     let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000).await?;
+        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
 
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
@@ -144,7 +144,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     let evm_recipient: alloy::primitives::Address =
         "0x70997970C51812dc3A010C7d01b50e0d17dc79C8".parse()?;
     let receiver = AccountOwner::Address20(evm_recipient.0 .0);
-    let burn_amount = Amount::from_tokens(BURN_AMOUNT_TOKENS);
+    let burn_amount = U128(BURN_AMOUNT_TOKENS * 10u128.pow(18));
 
     for _ in 0..NUM_BURNS {
         cc_b.synchronize_from_validators().await?;
