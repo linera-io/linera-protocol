@@ -240,9 +240,17 @@ where
     /// initializing the chain's execution state. Intended for callers that only
     /// need to re-emit cross-chain requests from the outbox of a sender chain
     /// whose `ChainDescription` we may never have needed.
+    ///
+    /// Takes `&mut self` because it reconciles the outbox indices with the current tracked set
+    /// (this only touches the outbox indices, not the execution state) and persists the result.
+    /// The save is a no-op write when nothing changed.
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
-    pub(crate) async fn cross_chain_network_actions(&self) -> Result<NetworkActions, WorkerError> {
-        self.create_network_actions(None).await
+    pub(crate) async fn cross_chain_network_actions(
+        &mut self,
+    ) -> Result<NetworkActions, WorkerError> {
+        let actions = self.create_network_actions(None).await?;
+        self.save().await?;
+        Ok(actions)
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
@@ -435,19 +443,25 @@ where
 
     /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
     async fn create_network_actions(
-        &self,
+        &mut self,
         old_round: Option<Round>,
     ) -> Result<NetworkActions, WorkerError> {
         #[cfg(with_metrics)]
         let _latency = metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency();
+        // Make the outbox index authoritative for the current tracked set first, so it already
+        // holds only `is_full` targets and needs no read-time filtering.
+        let tracked = self.reconcile_tracked_outboxes().await?;
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
-        let mut targets = self.chain.nonempty_outbox_chain_ids();
-        if let Some(chain_modes) = self.chain_modes.as_ref() {
-            let chain_modes = chain_modes
-                .read()
-                .expect("Panics should not happen while holding a lock to `chain_modes`");
-            // Only process outboxes for full chains (those whose inboxes we update).
-            targets.retain(|target| chain_modes.get(target).is_some_and(ListeningMode::is_full));
+        let targets = self.chain.nonempty_outbox_chain_ids();
+        if let Some(tracked) = tracked.as_ref() {
+            // Invariant (reconciliation + guarded writers): the index only holds tracked targets.
+            // Surface a violation as corruption rather than silently delivering to a wrong chain.
+            if let Some(target) = targets.iter().find(|target| !tracked.contains(*target)) {
+                return Err(ChainError::CorruptedChainState(format!(
+                    "outbox index contains untracked target {target}"
+                ))
+                .into());
+            }
         }
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
@@ -607,15 +621,13 @@ where
         if self.chain.all_messages_delivered_up_to(height) {
             return Ok(true);
         }
-        let Some(chain_modes) = self.chain_modes.as_ref() else {
+        if self.chain_modes.is_none() {
+            // Validators track every chain, so the counter fast path above is the complete answer.
             return Ok(false);
-        };
-        let mut targets = self.chain.nonempty_outbox_chain_ids();
-        {
-            let chain_modes = chain_modes.read().unwrap();
-            // Only consider full chains (those whose inboxes we update).
-            targets.retain(|target| chain_modes.get(target).is_some_and(ListeningMode::is_full));
         }
+        // On a client the caller (`confirm_updated_recipient`) has reconciled the outbox indices
+        // with the current tracked set, so every indexed target is tracked — no filtering needed.
+        let targets = self.chain.nonempty_outbox_chain_ids();
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for outbox in outboxes {
             let front = outbox.queue.front();
@@ -1427,12 +1439,18 @@ where
             return Ok(NetworkActions::default());
         }
 
-        // 3. Update outbox_counters (+1 per new height for this one recipient).
+        // 3. Update the indices only for tracked recipients (mirroring `process_outgoing_messages`):
+        //    an untracked recipient keeps its re-added outbox queue but is not counted or indexed.
         let new_heights_len = new_heights.len();
-        for h in new_heights {
-            *self.chain.outbox_counters.get_mut().entry(h).or_default() += 1;
+        if self
+            .tracked_full_chains()
+            .is_none_or(|tracked| tracked.contains(&recipient))
+        {
+            for h in new_heights {
+                *self.chain.outbox_counters.get_mut().entry(h).or_default() += 1;
+            }
+            self.chain.nonempty_outboxes.get_mut().insert(recipient);
         }
-        self.chain.nonempty_outboxes.get_mut().insert(recipient);
 
         // 4. Create cross-chain requests for this recipient.
         let actions = self

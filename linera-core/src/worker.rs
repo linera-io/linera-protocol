@@ -1911,7 +1911,7 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<NetworkActions, WorkerError> {
-        self.chain_read(chain_id, |guard| async move {
+        self.chain_write(chain_id, |mut guard| async move {
             guard.cross_chain_network_actions().await
         })
         .await
