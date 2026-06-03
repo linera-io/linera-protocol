@@ -457,20 +457,28 @@ where
         &mut self,
         target: &ChainId,
         height: BlockHeight,
+        tracked: Option<&BTreeSet<ChainId>>,
     ) -> Result<bool, ChainError> {
         let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
         let updates = outbox.mark_messages_as_received(height).await?;
         if updates.is_empty() {
             return Ok(false);
         }
+        // `outbox_counters` only counts targets we index: every chain on a validator
+        // (`tracked == None`), or tracked targets on a client. A missing counter for such a target
+        // is genuine corruption; for an untracked target it is expected (its messages were never
+        // counted — e.g. it was untracked when scheduled, or untracked between sending an update
+        // and receiving its confirmation), so there is nothing to decrement.
+        let expect_counter = tracked.is_none_or(|tracked| tracked.contains(target));
         for update in updates {
-            let counter = self
-                .outbox_counters
-                .get_mut()
-                .get_mut(&update)
-                .ok_or_else(|| {
-                    ChainError::CorruptedChainState("message counter should be present".into())
-                })?;
+            let Some(counter) = self.outbox_counters.get_mut().get_mut(&update) else {
+                if expect_counter {
+                    return Err(ChainError::CorruptedChainState(
+                        "message counter should be present".into(),
+                    ));
+                }
+                continue;
+            };
             *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
             if *counter == 0 {
                 // Important for the test in `all_messages_delivered_up_to`.
@@ -731,15 +739,15 @@ where
     /// fully-tracked chains, if the tracked set has changed since the last reconciliation.
     ///
     /// On a client these indices only hold entries for tracked targets, so that they stay small
-    /// (the per-target outbox *queues* in `outboxes` are still kept for every target, so a chain
-    /// that becomes tracked can be re-indexed). `digest` must be [`tracked_chains_hash`] of
-    /// `full_chains`.
+    /// (the per-target outbox *queues* in `outboxes` are kept for every target). `digest` must be
+    /// [`tracked_chains_hash`] of `full_chains`.
     ///
-    /// Cost: the removal pass is `O(index)`. The addition pass only runs when chains may have been
-    /// *added* to the tracked set. On initialization (`None` stamp = migration of a database
-    /// written before filtering) the old index already lists every target, so only removals are
-    /// needed. On a pure shrink (new set ⊆ old set) there are no additions either. The expensive
-    /// `outboxes` rescan is therefore reserved for the genuine growth case.
+    /// This rebuilds the indices additively from the tracked chains' retained outbox queues, which
+    /// is `O(|full_chains|)` — bounded by the wallet's tracked set — and needs no knowledge of the
+    /// previous set. It is therefore correct and cheap for every case: migration of a database
+    /// written before filtering, a restart after a tracked-set change, a shrink, or a growth; in
+    /// particular it never scans the (unbounded) full set of outbox targets. A subtractive
+    /// `O(|delta|)` fast path can be added on top once the worker supplies the added/removed sets.
     pub async fn reconcile_outbox_index(
         &mut self,
         full_chains: &BTreeSet<ChainId>,
@@ -748,75 +756,24 @@ where
         if *self.outbox_index_tracked_hash.get() == Some(digest) {
             return Ok(());
         }
-        let initializing = self.outbox_index_tracked_hash.get().is_none();
-
-        // 1. Removal pass: drop index/counter entries for targets that are no longer tracked.
-        //    The per-target outbox queue is left untouched so it can be re-indexed later.
-        let indexed = self.nonempty_outboxes.get().clone();
-        for target in indexed.iter() {
-            if full_chains.contains(target) {
+        self.nonempty_outboxes.get_mut().clear();
+        self.outbox_counters.get_mut().clear();
+        for target in full_chains {
+            let heights = {
+                let Some(outbox) = self.outboxes.try_load_entry(target).await? else {
+                    continue;
+                };
+                outbox.queue.elements().await?
+            };
+            if heights.is_empty() {
                 continue;
             }
-            self.unindex_outbox(target).await?;
-        }
-
-        // 2. Addition pass: index tracked targets that have a pending queue but are not indexed.
-        //    Skipped on initialization (migration: the old index already covered every target, so
-        //    step 1 alone leaves it tracked-only) and on a pure shrink. See the note above; the
-        //    `may_have_additions` decision is made by the caller, which knows the tracked-set delta
-        //    (defaults to a correct full rescan when the delta is unknown).
-        if !initializing {
-            for target in self.outboxes.indices().await? {
-                if !full_chains.contains(&target) || self.nonempty_outboxes.get().contains(&target) {
-                    continue;
-                }
-                self.reindex_outbox(&target).await?;
+            for height in heights {
+                *self.outbox_counters.get_mut().entry(height).or_default() += 1;
             }
+            self.nonempty_outboxes.get_mut().insert(*target);
         }
-
         self.outbox_index_tracked_hash.set(Some(digest));
-        Ok(())
-    }
-
-    /// Removes `target` from `nonempty_outboxes` and subtracts its queued heights from
-    /// `outbox_counters`, leaving the per-target outbox queue intact.
-    async fn unindex_outbox(&mut self, target: &ChainId) -> Result<(), ChainError> {
-        let heights = {
-            let outbox = self.outboxes.try_load_entry(target).await?;
-            match outbox {
-                Some(outbox) => outbox.queue.elements().await?,
-                None => Vec::new(),
-            }
-        };
-        for height in heights {
-            if let Some(counter) = self.outbox_counters.get_mut().get_mut(&height) {
-                *counter = counter.saturating_sub(1);
-                if *counter == 0 {
-                    self.outbox_counters.get_mut().remove(&height);
-                }
-            }
-        }
-        self.nonempty_outboxes.get_mut().remove(target);
-        Ok(())
-    }
-
-    /// Adds `target` to `nonempty_outboxes` and its queued heights to `outbox_counters`. Inverse
-    /// of [`Self::unindex_outbox`]; used when a previously untracked chain becomes tracked.
-    async fn reindex_outbox(&mut self, target: &ChainId) -> Result<(), ChainError> {
-        let heights = {
-            let outbox = self.outboxes.try_load_entry(target).await?;
-            match outbox {
-                Some(outbox) => outbox.queue.elements().await?,
-                None => Vec::new(),
-            }
-        };
-        if heights.is_empty() {
-            return Ok(());
-        }
-        for height in heights {
-            *self.outbox_counters.get_mut().entry(height).or_default() += 1;
-        }
-        self.nonempty_outboxes.get_mut().insert(*target);
         Ok(())
     }
 

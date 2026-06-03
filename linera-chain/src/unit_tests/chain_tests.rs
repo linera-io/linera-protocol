@@ -1158,3 +1158,46 @@ async fn test_reconcile_outbox_index_noop_when_hash_matches() -> anyhow::Result<
     assert!(chain.nonempty_outboxes.get().contains(&b));
     Ok(())
 }
+
+/// A `ConfirmUpdatedRecipient` arriving for a chain that has just been un-tracked must not error,
+/// even though reconciliation already dropped its outbox counter.
+#[tokio::test]
+async fn test_mark_received_untracked_target_is_tolerated() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let height = BlockHeight(2);
+    schedule_indexed(&mut chain, a, height).await?;
+
+    // Un-track `a`: its counter is dropped and it leaves the index, but the queue is kept.
+    let empty: BTreeSet<ChainId> = BTreeSet::new();
+    chain
+        .reconcile_outbox_index(&empty, crate::chain::tracked_chains_hash(&empty))
+        .await?;
+    assert!(!chain.nonempty_outboxes.get().contains(&a));
+    assert!(chain.outbox_counters.get().is_empty());
+    assert_eq!(outbox_queue_len(&chain, &a).await?, 1);
+
+    // The in-flight confirmation arrives; `a` is untracked, so this drains the queue without error.
+    let drained = chain
+        .mark_messages_as_received(&a, height, Some(&empty))
+        .await?;
+    assert!(drained);
+    assert_eq!(outbox_queue_len(&chain, &a).await?, 0);
+    Ok(())
+}
+
+/// A missing counter for a *tracked* target is still reported as corruption.
+#[tokio::test]
+async fn test_mark_received_tracked_missing_counter_errors() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let height = BlockHeight(2);
+    // Queue a message but never count it: corrupt-by-construction for a tracked target.
+    schedule_unindexed(&mut chain, a, height).await?;
+    let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
+    let result = chain
+        .mark_messages_as_received(&a, height, Some(&tracked))
+        .await;
+    assert!(result.is_err());
+    Ok(())
+}

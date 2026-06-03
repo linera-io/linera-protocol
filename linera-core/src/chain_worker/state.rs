@@ -1234,9 +1234,10 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
     ) -> Result<bool, WorkerError> {
+        let tracked = self.tracked_full_chains();
         Ok(self
             .chain
-            .mark_messages_as_received(&recipient, latest_height)
+            .mark_messages_as_received(&recipient, latest_height, tracked.as_ref())
             .await?
             && self
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)
