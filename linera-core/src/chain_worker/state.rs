@@ -1236,7 +1236,11 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
     ) -> Result<bool, WorkerError> {
-        let tracked = self.tracked_full_chains();
+        // Reconcile the outbox indices with the *current* tracked set before draining the counter
+        // and checking delivery. A chain tracked since the last reconciliation would otherwise be
+        // missing from the indices: its counter would be absent (a spurious `CorruptedChainState`)
+        // and the delivery check below would wrongly report it as fully delivered.
+        let tracked = self.reconcile_tracked_outboxes().await?;
         Ok(self
             .chain
             .mark_messages_as_received(&recipient, latest_height, tracked.as_ref())

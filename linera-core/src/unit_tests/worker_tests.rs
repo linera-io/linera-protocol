@@ -5170,3 +5170,84 @@ where
     }
     Ok(())
 }
+
+/// Confirming a chain that became tracked *after* its message was scheduled must reconcile the
+/// indices first: otherwise its counter is missing (a spurious `CorruptedChainState`) and the
+/// delivery check cannot see it. Here chain_3 is tracked late and must end up indexed.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_confirm_reconciles_newly_tracked_chain<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
+    let chain_modes = Arc::new(std::sync::RwLock::new(BTreeMap::new()));
+    env.worker.chain_modes = Some(chain_modes.clone());
+
+    let chain_1_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2 = dummy_chain_description(2).id();
+    let chain_3 = dummy_chain_description(3).id();
+    chain_modes
+        .write()
+        .unwrap()
+        .insert(chain_1, crate::client::ListeningMode::FullChain);
+
+    // chain_1 sends to chain_2 (height 0) and chain_3 (height 1) while both are untracked.
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc,
+            sender_key_pair.public(),
+            chain_3,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(90),
+            vec![&cert_0],
+        )
+        .await;
+    env.worker()
+        .process_confirmed_block(cert_0, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+
+    // Track both recipients; the indices are now stale until the next reconciliation.
+    {
+        let mut modes = chain_modes.write().unwrap();
+        modes.insert(chain_2, crate::client::ListeningMode::FullChain);
+        modes.insert(chain_3, crate::client::ListeningMode::FullChain);
+    }
+
+    // Confirming chain_2 reconciles first, so it re-counts chain_2 (no `CorruptedChainState`),
+    // drains it, and indexes the newly tracked chain_3 with its still-undelivered message.
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::ConfirmUpdatedRecipient {
+            sender: chain_1,
+            recipient: chain_2,
+            latest_height: BlockHeight::from(1),
+        })
+        .await?;
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert!(!chain.nonempty_outboxes.get().contains(&chain_2));
+        assert!(chain.nonempty_outboxes.get().contains(&chain_3));
+    }
+    Ok(())
+}
