@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "topic": "where do I plug in a new validator-side Prometheus metric?",
+  "summary": "Validator metrics are registered with the helpers in linera-base/src/prometheus_util.rs (register_int_counter_vec / register_histogram_vec) and exposed via the /metrics endpoint started by linera-metrics/src/monitoring_server.rs. To add a metric for an existing subsystem, register a LazyLock/once-cell static next to the others in that subsystem's module (e.g. linera-views/src/metrics.rs for storage), then increment/observe it at the call site. Dashboards live in docker/dashboards/linera-general.json and scrape config in docker/prometheus.yml / docker/alloy-config.river.",
+  "architecture": [
+    {
+      "pack": "observability",
+      "excerpt": "Metrics: ~310 register_* call sites. Registration helpers centralized in linera-base/src/prometheus_util.rs. Per-subsystem statics (e.g. linera-views/src/metrics.rs defines LOAD_VIEW_LATENCY). Exposed by MonitoringServer on :21100 in prod (docker), scraped by Prometheus/Alloy.",
+      "source_ref": { "kind": "kb_entry", "ref": ".context/architecture/observability.md" }
+    }
+  ],
+  "code_spans": [
+    { "path": "linera-base/src/prometheus_util.rs", "symbol": "register_histogram_vec", "why": "Canonical helper to register a histogram; mirror an existing call.", "commit": "cfa6e9e" },
+    { "path": "linera-views/src/metrics.rs", "symbol": "LOAD_VIEW_LATENCY", "why": "Example of a per-subsystem metric static to copy.", "commit": "cfa6e9e" },
+    { "path": "linera-metrics/src/monitoring_server.rs", "why": "Where the /metrics endpoint is served; no change needed, just confirms exposure.", "commit": "cfa6e9e" }
+  ],
+  "changes": [
+    { "kind": "pr", "ref": "#6440", "title": "linera-chain: widen outbox metric ceilings and add outbox_counters_size", "state": "merged", "relevance": "Recent worked example of adding a validator-side metric + dashboard ceiling." }
+  ],
+  "tests": [
+    { "path": "docker/docker-compose.yml", "test_name": "manual: curl proxy:21100/metrics", "kind": "e2e", "run_cmd": "docker compose -f docker/docker-compose.yml up && curl localhost:21100/metrics | grep <metric_name>" }
+  ],
+  "pitfalls": [
+    { "text": "New histograms need sensible bucket ceilings or dashboards clip at the top bucket (see #6440). Set buckets near observed p99.", "severity": "warning", "source_ref": { "kind": "pr", "ref": "#6440" } },
+    { "text": "High-cardinality labels (chain_id, application_id) multiply series and can OOM Prometheus. Keep labels bounded.", "severity": "critical", "source_ref": { "kind": "kb_entry", "ref": ".context/known-pitfalls/performance.md" } }
+  ],
+  "next_steps": [
+    "Read linera-base/src/prometheus_util.rs and copy the closest register_* helper.",
+    "Add the static near related metrics in the owning subsystem module.",
+    "Observe/increment at the call site; avoid unbounded label values.",
+    "Add a panel + bucket ceiling to docker/dashboards/linera-general.json mirroring #6440."
+  ],
+  "citations": [
+    { "kind": "repo_file", "ref": "linera-base/src/prometheus_util.rs", "commit": "cfa6e9e" },
+    { "kind": "repo_file", "ref": "linera-views/src/metrics.rs", "commit": "cfa6e9e" },
+    { "kind": "repo_file", "ref": "linera-metrics/src/monitoring_server.rs", "commit": "cfa6e9e" },
+    { "kind": "pr", "ref": "#6440" },
+    { "kind": "kb_entry", "ref": ".context/architecture/observability.md" }
+  ],
+  "confidence": { "level": "high", "rationale": "Pack verified against HEAD; PR #6440 is a live worked example; metric helper paths confirmed by grep (310 register_* sites)." },
+  "warnings": [
+    { "kind": "low_recall", "message": "Exact bucket values are subsystem-specific; read the neighboring metric before choosing buckets.", "affected": "next_steps" }
+  ],
+  "token_budget": { "requested": 2000, "used": 1180, "truncated": false }
+}

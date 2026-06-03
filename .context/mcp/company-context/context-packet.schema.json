@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linera.io/schemas/company-context/context-packet.schema.json",
+  "title": "ContextPacket",
+  "description": "A token-budgeted, citation-backed bundle of context optimized for a coding agent working on linera-protocol. Returned by company-context tools (notably `context_packet`). Designed to be navigation-first: it tells an agent WHICH files/PRs/dashboards to look at and WHAT invariants hold, not to paraphrase source. Imprecise retrieval is worse than none, so every claim must carry a citation and a confidence.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "topic",
+    "summary",
+    "citations",
+    "confidence",
+    "token_budget"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version for forward compatibility."
+    },
+    "topic": {
+      "type": "string",
+      "description": "The resolved topic/question this packet answers, normalized by the server (e.g. 'cross-chain message delivery: inbox/outbox flow')."
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 1200,
+      "description": "<=~200 token plain-language orientation. Pointers, not paraphrase. Answers: what is this, where does it live, what should I read first."
+    },
+    "architecture": {
+      "type": "array",
+      "description": "Relevant architecture-pack excerpts (from .context/architecture/*.md). Curated, not generated.",
+      "items": {
+        "type": "object",
+        "required": ["pack", "excerpt", "source_ref"],
+        "additionalProperties": false,
+        "properties": {
+          "pack": { "type": "string", "description": "e.g. 'cross-chain-messaging'" },
+          "excerpt": { "type": "string", "description": "Short relevant section, trimmed to budget." },
+          "source_ref": { "$ref": "#/$defs/sourceRef" }
+        }
+      }
+    },
+    "code_spans": {
+      "type": "array",
+      "description": "Concrete file/line spans the agent should read. The single most valuable field — prunes the search space.",
+      "items": {
+        "type": "object",
+        "required": ["path", "why"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "description": "Repo-relative path, e.g. 'linera-chain/src/outbox.rs'." },
+          "start_line": { "type": "integer", "minimum": 1 },
+          "end_line": { "type": "integer", "minimum": 1 },
+          "symbol": { "type": "string", "description": "Optional symbol name, e.g. 'Outbox::schedule_message'." },
+          "why": { "type": "string", "description": "One line: why this span matters for the topic." },
+          "snippet": { "type": "string", "description": "Optional small verbatim excerpt (<=40 lines). Omitted under tight budgets; agent reads the file instead." },
+          "commit": { "type": "string", "description": "Git SHA the span was resolved against, so the agent can detect drift." }
+        }
+      }
+    },
+    "changes": {
+      "type": "array",
+      "description": "Recent PRs / issues / commits touching this area (GitHub metadata only, no diffs unless requested).",
+      "items": {
+        "type": "object",
+        "required": ["kind", "ref", "title"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["pr", "issue", "commit"] },
+          "ref": { "type": "string", "description": "PR/issue number (#6440) or short SHA." },
+          "title": { "type": "string" },
+          "state": { "type": "string", "enum": ["open", "closed", "merged", "draft", "unknown"] },
+          "url": { "type": "string", "format": "uri" },
+          "merged_at": { "type": "string", "format": "date-time" },
+          "relevance": { "type": "string", "description": "One line on why this change is relevant." }
+        }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "description": "Tests that exercise this code path (from find_tests_for).",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" },
+          "test_name": { "type": "string", "description": "e.g. 'inbox_tests::test_inbox_skip'." },
+          "kind": { "type": "string", "enum": ["unit", "integration", "e2e", "bench", "proptest"] },
+          "run_cmd": { "type": "string", "description": "Copy-pasteable command, e.g. 'cargo test -p linera-chain inbox_tests'." }
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "description": "Only populated when the caller requested it (include=['metrics'|'logs'|'deploy']). Wraps Grafana/prod backends; never raw PromQL dumps.",
+      "additionalProperties": false,
+      "properties": {
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["metric", "summary"],
+            "additionalProperties": false,
+            "properties": {
+              "metric": { "type": "string", "description": "Prometheus metric name, e.g. 'execute_block_latency'." },
+              "summary": { "type": "string", "description": "Human summary: current vs baseline, p50/p95/p99, trend." },
+              "dashboard": { "type": "string", "description": "Grafana dashboard link/uid." },
+              "defined_at": { "type": "string", "description": "Source file where the metric is registered." }
+            }
+          }
+        },
+        "logs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["pattern", "count"],
+            "additionalProperties": false,
+            "properties": {
+              "pattern": { "type": "string", "description": "Clustered log pattern, not raw lines." },
+              "count": { "type": "integer" },
+              "example_redacted": { "type": "string", "description": "One redacted example line." },
+              "service": { "type": "string" }
+            }
+          }
+        },
+        "deploy": {
+          "type": "object",
+          "description": "Read-only deployment snapshot (see production-state backend). Never includes secrets.",
+          "additionalProperties": false,
+          "properties": {
+            "environment": { "type": "string", "enum": ["devnet", "testnet", "mainnet", "unknown"] },
+            "image_versions": { "type": "object", "additionalProperties": { "type": "string" } },
+            "helm_releases": { "type": "array", "items": { "type": "string" } },
+            "last_deploy": { "type": "string", "format": "date-time" },
+            "replicas": { "type": "object", "additionalProperties": { "type": "integer" } }
+          }
+        }
+      }
+    },
+    "pitfalls": {
+      "type": "array",
+      "description": "Known gotchas relevant to the topic (from .context/known-pitfalls/*.md).",
+      "items": {
+        "type": "object",
+        "required": ["text", "source_ref"],
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+          "source_ref": { "$ref": "#/$defs/sourceRef" }
+        }
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "description": "Suggested ordered next actions for the agent (read X, run test Y, check metric Z).",
+      "items": { "type": "string" }
+    },
+    "citations": {
+      "type": "array",
+      "description": "Every non-obvious claim in the packet must trace to a citation here. Empty citations => packet should be rejected.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/sourceRef" }
+    },
+    "confidence": {
+      "type": "object",
+      "required": ["level", "rationale"],
+      "additionalProperties": false,
+      "properties": {
+        "level": { "type": "string", "enum": ["high", "medium", "low"] },
+        "rationale": { "type": "string", "description": "Why this confidence: e.g. 'curated pack verified against HEAD 2 days ago; PR data live'." }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Stale / uncertain / partial-retrieval warnings. The agent must treat these as load-bearing.",
+      "items": {
+        "type": "object",
+        "required": ["kind", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": { "type": "string", "enum": ["stale_pack", "drift_detected", "budget_truncated", "backend_unavailable", "low_recall", "ambiguous_topic"] },
+          "message": { "type": "string" },
+          "affected": { "type": "string", "description": "Which field/source is affected." }
+        }
+      }
+    },
+    "token_budget": {
+      "type": "object",
+      "required": ["requested", "used"],
+      "additionalProperties": false,
+      "properties": {
+        "requested": { "type": "integer", "description": "Max tokens the caller allowed for this packet." },
+        "used": { "type": "integer", "description": "Estimated tokens in this packet (server-measured)." },
+        "truncated": { "type": "boolean", "description": "True if content was dropped to fit the budget; see warnings." }
+      }
+    }
+  },
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["repo_file", "kb_entry", "pr", "issue", "commit", "dashboard", "doc_url", "runbook", "metric_def"]
+        },
+        "ref": { "type": "string", "description": "Path, number, URL, SHA, or dashboard uid." },
+        "line_range": { "type": "string", "description": "Optional 'start-end'." },
+        "commit": { "type": "string", "description": "SHA the ref was resolved at, for drift detection." },
+        "retrieved_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linera.io/schemas/company-context/tools.schema.json",
+  "title": "company-context MCP tool surface (MVP, read-only)",
+  "description": "The 8 initial tools exposed by the `company-context` logical MCP facade. Every tool is READ-ONLY. The facade composes specialized backends (linera-kb/ripgrep, GitHub metadata, Grafana MCP, read-only prod-state) behind per-backend scoped tokens, audit logging, and a global token budget. Agents call these high-level tools instead of raw read_file/kubectl/PromQL.",
+  "x-conventions": {
+    "auth": "Each call carries the caller's identity (OIDC subject) injected by the gateway; backends receive short-lived scoped tokens, never long-lived secrets.",
+    "audit": "Every call is logged: {ts, subject, tool, args_hash, backend, tokens_used, latency_ms, redactions}.",
+    "token_budget": "All tools accept `max_tokens` (default 1500). The server measures output and truncates with a `budget_truncated` warning rather than overflowing.",
+    "errors": "On backend unavailability a tool returns a partial result with a `backend_unavailable` warning instead of failing hard."
+  },
+  "tools": [
+    {
+      "name": "context_packet",
+      "purpose": "Top-level entry point. Given a topic/task, assemble a token-budgeted ContextPacket by fanning out to the other tools and de-duplicating. This is what an agent calls first.",
+      "backends": ["linera-kb", "ripgrep", "github-metadata", "grafana (only if include requests it)", "prod-state (only if include requests it)"],
+      "input_schema": {
+        "type": "object",
+        "required": ["topic"],
+        "additionalProperties": false,
+        "properties": {
+          "topic": { "type": "string", "description": "Task or question, e.g. 'add a validator-side Prometheus metric for outbox size'." },
+          "include": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["architecture", "code", "changes", "tests", "metrics", "logs", "deploy", "pitfalls"] },
+            "description": "Which sections to populate. Defaults to ['architecture','code','changes','tests','pitfalls']. metrics/logs/deploy are opt-in (cost + auth)."
+          },
+          "max_tokens": { "type": "integer", "default": 2500, "maximum": 8000 }
+        }
+      },
+      "output_schema": { "$ref": "context-packet.schema.json" },
+      "token_budget_behavior": "Allocates the budget across sections (summary/code spans get priority); drops lowest-priority sections first and sets token_budget.truncated + a warning.",
+      "security": "metrics/logs/deploy require the caller to hold the corresponding scope; otherwise those sections are omitted with a backend_unavailable warning. No secrets ever enter the packet.",
+      "example_call": { "topic": "where do I plug in a new validator-side Prometheus metric?", "include": ["architecture", "code", "changes", "pitfalls"], "max_tokens": 2000 },
+      "example_response_ref": "See .context/mcp/company-context/examples/context_packet.add-metric.json"
+    },
+    {
+      "name": "search_code",
+      "purpose": "Exact lexical / symbol / error-string search across the repo (ripgrep-backed). For 'where is this string/symbol/error', not semantic questions.",
+      "backends": ["ripgrep", "indxr INDEX.md (symbol map)"],
+      "input_schema": {
+        "type": "object",
+        "required": ["query"],
+        "additionalProperties": false,
+        "properties": {
+          "query": { "type": "string", "description": "Literal or regex, e.g. 'register_histogram_vec' or 'InboxStateView'." },
+          "kind": { "type": "string", "enum": ["literal", "regex", "symbol"], "default": "literal" },
+          "path_glob": { "type": "string", "description": "Optional, e.g. 'linera-chain/**/*.rs'." },
+          "max_results": { "type": "integer", "default": 30, "maximum": 100 },
+          "max_tokens": { "type": "integer", "default": 1500 }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "matches": { "type": "array", "items": { "type": "object", "properties": {
+            "path": { "type": "string" }, "line": { "type": "integer" }, "text": { "type": "string" }, "symbol": { "type": "string" }
+          } } },
+          "truncated": { "type": "boolean" }
+        }
+      },
+      "token_budget_behavior": "Returns one line of context per match; collapses runs in the same file; truncates match list, not individual lines.",
+      "security": "Repo-scoped; refuses globs escaping the repo root; never reads .env / keystore / wallet files (deny-list).",
+      "example_call": { "query": "register_histogram_vec", "kind": "literal", "path_glob": "linera-*/**/*.rs", "max_results": 20 },
+      "example_response": { "matches": [ { "path": "linera-base/src/prometheus_util.rs", "line": 88, "text": "pub fn register_histogram_vec(...)", "symbol": "register_histogram_vec" } ], "truncated": false }
+    },
+    {
+      "name": "get_architecture_context",
+      "purpose": "Return a curated architecture pack (or relevant section) from .context/architecture/*.md. Navigation + invariants, not paraphrased source.",
+      "backends": ["linera-kb (.context/architecture)"],
+      "input_schema": {
+        "type": "object",
+        "required": ["area"],
+        "additionalProperties": false,
+        "properties": {
+          "area": { "type": "string", "enum": ["validator", "proxy", "shard-workers", "cross-chain-messaging", "scylla-storage", "benchmarking", "deployment", "observability", "performance-pitfalls"] },
+          "section": { "type": "string", "description": "Optional sub-heading to narrow (e.g. 'inbox cursor invariants')." },
+          "max_tokens": { "type": "integer", "default": 1500 }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "area": { "type": "string" },
+          "content": { "type": "string" },
+          "entry_points": { "type": "array", "items": { "type": "string" }, "description": "Key file paths to read next." },
+          "freshness": { "type": "object", "properties": { "verified_commit": { "type": "string" }, "verified_at": { "type": "string" }, "drift": { "type": "boolean" } } }
+        }
+      },
+      "token_budget_behavior": "Packs prioritize the 'entry points' and 'invariants' subsections; prose trimmed first.",
+      "security": "Static curated content; no live system access.",
+      "example_call": { "area": "cross-chain-messaging", "section": "inbox cursor invariants" },
+      "example_response": { "area": "cross-chain-messaging", "content": "...", "entry_points": ["linera-chain/src/inbox.rs", "linera-chain/src/outbox.rs"], "freshness": { "verified_commit": "cfa6e9e", "drift": false } }
+    },
+    {
+      "name": "recent_changes",
+      "purpose": "Recent PRs/issues/commits touching a path or area (GitHub metadata + git log). Answers 'what changed here lately / who/why'.",
+      "backends": ["github-metadata", "git log"],
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "description": "Repo path or glob to scope by, e.g. 'linera-chain/src/outbox.rs'." },
+          "area": { "type": "string", "description": "Alternatively a known area keyword." },
+          "since_days": { "type": "integer", "default": 60 },
+          "kinds": { "type": "array", "items": { "type": "string", "enum": ["pr", "issue", "commit"] }, "default": ["pr", "commit"] },
+          "max_results": { "type": "integer", "default": 15 },
+          "max_tokens": { "type": "integer", "default": 1200 }
+        }
+      },
+      "output_schema": { "type": "object", "properties": { "changes": { "type": "array", "items": { "$ref": "context-packet.schema.json#/properties/changes/items" } } } },
+      "token_budget_behavior": "Metadata only (title/number/state/relevance). Diffs require an explicit follow-up call and a higher budget.",
+      "security": "Public-repo GitHub read scope only; PR/issue bodies treated as untrusted input (prompt-injection sanitized).",
+      "example_call": { "path": "linera-chain/src/outbox.rs", "since_days": 90 },
+      "example_response": { "changes": [ { "kind": "pr", "ref": "#6440", "title": "widen outbox metric ceilings and add outbox_counters_size", "state": "merged", "relevance": "added outbox_counters_size metric on this file" } ] }
+    },
+    {
+      "name": "find_tests_for",
+      "purpose": "Given a code path/symbol, return the tests that exercise it and a copy-pasteable run command.",
+      "backends": ["ripgrep", "linera-kb (test map)", "cargo metadata"],
+      "input_schema": {
+        "type": "object",
+        "required": ["target"],
+        "additionalProperties": false,
+        "properties": {
+          "target": { "type": "string", "description": "Path or symbol, e.g. 'linera-chain/src/inbox.rs' or 'InboxStateView'." },
+          "include_kinds": { "type": "array", "items": { "type": "string", "enum": ["unit", "integration", "e2e", "bench", "proptest"] } },
+          "max_tokens": { "type": "integer", "default": 1000 }
+        }
+      },
+      "output_schema": { "type": "object", "properties": { "tests": { "type": "array", "items": { "$ref": "context-packet.schema.json#/properties/tests/items" } } } },
+      "token_budget_behavior": "Returns test names + run commands, not test bodies.",
+      "security": "Repo-scoped, read-only.",
+      "example_call": { "target": "linera-chain/src/inbox.rs" },
+      "example_response": { "tests": [ { "path": "linera-chain/src/unit_tests/inbox_tests.rs", "test_name": "inbox_tests", "kind": "unit", "run_cmd": "cargo test -p linera-chain inbox_tests" } ] }
+    },
+    {
+      "name": "search_prs",
+      "purpose": "Search PRs/issues by text/label/state for design rationale and history. Distinct from recent_changes (path-scoped) — this is query-scoped.",
+      "backends": ["github-metadata"],
+      "input_schema": {
+        "type": "object",
+        "required": ["query"],
+        "additionalProperties": false,
+        "properties": {
+          "query": { "type": "string" },
+          "type": { "type": "string", "enum": ["pr", "issue", "both"], "default": "both" },
+          "state": { "type": "string", "enum": ["open", "closed", "merged", "any"], "default": "any" },
+          "label": { "type": "string" },
+          "max_results": { "type": "integer", "default": 15 },
+          "max_tokens": { "type": "integer", "default": 1200 }
+        }
+      },
+      "output_schema": { "type": "object", "properties": { "results": { "type": "array", "items": { "$ref": "context-packet.schema.json#/properties/changes/items" } } } },
+      "token_budget_behavior": "Title + number + 1-line snippet; full bodies on explicit follow-up only.",
+      "security": "Read-only GitHub scope; bodies sanitized for prompt injection before returning.",
+      "example_call": { "query": "outbox metric ceiling", "type": "pr", "state": "merged" },
+      "example_response": { "results": [ { "kind": "pr", "ref": "#6440", "title": "widen outbox metric ceilings and add outbox_counters_size", "state": "merged" } ] }
+    },
+    {
+      "name": "metrics_summary",
+      "purpose": "Higher-level wrapper over Grafana/Prometheus: summarize a named metric or a known area (p50/p95/p99, baseline delta, trend) without the agent writing PromQL.",
+      "backends": ["grafana-mcp (read-only)", "linera-kb (metric catalog mapping metric -> source file)"],
+      "input_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "metric": { "type": "string", "description": "Prometheus metric name, e.g. 'execute_block_latency'." },
+          "area": { "type": "string", "description": "Alternatively an area, e.g. 'proxy', 'storage', 'cross-chain'." },
+          "environment": { "type": "string", "enum": ["devnet", "testnet", "mainnet"], "default": "testnet" },
+          "window": { "type": "string", "default": "6h", "description": "e.g. '1h','6h','24h'." },
+          "compare_baseline": { "type": "boolean", "default": true },
+          "max_tokens": { "type": "integer", "default": 1200 }
+        }
+      },
+      "output_schema": { "type": "object", "properties": { "metrics": { "$ref": "context-packet.schema.json#/properties/observability/properties/metrics" }, "dashboards": { "type": "array", "items": { "type": "string" } } } },
+      "token_budget_behavior": "Returns aggregates + verdict ('p99 +35% vs 7d baseline'), never raw time series.",
+      "security": "Requires `obs:read` scope; environment-scoped Grafana token; no admin/edit endpoints; PromQL is server-generated from a vetted template library (no arbitrary PromQL from the agent).",
+      "example_call": { "metric": "execute_block_latency", "environment": "testnet", "window": "6h" },
+      "example_response": { "metrics": [ { "metric": "execute_block_latency", "summary": "p50 12ms, p95 48ms, p99 110ms; p99 +35% vs 7d baseline", "defined_at": "linera-core (register_histogram_vec)", "dashboard": "linera-general" } ], "dashboards": ["linera-general"] }
+    },
+    {
+      "name": "logs_summary",
+      "purpose": "Higher-level wrapper over Grafana Loki: cluster logs into patterns with counts for a service/window, instead of dumping raw lines.",
+      "backends": ["grafana-mcp (Loki, read-only)"],
+      "input_schema": {
+        "type": "object",
+        "required": ["service"],
+        "additionalProperties": false,
+        "properties": {
+          "service": { "type": "string", "enum": ["proxy", "shard", "faucet", "exporter", "storage-service", "indexer"] },
+          "environment": { "type": "string", "enum": ["devnet", "testnet", "mainnet"], "default": "testnet" },
+          "level": { "type": "string", "enum": ["error", "warn", "info"], "default": "error" },
+          "window": { "type": "string", "default": "1h" },
+          "max_patterns": { "type": "integer", "default": 10 },
+          "max_tokens": { "type": "integer", "default": 1200 }
+        }
+      },
+      "output_schema": { "type": "object", "properties": { "logs": { "$ref": "context-packet.schema.json#/properties/observability/properties/logs" } } },
+      "token_budget_behavior": "Pattern + count + one redacted example per cluster; never streams raw logs.",
+      "security": "Requires `obs:read` scope; output passes a PII/secret redactor (keys, addresses, tokens) before return; LogQL is server-templated.",
+      "example_call": { "service": "proxy", "level": "error", "window": "1h" },
+      "example_response": { "logs": [ { "pattern": "connection reset forwarding to shard <N>", "count": 42, "example_redacted": "ERROR forwarding to shard 2: connection reset", "service": "proxy" } ] }
+    }
+  ]
+}
