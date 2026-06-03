@@ -255,6 +255,7 @@ where
 
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
+        let mut sent_blocks = false;
         loop {
             match result {
                 Err(NodeError::EventsNotFound(event_ids))
@@ -285,6 +286,24 @@ where
                         .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
                         .await?;
                     sent_blobs = true;
+                }
+                Err(NodeError::BlocksNotFound(hashes)) if !sent_blocks => {
+                    // The validator has recorded these hashes as trusted by a
+                    // checkpoint cert it verified, but is missing the actual block
+                    // bytes. Upload each from local storage; the worker's
+                    // trust-mark accept path lets them through regardless of their
+                    // (possibly revoked) epoch.
+                    let storage = self.client.local_node.storage_client();
+                    let certificates = storage.read_certificates(&hashes).await?;
+                    for (hash, maybe_cert) in hashes.iter().zip(certificates) {
+                        let cert = maybe_cert.ok_or_else(|| {
+                            chain_client::Error::ReadCertificatesError(vec![*hash])
+                        })?;
+                        self.remote_node
+                            .handle_confirmed_certificate(cert, delivery)
+                            .await?;
+                    }
+                    sent_blocks = true;
                 }
                 result => {
                     if let Err(err) = &result {
@@ -761,6 +780,12 @@ where
             }
         };
 
+        // Push a checkpoint if we have one above the validator's tip, to skip past
+        // pre-checkpoint blocks. Mirrors `bootstrap_chain_from_checkpoint`.
+        let info = self
+            .push_checkpoint_if_useful(chain_id, info, delivery)
+            .await?;
+
         // Calculate which block heights the validator is still missing
         let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
             .map(BlockHeight)
@@ -798,6 +823,44 @@ where
             .await?;
 
         Ok(certificates_by_height.into_iter().flatten().collect())
+    }
+
+    /// If we hold a checkpoint at a height the validator hasn't reached yet, pushes
+    /// the checkpoint certificate so the validator can install our chain's execution
+    /// state without replaying every pre-checkpoint block. The worker's first attempt
+    /// will report any pre-checkpoint sender blocks it doesn't yet have via
+    /// `BlocksNotFound`, which `send_confirmed_certificate` then uploads before
+    /// retrying. Returns the validator's chain info after the push (unchanged if
+    /// there's nothing useful to push).
+    async fn push_checkpoint_if_useful(
+        &mut self,
+        chain_id: ChainId,
+        info: Box<ChainInfo>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let local_query = ChainInfoQuery::new(chain_id).with_latest_checkpoint_height();
+        let local_info = self
+            .client
+            .local_node
+            .handle_chain_info_query(local_query)
+            .await?
+            .info;
+        let Some(checkpoint_height) = local_info.requested_latest_checkpoint_height else {
+            return Ok(info);
+        };
+        if checkpoint_height < info.next_block_height {
+            return Ok(info);
+        }
+        let Some(checkpoint_cert) = self
+            .read_certificates_for_heights(chain_id, vec![checkpoint_height])
+            .await?
+            .into_iter()
+            .next()
+        else {
+            return Ok(info);
+        };
+        self.send_confirmed_certificate(&checkpoint_cert, delivery)
+            .await
     }
 
     /// Initializes a new chain on the validator by sending the chain description and dependencies.

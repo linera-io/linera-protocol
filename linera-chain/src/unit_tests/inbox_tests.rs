@@ -338,3 +338,74 @@ async fn test_inbox_add_then_remove_mixed() {
     assert_eq!(view.added_bundles.count(), 0);
     assert_eq!(view.removed_bundles.count(), 0);
 }
+
+#[tokio::test]
+async fn test_inbox_restore_from_checkpoint() {
+    let hash = CryptoHash::test_hash("1");
+    let cutoff = Cursor {
+        height: BlockHeight::from(2),
+        index: 0,
+    };
+
+    // Fresh inbox: all cursors get seeded to the cutoff.
+    {
+        let mut view = InboxStateView::new().await;
+        view.restore_from_checkpoint(cutoff).await.unwrap();
+        assert_eq!(*view.restored_cursor.get(), cutoff);
+        assert_eq!(*view.next_cursor_to_remove.get(), cutoff);
+        assert_eq!(*view.next_cursor_to_add.get(), cutoff);
+        assert_eq!(view.added_bundles.count(), 0);
+        assert_eq!(view.removed_bundles.count(), 0);
+    }
+
+    // Inbox with deliveries straddling the cutoff: bundles strictly below the
+    // cutoff are dropped, those at or above it are kept, `next_cursor_to_add`
+    // stays at the higher pre-restore value, and the anticipated-remove queue
+    // is cleared.
+    {
+        let mut view = InboxStateView::new().await;
+        view.add_bundle(make_bundle(hash, 0, 0, [0])).await.unwrap();
+        view.add_bundle(make_bundle(hash, 1, 0, [1])).await.unwrap();
+        view.add_bundle(make_bundle(hash, 2, 0, [2])).await.unwrap();
+        view.add_bundle(make_bundle(hash, 3, 0, [3])).await.unwrap();
+        let pre_restore_next_add = *view.next_cursor_to_add.get();
+        assert!(pre_restore_next_add > cutoff);
+
+        view.restore_from_checkpoint(cutoff).await.unwrap();
+
+        assert_eq!(*view.restored_cursor.get(), cutoff);
+        assert_eq!(*view.next_cursor_to_remove.get(), cutoff);
+        assert_eq!(*view.next_cursor_to_add.get(), pre_restore_next_add);
+        let remaining = view.added_bundles.elements().await.unwrap();
+        assert_eq!(remaining.len(), 2);
+        assert_eq!(remaining[0].cursor().height, BlockHeight::from(2));
+        assert_eq!(remaining[1].cursor().height, BlockHeight::from(3));
+    }
+
+    // Anticipated removes from a now-rolled-back pre-restore block are cleared,
+    // even when they sit above the cutoff.
+    {
+        let mut view = InboxStateView::new().await;
+        view.remove_bundle(&make_bundle(hash, 3, 0, [3]))
+            .await
+            .unwrap();
+        assert_eq!(view.removed_bundles.count(), 1);
+        view.restore_from_checkpoint(cutoff).await.unwrap();
+        assert_eq!(view.removed_bundles.count(), 0);
+    }
+
+    // Attempting to restore from an earlier checkpoint than one we've already
+    // bootstrapped from is a dispatch-level invariant violation.
+    {
+        let mut view = InboxStateView::new().await;
+        let later = Cursor {
+            height: BlockHeight::from(5),
+            index: 0,
+        };
+        view.restore_from_checkpoint(later).await.unwrap();
+        assert_matches!(
+            view.restore_from_checkpoint(cutoff).await,
+            Err(ChainError::InternalError(_))
+        );
+    }
+}

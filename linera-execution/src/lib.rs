@@ -77,7 +77,7 @@ pub use crate::{
     system::{
         SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery, SystemResponse,
     },
-    transaction_tracker::{TransactionOutcome, TransactionTracker},
+    transaction_tracker::{PreparedCheckpoint, TransactionOutcome, TransactionTracker},
 };
 
 /// The `Linera.sol` library code to be included in solidity smart
@@ -643,6 +643,8 @@ pub struct MessageContext {
     pub chain_id: ChainId,
     /// The chain ID where the message originated from.
     pub origin: ChainId,
+    /// The hash of the certified block on the origin chain that sent the message.
+    pub origin_certificate_hash: CryptoHash,
     /// The timestamp of the block on the origin chain that sent the message.
     pub origin_timestamp: Timestamp,
     /// Whether the message was rejected by the original receiver and is now bouncing back.
@@ -1540,6 +1542,11 @@ impl From<SystemMessage> for Message {
 impl Message {
     pub fn system(message: SystemMessage) -> Self {
         Message::System(message)
+    }
+
+    /// Returns whether this message is a `SystemMessage::CheckpointAck`.
+    pub fn is_checkpoint_ack(&self) -> bool {
+        matches!(self, Message::System(SystemMessage::CheckpointAck { .. }))
     }
 
     /// Creates a new user application message assuming that the `message` is valid for the

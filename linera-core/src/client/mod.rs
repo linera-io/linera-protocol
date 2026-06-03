@@ -882,6 +882,11 @@ impl<Env: Environment> Client<Env> {
             // skip and let the regular sync path take over.
             return Ok(());
         }
+        // The first attempt at processing the checkpoint cert will fall into the
+        // worker's `BlocksNotFound` pre-check if pre-checkpoint sender blocks are
+        // missing; `handle_certificate_with_retry` downloads them by hash and
+        // retries, so by the time `process_certificates` returns the chain has
+        // both its restored state and every certified sender block in storage.
         self.process_certificates(
             slice::from_ref(remote_node),
             certificates,
@@ -957,6 +962,7 @@ impl<Env: Environment> Client<Env> {
         mode: ProcessConfirmedBlockMode,
     ) -> Result<ChainInfoResponse, chain_client::Error> {
         let mut downloaded_blobs = HashSet::<BlobId>::new();
+        let mut downloaded_blocks = HashSet::<CryptoHash>::new();
         let mut events = EventSetDownloader::new(self);
         loop {
             let result = self
@@ -970,6 +976,15 @@ impl<Env: Environment> Client<Env> {
                     continue;
                 }
             }
+            if let Err(LocalNodeError::BlocksNotFound(hashes)) = &result {
+                let new_blocks = filter_new(hashes, &downloaded_blocks);
+                if !new_blocks.is_empty() {
+                    self.download_pre_checkpoint_blocks(nodes, &new_blocks)
+                        .await?;
+                    downloaded_blocks.extend(new_blocks);
+                    continue;
+                }
+            }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
                 if events.download_new(event_ids).await? {
                     continue;
@@ -977,6 +992,41 @@ impl<Env: Environment> Client<Env> {
             }
             return Ok(result?);
         }
+    }
+
+    /// Downloads each missing pre-checkpoint sender block from `nodes` and feeds it
+    /// through the local worker. The worker's trust-mark accept path verifies the
+    /// cert against its own epoch's committee and writes it to storage. Routing
+    /// through `handle_certificate_with_retry` ensures the sender block's own
+    /// blob/event dependencies (e.g. a `ChainDescription` blob or an admin-chain
+    /// epoch event for a revoked epoch) get resolved before the cert is accepted.
+    async fn download_pre_checkpoint_blocks(
+        &self,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+        hashes: &[CryptoHash],
+    ) -> Result<(), chain_client::Error> {
+        for hash in hashes {
+            let mut last_error = None;
+            for node in nodes {
+                match node.node.download_certificate(*hash).await {
+                    Ok(certificate) => {
+                        Box::pin(self.handle_certificate_with_retry(
+                            &certificate,
+                            nodes,
+                            ProcessConfirmedBlockMode::Auto,
+                        ))
+                        .await?;
+                        last_error = None;
+                        break;
+                    }
+                    Err(error) => last_error = Some(error),
+                }
+            }
+            if let Some(error) = last_error {
+                return Err(error.into());
+            }
+        }
+        Ok(())
     }
 
     async fn handle_certificate<T: ProcessableCertificate>(

@@ -69,6 +69,9 @@ pub enum LocalNodeError {
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 
+    #[error("Blocks not found: {0:?}")]
+    BlocksNotFound(Vec<CryptoHash>),
+
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
 }
@@ -91,6 +94,7 @@ impl From<WorkerError> for LocalNodeError {
     fn from(error: WorkerError) -> Self {
         match error {
             WorkerError::BlobsNotFound(blob_ids) => LocalNodeError::BlobsNotFound(blob_ids),
+            WorkerError::BlocksNotFound(hashes) => LocalNodeError::BlocksNotFound(hashes),
             WorkerError::EventsNotFound(event_ids) => LocalNodeError::EventsNotFound(event_ids),
             error => LocalNodeError::WorkerError(error),
         }
@@ -144,6 +148,18 @@ where
                 .fully_handle_confirmed_certificate_with_notifications(certificate, mode, notifier),
         )
         .await?)
+    }
+
+    /// Test helper: returns the stored [`ConfirmedBlockCertificate`] for a
+    /// chain's block at a given height (or [`WorkerError::BlocksNotFound`] if
+    /// the height is referenced but the bytes aren't local).
+    #[cfg(with_testing)]
+    pub async fn read_certificate(
+        &self,
+        chain_id: linera_base::identifiers::ChainId,
+        height: linera_base::data_types::BlockHeight,
+    ) -> Result<Option<CacheArc<ConfirmedBlockCertificate>>, LocalNodeError> {
+        Ok(self.node.state.read_certificate(chain_id, height).await?)
     }
 
     #[instrument(level = "trace", skip_all)]

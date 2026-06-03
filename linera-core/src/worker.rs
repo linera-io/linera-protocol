@@ -397,6 +397,14 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    /// Variant raised when the chain references these block hashes via a
+    /// verified-checkpoint trust mark (`pre_checkpoint_block_trust`) but the
+    /// actual content isn't in storage yet. The caller is expected to upload
+    /// each missing block via `handle_confirmed_certificate`; the trust-mark
+    /// accept path verifies the cert against its own (possibly revoked)
+    /// epoch's committee and writes it through.
+    #[error("Blocks not found: {0:?}")]
+    BlocksNotFound(Vec<CryptoHash>),
     #[error("Block hash at height {height} for chain {chain_id} not found")]
     BlockHashNotFound {
         height: BlockHeight,
@@ -442,6 +450,7 @@ impl WorkerError {
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
             | WorkerError::BlobsNotFound(_)
+            | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)
             | WorkerError::UnexpectedBlob
             | WorkerError::TooManyPublishedBlobs(_)

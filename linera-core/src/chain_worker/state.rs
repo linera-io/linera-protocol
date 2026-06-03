@@ -206,6 +206,45 @@ where
         &self.chain
     }
 
+    /// Resolves the committee that signed certificates at the given epoch by
+    /// walking the admin chain's epoch event stream — works even after the
+    /// epoch has been revoked, so long as the admin chain still has the event.
+    /// Surfaces `EventsNotFound` (as a chained `ChainError::ExecutionError`)
+    /// when the admin event isn't local, so the caller's retry/sync paths can
+    /// fetch it before re-asking.
+    async fn committee_for_epoch(
+        &self,
+        epoch: Epoch,
+    ) -> Result<linera_execution::committee::Committee, WorkerError> {
+        let hash = self
+            .chain
+            .execution_state
+            .context()
+            .extra()
+            .get_committee_hashes(epoch..=epoch)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?
+            .remove(&epoch)
+            .ok_or_else(|| {
+                ChainError::InternalError(format!(
+                    "missing committee for epoch {epoch}; this is a bug"
+                ))
+            })?;
+        let committee = self
+            .chain
+            .execution_state
+            .context()
+            .extra()
+            .get_or_load_committee_by_hash(hash)
+            .await
+            .map_err(|error| {
+                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
+            })?;
+        Ok((*committee).clone())
+    }
+
     /// Filters bundles destined for this chain to drop ones already received and to refuse
     /// ones whose epoch has been revoked on the admin chain.
     ///
@@ -837,12 +876,29 @@ where
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
         let block = certificate.block();
+        let block_hash = certificate.hash();
         let height = block.header.height;
         let chain_id = block.header.chain_id;
 
+        // Trust-mark accept path: an earlier checkpoint cert recorded this block's
+        // hash in `pre_checkpoint_block_trust`. Removing the trust mark here is
+        // only an in-memory change; if anything below fails before `save`, the
+        // mark survives on the next reload. The dispatch's `gap` definition
+        // (`!=` rather than `<`) routes both above-tip and below-tip trust
+        // uploads to `preprocess_certified_block` so the chain can write the
+        // cert without advancing the tip.
+        let in_trust_set = self
+            .chain
+            .pre_checkpoint_block_trust
+            .contains(&block_hash)
+            .await?;
+        if in_trust_set {
+            self.chain.pre_checkpoint_block_trust.remove(&block_hash)?;
+        }
+
         // Check if we already processed this block.
         let tip = self.chain.tip_state.get().clone();
-        if tip.next_block_height > height {
+        if !in_trust_set && tip.next_block_height > height {
             let actions = self.create_network_actions(None).await?;
             self.register_delivery_notifier(height, &actions, notify_when_messages_are_delivered)
                 .await;
@@ -854,36 +910,7 @@ where
         }
 
         // We haven't processed the block - verify the certificate first.
-        // Resolve the committee hash from the admin chain's epoch event stream; the
-        // chain-local `committees` map is just a cache of the same hashes for trusted
-        // epochs, so we can skip it and always hit the event stream.
-        let epoch = block.header.epoch;
-        let hash = self
-            .chain
-            .execution_state
-            .context()
-            .extra()
-            .get_committee_hashes(epoch..=epoch)
-            .await
-            .map_err(|error| {
-                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-            })?
-            .remove(&epoch)
-            .ok_or_else(|| {
-                ChainError::InternalError(format!(
-                    "missing committee for epoch {epoch}; this is a bug"
-                ))
-            })?;
-        let committee = self
-            .chain
-            .execution_state
-            .context()
-            .extra()
-            .get_or_load_committee_by_hash(hash)
-            .await
-            .map_err(|error| {
-                ChainError::ExecutionError(Box::new(error), ChainExecutionContext::Block)
-            })?;
+        let committee = self.committee_for_epoch(block.header.epoch).await?;
         certificate.check(&committee)?;
 
         // Certificate check passed - which means the blobs the block requires are legitimate and
@@ -928,7 +955,7 @@ where
         //    then execute.
         //  - `Auto`/`Execute` mode + contiguous: execute directly.
         use ProcessConfirmedBlockMode::{Auto, Execute, Preprocess};
-        let gap = tip.next_block_height < height;
+        let gap = tip.next_block_height != height;
         let starts_with_checkpoint = block.starts_with_checkpoint();
         match (mode, gap, starts_with_checkpoint) {
             (Preprocess, _, _) | (Auto, true, false) => {
@@ -1001,10 +1028,12 @@ where
         blobs: BTreeMap<BlobId, Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
-        let (bytes, chain_id, height, previous_block_hash) = {
+        let (bytes, chain_id, height, previous_block_hash, outbox_block_hashes, inbox_cursors) = {
             let block = certificate.block();
             let Some(OracleResponse::Checkpoint {
                 execution_state_blobs,
+                outbox_block_hashes,
+                inbox_cursors,
                 ..
             }) = block.body.oracle_responses.first().and_then(|r| r.first())
             else {
@@ -1028,8 +1057,30 @@ where
                 block.header.chain_id,
                 block.header.height,
                 block.header.previous_block_hash,
+                outbox_block_hashes.clone(),
+                inbox_cursors.clone(),
             )
         };
+        // Every pre-checkpoint sender block the oracle response names must already
+        // be in storage before we touch any chain state. If some aren't, record
+        // their hashes as trusted-by-this-checkpoint and error with `BlocksNotFound`
+        // — the client uploads each missing cert (the trust-mark path at the top
+        // of `process_confirmed_block` accepts them regardless of their possibly
+        // revoked epoch), then retries the checkpoint. This way the worker never
+        // exposes a half-restored chain whose outboxes reference unknown blocks.
+        let mut missing_blocks = Vec::new();
+        for hash in &outbox_block_hashes {
+            if !self.storage.contains_certificate(*hash).await? {
+                missing_blocks.push(*hash);
+            }
+        }
+        if !missing_blocks.is_empty() {
+            for hash in &missing_blocks {
+                self.chain.pre_checkpoint_block_trust.insert(hash)?;
+            }
+            self.save().await?;
+            return Err(WorkerError::BlocksNotFound(missing_blocks));
+        }
         self.chain
             .execution_state
             .restore_from_content(&bytes)
@@ -1037,16 +1088,47 @@ where
         // `restore_from_content` writes directly to storage and leaves the
         // in-memory view in an undefined state — reload from storage.
         self.chain = self.storage.load_chain(chain_id).await?;
-        // We only reset `execution_state` (via restore) and `tip_state`. The
-        // other `ChainStateView` fields are either (a) already default for a
-        // fresh bootstrap node (`inboxes`, `outboxes`, `received_log`, …),
-        // (b) about to be overwritten by `apply_confirmed_block` when the
-        // cert is applied (`manager`, `block_hashes` for height `height`),
-        // or (c) outside the protocol state hash so divergence from the
-        // producer is fine (inboxes; subsequent blocks reconcile by
-        // anticipation if needed). The `num_*` counters on `ChainTipState`
-        // are write-only in current code, so leaving them at zero has no
-        // functional impact.
+        // Re-populate `block_hashes` for every pre-checkpoint sender block the
+        // chain still needs. The heights live in the just-restored execution
+        // state (`unfinalized_message_blocks`); the matching hashes are the
+        // ones the producer recorded in the oracle response, certified by the
+        // checkpoint cert we already trust. Without this, the next step
+        // (re-executing the checkpoint to verify its outcome) would fail
+        // because `collect_unfinalized_block_hashes` looks these up.
+        let heights = self.chain.collect_unfinalized_heights().await?;
+        ensure!(
+            heights.len() == outbox_block_hashes.len(),
+            ChainError::InternalError(format!(
+                "checkpoint oracle response has {} outbox block hashes but the \
+                 restored state references {} distinct heights",
+                outbox_block_hashes.len(),
+                heights.len(),
+            ))
+        );
+        for (height, hash) in heights.into_iter().zip(outbox_block_hashes) {
+            self.chain.block_hashes.insert(&height, hash)?;
+        }
+        // Rebuild the off-chain outbox state (queues, counters,
+        // nonempty_outboxes) from the on-chain unfinalized map so that this
+        // node can resume pushing pre-checkpoint messages forward. The outbox
+        // isn't part of the certified checkpoint blob, so without this a
+        // bootstrapped validator would silently stop delivering pending
+        // messages.
+        self.chain.restore_outboxes_from_unfinalized().await?;
+        for (origin, cursor) in inbox_cursors {
+            let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
+            inbox.restore_from_checkpoint(cursor).await?;
+        }
+        // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
+        // (for outbox-referenced pre-checkpoint heights), and the outbox views.
+        // The other `ChainStateView` fields are either (a) already default for
+        // a fresh bootstrap node (`inboxes`, `received_log`, …), (b) about to
+        // be overwritten by `apply_confirmed_block` when the cert is applied
+        // (`manager`, `block_hashes` for height `height`), or (c) outside the
+        // protocol state hash so divergence from the producer is fine
+        // (inboxes; subsequent blocks reconcile by anticipation if needed).
+        // The `num_*` counters on `ChainTipState` are write-only in current
+        // code, so leaving them at zero has no functional impact.
         let new_tip = ChainTipState {
             block_hash: previous_block_hash,
             next_block_height: height,
@@ -1951,7 +2033,7 @@ where
             .storage
             .read_certificate(certificate_hash)
             .await?
-            .ok_or_else(|| WorkerError::ReadCertificatesError(vec![certificate_hash]))?;
+            .ok_or(WorkerError::BlocksNotFound(vec![certificate_hash]))?;
         Ok(Some(certificate))
     }
 

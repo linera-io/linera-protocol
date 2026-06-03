@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use allocative::Allocative;
-use async_graphql::SimpleObject;
 use linera_base::{
-    data_types::{ArithmeticError, BlockHeight},
+    data_types::{ArithmeticError, BlockHeight, Cursor},
     ensure,
     identifiers::ChainId,
 };
@@ -17,7 +16,6 @@ use linera_views::{
     views::{ClonableView, View},
     ViewError,
 };
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{data_types::MessageBundle, ChainError};
@@ -80,26 +78,13 @@ where
     /// These bundles have been removed by anticipation and are waiting to be added.
     /// At least one of `added_bundles` and `removed_bundles` should be empty.
     pub removed_bundles: QueueView<C, MessageBundle>,
-}
-
-#[derive(
-    Debug,
-    Default,
-    Clone,
-    Copy,
-    Hash,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    SimpleObject,
-    Allocative,
-)]
-pub struct Cursor {
-    height: BlockHeight,
-    index: u32,
+    /// When this inbox was restored from a checkpoint, the sender's
+    /// `next_cursor_to_remove` at that time. Bundles with cursors strictly below this
+    /// are silently dropped from `add_bundle` / `remove_bundle`: their effects are
+    /// already baked into the restored execution state, so re-delivering them on this
+    /// validator (e.g. when a sender re-pushes) must be a no-op rather than re-enter
+    /// the inbox or the removed-by-anticipation queue.
+    pub restored_cursor: RegisterView<C, Cursor>,
 }
 
 #[derive(Error, Debug)]
@@ -123,26 +108,6 @@ pub(crate) enum InboxError {
         messages from the same origin"
     )]
     UnskippableBundle { bundle: MessageBundle },
-}
-
-impl From<&MessageBundle> for Cursor {
-    #[inline]
-    fn from(bundle: &MessageBundle) -> Self {
-        Self {
-            height: bundle.height,
-            index: bundle.transaction_index,
-        }
-    }
-}
-
-impl Cursor {
-    fn try_add_one(self) -> Result<Self, ArithmeticError> {
-        let value = Self {
-            height: self.height,
-            index: self.index.checked_add(1).ok_or(ArithmeticError::Overflow)?,
-        };
-        Ok(value)
-    }
 }
 
 impl From<(ChainId, ChainId, InboxError)> for ChainError {
@@ -202,6 +167,46 @@ where
             .observe(self.added_bundles.count() as f64);
     }
 
+    /// Reconciles this inbox with the producer's snapshot at checkpoint time.
+    ///
+    /// `next_cursor_to_remove` is chain-state-derived and takes the snapshot's
+    /// value (a lagging validator's higher pre-restore advancement is being
+    /// rolled back along with the execution state). `next_cursor_to_add` only
+    /// ratchets up — a lagging validator may already have received bundles past
+    /// the snapshot, and forgetting those deliveries would either lose them or
+    /// trip the inbox-gap check on the next cross-chain update. Pre-existing
+    /// `added_bundles` entries strictly below the cutoff are dropped (their
+    /// effects are baked into the restored execution state) and the
+    /// anticipated-remove queue is cleared since it came from pre-restore
+    /// blocks the rollback has invalidated.
+    ///
+    /// Errors if `restored_cursor` already sits past `cursor`: that means a
+    /// later checkpoint has already bootstrapped this inbox, and the chain
+    /// worker's dispatch should never have routed an earlier one here.
+    pub async fn restore_from_checkpoint(&mut self, cursor: Cursor) -> Result<(), ChainError> {
+        ensure!(
+            *self.restored_cursor.get() <= cursor,
+            ChainError::InternalError(format!(
+                "cannot restore inbox at cursor {cursor:?}: already bootstrapped \
+                 from a later checkpoint at cursor {previous:?}",
+                previous = *self.restored_cursor.get(),
+            ))
+        );
+        self.restored_cursor.set(cursor);
+        if *self.next_cursor_to_add.get() < cursor {
+            self.next_cursor_to_add.set(cursor);
+        }
+        self.next_cursor_to_remove.set(cursor);
+        while let Some(front) = self.added_bundles.front().await? {
+            if front.cursor() >= cursor {
+                break;
+            }
+            self.added_bundles.delete_front();
+        }
+        self.removed_bundles.clear();
+        Ok(())
+    }
+
     /// Consumes a bundle from the inbox.
     ///
     /// Returns `true` if the bundle was already known, i.e. it was present in `added_bundles`.
@@ -210,7 +215,13 @@ where
         bundle: &MessageBundle,
     ) -> Result<bool, InboxError> {
         // Record the latest cursor.
-        let cursor = Cursor::from(bundle);
+        let cursor = bundle.cursor();
+        if cursor < *self.restored_cursor.get() {
+            // Bundle's effects are already in the restored execution state; treat the
+            // consumption as a no-op without touching `removed_bundles` so the queue
+            // doesn't fill with bundles a sender will never push again.
+            return Ok(true);
+        }
         ensure!(
             cursor >= *self.next_cursor_to_remove.get(),
             InboxError::IncorrectOrder {
@@ -220,7 +231,7 @@ where
         );
         // Discard added bundles with lower cursors (if any).
         while let Some(previous_bundle) = self.added_bundles.front().await? {
-            if Cursor::from(&previous_bundle) >= cursor {
+            if previous_bundle.cursor() >= cursor {
                 break;
             }
             ensure!(
@@ -237,7 +248,7 @@ where
             Some(previous_bundle) => {
                 // Rationale: If the two cursors are equal, then the bundles should match.
                 // Otherwise, at this point we know that `self.next_cursor_to_add >
-                // Cursor::from(&previous_bundle) > cursor`. Notably, `bundle` will never be
+                // previous_bundle.cursor() > cursor`. Notably, `bundle` will never be
                 // added in the future. Therefore, we should fail instead of adding
                 // it to `self.removed_bundles`.
                 ensure!(
@@ -271,7 +282,12 @@ where
     /// Returns `true` if the bundle was new, `false` if it was already in `removed_bundles`.
     pub(crate) async fn add_bundle(&mut self, bundle: MessageBundle) -> Result<bool, InboxError> {
         // Record the latest cursor.
-        let cursor = Cursor::from(&bundle);
+        let cursor = bundle.cursor();
+        if cursor < *self.restored_cursor.get() {
+            // The sender is re-delivering a bundle whose effects are already baked
+            // into our restored execution state. Silently drop it.
+            return Ok(false);
+        }
         ensure!(
             cursor >= *self.next_cursor_to_add.get(),
             InboxError::IncorrectOrder {
@@ -282,7 +298,7 @@ where
         // Find if the bundle was removed ahead of time.
         let newly_added = match self.removed_bundles.front().await? {
             Some(previous_bundle) => {
-                if Cursor::from(&previous_bundle) == cursor {
+                if previous_bundle.cursor() == cursor {
                     // We already executed this bundle by anticipation. Remove it from
                     // the queue.
                     ensure!(
@@ -301,7 +317,7 @@ where
                     // The receiver has already executed a later bundle from the same
                     // sender ahead of time so we should skip this one.
                     ensure!(
-                        cursor < Cursor::from(&previous_bundle) && bundle.is_skippable(),
+                        cursor < previous_bundle.cursor() && bundle.is_skippable(),
                         InboxError::UnexpectedBundle {
                             previous_bundle,
                             bundle,

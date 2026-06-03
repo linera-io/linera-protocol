@@ -55,6 +55,9 @@ pub fn classify_message(message: &Message) -> MessageClassification {
                     Some(owner.to_string()),
                     Some(recipient.to_string()),
                 ),
+                SystemMessage::CheckpointAck { .. } => {
+                    ("CheckpointAck", None, None, None, None, None)
+                }
             };
 
             MessageClassification {
