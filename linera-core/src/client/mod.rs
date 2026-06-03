@@ -2217,14 +2217,22 @@ impl<'a, Env: Environment> EventSetDownloader<'a, Env> {
 /// driven deterministically by a simulated clock (e.g. `TestClock`) in tests.
 pub(crate) type ClockOf<Env> = <<Env as Environment>::Storage as linera_storage::Storage>::Clock;
 
+/// Converts a [`Duration`] into a [`TimeDelta`], saturating on overflow.
+pub(crate) fn duration_to_delta(duration: Duration) -> TimeDelta {
+    TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
+}
+
 /// Sleeps for `duration` according to `clock`'s notion of time.
 ///
 /// Unlike [`linera_base::time::timer::sleep`], this honors a simulated clock, so staggered
 /// retries and backoff resolve in virtual time during tests instead of blocking on real time.
 pub(crate) async fn sleep_for(clock: &impl linera_storage::Clock, duration: Duration) {
-    let delta = TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX));
     clock
-        .sleep_until(clock.current_time().saturating_add(delta))
+        .sleep_until(
+            clock
+                .current_time()
+                .saturating_add(duration_to_delta(duration)),
+        )
         .await;
 }
 

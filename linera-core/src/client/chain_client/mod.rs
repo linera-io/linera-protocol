@@ -67,6 +67,7 @@ use super::{
     ListeningMode, PendingProposal, TimingType,
 };
 use crate::{
+    client::duration_to_delta,
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     environment::Environment,
     local_node::{LocalNodeClient, LocalNodeError},
@@ -138,7 +139,7 @@ pub struct Options {
 }
 
 struct CircuitBreakerState {
-    next_probe_at: Instant,
+    next_probe_at: Timestamp,
     probe_interval: Duration,
 }
 
@@ -3124,6 +3125,9 @@ impl<Env: Environment> ChainClient<Env> {
             .options
             .notification_circuit_breaker_initial_probe_interval;
         let max_probe_interval = self.options.notification_circuit_breaker_max_probe_interval;
+        // Read the (possibly simulated) node clock once, so circuit-breaker probe scheduling can
+        // be driven deterministically in tests instead of depending on the wall clock.
+        let now = self.storage_client().clock().current_time();
         let (nodes, local_node) = {
             // For EventsOnly chains we may not have the chain's own committee locally,
             // and attempting to fetch it would trigger a full sync. Use the admin
@@ -3149,7 +3153,8 @@ impl<Env: Environment> ChainClient<Env> {
                 if let Some(state) = circuit_breakers.get_mut(validator) {
                     // Was probing -> probe failed -> escalate interval.
                     state.probe_interval = (state.probe_interval * 2).min(max_probe_interval);
-                    state.next_probe_at = Instant::now() + state.probe_interval;
+                    state.next_probe_at =
+                        now.saturating_add(duration_to_delta(state.probe_interval));
                     warn!(
                         %validator,
                         chain_id = %self.chain_id,
@@ -3161,7 +3166,8 @@ impl<Env: Environment> ChainClient<Env> {
                     circuit_breakers.insert(
                         *validator,
                         CircuitBreakerState {
-                            next_probe_at: Instant::now() + initial_probe_interval,
+                            next_probe_at: now
+                                .saturating_add(duration_to_delta(initial_probe_interval)),
                             probe_interval: initial_probe_interval,
                         },
                     );
@@ -3199,7 +3205,7 @@ impl<Env: Environment> ChainClient<Env> {
 
             // Circuit breaker: skip if not time to probe yet.
             if let Some(state) = circuit_breakers.get(&public_key) {
-                if Instant::now() < state.next_probe_at {
+                if now < state.next_probe_at {
                     continue;
                 }
                 debug!(
