@@ -420,7 +420,9 @@ where
     /// of fully-tracked chains, and returns that set to be passed to block application so that
     /// newly scheduled messages are only indexed for tracked targets. Returns `None` on a
     /// validator (no filtering).
-    async fn reconcile_tracked_outboxes(&mut self) -> Result<Option<BTreeSet<ChainId>>, WorkerError> {
+    async fn reconcile_tracked_outboxes(
+        &mut self,
+    ) -> Result<Option<BTreeSet<ChainId>>, WorkerError> {
         let Some(full_chains) = self.tracked_full_chains() else {
             return Ok(None);
         };
