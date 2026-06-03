@@ -434,10 +434,7 @@ where
         let Some(full_chains) = self.tracked_full_chains() else {
             return Ok(None);
         };
-        let digest = linera_chain::tracked_chains_hash(&full_chains);
-        self.chain
-            .reconcile_outbox_index(&full_chains, digest)
-            .await?;
+        self.chain.reconcile_outbox_index(&full_chains).await?;
         Ok(Some(full_chains))
     }
 

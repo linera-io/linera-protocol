@@ -223,7 +223,7 @@ const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 /// Computes the hash identifying a set of fully-tracked chains, stored in
 /// [`ChainStateView::outbox_index_tracked_hash`] to detect when the outbox indices must be
 /// reconciled. The input is order-independent because `BTreeSet` iterates in sorted order.
-pub fn tracked_chains_hash(full_chains: &BTreeSet<ChainId>) -> CryptoHash {
+pub(crate) fn tracked_chains_hash(full_chains: &BTreeSet<ChainId>) -> CryptoHash {
     CryptoHash::new(&CryptoHashVec(full_chains.iter().map(|id| id.0).collect()))
 }
 
@@ -737,11 +737,11 @@ where
     }
 
     /// Reconciles the `nonempty_outboxes` and `outbox_counters` indices with the given set of
-    /// fully-tracked chains, if the tracked set has changed since the last reconciliation.
+    /// fully-tracked chains, if the tracked set has changed since the last reconciliation
+    /// (i.e. the stored [`Self::outbox_index_tracked_hash`] no longer matches).
     ///
     /// On a client these indices only hold entries for tracked targets, so that they stay small
-    /// (the per-target outbox *queues* in `outboxes` are kept for every target). `digest` must be
-    /// [`tracked_chains_hash`] of `full_chains`.
+    /// (the per-target outbox *queues* in `outboxes` are kept for every target).
     ///
     /// This rebuilds the indices additively from the tracked chains' retained outbox queues, which
     /// is `O(|full_chains|)` — bounded by the wallet's tracked set — and needs no knowledge of the
@@ -752,8 +752,8 @@ where
     pub async fn reconcile_outbox_index(
         &mut self,
         full_chains: &BTreeSet<ChainId>,
-        digest: CryptoHash,
     ) -> Result<(), ChainError> {
+        let digest = tracked_chains_hash(full_chains);
         if *self.outbox_index_tracked_hash.get() == Some(digest) {
             return Ok(());
         }

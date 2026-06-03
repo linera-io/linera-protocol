@@ -1081,7 +1081,7 @@ async fn test_reconcile_outbox_index_migration_drops_untracked() -> anyhow::Resu
 
     let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
     let digest = crate::chain::tracked_chains_hash(&tracked);
-    chain.reconcile_outbox_index(&tracked, digest).await?;
+    chain.reconcile_outbox_index(&tracked).await?;
 
     assert_eq!(chain.nonempty_outbox_chain_ids(), vec![a]);
     assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
@@ -1105,8 +1105,7 @@ async fn test_reconcile_outbox_index_shrink_removes_chain() -> anyhow::Result<()
         .set(Some(crate::chain::tracked_chains_hash(&both)));
 
     let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
-    let digest = crate::chain::tracked_chains_hash(&tracked);
-    chain.reconcile_outbox_index(&tracked, digest).await?;
+    chain.reconcile_outbox_index(&tracked).await?;
 
     assert_eq!(chain.nonempty_outbox_chain_ids(), vec![a]);
     assert!(!chain.nonempty_outboxes.get().contains(&b));
@@ -1131,8 +1130,7 @@ async fn test_reconcile_outbox_index_retrack_reindexes_from_queue() -> anyhow::R
     assert!(!chain.nonempty_outboxes.get().contains(&b));
 
     let tracked: BTreeSet<ChainId> = [a, b].into_iter().collect();
-    let digest = crate::chain::tracked_chains_hash(&tracked);
-    chain.reconcile_outbox_index(&tracked, digest).await?;
+    chain.reconcile_outbox_index(&tracked).await?;
 
     assert!(chain.nonempty_outboxes.get().contains(&b));
     assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 2);
@@ -1153,7 +1151,7 @@ async fn test_reconcile_outbox_index_noop_when_hash_matches() -> anyhow::Result<
 
     // `b` is indexed even though it is untracked; a matching hash means reconcile returns early.
     schedule_indexed(&mut chain, b, height).await?;
-    chain.reconcile_outbox_index(&tracked, digest).await?;
+    chain.reconcile_outbox_index(&tracked).await?;
 
     assert!(chain.nonempty_outboxes.get().contains(&b));
     Ok(())
@@ -1170,9 +1168,7 @@ async fn test_mark_received_untracked_target_is_tolerated() -> anyhow::Result<()
 
     // Un-track `a`: its counter is dropped and it leaves the index, but the queue is kept.
     let empty: BTreeSet<ChainId> = BTreeSet::new();
-    chain
-        .reconcile_outbox_index(&empty, crate::chain::tracked_chains_hash(&empty))
-        .await?;
+    chain.reconcile_outbox_index(&empty).await?;
     assert!(!chain.nonempty_outboxes.get().contains(&a));
     assert!(chain.outbox_counters.get().is_empty());
     assert_eq!(outbox_queue_len(&chain, &a).await?, 1);
@@ -1218,13 +1214,21 @@ async fn test_mark_received_untracked_keeps_tracked_sibling_counter() -> anyhow:
 
     let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
     // Confirming the untracked B drains its queue but must leave A's counter untouched.
-    assert!(chain.mark_messages_as_received(&b, height, Some(&tracked)).await?);
+    assert!(
+        chain
+            .mark_messages_as_received(&b, height, Some(&tracked))
+            .await?
+    );
     assert_eq!(outbox_queue_len(&chain, &b).await?, 0);
     assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
     assert!(chain.nonempty_outboxes.get().contains(&a));
 
     // A's own confirmation still succeeds and clears the (intact) counter.
-    assert!(chain.mark_messages_as_received(&a, height, Some(&tracked)).await?);
+    assert!(
+        chain
+            .mark_messages_as_received(&a, height, Some(&tracked))
+            .await?
+    );
     assert!(chain.outbox_counters.get().is_empty());
     assert!(!chain.nonempty_outboxes.get().contains(&a));
     Ok(())
