@@ -324,6 +324,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 .await
             },
             timeout,
+            &self.clock,
         )
         .await
         .map_err(|errors| {
@@ -422,6 +423,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 .await
             },
             timeout,
+            &self.clock,
         )
         .await
         .map_err(|errors| {

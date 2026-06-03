@@ -817,6 +817,7 @@ impl<Env: Environment> Client<Env> {
                     })
                 },
                 timeout,
+                self.storage_client().clock(),
             )
             .await;
 
@@ -1385,6 +1386,7 @@ impl<Env: Environment> Client<Env> {
                     Ok(certificates_with_check_results)
                 },
                 self.options.certificate_batch_download_timeout,
+                self.storage_client().clock(),
             )
             .await
             {
@@ -2080,6 +2082,7 @@ impl<Env: Environment> Client<Env> {
                     Result::<_, chain_client::Error>::Ok(blob)
                 },
                 timeout,
+                self.storage_client().clock(),
             )
             .map_err(move |errors| {
                 for (validator, error) in &errors {
@@ -2243,6 +2246,7 @@ async fn communicate_concurrently<'a, A, E, F, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
     timeout: Duration,
+    clock: &impl linera_storage::Clock,
 ) -> Result<V, Vec<(ValidatorPublicKey, E)>>
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
@@ -2258,7 +2262,7 @@ where
             let fun = f.clone();
             let node = remote_node.clone();
             async move {
-                linera_base::time::timer::sleep(timeout * i * i).await;
+                sleep_for(clock, timeout * i * i).await;
                 fun(node).await.map_err(|err| (remote_node.public_key, err))
             }
         })
