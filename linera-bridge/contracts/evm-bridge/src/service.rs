@@ -22,6 +22,7 @@ use linera_sdk::{
 #[view(context = ViewStorageContext)]
 pub struct BridgeState {
     pub processed_deposits: SetView<[u8; 32]>,
+    pub processed_refunds: SetView<[u8; 32]>,
     pub verified_block_hashes: SetView<[u8; 32]>,
     pub fungible_app_id: RegisterView<Option<ApplicationId>>,
     pub bridge_contract_address: RegisterView<Option<[u8; 20]>>,
@@ -103,6 +104,22 @@ impl EvmBridgeService {
             .contains(&bytes)
             .await
             .expect("failed to check processed deposits")
+    }
+
+    /// Whether a refund with the given hash has been processed.
+    ///
+    /// The hash is the hex-encoded keccak-256 of the refund key
+    /// (see [`evm_bridge::RefundKey::hash`]).
+    async fn is_refund_processed(&self, hash: String) -> bool {
+        let bytes: [u8; 32] = hex::decode(hash.strip_prefix("0x").unwrap_or(&hash))
+            .expect("invalid hex")
+            .try_into()
+            .expect("hash must be 32 bytes");
+        self.state
+            .processed_refunds
+            .contains(&bytes)
+            .await
+            .expect("failed to check processed refunds")
     }
 
     /// Verifies that the given EVM block hash is finalized on the source chain.

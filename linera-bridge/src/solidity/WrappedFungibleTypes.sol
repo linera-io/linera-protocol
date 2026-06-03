@@ -4,12 +4,14 @@ import "BridgeTypes.sol";
 
 library WrappedFungibleTypes {
     struct BurnEvent {
+        BridgeTypes.Account source;
         bytes20 target;
         uint128 amount;
     }
 
     function bcs_serialize_BurnEvent(BurnEvent memory input) internal pure returns (bytes memory) {
-        bytes memory result = bcs_serialize_bytes20(input.target);
+        bytes memory result = BridgeTypes.bcs_serialize_Account(input.source);
+        result = abi.encodePacked(result, bcs_serialize_bytes20(input.target));
         return abi.encodePacked(result, bcs_serialize_uint128(input.amount));
     }
 
@@ -19,11 +21,13 @@ library WrappedFungibleTypes {
         returns (uint256, BurnEvent memory)
     {
         uint256 new_pos;
+        BridgeTypes.Account memory source;
+        (new_pos, source) = BridgeTypes.bcs_deserialize_offset_Account(pos, input);
         bytes20 target;
-        (new_pos, target) = bcs_deserialize_offset_bytes20(pos, input);
+        (new_pos, target) = bcs_deserialize_offset_bytes20(new_pos, input);
         uint128 amount;
         (new_pos, amount) = bcs_deserialize_offset_uint128(new_pos, input);
-        return (new_pos, BurnEvent(target, amount));
+        return (new_pos, BurnEvent(source, target, amount));
     }
 
     function bcs_deserialize_BurnEvent(bytes memory input) internal pure returns (BurnEvent memory) {

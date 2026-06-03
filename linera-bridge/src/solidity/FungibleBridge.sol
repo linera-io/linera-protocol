@@ -34,6 +34,21 @@ contract FungibleBridge is Microchain {
     /// the source Linera block (matches the on-chain dedup key).
     event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
 
+    /// Emitted when a burn at `(height, eventIndex)` is administratively
+    /// blocked from settlement by `blocked_by`. Subsequent `addBlock` /
+    /// `processBurns` calls skip the burn instead of releasing tokens.
+    /// Includes the decoded `source` chain id + owner and the burn
+    /// `amount` so the off-chain relayer can build a Linera-side refund
+    /// proof without re-fetching the certificate.
+    event BurnBlocked(
+        uint64 indexed height,
+        uint32 indexed eventIndex,
+        address indexed blocked_by,
+        bytes32 source_chain_id,
+        bytes source_owner_bcs,
+        uint128 amount
+    );
+
     // WrappedFungible application ID on Linera,
     // used to identify Burn events in the block stream.
     bytes32 public immutable fungibleApplicationId;
@@ -46,6 +61,11 @@ contract FungibleBridge is Microchain {
     /// position of the burn event within its stream. Set inside
     /// `_onBlock` after the burn's `token.transfer` succeeds.
     mapping(bytes32 => bool) internal processedBurns;
+
+    /// Per-burn block flag keyed identically to `processedBurns`. Once
+    /// set, `_onBlock` and `processBurns` skip the burn instead of
+    /// releasing tokens. One-way: there is no unblock entry point.
+    mapping(bytes32 => bool) internal blockedBurns;
 
     constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId)
         Microchain(_lightClient, _chainId)
@@ -61,6 +81,53 @@ contract FungibleBridge is Microchain {
     /// off-chain relayer pulls from the certificate.
     function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool) {
         return processedBurns[_burnKey(height, eventIndex)];
+    }
+
+    /// Returns whether the burn at `(height, eventIndex)` is blocked from
+    /// settlement. Blocked burns are silently skipped by `addBlock` and
+    /// `processBurns`.
+    function isBurnBlocked(uint64 height, uint32 eventIndex) external view returns (bool) {
+        return blockedBurns[_burnKey(height, eventIndex)];
+    }
+
+    /// Verifies `cert` once, decodes the burn at (txIndex, eventPosInTx),
+    /// and marks it blocked from settlement. The decoded `source` and
+    /// `amount` are emitted alongside `(height, eventIndex)` so the
+    /// off-chain relayer can build a Linera-side refund proof without
+    /// going back to the cert.
+    ///
+    /// Reverts with `"already processed"` if the burn was already settled —
+    /// the caller intended to block, not process, so the mismatch is signalled
+    /// loudly. No-op if the burn is already blocked (idempotent re-block).
+    /// One-way — no unblock entry point. Currently public (no access control);
+    /// see follow-up.
+    function blockBurn(bytes calldata cert, uint32 txIndex, uint32 eventPosInTx) external {
+        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(cert);
+        require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
+        require(txIndex < blockValue.body.events.length, "txIndex out of range");
+
+        BridgeTypes.Event[] memory txEvents = blockValue.body.events[txIndex];
+        require(eventPosInTx < txEvents.length, "eventPos out of range");
+
+        bytes32 burnsHash = keccak256("burns");
+        BridgeTypes.Event memory evt = txEvents[eventPosInTx];
+        require(_isMatchingBurn(evt, burnsHash), "not a matching burn");
+
+        uint64 height = blockValue.header.height.value;
+        bytes32 key = _burnKey(height, evt.index);
+        require(!processedBurns[key], "already processed");
+        if (blockedBurns[key]) return;
+        blockedBurns[key] = true;
+
+        WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
+        emit BurnBlocked(
+            height,
+            evt.index,
+            msg.sender,
+            burnEvt.source.chain_id.value.value,
+            BridgeTypes.bcs_serialize_AccountOwner(burnEvt.source.owner),
+            burnEvt.amount
+        );
     }
 
     /// Locks ERC-20 tokens in the bridge and emits a DepositInitiated event.
@@ -100,7 +167,8 @@ contract FungibleBridge is Microchain {
     /// Idempotent: each burn's release is gated on
     /// `processedBurns[keccak256(abi.encode(height, evt.index))]`, so
     /// re-submitting the same cert is a no-op for burns already released
-    /// by a prior call.
+    /// by a prior call. Burns flagged in `blockedBurns` are silently
+    /// skipped.
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
         bytes32 burnsHash = keccak256("burns");
         uint64 height = blockValue.header.height.value;
@@ -112,6 +180,7 @@ contract FungibleBridge is Microchain {
 
                 bytes32 key = _burnKey(height, evt.index);
                 if (processedBurns[key]) continue;
+                if (blockedBurns[key]) continue;
 
                 _releaseBurn(evt, key, height);
             }
@@ -137,6 +206,8 @@ contract FungibleBridge is Microchain {
     /// - any position out of range (`"eventPos out of range"`)
     /// - any position whose event is not a matching burn for this app
     ///   (`"not a matching burn"`)
+    /// - any position already in `blockedBurns` (`"burn blocked"`) — caller
+    ///   intent (process) conflicts with the existing block
     /// - any failed `token.transfer` (`"safeTransfer failed"`)
     function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
         require(eventPositionsInTx.length > 0, "empty positions");
@@ -156,6 +227,7 @@ contract FungibleBridge is Microchain {
 
             bytes32 key = _burnKey(height, evt.index);
             if (processedBurns[key]) continue;
+            require(!blockedBurns[key], "burn blocked");
 
             _releaseBurn(evt, key, height);
         }

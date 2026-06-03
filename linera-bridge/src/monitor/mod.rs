@@ -22,13 +22,13 @@ use alloy::primitives::{Address, B256, U256};
 use anyhow::Context as _;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{BlockHeight, U128},
-    identifiers::ApplicationId,
+    data_types::{Amount, BlockHeight, U128},
+    identifiers::{Account, ApplicationId},
 };
 use linera_execution::{Query, QueryResponse};
 use tokio::sync::RwLock;
 
-use crate::proof::DepositKey;
+use crate::proof::{DepositKey, RefundKey};
 
 /// Queries the evm-bridge app to check whether a deposit has been processed on Linera.
 pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
@@ -46,6 +46,24 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
     };
     let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
     Ok(response["data"]["isDepositProcessed"].as_bool() == Some(true))
+}
+
+/// Queries the evm-bridge app to check whether a refund has been processed on Linera.
+pub async fn query_refund_processed<E: linera_core::environment::Environment>(
+    chain_client: &linera_core::client::ChainClient<E>,
+    bridge_app_id: ApplicationId,
+    refund_key: &RefundKey,
+) -> anyhow::Result<bool> {
+    let hash_hex = format!("0x{}", hex::encode(refund_key.hash()));
+    let gql = format!(r#"{{ isRefundProcessed(hash: "{hash_hex}") }}"#);
+    let query = Query::user_without_abi(bridge_app_id, &GqlRequest { query: gql })?;
+    let (outcome, _) = chain_client.query_application(query, None).await?;
+    let response_bytes = match outcome.response {
+        QueryResponse::User(bytes) => bytes,
+        other => anyhow::bail!("unexpected query response: {other:?}"),
+    };
+    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
+    Ok(response["data"]["isRefundProcessed"].as_bool() == Some(true))
 }
 
 /// Queries the wrapped-fungible app for its declared source-ERC-20 decimals.
@@ -137,6 +155,18 @@ impl<T: Clone> Tracked<T> {
 
 pub type TrackedDeposit = Tracked<PendingDeposit>;
 pub type TrackedBurn = Tracked<PendingBurn>;
+pub type TrackedRefund = Tracked<PendingRefund>;
+
+/// A refund detected by the EVM scanner from a `BurnBlocked` log. The relayer
+/// builds an MPT receipt proof of this log and submits a `RefundBurn` operation
+/// on the bridge chain so the original burner is credited back on Linera.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PendingRefund {
+    pub key: RefundKey,
+    pub evm_tx_hash: B256,
+    pub source: Account,
+    pub amount: Amount,
+}
 
 /// One height's slice of `pending_burns_by_height_and_tx`. The two views
 /// (`event_indices` and `by_tx`) describe the same set of burns under one
@@ -186,20 +216,32 @@ impl PartialOrd for PendingBurnsAtHeight {
 pub struct MonitorState {
     pub(crate) deposits: HashMap<DepositKey, TrackedDeposit>,
     pub(crate) burns: HashMap<(BlockHeight, u32), TrackedBurn>,
+    pub(crate) refunds: HashMap<RefundKey, TrackedRefund>,
     pub(crate) last_scanned_evm_block: u64,
     pub(crate) last_scanned_linera_height: BlockHeight,
+    /// EVM chain id of the source the relayer is connected to. Baked into
+    /// every `RefundKey` so refund dedup is domain-separated from deposits.
+    source_chain_id: u64,
     db: Option<db::BridgeDb>,
 }
 
 impl MonitorState {
-    pub fn new(start_evm_block: u64) -> Self {
+    pub fn new(start_evm_block: u64, source_chain_id: u64) -> Self {
         Self {
             deposits: HashMap::new(),
             burns: HashMap::new(),
+            refunds: HashMap::new(),
             last_scanned_evm_block: start_evm_block,
             last_scanned_linera_height: BlockHeight(0),
+            source_chain_id,
             db: None,
         }
+    }
+
+    /// Returns the EVM source chain id this monitor was constructed with.
+    /// Refund-scan loops use it to build [`RefundKey`] values.
+    pub fn source_chain_id(&self) -> u64 {
+        self.source_chain_id
     }
 
     /// Sets the persistent SQLite database for write-through storage.
@@ -418,8 +460,10 @@ impl MonitorState {
         };
         let deposits = db.load_pending_deposits().await?;
         let burns = db.load_pending_burns().await?;
+        let refunds = db.load_pending_refunds(self.source_chain_id).await?;
         let n_deposits = deposits.len();
         let n_burns = burns.len();
+        let n_refunds = refunds.len();
         for d in deposits {
             self.deposits.insert(d.key.clone(), Tracked::new(d));
         }
@@ -427,9 +471,13 @@ impl MonitorState {
             self.burns
                 .insert((b.height, b.event_index), Tracked::new(b));
         }
+        for r in refunds {
+            self.refunds.insert(r.key.clone(), Tracked::new(r));
+        }
         tracing::info!(
             deposits = n_deposits,
             burns = n_burns,
+            refunds = n_refunds,
             "Recovered pending bridge requests from SQLite WAL"
         );
         Ok(())
@@ -521,12 +569,116 @@ impl MonitorState {
         }
     }
 
+    /// Tracks a refund detected from a `BurnBlocked` log. Returns `true` if
+    /// this is a newly discovered refund. Mirrors `track_deposit`/`track_burn`:
+    /// the `Entry` API protects existing retry state. SQLite persistence is
+    /// wired in by the refund-DB task.
+    pub async fn track_refund(&mut self, pending: PendingRefund) -> bool {
+        match self.refunds.entry(pending.key.clone()) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(e) => {
+                if let Some(db) = &self.db {
+                    if let Err(error) = db.store_pending_refund(&pending).await {
+                        tracing::warn!(?error, "Failed to persist refund to SQLite");
+                    }
+                }
+                e.insert(Tracked::new(pending));
+                crate::relay::metrics::refund_detected();
+                true
+            }
+        }
+    }
+
+    pub async fn complete_refund(&mut self, key: &RefundKey) {
+        if let Some(r) = self.refunds.get_mut(key) {
+            r.forwarded = true;
+            crate::relay::metrics::refund_completed();
+            if let Some(db) = &self.db {
+                if let Err(error) = db.mark_refund_completed(key).await {
+                    tracing::warn!(?key, ?error, "Failed to update refund status in SQLite");
+                }
+            }
+        } else {
+            tracing::warn!(refund_id = ?key, "Attempted to complete unknown refund");
+        }
+    }
+
+    pub fn all_refunds(&self) -> Vec<&TrackedRefund> {
+        self.refunds.values().collect()
+    }
+
+    pub fn pending_refunds(&self) -> Vec<&TrackedRefund> {
+        self.refunds.values().filter(|r| !r.forwarded).collect()
+    }
+
+    pub fn completed_refunds(&self) -> Vec<&TrackedRefund> {
+        self.refunds.values().filter(|r| r.forwarded).collect()
+    }
+
+    pub fn refunds_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedRefund> {
+        self.refunds
+            .values()
+            .filter(|r| {
+                !r.forwarded
+                    && !r.failed
+                    && retry_eligible(r.retry_count, r.last_retry_at, max_retries)
+            })
+            .collect()
+    }
+
+    /// Returns one pending refund whose backoff has elapsed, cloned so the
+    /// caller can drop the read lock before doing slow work.
+    pub fn next_refund_for_retry(&self, max_retries: u32) -> Option<PendingRefund> {
+        self.refunds
+            .values()
+            .find(|r| {
+                !r.forwarded
+                    && !r.failed
+                    && retry_eligible(r.retry_count, r.last_retry_at, max_retries)
+            })
+            .map(|r| r.value.clone())
+    }
+
+    /// Bumps the refund's retry counter; if the bump exhausts `max_retries`,
+    /// the refund is marked `failed`. Mirrors `mark_burn_retried`.
+    pub async fn mark_refund_retried(&mut self, key: &RefundKey, max_retries: u32) {
+        let exhausted = if let Some(r) = self.refunds.get_mut(key) {
+            r.retry_count += 1;
+            r.last_retry_at = Some(Instant::now());
+            r.retry_count >= max_retries
+        } else {
+            false
+        };
+        if exhausted {
+            self.mark_refund_failed(key).await;
+        }
+    }
+
+    pub async fn mark_refund_failed(&mut self, key: &RefundKey) {
+        if let Some(r) = self.refunds.get_mut(key) {
+            r.failed = true;
+            crate::relay::metrics::refund_failed();
+            if let Some(db) = &self.db {
+                if let Err(error) = db.mark_refund_failed(key).await {
+                    tracing::warn!(?key, ?error, "Failed to update refund status in SQLite");
+                }
+            }
+        }
+    }
+
     pub fn status_summary(&self) -> StatusSummary {
         StatusSummary {
             deposits_pending: self.deposits.values().filter(|d| !d.forwarded).count(),
             deposits_completed: self.deposits.values().filter(|d| d.forwarded).count(),
             burns_pending: self.burns.values().filter(|b| !b.forwarded).count(),
             burns_forwarded: self.burns.values().filter(|b| b.forwarded).count(),
+            refunds_pending: self
+                .refunds
+                .values()
+                .filter(|r| !r.forwarded && !r.failed)
+                .count(),
+            refunds_completed: self.refunds.values().filter(|r| r.forwarded).count(),
+            refunds_failed: self.refunds.values().filter(|r| r.failed).count(),
             last_scanned_evm_block: self.last_scanned_evm_block,
             last_scanned_linera_height: self.last_scanned_linera_height,
         }
@@ -539,14 +691,18 @@ pub struct StatusSummary {
     pub deposits_completed: usize,
     pub burns_pending: usize,
     pub burns_forwarded: usize,
+    pub refunds_pending: usize,
+    pub refunds_completed: usize,
+    pub refunds_failed: usize,
     pub last_scanned_evm_block: u64,
     pub last_scanned_linera_height: BlockHeight,
 }
 
-/// Runs the deposit and burn processing loops concurrently. Each loop reads
-/// pending work from `MonitorState` (the SQLite WAL is the source of truth)
-/// and is woken either by a `Notify` signal from the corresponding scanner or
-/// by a periodic poll for items whose retry backoff has just elapsed.
+/// Runs the deposit, burn, and refund processing loops concurrently. Each loop
+/// reads pending work from `MonitorState` (the SQLite WAL is the source of
+/// truth) and is woken either by a `Notify` signal from the corresponding
+/// scanner or by a periodic poll for items whose retry backoff has just
+/// elapsed.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
@@ -555,6 +711,7 @@ pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'stati
     linera_client: Arc<crate::relay::linera::LineraClient<E>>,
     deposit_notify: Arc<tokio::sync::Notify>,
     burn_notify: Arc<tokio::sync::Notify>,
+    refund_notify: Arc<tokio::sync::Notify>,
     poll_interval: Duration,
     max_retries: u32,
 ) -> anyhow::Result<()> {
@@ -564,6 +721,9 @@ pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'stati
         ) => result,
         result = linera::process_pending_burns(
             &monitor, &evm_client, &linera_client, &burn_notify, poll_interval, max_retries,
+        ) => result,
+        result = evm::process_pending_refunds(
+            &monitor, &linera_client, &proof_client, &refund_notify, poll_interval, max_retries,
         ) => result,
     }
 }
@@ -590,18 +750,17 @@ fn retry_eligible(retry_count: u32, last_retry_at: Option<Instant>, max_retries:
 #[cfg(test)]
 mod tests {
     use alloy::primitives::{Address, B256, U256};
-    use linera_base::data_types::BlockHeight;
+    use linera_base::{
+        crypto::CryptoHash,
+        data_types::{Amount, BlockHeight},
+        identifiers::{AccountOwner, ChainId},
+    };
 
     use super::*;
 
     #[test]
     fn test_deposit_key_hash_matches_evm_bridge() {
-        let key = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 5,
-            log_index: 0,
-        };
+        let key = DepositKey::new(8453, B256::from([0xAA; 32]), 5, 0);
         let hash = key.hash();
         assert_eq!(hash, key.hash());
         assert_ne!(hash, [0u8; 32]);
@@ -609,31 +768,16 @@ mod tests {
 
     #[test]
     fn test_deposit_key_different_log_index_different_hash() {
-        let key1 = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 5,
-            log_index: 0,
-        };
-        let key2 = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 5,
-            log_index: 1,
-        };
+        let key1 = DepositKey::new(8453, B256::from([0xAA; 32]), 5, 0);
+        let key2 = DepositKey::new(8453, B256::from([0xAA; 32]), 5, 1);
         assert_ne!(key1.hash(), key2.hash());
     }
 
     #[tokio::test]
     async fn test_monitor_state_track_and_complete() {
-        let mut state = MonitorState::new(0);
+        let mut state = MonitorState::new(0, 0);
 
-        let key = DepositKey {
-            source_chain_id: 8453,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 1,
-            log_index: 0,
-        };
+        let key = DepositKey::new(8453, B256::from([0xAA; 32]), 1, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -655,7 +799,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_monitor_state_track_and_forward_burn() {
-        let mut state = MonitorState::new(0);
+        let mut state = MonitorState::new(0, 0);
 
         state
             .track_burn(PendingBurn {
@@ -680,14 +824,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_summary() {
-        let mut state = MonitorState::new(100);
+        let mut state = MonitorState::new(100, 0);
 
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::ZERO,
-            tx_index: 0,
-            log_index: 0,
-        };
+        let key = DepositKey::new(1, B256::ZERO, 0, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -709,11 +848,27 @@ mod tests {
             })
             .await;
 
+        let refund_key = RefundKey::new(1, B256::ZERO, 0, 1);
+        state
+            .track_refund(PendingRefund {
+                key: refund_key.clone(),
+                evm_tx_hash: B256::ZERO,
+                source: Account {
+                    chain_id: ChainId(CryptoHash::from([0u8; 32])),
+                    owner: AccountOwner::CHAIN,
+                },
+                amount: Amount::ZERO,
+            })
+            .await;
+
         let summary = state.status_summary();
         assert_eq!(summary.deposits_pending, 1);
         assert_eq!(summary.deposits_completed, 0);
         assert_eq!(summary.burns_pending, 1);
         assert_eq!(summary.burns_forwarded, 0);
+        assert_eq!(summary.refunds_pending, 1);
+        assert_eq!(summary.refunds_completed, 0);
+        assert_eq!(summary.refunds_failed, 0);
         assert_eq!(summary.last_scanned_evm_block, 100);
     }
 
@@ -741,13 +896,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_deposits_ready_for_retry() {
-        let mut state = MonitorState::new(0);
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::ZERO,
-            tx_index: 0,
-            log_index: 0,
-        };
+        let mut state = MonitorState::new(0, 0);
+        let key = DepositKey::new(1, B256::ZERO, 0, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -773,13 +923,8 @@ mod tests {
     /// that have been completed.
     #[tokio::test]
     async fn next_deposit_for_retry_returns_pending_then_respects_backoff() {
-        let mut state = MonitorState::new(0);
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::ZERO,
-            tx_index: 0,
-            log_index: 0,
-        };
+        let mut state = MonitorState::new(0, 0);
+        let key = DepositKey::new(1, B256::ZERO, 0, 0);
         state
             .track_deposit(PendingDeposit {
                 key: key.clone(),
@@ -807,18 +952,13 @@ mod tests {
     /// on its next poll regardless of backpressure.
     #[tokio::test]
     async fn scanner_writes_directly_to_state_so_processor_sees_them() {
-        let mut state = MonitorState::new(100);
+        let mut state = MonitorState::new(100, 0);
 
         // Simulate the scanner discovering many deposits in a single iteration.
         for i in 0..128u64 {
             state
                 .track_deposit(PendingDeposit {
-                    key: DepositKey {
-                        source_chain_id: 1,
-                        block_hash: B256::ZERO,
-                        tx_index: i,
-                        log_index: 0,
-                    },
+                    key: DepositKey::new(1, B256::ZERO, i, 0),
                     tx_hash: B256::ZERO,
                     depositor: Address::ZERO,
                     amount: U256::ZERO,
@@ -838,12 +978,7 @@ mod tests {
     #[tokio::test]
     async fn load_from_db_recovers_pending_items_on_startup() {
         let db = db::BridgeDb::open_in_memory().await.unwrap();
-        let key = DepositKey {
-            source_chain_id: 1,
-            block_hash: B256::from([0xAA; 32]),
-            tx_index: 7,
-            log_index: 0,
-        };
+        let key = DepositKey::new(1, B256::from([0xAA; 32]), 7, 0);
         db.insert_deposit(&PendingDeposit {
             key: key.clone(),
             tx_hash: B256::from([0xBB; 32]),
@@ -865,7 +1000,7 @@ mod tests {
         .await
         .unwrap();
 
-        let mut state = MonitorState::new(0);
+        let mut state = MonitorState::new(0, 0);
         state.set_db(db);
         state.load_from_db().await.unwrap();
 
@@ -879,7 +1014,7 @@ mod tests {
     /// Same as the deposit version, but for the burn pipeline.
     #[tokio::test]
     async fn next_burn_for_retry_returns_pending_then_respects_backoff() {
-        let mut state = MonitorState::new(0);
+        let mut state = MonitorState::new(0, 0);
         let height = BlockHeight(101);
         state
             .track_burn(PendingBurn {
@@ -904,7 +1039,7 @@ mod tests {
 
     #[tokio::test]
     async fn pending_burns_by_height_and_tx_groups_and_sorts() {
-        let mut state = MonitorState::new(0);
+        let mut state = MonitorState::new(0, 0);
         let burns = [
             // Two burns at height 5: tx 0 has positions 1 then 0 (out of
             // order so the helper's sort is tested); tx 1 has one burn.
@@ -979,7 +1114,7 @@ mod tests {
         // `processBurns` path), it must not reappear in subsequent retry
         // snapshots — otherwise the chunking loop would keep re-discovering
         // it as oversized and burn estimate-RPC budget on every pass.
-        let mut state = MonitorState::new(0);
+        let mut state = MonitorState::new(0, 0);
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
@@ -1019,7 +1154,7 @@ mod tests {
 
     #[tokio::test]
     async fn event_index_for_pos_matches_tracked_burn() {
-        let mut state = MonitorState::new(0);
+        let mut state = MonitorState::new(0, 0);
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),

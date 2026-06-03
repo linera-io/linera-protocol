@@ -60,6 +60,34 @@ static BURNS_FAILED: LazyLock<IntGauge> = LazyLock::new(|| {
     prometheus::register_int_gauge!(opts).unwrap()
 });
 
+static REFUNDS_DETECTED: LazyLock<IntCounter> = LazyLock::new(|| {
+    let opts = Opts::new(
+        "bridge_refunds_detected",
+        "Total refunds found by EVM scanner from BurnBlocked logs",
+    )
+    .namespace("linera");
+    prometheus::register_int_counter!(opts).unwrap()
+});
+
+static REFUNDS_COMPLETED: LazyLock<IntCounter> = LazyLock::new(|| {
+    let opts = Opts::new(
+        "bridge_refunds_completed",
+        "Refunds credited back on Linera via RefundBurn",
+    )
+    .namespace("linera");
+    prometheus::register_int_counter!(opts).unwrap()
+});
+
+static REFUNDS_PENDING: LazyLock<IntGauge> = LazyLock::new(|| {
+    let opts = Opts::new("bridge_refunds_pending", "Currently pending refunds").namespace("linera");
+    prometheus::register_int_gauge!(opts).unwrap()
+});
+
+static REFUNDS_FAILED: LazyLock<IntGauge> = LazyLock::new(|| {
+    let opts = Opts::new("bridge_refunds_failed", "Permanently failed refunds").namespace("linera");
+    prometheus::register_int_gauge!(opts).unwrap()
+});
+
 static LAST_SCANNED_EVM_BLOCK: LazyLock<IntGauge> = LazyLock::new(|| {
     let opts = Opts::new(
         "bridge_last_scanned_evm_block",
@@ -124,6 +152,21 @@ pub(crate) fn burn_completed() {
 pub(crate) fn burn_failed() {
     BURNS_PENDING.dec();
     BURNS_FAILED.inc();
+}
+
+pub(crate) fn refund_detected() {
+    REFUNDS_DETECTED.inc();
+    REFUNDS_PENDING.inc();
+}
+
+pub(crate) fn refund_completed() {
+    REFUNDS_COMPLETED.inc();
+    REFUNDS_PENDING.dec();
+}
+
+pub(crate) fn refund_failed() {
+    REFUNDS_PENDING.dec();
+    REFUNDS_FAILED.inc();
 }
 
 pub(crate) fn set_last_scanned_evm_block(block: u64) {

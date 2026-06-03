@@ -3278,6 +3278,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-trie",
  "anyhow",
+ "bcs",
  "linera-base",
  "serde",
 ]

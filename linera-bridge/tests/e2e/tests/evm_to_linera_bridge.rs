@@ -307,12 +307,12 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     // Build the DepositKey for completion checks.
     let tx_index = proof.tx_index;
     let log_index = proof.log_indices[0];
-    let deposit_key = linera_bridge::proof::DepositKey {
-        source_chain_id: 31337, // Anvil chain ID
-        block_hash: deposit_receipt.block_hash.unwrap(),
+    let deposit_key = linera_bridge::proof::DepositKey::new(
+        31337, // Anvil chain ID
+        deposit_receipt.block_hash.unwrap(),
         tx_index,
         log_index,
-    };
+    );
 
     // ── Phase 7a: Verify deposit is NOT yet processed ──
     assert!(

@@ -15,17 +15,22 @@ use linera_chain::types::ConfirmedBlockCertificate;
 use linera_core::client::ChainClient;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::proof::DepositKey;
+use crate::proof::{DepositKey, RefundKey};
 
 /// A write operation to be executed on the bridge chain.
 /// Sent to the main loop which serializes all chain mutations.
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum ChainOperation {
     ProcessInbox {
         response: oneshot::Sender<Result<Vec<ConfirmedBlockCertificate>>>,
     },
     ProcessDeposit {
         proof: crate::proof::gen::DepositProof,
+        response: oneshot::Sender<Result<()>>,
+    },
+    ProcessRefund {
+        proof: crate::proof::gen::BurnBlockedProof,
         response: oneshot::Sender<Result<()>>,
     },
 }
@@ -113,12 +118,29 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
             .await
     }
 
+    pub async fn query_refund_processed(&self, refund_key: &RefundKey) -> Result<bool> {
+        crate::monitor::query_refund_processed(&self.chain_client, self.bridge_app_id, refund_key)
+            .await
+    }
+
     // ── Write operations (sent to main loop via channel) ──
 
     pub async fn process_deposit(&self, proof: crate::proof::gen::DepositProof) -> Result<()> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.op_tx
             .send(ChainOperation::ProcessDeposit {
+                proof,
+                response: resp_tx,
+            })
+            .await
+            .with_context(|| "Chain operation channel closed")?;
+        resp_rx.await.with_context(|| "Response channel closed")?
+    }
+
+    pub async fn process_refund(&self, proof: crate::proof::gen::BurnBlockedProof) -> Result<()> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        self.op_tx
+            .send(ChainOperation::ProcessRefund {
                 proof,
                 response: resp_tx,
             })

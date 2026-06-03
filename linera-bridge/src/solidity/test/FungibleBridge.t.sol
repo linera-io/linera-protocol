@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.30;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {FungibleBridge} from "../FungibleBridge.sol";
 import {BridgeTypes} from "../BridgeTypes.sol";
 import {WrappedFungibleTypes} from "../WrappedFungibleTypes.sol";
@@ -19,6 +19,12 @@ address constant RECIP_0 = address(0xA0);
 address constant RECIP_1 = address(0xA1);
 address constant RECIP_2 = address(0xA2);
 bytes32 constant APP_ID = bytes32(uint256(0xF00D));
+
+// Stable test source — chain id and Address32 owner — used by the mocks
+// for the burn event's `source: Account` field. Tests that assert on the
+// emitted BurnBlocked payload compare against these.
+bytes32 constant SOURCE_CHAIN_ID = bytes32(uint256(0xC2));
+bytes32 constant SOURCE_OWNER_ADDR32 = bytes32(uint256(0xBA5EBA11));
 
 // ------------------------------------------------------------------
 // MockLightClientForBurns
@@ -77,6 +83,10 @@ contract MockLightClientForBurns {
 
     function _encodeBurn(address target, uint128 amount) private pure returns (bytes memory) {
         WrappedFungibleTypes.BurnEvent memory burnEvt;
+        burnEvt.source.chain_id.value.value = SOURCE_CHAIN_ID;
+        // Address32 variant of AccountOwner (choice index 1 per BridgeTypes).
+        burnEvt.source.owner.choice = 1;
+        burnEvt.source.owner.address32.value = SOURCE_OWNER_ADDR32;
         burnEvt.target = bytes20(target);
         burnEvt.amount = amount;
         return WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
@@ -118,12 +128,88 @@ contract MockLightClientForNonBurn {
         evt.stream_id.stream_name.value = bytes("deposits");
         evt.index = 5;
         WrappedFungibleTypes.BurnEvent memory burnEvt;
+        burnEvt.source.chain_id.value.value = SOURCE_CHAIN_ID;
+        burnEvt.source.owner.choice = 1;
+        burnEvt.source.owner.address32.value = SOURCE_OWNER_ADDR32;
         burnEvt.target = bytes20(recipBase);
         burnEvt.amount = amountPerBurn;
         evt.value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
         b.body.events[0][0] = evt;
 
         sigHash = bytes32(uint256(0x1234));
+    }
+}
+
+// ------------------------------------------------------------------
+// MockLightClientWithOwner
+//
+// Like MockLightClientForBurns but with a fully parametric AccountOwner
+// so each variant can be exercised independently.
+// ------------------------------------------------------------------
+contract MockLightClientWithOwner {
+    bytes32 public immutable chainIdRet;
+    uint64 public immutable heightRet;
+    uint32 public immutable txIndexUsed;
+    bytes32 public immutable fungibleAppIdRet;
+    uint128 public immutable amountPerBurn;
+    address public immutable recipBase;
+    uint8 public immutable ownerChoice;
+    uint8 public immutable ownerReserved;
+    bytes32 public immutable ownerAddr32;
+    bytes20 public immutable ownerAddr20;
+
+    constructor(
+        bytes32 _chainId,
+        uint64 _height,
+        uint32 _txIndex,
+        bytes32 _fungibleAppId,
+        uint128 _amountPerBurn,
+        address _recipBase,
+        uint8 _ownerChoice,
+        uint8 _ownerReserved,
+        bytes32 _ownerAddr32,
+        bytes20 _ownerAddr20
+    ) {
+        chainIdRet = _chainId;
+        heightRet = _height;
+        txIndexUsed = _txIndex;
+        fungibleAppIdRet = _fungibleAppId;
+        amountPerBurn = _amountPerBurn;
+        recipBase = _recipBase;
+        ownerChoice = _ownerChoice;
+        ownerReserved = _ownerReserved;
+        ownerAddr32 = _ownerAddr32;
+        ownerAddr20 = _ownerAddr20;
+    }
+
+    function verifyBlock(bytes calldata) external view returns (BridgeTypes.Block memory b, bytes32 sigHash) {
+        b.header.chain_id.value.value = chainIdRet;
+        b.header.height.value = heightRet;
+
+        b.body.events = new BridgeTypes.Event[][](uint256(txIndexUsed) + 1);
+        b.body.events[txIndexUsed] = new BridgeTypes.Event[](1);
+
+        BridgeTypes.Event memory evt;
+        evt.stream_id.application_id.choice = 1;
+        evt.stream_id.application_id.user.application_description_hash.value = fungibleAppIdRet;
+        evt.stream_id.stream_name.value = bytes("burns");
+        evt.index = 5;
+        evt.value = _encodeBurn(recipBase, amountPerBurn);
+        b.body.events[txIndexUsed][0] = evt;
+
+        sigHash = bytes32(uint256(0x1234));
+    }
+
+    function _encodeBurn(address target, uint128 amount) private view returns (bytes memory) {
+        WrappedFungibleTypes.BurnEvent memory burnEvt;
+        burnEvt.source.chain_id.value.value = SOURCE_CHAIN_ID;
+        burnEvt.source.owner.choice = ownerChoice;
+        burnEvt.source.owner.reserved = ownerReserved;
+        burnEvt.source.owner.address32.value = ownerAddr32;
+        burnEvt.source.owner.address20 = ownerAddr20;
+        burnEvt.target = bytes20(target);
+        burnEvt.amount = amount;
+        return WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
     }
 }
 
@@ -144,12 +230,30 @@ function _u32s_single(uint32 a) pure returns (uint32[] memory) {
     return arr;
 }
 
+/// Mirrors the `AccountOwner` value the mocks bake into every BurnEvent,
+/// then runs it through the same codegen serializer that `blockBurn`
+/// uses when emitting `BurnBlocked.source_owner_bcs`.
+function _expectedOwnerBcs() pure returns (bytes memory) {
+    BridgeTypes.CryptoHash memory address32;
+    address32.value = SOURCE_OWNER_ADDR32;
+    BridgeTypes.AccountOwner memory owner = BridgeTypes.AccountOwner_case_address32(address32);
+    return BridgeTypes.bcs_serialize_AccountOwner(owner);
+}
+
 // ------------------------------------------------------------------
 // Test contract
 // ------------------------------------------------------------------
 
 contract FungibleBridgeProcessBurnsTest is Test {
     event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
+    event BurnBlocked(
+        uint64 indexed height,
+        uint32 indexed eventIndex,
+        address indexed blocked_by,
+        bytes32 source_chain_id,
+        bytes source_owner_bcs,
+        uint128 amount
+    );
 
     // Deploy a bridge backed by `lc`, with a LineraToken that has
     // `supply` tokens pre-minted to the bridge.
@@ -278,5 +382,153 @@ contract FungibleBridgeProcessBurnsTest is Test {
         assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "pos 1 stays processed");
         assertEq(tok.balanceOf(RECIP_0), AMOUNT, "pos 0 released once to its recipient");
         assertEq(tok.balanceOf(recip1), AMOUNT, "pos 1 not double-released");
+    }
+
+    function test_processBurns_reverts_on_blocked_position() public {
+        // 2 burns. Block (HEIGHT, 5) at position 0; then processBurns([0, 1])
+        // must revert with "burn blocked" — caller's intent (process) conflicts
+        // with the existing block. Revert is atomic: neither position is
+        // marked processed and no tokens are released.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
+
+        bridge.blockBurn(hex"deadbeef", TX, 0);
+        assertTrue(bridge.isBurnBlocked(HEIGHT, 5), "burn at index 5 should be blocked");
+
+        vm.expectRevert(bytes("burn blocked"));
+        bridge.processBurns(hex"deadbeef", TX, _u32s(0, 1));
+
+        assertFalse(bridge.isBurnProcessed(HEIGHT, 5), "blocked burn must not be marked processed");
+        assertFalse(bridge.isBurnProcessed(HEIGHT, 6), "unblocked burn must also be rolled back");
+        assertEq(tok.balanceOf(RECIP_0), 0, "blocked recipient holds no released tokens");
+        address recip1 = address(uint160(RECIP_0) + 1);
+        assertEq(tok.balanceOf(recip1), 0, "unblocked recipient holds no tokens - batch reverted");
+    }
+
+    function test_blockBurn_prevents_addBlock_release() public {
+        // Same as above but through the addBlock path: block (HEIGHT, 5)
+        // via position 0, then addBlock(cert) — pos 0 skipped, pos 1 released.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
+
+        bridge.blockBurn(hex"deadbeef", TX, 0);
+        bridge.addBlock(hex"deadbeef");
+
+        assertFalse(bridge.isBurnProcessed(HEIGHT, 5), "blocked burn must not be marked processed");
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "unblocked burn settles");
+        assertEq(tok.balanceOf(RECIP_0), 0, "blocked recipient holds no released tokens");
+    }
+
+    function test_blockBurn_idempotent_emits_once() public {
+        // First blockBurn sets the flag and emits with the decoded
+        // source + amount. Second is a no-op (no second event, flag stays set).
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+
+        vm.expectEmit(true, true, true, true, address(bridge));
+        emit BurnBlocked(HEIGHT, 5, address(this), SOURCE_CHAIN_ID, _expectedOwnerBcs(), AMOUNT);
+        bridge.blockBurn(hex"deadbeef", TX, 0);
+        assertTrue(bridge.isBurnBlocked(HEIGHT, 5));
+
+        vm.recordLogs();
+        bridge.blockBurn(hex"deadbeef", TX, 0);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertEq(logs.length, 0, "second blockBurn must be silent");
+    }
+
+    function test_blockBurn_chain_id_mismatch_reverts() public {
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(bytes32(uint256(0xDEAD)), HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+        vm.expectRevert(bytes("chain id mismatch"));
+        bridge.blockBurn(hex"deadbeef", TX, 0);
+    }
+
+    function test_blockBurn_tx_index_out_of_range_reverts() public {
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+        vm.expectRevert(bytes("txIndex out of range"));
+        bridge.blockBurn(hex"deadbeef", 99, 0);
+    }
+
+    function test_blockBurn_event_pos_out_of_range_reverts() public {
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+        vm.expectRevert(bytes("eventPos out of range"));
+        bridge.blockBurn(hex"deadbeef", TX, 99);
+    }
+
+    function test_blockBurn_non_burn_event_reverts() public {
+        MockLightClientForNonBurn lc = new MockLightClientForNonBurn(CHAIN_ID, HEIGHT, APP_ID, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+        vm.expectRevert(bytes("not a matching burn"));
+        bridge.blockBurn(hex"deadbeef", 0, 0);
+    }
+
+    function test_blockBurn_reverts_on_already_processed() public {
+        // After processBurns has settled (HEIGHT, 5), blockBurn for the same
+        // position must revert with "already processed" — the caller intended
+        // to block, but the burn has already been processed. Surfacing the
+        // mismatch is more useful than a silent no-op.
+        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+        bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
+        assertTrue(bridge.isBurnProcessed(HEIGHT, 5));
+
+        vm.expectRevert(bytes("already processed"));
+        bridge.blockBurn(hex"deadbeef", TX, 0);
+
+        assertFalse(bridge.isBurnBlocked(HEIGHT, 5), "blocked flag must not flip after revert");
+    }
+
+    /// blockBurn must emit a BurnBlocked event whose `source_owner_bcs` field
+    /// round-trips correctly for every AccountOwner variant.
+    ///
+    /// Variant 0 — Reserved/CHAIN: choice byte 0x00 + one reserved byte 0x00 (2 bytes total).
+    /// Variant 1 — Address32: choice byte 0x01 + 32-byte CryptoHash (33 bytes total).
+    /// Variant 2 — Address20: choice byte 0x02 + 20-byte EVM address (21 bytes total).
+    function test_blockBurn_emits_BurnBlocked_with_decoded_fields() public {
+        // --- Variant 0: Reserved/CHAIN (choice=0, reserved=0) ---
+        {
+            MockLightClientWithOwner lc = new MockLightClientWithOwner(
+                CHAIN_ID, HEIGHT, TX, APP_ID, AMOUNT, RECIP_0, 0, 0, bytes32(0), bytes20(0)
+            );
+            (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+            bytes memory expectedBcs = BridgeTypes.bcs_serialize_AccountOwner(BridgeTypes.AccountOwner_case_reserved(0));
+            vm.expectEmit(true, true, true, true, address(bridge));
+            emit BurnBlocked(HEIGHT, 5, address(this), SOURCE_CHAIN_ID, expectedBcs, AMOUNT);
+            bridge.blockBurn(hex"deadbeef", TX, 0);
+            assertTrue(bridge.isBurnBlocked(HEIGHT, 5), "Reserved/CHAIN variant must be blocked");
+        }
+
+        // --- Variant 1: Address32 (choice=1) ---
+        {
+            bytes32 addr32 = bytes32(uint256(0xBEEF1234CAFE5678));
+            MockLightClientWithOwner lc =
+                new MockLightClientWithOwner(CHAIN_ID, HEIGHT, TX, APP_ID, AMOUNT, RECIP_0, 1, 0, addr32, bytes20(0));
+            (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+            BridgeTypes.CryptoHash memory ch;
+            ch.value = addr32;
+            bytes memory expectedBcs =
+                BridgeTypes.bcs_serialize_AccountOwner(BridgeTypes.AccountOwner_case_address32(ch));
+            vm.expectEmit(true, true, true, true, address(bridge));
+            emit BurnBlocked(HEIGHT, 5, address(this), SOURCE_CHAIN_ID, expectedBcs, AMOUNT);
+            bridge.blockBurn(hex"deadbeef", TX, 0);
+            assertTrue(bridge.isBurnBlocked(HEIGHT, 5), "Address32 variant must be blocked");
+        }
+
+        // --- Variant 2: Address20 (choice=2) ---
+        {
+            bytes20 addr20 = bytes20(address(0xAAAA0000BBBBCCCCDDDD));
+            MockLightClientWithOwner lc =
+                new MockLightClientWithOwner(CHAIN_ID, HEIGHT, TX, APP_ID, AMOUNT, RECIP_0, 2, 0, bytes32(0), addr20);
+            (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
+            bytes memory expectedBcs =
+                BridgeTypes.bcs_serialize_AccountOwner(BridgeTypes.AccountOwner_case_address20(addr20));
+            vm.expectEmit(true, true, true, true, address(bridge));
+            emit BurnBlocked(HEIGHT, 5, address(this), SOURCE_CHAIN_ID, expectedBcs, AMOUNT);
+            bridge.blockBurn(hex"deadbeef", TX, 0);
+            assertTrue(bridge.isBurnBlocked(HEIGHT, 5), "Address20 variant must be blocked");
+        }
     }
 }

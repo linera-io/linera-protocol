@@ -70,14 +70,43 @@
 #[cfg(feature = "offchain")]
 pub mod gen;
 
+mod burn_blocked;
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
 use alloy_rlp::Encodable;
 use alloy_trie::{proof::ProofRetainer, HashBuilder, Nibbles};
 use anyhow::{anyhow, ensure, Result};
+pub use burn_blocked::{
+    burn_blocked_event_signature, parse_burn_blocked_event, BurnBlockedFields, RefundKey,
+};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
+
+/// Domain tag for storage key hash inputs.
+///
+/// Every replay-protection key type picks one unique variant. Assignments here
+/// are permanent: changing or reusing a discriminant would silently invalidate
+/// all previously stored hashes.
+///
+/// Add a new variant when introducing a new key type; the compiler then ensures
+/// you cannot forget to assign a tag.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum KeyDomain {
+    Deposit = 0x01,
+    Refund = 0x02,
+}
+
+impl KeyDomain {
+    fn deposit() -> Self {
+        KeyDomain::Deposit
+    }
+
+    fn refund() -> Self {
+        KeyDomain::Refund
+    }
+}
 
 /// A decoded log from an EVM transaction receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,6 +141,8 @@ pub struct DepositEvent {
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
 pub struct DepositKey {
+    #[serde(skip, default = "KeyDomain::deposit")]
+    domain: KeyDomain,
     pub source_chain_id: u64,
     pub block_hash: B256,
     pub tx_index: u64,
@@ -119,13 +150,24 @@ pub struct DepositKey {
 }
 
 impl DepositKey {
+    pub fn new(source_chain_id: u64, block_hash: B256, tx_index: u64, log_index: u64) -> Self {
+        Self {
+            domain: KeyDomain::Deposit,
+            source_chain_id,
+            block_hash,
+            tx_index,
+            log_index,
+        }
+    }
+
     /// Deterministic keccak-256 hash of the deposit key fields.
     pub fn hash(&self) -> [u8; 32] {
-        let mut data = [0u8; 56];
-        data[0..8].copy_from_slice(&self.source_chain_id.to_le_bytes());
-        data[8..40].copy_from_slice(self.block_hash.as_slice());
-        data[40..48].copy_from_slice(&self.tx_index.to_le_bytes());
-        data[48..56].copy_from_slice(&self.log_index.to_le_bytes());
+        let mut data = [0u8; 57];
+        data[0] = self.domain as u8;
+        data[1..9].copy_from_slice(&self.source_chain_id.to_le_bytes());
+        data[9..41].copy_from_slice(self.block_hash.as_slice());
+        data[41..49].copy_from_slice(&self.tx_index.to_le_bytes());
+        data[49..57].copy_from_slice(&self.log_index.to_le_bytes());
         keccak256(data).0
     }
 }
@@ -264,6 +306,35 @@ pub mod testing {
         data.extend_from_slice(token.as_slice());
         data.extend_from_slice(&U256::from(amount).to_be_bytes::<32>());
         data.extend_from_slice(&U256::from(nonce).to_be_bytes::<32>());
+        data
+    }
+
+    /// Builds ABI-encoded data for a `BurnBlocked` event:
+    /// `bytes32 source_chain_id, bytes source_owner_bcs, uint128 amount`.
+    pub fn build_burn_blocked_event_data(
+        source_chain_id: B256,
+        source_owner_bcs: &[u8],
+        amount: u128,
+    ) -> Vec<u8> {
+        let mut data = Vec::new();
+        // Head[0..32]: source_chain_id
+        data.extend_from_slice(source_chain_id.as_slice());
+        // Head[32..64]: offset to source_owner_bcs tail = 96
+        let mut offset = [0u8; 32];
+        offset[24..32].copy_from_slice(&96u64.to_be_bytes());
+        data.extend_from_slice(&offset);
+        // Head[64..96]: amount (uint128 left-padded to 32 bytes)
+        let mut amount_word = [0u8; 32];
+        amount_word[16..32].copy_from_slice(&amount.to_be_bytes());
+        data.extend_from_slice(&amount_word);
+        // Tail[96..128]: bytes length
+        let mut len_word = [0u8; 32];
+        len_word[24..32].copy_from_slice(&(source_owner_bcs.len() as u64).to_be_bytes());
+        data.extend_from_slice(&len_word);
+        // Tail[128..]: bytes data, padded to a 32-byte boundary
+        data.extend_from_slice(source_owner_bcs);
+        let pad = (32 - source_owner_bcs.len() % 32) % 32;
+        data.extend(std::iter::repeat_n(0u8, pad));
         data
     }
 

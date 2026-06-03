@@ -54,6 +54,36 @@ pub(crate) async fn update_balance_metrics<
     update_linera_balance_metric(linera_client).await;
 }
 
+/// Polls the EVM RPC for the chain id with bounded exponential backoff
+/// so a brief RPC outage at startup does not kill the relayer. Backs
+/// off 1s, 2s, 4s, 8s, 16s; gives up after ~31s with the underlying
+/// error so the operator still sees a clean failure on a hard outage.
+async fn fetch_evm_chain_id_with_retry<P: alloy::providers::Provider>(
+    evm_client: &evm::EvmClient<P>,
+) -> Result<u64> {
+    let mut delay = Duration::from_secs(1);
+    let max_delay = Duration::from_secs(16);
+    let mut last_error: Option<anyhow::Error> = None;
+    for attempt in 1..=5 {
+        match evm_client.get_chain_id().await {
+            Ok(id) => return Ok(id),
+            Err(error) => {
+                tracing::warn!(
+                    attempt,
+                    ?delay,
+                    ?error,
+                    "EVM chain id query failed; retrying after backoff"
+                );
+                last_error = Some(error);
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(max_delay);
+            }
+        }
+    }
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("EVM chain id query failed")))
+        .context("failed to query EVM chain id for monitor state after retries")
+}
+
 pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
     evm_client: &evm::EvmClient<P>,
 ) {
@@ -317,7 +347,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let mut chain_listener_handle = tokio::spawn(listener);
 
     // ── Monitor state + scan/retry ──
-    let mut monitor_state = MonitorState::new(monitor_start_block);
+    let source_chain_id = fetch_evm_chain_id_with_retry(&evm_client).await?;
+    let mut monitor_state = MonitorState::new(monitor_start_block, source_chain_id);
     let default_sqlite_path = storage_dir
         .parent()
         .unwrap_or(storage_dir)
@@ -340,17 +371,20 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let monitor = Arc::new(RwLock::new(monitor_state));
     let deposit_notify = Arc::new(Notify::new());
     let burn_notify = Arc::new(Notify::new());
+    let refund_notify = Arc::new(Notify::new());
 
     let mut evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
         let deposit_notify = Arc::clone(&deposit_notify);
+        let refund_notify = Arc::clone(&refund_notify);
         tokio::spawn(monitor::evm::evm_scan_loop(
             monitor,
             evm_client,
             linera_client,
             deposit_notify,
+            refund_notify,
             monitor_scan_interval,
         ))
     };
@@ -380,6 +414,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             linera_client,
             deposit_notify,
             burn_notify,
+            refund_notify,
             monitor_scan_interval,
             max_retries,
         ))
@@ -551,6 +586,44 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                         }.await;
                         if response.send(result).is_err() {
                             tracing::debug!("ProcessDeposit response receiver dropped");
+                        }
+                        update_balance_metrics(&evm_client, &linera_client).await;
+                    }
+                    linera::ChainOperation::ProcessRefund { proof, response } => {
+                        let result = async {
+                            let op = crate::abi::BridgeOperation::RefundBurn {
+                                block_header_rlp: proof.block_header_rlp,
+                                receipt_rlp: proof.receipt_rlp,
+                                proof_nodes: proof.proof_nodes,
+                                tx_index: proof.tx_index,
+                                log_index: proof.log_index,
+                            };
+                            let op_bytes = bcs::to_bytes(&op)
+                                .expect("failed to BCS-serialize BridgeOperation");
+                            chain_client.synchronize_from_validators().await
+                                .context("failed to synchronize")?;
+                            let outcome = chain_client
+                                .execute_operations(
+                                    vec![Operation::User {
+                                        application_id: bridge_app_id,
+                                        bytes: op_bytes,
+                                    }],
+                                    vec![],
+                                )
+                                .await?;
+                            match outcome {
+                                linera_core::data_types::ClientOutcome::Committed(cert) => {
+                                    tracing::info!(
+                                        height = %cert.block().header.height,
+                                        "RefundBurn committed"
+                                    );
+                                    Ok(())
+                                }
+                                other => anyhow::bail!("RefundBurn not committed: {other:?}"),
+                            }
+                        }.await;
+                        if response.send(result).is_err() {
+                            tracing::debug!("ProcessRefund response receiver dropped");
                         }
                         update_balance_metrics(&evm_client, &linera_client).await;
                     }

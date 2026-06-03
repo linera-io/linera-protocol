@@ -147,9 +147,17 @@ impl Contract for WrappedFungibleTokenContract {
                 if is_bouncing {
                     self.state.credit(source, amount).await;
                 } else if let (true, AccountOwner::Address20(addr)) = (on_mint_chain, target) {
+                    let source_chain_id = self
+                        .runtime
+                        .message_origin_chain_id()
+                        .expect("Message::Credit must be executed in a message context");
                     self.runtime.emit(
                         StreamName::from("burns"),
                         &BurnEvent {
+                            source: Account {
+                                chain_id: source_chain_id,
+                                owner: source,
+                            },
                             target: addr,
                             amount,
                         },

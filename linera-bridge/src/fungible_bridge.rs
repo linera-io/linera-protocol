@@ -9,11 +9,13 @@ mod tests {
     use linera_base::{
         crypto::{CryptoHash, TestString, ValidatorSecretKey},
         data_types::{BlockHeight, U128},
+        identifiers::{AccountOwner, ChainId},
     };
     use revm::{
         database::{CacheDB, EmptyDB},
         primitives::Address,
     };
+    use wrapped_fungible::Account;
 
     use crate::{evm::microchain::addBlockCall, test_helpers::*};
 
@@ -126,7 +128,16 @@ mod tests {
             target: [u8; 20],
             amount: U128,
         ) -> (Vec<revm::primitives::Log>, u64) {
-            let evt = burn_event(self.app_id, target, amount, 0);
+            let evt = burn_event(
+                self.app_id,
+                Account {
+                    chain_id: ChainId(self.chain_id),
+                    owner: AccountOwner::CHAIN,
+                },
+                target,
+                amount,
+                0,
+            );
             self.submit_block_with_events(vec![vec![evt]])
         }
 
@@ -229,7 +240,16 @@ mod tests {
         let mut t = TestBridge::new();
         let other_app_id = CryptoHash::new(&TestString::new("other_app"));
 
-        let evt = burn_event(other_app_id, TEST_TARGET, U128(50u128 * 10u128.pow(18)), 0);
+        let evt = burn_event(
+            other_app_id,
+            Account {
+                chain_id: ChainId(t.chain_id),
+                owner: AccountOwner::CHAIN,
+            },
+            TEST_TARGET,
+            U128(50u128 * 10u128.pow(18)),
+            0,
+        );
         t.submit_block_with_events(vec![vec![evt]]);
 
         assert_eq!(

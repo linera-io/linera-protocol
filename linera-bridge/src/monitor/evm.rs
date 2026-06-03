@@ -7,11 +7,12 @@
 use std::{sync::Arc, time::Duration};
 
 use alloy::providers::Provider;
+use linera_base::identifiers::Account;
 use tokio::sync::{Notify, RwLock};
 
-use super::{MonitorState, PendingDeposit};
+use super::{MonitorState, PendingDeposit, PendingRefund};
 use crate::{
-    proof::{parse_deposit_event, DepositKey, ReceiptLog},
+    proof::{parse_burn_blocked_event, parse_deposit_event, DepositKey, ReceiptLog, RefundKey},
     relay::{self, evm::EvmClient, linera::LineraClient},
 };
 
@@ -23,27 +24,35 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
     deposit_notify: Arc<Notify>,
+    refund_notify: Arc<Notify>,
     scan_interval: Duration,
 ) {
     loop {
-        let (scan_result, completion_result) = tokio::join!(
-            evm_scan_iteration(&monitor, &evm_client, &deposit_notify),
+        let (scan_result, deposit_completion, refund_completion) = tokio::join!(
+            evm_scan_iteration(&monitor, &evm_client, &deposit_notify, &refund_notify),
             check_deposit_completion(&monitor, &linera_client),
+            check_refund_completion(&monitor, &linera_client),
         );
 
         if let Err(error) = scan_result {
             tracing::warn!(error = ?error, "EVM scan iteration failed");
         }
-        if let Err(error) = completion_result {
+        if let Err(error) = deposit_completion {
             tracing::warn!(error = ?error, "Deposit completion check failed");
+        }
+        if let Err(error) = refund_completion {
+            tracing::warn!(error = ?error, "Refund completion check failed");
         }
 
         let summary = monitor.read().await.status_summary();
         tracing::trace!(
-            pending = summary.deposits_pending,
-            completed = summary.deposits_completed,
+            deposits_pending = summary.deposits_pending,
+            deposits_completed = summary.deposits_completed,
+            refunds_pending = summary.refunds_pending,
+            refunds_completed = summary.refunds_completed,
+            refunds_failed = summary.refunds_failed,
             last_block = summary.last_scanned_evm_block,
-            "EVM deposit scan complete"
+            "EVM scan complete"
         );
 
         tokio::time::sleep(scan_interval).await;
@@ -127,7 +136,8 @@ pub(crate) async fn process_pending_deposits<E: linera_core::environment::Enviro
 async fn evm_scan_iteration(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
-    notify: &Notify,
+    deposit_notify: &Notify,
+    refund_notify: &Notify,
 ) -> anyhow::Result<()> {
     let last_block = monitor.read().await.last_scanned_evm_block;
 
@@ -141,7 +151,8 @@ async fn evm_scan_iteration(
         .await?;
     let bridge_addr = evm_client.bridge_addr();
 
-    let mut tracked_any = false;
+    let mut tracked_deposit = false;
+    let mut tracked_refund = false;
     for log in &logs {
         let block_hash = match log.block_hash {
             Some(h) => h,
@@ -173,12 +184,12 @@ async fn evm_scan_iteration(
             }
         };
 
-        let key = DepositKey {
-            source_chain_id: deposit.source_chain_id.to::<u64>(),
+        let key = DepositKey::new(
+            deposit.source_chain_id.to::<u64>(),
             block_hash,
             tx_index,
             log_index,
-        };
+        );
 
         let was_new = monitor
             .write()
@@ -191,15 +202,70 @@ async fn evm_scan_iteration(
                 nonce: deposit.nonce,
             })
             .await;
-        tracked_any |= was_new;
+        tracked_deposit |= was_new;
+    }
+
+    let burn_blocked_logs = evm_client
+        .get_burn_blocked_logs(last_block + 1, current_block)
+        .await?;
+    let source_chain_id = monitor.read().await.source_chain_id();
+    for log in &burn_blocked_logs {
+        let block_hash = match log.block_hash {
+            Some(h) => h,
+            None => continue,
+        };
+        let tx_hash = match log.transaction_hash {
+            Some(h) => h,
+            None => continue,
+        };
+        let tx_index = match log.transaction_index {
+            Some(i) => i,
+            None => continue,
+        };
+        let log_index = match log.log_index {
+            Some(i) => i,
+            None => continue,
+        };
+
+        let receipt_log = ReceiptLog {
+            address: log.address(),
+            topics: log.data().topics().to_vec(),
+            data: log.data().data.to_vec(),
+        };
+        let parsed = match parse_burn_blocked_event(&receipt_log, bridge_addr) {
+            Ok(p) => p,
+            Err(error) => {
+                tracing::warn!(%tx_hash, ?error, "Failed to parse BurnBlocked log");
+                continue;
+            }
+        };
+
+        let key = RefundKey::new(source_chain_id, block_hash, tx_index, log_index);
+        let was_new = monitor
+            .write()
+            .await
+            .track_refund(PendingRefund {
+                key,
+                evm_tx_hash: tx_hash,
+                source: Account {
+                    chain_id: parsed.source_chain_id,
+                    owner: parsed.source_owner,
+                },
+                amount: parsed.amount,
+            })
+            .await;
+        tracked_refund |= was_new;
     }
 
     let mut state = monitor.write().await;
     state.last_scanned_evm_block = current_block;
     crate::relay::metrics::set_last_scanned_evm_block(current_block);
 
-    if tracked_any {
-        notify.notify_one();
+    if tracked_deposit {
+        deposit_notify.notify_one();
+    }
+    if tracked_refund {
+        refund_notify.notify_one();
     }
     Ok(())
 }
@@ -224,4 +290,80 @@ async fn check_deposit_completion<E: linera_core::environment::Environment>(
     }
 
     Ok(())
+}
+
+async fn check_refund_completion<E: linera_core::environment::Environment>(
+    monitor: &RwLock<MonitorState>,
+    linera_client: &LineraClient<E>,
+) -> anyhow::Result<()> {
+    let pending: Vec<RefundKey> = {
+        let state = monitor.read().await;
+        state
+            .pending_refunds()
+            .into_iter()
+            .map(|r| r.value.key.clone())
+            .collect()
+    };
+
+    for key in pending {
+        if linera_client.query_refund_processed(&key).await? {
+            monitor.write().await.complete_refund(&key).await;
+        }
+    }
+
+    Ok(())
+}
+
+/// Drains `MonitorState.refunds` for items ready for retry, processing one at
+/// a time. Mirrors [`process_pending_deposits`] but submits `RefundBurn`
+/// operations built from `BurnBlocked` MPT proofs.
+pub(crate) async fn process_pending_refunds<E: linera_core::environment::Environment>(
+    monitor: &RwLock<MonitorState>,
+    linera_client: &LineraClient<E>,
+    proof_client: &crate::proof::gen::HttpDepositProofClient,
+    notify: &Notify,
+    poll_interval: Duration,
+    max_retries: u32,
+) -> anyhow::Result<()> {
+    use crate::proof::gen::BurnBlockedProofClient as _;
+
+    loop {
+        let pending = monitor.read().await.next_refund_for_retry(max_retries);
+        let Some(pending) = pending else {
+            tracing::trace!(
+                ?poll_interval,
+                "EVM refunds processor sleeping until notified or poll interval elapses"
+            );
+            tokio::select! {
+                _ = notify.notified() => {
+                    tracing::trace!("EVM refunds processor notified about new pending item");
+                }
+                _ = tokio::time::sleep(poll_interval) => {}
+            }
+            continue;
+        };
+
+        let tx_hash = pending.evm_tx_hash;
+        tracing::info!(%tx_hash, "Processing pending refund...");
+        match proof_client.generate_burn_blocked_proof(tx_hash).await {
+            Ok(proof) => match linera_client.process_refund(proof).await {
+                Ok(()) => {
+                    tracing::info!(%tx_hash, "Refund processed successfully");
+                    relay::update_linera_balance_metric(linera_client).await;
+                }
+                Err(e) => {
+                    tracing::warn!(%tx_hash, "Refund processing failed: {e}");
+                }
+            },
+            Err(error) => {
+                tracing::warn!(%tx_hash, ?error, "Burn-blocked proof generation failed");
+            }
+        }
+
+        monitor
+            .write()
+            .await
+            .mark_refund_retried(&pending.key, max_retries)
+            .await;
+    }
 }
