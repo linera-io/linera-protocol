@@ -5251,3 +5251,94 @@ where
     }
     Ok(())
 }
+
+/// `RevertConfirm` for an untracked recipient must re-add its outbox queue but leave it out of the
+/// `nonempty_outboxes`/`outbox_counters` indices (the untracked branch of the tracking guard).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_revert_confirm_untracked_recipient_not_indexed<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
+    let chain_modes = Arc::new(std::sync::RwLock::new(BTreeMap::new()));
+    env.worker.chain_modes = Some(chain_modes.clone());
+
+    let chain_1_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2 = dummy_chain_description(2).id();
+    // Track only the sender; the recipient chain_2 stays untracked.
+    chain_modes
+        .write()
+        .unwrap()
+        .insert(chain_1, crate::client::ListeningMode::FullChain);
+
+    // chain_1 sends to the untracked chain_2 at heights 0 and 1.
+    let cert_0 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc.clone(),
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    let cert_1 = env
+        .make_simple_transfer_certificate(
+            chain_1_desc,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(3),
+            Vec::new(),
+            Amount::from_tokens(92),
+            vec![&cert_0],
+        )
+        .await;
+    env.worker()
+        .process_confirmed_block(cert_0, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    env.worker()
+        .process_confirmed_block(cert_1, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+
+    // Drain chain_1's outbox for chain_2 so the revert below has heights to re-add.
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::ConfirmUpdatedRecipient {
+            sender: chain_1,
+            recipient: chain_2,
+            latest_height: BlockHeight::from(1),
+        })
+        .await?;
+
+    // RevertConfirm re-adds chain_2's heights; since chain_2 is untracked it must not be indexed.
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::RevertConfirm {
+            sender: chain_1,
+            recipient: chain_2,
+            retransmit_from: BlockHeight::ZERO,
+        })
+        .await?;
+
+    let chain = env.worker().chain_state_view(chain_1).await?;
+    assert_eq!(
+        chain
+            .outboxes
+            .try_load_entry(&chain_2)
+            .await?
+            .expect("the revert re-creates chain_2's outbox")
+            .queue
+            .count(),
+        2,
+        "the revert should re-add both heights to chain_2's outbox queue",
+    );
+    assert!(!chain.nonempty_outboxes.get().contains(&chain_2));
+    assert!(chain.outbox_counters.get().is_empty());
+    Ok(())
+}
