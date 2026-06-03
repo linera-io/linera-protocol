@@ -310,9 +310,13 @@ impl<Env: Environment> Client<Env> {
             config,
             Some(chain_modes.clone()),
         );
+        let clock = environment.storage().clock().clone();
         let local_node = LocalNodeClient::new(state);
-        let requests_scheduler =
-            Arc::new(RequestsScheduler::new(vec![], requests_scheduler_config));
+        let requests_scheduler = Arc::new(RequestsScheduler::new(
+            vec![],
+            requests_scheduler_config,
+            clock,
+        ));
 
         Self {
             environment,
@@ -2204,6 +2208,24 @@ impl<'a, Env: Environment> EventSetDownloader<'a, Env> {
         self.downloaded.extend(new_events);
         Ok(true)
     }
+}
+
+/// The clock backing the environment's storage.
+///
+/// All client-side coordination logic (retries, backoff, request TTLs, the notification
+/// circuit breaker) reads time through this clock rather than the wall clock, so it can be
+/// driven deterministically by a simulated clock (e.g. `TestClock`) in tests.
+pub(crate) type ClockOf<Env> = <<Env as Environment>::Storage as linera_storage::Storage>::Clock;
+
+/// Sleeps for `duration` according to `clock`'s notion of time.
+///
+/// Unlike [`linera_base::time::timer::sleep`], this honors a simulated clock, so staggered
+/// retries and backoff resolve in virtual time during tests instead of blocking on real time.
+pub(crate) async fn sleep_for(clock: &impl linera_storage::Clock, duration: Duration) {
+    let delta = TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX));
+    clock
+        .sleep_until(clock.current_time().saturating_add(delta))
+        .await;
 }
 
 /// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay

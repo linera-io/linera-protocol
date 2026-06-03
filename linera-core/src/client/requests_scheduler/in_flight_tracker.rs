@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-use linera_base::time::{Duration, Instant};
+use linera_base::{data_types::Timestamp, time::Duration};
 use tokio::sync::broadcast;
 
 use super::{
@@ -49,11 +49,15 @@ impl<N: Clone> InFlightTracker<N> {
     /// # Returns
     /// - `None`: No matching in-flight request found. Also returned if the found request is stale (exceeds timeout).
     /// - `Some(InFlightMatch::Subsuming { key, outcome })`: Subsuming request found
-    pub(super) async fn try_subscribe(&self, key: &RequestKey) -> Option<InFlightMatch> {
+    pub(super) async fn try_subscribe(
+        &self,
+        key: &RequestKey,
+        now: Timestamp,
+    ) -> Option<InFlightMatch> {
         let in_flight = self.entries.read().await;
 
         if let Some(entry) = in_flight.get(key) {
-            let elapsed = Instant::now().duration_since(entry.started_at);
+            let elapsed = now.duration_since(entry.started_at);
 
             if elapsed <= self.timeout {
                 return Some(InFlightMatch::Exact(Subscribed(entry.sender.subscribe())));
@@ -63,7 +67,7 @@ impl<N: Clone> InFlightTracker<N> {
         // Sometimes a request key may not have the exact match but may be subsumed by a larger one.
         for (in_flight_key, entry) in in_flight.iter() {
             if in_flight_key.subsumes(key) {
-                let elapsed = Instant::now().duration_since(entry.started_at);
+                let elapsed = now.duration_since(entry.started_at);
 
                 if elapsed <= self.timeout {
                     return Some(InFlightMatch::Subsuming {
@@ -84,7 +88,7 @@ impl<N: Clone> InFlightTracker<N> {
     ///
     /// # Arguments
     /// - `key`: The request key to insert
-    pub(super) async fn insert_new(&self, key: RequestKey) {
+    pub(super) async fn insert_new(&self, key: RequestKey, now: Timestamp) {
         let (sender, _receiver) = broadcast::channel(1);
         let mut in_flight = self.entries.write().await;
 
@@ -92,7 +96,7 @@ impl<N: Clone> InFlightTracker<N> {
             key,
             InFlightEntry {
                 sender,
-                started_at: Instant::now(),
+                started_at: now,
                 alternative_peers: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             },
         );
@@ -235,7 +239,7 @@ pub(super) struct InFlightEntry<N> {
     /// Broadcast sender for notifying waiters when the request completes
     sender: broadcast::Sender<Arc<Result<RequestResult, NodeError>>>,
     /// Time when this request was initiated
-    started_at: Instant,
+    started_at: Timestamp,
     /// Alternative peers that can provide this data if the primary request fails
     alternative_peers: Arc<tokio::sync::RwLock<Vec<N>>>,
 }
