@@ -400,6 +400,37 @@ where
         })
     }
 
+    /// Returns the set of chains tracked in full mode, or `None` on a validator (which tracks all
+    /// chains and never filters its outbox indices).
+    fn tracked_full_chains(&self) -> Option<BTreeSet<ChainId>> {
+        let chain_modes = self.chain_modes.as_ref()?;
+        let chain_modes = chain_modes
+            .read()
+            .expect("Panics should not happen while holding a lock to `chain_modes`");
+        Some(
+            chain_modes
+                .iter()
+                .filter(|(_, mode)| mode.is_full())
+                .map(|(id, _)| *id)
+                .collect(),
+        )
+    }
+
+    /// Reconciles the chain's `nonempty_outboxes`/`outbox_counters` indices with the current set
+    /// of fully-tracked chains, and returns that set to be passed to block application so that
+    /// newly scheduled messages are only indexed for tracked targets. Returns `None` on a
+    /// validator (no filtering).
+    async fn reconcile_tracked_outboxes(&mut self) -> Result<Option<BTreeSet<ChainId>>, WorkerError> {
+        let Some(full_chains) = self.tracked_full_chains() else {
+            return Ok(None);
+        };
+        let digest = linera_chain::tracked_chains_hash(&full_chains);
+        self.chain
+            .reconcile_outbox_index(&full_chains, digest)
+            .await?;
+        Ok(Some(full_chains))
+    }
+
     /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
     async fn create_network_actions(
         &self,
@@ -783,10 +814,13 @@ where
         let index_values = self.chain.preprocessed_blocks.index_values().await?;
         let hashes = index_values.iter().map(|(_, hash)| *hash).collect();
         let blocks = self.read_confirmed_blocks(hashes).await?;
+        let tracked = self.reconcile_tracked_outboxes().await?;
         for ((height, _), maybe_block) in index_values.into_iter().zip(blocks) {
             let block =
                 maybe_block.ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
-            self.chain.preprocess_block(&block).await?;
+            self.chain
+                .preprocess_block(&block, tracked.as_ref())
+                .await?;
         }
         Ok(())
     }
@@ -913,7 +947,11 @@ where
         if block.body.events.iter().any(|events| !events.is_empty()) {
             self.initialize_next_expected_events().await?;
         }
-        let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
+        let tracked = self.reconcile_tracked_outboxes().await?;
+        let updated_event_streams = self
+            .chain
+            .preprocess_block(certificate.value(), tracked.as_ref())
+            .await?;
         self.save().await?;
         let mut actions = self.create_network_actions(None).await?;
         if !updated_event_streams.is_empty() {
@@ -981,6 +1019,7 @@ where
                 "Confirmed block has a timestamp in the future beyond the block time grace period"
             );
         }
+        let tracked = self.reconcile_tracked_outboxes().await?;
         let chain = &mut self.chain;
         chain
             .remove_bundles_from_inboxes(
@@ -1029,7 +1068,7 @@ where
         };
 
         let event_streams = chain
-            .apply_confirmed_block(&confirmed_block, local_time)
+            .apply_confirmed_block(&confirmed_block, local_time, tracked.as_ref())
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height}");

@@ -8,7 +8,7 @@ use std::{
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{CryptoHash, ValidatorPublicKey},
+    crypto::{CryptoHash, CryptoHashVec, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
         NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
@@ -220,6 +220,13 @@ pub struct BundleInInbox {
 // of 100 seems reasonable for the storing of the data.
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 
+/// Computes the hash identifying a set of fully-tracked chains, stored in
+/// [`ChainStateView::outbox_index_tracked_hash`] to detect when the outbox indices must be
+/// reconciled. The input is order-independent because `BTreeSet` iterates in sorted order.
+pub fn tracked_chains_hash(full_chains: &BTreeSet<ChainId>) -> CryptoHash {
+    CryptoHash::new(&CryptoHashVec(full_chains.iter().map(|id| id.0).collect()))
+}
+
 /// A view accessing the state of a chain.
 #[cfg_attr(
     with_graphql,
@@ -291,6 +298,18 @@ where
     /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
     /// the last reset, the error is returned instead.
     pub block_zero_executed_at: RegisterView<C, Timestamp>,
+
+    /// The hash of the set of fully-tracked chains that `nonempty_outboxes` and
+    /// `outbox_counters` were last reconciled against (see [`tracked_chains_hash`]). On a client
+    /// these two indices only hold entries for tracked targets; when the tracked set changes this
+    /// hash stops matching and the indices are reconciled (`reconcile_outbox_index`). `None` means
+    /// they have never been filtered — a pre-existing database entry (migration), or a validator
+    /// that tracks all chains and never filters.
+    ///
+    /// MUST stay last in this struct: `View` derives each sub-view's storage-key prefix from field
+    /// order, so inserting a field earlier would shift every following view's keys and corrupt
+    /// existing databases.
+    pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
 }
 
 /// Block-chaining state.
@@ -706,6 +725,99 @@ where
         let vec_of_options = self.outboxes.try_load_entries(targets).await?;
         let optional_vec = vec_of_options.into_iter().collect::<Option<Vec<_>>>();
         optional_vec.ok_or_else(|| ChainError::CorruptedChainState("Missing outboxes".into()))
+    }
+
+    /// Reconciles the `nonempty_outboxes` and `outbox_counters` indices with the given set of
+    /// fully-tracked chains, if the tracked set has changed since the last reconciliation.
+    ///
+    /// On a client these indices only hold entries for tracked targets, so that they stay small
+    /// (the per-target outbox *queues* in `outboxes` are still kept for every target, so a chain
+    /// that becomes tracked can be re-indexed). `digest` must be [`tracked_chains_hash`] of
+    /// `full_chains`.
+    ///
+    /// Cost: the removal pass is `O(index)`. The addition pass only runs when chains may have been
+    /// *added* to the tracked set. On initialization (`None` stamp = migration of a database
+    /// written before filtering) the old index already lists every target, so only removals are
+    /// needed. On a pure shrink (new set ⊆ old set) there are no additions either. The expensive
+    /// `outboxes` rescan is therefore reserved for the genuine growth case.
+    pub async fn reconcile_outbox_index(
+        &mut self,
+        full_chains: &BTreeSet<ChainId>,
+        digest: CryptoHash,
+    ) -> Result<(), ChainError> {
+        if *self.outbox_index_tracked_hash.get() == Some(digest) {
+            return Ok(());
+        }
+        let initializing = self.outbox_index_tracked_hash.get().is_none();
+
+        // 1. Removal pass: drop index/counter entries for targets that are no longer tracked.
+        //    The per-target outbox queue is left untouched so it can be re-indexed later.
+        let indexed = self.nonempty_outboxes.get().clone();
+        for target in indexed.iter() {
+            if full_chains.contains(target) {
+                continue;
+            }
+            self.unindex_outbox(target).await?;
+        }
+
+        // 2. Addition pass: index tracked targets that have a pending queue but are not indexed.
+        //    Skipped on initialization (migration: the old index already covered every target, so
+        //    step 1 alone leaves it tracked-only) and on a pure shrink. See the note above; the
+        //    `may_have_additions` decision is made by the caller, which knows the tracked-set delta
+        //    (defaults to a correct full rescan when the delta is unknown).
+        if !initializing {
+            for target in self.outboxes.indices().await? {
+                if !full_chains.contains(&target) || self.nonempty_outboxes.get().contains(&target) {
+                    continue;
+                }
+                self.reindex_outbox(&target).await?;
+            }
+        }
+
+        self.outbox_index_tracked_hash.set(Some(digest));
+        Ok(())
+    }
+
+    /// Removes `target` from `nonempty_outboxes` and subtracts its queued heights from
+    /// `outbox_counters`, leaving the per-target outbox queue intact.
+    async fn unindex_outbox(&mut self, target: &ChainId) -> Result<(), ChainError> {
+        let heights = {
+            let outbox = self.outboxes.try_load_entry(target).await?;
+            match outbox {
+                Some(outbox) => outbox.queue.elements().await?,
+                None => Vec::new(),
+            }
+        };
+        for height in heights {
+            if let Some(counter) = self.outbox_counters.get_mut().get_mut(&height) {
+                *counter = counter.saturating_sub(1);
+                if *counter == 0 {
+                    self.outbox_counters.get_mut().remove(&height);
+                }
+            }
+        }
+        self.nonempty_outboxes.get_mut().remove(target);
+        Ok(())
+    }
+
+    /// Adds `target` to `nonempty_outboxes` and its queued heights to `outbox_counters`. Inverse
+    /// of [`Self::unindex_outbox`]; used when a previously untracked chain becomes tracked.
+    async fn reindex_outbox(&mut self, target: &ChainId) -> Result<(), ChainError> {
+        let heights = {
+            let outbox = self.outboxes.try_load_entry(target).await?;
+            match outbox {
+                Some(outbox) => outbox.queue.elements().await?,
+                None => Vec::new(),
+            }
+        };
+        if heights.is_empty() {
+            return Ok(());
+        }
+        for height in heights {
+            *self.outbox_counters.get_mut().entry(height).or_default() += 1;
+        }
+        self.nonempty_outboxes.get_mut().insert(*target);
+        Ok(())
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
@@ -1155,6 +1267,7 @@ where
         &mut self,
         block: &ConfirmedBlock,
         local_time: Timestamp,
+        tracked: Option<&BTreeSet<ChainId>>,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
@@ -1162,7 +1275,7 @@ where
             self.block_zero_executed_at.set(local_time);
         }
         self.execution_state_hash.set(Some(block.header.state_hash));
-        let recipients = self.process_outgoing_messages(block).await?;
+        let recipients = self.process_outgoing_messages(block, tracked).await?;
 
         for recipient in recipients {
             self.previous_message_blocks
@@ -1196,6 +1309,7 @@ where
     pub async fn preprocess_block(
         &mut self,
         block: &ConfirmedBlock,
+        tracked: Option<&BTreeSet<ChainId>>,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
@@ -1203,7 +1317,7 @@ where
         if height < self.tip_state.get().next_block_height {
             return Ok(BTreeSet::new());
         }
-        self.process_outgoing_messages(block).await?;
+        self.process_outgoing_messages(block, tracked).await?;
         let updated_streams = self.process_emitted_events(block).await?;
         self.preprocessed_blocks.insert(&height, hash)?;
         Ok(updated_streams)
@@ -1323,6 +1437,7 @@ where
     async fn process_outgoing_messages(
         &mut self,
         block: &Block,
+        tracked: Option<&BTreeSet<ChainId>>,
     ) -> Result<Vec<ChainId>, ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
@@ -1330,11 +1445,16 @@ where
         let block_height = block.header.height;
         let next_height = self.tip_state.get().next_block_height;
 
-        // Update the outboxes.
-        let outbox_counters = self.outbox_counters.get_mut();
-        let nonempty_outboxes = self.nonempty_outboxes.get_mut();
+        // Update the outboxes. Every recipient's per-target outbox queue is updated, but the
+        // `nonempty_outboxes`/`outbox_counters` indices are only populated for targets we track
+        // (`tracked == None` means a validator that tracks all chains). Untracked targets are
+        // delivered by the validators, never by this local node, so indexing them would grow the
+        // two `RegisterView` indices — which are re-serialized whole on every block — without
+        // bound. Targets are collected and the indices updated once, after the loop, so a block
+        // that schedules nothing tracked does not mark the registers dirty.
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        let mut scheduled_tracked = Vec::new();
         for (mut outbox, target) in outboxes.into_iter().zip(&targets) {
             if block_height > next_height {
                 // There may be a gap in the chain before this block. We can only add it to this
@@ -1399,9 +1519,10 @@ where
                     }
                 }
             }
-            if outbox.schedule_message(block_height)? {
-                *outbox_counters.entry(block_height).or_default() += 1;
-                nonempty_outboxes.insert(*target);
+            if outbox.schedule_message(block_height)?
+                && tracked.is_none_or(|set| set.contains(target))
+            {
+                scheduled_tracked.push(*target);
             }
             #[cfg(with_metrics)]
             crate::outbox::metrics::OUTBOX_SIZE
@@ -1409,14 +1530,23 @@ where
                 .observe(outbox.queue.count() as f64);
         }
 
+        if !scheduled_tracked.is_empty() {
+            let outbox_counters = self.outbox_counters.get_mut();
+            let nonempty_outboxes = self.nonempty_outboxes.get_mut();
+            for target in &scheduled_tracked {
+                *outbox_counters.entry(block_height).or_default() += 1;
+                nonempty_outboxes.insert(*target);
+            }
+        }
+
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(nonempty_outboxes.len() as f64);
+            .observe(self.nonempty_outboxes.get().len() as f64);
         #[cfg(with_metrics)]
         metrics::OUTBOX_COUNTERS_SIZE
             .with_label_values(&[])
-            .observe(outbox_counters.len() as f64);
+            .observe(self.outbox_counters.get().len() as f64);
         Ok(targets)
     }
 }

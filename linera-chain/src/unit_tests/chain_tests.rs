@@ -358,7 +358,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .await?;
 
     let value = ConfirmedBlock::new(outcome.with(valid_block));
-    chain.apply_confirmed_block(&value, time).await?;
+    chain.apply_confirmed_block(&value, time, None).await?;
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value.clone())
@@ -390,7 +390,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .execute_test_block_simple(valid_block, time, &[])
         .await?;
     let value = ConfirmedBlock::new(outcome.with(valid_block));
-    chain.apply_confirmed_block(&value, time).await?;
+    chain.apply_confirmed_block(&value, time, None).await?;
 
     Ok(())
 }
@@ -474,7 +474,7 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
         .execute_test_block_simple(block_with_rejected, time, &[])
         .await?;
     let value = ConfirmedBlock::new(outcome.with(block_with_rejected));
-    chain.apply_confirmed_block(&value, time).await?;
+    chain.apply_confirmed_block(&value, time, None).await?;
 
     // Now test with the migration flag enabled.
     // We create a new chain with its own TestExecutionRuntimeContext (separate blob storage).
@@ -544,7 +544,7 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
         .execute_test_block_simple(block_with_accepted, time, &[])
         .await?;
     let value = ConfirmedBlock::new(outcome.with(block_with_accepted));
-    chain2.apply_confirmed_block(&value, time).await?;
+    chain2.apply_confirmed_block(&value, time, None).await?;
 
     Ok(())
 }
