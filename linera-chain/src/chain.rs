@@ -745,13 +745,16 @@ where
     /// written before filtering, a restart after a tracked-set change, a shrink, or a growth; in
     /// particular it never scans the (unbounded) full set of outbox targets. A subtractive
     /// `O(|delta|)` fast path can be added on top once the worker supplies the added/removed sets.
+    ///
+    /// Returns whether the indices were actually rebuilt (`false` if they were already current), so
+    /// a read-only caller can skip persisting when nothing changed.
     pub async fn reconcile_outbox_index(
         &mut self,
         full_chains: &BTreeSet<ChainId>,
-    ) -> Result<(), ChainError> {
+    ) -> Result<bool, ChainError> {
         let digest = tracked_chains_hash(full_chains);
         if *self.outbox_index_tracked_hash.get() == Some(digest) {
-            return Ok(());
+            return Ok(false);
         }
         self.nonempty_outboxes.get_mut().clear();
         self.outbox_counters.get_mut().clear();
@@ -771,7 +774,7 @@ where
             self.nonempty_outboxes.get_mut().insert(*target);
         }
         self.outbox_index_tracked_hash.set(Some(digest));
-        Ok(())
+        Ok(true)
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
@@ -1485,10 +1488,14 @@ where
         }
 
         if !scheduled_tracked.is_empty() {
-            let outbox_counters = self.outbox_counters.get_mut();
+            // All scheduled messages are at `block_height`, so bump its shared counter once.
+            *self
+                .outbox_counters
+                .get_mut()
+                .entry(block_height)
+                .or_default() += scheduled_tracked.len() as u32;
             let nonempty_outboxes = self.nonempty_outboxes.get_mut();
             for target in &scheduled_tracked {
-                *outbox_counters.entry(block_height).or_default() += 1;
                 nonempty_outboxes.insert(*target);
             }
         }

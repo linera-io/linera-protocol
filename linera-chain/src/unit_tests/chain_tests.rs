@@ -1233,3 +1233,29 @@ async fn test_mark_received_untracked_keeps_tracked_sibling_counter() -> anyhow:
     assert!(!chain.nonempty_outboxes.get().contains(&a));
     Ok(())
 }
+
+/// Reconciliation counts every queued height of a target, not just one.
+#[tokio::test]
+async fn test_reconcile_outbox_index_counts_all_queued_heights() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    // `a` has two pending heights in its outbox queue, neither yet indexed/counted.
+    schedule_unindexed(&mut chain, a, BlockHeight(3)).await?;
+    schedule_unindexed(&mut chain, a, BlockHeight(5)).await?;
+
+    let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
+    assert!(chain.reconcile_outbox_index(&tracked).await?);
+
+    assert!(chain.nonempty_outboxes.get().contains(&a));
+    assert_eq!(
+        *chain.outbox_counters.get().get(&BlockHeight(3)).unwrap(),
+        1
+    );
+    assert_eq!(
+        *chain.outbox_counters.get().get(&BlockHeight(5)).unwrap(),
+        1
+    );
+    // A second reconciliation against the same set is a no-op.
+    assert!(!chain.reconcile_outbox_index(&tracked).await?);
+    Ok(())
+}
