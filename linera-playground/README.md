@@ -49,6 +49,27 @@ a mutation you must connect a signer that **owns the target chain**:
 A mutation builds and signs a block; the validators reject it if the connected
 owner is not an owner of the chain.
 
+## Deploy with Docker
+
+A self-contained image builds the WASM client from source and serves the static
+site with nginx (including the cross-origin-isolation headers the client needs).
+Build it from the **repository root**:
+
+```bash
+docker build -f docker/Dockerfile.playground -t linera-playground .
+```
+
+The first build compiles the whole workspace to WASM, so it is slow (~15-30 min)
+and needs network access for the toolchain and crates. Then run it:
+
+```bash
+docker run --rm -p 8080:80 linera-playground
+```
+
+Open <http://localhost:8080> and set the faucet URL, chain ID and application ID
+in the UI. The faucet URL must be reachable from the browser (a public testnet
+faucet, or a local faucet exposed to the host).
+
 ## Manual end-to-end test (local network)
 
 From the root of the repository, start a local network with a faucet and deploy
