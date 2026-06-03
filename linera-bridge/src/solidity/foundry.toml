@@ -8,6 +8,11 @@ solc_version = "0.8.30"
 optimizer = true
 optimizer_runs = 1
 via_ir = true
+# Raise forge's in-process deploy-simulation ceiling above the EIP-170 24576-byte
+# limit so `forge script` can deploy LightClient in the e2e tests. Matches the
+# anvil `--code-size-limit` in docker/docker-compose.bridge-test.yml. This is a
+# test-environment allowance only; real chains still enforce EIP-170.
+code_size_limit = 300000
 evm_version = "cancun"
 remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
 skip = [
