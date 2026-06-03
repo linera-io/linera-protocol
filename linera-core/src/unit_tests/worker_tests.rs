@@ -5093,3 +5093,80 @@ where
 
     Ok(())
 }
+
+/// Worker-level regression test for the outbox-index filtering: a client worker that does not
+/// track the recipient must tolerate a `ConfirmUpdatedRecipient` for it. The recipient's outbox
+/// entry is scheduled but never counted, so before the fix this hit `CorruptedChainState` via the
+/// "message counter should be present" assertion.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_confirm_updated_recipient_untracked_target_is_tolerated<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let sender_key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
+    // Run the worker as a client; share the tracked-set map so later inserts are visible to the
+    // chain worker (which holds a clone of the `Arc`).
+    let chain_modes = Arc::new(std::sync::RwLock::new(BTreeMap::new()));
+    env.worker.chain_modes = Some(chain_modes.clone());
+
+    let chain_1_desc = env
+        .add_root_chain(1, sender_key_pair.public().into(), Amount::from_tokens(100))
+        .await;
+    let chain_1 = chain_1_desc.id();
+    let chain_2 = dummy_chain_description(2).id();
+    // Track only the sender; the recipient `chain_2` stays untracked.
+    chain_modes
+        .write()
+        .unwrap()
+        .insert(chain_1, crate::client::ListeningMode::FullChain);
+
+    // chain_1 transfers to the untracked chain_2: the outbox queue is scheduled but not indexed.
+    let certificate = env
+        .make_simple_transfer_certificate(
+            chain_1_desc,
+            sender_key_pair.public(),
+            chain_2,
+            Amount::from_tokens(5),
+            Vec::new(),
+            Amount::from_tokens(95),
+            vec![],
+        )
+        .await;
+    env.worker()
+        .process_confirmed_block(certificate, ProcessConfirmedBlockMode::Execute, None)
+        .await?;
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        assert!(!chain.nonempty_outboxes.get().contains(&chain_2));
+        assert!(chain.outbox_counters.get().is_empty());
+        assert_eq!(
+            chain
+                .outboxes
+                .try_load_entry(&chain_2)
+                .await?
+                .expect("outbox queue is kept for untracked targets")
+                .queue
+                .count(),
+            1
+        );
+    }
+
+    // The confirmation for the untracked recipient must drain the outbox without erroring.
+    env.worker()
+        .handle_cross_chain_request(CrossChainRequest::ConfirmUpdatedRecipient {
+            sender: chain_1,
+            recipient: chain_2,
+            latest_height: BlockHeight::ZERO,
+        })
+        .await?;
+    {
+        let chain = env.worker().chain_state_view(chain_1).await?;
+        let outbox = chain.outboxes.try_load_entry(&chain_2).await?;
+        assert!(outbox.is_none() || outbox.unwrap().queue.count() == 0);
+    }
+    Ok(())
+}

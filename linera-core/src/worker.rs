@@ -697,7 +697,7 @@ pub struct WorkerState<StorageClient: Storage> {
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
-    chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    pub(crate) chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
