@@ -1022,3 +1022,139 @@ async fn test_backward_compatible_view_field_append() {
         assert_eq!(new_view.field_c.count().await.unwrap(), 0);
     }
 }
+
+fn test_chain_id(seed: &str) -> ChainId {
+    ChainId(CryptoHash::test_hash(seed))
+}
+
+/// Schedules a message to `target`'s outbox at `height` and indexes it in
+/// `nonempty_outboxes`/`outbox_counters`, mirroring `process_outgoing_messages` for a tracked
+/// target.
+async fn schedule_indexed(
+    chain: &mut ChainStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    target: ChainId,
+    height: BlockHeight,
+) -> anyhow::Result<()> {
+    {
+        let mut outbox = chain.outboxes.try_load_entry_mut(&target).await?;
+        assert!(outbox.schedule_message(height)?);
+    }
+    *chain.outbox_counters.get_mut().entry(height).or_default() += 1;
+    chain.nonempty_outboxes.get_mut().insert(target);
+    Ok(())
+}
+
+/// Schedules a message to `target`'s outbox at `height` without indexing it, mirroring an
+/// untracked target: the per-target queue is kept but the indices are not touched.
+async fn schedule_unindexed(
+    chain: &mut ChainStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    target: ChainId,
+    height: BlockHeight,
+) -> anyhow::Result<()> {
+    let mut outbox = chain.outboxes.try_load_entry_mut(&target).await?;
+    assert!(outbox.schedule_message(height)?);
+    Ok(())
+}
+
+async fn outbox_queue_len(
+    chain: &ChainStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    target: &ChainId,
+) -> anyhow::Result<usize> {
+    Ok(chain
+        .outboxes
+        .try_load_entry(target)
+        .await?
+        .map_or(0, |outbox| outbox.queue.count()))
+}
+
+/// On the first reconciliation (`None` stamp, i.e. a database written before filtering), targets
+/// that are no longer tracked are dropped from the indices, but their outbox queues are kept.
+#[tokio::test]
+async fn test_reconcile_outbox_index_migration_drops_untracked() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(5);
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_indexed(&mut chain, b, height).await?;
+    assert_eq!(*chain.outbox_index_tracked_hash.get(), None);
+
+    let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
+    let digest = crate::chain::tracked_chains_hash(&tracked);
+    chain.reconcile_outbox_index(&tracked, digest).await?;
+
+    assert_eq!(chain.nonempty_outbox_chain_ids(), vec![a]);
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+    assert_eq!(outbox_queue_len(&chain, &b).await?, 1);
+    assert_eq!(*chain.outbox_index_tracked_hash.get(), Some(digest));
+    Ok(())
+}
+
+/// Shrinking the tracked set drops the removed chains from the indices (queue kept).
+#[tokio::test]
+async fn test_reconcile_outbox_index_shrink_removes_chain() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(1);
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_indexed(&mut chain, b, height).await?;
+    let both: BTreeSet<ChainId> = [a, b].into_iter().collect();
+    chain
+        .outbox_index_tracked_hash
+        .set(Some(crate::chain::tracked_chains_hash(&both)));
+
+    let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
+    let digest = crate::chain::tracked_chains_hash(&tracked);
+    chain.reconcile_outbox_index(&tracked, digest).await?;
+
+    assert_eq!(chain.nonempty_outbox_chain_ids(), vec![a]);
+    assert!(!chain.nonempty_outboxes.get().contains(&b));
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+    assert_eq!(outbox_queue_len(&chain, &b).await?, 1);
+    Ok(())
+}
+
+/// Growing the tracked set re-indexes a newly tracked chain from its retained outbox queue.
+#[tokio::test]
+async fn test_reconcile_outbox_index_retrack_reindexes_from_queue() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(7);
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_unindexed(&mut chain, b, height).await?;
+    let only_a: BTreeSet<ChainId> = [a].into_iter().collect();
+    chain
+        .outbox_index_tracked_hash
+        .set(Some(crate::chain::tracked_chains_hash(&only_a)));
+    assert!(!chain.nonempty_outboxes.get().contains(&b));
+
+    let tracked: BTreeSet<ChainId> = [a, b].into_iter().collect();
+    let digest = crate::chain::tracked_chains_hash(&tracked);
+    chain.reconcile_outbox_index(&tracked, digest).await?;
+
+    assert!(chain.nonempty_outboxes.get().contains(&b));
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 2);
+    Ok(())
+}
+
+/// A matching stamp short-circuits reconciliation without touching the indices.
+#[tokio::test]
+async fn test_reconcile_outbox_index_noop_when_hash_matches() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(3);
+    schedule_indexed(&mut chain, a, height).await?;
+    let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
+    let digest = crate::chain::tracked_chains_hash(&tracked);
+    chain.outbox_index_tracked_hash.set(Some(digest));
+
+    // `b` is indexed even though it is untracked; a matching hash means reconcile returns early.
+    schedule_indexed(&mut chain, b, height).await?;
+    chain.reconcile_outbox_index(&tracked, digest).await?;
+
+    assert!(chain.nonempty_outboxes.get().contains(&b));
+    Ok(())
+}
