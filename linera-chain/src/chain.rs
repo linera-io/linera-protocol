@@ -464,25 +464,26 @@ where
         if updates.is_empty() {
             return Ok(false);
         }
-        // `outbox_counters` only counts targets we index: every chain on a validator
-        // (`tracked == None`), or tracked targets on a client. A missing counter for such a target
-        // is genuine corruption; for an untracked target it is expected (its messages were never
-        // counted — e.g. it was untracked when scheduled, or untracked between sending an update
-        // and receiving its confirmation), so there is nothing to decrement.
-        let expect_counter = tracked.is_none_or(|tracked| tracked.contains(target));
-        for update in updates {
-            let Some(counter) = self.outbox_counters.get_mut().get_mut(&update) else {
-                if expect_counter {
-                    return Err(ChainError::CorruptedChainState(
-                        "message counter should be present".into(),
-                    ));
+        // `outbox_counters` is keyed by block height and shared across all recipients of that
+        // block, but only counts targets we index: every chain on a validator (`tracked == None`),
+        // or tracked targets on a client. An untracked target was never counted, so confirming it
+        // must NOT touch the counters at all — a present `counter[height]` belongs to a tracked
+        // sibling recipient of the same block and must be left intact. We only drain the queue
+        // (done above) for such a target.
+        if tracked.is_none_or(|tracked| tracked.contains(target)) {
+            for update in updates {
+                let counter = self
+                    .outbox_counters
+                    .get_mut()
+                    .get_mut(&update)
+                    .ok_or_else(|| {
+                        ChainError::CorruptedChainState("message counter should be present".into())
+                    })?;
+                *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
+                if *counter == 0 {
+                    // Important for the test in `all_messages_delivered_up_to`.
+                    self.outbox_counters.get_mut().remove(&update);
                 }
-                continue;
-            };
-            *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-            if *counter == 0 {
-                // Important for the test in `all_messages_delivered_up_to`.
-                self.outbox_counters.get_mut().remove(&update);
             }
         }
         if outbox.queue.count() == 0 {

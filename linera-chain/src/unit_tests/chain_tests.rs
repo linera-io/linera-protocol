@@ -1201,3 +1201,31 @@ async fn test_mark_received_tracked_missing_counter_errors() -> anyhow::Result<(
     assert!(result.is_err());
     Ok(())
 }
+
+/// Confirming an untracked target must not disturb a tracked sibling's counter: `outbox_counters`
+/// is keyed by block height and shared across all recipients of that block, and only tracked
+/// recipients are counted.
+#[tokio::test]
+async fn test_mark_received_untracked_keeps_tracked_sibling_counter() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(4);
+    // Same block height: A is tracked (counted), B is untracked (not counted).
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_unindexed(&mut chain, b, height).await?;
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+
+    let tracked: BTreeSet<ChainId> = [a].into_iter().collect();
+    // Confirming the untracked B drains its queue but must leave A's counter untouched.
+    assert!(chain.mark_messages_as_received(&b, height, Some(&tracked)).await?);
+    assert_eq!(outbox_queue_len(&chain, &b).await?, 0);
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+    assert!(chain.nonempty_outboxes.get().contains(&a));
+
+    // A's own confirmation still succeeds and clears the (intact) counter.
+    assert!(chain.mark_messages_as_received(&a, height, Some(&tracked)).await?);
+    assert!(chain.outbox_counters.get().is_empty());
+    assert!(!chain.nonempty_outboxes.get().contains(&a));
+    Ok(())
+}
