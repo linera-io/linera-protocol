@@ -305,10 +305,6 @@ where
     /// hash stops matching and the indices are reconciled (`reconcile_outbox_index`). `None` means
     /// they have never been filtered — a pre-existing database entry (migration), or a validator
     /// that tracks all chains and never filters.
-    ///
-    /// MUST stay last in this struct: `View` derives each sub-view's storage-key prefix from field
-    /// order, so inserting a field earlier would shift every following view's keys and corrupt
-    /// existing databases.
     pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
 }
 
