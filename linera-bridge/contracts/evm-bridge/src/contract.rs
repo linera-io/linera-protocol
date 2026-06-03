@@ -31,18 +31,18 @@ pub struct BridgeState {
     pub rpc_endpoint: RegisterView<String>,
 }
 
-pub struct EvmBridgeContract {
+pub struct EvmBridge {
     state: BridgeState,
     runtime: ContractRuntime<Self>,
 }
 
-linera_sdk::contract!(EvmBridgeContract);
+linera_sdk::contract!(EvmBridge);
 
-impl WithContractAbi for EvmBridgeContract {
+impl WithContractAbi for EvmBridge {
     type Abi = EvmBridgeAbi;
 }
 
-impl Contract for EvmBridgeContract {
+impl Contract for EvmBridge {
     type Message = BridgeMessage;
     type Parameters = BridgeParameters;
     type InstantiationArgument = BridgeInstantiationArgument;
@@ -52,7 +52,7 @@ impl Contract for EvmBridgeContract {
         let state = BridgeState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        EvmBridgeContract { state, runtime }
+        EvmBridge { state, runtime }
     }
 
     async fn instantiate(&mut self, argument: BridgeInstantiationArgument) {
@@ -149,7 +149,7 @@ impl Contract for EvmBridgeContract {
     }
 }
 
-impl EvmBridgeContract {
+impl EvmBridge {
     async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
         let rpc_endpoint = self.state.rpc_endpoint.get();
         assert!(
