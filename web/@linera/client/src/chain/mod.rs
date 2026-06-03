@@ -258,12 +258,9 @@ impl Chain {
     pub async fn next_round_info(&self) -> JsResult<RoundInfo> {
         let info = self.chain_client.chain_info().await?;
         let manager = &info.manager;
-        let round = manager.current_round;
         let identity = self.chain_client.identity().await?;
-        let can_propose = manager
-            .ownership
-            .can_propose(&identity, round, manager.leader.as_ref());
-        let (kind, number) = match round {
+        let can_propose = manager.can_propose(&identity);
+        let (kind, number) = match manager.current_round {
             Round::Fast => ("fast", 0),
             Round::MultiLeader(number) => ("multiLeader", number),
             Round::SingleLeader(number) => ("singleLeader", number),

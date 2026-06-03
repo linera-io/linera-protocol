@@ -158,24 +158,6 @@ impl ChainOwnership {
             || self.super_owners.contains(owner)
     }
 
-    /// Returns whether `owner` may propose a block in `round`, given the designated
-    /// `leader` for that round (the single owner allowed to propose, or `None` in the
-    /// fast and multi-leader rounds, where any eligible owner may).
-    pub fn can_propose(
-        &self,
-        owner: &AccountOwner,
-        round: Round,
-        leader: Option<&AccountOwner>,
-    ) -> bool {
-        match leader {
-            Some(leader) => leader == owner,
-            None => match round {
-                Round::Fast => self.super_owners.contains(owner),
-                _ => self.can_propose_in_multi_leader_round(owner),
-            },
-        }
-    }
-
     /// Returns the duration of the given round.
     pub fn round_timeout(&self, round: Round) -> Option<TimeDelta> {
         let tc = &self.timeout_config;
