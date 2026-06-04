@@ -300,9 +300,9 @@ where
     pub block_zero_executed_at: RegisterView<C, Timestamp>,
 
     /// The hash of the set of fully-tracked chains that `nonempty_outboxes` and
-    /// `outbox_counters` were last reconciled against (see [`tracked_chains_hash`]). On a client
-    /// these two indices only hold entries for tracked targets; when the tracked set changes this
-    /// hash stops matching and the indices are reconciled (`reconcile_outbox_index`). `None` means
+    /// `outbox_counters` were last reconciled against. On a client these two indices only hold
+    /// entries for tracked targets; when the tracked set changes this hash stops matching and the
+    /// indices are reconciled (`reconcile_outbox_index`). `None` means
     /// they have never been filtered — a pre-existing database entry (migration), or a validator
     /// that tracks all chains and never filters.
     pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
