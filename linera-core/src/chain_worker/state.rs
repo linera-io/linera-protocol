@@ -18,6 +18,7 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
@@ -31,7 +32,8 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView, ChainTipState, ExecutionResultExt as _,
+    ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
+    ExecutionResultExt as _,
 };
 use linera_execution::{
     system::EventSubscriptions, ExecutionRuntimeContext as _, ExecutionStateView, Query,
@@ -47,7 +49,7 @@ use tracing::{debug, instrument, trace, warn};
 
 use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
-    client::ListeningMode,
+    client::{ChainModes, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
@@ -105,7 +107,7 @@ where
     block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
-    chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    chain_modes: Option<Arc<sync::RwLock<ChainModes>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
     /// Set to `true` if a database `save` failure has left storage potentially
@@ -168,7 +170,7 @@ where
         execution_state_cache: Option<
             Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
-        chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+        chain_modes: Option<Arc<sync::RwLock<ChainModes>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
@@ -251,7 +253,8 @@ where
             }
         }
         Ok(Some(
-            self.build_network_actions(None, tracked.as_ref()).await?,
+            self.build_network_actions(None, tracked.as_deref().map(|h| h.inner()))
+                .await?,
         ))
     }
 
@@ -277,7 +280,9 @@ where
         if let Some(full_chains) = &tracked {
             self.chain.reconcile_outbox_index(full_chains).await?;
         }
-        let actions = self.build_network_actions(None, tracked.as_ref()).await?;
+        let actions = self
+            .build_network_actions(None, tracked.as_deref().map(|h| h.inner()))
+            .await?;
         self.save().await?;
         Ok(actions)
     }
@@ -437,20 +442,16 @@ where
         })
     }
 
-    /// Returns the set of chains tracked in full mode, or `None` on a validator (which tracks all
-    /// chains and never filters its outbox indices).
-    fn tracked_full_chains(&self) -> Option<BTreeSet<ChainId>> {
+    /// Returns the set of chains tracked in full mode together with its memoized hash, or `None` on
+    /// a validator (which tracks all chains and never filters its outbox indices). The hash is
+    /// cached in [`ChainModes`], so this is an `O(1)` clone rather than a rehash of the set.
+    fn tracked_full_chains(&self) -> Option<Arc<Hashed<ChainIdSet>>> {
         let chain_modes = self.chain_modes.as_ref()?;
-        let chain_modes = chain_modes
+        let full = chain_modes
             .read()
-            .expect("Panics should not happen while holding a lock to `chain_modes`");
-        Some(
-            chain_modes
-                .iter()
-                .filter(|(_, mode)| mode.is_full())
-                .map(|(id, _)| *id)
-                .collect(),
-        )
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .full();
+        Some(full)
     }
 
     /// Returns whether the given chain is tracked in full mode (always `true` on a validator),
@@ -472,7 +473,7 @@ where
     /// validator (no filtering).
     async fn reconcile_tracked_outboxes(
         &mut self,
-    ) -> Result<Option<BTreeSet<ChainId>>, WorkerError> {
+    ) -> Result<Option<Arc<Hashed<ChainIdSet>>>, WorkerError> {
         let Some(full_chains) = self.tracked_full_chains() else {
             return Ok(None);
         };
@@ -489,7 +490,7 @@ where
         // Make the outbox index authoritative for the current tracked set first, so it already
         // holds only `is_full` targets and needs no read-time filtering.
         let tracked = self.reconcile_tracked_outboxes().await?;
-        self.build_network_actions(old_round, tracked.as_ref())
+        self.build_network_actions(old_round, tracked.as_deref().map(|h| h.inner()))
             .await
     }
 
@@ -499,7 +500,7 @@ where
     async fn build_network_actions(
         &self,
         old_round: Option<Round>,
-        tracked: Option<&BTreeSet<ChainId>>,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<NetworkActions, WorkerError> {
         #[cfg(with_metrics)]
         let _latency = metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency();
@@ -885,7 +886,7 @@ where
             let block =
                 maybe_block.ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
             self.chain
-                .preprocess_block(&block, tracked.as_ref())
+                .preprocess_block(&block, tracked.as_deref().map(|h| h.inner()))
                 .await?;
         }
         Ok(())
@@ -1016,7 +1017,7 @@ where
         let tracked = self.reconcile_tracked_outboxes().await?;
         let updated_event_streams = self
             .chain
-            .preprocess_block(certificate.value(), tracked.as_ref())
+            .preprocess_block(certificate.value(), tracked.as_deref().map(|h| h.inner()))
             .await?;
         self.save().await?;
         let mut actions = self.create_network_actions(None).await?;
@@ -1134,7 +1135,11 @@ where
         };
 
         let event_streams = chain
-            .apply_confirmed_block(&confirmed_block, local_time, tracked.as_ref())
+            .apply_confirmed_block(
+                &confirmed_block,
+                local_time,
+                tracked.as_deref().map(|h| h.inner()),
+            )
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height}");
@@ -1307,7 +1312,11 @@ where
         let tracked = self.reconcile_tracked_outboxes().await?;
         Ok(self
             .chain
-            .mark_messages_as_received(&recipient, latest_height, tracked.as_ref())
+            .mark_messages_as_received(
+                &recipient,
+                latest_height,
+                tracked.as_deref().map(|h| h.inner()),
+            )
             .await?
             && self
                 .all_messages_to_tracked_chains_delivered_up_to(latest_height)

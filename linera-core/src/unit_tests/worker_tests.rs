@@ -5110,7 +5110,7 @@ where
     let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
     // Run the worker as a client; share the tracked-set map so later inserts are visible to the
     // chain worker (which holds a clone of the `Arc`).
-    let chain_modes = Arc::new(std::sync::RwLock::new(BTreeMap::new()));
+    let chain_modes = Arc::new(std::sync::RwLock::new(crate::client::ChainModes::default()));
     env.worker.chain_modes = Some(chain_modes.clone());
 
     let chain_1_desc = env
@@ -5122,7 +5122,7 @@ where
     chain_modes
         .write()
         .unwrap()
-        .insert(chain_1, crate::client::ListeningMode::FullChain);
+        .extend_mode(chain_1, crate::client::ListeningMode::FullChain);
 
     // chain_1 transfers to the untracked chain_2: the outbox queue is scheduled but not indexed.
     let certificate = env
@@ -5184,7 +5184,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
-    let chain_modes = Arc::new(std::sync::RwLock::new(BTreeMap::new()));
+    let chain_modes = Arc::new(std::sync::RwLock::new(crate::client::ChainModes::default()));
     env.worker.chain_modes = Some(chain_modes.clone());
 
     let chain_1_desc = env
@@ -5196,7 +5196,7 @@ where
     chain_modes
         .write()
         .unwrap()
-        .insert(chain_1, crate::client::ListeningMode::FullChain);
+        .extend_mode(chain_1, crate::client::ListeningMode::FullChain);
 
     // chain_1 sends to chain_2 (height 0) and chain_3 (height 1) while both are untracked.
     let cert_0 = env
@@ -5231,8 +5231,8 @@ where
     // Track both recipients; the indices are now stale until the next reconciliation.
     {
         let mut modes = chain_modes.write().unwrap();
-        modes.insert(chain_2, crate::client::ListeningMode::FullChain);
-        modes.insert(chain_3, crate::client::ListeningMode::FullChain);
+        modes.extend_mode(chain_2, crate::client::ListeningMode::FullChain);
+        modes.extend_mode(chain_3, crate::client::ListeningMode::FullChain);
     }
 
     // Confirming chain_2 reconciles first, so it re-counts chain_2 (no `CorruptedChainState`),
@@ -5264,7 +5264,7 @@ where
 {
     let sender_key_pair = AccountSecretKey::generate();
     let mut env = TestEnvironment::new(storage_builder.build().await?, true, false).await;
-    let chain_modes = Arc::new(std::sync::RwLock::new(BTreeMap::new()));
+    let chain_modes = Arc::new(std::sync::RwLock::new(crate::client::ChainModes::default()));
     env.worker.chain_modes = Some(chain_modes.clone());
 
     let chain_1_desc = env
@@ -5276,7 +5276,7 @@ where
     chain_modes
         .write()
         .unwrap()
-        .insert(chain_1, crate::client::ListeningMode::FullChain);
+        .extend_mode(chain_1, crate::client::ListeningMode::FullChain);
 
     // chain_1 sends to the untracked chain_2 at heights 0 and 1.
     let cert_0 = env

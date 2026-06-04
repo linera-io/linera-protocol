@@ -22,6 +22,7 @@ use linera_base::{
         ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
 };
@@ -34,7 +35,7 @@ use linera_chain::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError,
+    ChainError, ChainIdSet,
 };
 use linera_execution::committee::Committee;
 use linera_storage::{Arc as CacheArc, Clock as _, ResultReadCertificates, Storage as _};
@@ -246,6 +247,72 @@ impl ListeningMode {
     }
 }
 
+/// The per-chain [`ListeningMode`]s tracked by a local node, together with a memoized
+/// [`Hashed`] of the fully-tracked subset.
+///
+/// The hash is the version of the outbox index (see
+/// [`ChainStateView::outbox_index_tracked_hash`]). Caching it here — recomputed only when a chain
+/// newly becomes `FullChain`, which is rare and client-side — lets every cross-chain operation
+/// compare and reconcile the index in `O(1)` instead of rehashing the tracked set each time.
+///
+/// [`ChainStateView::outbox_index_tracked_hash`]: linera_chain::ChainStateView
+#[derive(Debug)]
+pub struct ChainModes {
+    modes: BTreeMap<ChainId, ListeningMode>,
+    full: Arc<Hashed<ChainIdSet>>,
+}
+
+impl Default for ChainModes {
+    fn default() -> Self {
+        Self::new(BTreeMap::new())
+    }
+}
+
+impl ChainModes {
+    /// Builds the listening modes from `modes`, computing the tracked-set hash once.
+    pub fn new(modes: BTreeMap<ChainId, ListeningMode>) -> Self {
+        let full = Self::compute_full(&modes);
+        Self { modes, full }
+    }
+
+    fn compute_full(modes: &BTreeMap<ChainId, ListeningMode>) -> Arc<Hashed<ChainIdSet>> {
+        Arc::new(Hashed::new(ChainIdSet(
+            modes
+                .iter()
+                .filter(|(_, mode)| mode.is_full())
+                .map(|(id, _)| *id)
+                .collect(),
+        )))
+    }
+
+    /// The fully-tracked chains together with their memoized hash (`O(1)` clone).
+    pub fn full(&self) -> Arc<Hashed<ChainIdSet>> {
+        self.full.clone()
+    }
+
+    /// Returns the listening mode for `chain_id`, if it is tracked.
+    pub fn get(&self, chain_id: &ChainId) -> Option<&ListeningMode> {
+        self.modes.get(chain_id)
+    }
+
+    /// Merges `mode` into the entry for `chain_id` — monotonic in the listening-mode order, so it
+    /// never weakens an existing entry — and returns the resulting mode. The tracked-set hash is
+    /// recomputed only if the chain newly became `FullChain`.
+    pub fn extend_mode(&mut self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
+        let was_full = self
+            .modes
+            .get(&chain_id)
+            .is_some_and(ListeningMode::is_full);
+        let entry = self.modes.entry(chain_id).or_insert_with(|| mode.clone());
+        entry.extend(Some(mode));
+        let result = entry.clone();
+        if !was_full && result.is_full() {
+            self.full = Self::compute_full(&self.modes);
+        }
+        result
+    }
+}
+
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<Env: Environment> {
     environment: Env,
@@ -258,7 +325,7 @@ pub struct Client<Env: Environment> {
     admin_chain_id: ChainId,
     /// Chains that should be tracked by the client, along with their listening mode.
     /// The presence of a chain in this map means it is tracked by the local node.
-    chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
+    chain_modes: Arc<RwLock<ChainModes>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
@@ -285,15 +352,15 @@ impl<Env: Environment> Client<Env> {
         block_cache_size: usize,
         execution_state_cache_size: usize,
     ) -> Self {
-        let mut chain_modes = chain_modes.into_iter().collect::<BTreeMap<_, _>>();
+        let mut modes = chain_modes.into_iter().collect::<BTreeMap<_, _>>();
         // The client needs the admin chain fully synced for epoch tracking, so
         // promote it (or insert) into `FullChain`. `extend` is monotonic in the
         // listening mode order, so this never weakens an existing entry.
-        chain_modes
+        modes
             .entry(admin_chain_id)
             .or_insert(ListeningMode::FullChain)
             .extend(Some(ListeningMode::FullChain));
-        let chain_modes = Arc::new(RwLock::new(chain_modes));
+        let chain_modes = Arc::new(RwLock::new(ChainModes::new(modes)));
         let config = ChainWorkerConfig {
             nickname: name.into(),
             long_lived_services,
@@ -425,13 +492,10 @@ impl<Env: Environment> Client<Env> {
     /// Returns the resulting mode.
     #[instrument(level = "trace", skip(self))]
     pub fn extend_chain_mode(&self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
-        let mut chain_modes = self
-            .chain_modes
+        self.chain_modes
             .write()
-            .expect("Panics should not happen while holding a lock to `chain_modes`");
-        let entry = chain_modes.entry(chain_id).or_insert_with(|| mode.clone());
-        entry.extend(Some(mode));
-        entry.clone()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .extend_mode(chain_id, mode)
     }
 
     /// Returns the listening mode for a chain, if it is tracked.

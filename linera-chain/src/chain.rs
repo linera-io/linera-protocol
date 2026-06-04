@@ -8,12 +8,13 @@ use std::{
 
 use allocative::Allocative;
 use linera_base::{
-    crypto::{CryptoHash, CryptoHashVec, ValidatorPublicKey},
+    crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
         ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
         NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
@@ -220,11 +221,22 @@ pub struct BundleInInbox {
 // of 100 seems reasonable for the storing of the data.
 const TIMESTAMPBUNDLE_BUCKET_SIZE: usize = 100;
 
-/// Computes the hash identifying a set of fully-tracked chains, stored in
-/// [`ChainStateView::outbox_index_tracked_hash`] to detect when the outbox indices must be
-/// reconciled. The input is order-independent because `BTreeSet` iterates in sorted order.
-pub(crate) fn tracked_chains_hash(full_chains: &BTreeSet<ChainId>) -> CryptoHash {
-    CryptoHash::new(&CryptoHashVec(full_chains.iter().map(|id| id.0).collect()))
+/// A set of fully-tracked chains. Wrapped in [`Hashed`] (as `Hashed<ChainIdSet>`) so the hash that
+/// identifies the set — stored in [`ChainStateView::outbox_index_tracked_hash`] to detect when the
+/// outbox indices must be reconciled — is computed once when the tracked set changes rather than on
+/// every cross-chain operation. The hash is order-independent because `BTreeSet` iterates in sorted
+/// order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChainIdSet(pub BTreeSet<ChainId>);
+
+impl linera_base::crypto::BcsHashable<'_> for ChainIdSet {}
+
+impl std::ops::Deref for ChainIdSet {
+    type Target = BTreeSet<ChainId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 /// A view accessing the state of a chain.
@@ -453,7 +465,7 @@ where
         &mut self,
         target: &ChainId,
         height: BlockHeight,
-        tracked: Option<&BTreeSet<ChainId>>,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<bool, ChainError> {
         let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
         let updates = outbox.mark_messages_as_received(height).await?;
@@ -750,15 +762,15 @@ where
     /// a read-only caller can skip persisting when nothing changed.
     pub async fn reconcile_outbox_index(
         &mut self,
-        full_chains: &BTreeSet<ChainId>,
+        tracked: &Hashed<ChainIdSet>,
     ) -> Result<bool, ChainError> {
-        let digest = tracked_chains_hash(full_chains);
+        let digest = tracked.hash();
         if *self.outbox_index_tracked_hash.get() == Some(digest) {
             return Ok(false);
         }
         self.nonempty_outboxes.get_mut().clear();
         self.outbox_counters.get_mut().clear();
-        for target in full_chains {
+        for target in tracked.inner().iter() {
             let heights = {
                 let Some(outbox) = self.outboxes.try_load_entry(target).await? else {
                     continue;
@@ -780,8 +792,8 @@ where
     /// Returns whether the outbox index is already reconciled to `full_chains` — i.e. the
     /// stored version hash matches — so the index can be read without rebuilding it. Lets the
     /// read-only network-actions fast path decide whether a write-lock reconcile is needed.
-    pub fn outbox_index_is_reconciled(&self, full_chains: &BTreeSet<ChainId>) -> bool {
-        *self.outbox_index_tracked_hash.get() == Some(tracked_chains_hash(full_chains))
+    pub fn outbox_index_is_reconciled(&self, tracked: &Hashed<ChainIdSet>) -> bool {
+        *self.outbox_index_tracked_hash.get() == Some(tracked.hash())
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
@@ -1231,7 +1243,7 @@ where
         &mut self,
         block: &ConfirmedBlock,
         local_time: Timestamp,
-        tracked: Option<&BTreeSet<ChainId>>,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
@@ -1273,7 +1285,7 @@ where
     pub async fn preprocess_block(
         &mut self,
         block: &ConfirmedBlock,
-        tracked: Option<&BTreeSet<ChainId>>,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
@@ -1401,7 +1413,7 @@ where
     async fn process_outgoing_messages(
         &mut self,
         block: &Block,
-        tracked: Option<&BTreeSet<ChainId>>,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<Vec<ChainId>, ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.

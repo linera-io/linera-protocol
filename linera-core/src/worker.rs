@@ -69,7 +69,7 @@ use crate::{
         BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult, DeliveryNotifier,
         ProcessConfirmedBlockMode,
     },
-    client::ListeningMode,
+    client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     notifier::Notifier,
 };
@@ -697,7 +697,7 @@ pub struct WorkerState<StorageClient: Storage> {
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
-    pub(crate) chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    pub(crate) chain_modes: Option<Arc<RwLock<ChainModes>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -853,7 +853,7 @@ where
     pub fn new(
         storage: StorageClient,
         chain_worker_config: ChainWorkerConfig,
-        chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+        chain_modes: Option<Arc<RwLock<ChainModes>>>,
     ) -> Self {
         let chain_workers = Arc::new(papaya::HashMap::new());
         start_sweep(&chain_workers, &chain_worker_config);
