@@ -903,6 +903,23 @@ impl ChainManagerInfo {
             .map(|vote| Box::new(vote.value.clone()));
     }
 
+    /// Returns whether `owner` may propose a block in the current round, based on the
+    /// already-computed [`leader`](Self::leader) for that round.
+    ///
+    /// [`leader`](Self::leader) is `None` in the fast and multi-leader rounds, where any
+    /// eligible owner may propose; in the single-leader and validator rounds it names the
+    /// only owner allowed to propose. Unlike [`should_propose`](Self::should_propose),
+    /// this needs no seed or committee, since the leader is taken as given.
+    pub fn can_propose(&self, owner: &AccountOwner) -> bool {
+        match &self.leader {
+            Some(leader) => leader == owner,
+            None => match self.current_round {
+                Round::Fast => self.ownership.super_owners.contains(owner),
+                _ => self.ownership.can_propose_in_multi_leader_round(owner),
+            },
+        }
+    }
+
     /// Returns whether the `identity` is allowed to propose a block in `round`.
     ///
     /// **Exception:** In single-leader rounds, a **super owner** should only propose

@@ -2297,8 +2297,12 @@ impl<Env: Environment> ChainClient<Env> {
         (propose_at > now).then_some(propose_at)
     }
 
-    /// Clears the information on any operation that previously failed.
-    #[cfg(with_testing)]
+    /// Discards the pending block proposal, if any, so that a fresh block can be
+    /// proposed instead of retrying the queued one.
+    ///
+    /// Note that this does not update the copy persisted in the wallet (callers that
+    /// persist pending proposals should refresh it afterwards). Also, this should never
+    /// be used on a proposal already submitted in the fast round.
     #[instrument(level = "trace")]
     pub async fn clear_pending_proposal(&self) {
         *self.proposal_mutex().lock().await = None;
