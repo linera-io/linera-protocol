@@ -112,6 +112,13 @@ mod tests {
 
     async fn state_with_failed_burn() -> AdminState {
         let mut ms = MonitorState::new(0);
+        // A failed burn is removed from memory and lives in `finished_burns`,
+        // so the retry path needs a DB to rebuild it from.
+        ms.set_db(
+            crate::monitor::db::BridgeDb::open_in_memory()
+                .await
+                .unwrap(),
+        );
         ms.track_burn(PendingBurn {
             height: BlockHeight(5),
             block_hash: CryptoHash::from([0u8; 32]),

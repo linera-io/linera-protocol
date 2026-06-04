@@ -452,9 +452,12 @@ impl MonitorState {
         }
     }
 
+    /// Marks a deposit `failed`: removes it from the in-memory map (a failed
+    /// deposit is no longer pending work) and moves the DB row to
+    /// `finished_deposits`. The DB row is the durable record; recovery is via
+    /// `retry_failed_deposits`.
     pub async fn mark_deposit_failed(&mut self, key: &DepositKey) {
-        if let Some(d) = self.deposits.get_mut(key) {
-            d.failed = true;
+        if self.deposits.remove(key).is_some() {
             crate::relay::metrics::deposit_failed();
             if let Some(db) = &self.db {
                 if let Err(error) = db.update_deposit_status(key, "failed").await {
@@ -504,9 +507,12 @@ impl MonitorState {
         }
     }
 
+    /// Marks a burn `failed`: removes it from the in-memory map (a failed
+    /// burn is no longer pending work) and moves the DB row to
+    /// `finished_burns`. The DB row is the durable record; recovery is via
+    /// `retry_failed_burns`.
     pub async fn mark_burn_failed(&mut self, height: BlockHeight, event_index: u32) {
-        if let Some(b) = self.burns.get_mut(&(height, event_index)) {
-            b.failed = true;
+        if self.burns.remove(&(height, event_index)).is_some() {
             crate::relay::metrics::burn_failed();
             if let Some(db) = &self.db {
                 if let Err(error) = db.update_burn_status(height, event_index, "failed").await {
@@ -522,11 +528,11 @@ impl MonitorState {
     }
 
     /// Re-queues every `failed` burn at `height` so the normal retry
-    /// machinery picks them up without a relayer restart. Resets the
-    /// in-memory `Tracked` entry in place, or rebuilds it from the DB row if
-    /// it is gone (e.g. the burn failed before a restart and was not reloaded
-    /// into memory). Moves the DB row back to `pending_burns`. Returns the
-    /// `event_index` values that were reset (empty if none were failed).
+    /// machinery picks them up without a relayer restart. A failed burn lives
+    /// only in the `finished_burns` table — it is removed from the in-memory
+    /// map when it fails — so this moves the DB row back to `pending_burns`
+    /// and rebuilds the in-memory `Tracked` entry. Returns the `event_index`
+    /// values re-queued (empty if none were failed or no DB is configured).
     pub async fn retry_failed_burns(&mut self, height: BlockHeight) -> Vec<u32> {
         let moved = if let Some(db) = &self.db {
             db.requeue_failed_burns(height)
@@ -541,14 +547,6 @@ impl MonitorState {
         };
 
         let mut reset = BTreeSet::new();
-        for (key, burn) in self.burns.iter_mut() {
-            if key.0 == height && burn.failed {
-                burn.failed = false;
-                burn.retry_count = 0;
-                burn.last_retry_at = None;
-                reset.insert(key.1);
-            }
-        }
         for burn in moved {
             let key = (burn.height, burn.event_index);
             if let Entry::Vacant(slot) = self.burns.entry(key) {
@@ -560,10 +558,11 @@ impl MonitorState {
     }
 
     /// Re-queues every `failed` deposit for `(source_chain_id, tx_hash)` so
-    /// the normal retry machinery picks them up. Resets the in-memory entry
-    /// in place, or rebuilds it from the DB row if it is gone. Moves the DB
-    /// row back to `pending_deposits`. Returns the `log_index` values that
-    /// were reset (empty if none were failed).
+    /// the normal retry machinery picks them up. A failed deposit lives only
+    /// in the `finished_deposits` table — it is removed from the in-memory
+    /// map when it fails — so this moves the DB row back to `pending_deposits`
+    /// and rebuilds the in-memory `Tracked` entry. Returns the `log_index`
+    /// values re-queued (empty if none were failed or no DB is configured).
     pub async fn retry_failed_deposits(&mut self, source_chain_id: u64, tx_hash: B256) -> Vec<u64> {
         let moved = if let Some(db) = &self.db {
             db.requeue_failed_deposits(source_chain_id, tx_hash)
@@ -582,17 +581,6 @@ impl MonitorState {
         };
 
         let mut reset = BTreeSet::new();
-        for (key, deposit) in self.deposits.iter_mut() {
-            if key.source_chain_id == source_chain_id
-                && deposit.value.tx_hash == tx_hash
-                && deposit.failed
-            {
-                deposit.failed = false;
-                deposit.retry_count = 0;
-                deposit.last_retry_at = None;
-                reset.insert(key.log_index);
-            }
-        }
         for deposit in moved {
             let key = deposit.key.clone();
             let log_index = key.log_index;
@@ -1122,7 +1110,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn retry_failed_burns_resets_in_memory_entry() {
+    async fn mark_burn_failed_removes_from_memory() {
         let mut state = MonitorState::new(0);
         state
             .track_burn(PendingBurn {
@@ -1136,15 +1124,11 @@ mod tests {
             })
             .await;
         state.mark_burn_failed(BlockHeight(5), 10).await;
-        assert!(state.pending_burns_by_height_and_tx(10).is_empty());
-
-        let reset = state.retry_failed_burns(BlockHeight(5)).await;
-        assert_eq!(reset, vec![10u32]);
-        assert_eq!(state.pending_burns_by_height_and_tx(10).len(), 1);
+        assert!(!state.burns.contains_key(&(BlockHeight(5), 10)));
     }
 
     #[tokio::test]
-    async fn retry_failed_burns_rebuilds_entry_from_db_after_restart() {
+    async fn retry_failed_burns_rebuilds_from_db() {
         let mut state = MonitorState::new(0);
         state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
         state
@@ -1159,9 +1143,9 @@ mod tests {
             })
             .await;
         state.mark_burn_failed(BlockHeight(5), 10).await;
-        // Simulate a restart: the in-memory entry is gone (only the DB
-        // `finished_burns` row remains).
-        state.burns.remove(&(BlockHeight(5), 10));
+        // Failing removed it from memory and moved it to `finished_burns`.
+        assert!(!state.burns.contains_key(&(BlockHeight(5), 10)));
+        assert!(state.pending_burns_by_height_and_tx(10).is_empty());
 
         let reset = state.retry_failed_burns(BlockHeight(5)).await;
         assert_eq!(reset, vec![10u32]);
@@ -1171,6 +1155,7 @@ mod tests {
     #[tokio::test]
     async fn retry_failed_burns_no_failed_items_returns_empty() {
         let mut state = MonitorState::new(0);
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
         state
             .track_burn(PendingBurn {
                 height: BlockHeight(5),
@@ -1182,13 +1167,39 @@ mod tests {
                 amount: U128(0),
             })
             .await;
+        // Nothing failed at this height; the pending burn is left untouched.
         let reset = state.retry_failed_burns(BlockHeight(5)).await;
         assert!(reset.is_empty());
+        assert_eq!(state.pending_burns_by_height_and_tx(10).len(), 1);
     }
 
     #[tokio::test]
-    async fn retry_failed_deposits_resets_in_memory_entry() {
+    async fn mark_deposit_failed_removes_from_memory() {
         let mut state = MonitorState::new(0);
+        let key = DepositKey {
+            source_chain_id: 8453,
+            block_hash: B256::from([1u8; 32]),
+            tx_index: 2,
+            log_index: 0,
+        };
+        state
+            .track_deposit(PendingDeposit {
+                key: key.clone(),
+                tx_hash: B256::from([7u8; 32]),
+                depositor: Address::ZERO,
+                amount: U256::from(0),
+                nonce: U256::from(0),
+            })
+            .await;
+        state.mark_deposit_failed(&key).await;
+        assert!(!state.deposits.contains_key(&key));
+        assert!(state.next_deposit_for_retry(10).is_none());
+    }
+
+    #[tokio::test]
+    async fn retry_failed_deposits_rebuilds_from_db() {
+        let mut state = MonitorState::new(0);
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
         let tx_hash = B256::from([7u8; 32]);
         let key = DepositKey {
             source_chain_id: 8453,
@@ -1206,6 +1217,7 @@ mod tests {
             })
             .await;
         state.mark_deposit_failed(&key).await;
+        assert!(!state.deposits.contains_key(&key));
 
         let reset = state.retry_failed_deposits(8453, tx_hash).await;
         assert_eq!(reset, vec![0u64]);
@@ -1215,8 +1227,10 @@ mod tests {
     #[tokio::test]
     async fn retry_failed_deposits_no_failed_items_returns_empty() {
         let mut state = MonitorState::new(0);
-        let tx_hash = B256::from([7u8; 32]);
-        let reset = state.retry_failed_deposits(8453, tx_hash).await;
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
+        let reset = state
+            .retry_failed_deposits(8453, B256::from([7u8; 32]))
+            .await;
         assert!(reset.is_empty());
     }
 }
