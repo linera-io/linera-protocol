@@ -236,20 +236,41 @@ where
         self.service_runtime_task.take()
     }
 
-    /// Returns the pending cross-chain network actions for this chain, without
-    /// initializing the chain's execution state. Intended for callers that only
-    /// need to re-emit cross-chain requests from the outbox of a sender chain
-    /// whose `ChainDescription` we may never have needed.
+    /// Returns the pending cross-chain network actions if the outbox index is already
+    /// reconciled to the current tracked set, or `None` if it must first be reconciled (which
+    /// needs a write lock). Read-only: it never reconciles or saves, so on the common path the
+    /// worker can serve it under a shared lock, avoiding the write lock, task spawn and `save()`
+    /// of [`Self::reconcile_and_cross_chain_network_actions`].
+    pub(crate) async fn cross_chain_network_actions_if_reconciled(
+        &self,
+    ) -> Result<Option<NetworkActions>, WorkerError> {
+        let tracked = self.tracked_full_chains();
+        if let Some(full_chains) = &tracked {
+            if !self.chain.outbox_index_is_reconciled(full_chains) {
+                return Ok(None);
+            }
+        }
+        Ok(Some(
+            self.build_network_actions(None, tracked.as_ref()).await?,
+        ))
+    }
+
+    /// Reconciles the outbox index with the current tracked set, then returns the pending
+    /// cross-chain network actions for this chain, without initializing the chain's execution
+    /// state. Intended for callers that only need to re-emit cross-chain requests from the
+    /// outbox of a sender chain whose `ChainDescription` we may never have needed.
     ///
-    /// Takes `&mut self` because it reconciles the outbox indices with the current tracked set
-    /// (this only touches the outbox indices, not the execution state).
+    /// This is the slow path of [`Self::cross_chain_network_actions_if_reconciled`], used only
+    /// when the index is stale (first load after migration, or the tracked set changed). It
+    /// takes `&mut self` to rebuild the outbox indices (this only touches the outbox indices,
+    /// not the execution state).
     ///
     /// It always `save()`s, even though reconciliation is usually a no-op: this runs under a write
     /// lock, so dropping the `RollbackGuard` *without* saving would call `rollback()` and discard
     /// any uncommitted in-memory chain state — e.g. a pending block proposal the client set
     /// mid-operation. `save()` is a no-op write when the resulting batch is empty.
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
-    pub(crate) async fn cross_chain_network_actions(
+    pub(crate) async fn reconcile_and_cross_chain_network_actions(
         &mut self,
     ) -> Result<NetworkActions, WorkerError> {
         let tracked = self.tracked_full_chains();

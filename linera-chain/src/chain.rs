@@ -777,6 +777,13 @@ where
         Ok(true)
     }
 
+    /// Returns whether the outbox index is already reconciled to `full_chains` — i.e. the
+    /// stored version hash matches — so the index can be read without rebuilding it. Lets the
+    /// read-only network-actions fast path decide whether a write-lock reconcile is needed.
+    pub fn outbox_index_is_reconciled(&self, full_chains: &BTreeSet<ChainId>) -> bool {
+        *self.outbox_index_tracked_hash.get() == Some(tracked_chains_hash(full_chains))
+    }
+
     /// Executes a block with a specified policy for handling bundle failures.
     #[instrument(skip_all, fields(
         chain_id = %block.chain_id,

@@ -1911,8 +1911,21 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<NetworkActions, WorkerError> {
+        // Fast path: when the outbox index is already reconciled to the current tracked set,
+        // the network actions are built from a read-only view, so a shared lock with no save
+        // suffices — avoiding the write lock, task spawn and `save()` of the slow path.
+        if let Some(actions) = self
+            .chain_read(chain_id, |guard| async move {
+                guard.cross_chain_network_actions_if_reconciled().await
+            })
+            .await?
+        {
+            return Ok(actions);
+        }
+        // Slow path (first load after migration, or the tracked set changed): reconcile and
+        // persist the index under an exclusive lock before building.
         self.chain_write(chain_id, |mut guard| async move {
-            guard.cross_chain_network_actions().await
+            guard.reconcile_and_cross_chain_network_actions().await
         })
         .await
     }
