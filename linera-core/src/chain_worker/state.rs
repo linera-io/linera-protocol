@@ -242,22 +242,22 @@ where
     /// whose `ChainDescription` we may never have needed.
     ///
     /// Takes `&mut self` because it reconciles the outbox indices with the current tracked set
-    /// (this only touches the outbox indices, not the execution state). It only persists — and only
-    /// pays the write cost — when reconciliation actually rebuilt the indices, i.e. when the tracked
-    /// set changed since the last reconciliation; the common case is a lock-only read.
+    /// (this only touches the outbox indices, not the execution state).
+    ///
+    /// It always `save()`s, even though reconciliation is usually a no-op: this runs under a write
+    /// lock, so dropping the `RollbackGuard` *without* saving would call `rollback()` and discard
+    /// any uncommitted in-memory chain state — e.g. a pending block proposal the client set
+    /// mid-operation. `save()` is a no-op write when the resulting batch is empty.
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
     pub(crate) async fn cross_chain_network_actions(
         &mut self,
     ) -> Result<NetworkActions, WorkerError> {
         let tracked = self.tracked_full_chains();
-        let rebuilt = match &tracked {
-            Some(full_chains) => self.chain.reconcile_outbox_index(full_chains).await?,
-            None => false,
-        };
-        let actions = self.build_network_actions(None, tracked.as_ref()).await?;
-        if rebuilt {
-            self.save().await?;
+        if let Some(full_chains) = &tracked {
+            self.chain.reconcile_outbox_index(full_chains).await?;
         }
+        let actions = self.build_network_actions(None, tracked.as_ref()).await?;
+        self.save().await?;
         Ok(actions)
     }
 
