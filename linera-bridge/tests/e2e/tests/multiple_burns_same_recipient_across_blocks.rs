@@ -220,6 +220,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
+            0, // admin port (unused in e2e)
             &linera_storage_runtime::CommonStorageOptions::with_defaults(),
             Duration::from_secs(2),
             0,

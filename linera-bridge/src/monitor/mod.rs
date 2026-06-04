@@ -521,6 +521,89 @@ impl MonitorState {
         }
     }
 
+    /// Re-queues every `failed` burn at `height` so the normal retry
+    /// machinery picks them up without a relayer restart. Resets the
+    /// in-memory `Tracked` entry in place, or rebuilds it from the DB row if
+    /// it is gone (e.g. the burn failed before a restart and was not reloaded
+    /// into memory). Moves the DB row back to `pending_burns`. Returns the
+    /// `event_index` values that were reset (empty if none were failed).
+    pub async fn retry_failed_burns(&mut self, height: BlockHeight) -> Vec<u32> {
+        let moved = if let Some(db) = &self.db {
+            db.requeue_failed_burns(height)
+                .await
+                .unwrap_or_else(|error| {
+                    tracing::warn!(?height, ?error, "Failed to requeue burns in SQLite");
+                    Vec::new()
+                })
+        } else {
+            tracing::warn!("No persistent DB configured for the relayer");
+            Vec::new()
+        };
+
+        let mut reset = BTreeSet::new();
+        for (key, burn) in self.burns.iter_mut() {
+            if key.0 == height && burn.failed {
+                burn.failed = false;
+                burn.retry_count = 0;
+                burn.last_retry_at = None;
+                reset.insert(key.1);
+            }
+        }
+        for burn in moved {
+            let key = (burn.height, burn.event_index);
+            if let Entry::Vacant(slot) = self.burns.entry(key) {
+                slot.insert(Tracked::new(burn));
+                reset.insert(key.1);
+            }
+        }
+        reset.into_iter().collect()
+    }
+
+    /// Re-queues every `failed` deposit for `(source_chain_id, tx_hash)` so
+    /// the normal retry machinery picks them up. Resets the in-memory entry
+    /// in place, or rebuilds it from the DB row if it is gone. Moves the DB
+    /// row back to `pending_deposits`. Returns the `log_index` values that
+    /// were reset (empty if none were failed).
+    pub async fn retry_failed_deposits(&mut self, source_chain_id: u64, tx_hash: B256) -> Vec<u64> {
+        let moved = if let Some(db) = &self.db {
+            db.requeue_failed_deposits(source_chain_id, tx_hash)
+                .await
+                .unwrap_or_else(|error| {
+                    tracing::warn!(
+                        source_chain_id,
+                        ?error,
+                        "Failed to requeue deposits in SQLite"
+                    );
+                    Vec::new()
+                })
+        } else {
+            tracing::warn!("No persistent DB configured for the relayer");
+            Vec::new()
+        };
+
+        let mut reset = BTreeSet::new();
+        for (key, deposit) in self.deposits.iter_mut() {
+            if key.source_chain_id == source_chain_id
+                && deposit.value.tx_hash == tx_hash
+                && deposit.failed
+            {
+                deposit.failed = false;
+                deposit.retry_count = 0;
+                deposit.last_retry_at = None;
+                reset.insert(key.log_index);
+            }
+        }
+        for deposit in moved {
+            let key = deposit.key.clone();
+            let log_index = key.log_index;
+            if let Entry::Vacant(slot) = self.deposits.entry(key) {
+                slot.insert(Tracked::new(deposit));
+                reset.insert(log_index);
+            }
+        }
+        reset.into_iter().collect()
+    }
+
     pub fn status_summary(&self) -> StatusSummary {
         StatusSummary {
             deposits_pending: self.deposits.values().filter(|d| !d.forwarded).count(),
@@ -1036,5 +1119,104 @@ mod tests {
         assert_eq!(state.event_index_for_pos(BlockHeight(5), 2, 0), None);
         assert_eq!(state.event_index_for_pos(BlockHeight(5), 0, 1), None);
         assert_eq!(state.event_index_for_pos(BlockHeight(6), 2, 1), None);
+    }
+
+    #[tokio::test]
+    async fn retry_failed_burns_resets_in_memory_entry() {
+        let mut state = MonitorState::new(0);
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: U128(0),
+            })
+            .await;
+        state.mark_burn_failed(BlockHeight(5), 10).await;
+        assert!(state.pending_burns_by_height_and_tx(10).is_empty());
+
+        let reset = state.retry_failed_burns(BlockHeight(5)).await;
+        assert_eq!(reset, vec![10u32]);
+        assert_eq!(state.pending_burns_by_height_and_tx(10).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_failed_burns_rebuilds_entry_from_db_after_restart() {
+        let mut state = MonitorState::new(0);
+        state.set_db(db::BridgeDb::open_in_memory().await.unwrap());
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: U128(0),
+            })
+            .await;
+        state.mark_burn_failed(BlockHeight(5), 10).await;
+        // Simulate a restart: the in-memory entry is gone (only the DB
+        // `finished_burns` row remains).
+        state.burns.remove(&(BlockHeight(5), 10));
+
+        let reset = state.retry_failed_burns(BlockHeight(5)).await;
+        assert_eq!(reset, vec![10u32]);
+        assert_eq!(state.pending_burns_by_height_and_tx(10).len(), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_failed_burns_no_failed_items_returns_empty() {
+        let mut state = MonitorState::new(0);
+        state
+            .track_burn(PendingBurn {
+                height: BlockHeight(5),
+                block_hash: CryptoHash::from([0u8; 32]),
+                tx_index: 0,
+                event_pos_in_tx: 0,
+                event_index: 10,
+                evm_recipient: Address::ZERO,
+                amount: U128(0),
+            })
+            .await;
+        let reset = state.retry_failed_burns(BlockHeight(5)).await;
+        assert!(reset.is_empty());
+    }
+
+    #[tokio::test]
+    async fn retry_failed_deposits_resets_in_memory_entry() {
+        let mut state = MonitorState::new(0);
+        let tx_hash = B256::from([7u8; 32]);
+        let key = DepositKey {
+            source_chain_id: 8453,
+            block_hash: B256::from([1u8; 32]),
+            tx_index: 2,
+            log_index: 0,
+        };
+        state
+            .track_deposit(PendingDeposit {
+                key: key.clone(),
+                tx_hash,
+                depositor: Address::ZERO,
+                amount: U256::from(0),
+                nonce: U256::from(0),
+            })
+            .await;
+        state.mark_deposit_failed(&key).await;
+
+        let reset = state.retry_failed_deposits(8453, tx_hash).await;
+        assert_eq!(reset, vec![0u64]);
+        assert!(state.next_deposit_for_retry(10).is_some());
+    }
+
+    #[tokio::test]
+    async fn retry_failed_deposits_no_failed_items_returns_empty() {
+        let mut state = MonitorState::new(0);
+        let tx_hash = B256::from([7u8; 32]);
+        let reset = state.retry_failed_deposits(8453, tx_hash).await;
+        assert!(reset.is_empty());
     }
 }

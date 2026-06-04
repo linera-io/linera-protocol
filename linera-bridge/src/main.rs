@@ -99,6 +99,10 @@ struct ServeOptions {
     #[arg(long, default_value = "3001")]
     port: u16,
 
+    /// Port for the localhost-only admin HTTP server (retry endpoints).
+    #[arg(long, default_value = "3002")]
+    admin_port: u16,
+
     #[command(flatten)]
     common_storage_options: linera_storage_runtime::CommonStorageOptions,
 
@@ -156,6 +160,7 @@ impl ServeOptions {
             &self.evm_private_key,
             self.evm_light_client_address.as_deref(),
             self.port,
+            self.admin_port,
             &self.common_storage_options,
             std::time::Duration::from_secs(self.monitor_scan_interval),
             self.monitor_start_block,
