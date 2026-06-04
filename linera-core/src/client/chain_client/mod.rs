@@ -102,9 +102,9 @@ pub struct Options {
     /// as a fraction of time taken to reach quorum.
     pub quorum_grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
-    pub blob_download_timeout: Duration,
+    pub blob_download_hedge_delay: Duration,
     /// The delay when downloading a batch of certificates, after which we try a second validator.
-    pub certificate_batch_download_timeout: Duration,
+    pub certificate_batch_download_hedge_delay: Duration,
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
@@ -161,8 +161,8 @@ impl Options {
             priority_bundle_origins: HashSet::new(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
-            blob_download_timeout: Duration::from_secs(1),
-            certificate_batch_download_timeout: Duration::from_secs(1),
+            blob_download_hedge_delay: Duration::from_secs(1),
+            certificate_batch_download_hedge_delay: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,

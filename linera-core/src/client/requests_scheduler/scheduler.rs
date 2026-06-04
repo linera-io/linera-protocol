@@ -312,7 +312,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         &self,
         peers: &[RemoteNode<Env::ValidatorNode>],
         blob_id: BlobId,
-        timeout: Duration,
+        hedge_delay: Duration,
     ) -> Result<Option<Blob>, NodeError> {
         let key = RequestKey::Blob(blob_id);
         communicate_concurrently(
@@ -323,7 +323,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 })
                 .await
             },
-            timeout,
+            hedge_delay,
             &self.clock,
         )
         .await
@@ -351,11 +351,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
         &self,
         peers: &[RemoteNode<Env::ValidatorNode>],
         blob_ids: &[BlobId],
-        timeout: Duration,
+        hedge_delay: Duration,
     ) -> Result<Option<Vec<Blob>>, NodeError> {
         let mut stream = blob_ids
             .iter()
-            .map(|blob_id| self.download_blob(peers, *blob_id, timeout))
+            .map(|blob_id| self.download_blob(peers, *blob_id, hedge_delay))
             .collect::<FuturesUnordered<_>>();
 
         let mut blobs = Vec::new();
@@ -399,7 +399,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
-        timeout: Duration,
+        hedge_delay: Duration,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         if peers.is_empty() {
             return Err(NodeError::NoValidators);
@@ -422,7 +422,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 })
                 .await
             },
-            timeout,
+            hedge_delay,
             &self.clock,
         )
         .await

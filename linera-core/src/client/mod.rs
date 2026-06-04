@@ -537,7 +537,7 @@ impl<Env: Environment> Client<Env> {
                     chain_id,
                     next_height,
                     limit,
-                    self.options.certificate_batch_download_timeout,
+                    self.options.certificate_batch_download_hedge_delay,
                 )
                 .await?;
             let Some(new_info) = self
@@ -705,7 +705,11 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let blobs = &self
             .requests_scheduler
-            .download_blobs(remote_nodes, blob_ids, self.options.blob_download_timeout)
+            .download_blobs(
+                remote_nodes,
+                blob_ids,
+                self.options.blob_download_hedge_delay,
+            )
             .await?
             .ok_or_else(|| {
                 chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(blob_ids.to_vec()))
@@ -723,7 +727,7 @@ impl<Env: Environment> Client<Env> {
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
         let mut validators = self.validator_nodes().await?;
-        let timeout = self.options.certificate_batch_download_timeout;
+        let hedge_delay = self.options.certificate_batch_download_hedge_delay;
         let mut remaining_event_ids = event_ids.to_vec();
 
         while !remaining_event_ids.is_empty() {
@@ -816,7 +820,7 @@ impl<Env: Environment> Client<Env> {
                         Ok((checked_certificates, unresolved, validator_key))
                     })
                 },
-                timeout,
+                hedge_delay,
                 self.storage_client().clock(),
             )
             .await;
@@ -1385,7 +1389,7 @@ impl<Env: Environment> Client<Env> {
                     }
                     Ok(certificates_with_check_results)
                 },
-                self.options.certificate_batch_download_timeout,
+                self.options.certificate_batch_download_hedge_delay,
                 self.storage_client().clock(),
             )
             .await
@@ -2056,7 +2060,7 @@ impl<Env: Environment> Client<Env> {
         blob_ids: Vec<BlobId>,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<Vec<CacheArc<Blob>>, chain_client::Error> {
-        let timeout = self.options.blob_download_timeout;
+        let hedge_delay = self.options.blob_download_hedge_delay;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         stream::iter(blob_ids.into_iter().map(|blob_id| {
@@ -2081,7 +2085,7 @@ impl<Env: Environment> Client<Env> {
                         .ok_or_else(|| LocalNodeError::BlobsNotFound(vec![blob_id]))?;
                     Result::<_, chain_client::Error>::Ok(blob)
                 },
-                timeout,
+                hedge_delay,
                 self.storage_client().clock(),
             )
             .map_err(move |errors| {
