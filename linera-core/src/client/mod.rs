@@ -2239,13 +2239,19 @@ pub(crate) async fn sleep_for(clock: &impl linera_storage::Clock, duration: Dura
         .await;
 }
 
-/// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay
-/// on each subsequent node. Returns the first `Ok` result; if all of the nodes fail, returns
-/// the collected `(validator, error)` pairs.
+/// Performs `f` on the nodes with a hedged, staggered fan-out, and returns the first `Ok`
+/// result. If all of the nodes fail, returns the collected `(validator, error)` pairs.
+///
+/// The first node is queried immediately. Each subsequent node is started either when a node
+/// that is still in flight has not answered within `hedge_delay` (hedging against a slow node by
+/// racing an extra request — the slow one is *not* cancelled), or *immediately* when an in-flight
+/// request fails — there is no point waiting out the hedge once we already know an attempt failed.
+/// The hedge sleeps on the node clock, so this is driveable in (possibly simulated) time; freezing
+/// the clock simply disables the slow-node hedge while still advancing on every failure.
 async fn communicate_concurrently<'a, A, E, F, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
-    timeout: Duration,
+    hedge_delay: Duration,
     clock: &impl linera_storage::Clock,
 ) -> Result<V, Vec<(ValidatorPublicKey, E)>>
 where
@@ -2253,26 +2259,71 @@ where
     RemoteNode<A>: Clone,
     R: Future<Output = Result<V, E>> + 'a,
 {
+    use futures::future::{select, Either};
+
     let mut nodes = nodes.to_vec();
     nodes.shuffle(&mut rand::thread_rng());
-    let mut stream = nodes
-        .iter()
-        .zip(0..)
-        .map(|(remote_node, i)| {
-            let fun = f.clone();
-            let node = remote_node.clone();
-            async move {
-                sleep_for(clock, timeout * i * i).await;
-                fun(node).await.map_err(|err| (remote_node.public_key, err))
-            }
-        })
-        .collect::<FuturesUnordered<_>>();
+    let mut nodes = nodes.into_iter();
+
+    let start = |node: RemoteNode<A>| {
+        let fun = f.clone();
+        async move {
+            let public_key = node.public_key;
+            fun(node).await.map_err(|err| (public_key, err))
+        }
+    };
+
+    let mut in_flight = FuturesUnordered::new();
     let mut errors = vec![];
-    while let Some(maybe_result) = stream.next().await {
-        match maybe_result {
-            Ok(result) => return Ok(result),
+    if let Some(node) = nodes.next() {
+        in_flight.push(start(node));
+    }
+    let mut next_hedge = Box::pin(sleep_for(clock, hedge_delay));
+
+    // Race request completions against the hedge timer, starting more nodes as we go.
+    loop {
+        if in_flight.is_empty() {
+            // Nothing running: start the next node, or stop if there are none left.
+            match nodes.next() {
+                Some(node) => {
+                    in_flight.push(start(node));
+                    next_hedge = Box::pin(sleep_for(clock, hedge_delay));
+                }
+                None => return Err(errors),
+            }
+            continue;
+        }
+        match select(in_flight.next(), next_hedge).await {
+            // A request succeeded.
+            Either::Left((Some(Ok(value)), _)) => return Ok(value),
+            // A request failed: try the next node right away rather than waiting out the hedge.
+            Either::Left((Some(Err(error)), hedge)) => {
+                errors.push(error);
+                next_hedge = hedge;
+                if let Some(node) = nodes.next() {
+                    in_flight.push(start(node));
+                    next_hedge = Box::pin(sleep_for(clock, hedge_delay));
+                }
+            }
+            // All in-flight requests drained; the loop top decides what to do next.
+            Either::Left((None, hedge)) => next_hedge = hedge,
+            // A request is slow: hedge by starting another node, if any remain.
+            Either::Right(((), _)) => match nodes.next() {
+                Some(node) => {
+                    in_flight.push(start(node));
+                    next_hedge = Box::pin(sleep_for(clock, hedge_delay));
+                }
+                None => break,
+            },
+        }
+    }
+
+    // No more nodes to start; just wait for the remaining in-flight requests.
+    while let Some(result) = in_flight.next().await {
+        match result {
+            Ok(value) => return Ok(value),
             Err(error) => errors.push(error),
-        };
+        }
     }
     Err(errors)
 }
@@ -2370,4 +2421,77 @@ pub async fn create_bytecode_blobs(
         blobs.push(blob);
     }
     (blobs, module_id)
+}
+
+#[cfg(test)]
+mod communicate_concurrently_tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    use linera_base::crypto::ValidatorKeypair;
+    use linera_storage::TestClock;
+
+    use super::*;
+
+    fn test_node() -> RemoteNode<()> {
+        RemoteNode {
+            public_key: ValidatorKeypair::generate().public_key,
+            node: (),
+        }
+    }
+
+    /// When every node fails, all errors are collected and we return promptly — crucially without
+    /// ever waiting out the hedge delay, so the frozen clock never advances.
+    #[tokio::test]
+    async fn does_not_wait_after_failures() {
+        let clock = TestClock::new();
+        let nodes: Vec<_> = (0..5).map(|_| test_node()).collect();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let result: Result<(), Vec<(ValidatorPublicKey, &str)>> = communicate_concurrently(
+            &nodes,
+            {
+                let calls = calls.clone();
+                move |_node| {
+                    let calls = calls.clone();
+                    async move {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        Err("unavailable")
+                    }
+                }
+            },
+            Duration::from_secs(30),
+            &clock,
+        )
+        .await;
+        assert_eq!(result.unwrap_err().len(), 5);
+        assert_eq!(calls.load(Ordering::SeqCst), 5);
+        // The hedge timer was never needed (every node failed), so virtual time did not advance.
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
+
+    /// A single working node is reached by failing over the others — again without advancing the
+    /// clock, regardless of where the shuffle places it.
+    #[tokio::test]
+    async fn fails_over_to_a_working_node() {
+        let clock = TestClock::new();
+        let nodes: Vec<_> = (0..5).map(|_| test_node()).collect();
+        let working = nodes[3].public_key;
+        let result: Result<u32, Vec<(ValidatorPublicKey, &str)>> = communicate_concurrently(
+            &nodes,
+            move |node| async move {
+                if node.public_key == working {
+                    Ok(42)
+                } else {
+                    Err("unavailable")
+                }
+            },
+            Duration::from_secs(30),
+            &clock,
+        )
+        .await;
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
 }
