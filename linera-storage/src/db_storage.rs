@@ -578,9 +578,6 @@ impl Clock for WallClock {
     }
 
     async fn sleep_for(&self, duration: Duration) {
-        // A relative wait: sleep on the monotonic timer directly, rather than going through the
-        // default `sleep_until(now + duration)` round-trip (which re-reads the wall clock and so
-        // would be subject to clock adjustments).
         linera_base::time::timer::sleep(duration).await
     }
 }
