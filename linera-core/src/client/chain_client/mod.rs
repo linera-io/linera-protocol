@@ -1964,6 +1964,8 @@ impl<Env: Environment> ChainClient<Env> {
         &self,
         proposal_guard: &mut Option<PendingProposal>,
     ) -> Result<ClientOutcome<Option<ConfirmedBlockCertificate>>, Error> {
+        // The fallback sync below is done at most once, so a genuinely stuck proposal can't loop.
+        let mut did_fallback_sync = false;
         loop {
             // `process_pending_block_inner` records the baseline snapshot itself, after
             // the initial timeout request, so that absorbing a timeout certificate isn't
@@ -1984,7 +1986,38 @@ impl<Env: Environment> ChainClient<Env> {
                 return Err(err);
             };
             if current == snapshot {
-                return Err(err);
+                // The lazy per-validator pull on rejection (`Updater::send_block_proposal`) can be
+                // raced out: `communicate_with_quorum` breaks as soon as a quorum is impossible and
+                // drops the still-in-flight `synchronize_chain_state_from` calls, so a locking block
+                // held only by the slower-to-respond validators is never absorbed. Fall back once to
+                // an explicit quorum sync — guaranteed to reach a lock-holder — and retry if it
+                // absorbed anything; otherwise the rejection was genuine, so propagate it.
+                //
+                // TODO(#6453): this fallback path has no deterministic regression test yet — forcing
+                // the lazy pull to miss needs a clock-driven per-validator response delay in the test
+                // harness (building on #6448); until then it is only covered indirectly by the (now
+                // non-flaky) `test_lazy_pull_absorbs_locking_block_on_proposal_rejection`.
+                if did_fallback_sync {
+                    return Err(err);
+                }
+                did_fallback_sync = true;
+                if self.synchronize_chain_state(self.chain_id).await.is_err() {
+                    return Err(err);
+                }
+                let Ok(after_sync) = self.consensus_state_snapshot().await else {
+                    return Err(err);
+                };
+                if after_sync == snapshot {
+                    return Err(err);
+                }
+                tracing::debug!(
+                    chain_id = %self.chain_id,
+                    ?snapshot,
+                    ?after_sync,
+                    %err,
+                    "fallback sync absorbed new consensus state after rejected proposal; retrying"
+                );
+                continue;
             }
             tracing::debug!(
                 chain_id = %self.chain_id,
