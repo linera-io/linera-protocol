@@ -232,32 +232,25 @@ async fn split_to_fit<P: Provider>(
     let mut oversized: Vec<u32> = Vec::new();
     let mut errored: Vec<u32> = Vec::new();
     while let Some(slice) = stack.pop() {
-        match estimate_fits(
+        let fits = estimate_fits(
             evm_client
                 .estimate_process_burns_gas(cert, tx_index, &slice)
                 .await,
-        ) {
-            Ok(true) => chunks.push(slice),
-            Ok(false) if slice.len() == 1 => oversized.push(slice[0]),
-            Ok(false) => {
+        );
+        match classify_slice(&fits, slice.len()) {
+            SliceVerdict::Fits => chunks.push(slice),
+            SliceVerdict::Oversized => oversized.push(slice[0]),
+            SliceVerdict::Bisect => {
                 let mid = slice.len() / 2;
                 let (left, right) = slice.split_at(mid);
                 stack.push(right.to_vec());
                 stack.push(left.to_vec());
             }
-            Err(error) => {
-                // The estimate itself failed — a transient transport/RPC error
-                // or a revert — as opposed to a successful estimate reporting an
-                // over-limit burn (`Ok(false)`). Treating this as "doesn't fit"
-                // would permanently fail a burn on a single node hiccup,
-                // stranding escrow already burned on Linera. Hand the whole
-                // slice to the caller for bounded retry: a persistent failure
-                // still terminates via `max_retries`, a transient one is
-                // re-estimated and settles on a later poll.
+            SliceVerdict::Errored => {
                 tracing::warn!(
                     tx_index,
                     ?slice,
-                    ?error,
+                    error = ?fits,
                     "estimate_process_burns_gas failed; scheduling retry instead of failing"
                 );
                 errored.extend_from_slice(&slice);
@@ -265,6 +258,36 @@ async fn split_to_fit<P: Provider>(
         }
     }
     (chunks, oversized, errored)
+}
+
+/// How `split_to_fit` should dispose of one slice, decided purely from the
+/// gas-estimate verdict and the slice length. Factored out so the
+/// transient-error vs. genuinely-oversized distinction — the property that
+/// keeps a single RPC hiccup from permanently failing a relayable burn — is
+/// unit-testable without a live EVM provider.
+#[derive(Debug, PartialEq, Eq)]
+enum SliceVerdict {
+    /// Estimate succeeded and the slice fits — submit it as a chunk.
+    Fits,
+    /// Estimate succeeded and a single burn exceeds the block gas limit —
+    /// genuinely un-relayable, fail it.
+    Oversized,
+    /// Estimate succeeded, the slice doesn't fit but holds more than one burn —
+    /// bisect and re-test the halves.
+    Bisect,
+    /// The estimate itself failed (transient transport/RPC error or a revert)
+    /// rather than returning a verdict — must NOT be read as "doesn't fit";
+    /// route to bounded retry instead.
+    Errored,
+}
+
+fn classify_slice(fits: &anyhow::Result<bool>, slice_len: usize) -> SliceVerdict {
+    match fits {
+        Ok(true) => SliceVerdict::Fits,
+        Ok(false) if slice_len == 1 => SliceVerdict::Oversized,
+        Ok(false) => SliceVerdict::Bisect,
+        Err(_) => SliceVerdict::Errored,
+    }
 }
 
 /// Marks oversized positions `failed` so they drop out of subsequent
@@ -515,4 +538,42 @@ async fn check_burn_completion(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_slice, SliceVerdict};
+
+    #[test]
+    fn fitting_slice_is_a_chunk() {
+        assert_eq!(classify_slice(&Ok(true), 1), SliceVerdict::Fits);
+        assert_eq!(classify_slice(&Ok(true), 8), SliceVerdict::Fits);
+    }
+
+    #[test]
+    fn single_over_limit_burn_is_oversized() {
+        assert_eq!(classify_slice(&Ok(false), 1), SliceVerdict::Oversized);
+    }
+
+    #[test]
+    fn multi_burn_non_fit_bisects() {
+        assert_eq!(classify_slice(&Ok(false), 2), SliceVerdict::Bisect);
+        assert_eq!(classify_slice(&Ok(false), 9), SliceVerdict::Bisect);
+    }
+
+    #[test]
+    fn estimate_error_routes_to_retry_not_failure() {
+        // A failed estimate (transient transport/RPC error, or a revert) must
+        // NOT be classified `Oversized` — not even for a single-position slice.
+        // Otherwise one node hiccup would permanently fail a burn whose escrow
+        // is already gone on Linera. It must route to bounded retry instead.
+        assert_eq!(
+            classify_slice(&Err(anyhow::anyhow!("connection reset")), 1),
+            SliceVerdict::Errored
+        );
+        assert_eq!(
+            classify_slice(&Err(anyhow::anyhow!("execution reverted")), 5),
+            SliceVerdict::Errored
+        );
+    }
 }
