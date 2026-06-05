@@ -1,14 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    future::Future,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-};
+use std::{collections::BTreeMap, future::Future, sync::Arc};
 
 use custom_debug_derive::Debug;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -16,9 +9,10 @@ use linera_base::{
     crypto::ValidatorPublicKey,
     data_types::{Blob, BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use linera_chain::types::ConfirmedBlockCertificate;
+use linera_storage::Clock as _;
 use rand::distributions::{Distribution, WeightedIndex};
 use tracing::{instrument, warn};
 
@@ -33,7 +27,7 @@ use crate::{
     client::{
         communicate_concurrently,
         requests_scheduler::{in_flight_tracker::Subscribed, request::Cacheable},
-        RequestsSchedulerConfig,
+        ClockOf, RequestsSchedulerConfig,
     },
     environment::Environment,
     node::{NodeError, ValidatorNode},
@@ -142,6 +136,8 @@ pub struct RequestsScheduler<Env: Environment> {
     in_flight_tracker: InFlightTracker<RemoteNode<Env::ValidatorNode>>,
     /// Cache of recently completed requests with their results and timestamps.
     cache: RequestsCache<RequestKey, RequestResult>,
+    /// The node clock, used to time retries and request TTLs in (possibly simulated) time.
+    clock: ClockOf<Env>,
 }
 
 impl<Env: Environment> RequestsScheduler<Env> {
@@ -149,6 +145,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
     pub fn new(
         nodes: impl IntoIterator<Item = RemoteNode<Env::ValidatorNode>>,
         config: &RequestsSchedulerConfig,
+        clock: ClockOf<Env>,
     ) -> Self {
         Self::with_config(
             nodes,
@@ -159,6 +156,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
             config.cache_max_size,
             Duration::from_millis(config.max_request_ttl_ms),
             Duration::from_millis(config.retry_delay_ms),
+            clock,
         )
     }
 
@@ -184,6 +182,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         max_cache_size: usize,
         max_request_ttl: Duration,
         retry_delay: Duration,
+        clock: ClockOf<Env>,
     ) -> Self {
         assert!(alpha > 0.0 && alpha < 1.0, "Alpha must be in (0, 1) range");
         Self {
@@ -204,6 +203,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
             retry_delay,
             in_flight_tracker: InFlightTracker::new(max_request_ttl),
             cache: RequestsCache::new(cache_ttl, max_cache_size),
+            clock,
         }
     }
 
@@ -290,10 +290,12 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
         // Clone the nodes Arc so we can move it into the closure
         let nodes = self.nodes.clone();
+        let clock = self.clock.clone();
         self.deduplicated_request(key, peer, move |peer| {
             let fut = operation(peer.clone());
             let nodes = nodes.clone();
-            async move { Self::track_request(nodes, peer, fut).await }
+            let clock = clock.clone();
+            async move { Self::track_request(nodes, peer, fut, &clock).await }
         })
         .await
     }
@@ -303,7 +305,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         &self,
         peers: &[RemoteNode<Env::ValidatorNode>],
         blob_id: BlobId,
-        timeout: Duration,
+        hedge_delay: Duration,
     ) -> Result<Option<Blob>, NodeError> {
         let key = RequestKey::Blob(blob_id);
         communicate_concurrently(
@@ -325,7 +327,8 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 }
                 errors.last().cloned().unwrap()
             },
-            timeout,
+            hedge_delay,
+            &self.clock,
         )
         .await
         .map_err(|(_validator, error)| error)
@@ -339,11 +342,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
         &self,
         peers: &[RemoteNode<Env::ValidatorNode>],
         blob_ids: &[BlobId],
-        timeout: Duration,
+        hedge_delay: Duration,
     ) -> Result<Option<Vec<Blob>>, NodeError> {
         let mut stream = blob_ids
             .iter()
-            .map(|blob_id| self.download_blob(peers, *blob_id, timeout))
+            .map(|blob_id| self.download_blob(peers, *blob_id, hedge_delay))
             .collect::<FuturesUnordered<_>>();
 
         let mut blobs = Vec::new();
@@ -387,7 +390,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         chain_id: ChainId,
         start: BlockHeight,
         limit: u64,
-        timeout: Duration,
+        hedge_delay: Duration,
     ) -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         let heights = (start.0..start.0 + limit)
             .map(BlockHeight)
@@ -418,7 +421,8 @@ impl<Env: Environment> RequestsScheduler<Env> {
                 }
                 errors.last().cloned().unwrap()
             },
-            timeout,
+            hedge_delay,
+            &self.clock,
         )
         .await
         .map_err(|(_validator, error)| error)
@@ -502,18 +506,19 @@ impl<Env: Environment> RequestsScheduler<Env> {
         nodes: Arc<tokio::sync::RwLock<BTreeMap<ValidatorPublicKey, NodeInfo<Env>>>>,
         peer: RemoteNode<Env::ValidatorNode>,
         operation: Fut,
+        clock: &ClockOf<Env>,
     ) -> Result<T, NodeError>
     where
         Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
-        let start_time = Instant::now();
+        let start_time = clock.current_time();
         let public_key = peer.public_key;
 
         // Execute the operation
         let result = operation.await;
 
         // Update metrics and release slot
-        let response_time_ms = start_time.elapsed().as_millis() as u64;
+        let response_time_ms = clock.current_time().delta_since(start_time).as_micros() / 1000;
         let is_success = result.is_ok();
         {
             let mut nodes_guard = nodes.write().await;
@@ -585,7 +590,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
         }
 
         // Check if there's an in-flight request (exact or subsuming)
-        if let Some(in_flight_match) = self.in_flight_tracker.try_subscribe(&key).await {
+        if let Some(in_flight_match) = self
+            .in_flight_tracker
+            .try_subscribe(&key, self.clock.current_time())
+            .await
+        {
             match in_flight_match {
                 InFlightMatch::Exact(Subscribed(mut receiver)) => {
                     tracing::trace!(
@@ -686,7 +695,9 @@ impl<Env: Environment> RequestsScheduler<Env> {
         };
 
         // Create new in-flight entry for this request
-        self.in_flight_tracker.insert_new(key.clone()).await;
+        self.in_flight_tracker
+            .insert_new(key.clone(), self.clock.current_time())
+            .await;
 
         // Remove the peer we're about to use from alternatives (it shouldn't retry with itself)
         self.in_flight_tracker
@@ -710,7 +721,11 @@ impl<Env: Environment> RequestsScheduler<Env> {
 
         if let Ok(success) = shared_result.as_ref() {
             self.cache
-                .store(key.clone(), Arc::new(success.clone()))
+                .store(
+                    key.clone(),
+                    Arc::new(success.clone()),
+                    self.clock.current_time(),
+                )
                 .await;
         }
         result
@@ -742,115 +757,25 @@ impl<Env: Environment> RequestsScheduler<Env> {
         F: Fn(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
-        use futures::{
-            future::{select, Either},
-            stream::{FuturesUnordered, StreamExt},
-        };
-        use linera_base::time::timer::sleep;
-
-        let mut futures: FuturesUnordered<Fut> = FuturesUnordered::new();
-        let peer_index = AtomicU32::new(0);
-
-        let push_future = |futures: &mut FuturesUnordered<Fut>, fut: Fut| {
-            futures.push(fut);
-            peer_index.fetch_add(1, Ordering::SeqCst)
-        };
-
-        // Start the first peer immediately (no delay)
-        push_future(&mut futures, operation(first_peer));
-
-        let mut last_error = NodeError::UnexpectedMessage;
-        let mut next_delay = Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
-
-        // Phase 1: Race between futures completion and delays (while alternatives might exist)
-        loop {
-            // Exit condition: no futures running and can't start any more
-            if futures.is_empty() {
-                if let Some(peer) = self.in_flight_tracker.pop_alternative_peer(key).await {
-                    push_future(&mut futures, operation(peer));
-                    next_delay =
-                        Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
-                } else {
-                    // No futures and no alternatives - we're done
-                    break;
-                }
-            }
-
-            let next_result = Box::pin(futures.next());
-
-            match select(next_result, next_delay).await {
-                // A request completed
-                Either::Left((Some(result), delay_fut)) => {
-                    // Keep the delay future for next iteration
-                    next_delay = delay_fut;
-
-                    match result {
-                        Ok(value) => {
-                            tracing::trace!(?key, "staggered parallel request succeeded");
-                            return Ok(value);
-                        }
-                        Err(error) => {
-                            tracing::debug!(
-                                ?key,
-                                %error,
-                                "staggered parallel request attempt failed"
-                            );
-                            last_error = error;
-
-                            // Immediately try next alternative
-                            if let Some(peer) =
-                                self.in_flight_tracker.pop_alternative_peer(key).await
-                            {
-                                push_future(&mut futures, operation(peer));
-                                next_delay = Box::pin(sleep(
-                                    staggered_delay * peer_index.load(Ordering::SeqCst),
-                                ));
-                            }
-                        }
-                    }
-                }
-                // All running futures completed
-                Either::Left((None, delay_fut)) => {
-                    // Restore the delay future
-                    next_delay = delay_fut;
-                    // Will check at top of loop if we should try more alternatives
-                    continue;
-                }
-                // Delay elapsed - try to start next peer
-                Either::Right((_, _)) => {
-                    if let Some(peer) = self.in_flight_tracker.pop_alternative_peer(key).await {
-                        push_future(&mut futures, operation(peer));
-                        next_delay =
-                            Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
-                    } else {
-                        // No more alternatives - break out to phase 2
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Phase 2: No more alternatives, just wait for remaining futures to complete
-        while let Some(result) = futures.next().await {
-            match result {
-                Ok(value) => {
-                    tracing::trace!(?key, "staggered parallel request succeeded");
-                    return Ok(value);
-                }
-                Err(error) => {
-                    tracing::debug!(
-                        ?key,
-                        %error,
-                        "staggered parallel request attempt failed"
-                    );
-                    last_error = error;
-                }
-            }
-        }
-
-        // All attempts failed
-        tracing::debug!(?key, "all staggered parallel retry attempts failed");
-        Err(last_error)
+        // Source additional peers from the in-flight tracker's alternative queue (populated by
+        // concurrent deduplicated requests), staggering with a linearly-growing delay.
+        crate::client::hedged_fan_out(
+            first_peer,
+            || self.in_flight_tracker.pop_alternative_peer(key),
+            operation,
+            |started| {
+                let n = u32::try_from(started).unwrap_or(u32::MAX);
+                staggered_delay.saturating_mul(n)
+            },
+            &self.clock,
+        )
+        .await
+        .map_err(|errors| {
+            errors
+                .into_iter()
+                .next_back()
+                .unwrap_or(NodeError::UnexpectedMessage)
+        })
     }
 
     /// Returns all peers ordered by their score (highest first).
@@ -932,11 +857,12 @@ mod tests {
 
     use linera_base::{
         crypto::{CryptoHash, InMemorySigner},
-        data_types::BlockHeight,
+        data_types::{BlockHeight, TimeDelta},
         identifiers::ChainId,
         time::Duration,
     };
     use linera_chain::types::ConfirmedBlockCertificate;
+    use linera_storage::TestClock;
     use tokio::sync::oneshot;
 
     use super::{super::request::RequestKey, *};
@@ -947,7 +873,10 @@ mod tests {
 
     type TestEnvironment = crate::environment::Test;
 
-    /// Helper function to create a test RequestsScheduler with custom configuration
+    /// Helper function to create a test RequestsScheduler with custom configuration.
+    ///
+    /// The scheduler is driven by a [`TestClock`] starting at the epoch, so tests control all
+    /// time deterministically via `manager.clock` (e.g. `add`/`set`) instead of sleeping.
     fn create_test_manager(
         in_flight_timeout: Duration,
         cache_ttl: Duration,
@@ -961,6 +890,7 @@ mod tests {
             100,
             in_flight_timeout,
             Duration::from_millis(STAGGERED_DELAY_MS),
+            TestClock::new(),
         );
         // Replace the tracker with one using the custom timeout
         manager.in_flight_tracker = InFlightTracker::new(in_flight_timeout);
@@ -971,6 +901,16 @@ mod tests {
     #[allow(clippy::unnecessary_wraps)]
     fn test_result_ok() -> Result<Vec<ConfirmedBlockCertificate>, NodeError> {
         Ok(vec![])
+    }
+
+    /// Yields until the scheduler has registered an in-flight entry for `key`.
+    ///
+    /// On the current-thread test runtime this deterministically lets a spawned request reach
+    /// its `insert_new` call, replacing brittle real-time sleeps.
+    async fn wait_for_in_flight(manager: &RequestsScheduler<TestEnvironment>, key: &RequestKey) {
+        while manager.get_alternative_peers(key).await.is_none() {
+            tokio::task::yield_now().await;
+        }
     }
 
     /// Helper function to create a test request key
@@ -1220,8 +1160,12 @@ mod tests {
                 .await
         });
 
-        // Wait for the timeout to elapse
-        tokio::time::sleep(Duration::from_millis(MAX_REQUEST_TTL_MS + 1)).await;
+        // Wait for the first request to register its in-flight entry, then advance virtual time
+        // past the in-flight timeout so deduplication is skipped.
+        wait_for_in_flight(&manager, &key).await;
+        manager
+            .clock
+            .add(TimeDelta::from_millis(MAX_REQUEST_TTL_MS + 1));
 
         // Start second request - should NOT deduplicate because first request exceeded timeout
         let execution_count_clone2 = execution_count.clone();
@@ -1277,7 +1221,9 @@ mod tests {
             })
             .collect();
 
-        // Create a RequestsScheduler
+        // Create a RequestsScheduler. The clock stays at the epoch (no `add`), so the staggered
+        // delay never elapses: the blocked first request parks instead of popping alternatives,
+        // letting us observe them registering deterministically.
         let manager: Arc<RequestsScheduler<TestEnvironment>> =
             Arc::new(RequestsScheduler::with_config(
                 nodes.clone(),
@@ -1288,6 +1234,7 @@ mod tests {
                 100,
                 Duration::from_millis(MAX_REQUEST_TTL_MS),
                 Duration::from_millis(STAGGERED_DELAY_MS),
+                TestClock::new(),
             ));
 
         let key = RequestKey::Blob(BlobId::new(
@@ -1319,8 +1266,8 @@ mod tests {
                 .await
         });
 
-        // Give first request time to start and become in-flight
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // Wait for the first request to start and become in-flight.
+        wait_for_in_flight(&manager, &key).await;
 
         // Start second and third requests with different nodes
         // These should register as alternatives and wait for the first request
@@ -1339,14 +1286,14 @@ mod tests {
             })
             .collect();
 
-        // Give time for alternative peers to register
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Alternatives are being popped as staggered parallel runs.
-        // The first request is blocked waiting for the signal, so staggered parallel has started
-        // and may have already popped one or both alternatives. We just verify that at least
-        // one alternative was registered (before being popped).
-        // This test primarily validates that alternatives can be registered during deduplication.
+        // Wait until both peers have registered as alternatives for the in-flight request.
+        loop {
+            if matches!(manager.get_alternative_peers(&key).await, Some(peers) if peers.len() >= 2)
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
 
         // Signal first request to complete
         tx.send(()).unwrap();
@@ -1358,7 +1305,6 @@ mod tests {
         }
 
         // After completion, the in-flight entry should be removed
-        tokio::time::sleep(Duration::from_millis(50)).await;
         let alt_peers = manager.get_alternative_peers(&key).await;
         assert!(
             alt_peers.is_none(),
@@ -1368,8 +1314,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_staggered_parallel_retry_on_failure() {
-        use std::sync::atomic::{AtomicU64, Ordering};
-
         use crate::test_utils::{MemoryStorageBuilder, TestBuilder};
 
         // Create a test environment with four validators
@@ -1397,6 +1341,12 @@ mod tests {
         let node0_key = nodes[0].public_key;
         let node2_key = nodes[2].public_key;
 
+        // Auto-advance the clock on every sleep, so the scheduler's staggered delays resolve in
+        // virtual time; the test is then deterministic and never blocks on real time, and asserts
+        // on the order peers are tried rather than on wall-clock durations.
+        let clock = TestClock::new();
+        clock.set_sleep_callback(|_| true);
+
         // Create a RequestsScheduler
         let manager: Arc<RequestsScheduler<TestEnvironment>> =
             Arc::new(RequestsScheduler::with_config(
@@ -1408,47 +1358,34 @@ mod tests {
                 100,
                 Duration::from_millis(MAX_REQUEST_TTL_MS),
                 staggered_delay,
+                clock,
             ));
 
         let key = test_key();
 
-        // Track when each peer is called
-        let call_times = Arc::new(tokio::sync::Mutex::new(Vec::new()));
-        let start_time = Instant::now();
+        // Record the order in which peers are tried.
+        let call_order = Arc::new(tokio::sync::Mutex::new(Vec::new()));
+        let call_order_clone = Arc::clone(&call_order);
 
-        // Track call count per peer
-        let call_count = Arc::new(AtomicU64::new(0));
-
-        let call_times_clone = Arc::clone(&call_times);
-        let call_count_clone = Arc::clone(&call_count);
-
-        // Test the staggered parallel retry logic directly
+        // Node 0 (first peer) and node 1 fail immediately; node 2 succeeds. The staggered retry
+        // must walk past the two failing peers to the working one.
         let operation = |peer: RemoteNode<<TestEnvironment as Environment>::ValidatorNode>| {
-            let times = Arc::clone(&call_times_clone);
-            let count = Arc::clone(&call_count_clone);
-            let start = start_time;
+            let order = Arc::clone(&call_order_clone);
             async move {
-                let elapsed = Instant::now().duration_since(start);
-                times.lock().await.push((peer.public_key, elapsed));
-                count.fetch_add(1, Ordering::SeqCst);
-
-                if peer.public_key == node0_key {
-                    // Node 0 fails quickly
-                    Err(NodeError::UnexpectedMessage)
-                } else if peer.public_key == node2_key {
-                    // Node 2 succeeds after a delay
-                    tokio::time::sleep(staggered_delay / 2).await;
+                order.lock().await.push(peer.public_key);
+                if peer.public_key == node2_key {
                     Ok(vec![])
                 } else {
-                    // Other nodes take longer or fail
-                    tokio::time::sleep(staggered_delay * 2).await;
                     Err(NodeError::UnexpectedMessage)
                 }
             }
         };
 
         // Setup: Insert in-flight entry and register alternative peers
-        manager.in_flight_tracker.insert_new(key.clone()).await;
+        manager
+            .in_flight_tracker
+            .insert_new(key.clone(), manager.clock.current_time())
+            .await;
         // Register nodes 3, 2, 1 as alternatives (will be popped in reverse: 1, 2, 3)
         for node in nodes.iter().skip(1).rev() {
             manager
@@ -1462,46 +1399,21 @@ mod tests {
             .try_staggered_parallel(&key, nodes[0].clone(), &operation, staggered_delay)
             .await;
 
-        // Should succeed with result from node 2
+        // Should succeed with the result from node 2, after walking past the failing peers.
         assert!(
             result.is_ok(),
             "Expected request to succeed with alternative peer"
         );
 
-        // Verify timing: calls should be staggered, not sequential
-        let times = call_times.lock().await;
-        // Can't test exactly 2 b/c we sleep _inside_ the operation and increase right at the start of it.
-        assert!(
-            times.len() >= 2,
-            "Should have tried at least 2 peers, got {}",
-            times.len()
+        let order = call_order.lock().await;
+        assert_eq!(
+            order.first(),
+            Some(&node0_key),
+            "First peer tried should be node 0"
         );
-
-        // First call should be at ~0ms
         assert!(
-            times[0].1.as_millis() < 50,
-            "First peer should be called immediately, was called at {}ms",
-            times[0].1.as_millis()
-        );
-
-        // Second call should start immediately after first fails (aggressive retry)
-        // When node 0 fails immediately, we immediately start node 1
-        if times.len() > 1 {
-            let delay = times[1].1.as_millis();
-            assert!(
-                delay < 50,
-                "Second peer should be called immediately on first failure, got {delay}ms"
-            );
-        }
-
-        // Total time should be significantly less than sequential (which would be
-        // ~650ms: 200ms + 200ms + 50ms + 200ms). With parallel staggered retry:
-        // node0 fails immediately, node1 starts immediately, the next delay is
-        // 200ms (peer_index=2), node2 starts at ~200ms and succeeds at ~250ms.
-        let total_time = Instant::now().duration_since(start_time).as_millis();
-        assert!(
-            total_time < 500,
-            "Total time should be less than 500ms (sequential would be ~650ms), got {total_time}ms"
+            order.contains(&node2_key),
+            "Retry should have reached the working peer (node 2)"
         );
     }
 }

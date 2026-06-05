@@ -311,9 +311,13 @@ impl<Env: Environment> Client<Env> {
             config,
             Some(chain_modes.clone()),
         );
+        let clock = environment.storage().clock().clone();
         let local_node = LocalNodeClient::new(state);
-        let requests_scheduler =
-            Arc::new(RequestsScheduler::new(vec![], requests_scheduler_config));
+        let requests_scheduler = Arc::new(RequestsScheduler::new(
+            vec![],
+            requests_scheduler_config,
+            clock,
+        ));
 
         Self {
             environment,
@@ -529,7 +533,7 @@ impl<Env: Environment> Client<Env> {
                     chain_id,
                     next_height,
                     limit,
-                    self.options.certificate_batch_download_timeout,
+                    self.options.certificate_batch_download_hedge_delay,
                 )
                 .await?;
             let Some(new_info) = self
@@ -697,7 +701,11 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let blobs = &self
             .requests_scheduler
-            .download_blobs(remote_nodes, blob_ids, self.options.blob_download_timeout)
+            .download_blobs(
+                remote_nodes,
+                blob_ids,
+                self.options.blob_download_hedge_delay,
+            )
             .await?
             .ok_or_else(|| {
                 chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(blob_ids.to_vec()))
@@ -715,7 +723,7 @@ impl<Env: Environment> Client<Env> {
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
         let validators = self.validator_nodes().await?;
-        let timeout = self.options.certificate_batch_download_timeout;
+        let timeout = self.options.certificate_batch_download_hedge_delay;
         // Group by chain, keeping only the max required index per stream.
         let mut required_by_chain = BTreeMap::<_, BTreeMap<StreamId, u32>>::new();
         for event_id in event_ids {
@@ -768,6 +776,7 @@ impl<Env: Environment> Client<Env> {
                     chain_client::Error::InternalError("missing events")
                 },
                 timeout,
+                self.storage_client().clock(),
             )
             .await;
 
@@ -1400,7 +1409,8 @@ impl<Env: Environment> Client<Env> {
                         })
                         .collect::<BTreeSet<_>>()
                 },
-                self.options.certificate_batch_download_timeout,
+                self.options.certificate_batch_download_hedge_delay,
+                self.storage_client().clock(),
             )
             .await
             {
@@ -2044,7 +2054,7 @@ impl<Env: Environment> Client<Env> {
         blob_ids: Vec<BlobId>,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<Vec<CacheArc<Blob>>, chain_client::Error> {
-        let timeout = self.options.blob_download_timeout;
+        let timeout = self.options.blob_download_hedge_delay;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         stream::iter(blob_ids.into_iter().map(|blob_id| {
@@ -2081,6 +2091,7 @@ impl<Env: Environment> Client<Env> {
                     chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
                 },
                 timeout,
+                self.storage_client().clock(),
             )
         }))
         .buffer_unordered(self.options.max_joined_tasks)
@@ -2200,42 +2211,138 @@ impl<'a, Env: Environment> EventSetDownloader<'a, Env> {
     }
 }
 
-/// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
-/// each subsequent node. Returns error `err` if all of the nodes fail.
-async fn communicate_concurrently<'a, A, E1, E2, F, G, R, V>(
+pub(crate) type ClockOf<Env> = <<Env as Environment>::Storage as linera_storage::Storage>::Clock;
+
+/// Races `operation` across peers with a hedged, **failure-responsive** fan-out, returning the
+/// first `Ok` (or every error if all attempts fail).
+///
+/// `first_peer` is tried immediately. `next_peer` then supplies additional peers, each started
+/// either *immediately* when an in-flight attempt fails (no point waiting once we know an attempt
+/// failed), or after the in-flight attempt has run for `hedge_schedule(started)` without answering
+/// — hedging against a slow peer by racing an extra request; the slow attempt is **not** cancelled.
+/// `hedge_schedule` maps the number of attempts started so far to the delay before starting the
+/// next one (e.g. `|k| delay * k` for a linearly-growing stagger). All sleeping is on `clock`, so
+/// this runs in (possibly simulated) time; freezing the clock disables the slow-peer hedge while
+/// still advancing on every failure.
+pub(crate) async fn hedged_fan_out<Peer, T, Err, NextPeer, NextFut, Op, OpFut>(
+    first_peer: Peer,
+    mut next_peer: NextPeer,
+    operation: Op,
+    hedge_schedule: impl Fn(usize) -> Duration,
+    // `Sync` so `clock.sleep_for(..)` yields a `Send` future, as required when this fan-out is
+    // spawned (e.g. background certificate downloads). All storage clocks are `Sync`.
+    clock: &(impl linera_storage::Clock + Sync),
+) -> Result<T, Vec<Err>>
+where
+    NextPeer: FnMut() -> NextFut,
+    NextFut: Future<Output = Option<Peer>>,
+    Op: Fn(Peer) -> OpFut,
+    OpFut: Future<Output = Result<T, Err>>,
+{
+    use futures::future::{select, Either};
+
+    let mut in_flight = FuturesUnordered::new();
+    let mut errors = vec![];
+    let mut started = 0usize;
+    let arm = |started: usize| clock.sleep_for(hedge_schedule(started));
+
+    in_flight.push(operation(first_peer));
+    started += 1;
+    let mut hedge = arm(started);
+
+    loop {
+        if in_flight.is_empty() {
+            // Nothing running: start the next peer, or stop if there are none left.
+            match next_peer().await {
+                Some(peer) => {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+                None => return Err(errors),
+            }
+            continue;
+        }
+        match select(in_flight.next(), hedge).await {
+            // An attempt succeeded.
+            Either::Left((Some(Ok(value)), _)) => return Ok(value),
+            // An attempt failed: try the next peer right away rather than waiting out the hedge.
+            Either::Left((Some(Err(error)), pending_hedge)) => {
+                errors.push(error);
+                hedge = pending_hedge;
+                if let Some(peer) = next_peer().await {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+            }
+            // All in-flight attempts drained; the loop top decides what to do next.
+            Either::Left((None, pending_hedge)) => hedge = pending_hedge,
+            // An attempt is slow: hedge by starting another peer, if any remain.
+            Either::Right(((), _)) => match next_peer().await {
+                Some(peer) => {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+                None => break,
+            },
+        }
+    }
+
+    // No more peers to start; just wait for the remaining in-flight attempts.
+    while let Some(result) = in_flight.next().await {
+        match result {
+            Ok(value) => return Ok(value),
+            Err(error) => errors.push(error),
+        }
+    }
+    Err(errors)
+}
+
+/// Performs `f` on the nodes with a hedged, staggered fan-out (see [`hedged_fan_out`]), returning
+/// the first `Ok`. If all of the nodes fail, reduces the collected `(validator, error)` pairs with
+/// `err`.
+///
+/// The hedge before starting the n-th node grows quadratically with `n`, so we stay reluctant to
+/// fan out to many validators at once when one is merely slow.
+async fn communicate_concurrently<A, E1, E2, F, G, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
     err: G,
-    timeout: Duration,
+    hedge_delay: Duration,
+    clock: &(impl linera_storage::Clock + Sync),
 ) -> Result<V, E2>
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
     RemoteNode<A>: Clone,
     G: FnOnce(Vec<(ValidatorPublicKey, E1)>) -> E2,
-    R: Future<Output = Result<V, E1>> + 'a,
+    R: Future<Output = Result<V, E1>>,
 {
     let mut nodes = nodes.to_vec();
     nodes.shuffle(&mut rand::thread_rng());
-    let mut stream = nodes
-        .iter()
-        .zip(0..)
-        .map(|(remote_node, i)| {
+    let mut nodes = nodes.into_iter();
+    let Some(first_peer) = nodes.next() else {
+        return Err(err(vec![]));
+    };
+    hedged_fan_out(
+        first_peer,
+        move || std::future::ready(nodes.next()),
+        |node: RemoteNode<A>| {
             let fun = f.clone();
-            let node = remote_node.clone();
             async move {
-                linera_base::time::timer::sleep(timeout * i * i).await;
-                fun(node).await.map_err(|err| (remote_node.public_key, err))
+                let public_key = node.public_key;
+                fun(node).await.map_err(|e| (public_key, e))
             }
-        })
-        .collect::<FuturesUnordered<_>>();
-    let mut errors = vec![];
-    while let Some(maybe_result) = stream.next().await {
-        match maybe_result {
-            Ok(result) => return Ok(result),
-            Err(error) => errors.push(error),
-        };
-    }
-    Err(err(errors))
+        },
+        |started| {
+            let k = u32::try_from(started).unwrap_or(u32::MAX);
+            hedge_delay.saturating_mul(k).saturating_mul(k)
+        },
+        clock,
+    )
+    .await
+    .map_err(err)
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
@@ -2309,5 +2416,80 @@ pub async fn create_bytecode_blobs(
             );
             (vec![evm_contract_blob], module_id)
         }
+    }
+}
+
+#[cfg(test)]
+mod communicate_concurrently_tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    use linera_base::crypto::ValidatorKeypair;
+    use linera_storage::TestClock;
+
+    use super::*;
+
+    fn test_node() -> RemoteNode<()> {
+        RemoteNode {
+            public_key: ValidatorKeypair::generate().public_key,
+            node: (),
+        }
+    }
+
+    /// When every node fails, all errors are collected and we return promptly — crucially without
+    /// ever waiting out the hedge delay, so the frozen clock never advances.
+    #[tokio::test]
+    async fn does_not_wait_after_failures() {
+        let clock = TestClock::new();
+        let nodes: Vec<_> = (0..5).map(|_| test_node()).collect();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let result: Result<(), Vec<(ValidatorPublicKey, &str)>> = communicate_concurrently(
+            &nodes,
+            {
+                let calls = calls.clone();
+                move |_node| {
+                    let calls = calls.clone();
+                    async move {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        Err("unavailable")
+                    }
+                }
+            },
+            |errors| errors,
+            Duration::from_secs(30),
+            &clock,
+        )
+        .await;
+        assert_eq!(result.unwrap_err().len(), 5);
+        assert_eq!(calls.load(Ordering::SeqCst), 5);
+        // The hedge timer was never needed (every node failed), so virtual time did not advance.
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
+
+    /// A single working node is reached by failing over the others — again without advancing the
+    /// clock, regardless of where the shuffle places it.
+    #[tokio::test]
+    async fn fails_over_to_a_working_node() {
+        let clock = TestClock::new();
+        let nodes: Vec<_> = (0..5).map(|_| test_node()).collect();
+        let working = nodes[3].public_key;
+        let result: Result<u32, Vec<(ValidatorPublicKey, &str)>> = communicate_concurrently(
+            &nodes,
+            move |node| async move {
+                if node.public_key == working {
+                    Ok(42)
+                } else {
+                    Err("unavailable")
+                }
+            },
+            |errors| errors,
+            Duration::from_secs(30),
+            &clock,
+        )
+        .await;
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(clock.current_time(), Timestamp::from(0));
     }
 }
