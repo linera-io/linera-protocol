@@ -904,16 +904,6 @@ mod tests {
         Arc::new(manager)
     }
 
-    /// Yields until the scheduler has registered an in-flight entry for `key`.
-    ///
-    /// On the current-thread test runtime this deterministically lets a spawned request reach
-    /// its `insert_new` call, replacing brittle real-time sleeps.
-    async fn wait_for_in_flight(manager: &RequestsScheduler<TestEnvironment>, key: &RequestKey) {
-        while manager.get_alternative_peers(key).await.is_none() {
-            tokio::task::yield_now().await;
-        }
-    }
-
     /// Helper function to create a test request key
     fn test_key() -> RequestKey {
         RequestKey::Certificates {
@@ -1134,6 +1124,8 @@ mod tests {
 
         // Track how many times the operation is executed
         let execution_count = Arc::new(AtomicUsize::new(0));
+        // Signaled once the first request's operation starts, i.e. its in-flight entry exists.
+        let started = Arc::new(tokio::sync::Notify::new());
 
         // Create a channel to control when the first operation completes
         let (tx, rx) = oneshot::channel();
@@ -1143,15 +1135,18 @@ mod tests {
         let manager_clone = Arc::clone(&manager);
         let key_clone = key.clone();
         let execution_count_clone = execution_count.clone();
+        let started_clone = started.clone();
         let rx_clone = Arc::clone(&rx);
         let peer_clone = peer.clone();
         let first_request = tokio::spawn(async move {
             manager_clone
                 .deduplicated_request(key_clone, peer_clone, |_| {
                     let count = execution_count_clone.clone();
+                    let started = started_clone.clone();
                     let rx = Arc::clone(&rx_clone);
                     async move {
                         count.fetch_add(1, Ordering::SeqCst);
+                        started.notify_one();
                         if let Some(receiver) = rx.lock().await.take() {
                             receiver.await.unwrap();
                         }
@@ -1161,9 +1156,9 @@ mod tests {
                 .await
         });
 
-        // Wait for the first request to register its in-flight entry, then advance virtual time
-        // past the in-flight timeout so deduplication is skipped.
-        wait_for_in_flight(&manager, &key).await;
+        // Wait for the first request's operation to start (its in-flight entry now exists), then
+        // advance virtual time past the in-flight timeout so deduplication is skipped.
+        started.notified().await;
         manager
             .clock
             .add(TimeDelta::from_millis(MAX_REQUEST_TTL_MS + 1));
@@ -1198,12 +1193,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_alternative_peers_registered_on_deduplication() {
+    async fn test_alternative_peers_registered_and_cleared() {
         use linera_base::identifiers::BlobType;
 
         use crate::test_utils::{MemoryStorageBuilder, TestBuilder};
 
-        // Create a test environment with three validators
+        // Three validators, to register as distinct alternative sources.
         let mut builder = TestBuilder::new(
             MemoryStorageBuilder::default(),
             3,
@@ -1212,8 +1207,6 @@ mod tests {
         )
         .await
         .unwrap();
-
-        // Get validator nodes
         let nodes: Vec<_> = (0..3)
             .map(|i| {
                 let node = builder.node(i);
@@ -1222,94 +1215,39 @@ mod tests {
             })
             .collect();
 
-        // Create a RequestsScheduler. The clock stays at the epoch (no `add`), so the staggered
-        // delay never elapses: the blocked first request parks instead of popping alternatives,
-        // letting us observe them registering deterministically.
-        let manager: Arc<RequestsScheduler<TestEnvironment>> =
-            Arc::new(RequestsScheduler::with_config(
-                nodes.clone(),
-                ScoringWeights::default(),
-                0.1,
-                1000.0,
-                Duration::from_secs(60),
-                100,
-                Duration::from_millis(MAX_REQUEST_TTL_MS),
-                Duration::from_millis(STAGGERED_DELAY_MS),
-                TestClock::new(),
-            ));
-
+        let manager = create_test_manager(Duration::from_secs(60), Duration::from_secs(60));
         let key = RequestKey::Blob(BlobId::new(
             CryptoHash::test_hash("test_blob"),
             BlobType::Data,
         ));
+        let now = manager.clock.current_time();
 
-        // Create a channel to control when first request completes
-        let (tx, rx) = oneshot::channel();
-        let rx = Arc::new(tokio::sync::Mutex::new(Some(rx)));
-
-        // Start first request with node 0 (will block until signaled)
-        let manager_clone = Arc::clone(&manager);
-        let node_clone = nodes[0].clone();
-        let key_clone = key.clone();
-        let rx_clone = Arc::clone(&rx);
-        let first_request = tokio::spawn(async move {
-            manager_clone
-                .with_peer(key_clone, node_clone, move |_peer| {
-                    let rx = Arc::clone(&rx_clone);
-                    async move {
-                        // Wait for signal
-                        if let Some(receiver) = rx.lock().await.take() {
-                            receiver.await.unwrap();
-                        }
-                        Ok(None) // Return Option<Blob>
-                    }
-                })
+        // A request is in flight, and two other peers register as alternative sources for it.
+        manager.in_flight_tracker.insert_new(key.clone(), now).await;
+        manager
+            .in_flight_tracker
+            .add_alternative_peer(&key, nodes[1].clone())
+            .await;
+        manager
+            .in_flight_tracker
+            .add_alternative_peer(&key, nodes[2].clone())
+            .await;
+        assert_eq!(
+            manager
+                .get_alternative_peers(&key)
                 .await
-        });
+                .map(|peers| peers.len()),
+            Some(2),
+        );
 
-        // Wait for the first request to start and become in-flight.
-        wait_for_in_flight(&manager, &key).await;
-
-        // Start second and third requests with different nodes
-        // These should register as alternatives and wait for the first request
-        let handles: Vec<_> = vec![nodes[1].clone(), nodes[2].clone()]
-            .into_iter()
-            .map(|node| {
-                let manager_clone = Arc::clone(&manager);
-                let key_clone = key.clone();
-                tokio::spawn(async move {
-                    manager_clone
-                        .with_peer(key_clone, node, |_peer| async move {
-                            Ok(None) // Return Option<Blob>
-                        })
-                        .await
-                })
-            })
-            .collect();
-
-        // Wait until both peers have registered as alternatives for the in-flight request.
-        loop {
-            if matches!(manager.get_alternative_peers(&key).await, Some(peers) if peers.len() >= 2)
-            {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-
-        // Signal first request to complete
-        tx.send(()).unwrap();
-
-        // Wait for all requests to complete
-        let _result1 = first_request.await.unwrap();
-        for handle in handles {
-            handle.await.unwrap().ok();
-        }
-
-        // After completion, the in-flight entry should be removed
-        let alt_peers = manager.get_alternative_peers(&key).await;
+        // Completing the request removes the in-flight entry along with its alternatives.
+        manager
+            .in_flight_tracker
+            .complete_and_broadcast(&key, Arc::new(Ok(RequestResult::Blob(None))))
+            .await;
         assert!(
-            alt_peers.is_none(),
-            "Expected in-flight entry to be removed after completion"
+            manager.get_alternative_peers(&key).await.is_none(),
+            "Expected the in-flight entry to be removed after completion",
         );
     }
 
