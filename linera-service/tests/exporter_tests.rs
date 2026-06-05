@@ -1,10 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(any(
-    feature = "scylladb",
-    feature = "storage-service",
-))]
+#![cfg(any(feature = "scylladb", feature = "storage-service",))]
 use anyhow::Result;
 use linera_base::time::Duration;
 use linera_core::{data_types::ChainInfoQuery, node::ValidatorNode};
