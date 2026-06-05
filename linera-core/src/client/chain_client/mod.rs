@@ -67,7 +67,6 @@ use super::{
     ListeningMode, PendingProposal, TimingType,
 };
 use crate::{
-    client::duration_to_delta,
     data_types::{ChainInfo, ChainInfoQuery, ClientOutcome, RoundTimeout},
     environment::Environment,
     local_node::{LocalNodeClient, LocalNodeError},
@@ -3154,7 +3153,7 @@ impl<Env: Environment> ChainClient<Env> {
                     // Was probing -> probe failed -> escalate interval.
                     state.probe_interval = (state.probe_interval * 2).min(max_probe_interval);
                     state.next_probe_at =
-                        now.saturating_add(duration_to_delta(state.probe_interval));
+                        now.saturating_add(TimeDelta::from_duration(state.probe_interval));
                     warn!(
                         %validator,
                         chain_id = %self.chain_id,
@@ -3167,7 +3166,7 @@ impl<Env: Environment> ChainClient<Env> {
                         *validator,
                         CircuitBreakerState {
                             next_probe_at: now
-                                .saturating_add(duration_to_delta(initial_probe_interval)),
+                                .saturating_add(TimeDelta::from_duration(initial_probe_interval)),
                             probe_interval: initial_probe_interval,
                         },
                     );

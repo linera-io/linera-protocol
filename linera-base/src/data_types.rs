@@ -492,6 +492,11 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
+    /// Returns the given [`Duration`] as a [`TimeDelta`], saturating at the maximum on overflow.
+    pub fn from_duration(duration: Duration) -> Self {
+        TimeDelta(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
+    }
+
     /// Returns this [`TimeDelta`] as a number of microseconds.
     pub const fn as_micros(&self) -> u64 {
         self.0

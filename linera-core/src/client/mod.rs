@@ -2224,25 +2224,6 @@ impl<'a, Env: Environment> EventSetDownloader<'a, Env> {
 /// driven deterministically by a simulated clock (e.g. `TestClock`) in tests.
 pub(crate) type ClockOf<Env> = <<Env as Environment>::Storage as linera_storage::Storage>::Clock;
 
-/// Converts a [`Duration`] into a [`TimeDelta`], saturating on overflow.
-pub(crate) fn duration_to_delta(duration: Duration) -> TimeDelta {
-    TimeDelta::from_micros(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
-}
-
-/// Sleeps for `duration` according to `clock`'s notion of time.
-///
-/// Unlike [`linera_base::time::timer::sleep`], this honors a simulated clock, so staggered
-/// retries and backoff resolve in virtual time during tests instead of blocking on real time.
-pub(crate) async fn sleep_for(clock: &impl linera_storage::Clock, duration: Duration) {
-    clock
-        .sleep_until(
-            clock
-                .current_time()
-                .saturating_add(duration_to_delta(duration)),
-        )
-        .await;
-}
-
 /// Races `operation` across peers with a hedged, **failure-responsive** fan-out, returning the
 /// first `Ok` (or every error if all attempts fail).
 ///
@@ -2259,7 +2240,9 @@ pub(crate) async fn hedged_fan_out<Peer, T, Err, NextPeer, NextFut, Op, OpFut>(
     mut next_peer: NextPeer,
     operation: Op,
     hedge_schedule: impl Fn(usize) -> Duration,
-    clock: &impl linera_storage::Clock,
+    // `Sync` so `clock.sleep_for(..)` yields a `Send` future, as required when this fan-out is
+    // spawned (e.g. background certificate downloads). All storage clocks are `Sync`.
+    clock: &(impl linera_storage::Clock + Sync),
 ) -> Result<T, Vec<Err>>
 where
     NextPeer: FnMut() -> NextFut,
@@ -2272,7 +2255,7 @@ where
     let mut in_flight = FuturesUnordered::new();
     let mut errors = vec![];
     let mut started = 0usize;
-    let arm = |started: usize| Box::pin(sleep_for(clock, hedge_schedule(started)));
+    let arm = |started: usize| clock.sleep_for(hedge_schedule(started));
 
     in_flight.push(operation(first_peer));
     started += 1;
@@ -2337,7 +2320,7 @@ async fn communicate_concurrently<A, E, F, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
     hedge_delay: Duration,
-    clock: &impl linera_storage::Clock,
+    clock: &(impl linera_storage::Clock + Sync),
 ) -> Result<V, Vec<(ValidatorPublicKey, E)>>
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
