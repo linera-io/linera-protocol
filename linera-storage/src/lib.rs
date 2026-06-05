@@ -662,8 +662,11 @@ pub trait Clock {
     /// Unlike [`linera_base::time::timer::sleep`], this honors a simulated clock (e.g. a test
     /// clock), so callers that sleep through it can be driven deterministically in virtual time.
     async fn sleep_for(&self, duration: Duration) {
-        self.sleep_until(self.current_time().saturating_add(TimeDelta::from_duration(duration)))
-            .await
+        self.sleep_until(
+            self.current_time()
+                .saturating_add(TimeDelta::from_duration(duration)),
+        )
+        .await
     }
 }
 
