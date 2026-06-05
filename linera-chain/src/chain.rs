@@ -749,14 +749,6 @@ where
     /// [`Self::outbox_index_tracked_hash`] no longer matches). The per-target outbox *queues* in
     /// `outboxes` are always kept; only these indices are filtered. Returns whether a rebuild
     /// actually happened, so a read-only caller can skip persisting when nothing changed.
-    ///
-    /// `tracked` is `Some` on a client, whose indices only hold its tracked targets: an
-    /// `O(|tracked|)` rebuild that never scans the (unbounded) full set of targets. `tracked` is
-    /// `None` in full mode (a validator), where every target is indexed; this is an `O(1)` no-op in
-    /// steady state (the stored hash is already `None`), doing the `O(|outboxes|)` full rebuild only
-    /// when switching back from a filtered set. Correct for every case — migration of a pre-filter
-    /// database, restart, shrink, or growth; a subtractive `O(|delta|)` fast path could be added
-    /// later once the worker supplies the added/removed sets.
     pub async fn reconcile_outbox_index(
         &mut self,
         tracked: Option<&Hashed<ChainIdSet>>,
