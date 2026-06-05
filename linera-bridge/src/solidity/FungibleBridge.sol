@@ -44,7 +44,8 @@ contract FungibleBridge is Microchain {
     IERC20 public immutable token;
     uint256 public depositNonce;
 
-    /// Per-burn dedup keyed by `keccak256(abi.encode(height, eventIndex))`
+    /// Per-burn dedup keyed by
+    /// `keccak256(abi.encode(bridgeApplicationId, height, eventIndex))`
     /// where `eventIndex` is the underlying Linera `Event.index` — the
     /// position of the burn event within its stream. Set inside
     /// `_onBlock` after the burn's `token.transfer` succeeds.
@@ -107,7 +108,7 @@ contract FungibleBridge is Microchain {
     /// Processes a Linera block and releases ERC-20 tokens for any BurnEvent
     /// events on the "burns" stream from the bridge application.
     /// Idempotent: each burn's release is gated on
-    /// `processedBurns[keccak256(abi.encode(height, evt.index))]`, so
+    /// `processedBurns[keccak256(abi.encode(bridgeApplicationId, height, evt.index))]`, so
     /// re-submitting the same cert is a no-op for burns already released
     /// by a prior call.
     function _onBlock(BridgeTypes.Block memory blockValue) internal override {
@@ -171,9 +172,13 @@ contract FungibleBridge is Microchain {
     }
 
     /// Dedup key for a burn at `(height, eventIndex)`. `eventIndex` is the
-    /// underlying Linera `Event.index`.
-    function _burnKey(uint64 height, uint32 eventIndex) private pure returns (bytes32) {
-        return keccak256(abi.encode(height, eventIndex));
+    /// underlying Linera `Event.index`. `bridgeApplicationId` is folded in so
+    /// the key is self-describing: dedup correctness no longer rests on the
+    /// implicit invariant that this contract only ever consumes the bridge
+    /// app's "burns" stream — if a future change let it match more than one
+    /// stream, keys from different apps could not collide.
+    function _burnKey(uint64 height, uint32 eventIndex) private view returns (bytes32) {
+        return keccak256(abi.encode(bridgeApplicationId, height, eventIndex));
     }
 
     /// Returns true if `evt` belongs to the configured bridge application's
