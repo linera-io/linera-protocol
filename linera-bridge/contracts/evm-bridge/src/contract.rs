@@ -307,12 +307,28 @@ impl EvmBridge {
     /// signer to the bridge chain, so `execute_burn` there burns the very escrow
     /// account this signer funded.
     fn initiate_burn(&mut self, amount: U128, evm_target: [u8; 20]) {
+        assert!(amount.0 > 0, "Burn amount must be non-zero");
         let signer = self
             .runtime
             .authenticated_signer()
             .expect("Burn requires an authenticated signer");
         let params = self.runtime.application_parameters();
         let bridge_chain_id = params.bridge_chain_id;
+
+        // A burn must originate from a *user* chain distinct from the bridge
+        // chain. The atomic funding-then-burn bundle relies on a tracked
+        // cross-chain `Credit` that bounces — refunding the signer — if the
+        // burn is rejected. On the bridge chain itself the funding `Transfer`
+        // is a local credit with no Credit message to bounce, so a rejected
+        // self-delivered burn would strand the escrow in the signer's account.
+        // Refuse to run that unsafe path: a same-chain burn is a no-op.
+        if self.runtime.chain_id() == bridge_chain_id {
+            log::warn!(
+                "ignoring Burn submitted on the bridge chain; \
+                 burns must originate from a separate user chain"
+            );
+            return;
+        }
         let fungible_app_id = params.fungible_app_id.with_abi::<WrappedFungibleTokenAbi>();
 
         // Move the signer's tokens into the signer's own escrow account on the
