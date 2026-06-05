@@ -3,8 +3,6 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use linera_base::time::{Duration, Instant};
-#[cfg(with_dynamodb)]
-use linera_views::dynamo_db::DynamoDbDatabase;
 #[cfg(with_rocksdb)]
 use linera_views::rocks_db::RocksDbDatabase;
 #[cfg(with_scylladb)]
@@ -111,15 +109,6 @@ fn bench_queue_view(criterion: &mut Criterion) {
             })
     });
 
-    #[cfg(with_dynamodb)]
-    criterion.bench_function("dynamodb_queue_view", |bencher| {
-        bencher
-            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
-            .iter_custom(|iterations| async move {
-                performance_queue_view::<DynamoDbDatabase>(iterations).await
-            })
-    });
-
     #[cfg(with_scylladb)]
     criterion.bench_function("scylladb_queue_view", |bencher| {
         bencher
@@ -190,15 +179,6 @@ fn bench_bucket_queue_view(criterion: &mut Criterion) {
             .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
             .iter_custom(|iterations| async move {
                 performance_bucket_queue_view::<RocksDbDatabase>(iterations).await
-            })
-    });
-
-    #[cfg(with_dynamodb)]
-    criterion.bench_function("dynamodb_bucket_queue_view", |bencher| {
-        bencher
-            .to_async(Runtime::new().expect("Failed to create Tokio runtime"))
-            .iter_custom(|iterations| async move {
-                performance_bucket_queue_view::<DynamoDbDatabase>(iterations).await
             })
     });
 

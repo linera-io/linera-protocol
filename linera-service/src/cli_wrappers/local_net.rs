@@ -89,15 +89,6 @@ async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
             #[cfg(not(feature = "storage-service"))]
             panic!("Database::Service is selected without the feature storage_service");
         }
-        Database::DynamoDb => {
-            #[cfg(feature = "dynamodb")]
-            {
-                let use_dynamodb_local = true;
-                Ok(InnerStorageConfig::DynamoDb { use_dynamodb_local })
-            }
-            #[cfg(not(feature = "dynamodb"))]
-            panic!("Database::DynamoDb is selected without the feature dynamodb");
-        }
         Database::ScyllaDb => {
             #[cfg(feature = "scylladb")]
             {
@@ -252,7 +243,6 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Database {
     Service,
-    DynamoDb,
     ScyllaDb,
     DualRocksDbScyllaDb,
 }

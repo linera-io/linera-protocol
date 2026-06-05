@@ -96,8 +96,6 @@ impl StorageConfigProvider {
             }
             #[cfg(feature = "storage-service")]
             InnerStorageConfig::Service { .. } => Ok(Database::Service),
-            #[cfg(feature = "dynamodb")]
-            InnerStorageConfig::DynamoDb { .. } => Ok(Database::DynamoDb),
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { .. } => Ok(Database::ScyllaDb),
             #[cfg(all(feature = "rocksdb", feature = "scylladb"))]
