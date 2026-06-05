@@ -744,28 +744,19 @@ where
         optional_vec.ok_or_else(|| ChainError::CorruptedChainState("Missing outboxes".into()))
     }
 
-    /// Reconciles the `nonempty_outboxes` and `outbox_counters` indices with the given set of
-    /// tracked chains, if it has changed since the last reconciliation (i.e. the stored
-    /// [`Self::outbox_index_tracked_hash`] no longer matches).
+    /// Reconciles the `nonempty_outboxes` and `outbox_counters` indices from the retained outbox
+    /// queues, rebuilding only when the tracked set changed since the last call (i.e. the stored
+    /// [`Self::outbox_index_tracked_hash`] no longer matches). The per-target outbox *queues* in
+    /// `outboxes` are always kept; only these indices are filtered. Returns whether a rebuild
+    /// actually happened, so a read-only caller can skip persisting when nothing changed.
     ///
-    /// `tracked` is `Some` on a client, whose indices only hold entries for tracked targets so that
-    /// they stay small (the per-target outbox *queues* in `outboxes` are kept for every target).
-    /// `tracked` is `None` in full mode (a validator), where every target is indexed; the stored
-    /// hash is then `None` and, in steady state, this is an `O(1)` no-op because full-mode indices
-    /// are maintained incrementally as blocks are applied.
-    ///
-    /// In the `Some` case the indices are rebuilt additively from the tracked chains' retained
-    /// outbox queues, which is `O(|tracked|)` — bounded by the wallet's tracked set — and never
-    /// scans the (unbounded) full set of outbox targets. The `None` case does real work only on a
-    /// mode transition (a previously-filtered chain switching back to full mode, so the stored hash
-    /// is still `Some`): it then re-indexes from *all* outbox queues, an `O(|outboxes|)` rebuild,
-    /// and stamps the hash back to `None`. Either case is correct for every scenario: migration of a
-    /// database written before filtering, a restart after a tracked-set change, a shrink, or a
-    /// growth. A subtractive `O(|delta|)` fast path can be added on top once the worker supplies the
-    /// added/removed sets.
-    ///
-    /// Returns whether the indices were actually rebuilt (`false` if they were already current), so
-    /// a read-only caller can skip persisting when nothing changed.
+    /// `tracked` is `Some` on a client, whose indices only hold its tracked targets: an
+    /// `O(|tracked|)` rebuild that never scans the (unbounded) full set of targets. `tracked` is
+    /// `None` in full mode (a validator), where every target is indexed; this is an `O(1)` no-op in
+    /// steady state (the stored hash is already `None`), doing the `O(|outboxes|)` full rebuild only
+    /// when switching back from a filtered set. Correct for every case — migration of a pre-filter
+    /// database, restart, shrink, or growth; a subtractive `O(|delta|)` fast path could be added
+    /// later once the worker supplies the added/removed sets.
     pub async fn reconcile_outbox_index(
         &mut self,
         tracked: Option<&Hashed<ChainIdSet>>,
@@ -801,10 +792,8 @@ where
         Ok(true)
     }
 
-    /// Returns whether the outbox index is already reconciled to `tracked` — i.e. the stored
-    /// version hash matches (in full mode, `tracked` is `None` and the stored hash must be `None`)
-    /// — so the index can be read without rebuilding it. Lets the read-only network-actions fast
-    /// path decide whether a write-lock reconcile is needed.
+    /// Returns whether the outbox index is already reconciled to `tracked` (the stored hash
+    /// matches), so the read-only network-actions path can read it without a write-lock rebuild.
     pub fn outbox_index_is_reconciled(&self, tracked: Option<&Hashed<ChainIdSet>>) -> bool {
         *self.outbox_index_tracked_hash.get() == tracked.map(|tracked| tracked.hash())
     }
@@ -1435,12 +1424,7 @@ where
         let next_height = self.tip_state.get().next_block_height;
 
         // Update the outboxes. Every recipient's per-target outbox queue is updated, but the
-        // `nonempty_outboxes`/`outbox_counters` indices are only populated for targets we track
-        // (`tracked == None` means a validator that tracks all chains). Untracked targets are
-        // delivered by the validators, never by this local node, so indexing them would grow the
-        // two `RegisterView` indices — which are re-serialized whole on every block — without
-        // bound. Targets are collected and the indices updated once, after the loop, so a block
-        // that schedules nothing tracked does not mark the registers dirty.
+        // `nonempty_outboxes` and `outbox_counters` indices are only populated for targets we track.
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
         let mut scheduled_tracked = Vec::new();
@@ -1520,7 +1504,7 @@ where
         }
 
         if !scheduled_tracked.is_empty() {
-            // All scheduled messages are at `block_height`, so bump its shared counter once.
+            // All scheduled messages are at `block_height`.
             *self
                 .outbox_counters
                 .get_mut()

@@ -299,11 +299,11 @@ impl ChainModes {
     /// never weakens an existing entry — and returns the resulting mode. The tracked-set hash is
     /// recomputed only if the chain newly became `FullChain`.
     pub fn extend_mode(&mut self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
-        let was_full = self
+        let entry = self
             .modes
-            .get(&chain_id)
-            .is_some_and(ListeningMode::is_full);
-        let entry = self.modes.entry(chain_id).or_insert_with(|| mode.clone());
+            .entry(chain_id)
+            .or_insert_with(|| ListeningMode::EventsOnly(BTreeSet::new()));
+        let was_full = entry.is_full();
         entry.extend(Some(mode));
         let result = entry.clone();
         if !was_full && result.is_full() {

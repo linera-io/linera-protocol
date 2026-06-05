@@ -240,9 +240,7 @@ where
 
     /// Returns the pending cross-chain network actions if the outbox index is already
     /// reconciled to the current tracked set, or `None` if it must first be reconciled (which
-    /// needs a write lock). Read-only: it never reconciles or saves, so on the common path the
-    /// worker can serve it under a shared lock, avoiding the write lock, task spawn and `save()`
-    /// of [`Self::reconcile_and_cross_chain_network_actions`].
+    /// needs a write lock).
     pub(crate) async fn cross_chain_network_actions_if_reconciled(
         &self,
     ) -> Result<Option<NetworkActions>, WorkerError> {
@@ -261,15 +259,7 @@ where
     /// state. Intended for callers that only need to re-emit cross-chain requests from the
     /// outbox of a sender chain whose `ChainDescription` we may never have needed.
     ///
-    /// This is the slow path of [`Self::cross_chain_network_actions_if_reconciled`], used only
-    /// when the index is stale (first load after migration, or the tracked set changed). It
-    /// takes `&mut self` to rebuild the outbox indices (this only touches the outbox indices,
-    /// not the execution state).
-    ///
-    /// It always `save()`s, even though reconciliation is usually a no-op: this runs under a write
-    /// lock, so dropping the `RollbackGuard` *without* saving would call `rollback()` and discard
-    /// any uncommitted in-memory chain state — e.g. a pending block proposal the client set
-    /// mid-operation. `save()` is a no-op write when the resulting batch is empty.
+    /// This is the slow path of [`Self::cross_chain_network_actions_if_reconciled`].
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
     pub(crate) async fn reconcile_and_cross_chain_network_actions(
         &mut self,
@@ -440,9 +430,8 @@ where
         })
     }
 
-    /// Returns the set of chains tracked in full mode together with its memoized hash, or `None` on
-    /// a validator (which tracks all chains and never filters its outbox indices). The hash is
-    /// cached in [`ChainModes`], so this is an `O(1)` clone rather than a rehash of the set.
+    /// Returns the set of chains tracked in full mode together with its memoized hash, or `None` if
+    /// every chain is implicitely in full-mode (e.g. on validator).
     fn tracked_full_chains(&self) -> Option<Arc<Hashed<ChainIdSet>>> {
         let chain_modes = self.chain_modes.as_ref()?;
         let full = chain_modes
@@ -453,8 +442,7 @@ where
     }
 
     /// Returns whether the given chain is tracked in full mode (always `true` on a validator),
-    /// i.e. whether its outbox should be indexed. Avoids materializing the whole tracked set for a
-    /// single membership test.
+    /// i.e. whether its outbox should be indexed.
     fn is_tracked(&self, chain_id: &ChainId) -> bool {
         self.chain_modes.as_ref().is_none_or(|chain_modes| {
             chain_modes
@@ -465,12 +453,8 @@ where
         })
     }
 
-    /// Reconciles the chain's `nonempty_outboxes`/`outbox_counters` indices with the current set
-    /// of fully-tracked chains (or, in full mode, with all targets), and returns that set to be
-    /// passed to block application so that newly scheduled messages are only indexed for tracked
-    /// targets. Returns `None` on a validator, which is passed through as "no filtering"; the
-    /// reconciliation itself still runs (a no-op in full mode unless the chain is switching back
-    /// from a filtered tracked set).
+    /// Reconciles the chain's `nonempty_outboxes` and `outbox_counters` indices with the current
+    /// set of fully-tracked chains.
     async fn reconcile_tracked_outboxes(
         &mut self,
     ) -> Result<Option<Arc<Hashed<ChainIdSet>>>, WorkerError> {
@@ -494,9 +478,7 @@ where
             .await
     }
 
-    /// Builds the pending cross-chain actions from the already-reconciled outbox index. The caller
-    /// must have reconciled `self` against `tracked` (the current set of fully-tracked chains, or
-    /// `None` on a validator), so that the index holds only tracked targets.
+    /// Builds the pending cross-chain actions from the already-reconciled outbox index.
     async fn build_network_actions(
         &self,
         old_round: Option<Round>,
@@ -507,8 +489,6 @@ where
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
         let targets = self.chain.nonempty_outbox_chain_ids();
         if let Some(tracked) = tracked {
-            // Invariant (reconciliation + guarded writers): the index only holds tracked targets.
-            // Surface a violation as corruption rather than silently delivering to a wrong chain.
             if let Some(target) = targets.iter().find(|target| !tracked.contains(*target)) {
                 return Err(ChainError::CorruptedChainState(format!(
                     "outbox index contains untracked target {target}"
@@ -678,8 +658,6 @@ where
             // Validators track every chain, so the counter fast path above is the complete answer.
             return Ok(false);
         }
-        // On a client the caller (`confirm_updated_recipient`) has reconciled the outbox indices
-        // with the current tracked set, so every indexed target is tracked — no filtering needed.
         let targets = self.chain.nonempty_outbox_chain_ids();
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for outbox in outboxes {
@@ -1306,9 +1284,7 @@ where
         latest_height: BlockHeight,
     ) -> Result<bool, WorkerError> {
         // Reconcile the outbox indices with the *current* tracked set before draining the counter
-        // and checking delivery. A chain tracked since the last reconciliation would otherwise be
-        // missing from the indices: its counter would be absent (a spurious `CorruptedChainState`)
-        // and the delivery check below would wrongly report it as fully delivered.
+        // and checking delivery.
         let tracked = self.reconcile_tracked_outboxes().await?;
         Ok(self
             .chain
@@ -1445,8 +1421,6 @@ where
         recipient: ChainId,
         retransmit_from: BlockHeight,
     ) -> Result<NetworkActions, WorkerError> {
-        // Reconcile the outbox index with the current tracked set before mutating it below, so the
-        // persisted index stays consistent with its tracked-set hash.
         self.reconcile_tracked_outboxes().await?;
         // 1. Walk backward through previous_message_blocks to collect all heights
         //    that sent messages to this recipient, from the latest down to retransmit_from.
