@@ -2001,7 +2001,8 @@ impl<Env: Environment> ChainClient<Env> {
                     return Err(err);
                 }
                 did_fallback_sync = true;
-                if self.synchronize_chain_state(self.chain_id).await.is_err() {
+                if let Err(sync_err) = self.synchronize_chain_state(self.chain_id).await {
+                    tracing::debug!(%sync_err, "fallback sync failed after rejected proposal");
                     return Err(err);
                 }
                 let Ok(after_sync) = self.consensus_state_snapshot().await else {
