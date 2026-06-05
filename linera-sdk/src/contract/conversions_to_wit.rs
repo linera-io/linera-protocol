@@ -176,12 +176,14 @@ impl From<TimeoutConfig> for wit_contract_api::TimeoutConfig {
     fn from(config: TimeoutConfig) -> Self {
         let TimeoutConfig {
             fast_round_duration,
+            multi_leader_round_duration,
             base_timeout,
             timeout_increment,
             fallback_duration,
         } = config;
         Self {
             fast_round_duration: fast_round_duration.map(Into::into),
+            multi_leader_round_duration: multi_leader_round_duration.into(),
             base_timeout: base_timeout.into(),
             timeout_increment: timeout_increment.into(),
             fallback_duration: fallback_duration.into(),

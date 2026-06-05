@@ -1900,9 +1900,6 @@ impl<Env: Environment> Client<Env> {
             self.handle_certificate(*timeout).await?;
         }
         let mut proposals = Vec::new();
-        if let Some(proposal) = remote_info.manager.requested_signed_proposal {
-            proposals.push(*proposal);
-        }
         if let Some(proposal) = remote_info.manager.requested_proposed {
             proposals.push(*proposal);
         }

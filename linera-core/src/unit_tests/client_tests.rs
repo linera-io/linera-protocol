@@ -28,7 +28,7 @@ use linera_execution::{
     committee::Committee, system::SystemOperation, ExecutionError, Message, MessageKind, Operation,
     QueryOutcome, ResourceControlPolicy, SystemMessage, SystemQuery, SystemResponse,
 };
-use linera_storage::Storage;
+use linera_storage::{Storage, TestClock};
 use rand::Rng;
 use test_case::test_case;
 use test_helpers::{
@@ -59,6 +59,33 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
     Environment,
 };
+
+/// Repeatedly runs `op`, advancing `clock` past each returned `WaitForTimeout`,
+/// until the operation produces some other `ClientOutcome` or an error.
+///
+/// Bounded at 16 iterations to avoid livelocks on broken setups.
+async fn run_through_timeouts<T, F, Fut, E>(
+    clock: &TestClock,
+    mut op: F,
+) -> Result<ClientOutcome<T>, E>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<ClientOutcome<T>, E>>,
+    E: std::fmt::Debug,
+{
+    for _ in 0..16 {
+        match op().await? {
+            ClientOutcome::WaitForTimeout(timeout) => {
+                let target = timeout.timestamp.saturating_add(TimeDelta::from_millis(1));
+                if clock.current_time() < target {
+                    clock.set(target);
+                }
+            }
+            outcome => return Ok(outcome),
+        }
+    }
+    panic!("run_through_timeouts: too many WaitForTimeout iterations");
+}
 
 /// A test to ensure that our chain client listener remains `Send`.  This is a bit of a
 /// hack, but requires that we not hold a `std::sync::Mutex` over `await` points, a
@@ -329,7 +356,9 @@ where
         Amount::from_millis(4000)
     );
     sender.synchronize_from_validators().await.unwrap();
-    // Can still use the chain.
+    // The chain is now in the `Fast` round under a single super owner; opt into fast
+    // blocks so we can keep proposing without configuring a Fast-round timeout.
+    sender.options_mut().allow_fast_blocks = true;
     sender
         .burn(AccountOwner::CHAIN, Amount::from_tokens(3))
         .await
@@ -395,6 +424,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let new_owner = signer.generate_new().into();
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let sender = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let certificate = sender
@@ -464,8 +494,8 @@ where
         ))
     );
 
-    // Half the validators voted for one block, half for the other. We need to make a proposal in
-    // the next round to succeed.
+    // Half the validators voted for one block, half for the other. We need to wait through
+    // the multi-leader round's timeout and propose in the next round to succeed.
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
     client.synchronize_from_validators().await.unwrap();
     assert_eq!(
@@ -473,8 +503,7 @@ where
         Amount::from_tokens(2)
     );
     client.clear_pending_proposal().await;
-    client
-        .burn(AccountOwner::CHAIN, Amount::ONE)
+    run_through_timeouts(&clock, || client.burn(AccountOwner::CHAIN, Amount::ONE))
         .await
         .unwrap_ok_committed();
     assert_eq!(client.local_balance().await.unwrap(), Amount::ONE);
@@ -485,8 +514,7 @@ where
     assert_eq!(client.chain_info().await?, sender.chain_info().await?);
     assert_eq!(sender.local_balance().await.unwrap(), Amount::ONE);
     sender.clear_pending_proposal().await;
-    sender
-        .burn(AccountOwner::CHAIN, Amount::ONE)
+    run_through_timeouts(&clock, || sender.burn(AccountOwner::CHAIN, Amount::ONE))
         .await
         .unwrap_ok_committed();
 
@@ -915,6 +943,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let owner_a = client.identity().await?;
@@ -947,8 +976,7 @@ where
 
     // Owner `b`'s client retries the pending block. The signer still holds owner `a`'s key,
     // so the proposal is signed as `a` and the worker accepts it.
-    let certificate = client
-        .process_pending_block()
+    let certificate = run_through_timeouts(&clock, || client.process_pending_block())
         .await
         .unwrap_ok_committed()
         .expect("the pending block should be committed");
@@ -1733,6 +1761,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
@@ -1824,10 +1853,11 @@ where
 
     client2_b.prepare_chain().await.unwrap();
     let recipient = Account::burn_address(client2_b.chain_id());
-    let bt_certificate = client2_b
-        .transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
-        .await
-        .unwrap_ok_committed();
+    let bt_certificate = run_through_timeouts(&clock, || {
+        client2_b.transfer_to_account(AccountOwner::CHAIN, Amount::from_tokens(1), recipient)
+    })
+    .await
+    .unwrap_ok_committed();
 
     let certificate_values = client2_b
         .read_confirmed_blocks_downward(bt_certificate.hash(), 2)
@@ -1862,6 +1892,7 @@ where
 {
     let mut signer = InMemorySigner::new(None);
     let owner2 = signer.generate_new().into();
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client1 = builder.add_root_chain(1, Amount::ONE).await?;
     let chain_id = client1.chain_id();
@@ -1923,7 +1954,7 @@ where
 
     client1.synchronize_from_validators().await.unwrap();
     assert_matches!(
-        client1.publish_data_blob(b"foo".to_vec()).await,
+        run_through_timeouts(&clock, || client1.publish_data_blob(b"foo".to_vec())).await,
         Ok(ClientOutcome::Conflict(_))
     );
 
@@ -1944,6 +1975,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
     let client1 = builder.add_root_chain(1, Amount::ZERO).await?;
@@ -2093,9 +2125,10 @@ where
             blob_hash: blob3_hash,
         }),
     ];
-    let b1_result = client3_b
-        .execute_operations(blob_2_3_operations.clone(), vec![blob3.clone()])
-        .await;
+    let b1_result = run_through_timeouts(&clock, || {
+        client3_b.execute_operations(blob_2_3_operations.clone(), vec![blob3.clone()])
+    })
+    .await;
     assert!(b1_result.is_err());
 
     let manager = client3_b
@@ -2677,6 +2710,7 @@ where
     // Configure a chain with two regular and no super owners.
     let mut signer = InMemorySigner::new(None);
     let owner1 = signer.generate_new().into();
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
@@ -2720,7 +2754,8 @@ where
         .manager;
     assert!(manager.requested_proposed.is_some());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
-    let result = client1.publish_data_blob(b"blob1".to_vec()).await;
+    let result =
+        run_through_timeouts(&clock, || client1.publish_data_blob(b"blob1".to_vec())).await;
     assert!(result.is_err());
     assert!(!client1
         .pending_proposal()
@@ -2738,16 +2773,13 @@ where
         .await
         .unwrap()
         .manager;
-    assert_eq!(
-        manager.requested_locking.unwrap().round(),
-        Round::MultiLeader(1)
-    );
+    assert!(manager.requested_locking.is_some());
     assert!(client0.pending_proposal().await.is_some());
 
     // Client 0 now only tries to transfer 1 token. But instead, they automatically finalize the
     // pending block, which publishes the blob.
     assert_matches!(
-        client0.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        run_through_timeouts(&clock, || client0.burn(AccountOwner::CHAIN, Amount::ONE)).await,
         Ok(ClientOutcome::Conflict(_))
     );
     client0.synchronize_from_validators().await.unwrap();
@@ -2806,6 +2838,7 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
 
@@ -2820,10 +2853,12 @@ where
     // Now three validators are online again.
     builder.set_fault_type([2], FaultType::Honest);
 
-    // The client tries to burn another token. But instead, they finalize the
-    // pending block, which transfers 3 tokens, leaving 10 - 3 = 7.
+    // The client tries to burn another token. But instead, they finalize the pending
+    // block, which transfers 3 tokens, leaving 10 - 3 = 7. Under timeout-only round
+    // advancement, the first attempt sees the conflicting pending proposal and surfaces
+    // `WaitForTimeout`; we advance the clock through the multi-leader timeout and retry.
     assert_matches!(
-        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        run_through_timeouts(&clock, || client.burn(AccountOwner::CHAIN, Amount::ONE)).await,
         Ok(ClientOutcome::Conflict(_))
     );
     assert_eq!(
@@ -2844,6 +2879,7 @@ where
 {
     // Configure a chain with two regular and no super owners.
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
     let chain_id = client0.chain_id();
@@ -2907,10 +2943,17 @@ where
     assert!(manager.requested_proposed.is_some());
     assert!(manager.requested_locking.is_none());
     assert_eq!(manager.current_round, Round::MultiLeader(0));
-    let result = client1
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
-        .await;
-    assert!(result.is_err());
+    // Under timeout-only round advancement, client1 can't progress past the existing
+    // proposal in `MultiLeader(0)` until validators sign a timeout. With this fault
+    // set (validator 0 offline, validator 3 OfflineWithInfo) there aren't enough
+    // signers for a timeout quorum, so we expect `WaitForTimeout` (rather than the
+    // old behavior of silently skipping to `MultiLeader(1)` and erroring later).
+    assert_matches!(
+        client1
+            .burn(AccountOwner::CHAIN, Amount::from_tokens(2))
+            .await,
+        Ok(ClientOutcome::WaitForTimeout(_))
+    );
 
     // Finally, three validators are online and honest again. Client 1 realizes there has been a
     // validated block in round 0, and re-proposes it when it tries to burn 4 tokens.
@@ -2926,12 +2969,12 @@ where
         manager.requested_locking.unwrap().round(),
         Round::MultiLeader(0)
     );
-    assert_eq!(manager.current_round, Round::MultiLeader(1));
     assert!(client1.pending_proposal().await.is_some());
     assert_matches!(
-        client1
-            .burn(AccountOwner::CHAIN, Amount::from_tokens(4))
-            .await,
+        run_through_timeouts(&clock, || {
+            client1.burn(AccountOwner::CHAIN, Amount::from_tokens(4))
+        })
+        .await,
         Ok(ClientOutcome::Conflict(_))
     );
 
@@ -3378,6 +3421,7 @@ where
         ..ResourceControlPolicy::default()
     };
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer)
         .await?
         .with_policy(policy.clone());
@@ -3386,11 +3430,14 @@ where
     let mut client3 = builder.add_root_chain(3, Amount::ONE).await?;
     let chain_id3 = client3.chain_id();
 
-    // Configure the clients as super owners with fast blocks enabled.
+    // Configure the clients as super owners with fast blocks enabled. Set a Fast-
+    // round timeout so the client can fall back to a `MultiLeader(0)` block when
+    // a Fast block isn't allowed (e.g. when the block uses oracles).
     for client in [&mut client1, &mut client2, &mut client3] {
         client.options_mut().allow_fast_blocks = true;
         let owner = client.identity().await?;
-        let ownership = ChainOwnership::single_super(owner);
+        let mut ownership = ChainOwnership::single_super(owner);
+        ownership.timeout_config.fast_round_duration = Some(TimeDelta::from_secs(1));
         client.change_ownership(ownership).await.unwrap();
     }
 
@@ -3421,12 +3468,14 @@ where
     builder.set_fault_type([3], FaultType::Honest);
 
     // Client 3 should be able to update validator 3 about the blob and the message.
-    let certificate = client3
-        .execute_operation(SystemOperation::VerifyBlob { blob_id })
-        .await
-        .unwrap_ok_committed();
+    // This reads a new blob, so it cannot be a fast block; the client waits for the
+    // Fast round to time out and falls back to `MultiLeader(0)`.
+    let certificate = run_through_timeouts(&clock, || {
+        client3.execute_operation(SystemOperation::VerifyBlob { blob_id })
+    })
+    .await
+    .unwrap_ok_committed();
 
-    // This read a new blob, so it cannot be a fast block.
     assert_eq!(certificate.round, Round::MultiLeader(0));
     let block = certificate.block();
     assert_eq!(block.body.incoming_bundles().count(), 1);
@@ -4019,20 +4068,25 @@ where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
+    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
 
     // Create a chain and get its owner.
     let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
     let super_owner = client.identity().await?;
 
-    // Change ownership to make the owner a super owner.
+    // Change ownership to make the owner a super owner, configuring a Fast-round
+    // timeout so the client can wait it out when fast blocks are disabled.
     let owner_change_op = Operation::system(SystemOperation::ChangeOwnership {
         super_owners: vec![super_owner],
         owners: vec![],
         first_leader: None,
         multi_leader_rounds: 10,
         open_multi_leader_rounds: false,
-        timeout_config: TimeoutConfig::default(),
+        timeout_config: TimeoutConfig {
+            fast_round_duration: Some(TimeDelta::from_secs(1)),
+            ..TimeoutConfig::default()
+        },
     });
     client.execute_operation(owner_change_op).await.unwrap();
 
@@ -4048,12 +4102,14 @@ where
         "Block should be in Fast round when fast blocks are enabled"
     );
 
-    // With fast blocks disabled, the super owner creates a block in MultiLeader(0) instead.
+    // With fast blocks disabled, the client waits for the Fast round to time out
+    // and then proposes in MultiLeader(0).
     client.options_mut().allow_fast_blocks = false;
-    let certificate = client
-        .burn(AccountOwner::CHAIN, Amount::from_tokens(1))
-        .await
-        .unwrap_ok_committed();
+    let certificate = run_through_timeouts(&clock, || {
+        client.burn(AccountOwner::CHAIN, Amount::from_tokens(1))
+    })
+    .await
+    .unwrap_ok_committed();
     assert_eq!(
         certificate.round,
         Round::MultiLeader(0),

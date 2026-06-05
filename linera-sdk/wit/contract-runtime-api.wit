@@ -138,6 +138,7 @@ interface contract-runtime-api {
 
     record timeout-config {
         fast-round-duration: option<time-delta>,
+        multi-leader-round-duration: time-delta,
         base-timeout: time-delta,
         timeout-increment: time-delta,
         fallback-duration: time-delta,

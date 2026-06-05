@@ -23,7 +23,9 @@ use serde::{Deserialize, Serialize};
 pub struct TimeoutConfigMetadata {
     /// The duration of the fast round in milliseconds.
     pub fast_round_ms: Option<String>,
-    /// The duration of the first single-leader and all multi-leader rounds in milliseconds.
+    /// The duration of every multi-leader round, in milliseconds.
+    pub multi_leader_round_ms: String,
+    /// The duration of the first single-leader round, in milliseconds.
     pub base_timeout_ms: String,
     /// The duration by which the timeout increases after each single-leader round in milliseconds.
     pub timeout_increment_ms: String,
@@ -38,6 +40,8 @@ impl From<&TimeoutConfig> for TimeoutConfigMetadata {
             fast_round_ms: config
                 .fast_round_duration
                 .map(|d| (d.as_micros() / 1000).to_string()),
+            multi_leader_round_ms: (config.multi_leader_round_duration.as_micros() / 1000)
+                .to_string(),
             base_timeout_ms: (config.base_timeout.as_micros() / 1000).to_string(),
             timeout_increment_ms: (config.timeout_increment.as_micros() / 1000).to_string(),
             fallback_duration_ms: (config.fallback_duration.as_micros() / 1000).to_string(),

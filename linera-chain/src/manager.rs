@@ -45,20 +45,21 @@
 //!
 //! ## Liveness, i.e. some block will eventually be confirmed
 //!
-//! In `Round::Fast`, liveness depends on the super owners coordinating, and proposing at most one
-//! block.
+//! Every non-`Fast` round leaves only via a timeout certificate (or a higher-round locking
+//! block). The same uniform rule applies to `Round::Fast`: if it has a configured timeout and
+//! the super owners propose nothing, validators eventually sign a timeout, and the next round
+//! opens. A chain with no `fast_round_duration` and no other owners therefore relies entirely
+//! on its super owners for progress — by design.
 //!
-//! If they propose none, and there are other owners, `Round::Fast` will eventually time out.
+//! In cooperative mode, if there is contention in a multi-leader round, validators will time out
+//! the round (using the short `multi_leader_round_duration`) and a quorum will form a timeout
+//! certificate. The next multi-leader round then opens, and an honest owner — typically chosen
+//! by the deterministic preferred-proposer rule — downloads the highest-round certificates and
+//! locking block known to honest validators and proposes in the new round. If there is a
+//! `ValidatedBlock` certificate they must include it and propose that block; otherwise they can
+//! propose a new block.
 //!
-//! In cooperative mode, if there is contention, the owners need to agree on a single owner as the
-//! next proposer. That owner should then download all highest-round certificates and block
-//! proposals known to the honest validators. They can then make a proposal in a round higher than
-//! all previous proposals. If there is any `ValidatedBlock` certificate they must include the
-//! highest one in their proposal, and propose that block. Otherwise they can propose a new block.
-//! Now all honest validators are allowed to vote for that proposal, and eventually confirm it.
-//!
-//! If the owners fail to cooperate, any honest owner can initiate the last multi-leader round by
-//! making a proposal there, then wait for it to time out, which starts the leader-based mode:
+//! Once the configured multi-leader rounds are exhausted, the protocol enters leader-based mode:
 //!
 //! In leader-based and fallback/public mode, an honest participant should subscribe to
 //! notifications from all validators, and follow the chain. Whenever another leader's round takes
@@ -158,12 +159,6 @@ where
     #[cfg_attr(with_graphql, graphql(skip))] // Derived from validator weights.
     #[allocative(skip)]
     pub fallback_distribution: RegisterView<C, Option<WeightedAliasIndex<u64>>>,
-    /// Highest-round authenticated block that we have received, but not necessarily
-    /// checked yet. If there are multiple proposals in the same round, this contains only the
-    /// first one. This can even contain proposals that did not execute successfully, to determine
-    /// which round to propose in.
-    #[cfg_attr(with_graphql, graphql(skip))]
-    pub signed_proposal: RegisterView<C, Option<BlockProposal>>,
     /// Highest-round authenticated block that we have received and checked. If there are multiple
     /// proposals in the same round, this contains only the first one.
     #[cfg_attr(with_graphql, graphql(skip))]
@@ -197,8 +192,9 @@ where
     /// the round to which the timeout applies.
     ///
     /// Having a leader timeout certificate in any given round causes the next one to become
-    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
-    /// round to become current, unless a higher one already is.
+    /// current. A locking block from a higher round also causes that round to become current.
+    /// All other round advancement (including past multi-leader rounds) requires a timeout
+    /// certificate.
     #[cfg_attr(with_graphql, graphql(skip))]
     pub current_round: RegisterView<C, Round>,
     /// The owners that take over in fallback mode.
@@ -215,8 +211,7 @@ where
     /// the round to which the timeout applies.
     ///
     /// Having a leader timeout certificate in any given round causes the next one to become
-    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
-    /// round to become current, unless a higher one already is.
+    /// current. A locking block from a higher round also causes that round to become current.
     #[graphql(derived(name = "current_round"))]
     async fn _current_round(&self) -> Round {
         self.current_round()
@@ -271,8 +266,7 @@ where
     /// the round to which the timeout applies.
     ///
     /// Having a leader timeout certificate in any given round causes the next one to become
-    /// current. Seeing a validated block certificate or a valid proposal in any round causes that
-    /// round to become current, unless a higher one already is.
+    /// current. A locking block from a higher round also causes that round to become current.
     pub fn current_round(&self) -> Round {
         *self.current_round.get()
     }
@@ -296,21 +290,9 @@ where
             // The proposal from the fast round may still be relevant as a locking block, so
             // we don't compare against the current round here.
             Round::Fast => {}
-            Round::MultiLeader(_) | Round::SingleLeader(0) => {
-                // If the fast round has not timed out yet, only a super owner is allowed to open
-                // a later round by making a proposal.
-                ensure!(
-                    self.is_super(&proposal.owner()) || !current_round.is_fast(),
-                    ChainError::WrongRound(current_round)
-                );
-                // After the fast round, proposals older than the current round are obsolete.
-                ensure!(
-                    new_round >= current_round,
-                    ChainError::InsufficientRound(new_round)
-                );
-            }
-            Round::SingleLeader(_) | Round::Validator(_) => {
-                // After the first single-leader round, only proposals from the current round are relevant.
+            // All other rounds can only be advanced via a timeout certificate. A proposal
+            // must therefore match the current round exactly.
+            Round::MultiLeader(_) | Round::SingleLeader(_) | Round::Validator(_) => {
                 ensure!(
                     new_round == current_round,
                     ChainError::WrongRound(current_round)
@@ -562,21 +544,15 @@ where
 
     /// Updates `current_round` and `round_timeout` if necessary.
     ///
-    /// This must be called after every change to `timeout`, `locking`, `proposed` or
-    /// `signed_proposal`.
+    /// This must be called after every change to `timeout` or `locking_block`.
     ///
     /// The current round starts at `Fast` if there is a super owner, `MultiLeader(0)` if at least
     /// one multi-leader round is configured, or otherwise `SingleLeader(0)`.
     ///
-    /// Single-leader rounds can only be ended by a timeout certificate for that round.
-    ///
-    /// The presence of any validated block certificate is also proof that a quorum of validators
-    /// is already in that round, even if we have not seen the corresponding timeout.
-    ///
-    /// Multi-leader rounds can always be skipped, so any correctly signed block proposal in a
-    /// later round ends a multi-leader round.
-    /// Since we don't accept proposals that violate that rule, we can compute the current round in
-    /// general by taking the maximum of all the above.
+    /// All non-Fast rounds can only be advanced by a timeout certificate for that round, except
+    /// that the presence of a locking block at round `r` is proof a quorum of validators is at
+    /// least in round `r` (since a `ValidatedBlock` certificate carries that quorum), and so
+    /// `current_round` is also raised to match.
     fn update_current_round(&mut self, local_time: Timestamp) {
         let current_round = self
             .timeout
@@ -589,16 +565,8 @@ where
                     .next_round(certificate.round)
                     .unwrap_or(Round::Validator(u32::MAX))
             })
-            // A locking block or a proposal is proof we have accepted that we are at least in
-            // this round.
+            // A locking block is proof a quorum is at least in this round.
             .chain(self.locking_block.get().as_ref().map(LockingBlock::round))
-            .chain(
-                self.proposed
-                    .get()
-                    .iter()
-                    .chain(self.signed_proposal.get())
-                    .map(|proposal| proposal.content.round),
-            )
             .max()
             .unwrap_or_default()
             // Otherwise compute the first round for this chain configuration.
@@ -663,49 +631,6 @@ where
         )
     }
 
-    /// Returns whether the owner is a super owner.
-    fn is_super(&self, owner: &AccountOwner) -> bool {
-        self.ownership.get().super_owners.contains(owner)
-    }
-
-    /// Sets the signed proposal, if it is newer than the known one, at most from the first
-    /// single-leader round. Returns whether it was updated.
-    ///
-    /// We don't update the signed proposal for any rounds later than `SingleLeader(0)`,
-    /// because single-leader rounds cannot be skipped without a timeout certificate.
-    pub fn update_signed_proposal(
-        &mut self,
-        proposal: &BlockProposal,
-        local_time: Timestamp,
-    ) -> bool {
-        if proposal.content.round > Round::SingleLeader(0) {
-            return false;
-        }
-        if let Some(old_proposal) = self.signed_proposal.get() {
-            if old_proposal.content.round >= proposal.content.round {
-                if *self.current_round.get() < old_proposal.content.round {
-                    tracing::warn!(
-                        chain_id = %proposal.content.block.chain_id,
-                        current_round = ?self.current_round.get(),
-                        proposal_round = ?old_proposal.content.round,
-                        "Proposal round is greater than current round. Updating."
-                    );
-                    self.update_current_round(local_time);
-                    return true;
-                }
-                return false;
-            }
-        }
-        if let Some(old_proposal) = self.proposed.get() {
-            if old_proposal.content.round >= proposal.content.round {
-                return false;
-            }
-        }
-        self.signed_proposal.set(Some(proposal.clone()));
-        self.update_current_round(local_time);
-        true
-    }
-
     /// Sets the proposed block, if it is newer than our known latest proposal.
     fn update_proposed(
         &mut self,
@@ -715,11 +640,6 @@ where
         if let Some(old_proposal) = self.proposed.get() {
             if old_proposal.content.round >= proposal.content.round {
                 return Ok(());
-            }
-        }
-        if let Some(old_proposal) = self.signed_proposal.get() {
-            if old_proposal.content.round <= proposal.content.round {
-                self.signed_proposal.set(None);
             }
         }
         self.proposed.set(Some(proposal));
@@ -807,9 +727,6 @@ pub struct ChainManagerInfo {
     pub ownership: ChainOwnership,
     /// The seed for the pseudo-random number generator that determines the round leaders.
     pub seed: u64,
-    /// Latest authenticated block that we have received, if requested. This can even contain
-    /// proposals that did not execute successfully, to determine which round to propose in.
-    pub requested_signed_proposal: Option<Box<BlockProposal>>,
     /// Latest authenticated block that we have received and checked, if requested.
     #[debug(skip_if = Option::is_none)]
     pub requested_proposed: Option<Box<BlockProposal>>,
@@ -865,7 +782,6 @@ where
         ChainManagerInfo {
             ownership: manager.ownership.get().clone(),
             seed: *manager.seed.get(),
-            requested_signed_proposal: None,
             requested_proposed: None,
             requested_locking: None,
             timeout: manager.timeout.get().clone().map(Box::new),
@@ -888,7 +804,6 @@ impl ChainManagerInfo {
         C: Context + Clone + 'static,
         C::Extra: ExecutionRuntimeContext,
     {
-        self.requested_signed_proposal = manager.signed_proposal.get().clone().map(Box::new);
         self.requested_proposed = manager.proposed.get().clone().map(Box::new);
         self.requested_locking = manager.locking_block.get().clone().map(Box::new);
         self.requested_confirmed = manager

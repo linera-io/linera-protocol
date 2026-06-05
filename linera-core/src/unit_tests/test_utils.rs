@@ -394,13 +394,14 @@ where
             | FaultType::Honest
             | FaultType::DontSendConfirmVote
             | FaultType::DontProcessValidated => {
-                let (response_result, _actions) = self
+                let response_result = self
                     .client
                     .lock()
                     .await
                     .state
                     .handle_block_proposal(proposal)
-                    .await;
+                    .await
+                    .map(|(response, _actions)| response);
                 let result = response_result.map_err(NodeError::from);
                 if self.fault_type == FaultType::DontSendValidateVote {
                     Err(NodeError::ClientIoError {
