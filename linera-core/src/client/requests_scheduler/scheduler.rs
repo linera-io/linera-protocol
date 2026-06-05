@@ -1,14 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    future::Future,
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        Arc,
-    },
-};
+use std::{collections::BTreeMap, future::Future, sync::Arc};
 
 use custom_debug_derive::Debug;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -34,7 +27,7 @@ use crate::{
     client::{
         communicate_concurrently,
         requests_scheduler::{in_flight_tracker::Subscribed, request::Cacheable},
-        sleep_for, ClockOf, RequestsSchedulerConfig,
+        ClockOf, RequestsSchedulerConfig,
     },
     environment::Environment,
     node::{NodeError, ValidatorNode},
@@ -771,117 +764,25 @@ impl<Env: Environment> RequestsScheduler<Env> {
         F: Fn(RemoteNode<Env::ValidatorNode>) -> Fut,
         Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
-        use futures::{
-            future::{select, Either},
-            stream::{FuturesUnordered, StreamExt},
-        };
-
-        let clock = self.clock.clone();
-        let sleep = |delay: Duration| sleep_for(&clock, delay);
-
-        let mut futures: FuturesUnordered<Fut> = FuturesUnordered::new();
-        let peer_index = AtomicU32::new(0);
-
-        let push_future = |futures: &mut FuturesUnordered<Fut>, fut: Fut| {
-            futures.push(fut);
-            peer_index.fetch_add(1, Ordering::SeqCst)
-        };
-
-        // Start the first peer immediately (no delay)
-        push_future(&mut futures, operation(first_peer));
-
-        let mut last_error = NodeError::UnexpectedMessage;
-        let mut next_delay = Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
-
-        // Phase 1: Race between futures completion and delays (while alternatives might exist)
-        loop {
-            // Exit condition: no futures running and can't start any more
-            if futures.is_empty() {
-                if let Some(peer) = self.in_flight_tracker.pop_alternative_peer(key).await {
-                    push_future(&mut futures, operation(peer));
-                    next_delay =
-                        Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
-                } else {
-                    // No futures and no alternatives - we're done
-                    break;
-                }
-            }
-
-            let next_result = Box::pin(futures.next());
-
-            match select(next_result, next_delay).await {
-                // A request completed
-                Either::Left((Some(result), delay_fut)) => {
-                    // Keep the delay future for next iteration
-                    next_delay = delay_fut;
-
-                    match result {
-                        Ok(value) => {
-                            tracing::trace!(?key, "staggered parallel request succeeded");
-                            return Ok(value);
-                        }
-                        Err(error) => {
-                            tracing::debug!(
-                                ?key,
-                                %error,
-                                "staggered parallel request attempt failed"
-                            );
-                            last_error = error;
-
-                            // Immediately try next alternative
-                            if let Some(peer) =
-                                self.in_flight_tracker.pop_alternative_peer(key).await
-                            {
-                                push_future(&mut futures, operation(peer));
-                                next_delay = Box::pin(sleep(
-                                    staggered_delay * peer_index.load(Ordering::SeqCst),
-                                ));
-                            }
-                        }
-                    }
-                }
-                // All running futures completed
-                Either::Left((None, delay_fut)) => {
-                    // Restore the delay future
-                    next_delay = delay_fut;
-                    // Will check at top of loop if we should try more alternatives
-                    continue;
-                }
-                // Delay elapsed - try to start next peer
-                Either::Right((_, _)) => {
-                    if let Some(peer) = self.in_flight_tracker.pop_alternative_peer(key).await {
-                        push_future(&mut futures, operation(peer));
-                        next_delay =
-                            Box::pin(sleep(staggered_delay * peer_index.load(Ordering::SeqCst)));
-                    } else {
-                        // No more alternatives - break out to phase 2
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Phase 2: No more alternatives, just wait for remaining futures to complete
-        while let Some(result) = futures.next().await {
-            match result {
-                Ok(value) => {
-                    tracing::trace!(?key, "staggered parallel request succeeded");
-                    return Ok(value);
-                }
-                Err(error) => {
-                    tracing::debug!(
-                        ?key,
-                        %error,
-                        "staggered parallel request attempt failed"
-                    );
-                    last_error = error;
-                }
-            }
-        }
-
-        // All attempts failed
-        tracing::debug!(?key, "all staggered parallel retry attempts failed");
-        Err(last_error)
+        // Source additional peers from the in-flight tracker's alternative queue (populated by
+        // concurrent deduplicated requests), staggering with a linearly-growing delay as on `main`.
+        crate::client::hedged_fan_out(
+            first_peer,
+            || self.in_flight_tracker.pop_alternative_peer(key),
+            operation,
+            |started| {
+                let n = u32::try_from(started).unwrap_or(u32::MAX);
+                staggered_delay.saturating_mul(n)
+            },
+            &self.clock,
+        )
+        .await
+        .map_err(|errors| {
+            errors
+                .into_iter()
+                .next_back()
+                .unwrap_or(NodeError::UnexpectedMessage)
+        })
     }
 
     /// Returns all peers ordered by their score (highest first).

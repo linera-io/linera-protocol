@@ -2243,16 +2243,97 @@ pub(crate) async fn sleep_for(clock: &impl linera_storage::Clock, duration: Dura
         .await;
 }
 
-/// Performs `f` on the nodes with a hedged, staggered fan-out, and returns the first `Ok`
-/// result. If all of the nodes fail, returns the collected `(validator, error)` pairs.
+/// Races `operation` across peers with a hedged, **failure-responsive** fan-out, returning the
+/// first `Ok` (or every error if all attempts fail).
 ///
-/// The first node is queried immediately. Each subsequent node is started either when a node
-/// that is still in flight has not answered within `hedge_delay` (hedging against a slow node by
-/// racing an extra request — the slow one is *not* cancelled), or *immediately* when an in-flight
-/// request fails — there is no point waiting out the hedge once we already know an attempt failed.
-/// The hedge sleeps on the node clock, so this is driveable in (possibly simulated) time; freezing
-/// the clock simply disables the slow-node hedge while still advancing on every failure.
-async fn communicate_concurrently<'a, A, E, F, R, V>(
+/// `first_peer` is tried immediately. `next_peer` then supplies additional peers, each started
+/// either *immediately* when an in-flight attempt fails (no point waiting once we know an attempt
+/// failed), or after the in-flight attempt has run for `hedge_schedule(started)` without answering
+/// — hedging against a slow peer by racing an extra request; the slow attempt is **not** cancelled.
+/// `hedge_schedule` maps the number of attempts started so far to the delay before starting the
+/// next one (e.g. `|k| delay * k` for a linearly-growing stagger). All sleeping is on `clock`, so
+/// this runs in (possibly simulated) time; freezing the clock disables the slow-peer hedge while
+/// still advancing on every failure.
+pub(crate) async fn hedged_fan_out<Peer, T, Err, NextPeer, NextFut, Op, OpFut>(
+    first_peer: Peer,
+    mut next_peer: NextPeer,
+    operation: Op,
+    hedge_schedule: impl Fn(usize) -> Duration,
+    clock: &impl linera_storage::Clock,
+) -> Result<T, Vec<Err>>
+where
+    NextPeer: FnMut() -> NextFut,
+    NextFut: Future<Output = Option<Peer>>,
+    Op: Fn(Peer) -> OpFut,
+    OpFut: Future<Output = Result<T, Err>>,
+{
+    use futures::future::{select, Either};
+
+    let mut in_flight = FuturesUnordered::new();
+    let mut errors = vec![];
+    let mut started = 0usize;
+    let arm = |started: usize| Box::pin(sleep_for(clock, hedge_schedule(started)));
+
+    in_flight.push(operation(first_peer));
+    started += 1;
+    let mut hedge = arm(started);
+
+    loop {
+        if in_flight.is_empty() {
+            // Nothing running: start the next peer, or stop if there are none left.
+            match next_peer().await {
+                Some(peer) => {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+                None => return Err(errors),
+            }
+            continue;
+        }
+        match select(in_flight.next(), hedge).await {
+            // An attempt succeeded.
+            Either::Left((Some(Ok(value)), _)) => return Ok(value),
+            // An attempt failed: try the next peer right away rather than waiting out the hedge.
+            Either::Left((Some(Err(error)), pending_hedge)) => {
+                errors.push(error);
+                hedge = pending_hedge;
+                if let Some(peer) = next_peer().await {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+            }
+            // All in-flight attempts drained; the loop top decides what to do next.
+            Either::Left((None, pending_hedge)) => hedge = pending_hedge,
+            // An attempt is slow: hedge by starting another peer, if any remain.
+            Either::Right(((), _)) => match next_peer().await {
+                Some(peer) => {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+                None => break,
+            },
+        }
+    }
+
+    // No more peers to start; just wait for the remaining in-flight attempts.
+    while let Some(result) = in_flight.next().await {
+        match result {
+            Ok(value) => return Ok(value),
+            Err(error) => errors.push(error),
+        }
+    }
+    Err(errors)
+}
+
+/// Performs `f` on the validators with a hedged, staggered fan-out (see [`hedged_fan_out`]),
+/// returning the first `Ok` result, or every `(validator, error)` pair if all of them fail.
+///
+/// Like on `main`, the hedge before starting the n-th validator grows quadratically with `n`, so
+/// we stay reluctant to fan out to many validators at once when one is merely slow.
+async fn communicate_concurrently<A, E, F, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
     hedge_delay: Duration,
@@ -2261,75 +2342,31 @@ async fn communicate_concurrently<'a, A, E, F, R, V>(
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
     RemoteNode<A>: Clone,
-    R: Future<Output = Result<V, E>> + 'a,
+    R: Future<Output = Result<V, E>>,
 {
-    use futures::future::{select, Either};
-
     let mut nodes = nodes.to_vec();
     nodes.shuffle(&mut rand::thread_rng());
     let mut nodes = nodes.into_iter();
-
-    let start = |node: RemoteNode<A>| {
-        let fun = f.clone();
-        async move {
-            let public_key = node.public_key;
-            fun(node).await.map_err(|err| (public_key, err))
-        }
+    let Some(first_peer) = nodes.next() else {
+        return Err(vec![]);
     };
-
-    let mut in_flight = FuturesUnordered::new();
-    let mut errors = vec![];
-    if let Some(node) = nodes.next() {
-        in_flight.push(start(node));
-    }
-    let mut next_hedge = Box::pin(sleep_for(clock, hedge_delay));
-
-    // Race request completions against the hedge timer, starting more nodes as we go.
-    loop {
-        if in_flight.is_empty() {
-            // Nothing running: start the next node, or stop if there are none left.
-            match nodes.next() {
-                Some(node) => {
-                    in_flight.push(start(node));
-                    next_hedge = Box::pin(sleep_for(clock, hedge_delay));
-                }
-                None => return Err(errors),
+    hedged_fan_out(
+        first_peer,
+        move || std::future::ready(nodes.next()),
+        |node: RemoteNode<A>| {
+            let fun = f.clone();
+            async move {
+                let public_key = node.public_key;
+                fun(node).await.map_err(|err| (public_key, err))
             }
-            continue;
-        }
-        match select(in_flight.next(), next_hedge).await {
-            // A request succeeded.
-            Either::Left((Some(Ok(value)), _)) => return Ok(value),
-            // A request failed: try the next node right away rather than waiting out the hedge.
-            Either::Left((Some(Err(error)), hedge)) => {
-                errors.push(error);
-                next_hedge = hedge;
-                if let Some(node) = nodes.next() {
-                    in_flight.push(start(node));
-                    next_hedge = Box::pin(sleep_for(clock, hedge_delay));
-                }
-            }
-            // All in-flight requests drained; the loop top decides what to do next.
-            Either::Left((None, hedge)) => next_hedge = hedge,
-            // A request is slow: hedge by starting another node, if any remain.
-            Either::Right(((), _)) => match nodes.next() {
-                Some(node) => {
-                    in_flight.push(start(node));
-                    next_hedge = Box::pin(sleep_for(clock, hedge_delay));
-                }
-                None => break,
-            },
-        }
-    }
-
-    // No more nodes to start; just wait for the remaining in-flight requests.
-    while let Some(result) = in_flight.next().await {
-        match result {
-            Ok(value) => return Ok(value),
-            Err(error) => errors.push(error),
-        }
-    }
-    Err(errors)
+        },
+        |started| {
+            let k = u32::try_from(started).unwrap_or(u32::MAX);
+            hedge_delay.saturating_mul(k).saturating_mul(k)
+        },
+        clock,
+    )
+    .await
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
