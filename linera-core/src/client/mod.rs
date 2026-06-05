@@ -2331,8 +2331,8 @@ where
 /// Performs `f` on the validators with a hedged, staggered fan-out (see [`hedged_fan_out`]),
 /// returning the first `Ok` result, or every `(validator, error)` pair if all of them fail.
 ///
-/// Like on `main`, the hedge before starting the n-th validator grows quadratically with `n`, so
-/// we stay reluctant to fan out to many validators at once when one is merely slow.
+/// The hedge before starting the n-th validator grows quadratically with `n`, so we stay
+/// reluctant to fan out to many validators at once when one is merely slow.
 async fn communicate_concurrently<A, E, F, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,

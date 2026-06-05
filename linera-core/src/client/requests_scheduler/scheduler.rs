@@ -765,7 +765,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         Fut: Future<Output = Result<T, NodeError>> + 'static,
     {
         // Source additional peers from the in-flight tracker's alternative queue (populated by
-        // concurrent deduplicated requests), staggering with a linearly-growing delay as on `main`.
+        // concurrent deduplicated requests), staggering with a linearly-growing delay.
         crate::client::hedged_fan_out(
             first_peer,
             || self.in_flight_tracker.pop_alternative_peer(key),
@@ -1343,8 +1343,8 @@ mod tests {
         let node2_key = nodes[2].public_key;
 
         // Auto-advance the clock on every sleep, so the scheduler's staggered delays resolve in
-        // virtual time. The test is fully deterministic and never blocks on real time (this used
-        // to be a flaky timing test, fixed by inflating real delays in #5525).
+        // virtual time; the test is then deterministic and never blocks on real time, and asserts
+        // on the order peers are tried rather than on wall-clock durations.
         let clock = TestClock::new();
         clock.set_sleep_callback(|_| true);
 
