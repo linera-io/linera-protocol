@@ -247,10 +247,8 @@ where
         &self,
     ) -> Result<Option<NetworkActions>, WorkerError> {
         let tracked = self.tracked_full_chains();
-        if let Some(full_chains) = &tracked {
-            if !self.chain.outbox_index_is_reconciled(full_chains) {
-                return Ok(None);
-            }
+        if !self.chain.outbox_index_is_reconciled(tracked.as_deref()) {
+            return Ok(None);
         }
         Ok(Some(
             self.build_network_actions(None, tracked.as_deref().map(|h| h.inner()))
@@ -277,9 +275,9 @@ where
         &mut self,
     ) -> Result<NetworkActions, WorkerError> {
         let tracked = self.tracked_full_chains();
-        if let Some(full_chains) = &tracked {
-            self.chain.reconcile_outbox_index(full_chains).await?;
-        }
+        self.chain
+            .reconcile_outbox_index(tracked.as_deref())
+            .await?;
         let actions = self
             .build_network_actions(None, tracked.as_deref().map(|h| h.inner()))
             .await?;
@@ -468,17 +466,19 @@ where
     }
 
     /// Reconciles the chain's `nonempty_outboxes`/`outbox_counters` indices with the current set
-    /// of fully-tracked chains, and returns that set to be passed to block application so that
-    /// newly scheduled messages are only indexed for tracked targets. Returns `None` on a
-    /// validator (no filtering).
+    /// of fully-tracked chains (or, in full mode, with all targets), and returns that set to be
+    /// passed to block application so that newly scheduled messages are only indexed for tracked
+    /// targets. Returns `None` on a validator, which is passed through as "no filtering"; the
+    /// reconciliation itself still runs (a no-op in full mode unless the chain is switching back
+    /// from a filtered tracked set).
     async fn reconcile_tracked_outboxes(
         &mut self,
     ) -> Result<Option<Arc<Hashed<ChainIdSet>>>, WorkerError> {
-        let Some(full_chains) = self.tracked_full_chains() else {
-            return Ok(None);
-        };
-        self.chain.reconcile_outbox_index(&full_chains).await?;
-        Ok(Some(full_chains))
+        let full_chains = self.tracked_full_chains();
+        self.chain
+            .reconcile_outbox_index(full_chains.as_deref())
+            .await?;
+        Ok(full_chains)
     }
 
     /// Reconciles the outbox index with the current tracked set, then loads pending cross-chain

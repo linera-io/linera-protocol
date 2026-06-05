@@ -745,32 +745,44 @@ where
     }
 
     /// Reconciles the `nonempty_outboxes` and `outbox_counters` indices with the given set of
-    /// fully-tracked chains, if the tracked set has changed since the last reconciliation
-    /// (i.e. the stored [`Self::outbox_index_tracked_hash`] no longer matches).
+    /// tracked chains, if it has changed since the last reconciliation (i.e. the stored
+    /// [`Self::outbox_index_tracked_hash`] no longer matches).
     ///
-    /// On a client these indices only hold entries for tracked targets, so that they stay small
-    /// (the per-target outbox *queues* in `outboxes` are kept for every target).
+    /// `tracked` is `Some` on a client, whose indices only hold entries for tracked targets so that
+    /// they stay small (the per-target outbox *queues* in `outboxes` are kept for every target).
+    /// `tracked` is `None` in full mode (a validator), where every target is indexed; the stored
+    /// hash is then `None` and, in steady state, this is an `O(1)` no-op because full-mode indices
+    /// are maintained incrementally as blocks are applied.
     ///
-    /// This rebuilds the indices additively from the tracked chains' retained outbox queues, which
-    /// is `O(|full_chains|)` — bounded by the wallet's tracked set — and needs no knowledge of the
-    /// previous set. It is therefore correct and cheap for every case: migration of a database
-    /// written before filtering, a restart after a tracked-set change, a shrink, or a growth; in
-    /// particular it never scans the (unbounded) full set of outbox targets. A subtractive
-    /// `O(|delta|)` fast path can be added on top once the worker supplies the added/removed sets.
+    /// In the `Some` case the indices are rebuilt additively from the tracked chains' retained
+    /// outbox queues, which is `O(|tracked|)` — bounded by the wallet's tracked set — and never
+    /// scans the (unbounded) full set of outbox targets. The `None` case does real work only on a
+    /// mode transition (a previously-filtered chain switching back to full mode, so the stored hash
+    /// is still `Some`): it then re-indexes from *all* outbox queues, an `O(|outboxes|)` rebuild,
+    /// and stamps the hash back to `None`. Either case is correct for every scenario: migration of a
+    /// database written before filtering, a restart after a tracked-set change, a shrink, or a
+    /// growth. A subtractive `O(|delta|)` fast path can be added on top once the worker supplies the
+    /// added/removed sets.
     ///
     /// Returns whether the indices were actually rebuilt (`false` if they were already current), so
     /// a read-only caller can skip persisting when nothing changed.
     pub async fn reconcile_outbox_index(
         &mut self,
-        tracked: &Hashed<ChainIdSet>,
+        tracked: Option<&Hashed<ChainIdSet>>,
     ) -> Result<bool, ChainError> {
-        let digest = tracked.hash();
-        if *self.outbox_index_tracked_hash.get() == Some(digest) {
+        let digest = tracked.map(|tracked| tracked.hash());
+        if *self.outbox_index_tracked_hash.get() == digest {
             return Ok(false);
         }
         self.nonempty_outboxes.get_mut().clear();
         self.outbox_counters.get_mut().clear();
-        for target in tracked.inner().iter() {
+        // In full mode (`None`) there is no tracked subset to iterate, so re-index from the keys of
+        // every retained outbox queue.
+        let targets = match tracked {
+            Some(tracked) => tracked.inner().iter().copied().collect::<Vec<_>>(),
+            None => self.outboxes.indices().await?,
+        };
+        for target in &targets {
             let heights = {
                 let Some(outbox) = self.outboxes.try_load_entry(target).await? else {
                     continue;
@@ -785,15 +797,16 @@ where
             }
             self.nonempty_outboxes.get_mut().insert(*target);
         }
-        self.outbox_index_tracked_hash.set(Some(digest));
+        self.outbox_index_tracked_hash.set(digest);
         Ok(true)
     }
 
-    /// Returns whether the outbox index is already reconciled to `full_chains` — i.e. the
-    /// stored version hash matches — so the index can be read without rebuilding it. Lets the
-    /// read-only network-actions fast path decide whether a write-lock reconcile is needed.
-    pub fn outbox_index_is_reconciled(&self, tracked: &Hashed<ChainIdSet>) -> bool {
-        *self.outbox_index_tracked_hash.get() == Some(tracked.hash())
+    /// Returns whether the outbox index is already reconciled to `tracked` — i.e. the stored
+    /// version hash matches (in full mode, `tracked` is `None` and the stored hash must be `None`)
+    /// — so the index can be read without rebuilding it. Lets the read-only network-actions fast
+    /// path decide whether a write-lock reconcile is needed.
+    pub fn outbox_index_is_reconciled(&self, tracked: Option<&Hashed<ChainIdSet>>) -> bool {
+        *self.outbox_index_tracked_hash.get() == tracked.map(|tracked| tracked.hash())
     }
 
     /// Executes a block with a specified policy for handling bundle failures.
