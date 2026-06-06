@@ -641,34 +641,6 @@ where
         Ok(cross_chain_requests)
     }
 
-    /// Returns true if there are no more outgoing messages in flight up to the given
-    /// block height for all tracked chains (those whose inboxes we update).
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        height = %height
-    ))]
-    async fn all_messages_to_tracked_chains_delivered_up_to(
-        &self,
-        height: BlockHeight,
-    ) -> Result<bool, WorkerError> {
-        if self.chain.all_messages_delivered_up_to(height) {
-            return Ok(true);
-        }
-        if self.chain_modes.is_none() {
-            // Validators track every chain, so the counter fast path above is the complete answer.
-            return Ok(false);
-        }
-        let targets = self.chain.nonempty_outbox_chain_ids();
-        let outboxes = self.chain.load_outboxes(&targets).await?;
-        for outbox in outboxes {
-            let front = outbox.queue.front();
-            if front.is_some_and(|key| *key <= height) {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
     /// Processes a leader timeout issued for this multi-owner chain.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
@@ -1286,6 +1258,8 @@ where
         // Reconcile the outbox indices with the *current* tracked set before draining the counter
         // and checking delivery.
         let tracked = self.reconcile_tracked_outboxes().await?;
+        // The indices are now reconciled to the tracked set, so `all_messages_delivered_up_to`
+        // (the `outbox_counters` fast path) is already the complete answer for tracked chains.
         Ok(self
             .chain
             .mark_messages_as_received(
@@ -1294,9 +1268,7 @@ where
                 tracked.as_deref().map(|h| h.inner()),
             )
             .await?
-            && self
-                .all_messages_to_tracked_chains_delivered_up_to(latest_height)
-                .await?)
+            && self.chain.all_messages_delivered_up_to(latest_height))
     }
 
     /// Notifies delivery waiters that all messages up to `height` have been delivered.
