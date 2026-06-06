@@ -299,8 +299,6 @@ where
     /// indices are reconciled (`reconcile_outbox_index`). `None` means
     /// they have never been filtered — a pre-existing database entry (migration), or a validator
     /// that tracks all chains and never filters.
-    ///
-    /// Appended last to keep the storage-key prefixes of the preceding fields stable.
     pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
 }
 
