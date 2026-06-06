@@ -130,10 +130,13 @@ pub trait EthereumQueries {
     /// Returns the chain ID reported by the connected EVM node.
     async fn get_chain_id(&self) -> Result<u64, Self::Error>;
 
-    /// Checks whether a block hash is finalized on the EVM chain.
+    /// Checks whether a block hash is finalized and canonical on the EVM chain.
     ///
-    /// Queries the node for the block (proving it exists), then compares its number
-    /// against the latest finalized block number.
+    /// Confirms the block exists, is at or below the latest finalized height, and
+    /// is the canonical block at that height. `eth_getBlockByHash` also returns
+    /// orphaned/uncle blocks (with their original, now non-canonical number, which
+    /// can be at or below the finalized height), so the canonical block at the
+    /// height must additionally be checked to have this exact hash.
     /// Returns `Err(BlockNotFound)` if the hash does not exist on chain.
     async fn is_block_hash_finalized(&self, block_hash: B256) -> Result<bool, Self::Error>;
 }
@@ -217,23 +220,39 @@ where
     }
 
     async fn is_block_hash_finalized(&self, block_hash: B256) -> Result<bool, Self::Error> {
-        let block: Option<EthBlockNumber> = self
+        // The block must exist; learn its height.
+        let block: Option<EthBlock> = self
             .request("eth_getBlockByHash", (block_hash, false))
             .await?;
         let block = block.ok_or(EthereumServiceError::BlockNotFound)?;
         let block_number = block.number.to::<u64>();
 
-        let finalized: EthBlockNumber = self
+        // It must be at or below the latest finalized height.
+        let finalized: EthBlock = self
             .request("eth_getBlockByNumber", ("finalized", false))
             .await?;
-        let finalized_number = finalized.number.to::<u64>();
+        if block_number > finalized.number.to::<u64>() {
+            return Ok(false);
+        }
 
-        Ok(block_number <= finalized_number)
+        // `eth_getBlockByHash` also returns orphaned/uncle blocks, which carry
+        // their original (now non-canonical) number and can be at or below the
+        // finalized height. Require the canonical block at this height to have
+        // this exact hash; otherwise the supplied hash is a non-canonical block
+        // that must not be treated as finalized.
+        let canonical: Option<EthBlock> = self
+            .request(
+                "eth_getBlockByNumber",
+                (BlockNumberOrTag::Number(block_number), false),
+            )
+            .await?;
+        Ok(canonical.map(|canonical| canonical.hash) == Some(block_hash))
     }
 }
 
-/// Minimal block response for extracting just the block number.
+/// Minimal block response: the fields needed to verify finality and canonicality.
 #[derive(Deserialize)]
-struct EthBlockNumber {
+struct EthBlock {
     number: U64,
+    hash: B256,
 }
