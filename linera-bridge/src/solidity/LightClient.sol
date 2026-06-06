@@ -14,6 +14,12 @@ contract LightClient {
     }
     mapping(uint32 => EpochCommittee) private committees;
     uint32 public currentEpoch;
+    // Certificates whose epoch is below this are rejected. Defaults to 0 (no
+    // epoch retired). Raised monotonically via `expireEpochsBelow` to drop
+    // retired committees from the set of valid signing roots — a
+    // weak-subjectivity floor: a quorum of a long-retired committee's keys can
+    // no longer forge a certificate once its epoch is expired.
+    uint32 public minAcceptedEpoch;
     bytes32 public adminChainId;
 
     constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
@@ -68,6 +74,44 @@ contract LightClient {
         _setCommittee(newEpoch, addrs, weights);
     }
 
+    /// Raises `minAcceptedEpoch`, permanently retiring every committee with an
+    /// epoch below `newMinEpoch` from certificate verification and deleting its
+    /// stored scalar fields (`totalWeight`, `validatorCount`, `quorumThreshold`).
+    /// The per-validator `weights`/`indices` mapping entries cannot be cleared
+    /// (Solidity cannot enumerate mapping keys), but they become permanently
+    /// unreachable: a zeroed `totalWeight` fails the `verifyCertificate` quorum
+    /// lookup, and epoch numbers are never reused (epochs are monotonic).
+    ///
+    /// Monotonic (`newMinEpoch` must strictly increase) and capped at
+    /// `currentEpoch`, so the current committee is never retired: at
+    /// `newMinEpoch == currentEpoch` the floor still admits `epoch == currentEpoch`
+    /// (the verification check is `epoch >= minAcceptedEpoch`) and the delete
+    /// loop stops before `currentEpoch`. Only `newMinEpoch > currentEpoch` could
+    /// retire the live committee, which is rejected. The caller may keep older
+    /// epochs valid for certificate-lag tolerance by choosing a lower
+    /// `newMinEpoch`. Retiring a wide range in one call costs O(range) gas;
+    /// expire incrementally if the gap is large.
+    ///
+    /// TODO(security): access control is intentionally deferred. This function
+    /// is currently UNAUTHENTICATED and MUST be gated (owner / governance)
+    /// before any production deployment — an unauthenticated caller can
+    /// otherwise raise the floor up to `currentEpoch` and reject legitimate
+    /// lagging certificates (a liveness DoS).
+    function expireEpochsBelow(uint32 newMinEpoch) external {
+        require(newMinEpoch > minAcceptedEpoch, "minAcceptedEpoch must increase");
+        require(newMinEpoch <= currentEpoch, "cannot expire current epoch");
+        for (uint32 epoch = minAcceptedEpoch; epoch < newMinEpoch; epoch++) {
+            delete committees[epoch];
+        }
+        minAcceptedEpoch = newMinEpoch;
+    }
+
+    /// Total voting weight of the committee stored at `epoch`, or 0 if no such
+    /// committee exists (never set, or retired via `expireEpochsBelow`).
+    function committeeTotalWeight(uint32 epoch) external view returns (uint64) {
+        return committees[epoch].totalWeight;
+    }
+
     function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory, bytes32) {
         return verifyCertificate(data);
     }
@@ -102,6 +146,7 @@ contract LightClient {
 
         // Step 5: Verify signatures against the block's epoch committee
         uint32 epoch = blockValue.header.epoch.value;
+        require(epoch >= minAcceptedEpoch, "epoch expired");
         EpochCommittee storage committee = committees[epoch];
         require(committee.totalWeight > 0, "unknown epoch");
         uint64 weight = 0;
