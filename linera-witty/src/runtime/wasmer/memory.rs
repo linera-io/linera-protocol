@@ -7,7 +7,9 @@ use std::borrow::Cow;
 
 use wasmer::{Extern, Memory};
 
-use super::{super::traits::InstanceWithMemory, EntrypointInstance, ReentrantInstance};
+use super::{
+    super::traits::InstanceWithMemory, EntrypointInstance, ReentrantInstance, WithEnvironment,
+};
 use crate::{GuestPointer, RuntimeError, RuntimeMemory};
 
 macro_rules! impl_memory_traits {
@@ -18,6 +20,10 @@ macro_rules! impl_memory_traits {
                     Extern::Memory(memory) => Some(memory),
                     _ => None,
                 })
+            }
+
+            fn load_memory(&mut self) -> Result<Memory, RuntimeError> {
+                WithEnvironment::environment(self).memory()
             }
         }
 
