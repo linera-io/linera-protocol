@@ -357,7 +357,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .await?;
 
     let value = ConfirmedBlock::new(outcome.with(valid_block));
-    chain.apply_confirmed_block(&value, time).await?;
+    chain.apply_confirmed_block(&value, time, None).await?;
 
     // In the second block, other operations are still not allowed.
     let invalid_block = make_child_block(&value.clone())
@@ -389,7 +389,7 @@ async fn test_application_permissions() -> anyhow::Result<()> {
         .execute_test_block_simple(valid_block, time, &[])
         .await?;
     let value = ConfirmedBlock::new(outcome.with(valid_block));
-    chain.apply_confirmed_block(&value, time).await?;
+    chain.apply_confirmed_block(&value, time, None).await?;
 
     Ok(())
 }
@@ -486,7 +486,7 @@ async fn test_mandatory_applications_with_messages() -> anyhow::Result<()> {
         .execute_test_block_simple(block_with_accepted, time, &[])
         .await?;
     let value = ConfirmedBlock::new(outcome.with(block_with_accepted));
-    chain.apply_confirmed_block(&value, time).await?;
+    chain.apply_confirmed_block(&value, time, None).await?;
 
     Ok(())
 }
@@ -898,4 +898,296 @@ async fn test_next_height_to_preprocess_register() {
     // Set the register to a height crossing the first byte boundary.
     chain.next_height_to_preprocess.set(BlockHeight(257));
     assert_eq!(*chain.next_height_to_preprocess.get(), BlockHeight(257));
+}
+
+fn test_chain_id(seed: &str) -> ChainId {
+    ChainId(CryptoHash::test_hash(seed))
+}
+
+/// Builds the hashed tracked-chain set passed to `reconcile_outbox_index`.
+fn tracked_set<const N: usize>(
+    ids: [ChainId; N],
+) -> linera_base::hashed::Hashed<crate::ChainIdSet> {
+    linera_base::hashed::Hashed::new(crate::ChainIdSet(ids.into_iter().collect()))
+}
+
+/// Schedules a message to `target`'s outbox at `height` and indexes it in
+/// `nonempty_outboxes`/`outbox_counters`, mirroring `process_outgoing_messages` for a tracked
+/// target.
+async fn schedule_indexed(
+    chain: &mut ChainStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    target: ChainId,
+    height: BlockHeight,
+) -> anyhow::Result<()> {
+    {
+        let mut outbox = chain.outboxes.try_load_entry_mut(&target).await?;
+        assert!(outbox.schedule_message(height)?);
+    }
+    *chain.outbox_counters.get_mut().entry(height).or_default() += 1;
+    chain.nonempty_outboxes.get_mut().insert(target);
+    Ok(())
+}
+
+/// Schedules a message to `target`'s outbox at `height` without indexing it, mirroring an
+/// untracked target: the per-target queue is kept but the indices are not touched.
+async fn schedule_unindexed(
+    chain: &mut ChainStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    target: ChainId,
+    height: BlockHeight,
+) -> anyhow::Result<()> {
+    let mut outbox = chain.outboxes.try_load_entry_mut(&target).await?;
+    assert!(outbox.schedule_message(height)?);
+    Ok(())
+}
+
+async fn outbox_queue_len(
+    chain: &ChainStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    target: &ChainId,
+) -> anyhow::Result<usize> {
+    Ok(chain
+        .outboxes
+        .try_load_entry(target)
+        .await?
+        .map_or(0, |outbox| outbox.queue.count()))
+}
+
+/// On the first reconciliation (`None` stamp, i.e. a database written before filtering), targets
+/// that are no longer tracked are dropped from the indices, but their outbox queues are kept.
+#[tokio::test]
+async fn test_reconcile_outbox_index_migration_drops_untracked() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(5);
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_indexed(&mut chain, b, height).await?;
+    assert_eq!(*chain.outbox_index_tracked_hash.get(), None);
+
+    let tracked = tracked_set([a]);
+    let digest = tracked.hash();
+    chain.reconcile_outbox_index(Some(&tracked)).await?;
+
+    assert_eq!(chain.nonempty_outbox_chain_ids(), vec![a]);
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+    assert_eq!(outbox_queue_len(&chain, &b).await?, 1);
+    assert_eq!(*chain.outbox_index_tracked_hash.get(), Some(digest));
+    Ok(())
+}
+
+/// Shrinking the tracked set drops the removed chains from the indices (queue kept).
+#[tokio::test]
+async fn test_reconcile_outbox_index_shrink_removes_chain() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(1);
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_indexed(&mut chain, b, height).await?;
+    chain
+        .outbox_index_tracked_hash
+        .set(Some(tracked_set([a, b]).hash()));
+
+    let tracked = tracked_set([a]);
+    chain.reconcile_outbox_index(Some(&tracked)).await?;
+
+    assert_eq!(chain.nonempty_outbox_chain_ids(), vec![a]);
+    assert!(!chain.nonempty_outboxes.get().contains(&b));
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+    assert_eq!(outbox_queue_len(&chain, &b).await?, 1);
+    Ok(())
+}
+
+/// Growing the tracked set re-indexes a newly tracked chain from its retained outbox queue.
+#[tokio::test]
+async fn test_reconcile_outbox_index_retrack_reindexes_from_queue() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(7);
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_unindexed(&mut chain, b, height).await?;
+    chain
+        .outbox_index_tracked_hash
+        .set(Some(tracked_set([a]).hash()));
+    assert!(!chain.nonempty_outboxes.get().contains(&b));
+
+    let tracked = tracked_set([a, b]);
+    chain.reconcile_outbox_index(Some(&tracked)).await?;
+
+    assert!(chain.nonempty_outboxes.get().contains(&b));
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 2);
+    Ok(())
+}
+
+/// A matching stamp short-circuits reconciliation without touching the indices.
+#[tokio::test]
+async fn test_reconcile_outbox_index_noop_when_hash_matches() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(3);
+    schedule_indexed(&mut chain, a, height).await?;
+    let tracked = tracked_set([a]);
+    let digest = tracked.hash();
+    chain.outbox_index_tracked_hash.set(Some(digest));
+
+    // `b` is indexed even though it is untracked; a matching hash means reconcile returns early.
+    schedule_indexed(&mut chain, b, height).await?;
+    chain.reconcile_outbox_index(Some(&tracked)).await?;
+
+    assert!(chain.nonempty_outboxes.get().contains(&b));
+    Ok(())
+}
+
+/// A `ConfirmUpdatedRecipient` arriving for a chain that has just been un-tracked must not error,
+/// even though reconciliation already dropped its outbox counter.
+#[tokio::test]
+async fn test_mark_received_untracked_target_is_tolerated() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let height = BlockHeight(2);
+    schedule_indexed(&mut chain, a, height).await?;
+
+    // Un-track `a`: its counter is dropped and it leaves the index, but the queue is kept.
+    let empty = tracked_set([]);
+    chain.reconcile_outbox_index(Some(&empty)).await?;
+    assert!(!chain.nonempty_outboxes.get().contains(&a));
+    assert!(chain.outbox_counters.get().is_empty());
+    assert_eq!(outbox_queue_len(&chain, &a).await?, 1);
+
+    // The in-flight confirmation arrives; `a` is untracked, so this drains the queue without error.
+    let drained = chain
+        .mark_messages_as_received(&a, height, Some(empty.inner()))
+        .await?;
+    assert!(drained);
+    assert_eq!(outbox_queue_len(&chain, &a).await?, 0);
+    Ok(())
+}
+
+/// A missing counter for a *tracked* target is still reported as corruption.
+#[tokio::test]
+async fn test_mark_received_tracked_missing_counter_errors() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let height = BlockHeight(2);
+    // Queue a message but never count it: corrupt-by-construction for a tracked target.
+    schedule_unindexed(&mut chain, a, height).await?;
+    let tracked = tracked_set([a]);
+    let result = chain
+        .mark_messages_as_received(&a, height, Some(tracked.inner()))
+        .await;
+    assert!(result.is_err());
+    Ok(())
+}
+
+/// Confirming an untracked target must not disturb a tracked sibling's counter: `outbox_counters`
+/// is keyed by block height and shared across all recipients of that block, and only tracked
+/// recipients are counted.
+#[tokio::test]
+async fn test_mark_received_untracked_keeps_tracked_sibling_counter() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(4);
+    // Same block height: A is tracked (counted), B is untracked (not counted).
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_unindexed(&mut chain, b, height).await?;
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+
+    let tracked = tracked_set([a]);
+    // Confirming the untracked B drains its queue but must leave A's counter untouched.
+    assert!(
+        chain
+            .mark_messages_as_received(&b, height, Some(tracked.inner()))
+            .await?
+    );
+    assert_eq!(outbox_queue_len(&chain, &b).await?, 0);
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+    assert!(chain.nonempty_outboxes.get().contains(&a));
+
+    // A's own confirmation still succeeds and clears the (intact) counter.
+    assert!(
+        chain
+            .mark_messages_as_received(&a, height, Some(tracked.inner()))
+            .await?
+    );
+    assert!(chain.outbox_counters.get().is_empty());
+    assert!(!chain.nonempty_outboxes.get().contains(&a));
+    Ok(())
+}
+
+/// Reconciliation counts every queued height of a target, not just one.
+#[tokio::test]
+async fn test_reconcile_outbox_index_counts_all_queued_heights() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    // `a` has two pending heights in its outbox queue, neither yet indexed/counted.
+    schedule_unindexed(&mut chain, a, BlockHeight(3)).await?;
+    schedule_unindexed(&mut chain, a, BlockHeight(5)).await?;
+
+    let tracked = tracked_set([a]);
+    assert!(chain.reconcile_outbox_index(Some(&tracked)).await?);
+
+    assert!(chain.nonempty_outboxes.get().contains(&a));
+    assert_eq!(
+        *chain.outbox_counters.get().get(&BlockHeight(3)).unwrap(),
+        1
+    );
+    assert_eq!(
+        *chain.outbox_counters.get().get(&BlockHeight(5)).unwrap(),
+        1
+    );
+    // A second reconciliation against the same set is a no-op.
+    assert!(!chain.reconcile_outbox_index(Some(&tracked)).await?);
+    Ok(())
+}
+
+/// In full mode (`None`), when the indices have never been filtered (stored hash `None`),
+/// reconciliation is a no-op: a steady-state validator keeps its incrementally-maintained indices
+/// untouched and never scans the full set of outbox targets.
+#[tokio::test]
+async fn test_reconcile_outbox_index_full_mode_noop_when_unfiltered() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let height = BlockHeight(4);
+    schedule_indexed(&mut chain, a, height).await?;
+    assert_eq!(*chain.outbox_index_tracked_hash.get(), None);
+
+    assert!(!chain.reconcile_outbox_index(None).await?);
+
+    // Indices are untouched and the chain stays in unfiltered (full) mode.
+    assert!(chain.nonempty_outboxes.get().contains(&a));
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 1);
+    assert_eq!(*chain.outbox_index_tracked_hash.get(), None);
+    Ok(())
+}
+
+/// Switching a previously-filtered chain back to full mode (`None`) re-indexes *every* outbox
+/// target from its retained queue — including targets dropped while filtered — and stamps the
+/// hash back to `None`.
+#[tokio::test]
+async fn test_reconcile_outbox_index_full_mode_reindexes_all() -> anyhow::Result<()> {
+    let mut chain = ChainStateView::new(test_chain_id("self")).await;
+    let a = test_chain_id("a");
+    let b = test_chain_id("b");
+    let height = BlockHeight(6);
+    // `a` is tracked/indexed; `b`'s queue is kept but it was dropped from the index while filtered.
+    schedule_indexed(&mut chain, a, height).await?;
+    schedule_unindexed(&mut chain, b, height).await?;
+    chain
+        .outbox_index_tracked_hash
+        .set(Some(tracked_set([a]).hash()));
+    assert!(!chain.nonempty_outboxes.get().contains(&b));
+
+    assert!(chain.reconcile_outbox_index(None).await?);
+
+    // Both targets are now indexed from their retained queues, and the stamp is back to `None`.
+    assert!(chain.nonempty_outboxes.get().contains(&a));
+    assert!(chain.nonempty_outboxes.get().contains(&b));
+    assert_eq!(*chain.outbox_counters.get().get(&height).unwrap(), 2);
+    assert_eq!(*chain.outbox_index_tracked_hash.get(), None);
+
+    // A second full-mode reconciliation is now a no-op.
+    assert!(!chain.reconcile_outbox_index(None).await?);
+    Ok(())
 }
