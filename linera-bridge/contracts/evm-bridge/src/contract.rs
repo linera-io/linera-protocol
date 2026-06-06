@@ -218,8 +218,15 @@ impl EvmBridge {
 
         // 3. Decode receipt logs and parse the deposit event
         let logs = proof::decode_receipt_logs(receipt_rlp).expect("failed to decode receipt logs");
+        // `log_index` is a u64 but indexes a Vec (usize). On wasm32 `usize` is
+        // 32-bit, so an unchecked `as usize` cast would truncate — letting
+        // `log_index` and `log_index + 2^32` select the same log while hashing
+        // to different `DepositKey`s (replay-guard bypass → double mint). A
+        // checked cast rejects any value that does not fit `usize`; the full
+        // u64 is preserved for the `DepositKey` below.
+        let log_index_usize = usize::try_from(log_index).expect("log_index out of range");
         assert!(
-            (log_index as usize) < logs.len(),
+            log_index_usize < logs.len(),
             "log_index {} out of range (receipt has {} logs)",
             log_index,
             logs.len()
@@ -229,7 +236,7 @@ impl EvmBridge {
                 "bridge contract address not registered — call RegisterFungibleBridge first",
             );
         let bridge_contract = alloy_primitives::Address::from(bridge_contract_bytes);
-        let deposit = proof::parse_deposit_event(&logs[log_index as usize], bridge_contract)
+        let deposit = proof::parse_deposit_event(&logs[log_index_usize], bridge_contract)
             .expect("failed to parse DepositInitiated event");
 
         // 4. Validate deposit fields against bridge parameters
