@@ -69,7 +69,7 @@ use crate::{
         BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult, DeliveryNotifier,
         ProcessConfirmedBlockMode,
     },
-    client::ListeningMode,
+    client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     notifier::Notifier,
 };
@@ -697,7 +697,7 @@ pub struct WorkerState<StorageClient: Storage> {
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
-    chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    pub(crate) chain_modes: Option<Arc<RwLock<ChainModes>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -853,7 +853,7 @@ where
     pub fn new(
         storage: StorageClient,
         chain_worker_config: ChainWorkerConfig,
-        chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+        chain_modes: Option<Arc<RwLock<ChainModes>>>,
     ) -> Self {
         let chain_workers = Arc::new(papaya::HashMap::new());
         start_sweep(&chain_workers, &chain_worker_config);
@@ -1911,8 +1911,21 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<NetworkActions, WorkerError> {
-        self.chain_read(chain_id, |guard| async move {
-            guard.cross_chain_network_actions().await
+        // Fast path: when the outbox index is already reconciled to the current tracked set,
+        // the network actions are built from a read-only view, so a shared lock with no save
+        // suffices — avoiding the write lock, task spawn and `save()` of the slow path.
+        if let Some(actions) = self
+            .chain_read(chain_id, |guard| async move {
+                guard.cross_chain_network_actions_if_reconciled().await
+            })
+            .await?
+        {
+            return Ok(actions);
+        }
+        // Slow path (first load after migration, or the tracked set changed): reconcile and
+        // persist the index under an exclusive lock before building.
+        self.chain_write(chain_id, |mut guard| async move {
+            guard.reconcile_and_cross_chain_network_actions().await
         })
         .await
     }

@@ -51,7 +51,11 @@ const MAX_VALUE_SIZE: usize = 3 * 1024 * 1024 * 1024 - 400;
 // For offset reasons we decrease by 400
 const MAX_KEY_SIZE: usize = 8 * 1024 * 1024 - 400;
 
-const WRITE_BUFFER_SIZE: usize = 256 * 1024 * 1024; // 256 MiB
+// A small write buffer keeps the memtable flushing even on low-write workloads. A large buffer
+// (e.g. 256 MiB) lets a slowly-filling memtable grow huge and accumulate range tombstones, so every
+// point read has to scan it — which severely amplifies reads during e.g. a long chain
+// synchronization, where blocks are re-executed with little net data written.
+const WRITE_BUFFER_SIZE: usize = 16 * 1024 * 1024; // 16 MiB
 const MAX_WRITE_BUFFER_NUMBER: i32 = 6;
 
 fn get_available_memory(sys: &System) -> usize {
