@@ -56,19 +56,7 @@ impl Contract for EvmBridge {
     }
 
     async fn instantiate(&mut self, argument: BridgeInstantiationArgument) {
-        let params = self.runtime.application_parameters();
-        if !argument.rpc_endpoint.is_empty() {
-            let client = ContractEthereumClient::new(argument.rpc_endpoint.clone());
-            let chain_id = client
-                .get_chain_id()
-                .await
-                .expect("failed to query chain ID from RPC endpoint");
-            assert_eq!(
-                chain_id, params.source_chain_id,
-                "RPC endpoint chain ID {chain_id} does not match configured source_chain_id {}",
-                params.source_chain_id
-            );
-        }
+        self.validate_rpc_endpoint(&argument.rpc_endpoint).await;
         self.state.rpc_endpoint.set(argument.rpc_endpoint);
     }
 
@@ -116,6 +104,7 @@ impl Contract for EvmBridge {
                 self.runtime
                     .authenticated_signer()
                     .expect("SetRpcEndpoint requires an authenticated signer");
+                self.validate_rpc_endpoint(&rpc_endpoint).await;
                 self.state.rpc_endpoint.set(rpc_endpoint);
             }
             BridgeOperation::Burn { amount, evm_target } => {
@@ -150,6 +139,29 @@ impl Contract for EvmBridge {
 }
 
 impl EvmBridge {
+    /// Validates a configured RPC endpoint. An empty endpoint is accepted and
+    /// disables finality verification. A non-empty endpoint must be reachable
+    /// and report the configured `source_chain_id`; otherwise this panics,
+    /// aborting the calling operation (`instantiate` / `SetRpcEndpoint`) and
+    /// leaving the previously stored endpoint unchanged. Shared by both so a
+    /// live bridge cannot be repointed at a wrong-chain endpoint without the
+    /// same check applied at genesis.
+    async fn validate_rpc_endpoint(&mut self, rpc_endpoint: &str) {
+        if rpc_endpoint.is_empty() {
+            return;
+        }
+        let source_chain_id = self.runtime.application_parameters().source_chain_id;
+        let client = ContractEthereumClient::new(rpc_endpoint.to_string());
+        let chain_id = client
+            .get_chain_id()
+            .await
+            .expect("failed to query chain ID from RPC endpoint");
+        assert_eq!(
+            chain_id, source_chain_id,
+            "RPC endpoint chain ID {chain_id} does not match configured source_chain_id {source_chain_id}"
+        );
+    }
+
     async fn verify_block_hash(&mut self, block_hash: [u8; 32]) {
         let rpc_endpoint = self.state.rpc_endpoint.get();
         assert!(
