@@ -121,12 +121,21 @@ where
     Ok(())
 }
 
-/// Scans a certificate for a `CreateCommittee` operation.
-/// Returns the epoch and blob hash if found.
+/// Scans a certificate for a `CreateCommittee` operation, returning the first
+/// one's epoch and blob hash if found.
+///
+/// Linera emits at most one `CreateCommittee` per admin-chain block, and both
+/// this relayer and the on-chain `addCommittee` (which requires the block's
+/// epoch to equal the LightClient's current epoch) rely on that — only the
+/// first is ever relayed. If that invariant is ever violated, only the first
+/// committee would be installed and the LightClient would stall one epoch
+/// behind the newer ones, so log loudly rather than fail silently.
 fn find_create_committee(
     cert: &ConfirmedBlockCertificate,
 ) -> Option<(Epoch, linera_base::crypto::CryptoHash)> {
-    cert.inner().block().body.operations().find_map(|op| {
+    let mut first = None;
+    let mut count = 0u32;
+    for op in cert.inner().block().body.operations() {
         if let Operation::System(boxed) = op {
             if let SystemOperation::Admin(AdminOperation::CreateCommittee {
                 epoch,
@@ -134,11 +143,22 @@ fn find_create_committee(
                 ..
             }) = boxed.as_ref()
             {
-                return Some((*epoch, *blob_hash));
+                count += 1;
+                if first.is_none() {
+                    first = Some((*epoch, *blob_hash));
+                }
             }
         }
-        None
-    })
+    }
+    if count > 1 {
+        tracing::error!(
+            count,
+            "admin block contains multiple CreateCommittee operations; only the first \
+             will be relayed, so the LightClient will stall behind the newer epochs. This \
+             violates the assumed at-most-one-CreateCommittee-per-admin-block invariant."
+        );
+    }
+    first
 }
 
 /// Relays a committee with bounded backoff, retrying transient failures (RPC

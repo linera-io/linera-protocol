@@ -35,7 +35,10 @@ contract LightClient {
         require(blockValue.header.chain_id.value.value == adminChainId, "block must be from admin chain");
         require(blockValue.header.epoch.value == currentEpoch, "block epoch must match current epoch");
 
-        // Find CreateCommittee in block operations
+        // Find the CreateCommittee in the block operations. Linera emits at most
+        // one CreateCommittee per admin block; together with the
+        // `block.epoch == currentEpoch` check above, each admin block drives
+        // exactly one epoch transition, so taking the first match is sufficient.
         bool found = false;
         uint32 newEpoch;
         bytes32 expectedBlobHash;
