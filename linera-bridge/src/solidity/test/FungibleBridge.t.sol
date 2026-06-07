@@ -293,3 +293,21 @@ contract FungibleBridgeProcessBurnsTest is Test {
         assertEq(tok.balanceOf(recip1), AMOUNT, "pos 1 not double-released");
     }
 }
+
+contract FungibleBridgeDepositTest is Test {
+    // A deposit above u128::MAX could never be minted on Linera (which holds
+    // U128), so deposit() must reject it at lock time rather than locking ERC-20
+    // that can never be bridged or refunded. The guard reverts before any token
+    // transfer, so the depositor needn't hold the amount and a minimal token
+    // suffices; deposit() also never calls the light client, so a dummy address
+    // works.
+    function test_deposit_reverts_amount_exceeds_u128() public {
+        uint256 oversized = uint256(type(uint128).max) + 1;
+        LineraToken tok = new LineraToken("Test", "TST", 18, 1);
+        FungibleBridge bridge =
+            new FungibleBridge(address(0xdead), CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID);
+
+        vm.expectRevert(bytes("amount exceeds u128"));
+        bridge.deposit(CHAIN_ID, FUNGIBLE_APP_ID, bytes32(uint256(0xBEEF)), oversized);
+    }
+}

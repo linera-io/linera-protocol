@@ -85,6 +85,10 @@ contract FungibleBridge is Microchain {
     ) external {
         require(amount > 0, "amount=0");
         require(target_application_id == fungibleApplicationId, "target application mismatch");
+        // The Linera side holds amounts as U128 and mints exactly `amount`, so a
+        // deposit above u128::MAX could never be minted — reject it at lock time
+        // instead of locking ERC-20 that can never be bridged or refunded.
+        require(amount <= type(uint128).max, "amount exceeds u128");
 
         uint256 before = token.balanceOf(address(this));
         _safeTransferFrom(msg.sender, address(this), amount);
