@@ -110,14 +110,20 @@ pub trait InstanceWithMemory: CabiReallocAlias + CabiFreeAlias {
 
     /// Returns the memory export from the current Wasm module instance.
     fn memory(&mut self) -> Result<Memory<'_, Self>, RuntimeError> {
+        let memory = self.load_memory()?;
+        Ok(Memory::new(self, memory))
+    }
+
+    /// Resolves the guest module's memory export.
+    ///
+    /// Runtimes may override this to cache the resolved handle and skip the export lookup
+    /// on every host call.
+    fn load_memory(&mut self) -> Result<<Self::Runtime as Runtime>::Memory, RuntimeError> {
         let export = self
             .load_export("memory")
             .ok_or(RuntimeError::MissingMemory)?;
 
-        let memory = self
-            .memory_from_export(export)?
-            .ok_or(RuntimeError::NotMemory)?;
-
-        Ok(Memory::new(self, memory))
+        self.memory_from_export(export)?
+            .ok_or(RuntimeError::NotMemory)
     }
 }

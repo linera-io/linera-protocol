@@ -51,5 +51,8 @@ macro_rules! impl_memory_traits {
     };
 }
 
+// TODO(#6463): cache the resolved `"memory"` export like the Wasmer runtime does, so it is not
+// re-resolved by name on every host call. The reentrant `Caller` is recreated per host call and
+// the store's `UserData` is owned by the caller, so this needs a different mechanism than Wasmer.
 impl_memory_traits!(EntrypointInstance<UserData>);
 impl_memory_traits!(ReentrantInstance<'_, UserData>);
