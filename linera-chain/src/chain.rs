@@ -749,10 +749,22 @@ where
         &mut self,
         tracked: Option<&Hashed<ChainIdSet>>,
     ) -> Result<bool, ChainError> {
-        let digest = tracked.map(|tracked| tracked.hash());
-        if *self.outbox_index_tracked_hash.get() == digest {
+        if *self.outbox_index_tracked_hash.get() == tracked.map(|tracked| tracked.hash()) {
             return Ok(false);
         }
+        self.rebuild_outbox_index(tracked).await?;
+        Ok(true)
+    }
+
+    /// Rebuilds `nonempty_outboxes` and `outbox_counters` from the retained outbox queues for the
+    /// tracked set (every retained queue on a validator, `tracked == None`), and stamps
+    /// [`Self::outbox_index_tracked_hash`]. Unlike [`Self::reconcile_outbox_index`] this always
+    /// rebuilds, so callers that have just rewritten the queues can refresh the indices regardless
+    /// of the stored stamp.
+    async fn rebuild_outbox_index(
+        &mut self,
+        tracked: Option<&Hashed<ChainIdSet>>,
+    ) -> Result<(), ChainError> {
         self.nonempty_outboxes.get_mut().clear();
         self.outbox_counters.get_mut().clear();
         // In full mode (`None`) there is no tracked subset to iterate, so re-index from the keys of
@@ -776,8 +788,9 @@ where
             }
             self.nonempty_outboxes.get_mut().insert(*target);
         }
-        self.outbox_index_tracked_hash.set(digest);
-        Ok(true)
+        self.outbox_index_tracked_hash
+            .set(tracked.map(|tracked| tracked.hash()));
+        Ok(())
     }
 
     /// Returns whether the outbox index is already reconciled to `tracked` (the stored hash
@@ -1353,7 +1366,10 @@ where
     /// pre-checkpoint messages — the off-chain outbox state isn't part of the
     /// certified checkpoint blob, so without this a bootstrapped node would
     /// silently stop pushing pending messages forward.
-    pub async fn restore_outboxes_from_unfinalized(&mut self) -> Result<(), ChainError> {
+    pub async fn restore_outboxes_from_unfinalized(
+        &mut self,
+        tracked: Option<&Hashed<ChainIdSet>>,
+    ) -> Result<(), ChainError> {
         // A lagging validator hit by a checkpoint push may already have outbox
         // queues from blocks it processed before the gap. Clear them so the
         // rebuild from `unfinalized_message_blocks` doesn't append duplicate
@@ -1365,8 +1381,6 @@ where
             outbox.queue.clear();
             outbox.next_height_to_schedule.set(BlockHeight::ZERO);
         }
-        let mut new_counters = BTreeMap::<BlockHeight, u32>::new();
-        let mut new_nonempty = BTreeSet::new();
         let entries = self
             .execution_state
             .system
@@ -1386,7 +1400,6 @@ where
             let mut outbox = self.outboxes.try_load_entry_mut(&recipient).await?;
             for height in &heights {
                 outbox.queue.push_back(*height);
-                *new_counters.entry(*height).or_default() += 1;
             }
             let max_height = *heights
                 .last()
@@ -1394,10 +1407,9 @@ where
             outbox
                 .next_height_to_schedule
                 .set(max_height.try_add_one()?);
-            new_nonempty.insert(recipient);
         }
-        self.outbox_counters.set(new_counters.into());
-        self.nonempty_outboxes.set(new_nonempty);
+        // The queues are now authoritative; rebuild the tracked-only indices from them.
+        self.rebuild_outbox_index(tracked).await?;
         Ok(())
     }
 

@@ -1166,7 +1166,10 @@ where
         // isn't part of the certified checkpoint blob, so without this a
         // bootstrapped validator would silently stop delivering pending
         // messages.
-        self.chain.restore_outboxes_from_unfinalized().await?;
+        let tracked = self.tracked_full_chains();
+        self.chain
+            .restore_outboxes_from_unfinalized(tracked.as_deref())
+            .await?;
         for (origin, cursor) in inbox_cursors {
             let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
             inbox.restore_from_checkpoint(cursor).await?;
