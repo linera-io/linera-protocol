@@ -13,7 +13,10 @@ use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
 
-use crate::proof::deposit_event_signature;
+use crate::{
+    evm::light_client::{addCommitteeCall, committeeHeightCall, currentEpochCall},
+    proof::deposit_event_signature,
+};
 
 sol! {
     #[sol(rpc)]
@@ -29,18 +32,6 @@ sol! {
     interface IERC20Decimals {
         function decimals() external view returns (uint8);
     }
-}
-
-sol! {
-    function addCommittee(
-        bytes calldata data,
-        bytes calldata committeeBlob,
-        bytes[] calldata validators
-    ) external;
-
-    function currentEpoch() external view returns (uint32);
-
-    function committeeHeight(uint32 epoch) external view returns (uint64);
 }
 
 /// Maximum block range per `eth_getLogs` query.
