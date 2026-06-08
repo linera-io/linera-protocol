@@ -5,22 +5,24 @@
 
 mod http_server;
 
+use std::collections::BTreeMap;
+
 use linera_base::{
-    crypto::{AccountPublicKey, Signer, ValidatorPublicKey},
-    data_types::{Amount, BlockHeight, Epoch, Round, Timestamp},
+    crypto::{AccountPublicKey, CryptoHash, Signer, ValidatorPublicKey},
+    data_types::{Amount, Blob, BlockHeight, Epoch, Event, OracleResponse, Round, Timestamp},
     identifiers::{Account, AccountOwner, ChainId},
 };
 use linera_execution::{
     committee::{Committee, ValidatorState},
-    Message, MessageKind, Operation, ResourceControlPolicy, SystemOperation,
+    Message, MessageKind, Operation, OutgoingMessage, ResourceControlPolicy, SystemOperation,
 };
 
 pub use self::http_server::HttpServer;
 use crate::{
-    block::ConfirmedBlock,
+    block::{Block, ConfirmedBlock},
     data_types::{
-        BlockProposal, IncomingBundle, PostedMessage, ProposedBlock, SignatureAggregator,
-        Transaction, Vote,
+        BlockExecutionOutcome, BlockProposal, IncomingBundle, OperationResult, PostedMessage,
+        ProposedBlock, SignatureAggregator, Transaction, Vote,
     },
     types::{CertificateValue, GenericCertificate},
 };
@@ -49,6 +51,88 @@ pub fn make_first_block(chain_id: ChainId) -> ProposedBlock {
         height: BlockHeight::ZERO,
         authenticated_owner: None,
         timestamp: Timestamp::default(),
+    }
+}
+
+/// Builds a [`Block`] for tests with a header that stays consistent with its body (the
+/// header is computed via [`Block::new`]), so it round-trips through serialization and
+/// storage. Tests start from an empty body and add messages, events, and so on.
+pub struct BlockBuilder {
+    block: ProposedBlock,
+    outcome: BlockExecutionOutcome,
+}
+
+impl BlockBuilder {
+    /// Starts building a block at the given chain and height with an empty body.
+    pub fn new(chain_id: ChainId, height: BlockHeight) -> Self {
+        BlockBuilder {
+            block: ProposedBlock {
+                epoch: Epoch::ZERO,
+                chain_id,
+                transactions: vec![],
+                previous_block_hash: None,
+                height,
+                authenticated_owner: None,
+                timestamp: Timestamp::default(),
+            },
+            outcome: BlockExecutionOutcome {
+                state_hash: CryptoHash::default(),
+                messages: vec![],
+                previous_message_blocks: BTreeMap::new(),
+                previous_event_blocks: BTreeMap::new(),
+                oracle_responses: vec![],
+                events: vec![],
+                blobs: vec![],
+                operation_results: vec![],
+            },
+        }
+    }
+
+    /// Sets the execution state hash recorded in the header.
+    pub fn with_state_hash(mut self, state_hash: CryptoHash) -> Self {
+        self.outcome.state_hash = state_hash;
+        self
+    }
+
+    /// Appends a transaction to the block's inputs.
+    pub fn with_transaction(mut self, transaction: Transaction) -> Self {
+        self.block.transactions.push(transaction);
+        self
+    }
+
+    /// Appends one transaction's outgoing messages to the body.
+    pub fn with_messages(mut self, messages: Vec<OutgoingMessage>) -> Self {
+        self.outcome.messages.push(messages);
+        self
+    }
+
+    /// Appends one transaction's events to the body.
+    pub fn with_events(mut self, events: Vec<Event>) -> Self {
+        self.outcome.events.push(events);
+        self
+    }
+
+    /// Appends one transaction's oracle responses to the body.
+    pub fn with_oracle_responses(mut self, oracle_responses: Vec<OracleResponse>) -> Self {
+        self.outcome.oracle_responses.push(oracle_responses);
+        self
+    }
+
+    /// Appends one transaction's created blobs to the body.
+    pub fn with_blobs(mut self, blobs: Vec<Blob>) -> Self {
+        self.outcome.blobs.push(blobs);
+        self
+    }
+
+    /// Appends an operation result to the body.
+    pub fn with_operation_result(mut self, operation_result: OperationResult) -> Self {
+        self.outcome.operation_results.push(operation_result);
+        self
+    }
+
+    /// Builds the block, computing a header that is consistent with the body.
+    pub fn build(self) -> Block {
+        self.outcome.with(self.block)
     }
 }
 
