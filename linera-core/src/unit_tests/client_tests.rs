@@ -4054,3 +4054,69 @@ where
 
     Ok(())
 }
+
+/// Regression test for the no-signer-key branch in `process_pending_block_without_prepare`:
+/// when a pending proposal is authenticated by an owner whose key the signer no longer holds
+/// (e.g. an autosigner key that staged the block is later withdrawn), the client must discard
+/// the stale proposal and report `Committed(None)` rather than erroring or wedging. This is the
+/// second of the two ways `execute_block`'s retry loop can observe `Committed(None)` — the
+/// other being the chain advancing past the staged height
+/// (`test_execute_block_retries_when_chain_advances`).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_discarded_when_signer_key_missing<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in multi-leader
+    // (non-fast) rounds — the branch that discards rather than erroring.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending, authenticated
+    // by `a` (signing it here requires `a`'s key, which the signer still holds at this point).
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    assert_eq!(
+        client
+            .pending_proposal()
+            .await
+            .expect("a pending proposal authored by `a` should remain")
+            .block
+            .authenticated_signer,
+        Some(owner_a),
+    );
+
+    // Bring the validators back, then withdraw owner `a`'s key from the signer and act as `b`.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    assert!(
+        builder.signer.forget_key(&owner_a),
+        "owner `a`'s key should have been present before we forget it"
+    );
+    client.set_preferred_owner(owner_b);
+
+    // Processing the pending block must discard the stale proposal (we can no longer sign as `a`)
+    // and report `Committed(None)`, rather than raising an error or looping.
+    assert_matches!(
+        client.process_pending_block().await?,
+        ClientOutcome::Committed(None)
+    );
+    assert!(client.pending_proposal().await.is_none());
+
+    Ok(())
+}
