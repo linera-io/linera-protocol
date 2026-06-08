@@ -258,6 +258,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
+            0, // admin port (unused in e2e)
             &linera_storage_runtime::CommonStorageOptions::with_defaults(),
             Duration::from_secs(2),
             0,

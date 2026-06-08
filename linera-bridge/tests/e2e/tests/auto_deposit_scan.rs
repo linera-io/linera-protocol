@@ -321,6 +321,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
+            0, // admin port (unused in e2e)
             &linera_storage_runtime::CommonStorageOptions::with_defaults(),
             std::time::Duration::from_secs(5), // monitor_scan_interval
             0,                                 // monitor_start_block
