@@ -13,7 +13,10 @@ use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
 
-use crate::proof::deposit_event_signature;
+use crate::{
+    evm::light_client::{addCommitteeCall, committeeHeightCall, currentEpochCall},
+    proof::deposit_event_signature,
+};
 
 sol! {
     #[sol(rpc)]
@@ -29,16 +32,6 @@ sol! {
     interface IERC20Decimals {
         function decimals() external view returns (uint8);
     }
-}
-
-sol! {
-    function addCommittee(
-        bytes calldata data,
-        bytes calldata committeeBlob,
-        bytes[] calldata validators
-    ) external;
-
-    function currentEpoch() external view returns (uint32);
 }
 
 /// Maximum block range per `eth_getLogs` query.
@@ -264,6 +257,25 @@ impl<P: Provider> EvmClient<P> {
         let epoch = currentEpochCall::abi_decode_returns(&result)
             .context("failed to decode currentEpoch response")?;
         Ok(Epoch(epoch))
+    }
+
+    /// Queries the admin-chain height of the block that created the committee at
+    /// `epoch`. Returns 0 for the genesis committee or an unknown epoch, which is
+    /// a safe scan origin (the relayer then reconciles from height 0).
+    pub async fn committee_height(&self, epoch: Epoch) -> Result<BlockHeight> {
+        let lc_addr = self.get_light_client_address().await?;
+        let call = committeeHeightCall { epoch: epoch.0 };
+        let tx = alloy::rpc::types::TransactionRequest::default()
+            .to(lc_addr)
+            .input(call.abi_encode().into());
+        let result = self
+            .provider
+            .call(tx)
+            .await
+            .context("failed to query LightClient.committeeHeight()")?;
+        let height = committeeHeightCall::abi_decode_returns(&result)
+            .context("failed to decode committeeHeight response")?;
+        Ok(BlockHeight(height))
     }
 
     /// Relays a committee update to the LightClient contract.

@@ -580,6 +580,72 @@ async fn test_log_index_out_of_range() {
     assert!(result.is_err(), "log_index out of range should be rejected");
 }
 
+/// Regression test for the `log_index` truncation double-mint.
+///
+/// The contract executes as wasm32, where `usize` is 32-bit, so an unchecked
+/// `log_index as usize` truncates. A `log_index` of `1 << 32` aliases to index
+/// 0 — selecting the *same* receipt log as `log_index: 0` and passing the
+/// `< logs.len()` bounds check — yet `DepositKey` hashes the full u64, so the
+/// replay key differs from the first deposit's. Without a checked cast this
+/// lets one genuine deposit be minted twice, the second mint unbacked.
+#[tokio::test]
+async fn test_log_index_u32_overflow_does_not_double_mint() {
+    let tb = TestBridge::setup().await;
+    let (block_header, receipt, proof_nodes, tx_index, log_index) = tb.build_valid_deposit();
+
+    // A legitimate deposit at log_index 0 mints 1_000_000.
+    tb.chain
+        .add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header.clone(),
+                    receipt_rlp: receipt.clone(),
+                    proof_nodes: proof_nodes.clone(),
+                    tx_index,
+                    log_index,
+                },
+            );
+        })
+        .await;
+    assert_eq!(
+        query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
+        Some(U128(1_000_000)),
+    );
+
+    // Re-submit the SAME proof with log_index = 1 << 32. On wasm32 this
+    // truncates to 0 (the same log), but its full-u64 DepositKey differs from
+    // the first deposit's, so a truncating `as usize` cast would mint a second,
+    // unbacked 1_000_000. It must be rejected instead.
+    let aliased_log_index: u64 = 1 << 32;
+    let result = tb
+        .chain
+        .try_add_block(|block| {
+            block.with_operation(
+                tb.bridge_app_id,
+                BridgeOperation::ProcessDeposit {
+                    block_header_rlp: block_header,
+                    receipt_rlp: receipt,
+                    proof_nodes,
+                    tx_index,
+                    log_index: aliased_log_index,
+                },
+            );
+        })
+        .await;
+    assert!(
+        result.is_err(),
+        "log_index with high bits set (aliasing to 0 on wasm32) must be rejected, not double-mint"
+    );
+
+    // Balance must be unchanged — no unbacked second mint.
+    assert_eq!(
+        query_balance(tb.fungible_app_id, &tb.chain, tb.chain_owner).await,
+        Some(U128(1_000_000)),
+        "aliased log_index must not mint a second time"
+    );
+}
+
 #[tokio::test]
 async fn test_deposit_amount_exceeds_u128() {
     let tb = TestBridge::setup().await;
