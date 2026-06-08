@@ -32,6 +32,7 @@ use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
+<<<<<<< HEAD
 use linera_storage::{DbStorage, Storage as _};
 use linera_views::{
     backends::{
@@ -40,6 +41,11 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
+=======
+use linera_storage::DbStorage;
+use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
+use linera_views::backends::rocks_db::RocksDbDatabase;
+>>>>>>> 9f4f48235 (Linera bridge various fixes (#6467))
 use linera_wallet_json::PersistentWallet;
 use tokio::sync::{mpsc, Notify, RwLock};
 
@@ -297,6 +303,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         &evm_client,
         admin_chain_id,
         admin_chain_height,
+        max_retries,
     )
     .await
     .context("committee catch-up failed")?;
@@ -479,34 +486,24 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     }
                 };
 
-                // Handle admin chain committee updates.
+                // Handle admin chain committee updates. Reconcile against the
+                // LightClient's current epoch (gap-filling, with bounded retry per
+                // relay) so a transient relay failure self-heals on a later admin
+                // block instead of stranding the LightClient at a stale epoch.
                 if notification.chain_id == admin_chain_id {
                     if let Reason::NewBlock { height, .. } = &notification.reason {
-                        tracing::debug!(%height, "New admin chain block, checking for committee update");
-                        let heights = vec![*height];
-                        if let Ok(certs) = chain_client
-                            .storage_client()
-                            .read_certificates_by_heights(admin_chain_id, &heights)
-                            .await
+                        tracing::debug!(%height, "New admin chain block, reconciling committees");
+                        let scan_upto = linera_base::data_types::BlockHeight(height.0 + 1);
+                        if let Err(e) = committee::catch_up(
+                            chain_client.storage_client(),
+                            &evm_client,
+                            admin_chain_id,
+                            scan_upto,
+                            max_retries,
+                        )
+                        .await
                         {
-                            for cert in certs.into_iter().flatten() {
-                                if let Some((epoch, blob_hash)) = committee::find_create_committee(&cert) {
-                                    let blob_id = linera_base::identifiers::BlobId::new(
-                                        blob_hash,
-                                        linera_base::identifiers::BlobType::Committee,
-                                    );
-                                    match chain_client.storage_client().read_blob(blob_id).await {
-                                        Ok(Some(blob)) => {
-                                            match committee::relay_committee(&evm_client, &cert, blob.bytes()).await {
-                                                Ok(()) => tracing::info!(?epoch, "Committee update relayed"),
-                                                Err(e) => tracing::error!(?epoch, error = %e, "Failed to relay committee"),
-                                            }
-                                        }
-                                        Ok(None) => tracing::error!(?blob_id, "Committee blob not found"),
-                                        Err(e) => tracing::error!(error = %e, "Failed to read committee blob"),
-                                    }
-                                }
-                            }
+                            tracing::error!(error = %e, "Committee reconcile failed; will retry on the next admin block");
                         }
                     }
                     continue;
