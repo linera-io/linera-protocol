@@ -700,6 +700,48 @@ impl Block {
     }
 }
 
+/// A single field of a [`BlockBody`], paired with enough data to recompute its hash and
+/// check it against the matching hash in a [`BlockHeader`]. This lets a holder of a header
+/// prove that one body field belongs to the block without the rest of the body.
+pub enum BlockBodyField {
+    Transactions(Vec<Transaction>),
+    Messages(Vec<Vec<OutgoingMessage>>),
+    PreviousMessageBlocks(BTreeMap<ChainId, (CryptoHash, BlockHeight)>),
+    PreviousEventBlocks(BTreeMap<StreamId, (CryptoHash, BlockHeight)>),
+    OracleResponses(Vec<Vec<OracleResponse>>),
+    Events(Vec<Vec<Event>>),
+    Blobs(Vec<Vec<Blob>>),
+    OperationResults(Vec<OperationResult>),
+}
+
+impl BlockHeader {
+    /// Returns whether `field` is the body field this header commits to.
+    pub fn verifies(&self, field: &BlockBodyField) -> bool {
+        match field {
+            BlockBodyField::Transactions(v) => hashing::hash_vec(v) == self.transactions_hash,
+            BlockBodyField::Messages(v) => hashing::hash_vec_vec(v) == self.messages_hash,
+            BlockBodyField::PreviousMessageBlocks(m) => {
+                CryptoHash::new(&PreviousMessageBlocksMap {
+                    inner: Cow::Borrowed(m),
+                }) == self.previous_message_blocks_hash
+            }
+            BlockBodyField::PreviousEventBlocks(m) => {
+                CryptoHash::new(&PreviousEventBlocksMap {
+                    inner: Cow::Borrowed(m),
+                }) == self.previous_event_blocks_hash
+            }
+            BlockBodyField::OracleResponses(v) => {
+                hashing::hash_vec_vec(v) == self.oracle_responses_hash
+            }
+            BlockBodyField::Events(v) => hashing::hash_vec_vec(v) == self.events_hash,
+            BlockBodyField::Blobs(v) => hashing::hash_vec_vec(v) == self.blobs_hash,
+            BlockBodyField::OperationResults(v) => {
+                hashing::hash_vec(v) == self.operation_results_hash
+            }
+        }
+    }
+}
+
 impl BcsHashable<'_> for BlockHeader {}
 
 #[derive(Serialize, Deserialize)]
