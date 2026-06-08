@@ -18,7 +18,12 @@ uint128 constant AMOUNT = 1_000_000_000_000_000_000; // 1e18
 address constant RECIP_0 = address(0xA0);
 address constant RECIP_1 = address(0xA1);
 address constant RECIP_2 = address(0xA2);
-bytes32 constant APP_ID = bytes32(uint256(0xF00D));
+// The Linera bridge application ID the mock emits its "burns" stream under;
+// the FungibleBridge matches burns against this id.
+bytes32 constant BRIDGE_APP_ID = bytes32(uint256(0xF00D));
+// A distinct wrapped-fungible (deposit/mint target) application ID, used to
+// confirm that burn-matching keys on the bridge id and not on this one.
+bytes32 constant FUNGIBLE_APP_ID = bytes32(uint256(0xBEEF));
 
 // ------------------------------------------------------------------
 // MockLightClientForBurns
@@ -155,7 +160,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
     // `supply` tokens pre-minted to the bridge.
     function _deployBridge(address lc, uint256 supply) internal returns (FungibleBridge bridge, LineraToken tok) {
         tok = new LineraToken("Test", "TST", 18, supply);
-        bridge = new FungibleBridge(lc, CHAIN_ID, address(tok), APP_ID);
+        bridge = new FungibleBridge(lc, CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID);
         // Send all tokens to the bridge so transfer() calls succeed.
         tok.transfer(address(bridge), supply);
     }
@@ -165,7 +170,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
     function test_processBurns_single_position_marks_processed() public {
         // 2 burns in tx TX at positions 0 and 1 with stream indices 5 and 6.
         // Settle only position 0; assert (HEIGHT, 5) is flipped, (HEIGHT, 6) stays false.
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
@@ -176,7 +182,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
 
     function test_processBurns_multi_position_marks_both_processed() public {
         // 2 burns; settle both positions; both flags true.
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s(0, 1));
@@ -190,7 +197,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
         // no-op, not a revert. Keeps the relayer robust to overlap between
         // an addBlock-path settlement and a racing/retrying processBurns
         // call covering the same (height, tx, pos).
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 1, AMOUNT, RECIP_0);
         (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(0));
@@ -205,7 +213,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
 
     function test_processBurns_tx_index_out_of_range_reverts() public {
         // Block has 1 tx; processBurns with txIndex=99 → revert "txIndex out of range".
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 1, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("txIndex out of range"));
@@ -214,7 +223,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
 
     function test_processBurns_event_pos_out_of_range_reverts() public {
         // 2 burns at positions 0,1; processBurns with position=99 → revert "eventPos out of range".
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("eventPos out of range"));
@@ -224,7 +234,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
     function test_processBurns_non_burn_event_reverts() public {
         // MockLightClient returns a Block whose only event has the wrong
         // stream_name ("deposits") → processBurns(tx=0, [0]) → revert "not a matching burn".
-        MockLightClientForNonBurn lc = new MockLightClientForNonBurn(CHAIN_ID, HEIGHT, APP_ID, AMOUNT, RECIP_0);
+        MockLightClientForNonBurn lc = new MockLightClientForNonBurn(CHAIN_ID, HEIGHT, BRIDGE_APP_ID, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("not a matching burn"));
@@ -234,7 +244,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
     function test_processBurns_empty_positions_reverts() public {
         // An empty positions array would silently pay for cert verification
         // with no work to do. Reject it eagerly so caller bugs surface.
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 1, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 1, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         uint32[] memory empty = new uint32[](0);
@@ -246,7 +257,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
         // Settle two burns; each release emits BurnReleased with
         // (height, evt.index, target, amount). Recipients are
         // RECIP_0 and RECIP_0+1; stream indices are 5 and 6.
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         address recip1 = address(uint160(RECIP_0) + 1);
@@ -263,7 +275,8 @@ contract FungibleBridgeProcessBurnsTest is Test {
         // 2 burns at positions 0,1. Settle pos 1 first; then call
         // processBurns([0, 1]). Under skip-on-duplicate semantics pos 0 must
         // be released and pos 1 silently skipped — no revert, no double-release.
-        MockLightClientForBurns lc = new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, APP_ID, 2, AMOUNT, RECIP_0);
+        MockLightClientForBurns lc =
+            new MockLightClientForBurns(CHAIN_ID, HEIGHT, TX, BRIDGE_APP_ID, 2, AMOUNT, RECIP_0);
         (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
 
         bridge.processBurns(hex"deadbeef", TX, _u32s_single(1));

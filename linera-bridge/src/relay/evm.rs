@@ -171,9 +171,11 @@ impl<P: Provider> EvmClient<P> {
         cert: &linera_chain::types::ConfirmedBlockCertificate,
     ) -> alloy::contract::Result<u64> {
         let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
-        tracing::trace!(size = cert_bytes.len(), "Estimating gas for addBlock");
+        let cert_size = cert_bytes.len();
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        bridge.addBlock(cert_bytes.into()).estimate_gas().await
+        let estimate = bridge.addBlock(cert_bytes.into()).estimate_gas().await;
+        tracing::debug!(?estimate, cert_size, "addBlock gas estimate");
+        estimate
     }
 
     /// Same as `estimate_add_block_gas` but for
@@ -185,17 +187,21 @@ impl<P: Provider> EvmClient<P> {
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
         let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
-        tracing::trace!(
-            tx_index,
-            count = positions_in_tx.len(),
-            size = cert_bytes.len(),
-            "Estimating gas for processBurns"
-        );
+        let cert_size = cert_bytes.len();
+        let count = positions_in_tx.len();
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        bridge
+        let estimate = bridge
             .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
             .estimate_gas()
-            .await
+            .await;
+        tracing::debug!(
+            tx_index,
+            count,
+            ?estimate,
+            cert_size,
+            "processBurns gas estimate"
+        );
+        estimate
     }
 
     /// Submits `processBurns(cert, tx_index, positions_in_tx)` and waits

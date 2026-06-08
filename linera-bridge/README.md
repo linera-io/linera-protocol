@@ -113,11 +113,11 @@ Blocks can be submitted in any order; sequential height enforcement is not requi
 
 ### FungibleBridge (concrete Microchain)
 
-A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When the wrapped-fungible application emits a `BurnEvent` (tokens auto-burned on the bridge chain), the contract releases the corresponding ERC-20 tokens to the target Ethereum address.
+A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When the bridge application emits a `BurnEvent` on its `"burns"` stream (after burning wrapped tokens on the bridge chain), the contract releases the corresponding ERC-20 tokens to the target Ethereum address.
 
-#### `constructor(address _lightClient, bytes32 _chainId, address _token)`
+#### `constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId, bytes32 _bridgeApplicationId)`
 
-Binds to a specific `LightClient`, chain, and ERC-20 token contract.
+Binds to a specific `LightClient`, chain, and ERC-20 token contract. `_fungibleApplicationId` is the wrapped-fungible application (the deposit/mint target); `_bridgeApplicationId` is the bridge application whose `"burns"` stream releases are matched against.
 
 #### `registerFungibleApplicationId(bytes32 _fungibleApplicationId)`
 
@@ -125,7 +125,7 @@ Registers the wrapped-fungible application ID. Can only be called once. Only eve
 
 #### `_onBlock(BridgeTypes.Block)`
 
-Scans the block's `events` for entries on the `"burns"` stream matching `fungibleApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
+Scans the block's `events` for entries on the `"burns"` stream matching `bridgeApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
 
 ## Rust API
 

@@ -7,7 +7,7 @@
 
 use evm_bridge::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters, EvmBridgeAbi};
 use linera_sdk::{
-    linera_base_types::ApplicationId,
+    linera_base_types::{ApplicationId, CryptoHash, TestString},
     test::{ActiveChain, QueryOutcome, TestValidator},
 };
 
@@ -25,6 +25,9 @@ async fn setup_bridge() -> (ActiveChain, ApplicationId<EvmBridgeAbi>) {
     let bridge_params = BridgeParameters {
         source_chain_id: 8453u64,
         token_address: [0xA0; 20],
+        bridge_chain_id: chain.id(),
+        // This suite never mints/burns; a placeholder fungible app id suffices.
+        fungible_app_id: ApplicationId::new(CryptoHash::new(&TestString::new("dummy_fungible"))),
     };
     let bridge_app_id = chain
         .create_application(

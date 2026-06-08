@@ -16,11 +16,11 @@ use linera_bridge::proof::{
     ReceiptLog,
 };
 use linera_sdk::{
-    linera_base_types::{AccountOwner, ApplicationId, U128},
+    linera_base_types::{AccountOwner, ApplicationId, CryptoHash, TestString, U128},
     test::{ActiveChain, TestValidator},
 };
 use serde::Deserialize;
-use wrapped_fungible::{WrappedFungibleTokenAbi, WrappedParameters};
+use wrapped_fungible::{WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters};
 
 /// Helper to query an account balance on the wrapped-fungible app.
 async fn query_balance(
@@ -38,10 +38,13 @@ async fn query_balance(
     let QueryOutcome { response, .. } = chain.graphql_query(app_id, query).await;
     let balance = response["accounts"]["entry"]["value"].as_str()?;
     Some(U128(
-        balance
-            .parse()
-            .expect("balance cannot be parsed as u128"),
+        balance.parse().expect("balance cannot be parsed as u128"),
     ))
+}
+
+/// A placeholder wrapped-fungible app id for bridge tests that never mint/burn.
+fn dummy_fungible_app_id() -> ApplicationId {
+    ApplicationId::new(CryptoHash::new(&TestString::new("dummy_fungible")))
 }
 
 /// Common setup for bridge integration tests.
@@ -59,24 +62,20 @@ struct TestBridge {
 
 impl TestBridge {
     async fn setup() -> Self {
-        let (validator, bridge_module_id) =
-            TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, BridgeInstantiationArgument>().await;
+        let (validator, bridge_module_id) = TestValidator::with_current_module::<
+            EvmBridgeAbi,
+            BridgeParameters,
+            BridgeInstantiationArgument,
+        >()
+        .await;
         let mut chain = validator.new_chain().await;
         let chain_owner = AccountOwner::from(chain.public_key());
 
         let token_address = [0xA0; 20];
         let source_chain_id = 8453u64;
 
-        // 1. Deploy bridge first
-        let bridge_params = BridgeParameters {
-            source_chain_id,
-            token_address,
-        };
-        let bridge_app_id = chain
-            .create_application(bridge_module_id, bridge_params, BridgeInstantiationArgument::default(), vec![])
-            .await;
-
-        // 2. Deploy wrapped-fungible with the bridge's app ID
+        // 1. Deploy wrapped-fungible first (the bridge takes its app id as a
+        //    creation parameter).
         let fungible_module_id = chain
             .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
                 "../../../examples/wrapped-fungible",
@@ -85,11 +84,9 @@ impl TestBridge {
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
             decimals: 6,
-            minter: Some(chain_owner),
-            mint_chain_id: Some(chain.id()),
+            mint_chain_id: chain.id(),
             evm_token_address: token_address,
             evm_source_chain_id: source_chain_id,
-            bridge_app_id: Some(bridge_app_id.forget_abi()),
         };
         let fungible_app_id = chain
             .create_application(
@@ -100,13 +97,29 @@ impl TestBridge {
             )
             .await;
 
-        // 3. Register the fungible app in the bridge
+        // 2. Deploy the bridge, pointing at the wrapped-fungible app.
+        let bridge_params = BridgeParameters {
+            source_chain_id,
+            token_address,
+            bridge_chain_id: chain.id(),
+            fungible_app_id: fungible_app_id.forget_abi(),
+        };
+        let bridge_app_id = chain
+            .create_application(
+                bridge_module_id,
+                bridge_params,
+                BridgeInstantiationArgument::default(),
+                vec![],
+            )
+            .await;
+
+        // 3. Register the bridge with the wrapped-fungible app so it may mint.
         chain
             .add_block(|block| {
                 block.with_operation(
-                    bridge_app_id,
-                    BridgeOperation::RegisterFungibleApp {
-                        app_id: fungible_app_id.forget_abi(),
+                    fungible_app_id,
+                    WrappedFungibleOperation::RegisterAuthorizedCaller {
+                        app_id: bridge_app_id.forget_abi(),
                     },
                 );
             })
@@ -198,21 +211,17 @@ impl TestBridge {
     /// Like `setup`, but skips the FungibleBridge address registration so callers
     /// can verify that `ProcessDeposit` panics when the address has not been set.
     async fn setup_without_bridge_address() -> Self {
-        let (validator, bridge_module_id) =
-            TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, BridgeInstantiationArgument>().await;
+        let (validator, bridge_module_id) = TestValidator::with_current_module::<
+            EvmBridgeAbi,
+            BridgeParameters,
+            BridgeInstantiationArgument,
+        >()
+        .await;
         let mut chain = validator.new_chain().await;
         let chain_owner = AccountOwner::from(chain.public_key());
 
         let token_address = [0xA0; 20];
         let source_chain_id = 8453u64;
-
-        let bridge_params = BridgeParameters {
-            source_chain_id,
-            token_address,
-        };
-        let bridge_app_id = chain
-            .create_application(bridge_module_id, bridge_params, BridgeInstantiationArgument::default(), vec![])
-            .await;
 
         let fungible_module_id = chain
             .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
@@ -222,11 +231,9 @@ impl TestBridge {
         let wrapped_params = WrappedParameters {
             ticker_symbol: "wUSDC".to_string(),
             decimals: 6,
-            minter: Some(chain_owner),
-            mint_chain_id: Some(chain.id()),
+            mint_chain_id: chain.id(),
             evm_token_address: token_address,
             evm_source_chain_id: source_chain_id,
-            bridge_app_id: Some(bridge_app_id.forget_abi()),
         };
         let fungible_app_id = chain
             .create_application(
@@ -237,12 +244,27 @@ impl TestBridge {
             )
             .await;
 
+        let bridge_params = BridgeParameters {
+            source_chain_id,
+            token_address,
+            bridge_chain_id: chain.id(),
+            fungible_app_id: fungible_app_id.forget_abi(),
+        };
+        let bridge_app_id = chain
+            .create_application(
+                bridge_module_id,
+                bridge_params,
+                BridgeInstantiationArgument::default(),
+                vec![],
+            )
+            .await;
+
         chain
             .add_block(|block| {
                 block.with_operation(
-                    bridge_app_id,
-                    BridgeOperation::RegisterFungibleApp {
-                        app_id: fungible_app_id.forget_abi(),
+                    fungible_app_id,
+                    WrappedFungibleOperation::RegisterAuthorizedCaller {
+                        app_id: bridge_app_id.forget_abi(),
                     },
                 );
             })
@@ -667,8 +689,12 @@ async fn test_replay_different_log_index_succeeds() {
 /// instantiation should fail because the chain ID check cannot succeed.
 #[tokio::test]
 async fn test_instantiation_fails_with_unreachable_endpoint() {
-    let (validator, bridge_module_id) =
-        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, BridgeInstantiationArgument>().await;
+    let (validator, bridge_module_id) = TestValidator::with_current_module::<
+        EvmBridgeAbi,
+        BridgeParameters,
+        BridgeInstantiationArgument,
+    >()
+    .await;
     let mut chain = validator.new_chain().await;
 
     let token_address = [0xA0; 20];
@@ -678,9 +704,18 @@ async fn test_instantiation_fails_with_unreachable_endpoint() {
     let bridge_params = BridgeParameters {
         source_chain_id,
         token_address,
+        bridge_chain_id: chain.id(),
+        fungible_app_id: dummy_fungible_app_id(),
     };
     let result = chain
-        .try_create_application(bridge_module_id, bridge_params, BridgeInstantiationArgument { rpc_endpoint: "http://localhost:8545".to_string() }, vec![])
+        .try_create_application(
+            bridge_module_id,
+            bridge_params,
+            BridgeInstantiationArgument {
+                rpc_endpoint: "http://localhost:8545".to_string(),
+            },
+            vec![],
+        )
         .await;
 
     assert!(
@@ -719,8 +754,12 @@ async fn setup_bridge_with_anvil(
     ApplicationId<EvmBridgeAbi>,
     ApplicationId<WrappedFungibleTokenAbi>,
 ) {
-    let (mut validator, bridge_module_id) =
-        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, BridgeInstantiationArgument>().await;
+    let (mut validator, bridge_module_id) = TestValidator::with_current_module::<
+        EvmBridgeAbi,
+        BridgeParameters,
+        BridgeInstantiationArgument,
+    >()
+    .await;
 
     // Allow the contract to make HTTP requests to the Anvil host.
     validator
@@ -738,16 +777,8 @@ async fn setup_bridge_with_anvil(
     // Anvil's default chain ID is 31337.
     let source_chain_id = 31337u64;
 
-    // 1. Deploy bridge first
-    let bridge_params = BridgeParameters {
-        source_chain_id,
-        token_address,
-    };
-    let bridge_app_id = chain
-        .create_application(bridge_module_id, bridge_params, BridgeInstantiationArgument { rpc_endpoint: anvil_endpoint.to_string() }, vec![])
-        .await;
-
-    // 2. Deploy wrapped-fungible with bridge's app ID
+    // 1. Deploy wrapped-fungible first (the bridge takes its app id as a
+    //    creation parameter).
     let fungible_module_id = chain
         .publish_bytecode_files_in::<WrappedFungibleTokenAbi, WrappedParameters, InitialState>(
             "../../../examples/wrapped-fungible",
@@ -756,11 +787,9 @@ async fn setup_bridge_with_anvil(
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wUSDC".to_string(),
         decimals: 6,
-        minter: Some(chain_owner),
-        mint_chain_id: Some(chain.id()),
+        mint_chain_id: chain.id(),
         evm_token_address: token_address,
         evm_source_chain_id: source_chain_id,
-        bridge_app_id: Some(bridge_app_id.forget_abi()),
     };
     let fungible_app_id = chain
         .create_application(
@@ -771,13 +800,31 @@ async fn setup_bridge_with_anvil(
         )
         .await;
 
-    // 3. Register fungible app in bridge
+    // 2. Deploy the bridge (Anvil endpoint), pointing at the wrapped app.
+    let bridge_params = BridgeParameters {
+        source_chain_id,
+        token_address,
+        bridge_chain_id: chain.id(),
+        fungible_app_id: fungible_app_id.forget_abi(),
+    };
+    let bridge_app_id = chain
+        .create_application(
+            bridge_module_id,
+            bridge_params,
+            BridgeInstantiationArgument {
+                rpc_endpoint: anvil_endpoint.to_string(),
+            },
+            vec![],
+        )
+        .await;
+
+    // 3. Register the bridge with the wrapped-fungible app.
     chain
         .add_block(|block| {
             block.with_operation(
-                bridge_app_id,
-                BridgeOperation::RegisterFungibleApp {
-                    app_id: fungible_app_id.forget_abi(),
+                fungible_app_id,
+                WrappedFungibleOperation::RegisterAuthorizedCaller {
+                    app_id: bridge_app_id.forget_abi(),
                 },
             );
         })
@@ -855,32 +902,6 @@ async fn test_verify_block_hash_not_found() {
 }
 
 #[tokio::test]
-async fn test_register_fungible_app_cannot_be_called_twice() {
-    let tb = TestBridge::setup().await;
-
-    // The bridge already has a registered fungible app from setup.
-    // Attempting to register again should fail.
-    let dummy_app_id = ApplicationId::new(linera_sdk::linera_base_types::CryptoHash::new(
-        &linera_sdk::linera_base_types::TestString::new("other_app"),
-    ));
-    let result = tb
-        .chain
-        .try_add_block(|block| {
-            block.with_operation(
-                tb.bridge_app_id,
-                BridgeOperation::RegisterFungibleApp {
-                    app_id: dummy_app_id,
-                },
-            );
-        })
-        .await;
-    assert!(
-        result.is_err(),
-        "registering fungible app a second time should be rejected"
-    );
-}
-
-#[tokio::test]
 async fn test_process_deposit_rejects_when_bridge_address_unregistered() {
     let tb = TestBridge::setup_without_bridge_address().await;
     let (block_header, receipt, proof_nodes, tx_index, log_index) = tb.build_valid_deposit();
@@ -909,16 +930,27 @@ async fn test_process_deposit_rejects_when_bridge_address_unregistered() {
 
 #[tokio::test]
 async fn test_register_fungible_bridge_is_one_shot() {
-    let (validator, bridge_module_id) =
-        TestValidator::with_current_module::<EvmBridgeAbi, BridgeParameters, BridgeInstantiationArgument>().await;
+    let (validator, bridge_module_id) = TestValidator::with_current_module::<
+        EvmBridgeAbi,
+        BridgeParameters,
+        BridgeInstantiationArgument,
+    >()
+    .await;
     let mut chain = validator.new_chain().await;
 
     let bridge_params = BridgeParameters {
         source_chain_id: 8453u64,
         token_address: [0xA0; 20],
+        bridge_chain_id: chain.id(),
+        fungible_app_id: dummy_fungible_app_id(),
     };
     let bridge_app_id = chain
-        .create_application(bridge_module_id, bridge_params, BridgeInstantiationArgument::default(), vec![])
+        .create_application(
+            bridge_module_id,
+            bridge_params,
+            BridgeInstantiationArgument::default(),
+            vec![],
+        )
         .await;
 
     chain

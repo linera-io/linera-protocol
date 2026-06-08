@@ -23,11 +23,13 @@ contract DeployFungibleBridgeTest is Test {
 
         bytes32 chainId = bytes32(uint256(0xdeadbeef));
         bytes32 appId = bytes32(uint256(0xfeedface));
+        bytes32 bridgeAppId = bytes32(uint256(0xb0a4d));
 
         vm.setEnv("LIGHT_CLIENT", vm.toString(address(lc)));
         vm.setEnv("BRIDGE_CHAIN_ID", vm.toString(chainId));
         vm.setEnv("TOKEN_ADDRESS", vm.toString(address(token)));
         vm.setEnv("FUNGIBLE_APP_ID", vm.toString(appId));
+        vm.setEnv("BRIDGE_APP_ID", vm.toString(bridgeAppId));
 
         FungibleBridge bridge = new DeployFungibleBridge().run();
 
