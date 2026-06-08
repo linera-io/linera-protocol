@@ -214,20 +214,20 @@ pub struct Options {
 
     /// The delay when downloading a blob, after which we try a second validator, in milliseconds.
     #[arg(
-        long = "blob-download-timeout-ms",
+        long = "blob-download-hedge-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis,
     )]
-    pub blob_download_timeout: Duration,
+    pub blob_download_hedge_delay: Duration,
 
     /// The delay when downloading a batch of certificates, after which we try a second validator,
     /// in milliseconds.
     #[arg(
-        long = "cert-batch-download-timeout-ms",
+        long = "cert-batch-download-hedge-delay-ms",
         default_value = "1000",
         value_parser = util::parse_millis
     )]
-    pub certificate_batch_download_timeout: Duration,
+    pub certificate_batch_download_hedge_delay: Duration,
 
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
@@ -369,8 +369,8 @@ impl Options {
             message_policy,
             cross_chain_message_delivery,
             quorum_grace_period: self.quorum_grace_period,
-            blob_download_timeout: self.blob_download_timeout,
-            certificate_batch_download_timeout: self.certificate_batch_download_timeout,
+            blob_download_hedge_delay: self.blob_download_hedge_delay,
+            certificate_batch_download_hedge_delay: self.certificate_batch_download_hedge_delay,
             certificate_download_batch_size: self.certificate_download_batch_size,
             certificate_upload_batch_size: self.certificate_upload_batch_size,
             sender_certificate_download_batch_size: self.sender_certificate_download_batch_size,
