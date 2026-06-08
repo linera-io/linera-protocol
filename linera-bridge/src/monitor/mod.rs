@@ -84,7 +84,7 @@ pub struct PendingDeposit {
 /// A pending burn detected by the Linera scanner, sent to the retry loop.
 ///
 /// `event_index` is the underlying Linera `Event.index` — the position of
-/// the burn event within its stream ("burns" on the configured fungible
+/// the burn event within its stream ("burns" on the configured bridge
 /// application). Used both as the dedup key off-chain and as the value
 /// the `FungibleBridge.isBurnProcessed(height, eventIndex)` view consumes.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -101,7 +101,7 @@ pub struct PendingBurn {
     /// Used by `processBurns(cert, tx_index, [event_pos_in_tx, ...])`.
     pub event_pos_in_tx: u32,
     /// `Event.index` — sequential position of this burn within its stream
-    /// (the "burns" stream of the configured fungible app on the configured
+    /// (the "burns" stream of the configured bridge app on the configured
     /// Linera chain). Unique for the lifetime of that stream, so unique
     /// across all heights within the relayer's scope. Off-chain and on-chain
     /// dedup key.

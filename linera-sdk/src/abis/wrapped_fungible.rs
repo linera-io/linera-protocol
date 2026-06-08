@@ -22,21 +22,17 @@ pub struct WrappedParameters {
     pub ticker_symbol: String,
     /// Number of decimal places used by the source ERC-20 (e.g. 6 for USDC).
     pub decimals: u8,
-    /// If set, only this account owner can sign mint operations
-    pub minter: Option<AccountOwner>,
-    /// If set, minting and auto-burning are restricted to this chain
-    pub mint_chain_id: Option<ChainId>,
+    /// The chain on which minting and burning are allowed (the bridge chain).
+    pub mint_chain_id: ChainId,
     /// The ERC-20 token address on the source EVM chain
     pub evm_token_address: [u8; 20],
     /// The EVM chain ID of the source chain (e.g. 8453 for Base)
     pub evm_source_chain_id: u64,
-    /// If set, only this application can call Mint (via cross-app call)
-    pub bridge_app_id: Option<ApplicationId>,
 }
 
-/// Event emitted when tokens are auto-burned on the bridge chain.
-/// The relayer observes these on the "burns" stream and forwards
-/// to EVM to release the corresponding ERC-20 tokens.
+/// Event emitted by the bridge application on its "burns" stream when it burns
+/// wrapped tokens on the bridge chain. The relayer observes these and forwards
+/// them to EVM to release the corresponding ERC-20 tokens.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BurnEvent {
     /// The Ethereum address to receive the unlocked ERC-20 tokens
@@ -111,15 +107,28 @@ pub enum WrappedFungibleOperation {
         amount: U128,
         target_account: Account,
     },
+<<<<<<< HEAD
     /// Mints new tokens and transfers them to a target account. Only the authorized
     /// minter can call this.
     MintAndTransfer {
+=======
+    /// Mints new tokens to a target account. Driven by the registered authorized
+    /// caller (see [`Self::RegisterAuthorizedCaller`]) on the designated mint chain.
+    Mint {
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
         target_account: Account,
         amount: U128,
     },
-    /// Burns tokens from an account. Rejected by the contract — burning happens
-    /// automatically when tokens are transferred to an Address20 on the bridge chain.
+    /// Burns tokens from an account. Authorized only via the registered authorized
+    /// caller (see [`Self::RegisterAuthorizedCaller`]) on the designated mint chain.
     Burn { owner: AccountOwner, amount: U128 },
+    /// Registers the application authorized to drive `Mint`/`Burn`. Must run on
+    /// the designated `mint_chain_id` — the only chain where it is consulted — and
+    /// requires an authenticated signer. Because an authorized caller may take
+    /// this token's id as a creation parameter, the two cannot reference each
+    /// other at creation; this token is created first and registers its caller
+    /// afterwards.
+    RegisterAuthorizedCaller { app_id: ApplicationId },
 }
 
 /// Cross-chain message used by the wrapped fungible token application.

@@ -23,7 +23,11 @@ importers:
     devDependencies:
       '@vitest/browser':
         specifier: ^3.2.4
+<<<<<<< HEAD
         version: 3.2.4(playwright@1.58.0)(vite@7.1.7(yaml@2.8.3))(vitest@3.2.4)
+=======
+        version: 3.2.4(playwright@1.54.0)(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1))(vitest@3.2.4)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
       playwright:
         specifier: 1.58.0
         version: 1.58.0
@@ -44,7 +48,11 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
+<<<<<<< HEAD
         version: 3.2.4(@types/debug@4.1.13)(@vitest/browser@3.2.4)(yaml@2.8.3)
+=======
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.7.5)(@vitest/browser@3.2.4)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   ../web/@linera/metamask:
     dependencies:
@@ -73,7 +81,11 @@ importers:
     devDependencies:
       vite:
         specifier: 7.1.7
+<<<<<<< HEAD
         version: 7.1.7(yaml@2.8.3)
+=======
+        version: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   counter:
     dependencies:
@@ -98,10 +110,14 @@ importers:
         version: 5.9.3
       vite:
         specifier: 7.1.7
+<<<<<<< HEAD
         version: 7.1.7(yaml@2.8.3)
       vite-plugin-checker:
         specifier: ^0.8.0
         version: 0.8.0(eslint@9.39.4)(optionator@0.9.4)(stylelint@16.26.1(typescript@5.9.3))(typescript@5.9.3)(vite@7.1.7(yaml@2.8.3))
+=======
+        version: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   counter/metamask:
     dependencies:
@@ -113,8 +129,13 @@ importers:
         version: link:../../../web/@linera/metamask
     devDependencies:
       vite:
+<<<<<<< HEAD
         specifier: ^7.1.7
         version: 7.1.7(yaml@2.8.3)
+=======
+        specifier: 7.1.7
+        version: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   native-fungible:
     dependencies:
@@ -136,10 +157,14 @@ importers:
         version: 5.9.3
       vite:
         specifier: 7.1.7
+<<<<<<< HEAD
         version: 7.1.7(yaml@2.8.3)
       vite-plugin-checker:
         specifier: ^0.8.0
         version: 0.8.0(eslint@9.39.4)(optionator@0.9.4)(stylelint@16.26.1(typescript@5.9.3))(typescript@5.9.3)(vite@7.1.7(yaml@2.8.3))
+=======
+        version: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   native-fungible/metamask:
     dependencies:
@@ -151,8 +176,13 @@ importers:
         version: link:../../../web/@linera/metamask
     devDependencies:
       vite:
+<<<<<<< HEAD
         specifier: ^7.1.7
         version: 7.1.7(yaml@2.8.3)
+=======
+        specifier: 7.1.7
+        version: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
 packages:
 
@@ -171,6 +201,7 @@ packages:
     resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
 
+<<<<<<< HEAD
   '@cacheable/memory@2.0.8':
     resolution: {integrity: sha512-FvEb29x5wVwu/Kf93IWwsOOEuhHh6dYCJF3vcKLzXc0KXIW181AOzv6ceT4ZpBHDvAfG60eqb+ekmrnLHIy+jw==}
 
@@ -213,102 +244,186 @@ packages:
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
+=======
+  '@esbuild/aix-ppc64@0.25.10':
+    resolution: {integrity: sha512-0NFWnA+7l41irNuaSVlLfgNT12caWJVLzp5eAVhZ0z1qpxbockccEt3s+149rE64VUI3Ml2zt8Nv5JVc4QXTsw==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [ppc64]
     os: [aix]
 
+<<<<<<< HEAD
   '@esbuild/android-arm64@0.25.12':
     resolution: {integrity: sha512-6AAmLG7zwD1Z159jCKPvAxZd4y/VTO0VkprYy+3N2FtJ8+BQWFXU+OxARIwA46c5tdD9SsKGZ/1ocqBS/gAKHg==}
+=======
+  '@esbuild/android-arm64@0.25.10':
+    resolution: {integrity: sha512-LSQa7eDahypv/VO6WKohZGPSJDq5OVOo3UoFR1E4t4Gj1W7zEQMUhI+lo81H+DtB+kP+tDgBp+M4oNCwp6kffg==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [android]
 
+<<<<<<< HEAD
   '@esbuild/android-arm@0.25.12':
     resolution: {integrity: sha512-VJ+sKvNA/GE7Ccacc9Cha7bpS8nyzVv0jdVgwNDaR4gDMC/2TTRc33Ip8qrNYUcpkOHUT5OZ0bUcNNVZQ9RLlg==}
+=======
+  '@esbuild/android-arm@0.25.10':
+    resolution: {integrity: sha512-dQAxF1dW1C3zpeCDc5KqIYuZ1tgAdRXNoZP7vkBIRtKZPYe2xVr/d3SkirklCHudW1B45tGiUlz2pUWDfbDD4w==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [arm]
     os: [android]
 
+<<<<<<< HEAD
   '@esbuild/android-x64@0.25.12':
     resolution: {integrity: sha512-5jbb+2hhDHx5phYR2By8GTWEzn6I9UqR11Kwf22iKbNpYrsmRB18aX/9ivc5cabcUiAT/wM+YIZ6SG9QO6a8kg==}
+=======
+  '@esbuild/android-x64@0.25.10':
+    resolution: {integrity: sha512-MiC9CWdPrfhibcXwr39p9ha1x0lZJ9KaVfvzA0Wxwz9ETX4v5CHfF09bx935nHlhi+MxhA63dKRRQLiVgSUtEg==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [android]
 
+<<<<<<< HEAD
   '@esbuild/darwin-arm64@0.25.12':
     resolution: {integrity: sha512-N3zl+lxHCifgIlcMUP5016ESkeQjLj/959RxxNYIthIg+CQHInujFuXeWbWMgnTo4cp5XVHqFPmpyu9J65C1Yg==}
+=======
+  '@esbuild/darwin-arm64@0.25.10':
+    resolution: {integrity: sha512-JC74bdXcQEpW9KkV326WpZZjLguSZ3DfS8wrrvPMHgQOIEIG/sPXEN/V8IssoJhbefLRcRqw6RQH2NnpdprtMA==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [darwin]
 
+<<<<<<< HEAD
   '@esbuild/darwin-x64@0.25.12':
     resolution: {integrity: sha512-HQ9ka4Kx21qHXwtlTUVbKJOAnmG1ipXhdWTmNXiPzPfWKpXqASVcWdnf2bnL73wgjNrFXAa3yYvBSd9pzfEIpA==}
+=======
+  '@esbuild/darwin-x64@0.25.10':
+    resolution: {integrity: sha512-tguWg1olF6DGqzws97pKZ8G2L7Ig1vjDmGTwcTuYHbuU6TTjJe5FXbgs5C1BBzHbJ2bo1m3WkQDbWO2PvamRcg==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [darwin]
 
+<<<<<<< HEAD
   '@esbuild/freebsd-arm64@0.25.12':
     resolution: {integrity: sha512-gA0Bx759+7Jve03K1S0vkOu5Lg/85dou3EseOGUes8flVOGxbhDDh/iZaoek11Y8mtyKPGF3vP8XhnkDEAmzeg==}
+=======
+  '@esbuild/freebsd-arm64@0.25.10':
+    resolution: {integrity: sha512-3ZioSQSg1HT2N05YxeJWYR+Libe3bREVSdWhEEgExWaDtyFbbXWb49QgPvFH8u03vUPX10JhJPcz7s9t9+boWg==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [freebsd]
 
+<<<<<<< HEAD
   '@esbuild/freebsd-x64@0.25.12':
     resolution: {integrity: sha512-TGbO26Yw2xsHzxtbVFGEXBFH0FRAP7gtcPE7P5yP7wGy7cXK2oO7RyOhL5NLiqTlBh47XhmIUXuGciXEqYFfBQ==}
+=======
+  '@esbuild/freebsd-x64@0.25.10':
+    resolution: {integrity: sha512-LLgJfHJk014Aa4anGDbh8bmI5Lk+QidDmGzuC2D+vP7mv/GeSN+H39zOf7pN5N8p059FcOfs2bVlrRr4SK9WxA==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [freebsd]
 
+<<<<<<< HEAD
   '@esbuild/linux-arm64@0.25.12':
     resolution: {integrity: sha512-8bwX7a8FghIgrupcxb4aUmYDLp8pX06rGh5HqDT7bB+8Rdells6mHvrFHHW2JAOPZUbnjUpKTLg6ECyzvas2AQ==}
+=======
+  '@esbuild/linux-arm64@0.25.10':
+    resolution: {integrity: sha512-5luJWN6YKBsawd5f9i4+c+geYiVEw20FVW5x0v1kEMWNq8UctFjDiMATBxLvmmHA4bf7F6hTRaJgtghFr9iziQ==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-arm@0.25.12':
     resolution: {integrity: sha512-lPDGyC1JPDou8kGcywY0YILzWlhhnRjdof3UlcoqYmS9El818LLfJJc3PXXgZHrHCAKs/Z2SeZtDJr5MrkxtOw==}
+=======
+  '@esbuild/linux-arm@0.25.10':
+    resolution: {integrity: sha512-oR31GtBTFYCqEBALI9r6WxoU/ZofZl962pouZRTEYECvNF/dtXKku8YXcJkhgK/beU+zedXfIzHijSRapJY3vg==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [arm]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-ia32@0.25.12':
     resolution: {integrity: sha512-0y9KrdVnbMM2/vG8KfU0byhUN+EFCny9+8g202gYqSSVMonbsCfLjUO+rCci7pM0WBEtz+oK/PIwHkzxkyharA==}
+=======
+  '@esbuild/linux-ia32@0.25.10':
+    resolution: {integrity: sha512-NrSCx2Kim3EnnWgS4Txn0QGt0Xipoumb6z6sUtl5bOEZIVKhzfyp/Lyw4C1DIYvzeW/5mWYPBFJU3a/8Yr75DQ==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [ia32]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-loong64@0.25.12':
     resolution: {integrity: sha512-h///Lr5a9rib/v1GGqXVGzjL4TMvVTv+s1DPoxQdz7l/AYv6LDSxdIwzxkrPW438oUXiDtwM10o9PmwS/6Z0Ng==}
+=======
+  '@esbuild/linux-loong64@0.25.10':
+    resolution: {integrity: sha512-xoSphrd4AZda8+rUDDfD9J6FUMjrkTz8itpTITM4/xgerAZZcFW7Dv+sun7333IfKxGG8gAq+3NbfEMJfiY+Eg==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [loong64]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-mips64el@0.25.12':
     resolution: {integrity: sha512-iyRrM1Pzy9GFMDLsXn1iHUm18nhKnNMWscjmp4+hpafcZjrr2WbT//d20xaGljXDBYHqRcl8HnxbX6uaA/eGVw==}
+=======
+  '@esbuild/linux-mips64el@0.25.10':
+    resolution: {integrity: sha512-ab6eiuCwoMmYDyTnyptoKkVS3k8fy/1Uvq7Dj5czXI6DF2GqD2ToInBI0SHOp5/X1BdZ26RKc5+qjQNGRBelRA==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [mips64el]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-ppc64@0.25.12':
     resolution: {integrity: sha512-9meM/lRXxMi5PSUqEXRCtVjEZBGwB7P/D4yT8UG/mwIdze2aV4Vo6U5gD3+RsoHXKkHCfSxZKzmDssVlRj1QQA==}
+=======
+  '@esbuild/linux-ppc64@0.25.10':
+    resolution: {integrity: sha512-NLinzzOgZQsGpsTkEbdJTCanwA5/wozN9dSgEl12haXJBzMTpssebuXR42bthOF3z7zXFWH1AmvWunUCkBE4EA==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [ppc64]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-riscv64@0.25.12':
     resolution: {integrity: sha512-Zr7KR4hgKUpWAwb1f3o5ygT04MzqVrGEGXGLnj15YQDJErYu/BGg+wmFlIDOdJp0PmB0lLvxFIOXZgFRrdjR0w==}
+=======
+  '@esbuild/linux-riscv64@0.25.10':
+    resolution: {integrity: sha512-FE557XdZDrtX8NMIeA8LBJX3dC2M8VGXwfrQWU7LB5SLOajfJIxmSdyL/gU1m64Zs9CBKvm4UAuBp5aJ8OgnrA==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [riscv64]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-s390x@0.25.12':
     resolution: {integrity: sha512-MsKncOcgTNvdtiISc/jZs/Zf8d0cl/t3gYWX8J9ubBnVOwlk65UIEEvgBORTiljloIWnBzLs4qhzPkJcitIzIg==}
+=======
+  '@esbuild/linux-s390x@0.25.10':
+    resolution: {integrity: sha512-3BBSbgzuB9ajLoVZk0mGu+EHlBwkusRmeNYdqmznmMc9zGASFjSsxgkNsqmXugpPk00gJ0JNKh/97nxmjctdew==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [s390x]
     os: [linux]
 
+<<<<<<< HEAD
   '@esbuild/linux-x64@0.25.12':
     resolution: {integrity: sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw==}
+=======
+  '@esbuild/linux-x64@0.25.10':
+    resolution: {integrity: sha512-QSX81KhFoZGwenVyPoberggdW1nrQZSvfVDAIUXr3WqLRZGZqWk/P4T8p2SP+de2Sr5HPcvjhcJzEiulKgnxtA==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [linux]
@@ -319,8 +434,13 @@ packages:
     cpu: [arm64]
     os: [netbsd]
 
+<<<<<<< HEAD
   '@esbuild/netbsd-x64@0.25.12':
     resolution: {integrity: sha512-Ld5pTlzPy3YwGec4OuHh1aCVCRvOXdH8DgRjfDy/oumVovmuSzWfnSJg+VtakB9Cm0gxNO9BzWkj6mtO1FMXkQ==}
+=======
+  '@esbuild/netbsd-x64@0.25.10':
+    resolution: {integrity: sha512-7RTytDPGU6fek/hWuN9qQpeGPBZFfB4zZgcz2VK2Z5VpdUxEI8JKYsg3JfO0n/Z1E/6l05n0unDCNc4HnhQGig==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [netbsd]
@@ -331,8 +451,13 @@ packages:
     cpu: [arm64]
     os: [openbsd]
 
+<<<<<<< HEAD
   '@esbuild/openbsd-x64@0.25.12':
     resolution: {integrity: sha512-MZyXUkZHjQxUvzK7rN8DJ3SRmrVrke8ZyRusHlP+kuwqTcfWLyqMOE3sScPPyeIXN/mDJIfGXvcMqCgYKekoQw==}
+=======
+  '@esbuild/openbsd-x64@0.25.10':
+    resolution: {integrity: sha512-XkA4frq1TLj4bEMB+2HnI0+4RnjbuGZfet2gs/LNs5Hc7D89ZQBHQ0gL2ND6Lzu1+QVkjp3x1gIcPKzRNP8bXw==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [openbsd]
@@ -343,26 +468,46 @@ packages:
     cpu: [arm64]
     os: [openharmony]
 
+<<<<<<< HEAD
   '@esbuild/sunos-x64@0.25.12':
     resolution: {integrity: sha512-3wGSCDyuTHQUzt0nV7bocDy72r2lI33QL3gkDNGkod22EsYl04sMf0qLb8luNKTOmgF/eDEDP5BFNwoBKH441w==}
+=======
+  '@esbuild/sunos-x64@0.25.10':
+    resolution: {integrity: sha512-fswk3XT0Uf2pGJmOpDB7yknqhVkJQkAQOcW/ccVOtfx05LkbWOaRAtn5SaqXypeKQra1QaEa841PgrSL9ubSPQ==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [sunos]
 
+<<<<<<< HEAD
   '@esbuild/win32-arm64@0.25.12':
     resolution: {integrity: sha512-rMmLrur64A7+DKlnSuwqUdRKyd3UE7oPJZmnljqEptesKM8wx9J8gx5u0+9Pq0fQQW8vqeKebwNXdfOyP+8Bsg==}
+=======
+  '@esbuild/win32-arm64@0.25.10':
+    resolution: {integrity: sha512-ah+9b59KDTSfpaCg6VdJoOQvKjI33nTaQr4UluQwW7aEwZQsbMCfTmfEO4VyewOxx4RaDT/xCy9ra2GPWmO7Kw==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [arm64]
     os: [win32]
 
+<<<<<<< HEAD
   '@esbuild/win32-ia32@0.25.12':
     resolution: {integrity: sha512-HkqnmmBoCbCwxUKKNPBixiWDGCpQGVsrQfJoVGYLPT41XWF8lHuE5N6WhVia2n4o5QK5M4tYr21827fNhi4byQ==}
+=======
+  '@esbuild/win32-ia32@0.25.10':
+    resolution: {integrity: sha512-QHPDbKkrGO8/cz9LKVnJU22HOi4pxZnZhhA2HYHez5Pz4JeffhDjf85E57Oyco163GnzNCVkZK0b/n4Y0UHcSw==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [ia32]
     os: [win32]
 
+<<<<<<< HEAD
   '@esbuild/win32-x64@0.25.12':
     resolution: {integrity: sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA==}
+=======
+  '@esbuild/win32-x64@0.25.10':
+    resolution: {integrity: sha512-9KpxSVFCu0iK1owoez6aC/s/EdUQLDN3adTxGCqxMVhrPDj6bt5dbrHDXUuq+Bs2vATFBBrQS5vdQ/Ed2P+nbw==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
@@ -993,8 +1138,13 @@ packages:
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
 
+<<<<<<< HEAD
   esbuild@0.25.12:
     resolution: {integrity: sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==}
+=======
+  esbuild@0.25.10:
+    resolution: {integrity: sha512-9RiGKvCwaqxO2owP61uQ4BgNborAQskMR6QusfWzQqv7AZOg5oGehdY2pRJMTKuwxd1IDBP4rSbI5lHzU7SMsQ==}
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     engines: {node: '>=18'}
     hasBin: true
 
@@ -1705,6 +1855,7 @@ packages:
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
 
+<<<<<<< HEAD
   universalify@2.0.1:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
     engines: {node: '>= 10.0.0'}
@@ -1712,11 +1863,14 @@ packages:
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
 
+=======
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   vite-node@3.2.4:
@@ -1724,6 +1878,7 @@ packages:
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
     hasBin: true
 
+<<<<<<< HEAD
   vite-plugin-checker@0.8.0:
     resolution: {integrity: sha512-UA5uzOGm97UvZRTdZHiQVYFnd86AVn8EVaD4L3PoVzxH+IZSfaAw14WGFwX9QS23UW3lV/5bVKZn6l0w+q9P0g==}
     engines: {node: '>=14.16'}
@@ -1758,6 +1913,8 @@ packages:
       vue-tsc:
         optional: true
 
+=======
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
   vite@7.1.7:
     resolution: {integrity: sha512-VbA8ScMvAISJNJVbRDTJdCwqQoAareR/wutevKanhR2/1EkoXVZVkkORaYm/tNVCjP/UDTKtcw3bAkwOUdedmA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -1925,6 +2082,7 @@ snapshots:
 
   '@babel/runtime@7.29.2': {}
 
+<<<<<<< HEAD
   '@cacheable/memory@2.0.8':
     dependencies:
       '@cacheable/utils': 2.4.0
@@ -2081,6 +2239,85 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+=======
+  '@esbuild/aix-ppc64@0.25.10':
+    optional: true
+
+  '@esbuild/android-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/android-arm@0.25.10':
+    optional: true
+
+  '@esbuild/android-x64@0.25.10':
+    optional: true
+
+  '@esbuild/darwin-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/darwin-x64@0.25.10':
+    optional: true
+
+  '@esbuild/freebsd-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/freebsd-x64@0.25.10':
+    optional: true
+
+  '@esbuild/linux-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/linux-arm@0.25.10':
+    optional: true
+
+  '@esbuild/linux-ia32@0.25.10':
+    optional: true
+
+  '@esbuild/linux-loong64@0.25.10':
+    optional: true
+
+  '@esbuild/linux-mips64el@0.25.10':
+    optional: true
+
+  '@esbuild/linux-ppc64@0.25.10':
+    optional: true
+
+  '@esbuild/linux-riscv64@0.25.10':
+    optional: true
+
+  '@esbuild/linux-s390x@0.25.10':
+    optional: true
+
+  '@esbuild/linux-x64@0.25.10':
+    optional: true
+
+  '@esbuild/netbsd-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/netbsd-x64@0.25.10':
+    optional: true
+
+  '@esbuild/openbsd-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/openbsd-x64@0.25.10':
+    optional: true
+
+  '@esbuild/openharmony-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/sunos-x64@0.25.10':
+    optional: true
+
+  '@esbuild/win32-arm64@0.25.10':
+    optional: true
+
+  '@esbuild/win32-ia32@0.25.10':
+    optional: true
+
+  '@esbuild/win32-x64@0.25.10':
+    optional: true
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   '@ethereumjs/common@3.2.0':
     dependencies:
@@ -2390,17 +2627,30 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
+<<<<<<< HEAD
   '@vitest/browser@3.2.4(playwright@1.58.0)(vite@7.1.7(yaml@2.8.3))(vitest@3.2.4)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
       '@vitest/mocker': 3.2.4(vite@7.1.7(yaml@2.8.3))
+=======
+  '@vitest/browser@3.2.4(playwright@1.54.0)(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1))(vitest@3.2.4)':
+    dependencies:
+      '@testing-library/dom': 10.4.1
+      '@testing-library/user-event': 14.6.1(@testing-library/dom@10.4.1)
+      '@vitest/mocker': 3.2.4(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1))
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
       '@vitest/utils': 3.2.4
       magic-string: 0.30.21
       sirv: 3.0.2
       tinyrainbow: 2.0.0
+<<<<<<< HEAD
       vitest: 3.2.4(@types/debug@4.1.13)(@vitest/browser@3.2.4)(yaml@2.8.3)
       ws: 8.20.0
+=======
+      vitest: 3.2.4(@types/debug@4.1.12)(@types/node@22.7.5)(@vitest/browser@3.2.4)(yaml@2.8.1)
+      ws: 8.18.3
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     optionalDependencies:
       playwright: 1.58.0
     transitivePeerDependencies:
@@ -2417,13 +2667,21 @@ snapshots:
       chai: 5.3.3
       tinyrainbow: 2.0.0
 
+<<<<<<< HEAD
   '@vitest/mocker@3.2.4(vite@7.1.7(yaml@2.8.3))':
+=======
+  '@vitest/mocker@3.2.4(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1))':
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     dependencies:
       '@vitest/spy': 3.2.4
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
+<<<<<<< HEAD
       vite: 7.1.7(yaml@2.8.3)
+=======
+      vite: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   '@vitest/pretty-format@3.2.4':
     dependencies:
@@ -2636,6 +2894,7 @@ snapshots:
 
   es-module-lexer@1.7.0: {}
 
+<<<<<<< HEAD
   esbuild@0.25.12:
     optionalDependencies:
       '@esbuild/aix-ppc64': 0.25.12
@@ -2730,6 +2989,36 @@ snapshots:
       estraverse: 5.3.0
 
   estraverse@5.3.0: {}
+=======
+  esbuild@0.25.10:
+    optionalDependencies:
+      '@esbuild/aix-ppc64': 0.25.10
+      '@esbuild/android-arm': 0.25.10
+      '@esbuild/android-arm64': 0.25.10
+      '@esbuild/android-x64': 0.25.10
+      '@esbuild/darwin-arm64': 0.25.10
+      '@esbuild/darwin-x64': 0.25.10
+      '@esbuild/freebsd-arm64': 0.25.10
+      '@esbuild/freebsd-x64': 0.25.10
+      '@esbuild/linux-arm': 0.25.10
+      '@esbuild/linux-arm64': 0.25.10
+      '@esbuild/linux-ia32': 0.25.10
+      '@esbuild/linux-loong64': 0.25.10
+      '@esbuild/linux-mips64el': 0.25.10
+      '@esbuild/linux-ppc64': 0.25.10
+      '@esbuild/linux-riscv64': 0.25.10
+      '@esbuild/linux-s390x': 0.25.10
+      '@esbuild/linux-x64': 0.25.10
+      '@esbuild/netbsd-arm64': 0.25.10
+      '@esbuild/netbsd-x64': 0.25.10
+      '@esbuild/openbsd-arm64': 0.25.10
+      '@esbuild/openbsd-x64': 0.25.10
+      '@esbuild/openharmony-arm64': 0.25.10
+      '@esbuild/sunos-x64': 0.25.10
+      '@esbuild/win32-arm64': 0.25.10
+      '@esbuild/win32-ia32': 0.25.10
+      '@esbuild/win32-x64': 0.25.10
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   estree-walker@3.0.3:
     dependencies:
@@ -3377,23 +3666,34 @@ snapshots:
 
   undici-types@6.19.8: {}
 
+<<<<<<< HEAD
   universalify@2.0.1: {}
 
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
 
+=======
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
   util-deprecate@1.0.2: {}
 
   uuid@9.0.1: {}
 
+<<<<<<< HEAD
   vite-node@3.2.4(yaml@2.8.3):
+=======
+  vite-node@3.2.4(@types/node@22.7.5)(yaml@2.8.1):
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
+<<<<<<< HEAD
       vite: 7.1.7(yaml@2.8.3)
+=======
+      vite: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -3408,6 +3708,7 @@ snapshots:
       - tsx
       - yaml
 
+<<<<<<< HEAD
   vite-plugin-checker@0.8.0(eslint@9.39.4)(optionator@0.9.4)(stylelint@16.26.1(typescript@5.9.3))(typescript@5.9.3)(vite@7.1.7(yaml@2.8.3)):
     dependencies:
       '@babel/code-frame': 7.29.0
@@ -3440,14 +3741,34 @@ snapshots:
       rollup: 4.60.0
       tinyglobby: 0.2.15
     optionalDependencies:
+=======
+  vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1):
+    dependencies:
+      esbuild: 0.25.10
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
+      postcss: 8.5.6
+      rollup: 4.52.2
+      tinyglobby: 0.2.15
+    optionalDependencies:
+      '@types/node': 22.7.5
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
       fsevents: 2.3.3
       yaml: 2.8.3
 
+<<<<<<< HEAD
   vitest@3.2.4(@types/debug@4.1.13)(@vitest/browser@3.2.4)(yaml@2.8.3):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.4
       '@vitest/mocker': 3.2.4(vite@7.1.7(yaml@2.8.3))
+=======
+  vitest@3.2.4(@types/debug@4.1.12)(@types/node@22.7.5)(@vitest/browser@3.2.4)(yaml@2.8.1):
+    dependencies:
+      '@types/chai': 5.2.3
+      '@vitest/expect': 3.2.4
+      '@vitest/mocker': 3.2.4(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1))
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
       '@vitest/pretty-format': 3.2.4
       '@vitest/runner': 3.2.4
       '@vitest/snapshot': 3.2.4
@@ -3465,12 +3786,22 @@ snapshots:
       tinyglobby: 0.2.15
       tinypool: 1.1.1
       tinyrainbow: 2.0.0
+<<<<<<< HEAD
       vite: 7.1.7(yaml@2.8.3)
       vite-node: 3.2.4(yaml@2.8.3)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/debug': 4.1.13
       '@vitest/browser': 3.2.4(playwright@1.58.0)(vite@7.1.7(yaml@2.8.3))(vitest@3.2.4)
+=======
+      vite: 7.1.7(@types/node@22.7.5)(yaml@2.8.1)
+      vite-node: 3.2.4(@types/node@22.7.5)(yaml@2.8.1)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/debug': 4.1.12
+      '@types/node': 22.7.5
+      '@vitest/browser': 3.2.4(playwright@1.54.0)(vite@7.1.7(@types/node@22.7.5)(yaml@2.8.1))(vitest@3.2.4)
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     transitivePeerDependencies:
       - jiti
       - less
@@ -3484,6 +3815,7 @@ snapshots:
       - terser
       - tsx
       - yaml
+<<<<<<< HEAD
 
   vscode-jsonrpc@6.0.0: {}
 
@@ -3507,6 +3839,8 @@ snapshots:
       vscode-languageserver-protocol: 3.16.0
 
   vscode-uri@3.1.0: {}
+=======
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
   webextension-polyfill@0.12.0: {}
 

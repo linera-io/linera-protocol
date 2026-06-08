@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_sdk::{
+<<<<<<< HEAD
     linera_base_types::{AccountOwner, OwnerSpender, U128},
     views::{linera_views, MapView, RootView, ViewStorageContext},
+=======
+    linera_base_types::{AccountOwner, ApplicationId, U128},
+    views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 };
 use wrapped_fungible::InitialState;
 
@@ -14,6 +19,9 @@ use wrapped_fungible::InitialState;
 pub struct WrappedFungibleTokenState {
     pub accounts: MapView<AccountOwner, U128>,
     pub allowances: MapView<OwnerSpender, U128>,
+    /// The application authorized to drive `Mint`/`Burn`, set via
+    /// `RegisterAuthorizedCaller`. `None` until registered.
+    pub authorized_caller_id: RegisterView<Option<ApplicationId>>,
 }
 
 #[allow(dead_code)]

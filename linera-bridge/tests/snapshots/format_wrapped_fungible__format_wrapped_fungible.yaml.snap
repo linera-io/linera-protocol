@@ -23,6 +23,10 @@ AccountOwner:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
+ApplicationId:
+  STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
 BurnEvent:
   STRUCT:
     - target:
@@ -111,3 +115,8 @@ WrappedFungibleOperation:
           - owner:
               TYPENAME: AccountOwner
           - amount: U128
+    8:
+      RegisterAuthorizedCaller:
+        STRUCT:
+          - app_id:
+              TYPENAME: ApplicationId

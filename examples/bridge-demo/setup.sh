@@ -212,7 +212,7 @@ echo "  LineraToken: $TOKEN_ADDRESS"
 validate_eth_address "Token address" "$TOKEN_ADDRESS"
 TOKEN_ADDR_HEX=$(echo "$TOKEN_ADDRESS" | sed 's/^0x//')
 
-# ── 3b. Read relay owner (minter for wrapped-fungible) ──
+# ── 3b. Read relay owner (owns the bridge chain; performs the registrations) ──
 echo "Reading relay owner..."
 for i in $(seq 1 30); do
     RELAY_OWNER=$(dc_exec foundry-tools cat /shared/relay-owner 2>/dev/null | tr -d '[:space:]')
@@ -223,13 +223,59 @@ for i in $(seq 1 30); do
     sleep 2
 done
 [[ -z "$RELAY_OWNER" ]] && die "Relay owner not found within timeout"
-echo "  Relay owner (minter): $RELAY_OWNER"
+echo "  Relay owner: $RELAY_OWNER"
 
 # FungibleBridge is deployed below (step 7), after the wrapped-fungible app
 # is created so the canonical applicationId can be baked into its constructor.
 CHAIN_BYTES32="0x${BRIDGE_CHAIN_ID}"
 
-# ── 5. Publish and create evm-bridge app ──
+# ── 5. Publish and create wrapped-fungible app (first; the evm-bridge app takes
+#       its app ID as a creation parameter) ──
+echo "Syncing chain state..."
+linera_exec sync 2>&1
+linera_exec process-inbox 2>&1
+echo "Publishing and creating wrapped-fungible app..."
+WRAPPED_PARAMS=$(
+    TICKER="$TICKER_SYMBOL" \
+    DECIMALS="$TOKEN_DECIMALS" \
+    TOKEN_HEX="$TOKEN_ADDR_HEX" \
+    CHAIN_ID="$EVM_CHAIN_ID" \
+    BRIDGE_CHAIN="$BRIDGE_CHAIN_ID" \
+    python3 -c "
+import json, os
+def hex_to_array(h):
+    return [int(h[i:i+2], 16) for i in range(0, len(h), 2)]
+params = {
+    'ticker_symbol': os.environ['TICKER'],
+    'decimals': int(os.environ['DECIMALS']),
+    'mint_chain_id': os.environ['BRIDGE_CHAIN'],
+    'evm_token_address': hex_to_array(os.environ['TOKEN_HEX']),
+    'evm_source_chain_id': int(os.environ['CHAIN_ID']),
+}
+print(json.dumps(params))
+")
+for attempt in 1 2 3; do
+    WRAPPED_APP_OUTPUT=$(linera_exec publish-and-create \
+        "$WASM_DIR/wrapped_fungible_contract.wasm" \
+        "$WASM_DIR/wrapped_fungible_service.wasm" \
+        --json-parameters "$WRAPPED_PARAMS" \
+        --json-argument '{"accounts":{}}' 2>&1) && break
+    echo "  Attempt $attempt failed, retrying..." >&2
+    echo "$WRAPPED_APP_OUTPUT" >&2
+    sleep 2
+done
+[[ -z "$WRAPPED_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create wrapped-fungible failed after retries" >&2; exit 1; }
+WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)
+validate_hex64 "Wrapped-fungible app ID" "$WRAPPED_APP_ID"
+echo "  Wrapped-fungible app: $WRAPPED_APP_ID"
+
+# Write wrapped-fungible app ID to shared dir for relay.
+dc_exec --user root foundry-tools sh -c "echo '$WRAPPED_APP_ID' > /shared/wrapped-app-id"
+echo "$WRAPPED_APP_ID" > "$SHARED_DIR/wrapped-app-id"
+
+APP_ID_BYTES32="0x${WRAPPED_APP_ID}"
+
+# ── 6. Publish and create evm-bridge app (points at the wrapped app) ──
 echo "Syncing chain state..."
 linera_exec sync 2>&1
 linera_exec process-inbox 2>&1
@@ -237,6 +283,8 @@ echo "Publishing and creating evm-bridge app..."
 BRIDGE_PARAMS=$(
     CHAIN_ID="$EVM_CHAIN_ID" \
     TOKEN_HEX="$TOKEN_ADDR_HEX" \
+    BRIDGE_CHAIN="$BRIDGE_CHAIN_ID" \
+    FUNGIBLE_APP="$WRAPPED_APP_ID" \
     python3 -c "
 import json, os
 def hex_to_array(h):
@@ -244,6 +292,8 @@ def hex_to_array(h):
 params = {
     'source_chain_id': int(os.environ['CHAIN_ID']),
     'token_address': hex_to_array(os.environ['TOKEN_HEX']),
+    'bridge_chain_id': os.environ['BRIDGE_CHAIN'],
+    'fungible_app_id': os.environ['FUNGIBLE_APP'],
 }
 print(json.dumps(params))
 ")
@@ -272,54 +322,7 @@ echo "  Linera bridge app: $BRIDGE_APP_ID"
 dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_APP_ID' > /shared/bridge-app-id"
 echo "$BRIDGE_APP_ID" > "$SHARED_DIR/bridge-app-id"
 
-# ── 6. Publish and create wrapped-fungible app ──
-echo "Syncing chain state..."
-linera_exec sync 2>&1
-linera_exec process-inbox 2>&1
-echo "Publishing and creating wrapped-fungible app..."
-WRAPPED_PARAMS=$(
-    TICKER="$TICKER_SYMBOL" \
-    DECIMALS="$TOKEN_DECIMALS" \
-    MINTER="$RELAY_OWNER" \
-    TOKEN_HEX="$TOKEN_ADDR_HEX" \
-    CHAIN_ID="$EVM_CHAIN_ID" \
-    BRIDGE_CHAIN="$BRIDGE_CHAIN_ID" \
-    BRIDGE_APP="$BRIDGE_APP_ID" \
-    python3 -c "
-import json, os
-def hex_to_array(h):
-    return [int(h[i:i+2], 16) for i in range(0, len(h), 2)]
-params = {
-    'ticker_symbol': os.environ['TICKER'],
-    'decimals': int(os.environ['DECIMALS']),
-    'minter': os.environ['MINTER'],
-    'mint_chain_id': os.environ['BRIDGE_CHAIN'],
-    'evm_token_address': hex_to_array(os.environ['TOKEN_HEX']),
-    'evm_source_chain_id': int(os.environ['CHAIN_ID']),
-    'bridge_app_id': os.environ['BRIDGE_APP'],
-}
-print(json.dumps(params))
-")
-for attempt in 1 2 3; do
-    WRAPPED_APP_OUTPUT=$(linera_exec publish-and-create \
-        "$WASM_DIR/wrapped_fungible_contract.wasm" \
-        "$WASM_DIR/wrapped_fungible_service.wasm" \
-        --json-parameters "$WRAPPED_PARAMS" \
-        --json-argument '{"accounts":{}}' 2>&1) && break
-    echo "  Attempt $attempt failed, retrying..." >&2
-    echo "$WRAPPED_APP_OUTPUT" >&2
-    sleep 2
-done
-[[ -z "$WRAPPED_APP_OUTPUT" ]] && { echo "ERROR: publish-and-create wrapped-fungible failed after retries" >&2; exit 1; }
-WRAPPED_APP_ID=$(echo "$WRAPPED_APP_OUTPUT" | grep -oE '^[a-f0-9]{64}$' | tail -1)
-validate_hex64 "Wrapped-fungible app ID" "$WRAPPED_APP_ID"
-echo "  Wrapped-fungible app: $WRAPPED_APP_ID"
-
-# Write wrapped-fungible app ID to shared dir for relay.
-dc_exec --user root foundry-tools sh -c "echo '$WRAPPED_APP_ID' > /shared/wrapped-app-id"
-echo "$WRAPPED_APP_ID" > "$SHARED_DIR/wrapped-app-id"
-
-APP_ID_BYTES32="0x${WRAPPED_APP_ID:0:64}"
+BRIDGE_APP_ID_BYTES32="0x${BRIDGE_APP_ID}"
 
 # ── 7. Deploy FungibleBridge with the wrapped-fungible applicationId baked in ──
 echo "Deploying FungibleBridge via forge script..."
@@ -328,6 +331,7 @@ dc_exec foundry-tools env \
     BRIDGE_CHAIN_ID="$CHAIN_BYTES32" \
     TOKEN_ADDRESS="$TOKEN_ADDRESS" \
     FUNGIBLE_APP_ID="$APP_ID_BYTES32" \
+    BRIDGE_APP_ID="$BRIDGE_APP_ID_BYTES32" \
     forge script /contracts/script/DeployFungibleBridge.s.sol \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
@@ -348,23 +352,24 @@ echo "  FungibleBridge: $BRIDGE_ADDRESS"
 dc_exec --user root foundry-tools sh -c "echo '$BRIDGE_ADDRESS' > /shared/bridge-address"
 echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
-# ── 8. Register app IDs on both sides ──
-echo "Registering fungible app in evm-bridge..."
-# BCS encoding: variant index 0 (RegisterFungibleApp) + 32-byte app ID hash.
-# Must use the relay wallet since it owns the bridge chain.
-REGISTER_HEX="00${WRAPPED_APP_ID}"
+# ── 8. Register the bridge ↔ wrapped relationship on both sides ──
+echo "Registering the bridge as the wrapped-fungible authorized caller..."
+# BCS: WrappedFungibleOperation::RegisterAuthorizedCaller (variant 8) + 32-byte
+# bridge app ID. Submitted on the WRAPPED app, on the mint (bridge) chain — the
+# relay wallet owns that chain.
+REGISTER_CALLER_HEX="08${BRIDGE_APP_ID}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
     LINERA_STORAGE=rocksdb:/shared/relay-wallet/client.db \
     ./linera execute-operation \
-    --application-id "$BRIDGE_APP_ID" \
-    --operation "$REGISTER_HEX" \
+    --application-id "$WRAPPED_APP_ID" \
+    --operation "$REGISTER_CALLER_HEX" \
     --chain-id "$BRIDGE_CHAIN_ID" 2>&1
 
 echo "Registering FungibleBridge address in evm-bridge..."
-# BCS encoding: variant index 3 (RegisterFungibleBridge) + 20-byte EVM address.
-REGISTER_BRIDGE_HEX="03${BRIDGE_ADDR_HEX}"
+# BCS: BridgeOperation::RegisterFungibleBridge (variant 2) + 20-byte EVM address.
+REGISTER_BRIDGE_HEX="02${BRIDGE_ADDR_HEX}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
@@ -373,7 +378,7 @@ dc_exec linera-network env \
     --application-id "$BRIDGE_APP_ID" \
     --operation "$REGISTER_BRIDGE_HEX" \
     --chain-id "$BRIDGE_CHAIN_ID" 2>&1
-echo "  App IDs registered on both sides"
+echo "  Registered: bridge as wrapped's authorized caller; FungibleBridge address in evm-bridge"
 
 # ── 8. Fund FungibleBridge with ERC20 tokens ──
 if [[ "$FUND_AMOUNT" != "0" ]]; then

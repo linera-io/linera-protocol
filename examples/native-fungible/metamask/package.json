@@ -16,6 +16,10 @@
     "@linera/metamask": "workspace:*"
   },
   "devDependencies": {
+<<<<<<< HEAD
     "vite": "^7.1.7"
+=======
+    "vite": "7.1.7"
+>>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
   }
 }
