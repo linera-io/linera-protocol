@@ -20,7 +20,7 @@ mod pending_blobs;
 #[cfg(with_testing)]
 pub mod test;
 
-pub use chain::{ChainStateView, ChainTipState};
+pub use chain::{ChainIdSet, ChainStateView, ChainTipState};
 use data_types::{MessageBundle, PostedMessage};
 use linera_base::{
     bcs,

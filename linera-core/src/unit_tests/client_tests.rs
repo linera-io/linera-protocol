@@ -4278,6 +4278,24 @@ where
             *outbox_chain.next_height_to_schedule.get(),
             BlockHeight::from(1)
         );
+        // The follower only follows `chain_id`; it does not track the recipient, so the
+        // tracked-only outbox indices stay empty even though the queue above was restored.
+        assert!(!chain_state
+            .nonempty_outboxes
+            .get()
+            .contains(&recipient.chain_id()));
+        assert!(chain_state.outbox_counters.get().is_empty());
+    }
+
+    // The restored queue is what lets delivery resume once the recipient is tracked: reconciling
+    // against a tracked set that includes it rebuilds the indices from that queue.
+    {
+        let tracked = linera_base::hashed::Hashed::new(linera_chain::ChainIdSet(
+            [recipient.chain_id()].into_iter().collect(),
+        ));
+        let storage = follower.storage_client();
+        let mut chain_state = storage.load_chain(chain_id).await?;
+        chain_state.reconcile_outbox_index(Some(&tracked)).await?;
         assert!(chain_state
             .nonempty_outboxes
             .get()
