@@ -9,7 +9,7 @@ use linera_base::{
 
 use super::*;
 use crate::{
-    block::{Block, ConfirmedBlock, ValidatedBlock},
+    block::{Block, BlockBodyField, ConfirmedBlock, ValidatedBlock},
     test::{make_first_block, BlockTestExt},
 };
 
@@ -53,6 +53,36 @@ fn block_serde_round_trip_preserves_hash() {
     let restored: Block = bcs::from_bytes(&bytes).unwrap();
     assert_eq!(restored, block);
     assert_eq!(restored.hash(), hash);
+}
+
+#[test]
+fn header_verifies_each_body_field() {
+    let block = sample_block();
+    let h = &block.header;
+    let b = &block.body;
+    assert!(h.verifies(&BlockBodyField::Transactions(b.transactions.clone())));
+    assert!(h.verifies(&BlockBodyField::Messages(b.messages.clone())));
+    assert!(h.verifies(&BlockBodyField::PreviousMessageBlocks(
+        b.previous_message_blocks.clone()
+    )));
+    assert!(h.verifies(&BlockBodyField::PreviousEventBlocks(
+        b.previous_event_blocks.clone()
+    )));
+    assert!(h.verifies(&BlockBodyField::OracleResponses(b.oracle_responses.clone())));
+    assert!(h.verifies(&BlockBodyField::Events(b.events.clone())));
+    assert!(h.verifies(&BlockBodyField::Blobs(b.blobs.clone())));
+    assert!(h.verifies(&BlockBodyField::OperationResults(
+        b.operation_results.clone()
+    )));
+}
+
+#[test]
+fn header_rejects_wrong_field() {
+    let block = sample_block();
+    // sample_block contains one transfer, so an empty transactions list must not verify.
+    assert!(!block
+        .header
+        .verifies(&BlockBodyField::Transactions(Vec::new())));
 }
 
 #[test]
