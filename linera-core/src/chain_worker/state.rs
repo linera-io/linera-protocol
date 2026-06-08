@@ -33,8 +33,8 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
-    ExecutionResultExt as _, StreamCounts,
+    BlockExecutionPhase, ChainError, ChainExecutionContext, ChainIdSet, ChainStateView,
+    ChainTipState, ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -1300,6 +1300,7 @@ where
                     &published_blobs,
                     oracle_responses,
                     BundleExecutionPolicy::committed(),
+                    BlockExecutionPhase::HandleConfirmed,
                 )
                 .await?;
             // We should always agree on the messages and state hash.
@@ -2302,7 +2303,15 @@ where
             .remove_bundles_from_inboxes(block.timestamp, true, block.incoming_bundles())
             .await?;
         let (executed_block, resource_tracker, never_reject_origins) =
-            Box::pin(self.execute_block(block, local_time, round, published_blobs, policy)).await?;
+            Box::pin(self.execute_block(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                policy,
+                BlockExecutionPhase::StageProposal,
+            ))
+            .await?;
 
         // No need to sign: only used internally.
         let info = ChainInfo::from_chain_view(&mut self.chain).await?;
@@ -2498,6 +2507,7 @@ where
                 round.multi_leader(),
                 &published_blobs,
                 BundleExecutionPolicy::committed(),
+                BlockExecutionPhase::HandleProposal,
             ))
             .await?;
             executed_block
@@ -2654,12 +2664,19 @@ where
         round: Option<u32>,
         published_blobs: &[Blob],
         policy: BundleExecutionPolicy,
+        phase: BlockExecutionPhase,
     ) -> Result<(Block, ResourceTracker, HashSet<ChainId>), WorkerError> {
-        let (proposed_block, outcome, resource_tracker, never_reject_origins) = Box::pin(
-            self.chain
-                .execute_block(block, local_time, round, published_blobs, None, policy),
-        )
-        .await?;
+        let (proposed_block, outcome, resource_tracker, never_reject_origins) =
+            Box::pin(self.chain.execute_block(
+                block,
+                local_time,
+                round,
+                published_blobs,
+                None,
+                policy,
+                phase,
+            ))
+            .await?;
         let executed_block = Block::new(proposed_block, outcome);
         let block_hash = executed_block.hash();
         if let Some(cache) = &self.execution_state_cache {
