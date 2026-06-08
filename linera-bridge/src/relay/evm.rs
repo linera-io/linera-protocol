@@ -130,17 +130,17 @@ impl<P: Provider> EvmClient<P> {
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
     ) -> Result<()> {
-        let cert_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
+        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
             .context("failed to BCS-serialize block proof")?;
 
         tracing::info!(
-            size = cert_bytes.len(),
+            size = proof_bytes.len(),
             "Calling addBlock on FungibleBridge..."
         );
 
         let bridge_contract = IFungibleBridge::new(self.bridge_addr, &self.provider);
         let pending_tx = bridge_contract
-            .addBlock(cert_bytes.into())
+            .addBlock(proof_bytes.into())
             .send()
             .await
             .context("addBlock send failed")?;
@@ -165,11 +165,11 @@ impl<P: Provider> EvmClient<P> {
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
     ) -> alloy::contract::Result<u64> {
-        let cert_bytes =
+        let proof_bytes =
             bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
-        let cert_size = cert_bytes.len();
+        let cert_size = proof_bytes.len();
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        let estimate = bridge.addBlock(cert_bytes.into()).estimate_gas().await;
+        let estimate = bridge.addBlock(proof_bytes.into()).estimate_gas().await;
         tracing::debug!(?estimate, cert_size, "addBlock gas estimate");
         estimate
     }
@@ -182,13 +182,13 @@ impl<P: Provider> EvmClient<P> {
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
-        let cert_bytes =
+        let proof_bytes =
             bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
-        let cert_size = cert_bytes.len();
+        let cert_size = proof_bytes.len();
         let count = positions_in_tx.len();
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         let estimate = bridge
-            .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
+            .processBurns(proof_bytes.into(), tx_index, positions_in_tx.to_vec())
             .estimate_gas()
             .await;
         tracing::debug!(
@@ -209,17 +209,17 @@ impl<P: Provider> EvmClient<P> {
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> Result<()> {
-        let cert_bytes =
+        let proof_bytes =
             bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         tracing::info!(
             tx_index,
             count = positions_in_tx.len(),
-            size = cert_bytes.len(),
+            size = proof_bytes.len(),
             "Calling processBurns on FungibleBridge..."
         );
         let pending_tx = bridge
-            .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
+            .processBurns(proof_bytes.into(), tx_index, positions_in_tx.to_vec())
             .send()
             .await
             .context("processBurns send failed")?;
