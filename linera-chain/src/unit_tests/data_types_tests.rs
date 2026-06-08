@@ -86,6 +86,36 @@ fn header_rejects_wrong_field() {
 }
 
 #[test]
+fn light_client_verifies_header_and_one_field() {
+    let validator_key_pair = ValidatorKeypair::generate();
+    let account_secret = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
+    let committee = Committee::make_simple(vec![(
+        validator_key_pair.public_key,
+        account_secret.public(),
+    )]);
+
+    let value = ConfirmedBlock::new(sample_block());
+    let vote = LiteVote::new(
+        LiteValue::new(&value),
+        Round::Fast,
+        &validator_key_pair.secret_key,
+    );
+    let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
+    let certificate = builder
+        .append(validator_key_pair.public_key, vote.signature)
+        .unwrap()
+        .unwrap();
+
+    // The signed commitment is reproducible from the header alone.
+    let header = certificate.block().header.clone();
+    assert_eq!(CryptoHash::new(&header), certificate.hash());
+
+    // One body field can be proven against that header without the rest of the body.
+    let events = certificate.block().body.events.clone();
+    assert!(header.verifies(&BlockBodyField::Events(events)));
+}
+
+#[test]
 fn test_signed_values() {
     let validator1_key_pair = ValidatorKeypair::generate();
     let validator2_key_pair = ValidatorKeypair::generate();
