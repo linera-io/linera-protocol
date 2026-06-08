@@ -2,19 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_base::{
-    crypto::{CryptoHash, TestString},
-    data_types::{OracleResponse, Round},
+    crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSignature},
+    data_types::{Event, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
     vm::VmRuntime,
 };
 use linera_chain::{
+    block::BlockHeader,
     data_types::{MessageAction, Transaction, VoteValue},
-    types::{CertificateKind, ConfirmedBlockCertificate},
+    types::CertificateKind,
 };
 use linera_execution::{
     system::AdminOperation, Message, MessageKind, Operation, SystemMessage, SystemOperation,
 };
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
+
+/// Code-generation mirror of [`linera_bridge::block_proof::BlockProof`]. The EVM light client
+/// deserializes this lighter payload (header + events + signatures) instead of a full block.
+/// The two definitions must stay in sync; a mismatch surfaces as a bridge light-client test
+/// failure.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BlockProof {
+    header: BlockHeader,
+    events: Vec<Vec<Event>>,
+    round: Round,
+    signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+}
 
 fn get_registry() -> Result<Registry> {
     let mut tracer = Tracer::new(
@@ -59,7 +72,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CertificateKind>(&samples)?;
     tracer.trace_type::<Transaction>(&samples)?;
     tracer.trace_type::<VoteValue>(&samples)?;
-    tracer.trace_type::<ConfirmedBlockCertificate>(&samples)?;
+    tracer.trace_type::<BlockProof>(&samples)?;
     tracer.registry()
 }
 
