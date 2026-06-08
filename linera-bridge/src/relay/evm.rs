@@ -286,13 +286,14 @@ impl<P: Provider> EvmClient<P> {
     /// Relays a committee update to the LightClient contract.
     pub async fn add_committee(
         &self,
-        certificate_bytes: &[u8],
+        proof: &BlockProof,
         committee_blob: &[u8],
         validator_keys: Vec<Vec<u8>>,
     ) -> Result<alloy::primitives::TxHash> {
         let lc_addr = self.get_light_client_address().await?;
+        let proof_bytes = bcs::to_bytes(proof).context("failed to BCS-serialize block proof")?;
         let call = addCommitteeCall {
-            data: Bytes::copy_from_slice(certificate_bytes),
+            data: Bytes::copy_from_slice(&proof_bytes),
             committeeBlob: Bytes::copy_from_slice(committee_blob),
             validators: validator_keys.into_iter().map(Bytes::from).collect(),
         };
