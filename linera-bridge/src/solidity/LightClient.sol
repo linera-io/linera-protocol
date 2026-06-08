@@ -11,6 +11,8 @@ contract LightClient {
         uint256 validatorCount;
         uint64 totalWeight;
         uint64 quorumThreshold;
+        // Admin-chain height of the block that created this committee.
+        uint64 createdAtHeight;
     }
     mapping(uint32 => EpochCommittee) private committees;
     uint32 public currentEpoch;
@@ -24,7 +26,8 @@ contract LightClient {
 
     constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
         require(validators.length == weights.length, "length mismatch");
-        _setCommittee(_epoch, validators, weights);
+        // Genesis committee has no backing admin block, so its height is 0.
+        _setCommittee(_epoch, validators, weights, 0);
         adminChainId = _adminChainId;
     }
 
@@ -73,8 +76,9 @@ contract LightClient {
         // Parse blob to extract addresses and weights, verified against caller's keys
         (address[] memory addrs, uint64[] memory weights) = _parseCommitteeBlob(committeeBlob, validators);
 
-        // Store the new committee
-        _setCommittee(newEpoch, addrs, weights);
+        // Store the new committee, recording the admin-chain height of the
+        // block that created it so the relayer can resume scanning from here.
+        _setCommittee(newEpoch, addrs, weights, blockValue.header.height.value);
     }
 
     /// Raises `minAcceptedEpoch`, permanently retiring every committee with an
@@ -113,6 +117,14 @@ contract LightClient {
     /// committee exists (never set, or retired via `expireEpochsBelow`).
     function committeeTotalWeight(uint32 epoch) external view returns (uint64) {
         return committees[epoch].totalWeight;
+    }
+
+    /// Admin-chain height of the block that created the committee at `epoch`, or
+    /// 0 if no such committee exists or it was the genesis committee. The relayer
+    /// uses `committeeHeight(currentEpoch)` to resume committee reconciliation
+    /// from that height instead of re-scanning the admin chain from 0.
+    function committeeHeight(uint32 epoch) external view returns (uint64) {
+        return committees[epoch].createdAtHeight;
     }
 
     function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory, bytes32) {
@@ -193,7 +205,9 @@ contract LightClient {
         return (blockValue, signedHash);
     }
 
-    function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights) internal {
+    function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights, uint64 createdAtHeight)
+        internal
+    {
         require(
             epoch == currentEpoch + 1 || (committees[currentEpoch].totalWeight == 0 && currentEpoch == 0),
             "epoch must be sequential"
@@ -210,6 +224,7 @@ contract LightClient {
         committee.validatorCount = validators.length;
         committee.totalWeight = total;
         committee.quorumThreshold = 2 * total / 3 + 1;
+        committee.createdAtHeight = createdAtHeight;
         currentEpoch = epoch;
     }
 

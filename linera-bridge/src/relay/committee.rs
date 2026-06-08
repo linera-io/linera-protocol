@@ -64,8 +64,12 @@ where
 /// stale epoch — which would make it reject all subsequent burn certificates
 /// signed by the newer committee.
 ///
-/// Scans from height 0 each call. The admin chain is low-volume and the reads are
-/// local; in the steady state every committee is `<= current_epoch` and skipped.
+/// Scans only the admin-chain blocks above the height that installed
+/// `current_epoch`'s committee (queried from the LightClient via
+/// [`EvmClient::committee_height`]), so the work per call is bounded by the
+/// number of admin blocks since the last relayed committee rather than the full
+/// admin-chain height. Falls back to a full scan from height 0 when that height
+/// is unknown (genesis epoch).
 async fn reconcile_committees<S, P>(
     storage: &S,
     evm_client: &EvmClient<P>,
@@ -88,7 +92,17 @@ where
         }
     };
 
-    let heights: Vec<BlockHeight> = (0..scan_upto.0).map(BlockHeight).collect();
+    // Resume scanning from the admin-chain height that installed `current_epoch`'s
+    // committee: every committee at or below that height has epoch <=
+    // `current_epoch` and would be skipped anyway, and committees newer than
+    // `current_epoch` are created at strictly higher heights. The genesis
+    // committee (and any unknown epoch) reports height 0, so this degrades to a
+    // full scan. Because `current_epoch` is the LightClient's own state, a relay
+    // that failed leaves `current_epoch` — and thus this origin — unchanged, so
+    // the missed committee is re-scanned on the next admin block (self-healing).
+    let scan_from = evm_client.committee_height(current_epoch).await?;
+
+    let heights: Vec<BlockHeight> = (scan_from.0..scan_upto.0).map(BlockHeight).collect();
     if heights.is_empty() {
         return Ok(());
     }

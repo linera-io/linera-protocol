@@ -22,6 +22,8 @@ sol! {
     function expireEpochsBelow(uint32 newMinEpoch) external;
 
     function committeeTotalWeight(uint32 epoch) external view returns (uint64);
+
+    function committeeHeight(uint32 epoch) external view returns (uint64);
 }
 
 #[cfg(test)]
@@ -38,8 +40,8 @@ mod tests {
     };
 
     use super::{
-        addCommitteeCall, committeeTotalWeightCall, currentEpochCall, expireEpochsBelowCall,
-        minAcceptedEpochCall, verifyBlockCall,
+        addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
+        expireEpochsBelowCall, minAcceptedEpochCall, verifyBlockCall,
     };
     use crate::test_helpers::*;
 
@@ -64,6 +66,36 @@ mod tests {
         );
 
         assert_eq!(light_client.query_current_epoch(), Epoch(1));
+    }
+
+    #[test]
+    fn test_light_client_committee_height() {
+        let mut light_client: TestLightClient = TestLightClient::new();
+
+        // The genesis committee (epoch 0) is set in the constructor with no
+        // backing block, so its recorded admin-chain height defaults to 0.
+        assert_eq!(light_client.query_committee_height(0), 0);
+
+        // Rotate to epoch 1 via an admin block at height 7.
+        let new_secret = ValidatorSecretKey::generate();
+        let new_public = new_secret.public();
+        let call = light_client.add_committee_call(
+            &new_public,
+            Epoch(1),
+            Epoch::ZERO,
+            BlockHeight(7),
+            test_admin_chain_id(),
+        );
+        call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            call,
+        );
+
+        // The committee for epoch 1 records the admin-chain height of the block
+        // that created it, so the relayer can resume scanning from there.
+        assert_eq!(light_client.query_committee_height(1), 7);
     }
 
     #[test]
@@ -655,6 +687,16 @@ mod tests {
                 currentEpochCall {},
             );
             Epoch(epoch)
+        }
+
+        fn query_committee_height(&mut self, epoch: u32) -> u64 {
+            let (height, _, _) = call_contract(
+                &mut self.db,
+                self.deployer,
+                self.contract,
+                committeeHeightCall { epoch },
+            );
+            height
         }
 
         fn verify_block(&mut self, data: Vec<u8>) {

@@ -39,6 +39,8 @@ sol! {
     ) external;
 
     function currentEpoch() external view returns (uint32);
+
+    function committeeHeight(uint32 epoch) external view returns (uint64);
 }
 
 /// Maximum block range per `eth_getLogs` query.
@@ -264,6 +266,25 @@ impl<P: Provider> EvmClient<P> {
         let epoch = currentEpochCall::abi_decode_returns(&result)
             .context("failed to decode currentEpoch response")?;
         Ok(Epoch(epoch))
+    }
+
+    /// Queries the admin-chain height of the block that created the committee at
+    /// `epoch`. Returns 0 for the genesis committee or an unknown epoch, which is
+    /// a safe scan origin (the relayer then reconciles from height 0).
+    pub async fn committee_height(&self, epoch: Epoch) -> Result<BlockHeight> {
+        let lc_addr = self.get_light_client_address().await?;
+        let call = committeeHeightCall { epoch: epoch.0 };
+        let tx = alloy::rpc::types::TransactionRequest::default()
+            .to(lc_addr)
+            .input(call.abi_encode().into());
+        let result = self
+            .provider
+            .call(tx)
+            .await
+            .context("failed to query LightClient.committeeHeight()")?;
+        let height = committeeHeightCall::abi_decode_returns(&result)
+            .context("failed to decode committeeHeight response")?;
+        Ok(BlockHeight(height))
     }
 
     /// Relays a committee update to the LightClient contract.
