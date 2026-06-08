@@ -9,12 +9,32 @@ use linera_base::{
 
 use super::*;
 use crate::{
-    block::{ConfirmedBlock, ValidatedBlock},
+    block::{Block, ConfirmedBlock, ValidatedBlock},
     test::{make_first_block, BlockTestExt},
 };
 
 fn dummy_chain_id(index: u32) -> ChainId {
     ChainId(CryptoHash::test_hash(format!("chain{index}")))
+}
+
+fn sample_block() -> Block {
+    BlockExecutionOutcome {
+        messages: vec![Vec::new()],
+        previous_message_blocks: BTreeMap::new(),
+        previous_event_blocks: BTreeMap::new(),
+        state_hash: CryptoHash::test_hash("state"),
+        oracle_responses: vec![Vec::new()],
+        events: vec![Vec::new()],
+        blobs: vec![Vec::new()],
+        operation_results: vec![OperationResult::default()],
+    }
+    .with(make_first_block(dummy_chain_id(1)).with_simple_transfer(dummy_chain_id(2), Amount::ONE))
+}
+
+#[test]
+fn block_hash_is_header_hash() {
+    let block = sample_block();
+    assert_eq!(block.hash(), CryptoHash::new(&block.header));
 }
 
 #[test]
