@@ -29,14 +29,26 @@ use crate::{
 };
 
 /// Wrapper around a `Block` that has been validated.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
-#[serde(transparent)]
+#[derive(Debug, PartialEq, Eq, Clone, Allocative)]
 pub struct ValidatedBlock(Hashed<Block>);
+
+impl Serialize for ValidatedBlock {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ValidatedBlock {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::new(Block::deserialize(deserializer)?))
+    }
+}
 
 impl ValidatedBlock {
     /// Creates a new `ValidatedBlock` from a `Block`.
     pub fn new(block: Block) -> Self {
-        Self(Hashed::new(block))
+        let hash = block.hash();
+        Self(Hashed::with_hash(block, hash))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -75,9 +87,20 @@ impl ValidatedBlock {
 }
 
 /// Wrapper around a `Block` that has been confirmed.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
-#[serde(transparent)]
+#[derive(Debug, PartialEq, Eq, Clone, Allocative)]
 pub struct ConfirmedBlock(Hashed<Block>);
+
+impl Serialize for ConfirmedBlock {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ConfirmedBlock {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::new(Block::deserialize(deserializer)?))
+    }
+}
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl ConfirmedBlock {
@@ -97,7 +120,8 @@ impl ConfirmedBlock {
 
 impl ConfirmedBlock {
     pub fn new(block: Block) -> Self {
-        Self(Hashed::new(block))
+        let hash = block.hash();
+        Self(Hashed::with_hash(block, hash))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -676,7 +700,6 @@ impl Block {
     }
 }
 
-impl BcsHashable<'_> for Block {}
 impl BcsHashable<'_> for BlockHeader {}
 
 #[derive(Serialize, Deserialize)]

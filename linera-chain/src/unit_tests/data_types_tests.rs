@@ -38,6 +38,24 @@ fn block_hash_is_header_hash() {
 }
 
 #[test]
+fn confirmed_block_hash_is_header_hash() {
+    let block = sample_block();
+    let header_hash = CryptoHash::new(&block.header);
+    assert_eq!(ConfirmedBlock::new(block.clone()).hash(), header_hash);
+    assert_eq!(ValidatedBlock::new(block).hash(), header_hash);
+}
+
+#[test]
+fn block_serde_round_trip_preserves_hash() {
+    let block = sample_block();
+    let hash = block.hash();
+    let bytes = bcs::to_bytes(&block).unwrap();
+    let restored: Block = bcs::from_bytes(&bytes).unwrap();
+    assert_eq!(restored, block);
+    assert_eq!(restored.hash(), hash);
+}
+
+#[test]
 fn test_signed_values() {
     let validator1_key_pair = ValidatorKeypair::generate();
     let validator2_key_pair = ValidatorKeypair::generate();
