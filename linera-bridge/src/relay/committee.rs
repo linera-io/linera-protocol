@@ -215,11 +215,10 @@ async fn relay_committee<P: Provider>(
     committee_blob_bytes: &[u8],
 ) -> Result<()> {
     let validator_keys = extract_validator_keys(committee_blob_bytes)?;
-    let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
-        .context("failed to BCS-serialize block proof")?;
+    let proof = BlockProof::from_certificate(cert);
 
     let tx_hash = evm_client
-        .add_committee(&proof_bytes, committee_blob_bytes, validator_keys)
+        .add_committee(&proof, committee_blob_bytes, validator_keys)
         .await?;
 
     tracing::info!(%tx_hash, "Relayed committee to LightClient");
