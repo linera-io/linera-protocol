@@ -463,6 +463,11 @@ impl Block {
         Self { header, body }
     }
 
+    /// Returns the hash of this block, which commits to the entire block via its header.
+    pub fn hash(&self) -> CryptoHash {
+        CryptoHash::new(&self.header)
+    }
+
     /// Returns the bundles of messages sent via the given medium to the specified
     /// recipient. Messages originating from different transactions of the original block
     /// are kept in separate bundles. If the medium is a channel, does not verify that the
@@ -672,6 +677,7 @@ impl Block {
 }
 
 impl BcsHashable<'_> for Block {}
+impl BcsHashable<'_> for BlockHeader {}
 
 #[derive(Serialize, Deserialize)]
 pub struct PreviousMessageBlocksMap<'a> {
