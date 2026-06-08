@@ -189,6 +189,7 @@ impl<UserData: 'static> Instance for ReentrantInstance<'_, UserData> {
 /// A slot to store a [`wasmer::Instance`] in a way that can be shared with reentrant calls.
 pub struct Environment<UserData> {
     exports: Arc<OnceLock<wasmer::Exports>>,
+    memory: Arc<OnceLock<Memory>>,
     user_data: Arc<Mutex<UserData>>,
 }
 
@@ -197,6 +198,7 @@ impl<UserData> Environment<UserData> {
     fn new(user_data: UserData) -> Self {
         Environment {
             exports: Arc::new(OnceLock::new()),
+            memory: Arc::new(OnceLock::new()),
             user_data: Arc::new(Mutex::new(user_data)),
         }
     }
@@ -214,6 +216,24 @@ impl<UserData> Environment<UserData> {
             .cloned()
     }
 
+    /// Returns the guest module's memory export, resolving it by name only on the first call
+    /// and reusing the cached handle afterwards.
+    fn memory(&self) -> Result<Memory, crate::RuntimeError> {
+        if let Some(memory) = self.memory.get() {
+            return Ok(memory.clone());
+        }
+
+        let export = self
+            .load_export("memory")
+            .ok_or(crate::RuntimeError::MissingMemory)?;
+        let Extern::Memory(memory) = export else {
+            return Err(crate::RuntimeError::NotMemory);
+        };
+
+        // Cache for subsequent calls; a concurrent reentrant call may win the race, harmlessly.
+        Ok(self.memory.get_or_init(|| memory).clone())
+    }
+
     /// Returns a reference to the `UserData` stored in this [`Environment`].
     fn user_data(&self) -> MutexGuard<'_, UserData> {
         self.user_data
@@ -226,7 +246,25 @@ impl<UserData> Clone for Environment<UserData> {
     fn clone(&self) -> Self {
         Environment {
             exports: self.exports.clone(),
+            memory: self.memory.clone(),
             user_data: self.user_data.clone(),
         }
+    }
+}
+
+/// Provides access to the shared [`Environment`] backing a Wasmer instance.
+trait WithEnvironment<UserData> {
+    fn environment(&self) -> &Environment<UserData>;
+}
+
+impl<UserData> WithEnvironment<UserData> for EntrypointInstance<UserData> {
+    fn environment(&self) -> &Environment<UserData> {
+        &self.instance_slot
+    }
+}
+
+impl<UserData: 'static> WithEnvironment<UserData> for ReentrantInstance<'_, UserData> {
+    fn environment(&self) -> &Environment<UserData> {
+        self.data()
     }
 }
