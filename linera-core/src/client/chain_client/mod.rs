@@ -1412,15 +1412,23 @@ impl<Env: Environment> ChainClient<Env> {
                 ClientOutcome::Committed(Some(certificate)) => {
                     return Ok(self.classify_committed(certificate, &operations));
                 }
-                // The chain advanced past the height we staged at while we were proposing
-                // (e.g. a notification or background sync committed another block at our
-                // height), so `process_pending_block_inner` cleared the pending proposal
-                // without committing ours. Our operations were not applied; re-stage at
-                // the new height and retry. See #5664.
+                // `process_pending_block_without_prepare` cleared the pending proposal
+                // without committing ours, so our operations were not applied. This happens
+                // in two ways:
+                //   * the chain advanced past the height we staged at while we were
+                //     proposing (e.g. a notification or background sync committed another
+                //     block at our height) — the common #5664 case; or
+                //   * the staged proposal's authenticated signer's key is no longer held
+                //     (the preferred owner changed since we staged), so the stale proposal
+                //     was discarded.
+                // Either way, re-stage and retry: `new_pending_block` recomputes the block
+                // at the current height and signs as the current identity, so the first
+                // case advances to the new height (genuine external progress) and the
+                // second adopts a signer we hold, so the retry converges. See #5664.
                 ClientOutcome::Committed(None) => {
                     tracing::debug!(
                         chain_id = %self.chain_id,
-                        "chain advanced during proposal; re-staging block at new height"
+                        "pending proposal cleared without committing ours; re-staging and retrying"
                     );
                     continue;
                 }
