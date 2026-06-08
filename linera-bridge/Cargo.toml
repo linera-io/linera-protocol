@@ -131,7 +131,7 @@ bcs.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
-linera-chain.workspace = true
+linera-chain = { workspace = true, features = ["test"] }
 linera-execution = { workspace = true, features = ["revm", "test"] }
 linera-storage = { workspace = true, features = ["test"] }
 proptest.workspace = true

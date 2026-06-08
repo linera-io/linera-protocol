@@ -25,6 +25,10 @@ pub mod monitor;
 #[cfg(feature = "relay")]
 pub mod relay;
 
+/// A light proof that a Linera block was confirmed: header + events + signatures.
+#[cfg(feature = "relay")]
+pub mod block_proof;
+
 // -- Test-only modules --
 
 /// Tests for the FungibleBridge EVM contract.
