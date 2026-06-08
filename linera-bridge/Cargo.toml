@@ -19,6 +19,7 @@ offchain = [
     "dep:alloy-sol-types",
     "dep:async-trait",
     "dep:bcs",
+    "dep:linera-chain",
     "dep:linera-execution",
     "dep:op-alloy-network",
     "dep:thiserror",

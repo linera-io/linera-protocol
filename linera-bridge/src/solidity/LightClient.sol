@@ -33,11 +33,11 @@ contract LightClient {
     }
 
     function addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators) external {
-        (BridgeTypes.Block memory blockValue,) = verifyCertificate(data);
+        (BridgeTypes.BlockProof memory proof,) = verifyCertificate(data);
 
         // The block must be from the admin chain and the current epoch
-        require(blockValue.header.chain_id.value.value == adminChainId, "block must be from admin chain");
-        require(blockValue.header.epoch.value == currentEpoch, "block epoch must match current epoch");
+        require(proof.header.chain_id.value.value == adminChainId, "block must be from admin chain");
+        require(proof.header.epoch.value == currentEpoch, "block epoch must match current epoch");
 
         // Find the CreateCommittee in the block operations. Linera emits at most
         // one CreateCommittee per admin block; together with the
@@ -46,8 +46,8 @@ contract LightClient {
         bool found = false;
         uint32 newEpoch;
         bytes32 expectedBlobHash;
-        for (uint256 i = 0; i < blockValue.body.transactions.length; i++) {
-            BridgeTypes.Transaction memory txn = blockValue.body.transactions[i];
+        for (uint256 i = 0; i < proof.transactions.length; i++) {
+            BridgeTypes.Transaction memory txn = proof.transactions[i];
             // choice=1 is ExecuteOperation
             if (txn.choice != 1) continue;
             BridgeTypes.Operation memory op = txn.execute_operation;
@@ -79,7 +79,7 @@ contract LightClient {
 
         // Store the new committee, recording the admin-chain height of the
         // block that created it so the relayer can resume scanning from here.
-        _setCommittee(newEpoch, addrs, weights, blockValue.header.height.value);
+        _setCommittee(newEpoch, addrs, weights, proof.header.height.value);
     }
 
     /// Raises `minAcceptedEpoch`, permanently retiring every committee with an
@@ -128,48 +128,51 @@ contract LightClient {
         return committees[epoch].createdAtHeight;
     }
 
-    function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory, bytes32) {
+    function verifyBlock(bytes calldata data) external view returns (BridgeTypes.BlockProof memory, bytes32) {
         return verifyCertificate(data);
     }
 
-    function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.Block memory, bytes32) {
+    function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.BlockProof memory, bytes32) {
         // Copy calldata to memory for the BCS deserializer
         bytes memory mdata = data;
 
-        // Step 1: Deserialize just the Block (value) to get its end offset
-        uint256 valueEndPos;
-        BridgeTypes.Block memory blockValue;
-        (valueEndPos, blockValue) = BridgeTypes.bcs_deserialize_offset_Block(0, mdata);
-
-        // Step 2: Compute value_hash = keccak256("Block::" ++ BCS(block))
-        // CryptoHash::new adds a type name prefix; ConfirmedBlock is transparent over Block
-        bytes32 valueHash = keccak256(abi.encodePacked("Block::", _sliceMemory(mdata, 0, valueEndPos)));
-
-        // Step 3: Deserialize Round and signatures
+        // Step 1: Deserialize the lighter payload (header + transactions + events + round +
+        // signatures). The full block body is never sent.
         uint256 pos;
-        BridgeTypes.Round memory round;
-        (pos, round) = BridgeTypes.bcs_deserialize_offset_Round(valueEndPos, mdata);
-        BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
-        (pos, signatures) =
-            BridgeTypes.bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(pos, mdata);
+        BridgeTypes.BlockProof memory proof;
+        (pos, proof) = BridgeTypes.bcs_deserialize_offset_BlockProof(0, mdata);
         require(pos == mdata.length, "incomplete deserialization");
+
+        // Step 2: Compute value_hash = keccak256("BlockHeader::" ++ BCS(header)).
+        // The block hash now commits to the header, which commits to the body via its
+        // per-field hashes, so the header alone reproduces the signed value.
+        bytes32 valueHash =
+            keccak256(abi.encodePacked("BlockHeader::", BridgeTypes.bcs_serialize_BlockHeader(proof.header)));
+
+        // Step 3: The carried body fields must be the ones the header commits to.
+        require(
+            _hashTransactions(proof.transactions) == proof.header.transactions_hash.value,
+            "transactions do not match header"
+        );
+        require(_hashEvents(proof.events) == proof.header.events_hash.value, "events do not match header");
 
         // Step 4: Construct VoteValue BCS and hash with type name prefix
         // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
-        BridgeTypes.VoteValue memory voteValue =
-            BridgeTypes.VoteValue(BridgeTypes.CryptoHash(valueHash), round, BridgeTypes.CertificateKind.Confirmed);
+        BridgeTypes.VoteValue memory voteValue = BridgeTypes.VoteValue(
+            BridgeTypes.CryptoHash(valueHash), proof.round, BridgeTypes.CertificateKind.Confirmed
+        );
         bytes32 signedHash = keccak256(abi.encodePacked("VoteValue::", BridgeTypes.bcs_serialize_VoteValue(voteValue)));
 
         // Step 5: Verify signatures against the block's epoch committee
-        uint32 epoch = blockValue.header.epoch.value;
+        uint32 epoch = proof.header.epoch.value;
         require(epoch >= minAcceptedEpoch, "epoch expired");
         EpochCommittee storage committee = committees[epoch];
         require(committee.totalWeight > 0, "unknown epoch");
         uint64 weight = 0;
         bool[] memory seen = new bool[](committee.validatorCount);
-        for (uint256 i = 0; i < signatures.length; i++) {
+        for (uint256 i = 0; i < proof.signatures.length; i++) {
             // Pack uint8[] back into contiguous bytes, then extract r and s
-            uint8[] memory sigValues = signatures[i].entry1.value.values;
+            uint8[] memory sigValues = proof.signatures[i].entry1.value.values;
             bytes memory sigBytes = new bytes(64);
             for (uint256 j = 0; j < 64; j++) {
                 sigBytes[j] = bytes1(sigValues[j]);
@@ -203,7 +206,40 @@ contract LightClient {
         }
         require(weight >= committee.quorumThreshold, "insufficient quorum");
 
-        return (blockValue, signedHash);
+        return (proof, valueHash);
+    }
+
+    /// Recomputes Linera's `transactions_hash`: keccak256("CryptoHashVec::" ++ BCS(Vec<CryptoHash>))
+    /// over the per-transaction hashes keccak256("Transaction::" ++ BCS(txn)).
+    function _hashTransactions(BridgeTypes.Transaction[] memory transactions) internal pure returns (bytes32) {
+        BridgeTypes.CryptoHash[] memory hashes = new BridgeTypes.CryptoHash[](transactions.length);
+        for (uint256 i = 0; i < transactions.length; i++) {
+            hashes[i] = BridgeTypes.CryptoHash(
+                keccak256(abi.encodePacked("Transaction::", BridgeTypes.bcs_serialize_Transaction(transactions[i])))
+            );
+        }
+        return _hashCryptoHashVec(hashes);
+    }
+
+    /// Recomputes Linera's `events_hash`: a two-level `hash_vec_vec` over the events, where each
+    /// event hashes to keccak256("Event::" ++ BCS(event)).
+    function _hashEvents(BridgeTypes.Event[][] memory events) internal pure returns (bytes32) {
+        BridgeTypes.CryptoHash[] memory outer = new BridgeTypes.CryptoHash[](events.length);
+        for (uint256 i = 0; i < events.length; i++) {
+            BridgeTypes.CryptoHash[] memory inner = new BridgeTypes.CryptoHash[](events[i].length);
+            for (uint256 j = 0; j < events[i].length; j++) {
+                inner[j] = BridgeTypes.CryptoHash(
+                    keccak256(abi.encodePacked("Event::", BridgeTypes.bcs_serialize_Event(events[i][j])))
+                );
+            }
+            outer[i] = BridgeTypes.CryptoHash(_hashCryptoHashVec(inner));
+        }
+        return _hashCryptoHashVec(outer);
+    }
+
+    /// keccak256("CryptoHashVec::" ++ BCS(Vec<CryptoHash>)).
+    function _hashCryptoHashVec(BridgeTypes.CryptoHash[] memory hashes) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("CryptoHashVec::", BridgeTypes.bcs_serialize_seq_CryptoHash(hashes)));
     }
 
     function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights, uint64 createdAtHeight)
@@ -318,16 +354,6 @@ contract LightClient {
         uint64 result = 0;
         for (uint256 i = 0; i < 8; i++) {
             result |= uint64(uint8(data[pos + i])) << (i * 8);
-        }
-        return result;
-    }
-
-    /// Copies a slice of memory bytes into a new bytes array.
-    function _sliceMemory(bytes memory data, uint256 start, uint256 end) internal pure returns (bytes memory) {
-        uint256 len = end - start;
-        bytes memory result = new bytes(len);
-        for (uint256 i = 0; i < len; i++) {
-            result[i] = data[start + i];
         }
         return result;
     }

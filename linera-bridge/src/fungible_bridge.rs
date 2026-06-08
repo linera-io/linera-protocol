@@ -156,7 +156,9 @@ mod tests {
                 self.deployer,
                 self.bridge,
                 &addBlockCall {
-                    data: bcs::to_bytes(&cert).unwrap().into(),
+                    data: bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
+                        .unwrap()
+                        .into(),
                 },
             );
             (logs, gas)

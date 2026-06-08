@@ -148,7 +148,8 @@ mod tests {
                 self.chain_id,
                 height,
             );
-            let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+            let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
+                .expect("BCS serialization failed");
             call_contract(
                 &mut self.db,
                 self.deployer,
@@ -166,7 +167,8 @@ mod tests {
         ) -> Result<(), String> {
             let cert =
                 create_signed_certificate_for_chain(&self.secret, &self.public, chain_id, height);
-            let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+            let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
+                .expect("BCS serialization failed");
             try_call_contract(
                 &mut self.db,
                 self.deployer,

@@ -115,11 +115,11 @@ contract FungibleBridge is Microchain {
     /// `processedBurns[keccak256(abi.encode(bridgeApplicationId, height, evt.index))]`, so
     /// re-submitting the same cert is a no-op for burns already released
     /// by a prior call.
-    function _onBlock(BridgeTypes.Block memory blockValue) internal override {
+    function _onBlock(BridgeTypes.BlockProof memory blockValue) internal override {
         bytes32 burnsHash = keccak256("burns");
         uint64 height = blockValue.header.height.value;
-        for (uint256 i = 0; i < blockValue.body.events.length; i++) {
-            BridgeTypes.Event[] memory txEvents = blockValue.body.events[i];
+        for (uint256 i = 0; i < blockValue.events.length; i++) {
+            BridgeTypes.Event[] memory txEvents = blockValue.events[i];
             for (uint256 j = 0; j < txEvents.length; j++) {
                 BridgeTypes.Event memory evt = txEvents[j];
                 if (!_isMatchingBurn(evt, burnsHash)) continue;
@@ -154,13 +154,13 @@ contract FungibleBridge is Microchain {
     /// - any failed `token.transfer` (`"safeTransfer failed"`)
     function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
         require(eventPositionsInTx.length > 0, "empty positions");
-        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
+        (BridgeTypes.BlockProof memory blockValue,) = lightClient.verifyBlock(data);
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
-        require(txIndex < blockValue.body.events.length, "txIndex out of range");
+        require(txIndex < blockValue.events.length, "txIndex out of range");
 
         uint64 height = blockValue.header.height.value;
         bytes32 burnsHash = keccak256("burns");
-        BridgeTypes.Event[] memory txEvents = blockValue.body.events[txIndex];
+        BridgeTypes.Event[] memory txEvents = blockValue.events[txIndex];
 
         for (uint256 k = 0; k < eventPositionsInTx.length; k++) {
             uint32 pos = eventPositionsInTx[k];
