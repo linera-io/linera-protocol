@@ -294,12 +294,6 @@ where
         let thread_pool = self.context().extra().thread_pool().clone();
         let mut actor = ExecutionStateActor::new(self, &mut txn_tracker, &mut resource_controller);
 
-        // On the web, modules cannot be loaded dynamically mid-execution (#2927),
-        // so eagerly preload every installed application's module; natively, only
-        // the target and its declared dependencies (undeclared callees load lazily).
-        #[cfg(web)]
-        let (codes, descriptions) = actor.all_installed_services(application_id).await?;
-        #[cfg(not(web))]
         let (codes, descriptions) = actor.service_and_dependencies(application_id).await?;
 
         let service_runtime_task = thread_pool
