@@ -14,6 +14,7 @@ use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
 
 use crate::{
+    block_proof::BlockProof,
     evm::light_client::{addCommitteeCall, committeeHeightCall, currentEpochCall},
     proof::deposit_event_signature,
 };
@@ -129,7 +130,8 @@ impl<P: Provider> EvmClient<P> {
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
     ) -> Result<()> {
-        let cert_bytes = bcs::to_bytes(cert).context("failed to BCS-serialize certificate")?;
+        let cert_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
+            .context("failed to BCS-serialize block proof")?;
 
         tracing::info!(
             size = cert_bytes.len(),
@@ -163,7 +165,8 @@ impl<P: Provider> EvmClient<P> {
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
     ) -> alloy::contract::Result<u64> {
-        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+        let cert_bytes =
+            bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
         let cert_size = cert_bytes.len();
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         let estimate = bridge.addBlock(cert_bytes.into()).estimate_gas().await;
@@ -179,7 +182,8 @@ impl<P: Provider> EvmClient<P> {
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
-        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+        let cert_bytes =
+            bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
         let cert_size = cert_bytes.len();
         let count = positions_in_tx.len();
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
@@ -205,7 +209,8 @@ impl<P: Provider> EvmClient<P> {
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> Result<()> {
-        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+        let cert_bytes =
+            bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         tracing::info!(
             tx_index,

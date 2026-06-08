@@ -25,8 +25,8 @@ pub mod monitor;
 #[cfg(feature = "relay")]
 pub mod relay;
 
-/// A light proof that a Linera block was confirmed: header + events + signatures.
-#[cfg(feature = "relay")]
+/// A light proof that a Linera block was confirmed: header + body fields + signatures.
+#[cfg(feature = "offchain")]
 pub mod block_proof;
 
 // -- Test-only modules --

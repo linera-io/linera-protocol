@@ -68,6 +68,11 @@ ApplicationPermissions:
         OPTION:
           SEQ:
             TYPENAME: ApplicationId
+BlobContent:
+  STRUCT:
+    - blob_type:
+        TYPENAME: BlobType
+    - bytes: BYTES
 BlobId:
   STRUCT:
     - hash:
@@ -134,6 +139,9 @@ BlockProof:
   STRUCT:
     - header:
         TYPENAME: BlockHeader
+    - transactions:
+        SEQ:
+          TYPENAME: Transaction
     - events:
         SEQ:
           SEQ:

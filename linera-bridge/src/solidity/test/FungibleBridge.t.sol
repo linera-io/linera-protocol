@@ -59,13 +59,13 @@ contract MockLightClientForBurns {
         recipBase = _recipBase;
     }
 
-    function verifyBlock(bytes calldata) external view returns (BridgeTypes.Block memory b, bytes32 sigHash) {
+    function verifyBlock(bytes calldata) external view returns (BridgeTypes.BlockProof memory b, bytes32 sigHash) {
         b.header.chain_id.value.value = chainIdRet;
         b.header.height.value = heightRet;
 
         // Allocate txIndexUsed + 1 tx-slots; all before txIndexUsed are empty.
-        b.body.events = new BridgeTypes.Event[][](uint256(txIndexUsed) + 1);
-        b.body.events[txIndexUsed] = new BridgeTypes.Event[](numBurns);
+        b.events = new BridgeTypes.Event[][](uint256(txIndexUsed) + 1);
+        b.events[txIndexUsed] = new BridgeTypes.Event[](numBurns);
 
         for (uint32 i = 0; i < numBurns; i++) {
             BridgeTypes.Event memory evt;
@@ -74,7 +74,7 @@ contract MockLightClientForBurns {
             evt.stream_id.stream_name.value = bytes("burns");
             evt.index = 5 + i; // stream index differs from positional index
             evt.value = _encodeBurn(address(uint160(recipBase) + i), amountPerBurn);
-            b.body.events[txIndexUsed][i] = evt;
+            b.events[txIndexUsed][i] = evt;
         }
 
         sigHash = bytes32(uint256(0x1234));
@@ -109,12 +109,12 @@ contract MockLightClientForNonBurn {
         recipBase = _recipBase;
     }
 
-    function verifyBlock(bytes calldata) external view returns (BridgeTypes.Block memory b, bytes32 sigHash) {
+    function verifyBlock(bytes calldata) external view returns (BridgeTypes.BlockProof memory b, bytes32 sigHash) {
         b.header.chain_id.value.value = chainIdRet;
         b.header.height.value = heightRet;
 
-        b.body.events = new BridgeTypes.Event[][](1);
-        b.body.events[0] = new BridgeTypes.Event[](1);
+        b.events = new BridgeTypes.Event[][](1);
+        b.events[0] = new BridgeTypes.Event[](1);
 
         BridgeTypes.Event memory evt;
         evt.stream_id.application_id.choice = 1;
@@ -126,7 +126,7 @@ contract MockLightClientForNonBurn {
         burnEvt.target = bytes20(recipBase);
         burnEvt.amount = amountPerBurn;
         evt.value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
-        b.body.events[0][0] = evt;
+        b.events[0][0] = evt;
 
         sigHash = bytes32(uint256(0x1234));
     }

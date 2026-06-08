@@ -269,7 +269,10 @@ mod tests {
         let mut light_client: TestLightClient = TestLightClient::new();
 
         let certificate = create_signed_certificate(&light_client.secret, &light_client.public);
-        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
 
         light_client.verify_block(bcs_bytes);
     }
@@ -473,7 +476,10 @@ mod tests {
             Round::Fast,
             vec![(public_a, vote.signature), (public_a, vote.signature)],
         );
-        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
 
         assert!(
             try_call_contract(
@@ -534,7 +540,10 @@ mod tests {
         let wrong_secret = ValidatorSecretKey::generate();
         let wrong_public = wrong_secret.public();
         let certificate = create_signed_certificate(&wrong_secret, &wrong_public);
-        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
 
         assert!(
             light_client.try_verify_block(bcs_bytes).is_err(),
@@ -570,7 +579,10 @@ mod tests {
             Round::Fast,
             vec![(light_client.public, malleable_sig)],
         );
-        let bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
 
         assert!(
             light_client.try_verify_block(bcs_bytes).is_err(),
@@ -588,7 +600,10 @@ mod tests {
         let sig_bytes = certificate.signatures().first().unwrap().1.as_bytes();
         let original_r = &sig_bytes[..32];
 
-        let mut bcs_bytes = bcs::to_bytes(&certificate).expect("BCS serialization failed");
+        let mut bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
 
         // Find the original r bytes in the serialized certificate
         let r_pos = bcs_bytes
