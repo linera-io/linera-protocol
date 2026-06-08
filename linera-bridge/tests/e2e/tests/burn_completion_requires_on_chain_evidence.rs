@@ -230,7 +230,12 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
+<<<<<<< HEAD
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
+=======
+            0, // admin port (unused in e2e)
+            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
+>>>>>>> ea86ce4db (Bridge admin retry endpoint (#6451))
             Duration::from_secs(2),
             0,
             5,

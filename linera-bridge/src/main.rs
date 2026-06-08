@@ -99,6 +99,7 @@ struct ServeOptions {
     #[arg(long, default_value = "3001")]
     port: u16,
 
+<<<<<<< HEAD
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
@@ -118,6 +119,14 @@ struct ServeOptions {
     /// The maximal number of entries in the event cache.
     #[arg(long, default_value = "1000")]
     event_cache_size: usize,
+=======
+    /// Port for the localhost-only admin HTTP server (retry endpoints).
+    #[arg(long, default_value = "3002")]
+    admin_port: u16,
+
+    #[command(flatten)]
+    common_storage_options: linera_storage_runtime::CommonStorageOptions,
+>>>>>>> ea86ce4db (Bridge admin retry endpoint (#6451))
 
     /// Interval between monitor scan loops, in seconds.
     #[arg(long, default_value = "30")]
@@ -173,6 +182,7 @@ impl ServeOptions {
             &self.evm_private_key,
             self.evm_light_client_address.as_deref(),
             self.port,
+<<<<<<< HEAD
             linera_storage::StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
@@ -181,6 +191,10 @@ impl ServeOptions {
                 event_cache_size: self.event_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
+=======
+            self.admin_port,
+            &self.common_storage_options,
+>>>>>>> ea86ce4db (Bridge admin retry endpoint (#6451))
             std::time::Duration::from_secs(self.monitor_scan_interval),
             self.monitor_start_block,
             self.max_retries,
