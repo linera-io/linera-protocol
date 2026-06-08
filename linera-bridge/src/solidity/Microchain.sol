@@ -19,12 +19,12 @@ abstract contract Microchain {
     /// relies on that idempotency to safely re-submit `addBlock(cert)`
     /// after partial settlement.
     function addBlock(bytes calldata data) external {
-        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
+        (BridgeTypes.BlockProof memory blockValue,) = lightClient.verifyBlock(data);
         require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
         _onBlock(blockValue);
     }
 
     /// Called after a block has been verified and accepted. Subcontracts
     /// implement this to extract and store application-specific data.
-    function _onBlock(BridgeTypes.Block memory blockValue) internal virtual;
+    function _onBlock(BridgeTypes.BlockProof memory blockValue) internal virtual;
 }

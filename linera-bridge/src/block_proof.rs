@@ -5,10 +5,10 @@
 //!
 //! Instead of relaying an entire [`Block`](linera_chain::block::Block) to the EVM light
 //! client, the relayer sends only the [`BlockHeader`] — which the validators sign and which
-//! commits to every body field through its per-field hashes — together with the block's
-//! events. The events are the one body field the bridge needs, to release burns; they are
-//! checked against the header's `events_hash`. Everything else in the body stays off the
-//! wire.
+//! commits to every body field through its per-field hashes — together with the two body
+//! fields the bridge needs: the transactions (for committee transitions) and the events (for
+//! burns). Each is checked against the matching hash in the header; the rest of the body
+//! stays off the wire.
 
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
@@ -16,17 +16,21 @@ use linera_base::{
 };
 use linera_chain::{
     block::{BlockBodyField, BlockHeader},
+    data_types::Transaction,
     types::ConfirmedBlockCertificate,
 };
 use serde::{Deserialize, Serialize};
 
 /// A confirmed block reduced to what the EVM bridge needs in order to verify it: the header,
-/// the events, the round, and the validator signatures.
+/// the transactions (for committee transitions), the events (for burns), the round, and the
+/// validator signatures. The rest of the body is dropped.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockProof {
     /// The block header. Its hash is the value the validators signed, and it commits to the
     /// whole body via its per-field hashes.
     pub header: BlockHeader,
+    /// The block's transactions. Checked against `header.transactions_hash`.
+    pub transactions: Vec<Transaction>,
     /// The block's events, one inner vector per transaction. Checked against
     /// `header.events_hash`.
     pub events: Vec<Vec<Event>>,
@@ -37,12 +41,13 @@ pub struct BlockProof {
 }
 
 impl BlockProof {
-    /// Builds a proof from a confirmed-block certificate, dropping every body field except
-    /// the events.
+    /// Builds a proof from a confirmed-block certificate, dropping every body field except the
+    /// transactions and the events.
     pub fn from_certificate(certificate: &ConfirmedBlockCertificate) -> Self {
         let block = certificate.block();
         BlockProof {
             header: block.header.clone(),
+            transactions: block.body.transactions.clone(),
             events: block.body.events.clone(),
             round: certificate.round,
             signatures: certificate.signatures().clone(),
@@ -53,6 +58,12 @@ impl BlockProof {
     /// the value the certificate's signatures are over.
     pub fn block_hash(&self) -> CryptoHash {
         CryptoHash::new(&self.header)
+    }
+
+    /// Returns whether the carried transactions are the ones the header commits to.
+    pub fn transactions_match_header(&self) -> bool {
+        self.header
+            .verifies(&BlockBodyField::Transactions(self.transactions.clone()))
     }
 
     /// Returns whether the carried events are the ones the header commits to.
@@ -116,7 +127,8 @@ mod tests {
         assert_eq!(proof.block_hash(), certificate.hash());
         // The signatures still verify against that hash — the body was never needed.
         assert!(certificate.check(&committee).is_ok());
-        // The carried events are exactly the ones the header commits to.
+        // The carried body fields are exactly the ones the header commits to.
+        assert!(proof.transactions_match_header());
         assert!(proof.events_match_header());
         assert_eq!(proof.events, vec![vec![event]]);
     }

@@ -70,7 +70,8 @@ mod tests {
         let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
-        let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
+            .expect("BCS serialization failed");
         let (_, _, gas_used) = call_contract(
             &mut db,
             deployer,
