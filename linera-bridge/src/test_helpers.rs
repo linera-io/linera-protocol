@@ -95,6 +95,21 @@ pub fn create_certificate_with_transactions(
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
 }
 
+/// Creates a certificate for a block carrying `events` (one inner vector per transaction), signed
+/// by the given validator. Used to exercise event-inclusion proofs.
+pub fn create_signed_certificate_with_events(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+    chain_id: CryptoHash,
+    height: BlockHeight,
+    events: Vec<Vec<linera_base::data_types::Event>>,
+) -> ConfirmedBlockCertificate {
+    let block = build_block(chain_id, Epoch::ZERO, height, vec![], events);
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
+    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
+}
+
 /// Creates a certificate for a specific chain and height with a default user operation.
 pub fn create_signed_certificate_for_chain(
     secret: &ValidatorSecretKey,
