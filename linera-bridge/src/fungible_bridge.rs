@@ -151,14 +151,15 @@ mod tests {
                 height,
                 events,
             );
+            let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
             let (_, logs, gas) = call_contract(
                 &mut self.db,
                 self.deployer,
                 self.bridge,
                 &addBlockCall {
-                    data: bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
-                        .unwrap()
-                        .into(),
+                    blockProof: block_proof,
+                    eventBcs: event_bcs,
+                    eventsPerTx: events_per_tx,
                 },
             );
             (logs, gas)

@@ -687,16 +687,12 @@ library BridgeTypes {
 
     struct BlockProof {
         BlockHeader header;
-        Transaction[] transactions;
-        Event[][] events;
         Round round;
         tuple_Secp256k1PublicKey_Secp256k1Signature[] signatures;
     }
 
     function bcs_serialize_BlockProof(BlockProof memory input) internal pure returns (bytes memory) {
         bytes memory result = bcs_serialize_BlockHeader(input.header);
-        result = abi.encodePacked(result, bcs_serialize_seq_Transaction(input.transactions));
-        result = abi.encodePacked(result, bcs_serialize_seq_seq_Event(input.events));
         result = abi.encodePacked(result, bcs_serialize_Round(input.round));
         return abi.encodePacked(result, bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(input.signatures));
     }
@@ -709,15 +705,11 @@ library BridgeTypes {
         uint256 new_pos;
         BlockHeader memory header;
         (new_pos, header) = bcs_deserialize_offset_BlockHeader(pos, input);
-        Transaction[] memory transactions;
-        (new_pos, transactions) = bcs_deserialize_offset_seq_Transaction(new_pos, input);
-        Event[][] memory events;
-        (new_pos, events) = bcs_deserialize_offset_seq_seq_Event(new_pos, input);
         Round memory round;
         (new_pos, round) = bcs_deserialize_offset_Round(new_pos, input);
         tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
         (new_pos, signatures) = bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(new_pos, input);
-        return (new_pos, BlockProof(header, transactions, events, round, signatures));
+        return (new_pos, BlockProof(header, round, signatures));
     }
 
     function bcs_deserialize_BlockProof(bytes memory input) internal pure returns (BlockProof memory) {
@@ -3961,41 +3953,6 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_Event(Event[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_Event(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_Event(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Event[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        Event[] memory result;
-        result = new Event[](len);
-        Event memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_Event(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_Event(bytes memory input) internal pure returns (Event[] memory) {
-        uint256 new_pos;
-        Event[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_Event(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     function bcs_serialize_seq_Header(Header[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_uleb128(len);
@@ -4066,41 +4023,6 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_Transaction(Transaction[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_Transaction(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_Transaction(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Transaction[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        Transaction[] memory result;
-        result = new Transaction[](len);
-        Transaction memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_Transaction(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_Transaction(bytes memory input) internal pure returns (Transaction[] memory) {
-        uint256 new_pos;
-        Transaction[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_Transaction(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     function bcs_serialize_seq_key_values_AccountOwner_uint64(key_values_AccountOwner_uint64[] memory input)
         internal
         pure
@@ -4140,41 +4062,6 @@ library BridgeTypes {
         uint256 new_pos;
         key_values_AccountOwner_uint64[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_seq_Event(Event[][] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_seq_Event(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_seq_Event(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Event[][] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        Event[][] memory result;
-        result = new Event[][](len);
-        Event[] memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_seq_Event(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_seq_Event(bytes memory input) internal pure returns (Event[][] memory) {
-        uint256 new_pos;
-        Event[][] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_seq_Event(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

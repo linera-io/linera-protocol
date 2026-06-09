@@ -3,37 +3,27 @@
 
 //! A light proof that a Linera block was confirmed.
 //!
-//! Instead of relaying an entire [`Block`](linera_chain::block::Block) to the EVM light
-//! client, the relayer sends only the [`BlockHeader`] — which the validators sign and which
-//! commits to every body field through its per-field hashes — together with the two body
-//! fields the bridge needs: the transactions (for committee transitions) and the events (for
-//! burns). Each is checked against the matching hash in the header; the rest of the body
-//! stays off the wire.
+//! Instead of relaying an entire [`Block`](linera_chain::block::Block) to the EVM light client,
+//! the relayer sends only the [`BlockHeader`] and the validator signatures over it. The header
+//! commits to every body field through its per-field hashes, so any body field the bridge needs
+//! (the events for burns, the transactions for committee transitions) is shipped alongside the
+//! proof and checked against the matching hash in the header — never inside the proof itself.
 
 use linera_base::{
     crypto::{CryptoHash, CryptoHashVec, ValidatorPublicKey, ValidatorSignature},
     data_types::{Event, Round},
 };
-use linera_chain::{
-    block::{BlockBodyField, BlockHeader},
-    data_types::Transaction,
-    types::ConfirmedBlockCertificate,
-};
+use linera_chain::{block::BlockHeader, types::ConfirmedBlockCertificate};
 use serde::{Deserialize, Serialize};
 
-/// A confirmed block reduced to what the EVM bridge needs in order to verify it: the header,
-/// the transactions (for committee transitions), the events (for burns), the round, and the
-/// validator signatures. The rest of the body is dropped.
+/// A confirmed block reduced to its signed commitment: the header, the round, and the validator
+/// signatures. The header's hash is the value the validators signed and commits to the whole body
+/// via its per-field hashes, so the body itself never travels in the proof.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BlockProof {
     /// The block header. Its hash is the value the validators signed, and it commits to the
     /// whole body via its per-field hashes.
     pub header: BlockHeader,
-    /// The block's transactions. Checked against `header.transactions_hash`.
-    pub transactions: Vec<Transaction>,
-    /// The block's events, one inner vector per transaction. Checked against
-    /// `header.events_hash`.
-    pub events: Vec<Vec<Event>>,
     /// The round in which the block was confirmed.
     pub round: Round,
     /// The validator signatures over the block hash.
@@ -41,29 +31,11 @@ pub struct BlockProof {
 }
 
 impl BlockProof {
-    /// Builds a proof from a confirmed-block certificate, dropping every body field except the
-    /// transactions and the events.
+    /// Builds a proof from a confirmed-block certificate: just the header, round, and signatures.
     pub fn from_certificate(certificate: &ConfirmedBlockCertificate) -> Self {
         let block = certificate.block();
         BlockProof {
             header: block.header.clone(),
-            transactions: block.body.transactions.clone(),
-            events: block.body.events.clone(),
-            round: certificate.round,
-            signatures: certificate.signatures().clone(),
-        }
-    }
-
-    /// Builds a header-only proof: the header, round, and signatures with empty body fields.
-    /// Enough to verify the block's signatures and register its `events_hash`, without shipping
-    /// any body. The header's per-field hashes are authenticated by the signatures, so the
-    /// dropped fields can be proven against it later via inclusion proofs.
-    pub fn header_only(certificate: &ConfirmedBlockCertificate) -> Self {
-        let block = certificate.block();
-        BlockProof {
-            header: block.header.clone(),
-            transactions: Vec::new(),
-            events: Vec::new(),
             round: certificate.round,
             signatures: certificate.signatures().clone(),
         }
@@ -73,18 +45,6 @@ impl BlockProof {
     /// the value the certificate's signatures are over.
     pub fn block_hash(&self) -> CryptoHash {
         CryptoHash::new(&self.header)
-    }
-
-    /// Returns whether the carried transactions are the ones the header commits to.
-    pub fn transactions_match_header(&self) -> bool {
-        self.header
-            .verifies(&BlockBodyField::Transactions(self.transactions.clone()))
-    }
-
-    /// Returns whether the carried events are the ones the header commits to.
-    pub fn events_match_header(&self) -> bool {
-        self.header
-            .verifies(&BlockBodyField::Events(self.events.clone()))
     }
 }
 
@@ -202,25 +162,16 @@ mod tests {
 
     use super::{BlockProof, EventInclusionProof};
 
-    /// The lighter scheme end to end: a confirmed block can be verified, and one of its
-    /// events proven, from only the header, the events, and the signatures — no body.
+    /// A confirmed block's `BlockProof` reproduces the value the validators signed, from the
+    /// header and signatures alone — no body.
     #[test]
-    fn block_proof_verifies_block_and_events_from_header() {
+    fn block_proof_reproduces_signed_value() {
         let validator = ValidatorKeypair::generate();
         let account = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
         let committee = Committee::make_simple(vec![(validator.public_key, account.public())]);
 
-        let event = Event {
-            stream_id: StreamId {
-                application_id: GenericApplicationId::System,
-                stream_name: StreamName(b"burns".to_vec()),
-            },
-            index: 0,
-            value: b"burn".to_vec(),
-        };
-        let block = BlockBuilder::new(ChainId(CryptoHash::test_hash("chain")), BlockHeight(1))
-            .with_events(vec![event.clone()])
-            .build();
+        let block =
+            BlockBuilder::new(ChainId(CryptoHash::test_hash("chain")), BlockHeight(1)).build();
         let confirmed = ConfirmedBlock::new(block);
 
         let vote = LiteVote::new(
@@ -240,10 +191,6 @@ mod tests {
         assert_eq!(proof.block_hash(), certificate.hash());
         // The signatures still verify against that hash — the body was never needed.
         assert!(certificate.check(&committee).is_ok());
-        // The carried body fields are exactly the ones the header commits to.
-        assert!(proof.transactions_match_header());
-        assert!(proof.events_match_header());
-        assert_eq!(proof.events, vec![vec![event]]);
     }
 
     /// An `EventInclusionProof` for any subset of a block's events folds back to the exact

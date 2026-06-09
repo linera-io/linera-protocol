@@ -18,10 +18,12 @@ use alloy::{
 };
 use alloy_sol_types::SolCall;
 use linera_base::crypto::ValidatorPublicKey;
+use linera_chain::types::ConfirmedBlockCertificate;
 use linera_execution::committee::Committee;
 use url::Url;
 
 use super::light_client::addCommitteeCall;
+use crate::block_proof::BlockProof;
 
 /// Client for interacting with a deployed LightClient contract on an EVM chain.
 #[expect(clippy::type_complexity)]
@@ -63,20 +65,30 @@ impl EvmLightClient {
 
     /// Calls `LightClient.addCommittee()` on the EVM chain.
     ///
-    /// Extracts uncompressed validator keys from the committee blob internally,
-    /// then submits the transaction to the LightClient contract.
+    /// Derives the block proof and the per-transaction BCS encodings from `certificate`,
+    /// extracts uncompressed validator keys from the committee blob, then submits the
+    /// transaction to the LightClient contract.
     ///
-    /// - `certificate_bytes`: BCS-serialized `ConfirmedBlockCertificate`
+    /// - `certificate`: the confirmed block whose admin transaction creates the new committee
     /// - `committee_blob`: raw committee blob bytes (BCS-serialized `Committee`)
     pub async fn add_committee(
         &self,
-        certificate_bytes: &[u8],
+        certificate: &ConfirmedBlockCertificate,
         committee_blob: &[u8],
     ) -> anyhow::Result<TxHash> {
         let validator_keys = extract_validator_keys(committee_blob)?;
+        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(certificate))?;
+        let transaction_bcs: Vec<Bytes> = certificate
+            .block()
+            .body
+            .transactions
+            .iter()
+            .map(|txn| Bytes::from(bcs::to_bytes(txn).expect("BCS-serialize transaction")))
+            .collect();
 
         let call = addCommitteeCall {
-            data: Bytes::copy_from_slice(certificate_bytes),
+            blockProof: Bytes::from(proof_bytes),
+            transactionBcs: transaction_bcs,
             committeeBlob: Bytes::copy_from_slice(committee_blob),
             validators: validator_keys.into_iter().map(Bytes::from).collect(),
         };

@@ -115,20 +115,17 @@ contract FungibleBridge is Microchain {
     /// `processedBurns[keccak256(abi.encode(bridgeApplicationId, height, evt.index))]`, so
     /// re-submitting the same cert is a no-op for burns already released
     /// by a prior call.
-    function _onBlock(BridgeTypes.BlockProof memory blockValue) internal override {
+    function _onBlock(BridgeTypes.BlockHeader memory header, bytes[] calldata eventBcs) internal override {
         bytes32 burnsHash = keccak256("burns");
-        uint64 height = blockValue.header.height.value;
-        for (uint256 i = 0; i < blockValue.events.length; i++) {
-            BridgeTypes.Event[] memory txEvents = blockValue.events[i];
-            for (uint256 j = 0; j < txEvents.length; j++) {
-                BridgeTypes.Event memory evt = txEvents[j];
-                if (!_isMatchingBurn(evt, burnsHash)) continue;
+        uint64 height = header.height.value;
+        for (uint256 i = 0; i < eventBcs.length; i++) {
+            BridgeTypes.Event memory evt = BridgeTypes.bcs_deserialize_Event(eventBcs[i]);
+            if (!_isMatchingBurn(evt, burnsHash)) continue;
 
-                bytes32 key = _burnKey(height, evt.index);
-                if (processedBurns[key]) continue;
+            bytes32 key = _burnKey(height, evt.index);
+            if (processedBurns[key]) continue;
 
-                _releaseBurn(evt, key, height);
-            }
+            _releaseBurn(evt, key, height);
         }
     }
 

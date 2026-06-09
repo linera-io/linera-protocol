@@ -11,18 +11,9 @@ contract LightClient {
         uint256 validatorCount;
         uint64 totalWeight;
         uint64 quorumThreshold;
-        // Admin-chain height of the block that created this committee.
-        uint64 createdAtHeight;
     }
-
     mapping(uint32 => EpochCommittee) private committees;
     uint32 public currentEpoch;
-    // Certificates whose epoch is below this are rejected. Defaults to 0 (no
-    // epoch retired). Raised monotonically via `expireEpochsBelow` to drop
-    // retired committees from the set of valid signing roots — a
-    // weak-subjectivity floor: a quorum of a long-retired committee's keys can
-    // no longer forge a certificate once its epoch is expired.
-    uint32 public minAcceptedEpoch;
     bytes32 public adminChainId;
 
     /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
@@ -40,27 +31,59 @@ contract LightClient {
 
     constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
         require(validators.length == weights.length, "length mismatch");
-        // Genesis committee has no backing admin block, so its height is 0.
-        _setCommittee(_epoch, validators, weights, 0);
+        _setCommittee(_epoch, validators, weights);
         adminChainId = _adminChainId;
     }
 
-    function addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators) external {
-        (BridgeTypes.BlockProof memory proof,) = verifyCertificate(data);
+    function addCommittee(
+        bytes calldata blockProof,
+        bytes[] calldata transactionBcs,
+        bytes calldata committeeBlob,
+        bytes[] calldata validators
+    ) external {
+        _verifyAdminTransactions(blockProof, transactionBcs);
 
-        // The block must be from the admin chain and the current epoch
+        (bool found, uint32 newEpoch, bytes32 expectedBlobHash) = _findCreateCommittee(transactionBcs);
+        require(found, "no CreateCommittee operation found");
+
+        // Verify committeeBlob hash matches the blob_hash from CreateCommittee
+        BridgeTypes.BlobContent memory blobContent =
+            BridgeTypes.BlobContent(BridgeTypes.BlobType.Committee, committeeBlob);
+        bytes32 computedHash =
+            keccak256(abi.encodePacked("BlobContent::", BridgeTypes.bcs_serialize_BlobContent(blobContent)));
+        require(computedHash == expectedBlobHash, "committee blob hash mismatch");
+
+        // Parse blob to extract addresses and weights, verified against caller's keys
+        (address[] memory addrs, uint64[] memory weights) = _parseCommitteeBlob(committeeBlob, validators);
+
+        // Store the new committee
+        _setCommittee(newEpoch, addrs, weights);
+    }
+
+    /// Verifies the header proof's quorum, that the block is from the admin chain at the current
+    /// epoch, and that `transactionBcs` (the per-transaction BCS encodings) are the transactions the
+    /// header commits to.
+    function _verifyAdminTransactions(bytes calldata blockProof, bytes[] calldata transactionBcs) internal view {
+        (BridgeTypes.BlockProof memory proof, bytes32 blockHash) = _deserializeAndHash(blockProof);
+        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
+
         require(proof.header.chain_id.value.value == adminChainId, "block must be from admin chain");
         require(proof.header.epoch.value == currentEpoch, "block epoch must match current epoch");
+        require(
+            _hashTransactionsFromBcs(transactionBcs) == proof.header.transactions_hash.value,
+            "transactions do not match header"
+        );
+    }
 
-        // Find the CreateCommittee in the block operations. Linera emits at most
-        // one CreateCommittee per admin block; together with the
-        // `block.epoch == currentEpoch` check above, each admin block drives
-        // exactly one epoch transition, so taking the first match is sufficient.
-        bool found = false;
-        uint32 newEpoch;
-        bytes32 expectedBlobHash;
-        for (uint256 i = 0; i < proof.transactions.length; i++) {
-            BridgeTypes.Transaction memory txn = proof.transactions[i];
+    /// Scans the per-transaction BCS encodings for a `CreateCommittee` admin operation, returning
+    /// its epoch and blob hash if found.
+    function _findCreateCommittee(bytes[] calldata transactionBcs)
+        internal
+        pure
+        returns (bool found, uint32 newEpoch, bytes32 expectedBlobHash)
+    {
+        for (uint256 i = 0; i < transactionBcs.length; i++) {
+            BridgeTypes.Transaction memory txn = BridgeTypes.bcs_deserialize_Transaction(transactionBcs[i]);
             // choice=1 is ExecuteOperation
             if (txn.choice != 1) continue;
             BridgeTypes.Operation memory op = txn.execute_operation;
@@ -78,95 +101,65 @@ contract LightClient {
             found = true;
             break;
         }
-        require(found, "no CreateCommittee operation found");
-
-        // Verify committeeBlob hash matches the blob_hash from CreateCommittee
-        BridgeTypes.BlobContent memory blobContent =
-            BridgeTypes.BlobContent(BridgeTypes.BlobType.Committee, committeeBlob);
-        bytes32 computedHash =
-            keccak256(abi.encodePacked("BlobContent::", BridgeTypes.bcs_serialize_BlobContent(blobContent)));
-        require(computedHash == expectedBlobHash, "committee blob hash mismatch");
-
-        // Parse blob to extract addresses and weights, verified against caller's keys
-        (address[] memory addrs, uint64[] memory weights) = _parseCommitteeBlob(committeeBlob, validators);
-
-        // Store the new committee, recording the admin-chain height of the
-        // block that created it so the relayer can resume scanning from here.
-        _setCommittee(newEpoch, addrs, weights, proof.header.height.value);
     }
 
-    /// Raises `minAcceptedEpoch`, permanently retiring every committee with an
-    /// epoch below `newMinEpoch` from certificate verification and deleting its
-    /// stored scalar fields (`totalWeight`, `validatorCount`, `quorumThreshold`).
-    /// The per-validator `weights`/`indices` mapping entries cannot be cleared
-    /// (Solidity cannot enumerate mapping keys), but they become permanently
-    /// unreachable: a zeroed `totalWeight` fails the `verifyCertificate` quorum
-    /// lookup, and epoch numbers are never reused (epochs are monotonic).
-    ///
-    /// Monotonic (`newMinEpoch` must strictly increase) and capped at
-    /// `currentEpoch`, so the current committee is never retired: at
-    /// `newMinEpoch == currentEpoch` the floor still admits `epoch == currentEpoch`
-    /// (the verification check is `epoch >= minAcceptedEpoch`) and the delete
-    /// loop stops before `currentEpoch`. Only `newMinEpoch > currentEpoch` could
-    /// retire the live committee, which is rejected. The caller may keep older
-    /// epochs valid for certificate-lag tolerance by choosing a lower
-    /// `newMinEpoch`. Retiring a wide range in one call costs O(range) gas;
-    /// expire incrementally if the gap is large.
-    ///
-    /// TODO(security): access control is intentionally deferred. This function
-    /// is currently UNAUTHENTICATED and MUST be gated (owner / governance)
-    /// before any production deployment — an unauthenticated caller can
-    /// otherwise raise the floor up to `currentEpoch` and reject legitimate
-    /// lagging certificates (a liveness DoS).
-    function expireEpochsBelow(uint32 newMinEpoch) external {
-        require(newMinEpoch > minAcceptedEpoch, "minAcceptedEpoch must increase");
-        require(newMinEpoch <= currentEpoch, "cannot expire current epoch");
-        for (uint32 epoch = minAcceptedEpoch; epoch < newMinEpoch; epoch++) {
-            delete committees[epoch];
-        }
-        minAcceptedEpoch = newMinEpoch;
-    }
-
-    /// Total voting weight of the committee stored at `epoch`, or 0 if no such
-    /// committee exists (never set, or retired via `expireEpochsBelow`).
-    function committeeTotalWeight(uint32 epoch) external view returns (uint64) {
-        return committees[epoch].totalWeight;
-    }
-
-    /// Admin-chain height of the block that created the committee at `epoch`, or
-    /// 0 if no such committee exists or it was the genesis committee. The relayer
-    /// uses `committeeHeight(currentEpoch)` to resume committee reconciliation
-    /// from that height instead of re-scanning the admin chain from 0.
-    function committeeHeight(uint32 epoch) external view returns (uint64) {
-        return committees[epoch].createdAtHeight;
-    }
-
-    function verifyBlock(bytes calldata data) external view returns (BridgeTypes.BlockProof memory, bytes32) {
-        return verifyCertificate(data);
-    }
-
-    function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.BlockProof memory, bytes32) {
-        (BridgeTypes.BlockProof memory proof, bytes32 valueHash) = _deserializeAndHash(data);
-
-        // The carried body fields must be the ones the header commits to.
+    /// Verifies a confirmed block from its header proof and the events it commits to, returning the
+    /// header and the block hash. The body never travels in the proof; `eventBcs` are the per-event
+    /// BCS encodings and `eventsPerTx` how many belong to each transaction — together they
+    /// reconstruct `events_hash`, checked against the header.
+    function verifyBlockFromEvents(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx)
+        external
+        view
+        returns (BridgeTypes.BlockHeader memory header, bytes32 blockHash)
+    {
+        BridgeTypes.BlockProof memory proof;
+        (proof, blockHash) = _deserializeAndHash(blockProof);
+        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
         require(
-            _hashTransactions(proof.transactions) == proof.header.transactions_hash.value,
-            "transactions do not match header"
+            _hashEventsFromBcs(eventBcs, eventsPerTx) == proof.header.events_hash.value, "events do not match header"
         );
-        require(_hashEvents(proof.events) == proof.header.events_hash.value, "events do not match header");
+        header = proof.header;
+    }
 
-        // The header alone reproduces the value the validators signed; verify the quorum.
-        _verifyQuorum(valueHash, proof.header.epoch.value, proof.round, proof.signatures);
+    /// Reconstructs `events_hash` (`hash_vec_vec`) from the per-event BCS encodings grouped by
+    /// `eventsPerTx`: each event hashes to `keccak256("Event::" ++ eventBcs[k])`, the leaves of each
+    /// transaction fold to its event hash, and those fold to `events_hash`.
+    function _hashEventsFromBcs(bytes[] calldata eventBcs, uint32[] calldata eventsPerTx)
+        internal
+        pure
+        returns (bytes32)
+    {
+        bytes32[] memory leaves = _eventLeaves(eventBcs);
+        BridgeTypes.CryptoHash[] memory txHashes = new BridgeTypes.CryptoHash[](eventsPerTx.length);
+        uint256 cursor = 0;
+        for (uint256 i = 0; i < eventsPerTx.length; i++) {
+            BridgeTypes.CryptoHash[] memory group = new BridgeTypes.CryptoHash[](eventsPerTx[i]);
+            for (uint256 j = 0; j < eventsPerTx[i]; j++) {
+                group[j] = BridgeTypes.CryptoHash(leaves[cursor]);
+                cursor++;
+            }
+            txHashes[i] = BridgeTypes.CryptoHash(_hashCryptoHashVec(group));
+        }
+        require(cursor == leaves.length, "events/eventsPerTx mismatch");
+        return _hashCryptoHashVec(txHashes);
+    }
 
-        return (proof, valueHash);
+    /// Recomputes `transactions_hash` (`hash_vec`) from the per-transaction BCS encodings: each
+    /// hashes to `keccak256("Transaction::" ++ transactionBcs[i])`, then the leaves fold once.
+    function _hashTransactionsFromBcs(bytes[] calldata transactionBcs) internal pure returns (bytes32) {
+        BridgeTypes.CryptoHash[] memory leaves = new BridgeTypes.CryptoHash[](transactionBcs.length);
+        for (uint256 i = 0; i < transactionBcs.length; i++) {
+            leaves[i] = BridgeTypes.CryptoHash(keccak256(abi.encodePacked("Transaction::", transactionBcs[i])));
+        }
+        return _hashCryptoHashVec(leaves);
     }
 
     /// Verifies a block's signatures from its header and records its `events_hash`, so that
     /// individual events can later be proven against it (via `verifyEventInclusion`) without
     /// re-checking the whole certificate. Returns the block hash
     /// (`keccak256("BlockHeader::" ++ BCS(header))`).
-    function registerBlock(bytes calldata data) external returns (bytes32) {
-        (BridgeTypes.BlockProof memory proof, bytes32 blockHash) = _deserializeAndHash(data);
+    function registerBlock(bytes calldata blockProof) external returns (bytes32) {
+        (BridgeTypes.BlockProof memory proof, bytes32 blockHash) = _deserializeAndHash(blockProof);
         _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
         registeredBlocks[blockHash] = RegisteredBlock(
             proof.header.events_hash.value, proof.header.height.value, proof.header.chain_id.value.value
@@ -261,21 +254,17 @@ contract LightClient {
     /// `keccak256("BlockHeader::" ++ BCS(header))`; since the header is the first field, its BCS
     /// bytes are already in calldata, so we hash that slice directly rather than re-serializing
     /// the just-deserialized header.
-    function _deserializeAndHash(bytes calldata data)
+    function _deserializeAndHash(bytes calldata blockProof)
         internal
         pure
-        returns (BridgeTypes.BlockProof memory proof, bytes32 valueHash)
+        returns (BridgeTypes.BlockProof memory proof, bytes32 blockHash)
     {
-        bytes memory mdata = data;
+        bytes memory mdata = blockProof;
         uint256 pos;
         BridgeTypes.BlockHeader memory header;
         (pos, header) = BridgeTypes.bcs_deserialize_offset_BlockHeader(0, mdata);
-        valueHash = keccak256(abi.encodePacked("BlockHeader::", data[0:pos]));
+        blockHash = keccak256(abi.encodePacked("BlockHeader::", blockProof[0:pos]));
 
-        BridgeTypes.Transaction[] memory transactions;
-        (pos, transactions) = BridgeTypes.bcs_deserialize_offset_seq_Transaction(pos, mdata);
-        BridgeTypes.Event[][] memory events;
-        (pos, events) = BridgeTypes.bcs_deserialize_offset_seq_seq_Event(pos, mdata);
         BridgeTypes.Round memory round;
         (pos, round) = BridgeTypes.bcs_deserialize_offset_Round(pos, mdata);
         BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
@@ -283,13 +272,13 @@ contract LightClient {
             BridgeTypes.bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(pos, mdata);
         require(pos == mdata.length, "incomplete deserialization");
 
-        proof = BridgeTypes.BlockProof(header, transactions, events, round, signatures);
+        proof = BridgeTypes.BlockProof(header, round, signatures);
     }
 
     /// Verifies that `signatures` form a quorum of the `epoch` committee over the block whose hash
-    /// is `valueHash`.
+    /// is `blockHash`.
     function _verifyQuorum(
-        bytes32 valueHash,
+        bytes32 blockHash,
         uint32 epoch,
         BridgeTypes.Round memory round,
         BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures
@@ -297,11 +286,10 @@ contract LightClient {
         // Construct VoteValue BCS and hash with type name prefix
         // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
         BridgeTypes.VoteValue memory voteValue =
-            BridgeTypes.VoteValue(BridgeTypes.CryptoHash(valueHash), round, BridgeTypes.CertificateKind.Confirmed);
+            BridgeTypes.VoteValue(BridgeTypes.CryptoHash(blockHash), round, BridgeTypes.CertificateKind.Confirmed);
         bytes32 signedHash = keccak256(abi.encodePacked("VoteValue::", BridgeTypes.bcs_serialize_VoteValue(voteValue)));
 
         // Verify signatures against the block's epoch committee
-        require(epoch >= minAcceptedEpoch, "epoch expired");
         EpochCommittee storage committee = committees[epoch];
         require(committee.totalWeight > 0, "unknown epoch");
         uint64 weight = 0;
@@ -343,42 +331,12 @@ contract LightClient {
         require(weight >= committee.quorumThreshold, "insufficient quorum");
     }
 
-    /// Recomputes Linera's `transactions_hash`: keccak256("CryptoHashVec::" ++ BCS(Vec<CryptoHash>))
-    /// over the per-transaction hashes keccak256("Transaction::" ++ BCS(txn)).
-    function _hashTransactions(BridgeTypes.Transaction[] memory transactions) internal pure returns (bytes32) {
-        BridgeTypes.CryptoHash[] memory hashes = new BridgeTypes.CryptoHash[](transactions.length);
-        for (uint256 i = 0; i < transactions.length; i++) {
-            hashes[i] = BridgeTypes.CryptoHash(
-                keccak256(abi.encodePacked("Transaction::", BridgeTypes.bcs_serialize_Transaction(transactions[i])))
-            );
-        }
-        return _hashCryptoHashVec(hashes);
-    }
-
-    /// Recomputes Linera's `events_hash`: a two-level `hash_vec_vec` over the events, where each
-    /// event hashes to keccak256("Event::" ++ BCS(event)).
-    function _hashEvents(BridgeTypes.Event[][] memory events) internal pure returns (bytes32) {
-        BridgeTypes.CryptoHash[] memory outer = new BridgeTypes.CryptoHash[](events.length);
-        for (uint256 i = 0; i < events.length; i++) {
-            BridgeTypes.CryptoHash[] memory inner = new BridgeTypes.CryptoHash[](events[i].length);
-            for (uint256 j = 0; j < events[i].length; j++) {
-                inner[j] = BridgeTypes.CryptoHash(
-                    keccak256(abi.encodePacked("Event::", BridgeTypes.bcs_serialize_Event(events[i][j])))
-                );
-            }
-            outer[i] = BridgeTypes.CryptoHash(_hashCryptoHashVec(inner));
-        }
-        return _hashCryptoHashVec(outer);
-    }
-
     /// keccak256("CryptoHashVec::" ++ BCS(Vec<CryptoHash>)).
     function _hashCryptoHashVec(BridgeTypes.CryptoHash[] memory hashes) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked("CryptoHashVec::", BridgeTypes.bcs_serialize_seq_CryptoHash(hashes)));
     }
 
-    function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights, uint64 createdAtHeight)
-        internal
-    {
+    function _setCommittee(uint32 epoch, address[] memory validators, uint64[] memory weights) internal {
         require(
             epoch == currentEpoch + 1 || (committees[currentEpoch].totalWeight == 0 && currentEpoch == 0),
             "epoch must be sequential"
@@ -395,7 +353,6 @@ contract LightClient {
         committee.validatorCount = validators.length;
         committee.totalWeight = total;
         committee.quorumThreshold = 2 * total / 3 + 1;
-        committee.createdAtHeight = createdAtHeight;
         currentEpoch = epoch;
     }
 
@@ -483,11 +440,11 @@ contract LightClient {
         require(lhs == rhs, "key not on secp256k1 curve");
     }
 
-    /// Reads 8 bytes from data at pos as a little-endian uint64.
-    function _readU64LE(bytes memory data, uint256 pos) internal pure returns (uint64) {
+    /// Reads 8 bytes from buffer at pos as a little-endian uint64.
+    function _readU64LE(bytes memory buffer, uint256 pos) internal pure returns (uint64) {
         uint64 result = 0;
         for (uint256 i = 0; i < 8; i++) {
-            result |= uint64(uint8(data[pos + i])) << (i * 8);
+            result |= uint64(uint8(buffer[pos + i])) << (i * 8);
         }
         return result;
     }

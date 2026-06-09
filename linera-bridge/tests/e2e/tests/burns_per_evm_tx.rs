@@ -12,12 +12,11 @@
 
 use alloy::{providers::ProviderBuilder, sol};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::{abi::BridgeOperation, block_proof::BlockProof};
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_linera_token_with_supply, fetch_latest_cert,
-    fund_bridge_erc20, light_client_address, publish_and_create_evm_bridge,
-    publish_and_create_wrapped_fungible, register_bridge_app, set_anvil_block_gas_limit,
-    start_compose, wait_for_light_client,
+    add_block_args, compose_file_path, deploy_fungible_bridge, deploy_linera_token_with_supply,
+    fetch_latest_cert, fund_bridge_erc20, light_client_address,
+    publish_and_create_wrapped_fungible, set_anvil_block_gas_limit, start_compose,
+    wait_for_light_client,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -26,11 +25,12 @@ use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use test_case::test_case;
+use wrapped_fungible::{Account, WrappedFungibleOperation};
 
 sol! {
     #[sol(rpc)]
     interface IFungibleBridge {
-        function addBlock(bytes calldata data) external;
+        function addBlock(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx) external;
     }
 }
 
@@ -52,11 +52,8 @@ const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(38);
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 10u128.pow(15);
 
-// Floors are a safe lower bound for the bridge-driven burn flow (each burn carries a
-// funding `Credit` plus a `BridgeMessage::Burn` in the chain-A block), measured against
-// the heaviest payload. The lighter `BlockProof` only raises capacity, so these stay valid.
-#[test_case("ethereum",     30_000_000,  Some(30); "ethereum")]
-#[test_case("base",         240_000_000, Some(140); "base")]
+#[test_case("ethereum",     30_000_000,  Some(45); "ethereum")]
+#[test_case("base",         240_000_000, Some(165); "base")]
 #[tokio::test]
 #[serial_test::serial]
 #[ignore] // Requires pre-built docker images, Wasm, and bridge contracts.
@@ -136,7 +133,6 @@ async fn burns_per_evm_tx(
     let erc20_addr =
         deploy_linera_token_with_supply(&compose, &project_name, &compose_file, token_supply_attos)
             .await?;
-
     let fungible_app_id = publish_and_create_wrapped_fungible(
         &cc_b,
         owner_b,
@@ -146,17 +142,7 @@ async fn burns_per_evm_tx(
     )
     .await?;
 
-    // The evm-bridge app drives the burn; create it on the bridge/mint chain
-    // (chain A) after the wrapped-fungible app so its id can be baked in.
-    let bridge_app_id =
-        publish_and_create_evm_bridge(&cc_a, erc20_addr, chain_a, fungible_app_id).await?;
-
-    // Register the wrapped-fungible app with the evm-bridge so it can drive
-    // the escrow transfer + burn.
-    register_bridge_app(&cc_a, fungible_app_id, bridge_app_id).await?;
-
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
-    let bridge_app_id_bytes32 = format!("0x{}", bridge_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
     let bridge_addr = deploy_fungible_bridge(
         &compose,
@@ -166,7 +152,6 @@ async fn burns_per_evm_tx(
         &chain_a_bytes32,
         erc20_addr,
         &app_id_bytes32,
-        &bridge_app_id_bytes32,
     )
     .await?;
 
@@ -187,7 +172,9 @@ async fn burns_per_evm_tx(
         hi,
         &cc_a,
         &cc_b,
-        bridge_app_id,
+        owner_b,
+        chain_a,
+        fungible_app_id,
         bridge_addr,
         &provider,
     )
@@ -200,7 +187,9 @@ async fn burns_per_evm_tx(
             next_hi,
             &cc_a,
             &cc_b,
-            bridge_app_id,
+            owner_b,
+            chain_a,
+            fungible_app_id,
             bridge_addr,
             &provider,
         )
@@ -229,7 +218,9 @@ async fn burns_per_evm_tx(
             lo,
             &cc_a,
             &cc_b,
-            bridge_app_id,
+            owner_b,
+            chain_a,
+            fungible_app_id,
             bridge_addr,
             &provider,
         )
@@ -271,7 +262,9 @@ async fn burns_per_evm_tx(
             mid,
             &cc_a,
             &cc_b,
-            bridge_app_id,
+            owner_b,
+            chain_a,
+            fungible_app_id,
             bridge_addr,
             &provider,
         )
@@ -301,19 +294,22 @@ async fn burns_per_evm_tx(
     Ok(())
 }
 
-/// Bundles `n` `BridgeOperation::Burn` ops into a single chain-B block;
-/// each routes a funding transfer + tracked `BridgeMessage::Burn` to the
-/// bridge chain (chain A). Drives `cc_a.process_inbox()` (which produces
-/// one chain-A block with `n` `BurnEvent`s), reads the resulting
-/// `ConfirmedBlockCertificate`, BCS-encodes its `BlockProof`, and asks
-/// anvil to estimate the gas required by `bridge.addBlock(proof_bytes)`.
+/// Bundles `n` `WrappedFungibleOperation::Transfer` ops into a single
+/// chain-B block, drives `cc_a.process_inbox()` (which produces one
+/// chain-A block with `n` `BurnEvent`s), reads the resulting
+/// `ConfirmedBlockCertificate`, builds the `addBlock` arguments (header proof,
+/// per-event BCS, per-transaction event counts), and asks anvil to estimate the
+/// gas required by `bridge.addBlock(...)`.
 ///
 /// Returns the estimated gas. Reverts surface as `Err`.
+#[allow(clippy::too_many_arguments)]
 async fn build_and_estimate<P, E>(
     n: u32,
     cc_a: &linera_core::client::ChainClient<E>,
     cc_b: &linera_core::client::ChainClient<E>,
-    bridge_app_id: linera_base::identifiers::ApplicationId,
+    owner_b: AccountOwner,
+    chain_a: linera_base::identifiers::ChainId,
+    fungible_app_id: linera_base::identifiers::ApplicationId,
     bridge_addr: alloy::primitives::Address,
     provider: &P,
 ) -> anyhow::Result<u64>
@@ -330,16 +326,21 @@ where
             // iteration counter so log inspection makes the address ↔ burn
             // mapping easy to read. Start from 1 — `Address20(0…0)` is the
             // zero address and ERC-20 rejects transfers to it.
-            let mut evm_target = [0u8; 20];
-            evm_target[16..].copy_from_slice(&i.to_be_bytes());
-            let burn_bytes = bcs::to_bytes(&BridgeOperation::Burn {
+            let mut bytes = [0u8; 20];
+            bytes[16..].copy_from_slice(&i.to_be_bytes());
+            let owner = AccountOwner::Address20(bytes);
+            let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
+                owner: owner_b,
                 amount: burn_amount,
-                evm_target,
+                target_account: Account {
+                    chain_id: chain_a,
+                    owner,
+                },
             })
             .expect("BCS serialization");
             Operation::User {
-                application_id: bridge_app_id,
-                bytes: burn_bytes,
+                application_id: fungible_app_id,
+                bytes: withdraw_bytes,
             }
         })
         .collect::<Vec<_>>();
@@ -359,12 +360,11 @@ where
     );
 
     let cert = fetch_latest_cert(cc_a).await?;
-    let proof_bytes =
-        bcs::to_bytes(&BlockProof::from_certificate(&cert)).context("BCS-serialize block proof")?;
+    let (proof, event_bcs, events_per_tx) = add_block_args(&cert);
 
     let bridge = IFungibleBridge::new(bridge_addr, provider);
     let gas = bridge
-        .addBlock(proof_bytes.into())
+        .addBlock(proof, event_bcs, events_per_tx)
         .estimate_gas()
         .await
         .with_context(|| format!("estimate_gas(addBlock) for n={n}"))?;
