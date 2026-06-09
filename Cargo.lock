@@ -5155,6 +5155,7 @@ dependencies = [
  "bcs",
  "cfg_aliases",
  "custom_debug_derive",
+ "derive_more 1.0.0",
  "futures",
  "hex",
  "linera-base",

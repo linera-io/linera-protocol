@@ -703,6 +703,7 @@ impl Block {
 /// A single field of a [`BlockBody`], paired with enough data to recompute its hash and
 /// check it against the matching hash in a [`BlockHeader`]. This lets a holder of a header
 /// prove that one body field belongs to the block without the rest of the body.
+#[derive(derive_more::From)]
 pub enum BlockBodyField {
     Transactions(Vec<Transaction>),
     Messages(Vec<Vec<OutgoingMessage>>),
@@ -716,18 +717,18 @@ pub enum BlockBodyField {
 
 impl BlockHeader {
     /// Returns whether `field` is the body field this header commits to.
-    pub fn verifies(&self, field: &BlockBodyField) -> bool {
-        match field {
+    pub fn verifies(&self, field: impl Into<BlockBodyField>) -> bool {
+        match field.into() {
             BlockBodyField::Transactions(v) => hashing::hash_vec(v) == self.transactions_hash,
             BlockBodyField::Messages(v) => hashing::hash_vec_vec(v) == self.messages_hash,
             BlockBodyField::PreviousMessageBlocks(m) => {
                 CryptoHash::new(&PreviousMessageBlocksMap {
-                    inner: Cow::Borrowed(m),
+                    inner: Cow::Owned(m),
                 }) == self.previous_message_blocks_hash
             }
             BlockBodyField::PreviousEventBlocks(m) => {
                 CryptoHash::new(&PreviousEventBlocksMap {
-                    inner: Cow::Borrowed(m),
+                    inner: Cow::Owned(m),
                 }) == self.previous_event_blocks_hash
             }
             BlockBodyField::OracleResponses(v) => {
