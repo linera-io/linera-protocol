@@ -55,12 +55,10 @@ sol! {
 const NUM_BURNS: usize = 8;
 const BURN_AMOUNT_TOKENS: u128 = 1;
 /// Per-block gas ceiling sized to live between `processBurns(cert, tx, [single])`
-/// (~3.8M gas, measured — dominated by `verifyBlock` in the
-/// bridge-driven burn flow where each burn adds a funding `Credit` plus a
-/// `BridgeMessage::Burn` to the chain-A block) and `addBlock(cert)` for all
-/// `NUM_BURNS` burns (~4.21M gas, measured). `addBlock` therefore cannot fit,
-/// so the relayer routes through chunked per-tx `processBurns` instead.
-const ANVIL_BLOCK_GAS_LIMIT: u64 = 4_000_000;
+/// (dominated by cert verification, ~2.4M gas) and `addBlock(cert)` for
+/// `NUM_BURNS` burns (~3.0M gas). The relayer must therefore route through
+/// chunked `processBurns` per tx.
+const ANVIL_BLOCK_GAS_LIMIT: u64 = 2_800_000;
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary.
