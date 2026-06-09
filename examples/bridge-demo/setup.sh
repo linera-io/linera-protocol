@@ -35,7 +35,10 @@ TOKEN_DECIMALS=18
 FUND_AMOUNT="500000000000000000000"
 SHARED_DIR=""
 WALLET_DIR="/tmp/wallet"
-EXTRA_WALLET_ID=1
+# `linera net up --with-faucet` already owns wallet_0 (admin) and wallet_1 (faucet, holds an open
+# rocksdb lock on client_1.db). Use a higher slot so the copied extra wallet doesn't clobber the
+# faucet's wallet or block on its lock.
+EXTRA_WALLET_ID=2
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
