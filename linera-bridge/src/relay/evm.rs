@@ -3,6 +3,10 @@
 
 //! Centralized EVM client for all bridge EVM interactions.
 
+// `processBurns` carries the inclusion-proof components as separate arguments, so its
+// `sol!`-generated binding exceeds clippy's argument-count threshold.
+#![allow(clippy::too_many_arguments)]
+
 use alloy::{
     primitives::{Address, Bytes, B256, U256},
     providers::Provider,
@@ -14,8 +18,10 @@ use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
 
 use crate::{
-    block_proof::BlockProof,
-    evm::light_client::{addCommitteeCall, committeeHeightCall, currentEpochCall},
+    block_proof::{BlockProof, EventInclusionProof},
+    evm::light_client::{
+        addCommitteeCall, committeeHeightCall, currentEpochCall, registerBlockCall,
+    },
     proof::deposit_event_signature,
 };
 
@@ -23,7 +29,16 @@ sol! {
     #[sol(rpc)]
     interface IFungibleBridge {
         function addBlock(bytes calldata data) external;
-        function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external;
+        function processBurns(
+            bytes32 blockHash,
+            bytes[] calldata eventBcs,
+            uint32 txIndex,
+            uint32 numTxs,
+            uint32 numEventsInTx,
+            uint32[] calldata positions,
+            bytes32[] calldata innerSiblings,
+            bytes32[] calldata outerSiblings
+        ) external;
         function lightClient() external view returns (address);
         function token() external view returns (address);
         function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool);
@@ -37,6 +52,19 @@ sol! {
 
 /// Maximum block range per `eth_getLogs` query.
 const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
+
+/// Arguments for a `processBurns` call: a chunk of events within one transaction plus the
+/// inclusion proof binding them to a registered block's `events_hash`.
+struct ProcessBurnsArgs {
+    block_hash: B256,
+    event_bcs: Vec<Bytes>,
+    tx_index: u32,
+    num_txs: u32,
+    num_events_in_tx: u32,
+    positions: Vec<u32>,
+    inner_siblings: Vec<B256>,
+    outer_siblings: Vec<B256>,
+}
 
 /// Centralized client for all EVM interactions. Safe to share via `Arc`.
 pub struct EvmClient<P> {
@@ -174,52 +202,122 @@ impl<P: Provider> EvmClient<P> {
         estimate
     }
 
-    /// Same as `estimate_add_block_gas` but for
-    /// `processBurns(cert, tx_index, positions_in_tx)`.
+    /// Registers a block on the LightClient from its header and signatures alone, so its events can
+    /// later be settled in chunks. Must succeed before `estimate_process_burns_gas` or
+    /// `process_burns`, both of which prove events against the registered block.
+    pub async fn register_block(
+        &self,
+        cert: &linera_chain::types::ConfirmedBlockCertificate,
+    ) -> Result<()> {
+        let lc_addr = self.get_light_client_address().await?;
+        let proof_bytes = bcs::to_bytes(&BlockProof::header_only(cert))
+            .context("failed to BCS-serialize header proof")?;
+        let call = registerBlockCall {
+            data: proof_bytes.into(),
+        };
+        let tx = alloy::rpc::types::TransactionRequest::default()
+            .to(lc_addr)
+            .input(call.abi_encode().into());
+        let receipt = self
+            .provider
+            .send_transaction(tx)
+            .await
+            .context("registerBlock send failed")?
+            .get_receipt()
+            .await
+            .context("registerBlock receipt failed")?;
+        tracing::info!(tx = ?receipt.transaction_hash, "registerBlock transaction confirmed");
+        Ok(())
+    }
+
+    /// Builds the `processBurns` arguments for the events at `positions` within transaction
+    /// `tx_index` of `cert`: the chunk's BCS-encoded events plus the inclusion proof binding them to
+    /// the block's registered `events_hash`. The block must already be registered.
+    fn process_burns_args(
+        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        tx_index: u32,
+        positions: &[u32],
+    ) -> ProcessBurnsArgs {
+        let events = &cert.block().body.events;
+        let proof = EventInclusionProof::new(events, tx_index as usize, positions);
+        let event_bcs = positions
+            .iter()
+            .map(|p| {
+                Bytes::from(
+                    bcs::to_bytes(&events[tx_index as usize][*p as usize])
+                        .expect("BCS-serialize event"),
+                )
+            })
+            .collect();
+        let to_b256 = |h: &linera_base::crypto::CryptoHash| B256::from(*h.as_bytes());
+        ProcessBurnsArgs {
+            block_hash: B256::from(*cert.hash().as_bytes()),
+            event_bcs,
+            tx_index,
+            num_txs: proof.num_txs,
+            num_events_in_tx: proof.num_events_in_tx,
+            positions: positions.to_vec(),
+            inner_siblings: proof.inner_siblings.iter().map(to_b256).collect(),
+            outer_siblings: proof.outer_siblings.iter().map(to_b256).collect(),
+        }
+    }
+
+    /// Same as `estimate_add_block_gas` but for the chunked `processBurns(cert, tx_index,
+    /// positions_in_tx)` path.
     pub async fn estimate_process_burns_gas(
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
-        let proof_bytes =
-            bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
-        let cert_size = proof_bytes.len();
-        let count = positions_in_tx.len();
-        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        let estimate = bridge
-            .processBurns(proof_bytes.into(), tx_index, positions_in_tx.to_vec())
-            .estimate_gas()
-            .await;
-        tracing::debug!(
+        let args = Self::process_burns_args(cert, tx_index, positions_in_tx);
+        tracing::trace!(
             tx_index,
-            count,
-            ?estimate,
-            cert_size,
-            "processBurns gas estimate"
+            count = positions_in_tx.len(),
+            "Estimating gas for processBurns"
         );
-        estimate
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        bridge
+            .processBurns(
+                args.block_hash,
+                args.event_bcs,
+                args.tx_index,
+                args.num_txs,
+                args.num_events_in_tx,
+                args.positions,
+                args.inner_siblings,
+                args.outer_siblings,
+            )
+            .estimate_gas()
+            .await
     }
 
-    /// Submits `processBurns(cert, tx_index, positions_in_tx)` and waits
-    /// for the receipt. Used after `split_to_fit` returns a chunk.
+    /// Submits `processBurns(cert, tx_index, positions_in_tx)` and waits for the receipt. Used after
+    /// `split_to_fit` returns a chunk.
     pub async fn process_burns(
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> Result<()> {
-        let proof_bytes =
-            bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof");
+        let args = Self::process_burns_args(cert, tx_index, positions_in_tx);
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         tracing::info!(
             tx_index,
             count = positions_in_tx.len(),
-            size = proof_bytes.len(),
             "Calling processBurns on FungibleBridge..."
         );
         let pending_tx = bridge
-            .processBurns(proof_bytes.into(), tx_index, positions_in_tx.to_vec())
+            .processBurns(
+                args.block_hash,
+                args.event_bcs,
+                args.tx_index,
+                args.num_txs,
+                args.num_events_in_tx,
+                args.positions,
+                args.inner_siblings,
+                args.outer_siblings,
+            )
             .send()
             .await
             .context("processBurns send failed")?;

@@ -132,40 +132,53 @@ contract FungibleBridge is Microchain {
         }
     }
 
-    /// Processes burns at the requested `eventPositionsInTx` positions
-    /// within transaction `txIndex` of `cert`. Verifies the cert once
-    /// and uses direct array access (`body.events[txIndex][pos]`) for
-    /// every burn — no nested-loop scan. The off-chain relayer uses
-    /// this when `addBlock(cert)` would not fit in a single EVM tx,
-    /// chunking burns per-tx-then-by-gas.
+    /// Releases the burns whose canonical BCS encodings are `eventBcs`, after proving they sit at
+    /// `positions` within transaction `txIndex` of the block registered under `blockHash` (see
+    /// `LightClient.verifyEventInclusion`). The off-chain relayer uses this when `addBlock` would
+    /// not fit in a single EVM tx: it registers the block once, then settles burns in chunks, each
+    /// proving only its own events instead of re-verifying the whole certificate.
     ///
-    /// Idempotent like `_onBlock`: positions already in `processedBurns` are
-    /// skipped silently rather than reverted. Lets the relayer recover from
-    /// overlap with a prior `addBlock` (or a racing/retrying `processBurns`)
-    /// instead of losing the whole chunk to a single duplicate.
+    /// Idempotent like `_onBlock`: burns already in `processedBurns` are skipped silently rather
+    /// than reverted, so the relayer can recover from overlap with a prior `addBlock` or a
+    /// racing/retrying `processBurns`.
     ///
-    /// Reverts (atomically — no `processedBurns` flag is set if the call
-    /// reverts) on:
-    /// - empty `eventPositionsInTx` (`"empty positions"`)
-    /// - `txIndex` out of range (`"txIndex out of range"`)
-    /// - any position out of range (`"eventPos out of range"`)
-    /// - any position whose event is not a matching burn for this app
-    ///   (`"not a matching burn"`)
+    /// Reverts (atomically — no `processedBurns` flag is set if the call reverts) on:
+    /// - empty `positions` (`"empty positions"`)
+    /// - a failed inclusion proof (block not registered, or events/siblings do not fold to its
+    ///   `events_hash`)
+    /// - a block registered for a different chain (`"chain id mismatch"`)
+    /// - any event that is not a matching burn for this app (`"not a matching burn"`)
     /// - any failed `token.transfer` (`"safeTransfer failed"`)
-    function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
-        require(eventPositionsInTx.length > 0, "empty positions");
-        (BridgeTypes.BlockProof memory blockValue,) = lightClient.verifyBlock(data);
-        require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
-        require(txIndex < blockValue.events.length, "txIndex out of range");
+    function processBurns(
+        bytes32 blockHash,
+        bytes[] calldata eventBcs,
+        uint32 txIndex,
+        uint32 numTxs,
+        uint32 numEventsInTx,
+        uint32[] calldata positions,
+        bytes32[] calldata innerSiblings,
+        bytes32[] calldata outerSiblings
+    ) external {
+        require(positions.length > 0, "empty positions");
 
-        uint64 height = blockValue.header.height.value;
+        // Prove the events belong to the registered block (reverts if not registered or the proof
+        // does not fold to its events_hash).
+        lightClient.verifyEventInclusion(
+            blockHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, innerSiblings, outerSiblings
+        );
+
+        (, uint64 height, bytes32 blockChainId) = lightClient.registeredBlocks(blockHash);
+        require(blockChainId == chainId, "chain id mismatch");
+
+        _releaseBurns(eventBcs, height);
+    }
+
+    /// Releases each burn in `eventBcs` (already proven included in a block at `height`), skipping
+    /// any already in `processedBurns`.
+    function _releaseBurns(bytes[] calldata eventBcs, uint64 height) private {
         bytes32 burnsHash = keccak256("burns");
-        BridgeTypes.Event[] memory txEvents = blockValue.events[txIndex];
-
-        for (uint256 k = 0; k < eventPositionsInTx.length; k++) {
-            uint32 pos = eventPositionsInTx[k];
-            require(pos < txEvents.length, "eventPos out of range");
-            BridgeTypes.Event memory evt = txEvents[pos];
+        for (uint256 k = 0; k < eventBcs.length; k++) {
+            BridgeTypes.Event memory evt = BridgeTypes.bcs_deserialize_Event(eventBcs[k]);
             require(_isMatchingBurn(evt, burnsHash), "not a matching burn");
 
             bytes32 key = _burnKey(height, evt.index);

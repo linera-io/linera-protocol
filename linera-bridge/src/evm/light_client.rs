@@ -15,6 +15,24 @@ sol! {
 
     function verifyBlock(bytes calldata data) external view;
 
+    function registerBlock(bytes calldata data) external returns (bytes32);
+
+    function registeredBlocks(bytes32 blockHash)
+        external
+        view
+        returns (bytes32 eventsHash, uint64 height, bytes32 chainId);
+
+    function verifyEventInclusion(
+        bytes32 blockHash,
+        bytes[] calldata eventBcs,
+        uint32 txIndex,
+        uint32 numTxs,
+        uint32 numEventsInTx,
+        uint32[] calldata positions,
+        bytes32[] calldata innerSiblings,
+        bytes32[] calldata outerSiblings
+    ) external view;
+
     function currentEpoch() external view returns (uint32);
 
     function minAcceptedEpoch() external view returns (uint32);
@@ -41,7 +59,8 @@ mod tests {
 
     use super::{
         addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
-        expireEpochsBelowCall, minAcceptedEpochCall, verifyBlockCall,
+        expireEpochsBelowCall, minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
+        verifyBlockCall, verifyEventInclusionCall,
     };
     use crate::test_helpers::*;
 
@@ -465,6 +484,143 @@ mod tests {
             )
             .is_err(),
             "minAcceptedEpoch cannot decrease"
+        );
+    }
+
+    #[test]
+    fn test_light_client_register_block_records_events_hash() {
+        let mut light_client = TestLightClient::new();
+        let certificate = create_signed_certificate(&light_client.secret, &light_client.public);
+        let header_only = bcs::to_bytes(&crate::block_proof::BlockProof::header_only(&certificate))
+            .expect("BCS serialization failed");
+
+        let (block_hash, _, _) = call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &registerBlockCall {
+                data: header_only.into(),
+            },
+        );
+
+        // `registerBlock` returns the block hash, which is `hash(header)`.
+        assert_eq!(block_hash.0, *certificate.hash().as_bytes());
+
+        // The stored metadata matches the header: events hash, height, and chain id.
+        let (block_meta, _, _) = call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &registeredBlocksCall {
+                blockHash: block_hash,
+            },
+        );
+        let header = &certificate.block().header;
+        assert_eq!(block_meta.eventsHash.0, *header.events_hash.as_bytes());
+        assert_eq!(block_meta.height, header.height.0);
+        assert_eq!(block_meta.chainId.0, *header.chain_id.0.as_bytes());
+    }
+
+    #[test]
+    fn test_light_client_verify_event_inclusion() {
+        use alloy_primitives::{Bytes, B256};
+        use linera_base::{
+            data_types::Event,
+            identifiers::{GenericApplicationId, StreamId, StreamName},
+        };
+
+        use crate::block_proof::{BlockProof, EventInclusionProof};
+
+        let mut lc = TestLightClient::new();
+        let chain = CryptoHash::new(&TestString::new("test_chain"));
+        let make_event = |value: &[u8], index| Event {
+            stream_id: StreamId {
+                application_id: GenericApplicationId::System,
+                stream_name: StreamName(b"burns".to_vec()),
+            },
+            index,
+            value: value.to_vec(),
+        };
+        // Three transactions carrying 1, 2, and 1 events.
+        let events = vec![
+            vec![make_event(b"a", 0)],
+            vec![make_event(b"b", 1), make_event(b"c", 2)],
+            vec![make_event(b"d", 3)],
+        ];
+        let certificate = create_signed_certificate_with_events(
+            &lc.secret,
+            &lc.public,
+            chain,
+            BlockHeight(1),
+            events.clone(),
+        );
+
+        // Register the block from its header and signatures alone.
+        let header_only = bcs::to_bytes(&BlockProof::header_only(&certificate))
+            .expect("BCS serialization failed");
+        let (block_hash, _, _) = call_contract(
+            &mut lc.db,
+            lc.deployer,
+            lc.contract,
+            &registerBlockCall {
+                data: header_only.into(),
+            },
+        );
+
+        let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
+
+        // Prove the second event of transaction 1.
+        let tx_index = 1usize;
+        let positions = [1u32];
+        let proof = EventInclusionProof::new(&events, tx_index, &positions);
+        let inner: Vec<B256> = proof.inner_siblings.iter().map(to_b256).collect();
+        let outer: Vec<B256> = proof.outer_siblings.iter().map(to_b256).collect();
+        let make_call = |event_bcs: Vec<Bytes>| verifyEventInclusionCall {
+            blockHash: block_hash,
+            eventBcs: event_bcs,
+            txIndex: proof.tx_index,
+            numTxs: proof.num_txs,
+            numEventsInTx: proof.num_events_in_tx,
+            positions: positions.to_vec(),
+            innerSiblings: inner.clone(),
+            outerSiblings: outer.clone(),
+        };
+
+        // The correct event verifies.
+        let event_bcs: Vec<Bytes> = vec![bcs::to_bytes(&events[tx_index][1])
+            .expect("BCS serialization failed")
+            .into()];
+        call_contract(&mut lc.db, lc.deployer, lc.contract, &make_call(event_bcs));
+
+        // A tampered event does not.
+        let bad: Vec<Bytes> = vec![bcs::to_bytes(&make_event(b"x", 9))
+            .expect("BCS serialization failed")
+            .into()];
+        assert!(
+            try_call_contract(&mut lc.db, lc.deployer, lc.contract, &make_call(bad)).is_err(),
+            "tampered event must fail inclusion"
+        );
+
+        let good_bcs = || -> Vec<Bytes> {
+            vec![bcs::to_bytes(&events[tx_index][1])
+                .expect("BCS serialization failed")
+                .into()]
+        };
+
+        // An unregistered block hash is rejected.
+        let mut unregistered = make_call(good_bcs());
+        unregistered.blockHash = B256::ZERO;
+        assert!(
+            try_call_contract(&mut lc.db, lc.deployer, lc.contract, &unregistered).is_err(),
+            "unregistered block must be rejected"
+        );
+
+        // A txIndex past the block's transaction count is rejected.
+        let mut bad_tx = make_call(good_bcs());
+        bad_tx.txIndex = proof.num_txs;
+        assert!(
+            try_call_contract(&mut lc.db, lc.deployer, lc.contract, &bad_tx).is_err(),
+            "out-of-range txIndex must be rejected"
         );
     }
 

@@ -25,6 +25,19 @@ contract LightClient {
     uint32 public minAcceptedEpoch;
     bytes32 public adminChainId;
 
+    /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
+    /// individual events can later be proven against it (`verifyEventInclusion`) and settled
+    /// (`processBurns`) without re-checking the certificate or re-parsing the header per chunk.
+    /// `eventsHash` is never zero for a valid header, so a zero `eventsHash` means "unregistered".
+    struct RegisteredBlock {
+        bytes32 eventsHash;
+        uint64 height;
+        bytes32 chainId;
+    }
+
+    /// Maps a registered block's hash (`keccak256("BlockHeader::" ++ BCS(header))`) to its metadata.
+    mapping(bytes32 => RegisteredBlock) public registeredBlocks;
+
     constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
         require(validators.length == weights.length, "length mismatch");
         // Genesis committee has no backing admin block, so its height is 0.
@@ -133,46 +146,169 @@ contract LightClient {
     }
 
     function verifyCertificate(bytes calldata data) internal view returns (BridgeTypes.BlockProof memory, bytes32) {
-        // Copy calldata to memory for the BCS deserializer
-        bytes memory mdata = data;
+        (BridgeTypes.BlockProof memory proof, bytes32 valueHash) = _deserializeAndHash(data);
 
-        // Step 1: Deserialize the lighter payload (header + transactions + events + round +
-        // signatures). The full block body is never sent.
-        uint256 pos;
-        BridgeTypes.BlockProof memory proof;
-        (pos, proof) = BridgeTypes.bcs_deserialize_offset_BlockProof(0, mdata);
-        require(pos == mdata.length, "incomplete deserialization");
-
-        // Step 2: Compute value_hash = keccak256("BlockHeader::" ++ BCS(header)).
-        // The block hash now commits to the header, which commits to the body via its
-        // per-field hashes, so the header alone reproduces the signed value.
-        bytes32 valueHash =
-            keccak256(abi.encodePacked("BlockHeader::", BridgeTypes.bcs_serialize_BlockHeader(proof.header)));
-
-        // Step 3: The carried body fields must be the ones the header commits to.
+        // The carried body fields must be the ones the header commits to.
         require(
             _hashTransactions(proof.transactions) == proof.header.transactions_hash.value,
             "transactions do not match header"
         );
         require(_hashEvents(proof.events) == proof.header.events_hash.value, "events do not match header");
 
-        // Step 4: Construct VoteValue BCS and hash with type name prefix
-        // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
-        BridgeTypes.VoteValue memory voteValue = BridgeTypes.VoteValue(
-            BridgeTypes.CryptoHash(valueHash), proof.round, BridgeTypes.CertificateKind.Confirmed
+        // The header alone reproduces the value the validators signed; verify the quorum.
+        _verifyQuorum(valueHash, proof.header.epoch.value, proof.round, proof.signatures);
+
+        return (proof, valueHash);
+    }
+
+    /// Verifies a block's signatures from its header and records its `events_hash`, so that
+    /// individual events can later be proven against it (via `verifyEventInclusion`) without
+    /// re-checking the whole certificate. Returns the block hash
+    /// (`keccak256("BlockHeader::" ++ BCS(header))`).
+    function registerBlock(bytes calldata data) external returns (bytes32) {
+        (BridgeTypes.BlockProof memory proof, bytes32 blockHash) = _deserializeAndHash(data);
+        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
+        registeredBlocks[blockHash] = RegisteredBlock(
+            proof.header.events_hash.value, proof.header.height.value, proof.header.chain_id.value.value
         );
+        return blockHash;
+    }
+
+    /// Proves that the events whose canonical BCS encodings are `eventBcs` sit at `positions`
+    /// (ascending) within transaction `txIndex` of the block registered under `blockHash`. Reverts
+    /// unless they fold — with the supplied sibling hashes — to the block's registered
+    /// `events_hash`. `numTxs`/`numEventsInTx` are the outer/inner vector lengths; `innerSiblings`
+    /// are the leaf hashes of the unproven events in `txIndex` (position order) and `outerSiblings`
+    /// the per-transaction hashes of the other transactions (transaction order). This lets a caller
+    /// settle a subset of a block's events without re-hashing the whole block.
+    function verifyEventInclusion(
+        bytes32 blockHash,
+        bytes[] calldata eventBcs,
+        uint32 txIndex,
+        uint32 numTxs,
+        uint32 numEventsInTx,
+        uint32[] calldata positions,
+        bytes32[] calldata innerSiblings,
+        bytes32[] calldata outerSiblings
+    ) external view {
+        bytes32 eventsHash = registeredBlocks[blockHash].eventsHash;
+        require(eventsHash != 0, "block not registered");
+        require(txIndex < numTxs, "txIndex out of range");
+        require(eventBcs.length == positions.length, "events/positions length mismatch");
+        require(positions.length + innerSiblings.length == numEventsInTx, "inner sibling count mismatch");
+        require(outerSiblings.length + 1 == numTxs, "outer sibling count mismatch");
+
+        bytes32[] memory provenLeaves = _eventLeaves(eventBcs);
+        bytes32 txHash = _foldTransactionEvents(provenLeaves, positions, innerSiblings, numEventsInTx);
+        bytes32 computed = _foldEventsHash(txHash, txIndex, numTxs, outerSiblings);
+        require(computed == eventsHash, "event inclusion proof failed");
+    }
+
+    /// Leaf hash of each proven event: `keccak256("Event::" ++ BCS(event))`.
+    function _eventLeaves(bytes[] calldata eventBcs) internal pure returns (bytes32[] memory leaves) {
+        leaves = new bytes32[](eventBcs.length);
+        for (uint256 i = 0; i < eventBcs.length; i++) {
+            leaves[i] = keccak256(abi.encodePacked("Event::", eventBcs[i]));
+        }
+    }
+
+    /// Reconstructs transaction `txIndex`'s event hash (`hash_vec` over its event leaves): proven
+    /// positions take their leaf from `provenLeaves`, the rest from `innerSiblings`. The cursor walk
+    /// enforces ascending, in-range `positions` (every position must be consumed in order).
+    function _foldTransactionEvents(
+        bytes32[] memory provenLeaves,
+        uint32[] calldata positions,
+        bytes32[] calldata innerSiblings,
+        uint32 numEventsInTx
+    ) internal pure returns (bytes32) {
+        BridgeTypes.CryptoHash[] memory innerLeaves = new BridgeTypes.CryptoHash[](numEventsInTx);
+        uint256 provenCursor = 0;
+        uint256 innerCursor = 0;
+        for (uint32 p = 0; p < numEventsInTx; p++) {
+            if (provenCursor < positions.length && positions[provenCursor] == p) {
+                innerLeaves[p] = BridgeTypes.CryptoHash(provenLeaves[provenCursor]);
+                provenCursor++;
+            } else {
+                innerLeaves[p] = BridgeTypes.CryptoHash(innerSiblings[innerCursor]);
+                innerCursor++;
+            }
+        }
+        require(provenCursor == positions.length, "position out of range or unsorted");
+        return _hashCryptoHashVec(innerLeaves);
+    }
+
+    /// Reconstructs the block's `events_hash` (`hash_vec_vec`) from transaction `txIndex`'s
+    /// recomputed event hash and the per-transaction `outerSiblings` for the other transactions.
+    function _foldEventsHash(bytes32 txHash, uint32 txIndex, uint32 numTxs, bytes32[] calldata outerSiblings)
+        internal
+        pure
+        returns (bytes32)
+    {
+        BridgeTypes.CryptoHash[] memory outer = new BridgeTypes.CryptoHash[](numTxs);
+        uint256 outerCursor = 0;
+        for (uint32 j = 0; j < numTxs; j++) {
+            if (j == txIndex) {
+                outer[j] = BridgeTypes.CryptoHash(txHash);
+            } else {
+                outer[j] = BridgeTypes.CryptoHash(outerSiblings[outerCursor]);
+                outerCursor++;
+            }
+        }
+        return _hashCryptoHashVec(outer);
+    }
+
+    /// Deserializes a `BlockProof` and computes its block hash. The block hash is
+    /// `keccak256("BlockHeader::" ++ BCS(header))`; since the header is the first field, its BCS
+    /// bytes are already in calldata, so we hash that slice directly rather than re-serializing
+    /// the just-deserialized header.
+    function _deserializeAndHash(bytes calldata data)
+        internal
+        pure
+        returns (BridgeTypes.BlockProof memory proof, bytes32 valueHash)
+    {
+        bytes memory mdata = data;
+        uint256 pos;
+        BridgeTypes.BlockHeader memory header;
+        (pos, header) = BridgeTypes.bcs_deserialize_offset_BlockHeader(0, mdata);
+        valueHash = keccak256(abi.encodePacked("BlockHeader::", data[0:pos]));
+
+        BridgeTypes.Transaction[] memory transactions;
+        (pos, transactions) = BridgeTypes.bcs_deserialize_offset_seq_Transaction(pos, mdata);
+        BridgeTypes.Event[][] memory events;
+        (pos, events) = BridgeTypes.bcs_deserialize_offset_seq_seq_Event(pos, mdata);
+        BridgeTypes.Round memory round;
+        (pos, round) = BridgeTypes.bcs_deserialize_offset_Round(pos, mdata);
+        BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
+        (pos, signatures) =
+            BridgeTypes.bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(pos, mdata);
+        require(pos == mdata.length, "incomplete deserialization");
+
+        proof = BridgeTypes.BlockProof(header, transactions, events, round, signatures);
+    }
+
+    /// Verifies that `signatures` form a quorum of the `epoch` committee over the block whose hash
+    /// is `valueHash`.
+    function _verifyQuorum(
+        bytes32 valueHash,
+        uint32 epoch,
+        BridgeTypes.Round memory round,
+        BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures
+    ) internal view {
+        // Construct VoteValue BCS and hash with type name prefix
+        // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
+        BridgeTypes.VoteValue memory voteValue =
+            BridgeTypes.VoteValue(BridgeTypes.CryptoHash(valueHash), round, BridgeTypes.CertificateKind.Confirmed);
         bytes32 signedHash = keccak256(abi.encodePacked("VoteValue::", BridgeTypes.bcs_serialize_VoteValue(voteValue)));
 
-        // Step 5: Verify signatures against the block's epoch committee
-        uint32 epoch = proof.header.epoch.value;
+        // Verify signatures against the block's epoch committee
         require(epoch >= minAcceptedEpoch, "epoch expired");
         EpochCommittee storage committee = committees[epoch];
         require(committee.totalWeight > 0, "unknown epoch");
         uint64 weight = 0;
         bool[] memory seen = new bool[](committee.validatorCount);
-        for (uint256 i = 0; i < proof.signatures.length; i++) {
+        for (uint256 i = 0; i < signatures.length; i++) {
             // Pack uint8[] back into contiguous bytes, then extract r and s
-            uint8[] memory sigValues = proof.signatures[i].entry1.value.values;
+            uint8[] memory sigValues = signatures[i].entry1.value.values;
             bytes memory sigBytes = new bytes(64);
             for (uint256 j = 0; j < 64; j++) {
                 sigBytes[j] = bytes1(sigValues[j]);
@@ -205,8 +341,6 @@ contract LightClient {
             weight += w;
         }
         require(weight >= committee.quorumThreshold, "insufficient quorum");
-
-        return (proof, valueHash);
     }
 
     /// Recomputes Linera's `transactions_hash`: keccak256("CryptoHashVec::" ++ BCS(Vec<CryptoHash>))
