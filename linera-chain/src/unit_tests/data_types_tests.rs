@@ -60,20 +60,14 @@ fn header_verifies_each_body_field() {
     let block = sample_block();
     let h = &block.header;
     let b = &block.body;
-    assert!(h.verifies(&BlockBodyField::Transactions(b.transactions.clone())));
-    assert!(h.verifies(&BlockBodyField::Messages(b.messages.clone())));
-    assert!(h.verifies(&BlockBodyField::PreviousMessageBlocks(
-        b.previous_message_blocks.clone()
-    )));
-    assert!(h.verifies(&BlockBodyField::PreviousEventBlocks(
-        b.previous_event_blocks.clone()
-    )));
-    assert!(h.verifies(&BlockBodyField::OracleResponses(b.oracle_responses.clone())));
-    assert!(h.verifies(&BlockBodyField::Events(b.events.clone())));
-    assert!(h.verifies(&BlockBodyField::Blobs(b.blobs.clone())));
-    assert!(h.verifies(&BlockBodyField::OperationResults(
-        b.operation_results.clone()
-    )));
+    assert!(h.verifies(b.transactions.clone()));
+    assert!(h.verifies(b.messages.clone()));
+    assert!(h.verifies(b.previous_message_blocks.clone()));
+    assert!(h.verifies(b.previous_event_blocks.clone()));
+    assert!(h.verifies(b.oracle_responses.clone()));
+    assert!(h.verifies(b.events.clone()));
+    assert!(h.verifies(b.blobs.clone()));
+    assert!(h.verifies(b.operation_results.clone()));
 }
 
 #[test]
@@ -82,7 +76,7 @@ fn header_rejects_wrong_field() {
     // sample_block contains one transfer, so an empty transactions list must not verify.
     assert!(!block
         .header
-        .verifies(&BlockBodyField::Transactions(Vec::new())));
+        .verifies(BlockBodyField::Transactions(Vec::new())));
 }
 
 #[test]
@@ -112,7 +106,7 @@ fn light_client_verifies_header_and_one_field() {
 
     // One body field can be proven against that header without the rest of the body.
     let events = certificate.block().body.events.clone();
-    assert!(header.verifies(&BlockBodyField::Events(events)));
+    assert!(header.verifies(events));
 }
 
 #[test]
