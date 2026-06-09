@@ -582,6 +582,7 @@ mod tests {
             certificate_cache_size: 1000,
             certificate_raw_cache_size: 1000,
             event_cache_size: 1000,
+            block_hash_by_height_cache_size: 1000,
             cache_cleanup_interval_secs: crate::DEFAULT_CLEANUP_INTERVAL_SECS,
         };
         let storage = DbStorage::<D, WallClock>::new(database, None, cache_sizes, WallClock);

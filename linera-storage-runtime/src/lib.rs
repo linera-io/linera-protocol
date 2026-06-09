@@ -108,6 +108,10 @@ pub struct CommonStorageOptions {
     #[arg(long, default_value = "1000", global = true)]
     pub event_cache_size: usize,
 
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000", global = true)]
+    pub block_hash_by_height_cache_size: usize,
+
     /// The number of entries in the block cache.
     #[arg(long, default_value = "5000", global = true)]
     pub block_cache_size: usize,
@@ -130,6 +134,7 @@ impl CommonStorageOptions {
             certificate_cache_size: self.certificate_cache_size,
             certificate_raw_cache_size: self.certificate_raw_cache_size,
             event_cache_size: self.event_cache_size,
+            block_hash_by_height_cache_size: self.block_hash_by_height_cache_size,
             cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
         }
     }
