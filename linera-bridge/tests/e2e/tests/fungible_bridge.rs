@@ -23,7 +23,10 @@ use linera_base::{
     identifiers::{Account, AccountOwner},
     vm::VmRuntime,
 };
-use linera_bridge::abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters};
+use linera_bridge::{
+    abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
+    block_proof::BlockProof,
+};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok, light_client_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
@@ -108,7 +111,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
     // Collect all chain A certificate bytes to submit to the bridge in sequential order.
-    let mut chain_a_cert_bytes: Vec<Vec<u8>> = Vec::new();
+    let mut proofs_bytes: Vec<Vec<u8>> = Vec::new();
 
     // ── 2b. Deploy LineraToken on Anvil ──
     // Done before creating the Linera apps so its address can be baked into both the
@@ -140,12 +143,12 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("publish module committed");
     tracing::info!(height=?cert.inner().block().header.height, "Module published");
-    chain_a_cert_bytes.push(bcs::to_bytes(&cert)?);
+    proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(&cert))?);
 
     cc_a.synchronize_from_validators().await?;
     let (inbox_certs, _) = cc_a.process_inbox().await?;
     for c in &inbox_certs {
-        chain_a_cert_bytes.push(bcs::to_bytes(c)?);
+        proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(c))?);
     }
 
     tracing::info!("Creating wrapped-fungible application...");
@@ -173,7 +176,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .expect("create application committed");
     let app_id = app_id.forget_abi();
     tracing::info!(%app_id, "Application created");
-    chain_a_cert_bytes.push(bcs::to_bytes(&create_cert)?);
+    proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(&create_cert))?);
 
     // 3b. Publish and create the evm-bridge app, pointing it at the wrapped-fungible app
     // via `fungible_app_id`. It drives the burn: a user submits `BridgeOperation::Burn`
@@ -189,11 +192,11 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("publish evm-bridge module committed");
     tracing::info!(height=?eb_publish_cert.inner().block().header.height, "evm-bridge module published");
-    chain_a_cert_bytes.push(bcs::to_bytes(&eb_publish_cert)?);
+    proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(&eb_publish_cert))?);
     cc_a.synchronize_from_validators().await?;
     let (eb_inbox_certs, _) = cc_a.process_inbox().await?;
     for c in &eb_inbox_certs {
-        chain_a_cert_bytes.push(bcs::to_bytes(c)?);
+        proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(c))?);
     }
 
     tracing::info!("Creating evm-bridge application...");
@@ -214,7 +217,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("create evm-bridge app committed");
     tracing::info!(%bridge_app_id, "evm-bridge app created");
-    chain_a_cert_bytes.push(bcs::to_bytes(&eb_create_cert)?);
+    proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(&eb_create_cert))?);
 
     // 3c. Register the evm-bridge app on the wrapped-fungible app so the bridge can
     // drive the burn. This must happen before any Burn operation is submitted.
@@ -230,7 +233,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .execute_operations(vec![register_op], vec![])
         .await?
         .expect("register bridge app committed");
-    chain_a_cert_bytes.push(bcs::to_bytes(&register_cert)?);
+    proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(&register_cert))?);
 
     // ── 4. Claim chain B (user chain) from faucet and subscribe to notifications ──
     tracing::info!("Claiming chain B from faucet...");
@@ -313,7 +316,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         recipients=?transfer_block.recipients(),
         "Transfer block submitted"
     );
-    chain_a_cert_bytes.push(bcs::to_bytes(&transfer_cert)?);
+    proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(
+        &transfer_cert,
+    ))?);
 
     // ── 9. Wait for incoming bundle notification, then process inbox on chain B ──
     tracing::info!("Waiting for NewIncomingBundle notification on chain B...");
@@ -365,7 +370,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     let (inbox_a_certs, _) = cc_a.process_inbox().await?;
     for c in &inbox_a_certs {
-        chain_a_cert_bytes.push(bcs::to_bytes(c)?);
+        proofs_bytes.push(bcs::to_bytes(&BlockProof::from_certificate(c))?);
     }
 
     // ── 12. Submit all chain A blocks to FungibleBridge sequentially ──
@@ -373,7 +378,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     // burned the escrowed tokens and emitted a `BurnEvent` in a chain A block (collected
     // above). FungibleBridge matches that event against its `bridgeApplicationId`.
     tracing::info!(
-        count = chain_a_cert_bytes.len(),
+        count = proofs_bytes.len(),
         "Submitting all chain A blocks to bridge"
     );
 
@@ -385,9 +390,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .connect_http(rpc_url);
 
     let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-    for (i, cert_bytes) in chain_a_cert_bytes.iter().enumerate() {
+    for (i, proof_bytes) in proofs_bytes.iter().enumerate() {
         let tx = bridge_contract
-            .addBlock(cert_bytes.clone().into())
+            .addBlock(proof_bytes.clone().into())
             .send()
             .await?;
         let receipt = tx.get_receipt().await?;
