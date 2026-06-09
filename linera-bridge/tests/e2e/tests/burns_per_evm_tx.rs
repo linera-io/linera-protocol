@@ -52,8 +52,8 @@ const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(38);
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 10u128.pow(15);
 
-#[test_case("ethereum",     30_000_000,  Some(45); "ethereum")]
-#[test_case("base",         240_000_000, Some(165); "base")]
+#[test_case("ethereum",     30_000_000,  Some(250); "ethereum")]
+#[test_case("base",         240_000_000, Some(290); "base")]
 #[tokio::test]
 #[serial_test::serial]
 #[ignore] // Requires pre-built docker images, Wasm, and bridge contracts.
@@ -167,6 +167,10 @@ async fn burns_per_evm_tx(
     )
     .await;
 
+    // `n` is past the upper bound when its addBlock estimate exceeds the EVM block gas limit,
+    // or when `n` burns do not fit in a single Linera block (`None`).
+    let over_limit = |gas: Option<u64>| !matches!(gas, Some(g) if g <= block_gas_limit);
+
     let mut hi: u32 = 8;
     let mut hi_gas = build_and_estimate(
         hi,
@@ -179,9 +183,9 @@ async fn burns_per_evm_tx(
         &provider,
     )
     .await?;
-    tracing::info!(n = hi, gas = hi_gas, "search: initial `Burn` ops count");
+    tracing::info!(n = hi, gas = ?hi_gas, "search: initial `Burn` ops count");
 
-    while hi_gas <= block_gas_limit && hi < MAX_SEARCH_N {
+    while !over_limit(hi_gas) && hi < MAX_SEARCH_N {
         let next_hi = hi.saturating_mul(2).min(MAX_SEARCH_N);
         let gas = build_and_estimate(
             next_hi,
@@ -196,13 +200,13 @@ async fn burns_per_evm_tx(
         .await?;
         hi = next_hi;
         hi_gas = gas;
-        if hi_gas > block_gas_limit {
-            tracing::info!(burn_ops = next_hi, gas, "search: found upper bound");
+        if over_limit(hi_gas) {
+            tracing::info!(burn_ops = next_hi, ?gas, "search: found upper bound");
             break;
         }
         tracing::info!(
             burn_ops = next_hi,
-            gas,
+            ?gas,
             "search: doubling, still under limit"
         );
         if hi == MAX_SEARCH_N {
@@ -225,17 +229,18 @@ async fn burns_per_evm_tx(
             &provider,
         )
         .await?
-    };
+    }
+    .expect("n=1 must fit in a single Linera block");
     anyhow::ensure!(
         lo_gas <= block_gas_limit,
         "n=1 already exceeds block_gas_limit ({lo_gas} > {block_gas_limit}); test cannot proceed"
     );
 
-    // If even the doubling cap fits, we cannot bound from above — report the cap.
-    if hi_gas <= block_gas_limit {
+    // If even the doubling cap fits under both limits, we cannot bound from above — report the cap.
+    if !over_limit(hi_gas) {
         tracing::warn!(
             cap = MAX_SEARCH_N,
-            gas = hi_gas,
+            gas = ?hi_gas,
             block_gas_limit,
             "search hit MAX_SEARCH_N without exceeding gas limit; reported max_n is the cap"
         );
@@ -243,7 +248,7 @@ async fn burns_per_evm_tx(
         tracing::info!(
             chain = name,
             max_n,
-            gas_at_max_n = hi_gas,
+            gas_at_max_n = ?hi_gas,
             block_gas_limit,
             "RESULT"
         );
@@ -258,7 +263,7 @@ async fn burns_per_evm_tx(
 
     while lo + 1 < hi {
         let mid = lo + (hi - lo) / 2;
-        let g = build_and_estimate(
+        let gas = build_and_estimate(
             mid,
             &cc_a,
             &cc_b,
@@ -269,13 +274,13 @@ async fn burns_per_evm_tx(
             &provider,
         )
         .await?;
-        tracing::info!(n = mid, gas = g, "search: bisect");
-        if g <= block_gas_limit {
-            lo = mid;
-            lo_gas = g;
-        } else {
+        tracing::info!(n = mid, ?gas, "search: bisect");
+        if over_limit(gas) {
             hi = mid;
-            hi_gas = g;
+            hi_gas = gas
+        } else {
+            lo = mid;
+            lo_gas = gas.expect("under limit => fits in one block");
         }
     }
 
@@ -301,7 +306,9 @@ async fn burns_per_evm_tx(
 /// per-event BCS, per-transaction event counts), and asks anvil to estimate the
 /// gas required by `bridge.addBlock(...)`.
 ///
-/// Returns the estimated gas. Reverts surface as `Err`.
+/// Returns `Some(gas)` for the estimate, or `None` when `n` burns do not fit in a single
+/// Linera block (chain A split them across blocks) — an upper bound on `max_n` that the
+/// caller treats like exceeding `block_gas_limit`. Reverts surface as `Err`.
 #[allow(clippy::too_many_arguments)]
 async fn build_and_estimate<P, E>(
     n: u32,
@@ -312,7 +319,7 @@ async fn build_and_estimate<P, E>(
     fungible_app_id: linera_base::identifiers::ApplicationId,
     bridge_addr: alloy::primitives::Address,
     provider: &P,
-) -> anyhow::Result<u64>
+) -> anyhow::Result<Option<u64>>
 where
     P: alloy::providers::Provider,
     E: linera_core::environment::Environment,
@@ -354,10 +361,17 @@ where
     let height_before = cc_a.chain_info().await?.next_block_height;
     cc_a.process_inbox().await?;
     let height_after = cc_a.chain_info().await?.next_block_height;
-    anyhow::ensure!(
-        height_after.0 == height_before.0 + 1,
-        "chain A must produce exactly ONE block (n={n}, before={height_before}, after={height_after})"
-    );
+    // One EVM tx carries one Linera block. If chain A split the burns across blocks, `n`
+    // exceeds a single block's capacity — an upper bound on `max_n`, not an error.
+    if height_after.0 != height_before.0 + 1 {
+        tracing::info!(
+            n,
+            before = height_before.0,
+            after = height_after.0,
+            "search: n exceeds one Linera block"
+        );
+        return Ok(None);
+    }
 
     let cert = fetch_latest_cert(cc_a).await?;
     let (proof, event_bcs, events_per_tx) = add_block_args(&cert);
@@ -369,5 +383,5 @@ where
         .await
         .with_context(|| format!("estimate_gas(addBlock) for n={n}"))?;
 
-    Ok(gas)
+    Ok(Some(gas))
 }
