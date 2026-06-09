@@ -8,13 +8,12 @@ pub const SOURCE: &str = include_str!("../solidity/LightClient.sol");
 
 sol! {
     function addCommittee(
-        bytes calldata data,
-        bytes calldata committeeBlob
+        bytes calldata blockProof,
+        bytes[] calldata transactionBcs,
+        bytes calldata committeeBlob,
     ) external;
 
-    function verifyBlock(bytes calldata data) external view;
-
-    function registerBlock(bytes calldata data) external returns (bytes32);
+    function registerBlock(bytes calldata blockProof) external returns (bytes32);
 
     function registeredBlocks(bytes32 blockHash)
         external
@@ -59,7 +58,7 @@ mod tests {
     use super::{
         addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
         expireEpochsBelowCall, minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
-        verifyBlockCall, verifyEventInclusionCall,
+        verifyEventInclusionCall,
     };
     use crate::test_helpers::*;
 
@@ -296,186 +295,21 @@ mod tests {
         light_client.verify_block(bcs_bytes);
     }
 
-    /// A retired committee can still sign a verifiable certificate until its
-    /// epoch is expired via `expireEpochsBelow` (weak-subjectivity floor).
-    #[test]
-    fn test_light_client_expire_epochs_below() {
-        let mut light_client = TestLightClient::new();
-
-        // Baseline: a valid epoch-0 certificate verifies, nothing expired yet.
-        let cert0 = create_signed_certificate(&light_client.secret, &light_client.public);
-        let cert0_bytes = bcs::to_bytes(&cert0).expect("BCS serialization failed");
-        light_client.verify_block(cert0_bytes.clone());
-
-        // Rotate to epoch 1.
-        let secret_1 = ValidatorSecretKey::generate();
-        let public_1 = secret_1.public();
-        let call_1 = light_client.add_committee_call(
-            &public_1,
-            Epoch(1),
-            Epoch::ZERO,
-            BlockHeight(1),
-            test_admin_chain_id(),
-        );
-        call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &call_1,
-        );
-        assert_eq!(light_client.query_current_epoch(), Epoch(1));
-
-        // Weak subjectivity: the epoch-0 certificate still verifies after rotation.
-        light_client.verify_block(cert0_bytes.clone());
-
-        // The epoch-0 committee is present in storage before expiry.
-        let (weight_before, _, _) = call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &committeeTotalWeightCall { epoch: 0 },
-        );
-        assert!(
-            weight_before > 0,
-            "epoch 0 committee should exist before expiry"
-        );
-
-        // Retire epoch 0.
-        call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &expireEpochsBelowCall { newMinEpoch: 1 },
-        );
-        let (min_epoch, _, _) = call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &minAcceptedEpochCall {},
-        );
-        assert_eq!(min_epoch, 1, "minAcceptedEpoch should be raised to 1");
-
-        // The epoch-0 committee storage is cleared, not merely floored out.
-        let (weight_after, _, _) = call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &committeeTotalWeightCall { epoch: 0 },
-        );
-        assert_eq!(
-            weight_after, 0,
-            "epoch 0 committee storage should be cleared after expiry"
-        );
-
-        // The retired epoch-0 certificate is now rejected as expired.
-        assert!(
-            light_client.try_verify_block(cert0_bytes).is_err(),
-            "certificate from a retired epoch must be rejected"
-        );
-
-        // The current committee (epoch 1) still verifies.
-        let block_1 = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
-            Epoch(1),
-            BlockHeight(2),
-            vec![],
-        );
-        let cert1_bytes = sign_and_serialize(&secret_1, &public_1, block_1);
-        light_client.verify_block(cert1_bytes);
-    }
-
-    /// `expireEpochsBelow` is monotonic and can never retire the current epoch.
-    #[test]
-    fn test_light_client_expire_epochs_below_invariants() {
-        let mut light_client = TestLightClient::new();
-
-        // At epoch 0 nothing can be expired: newMinEpoch must exceed
-        // minAcceptedEpoch (0) yet not exceed currentEpoch (0).
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                light_client.deployer,
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 1 },
-            )
-            .is_err(),
-            "cannot expire at epoch 0"
-        );
-
-        // Rotate to epoch 1.
-        let secret_1 = ValidatorSecretKey::generate();
-        let public_1 = secret_1.public();
-        let call_1 = light_client.add_committee_call(
-            &public_1,
-            Epoch(1),
-            Epoch::ZERO,
-            BlockHeight(1),
-            test_admin_chain_id(),
-        );
-        call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &call_1,
-        );
-
-        // The current epoch can never be retired: newMinEpoch may not exceed
-        // currentEpoch.
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                light_client.deployer,
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 2 },
-            )
-            .is_err(),
-            "cannot expire the current epoch"
-        );
-
-        // Retire epoch 0 (floor -> 1) while still at epoch 1.
-        call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &expireEpochsBelowCall { newMinEpoch: 1 },
-        );
-
-        // Monotonic: cannot repeat or decrease the floor.
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                light_client.deployer,
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 1 },
-            )
-            .is_err(),
-            "minAcceptedEpoch must strictly increase"
-        );
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                light_client.deployer,
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 0 },
-            )
-            .is_err(),
-            "minAcceptedEpoch cannot decrease"
-        );
-    }
-
     #[test]
     fn test_light_client_register_block_records_events_hash() {
         let mut light_client = TestLightClient::new();
         let certificate = create_signed_certificate(&light_client.secret, &light_client.public);
-        let header_only = bcs::to_bytes(&crate::block_proof::BlockProof::header_only(&certificate))
-            .expect("BCS serialization failed");
+        let proof_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(
+            &certificate,
+        ))
+        .expect("BCS serialization failed");
 
         let (block_hash, _, _) = call_contract(
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
             &registerBlockCall {
-                data: header_only.into(),
+                blockProof: proof_bytes.into(),
             },
         );
 
@@ -532,14 +366,14 @@ mod tests {
         );
 
         // Register the block from its header and signatures alone.
-        let header_only = bcs::to_bytes(&BlockProof::header_only(&certificate))
+        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(&certificate))
             .expect("BCS serialization failed");
         let (block_hash, _, _) = call_contract(
             &mut lc.db,
             lc.deployer,
             lc.contract,
             &registerBlockCall {
-                data: header_only.into(),
+                blockProof: proof_bytes.into(),
             },
         );
 
@@ -642,8 +476,8 @@ mod tests {
                 &mut db,
                 deployer,
                 contract,
-                &verifyBlockCall {
-                    data: bcs_bytes.into(),
+                &registerBlockCall {
+                    blockProof: bcs_bytes.into(),
                 },
             )
             .is_err(),
@@ -779,6 +613,178 @@ mod tests {
         );
     }
 
+    /// A retired committee can still sign a verifiable block proof until its
+    /// epoch is expired via `expireEpochsBelow` (weak-subjectivity floor).
+    #[test]
+    fn test_light_client_expire_epochs_below() {
+        let mut light_client = TestLightClient::new();
+
+        // Baseline: a valid epoch-0 block proof verifies, nothing expired yet.
+        let block_0 = create_test_block(
+            CryptoHash::new(&TestString::new("test_chain")),
+            Epoch::ZERO,
+            BlockHeight(1),
+            vec![],
+        );
+        let proof_0 = sign_and_serialize(&light_client.secret, &light_client.public, block_0);
+        light_client.verify_block(proof_0.clone());
+
+        // Rotate to epoch 1.
+        let secret_1 = ValidatorSecretKey::generate();
+        let public_1 = secret_1.public();
+        let call_1 = light_client.add_committee_call(
+            &public_1,
+            Epoch(1),
+            Epoch::ZERO,
+            BlockHeight(1),
+            test_admin_chain_id(),
+        );
+        call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &call_1,
+        );
+        assert_eq!(light_client.query_current_epoch(), Epoch(1));
+
+        // Weak subjectivity: the epoch-0 proof still verifies after rotation.
+        light_client.verify_block(proof_0.clone());
+
+        // The epoch-0 committee is present in storage before expiry.
+        let (weight_before, _, _) = call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &committeeTotalWeightCall { epoch: 0 },
+        );
+        assert!(
+            weight_before > 0,
+            "epoch 0 committee should exist before expiry"
+        );
+
+        // Retire epoch 0.
+        call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &expireEpochsBelowCall { newMinEpoch: 1 },
+        );
+        let (min_epoch, _, _) = call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &minAcceptedEpochCall {},
+        );
+        assert_eq!(min_epoch, 1, "minAcceptedEpoch should be raised to 1");
+
+        // The epoch-0 committee storage is cleared, not merely floored out.
+        let (weight_after, _, _) = call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &committeeTotalWeightCall { epoch: 0 },
+        );
+        assert_eq!(
+            weight_after, 0,
+            "epoch 0 committee storage should be cleared after expiry"
+        );
+
+        // The retired epoch-0 proof is now rejected as expired.
+        assert!(
+            light_client.try_verify_block(proof_0).is_err(),
+            "block proof from a retired epoch must be rejected"
+        );
+
+        // The current committee (epoch 1) still verifies.
+        let block_1 = create_test_block(
+            CryptoHash::new(&TestString::new("test_chain")),
+            Epoch(1),
+            BlockHeight(2),
+            vec![],
+        );
+        let proof_1 = sign_and_serialize(&secret_1, &public_1, block_1);
+        light_client.verify_block(proof_1);
+    }
+
+    /// `expireEpochsBelow` is monotonic and can never retire the current epoch.
+    #[test]
+    fn test_light_client_expire_epochs_below_invariants() {
+        let mut light_client = TestLightClient::new();
+
+        // At epoch 0 nothing can be expired: newMinEpoch must exceed
+        // minAcceptedEpoch (0) yet not exceed currentEpoch (0).
+        assert!(
+            try_call_contract(
+                &mut light_client.db,
+                light_client.deployer,
+                light_client.contract,
+                &expireEpochsBelowCall { newMinEpoch: 1 },
+            )
+            .is_err(),
+            "cannot expire at epoch 0"
+        );
+
+        // Rotate to epoch 1.
+        let secret_1 = ValidatorSecretKey::generate();
+        let public_1 = secret_1.public();
+        let call_1 = light_client.add_committee_call(
+            &public_1,
+            Epoch(1),
+            Epoch::ZERO,
+            BlockHeight(1),
+            test_admin_chain_id(),
+        );
+        call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &call_1,
+        );
+
+        // The current epoch can never be retired: newMinEpoch may not exceed
+        // currentEpoch.
+        assert!(
+            try_call_contract(
+                &mut light_client.db,
+                light_client.deployer,
+                light_client.contract,
+                &expireEpochsBelowCall { newMinEpoch: 2 },
+            )
+            .is_err(),
+            "cannot expire the current epoch"
+        );
+
+        // Retire epoch 0 (floor -> 1) while still at epoch 1.
+        call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &expireEpochsBelowCall { newMinEpoch: 1 },
+        );
+
+        // Monotonic: cannot repeat or decrease the floor.
+        assert!(
+            try_call_contract(
+                &mut light_client.db,
+                light_client.deployer,
+                light_client.contract,
+                &expireEpochsBelowCall { newMinEpoch: 1 },
+            )
+            .is_err(),
+            "minAcceptedEpoch must strictly increase"
+        );
+        assert!(
+            try_call_contract(
+                &mut light_client.db,
+                light_client.deployer,
+                light_client.contract,
+                &expireEpochsBelowCall { newMinEpoch: 0 },
+            )
+            .is_err(),
+            "minAcceptedEpoch cannot decrease"
+        );
+    }
+
     /// Common test state for LightClient tests with a single initial validator.
     struct TestLightClient {
         db: CacheDB<EmptyDB>,
@@ -846,21 +852,26 @@ mod tests {
             height
         }
 
-        fn verify_block(&mut self, data: Vec<u8>) {
+        /// Registers a block, which runs the same quorum verification the old `verifyBlock` did.
+        fn verify_block(&mut self, proof_bytes: Vec<u8>) {
             call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                &verifyBlockCall { data: data.into() },
+                &registerBlockCall {
+                    blockProof: proof_bytes.into(),
+                },
             );
         }
 
-        fn try_verify_block(&mut self, data: Vec<u8>) -> Result<(), String> {
+        fn try_verify_block(&mut self, proof_bytes: Vec<u8>) -> Result<(), String> {
             try_call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                &verifyBlockCall { data: data.into() },
+                &registerBlockCall {
+                    blockProof: proof_bytes.into(),
+                },
             )
             .map(|_| ())
         }
@@ -880,10 +891,12 @@ mod tests {
     ) -> addCommitteeCall {
         let (committee_bytes, blob_hash) = create_committee_blob(new_public);
         let transactions = create_committee_transaction(new_epoch, blob_hash);
+        let transaction_bcs = transaction_bcs(&transactions);
         let block = create_test_block(chain_id, block_epoch, height, transactions);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
         addCommitteeCall {
-            data: bcs_bytes.into(),
+            blockProof: bcs_bytes.into(),
+            transactionBcs: transaction_bcs,
             committeeBlob: committee_bytes.into(),
         }
     }
@@ -960,6 +973,7 @@ mod tests {
         let blob_hash = CryptoHash::new(&blob_content);
 
         let transactions = create_committee_transaction(Epoch(1), blob_hash);
+        let transaction_bcs = transaction_bcs(&transactions);
         let block = create_test_block(
             test_admin_chain_id(),
             Epoch::ZERO,
@@ -969,7 +983,8 @@ mod tests {
         let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
 
         let call = addCommitteeCall {
-            data: bcs_bytes.into(),
+            blockProof: bcs_bytes.into(),
+            transactionBcs: transaction_bcs,
             committeeBlob: committee_bytes.into(),
         };
         call_contract(
@@ -1027,11 +1042,13 @@ mod tests {
     ) -> addCommitteeCall {
         let (committee_bytes, blob_hash) = create_multi_committee_blob(new_publics);
         let transactions = create_committee_transaction(new_epoch, blob_hash);
+        let transaction_bcs = transaction_bcs(&transactions);
         let block = create_test_block(chain_id, block_epoch, height, transactions);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
 
         addCommitteeCall {
-            data: bcs_bytes.into(),
+            blockProof: bcs_bytes.into(),
+            transactionBcs: transaction_bcs,
             committeeBlob: committee_bytes.into(),
         }
     }

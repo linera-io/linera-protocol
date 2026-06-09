@@ -714,3 +714,31 @@ pub fn test_storage_cache_config() -> linera_storage::StorageCacheConfig {
         cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
     }
 }
+
+/// Builds the three `addBlock` arguments from a certificate: the BCS-serialized
+/// `BlockProof`, the flattened per-event BCS encodings, and the per-transaction
+/// event counts that the header's `events_hash` is folded from.
+pub fn add_block_args(
+    certificate: &linera_chain::types::ConfirmedBlockCertificate,
+) -> (
+    alloy::primitives::Bytes,
+    Vec<alloy::primitives::Bytes>,
+    Vec<u32>,
+) {
+    use alloy::primitives::Bytes;
+    let proof = Bytes::from(
+        bcs::to_bytes(&linera_bridge::block_proof::BlockProof::from_certificate(certificate))
+            .expect("BCS serialization failed"),
+    );
+    let events = &certificate.block().body.events;
+    let event_bcs = events
+        .iter()
+        .flatten()
+        .map(|event| Bytes::from(bcs::to_bytes(event).expect("BCS serialization failed")))
+        .collect();
+    let events_per_tx = events
+        .iter()
+        .map(|tx_events| u32::try_from(tx_events.len()).expect("event count exceeds u32"))
+        .collect();
+    (proof, event_bcs, events_per_tx)
+}

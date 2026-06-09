@@ -32,6 +32,7 @@ mod tests {
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
         let transactions = create_committee_transaction(Epoch(1), blob_hash);
+        let transaction_bcs = transaction_bcs(&transactions);
         let block = create_test_block(
             test_admin_chain_id(),
             Epoch::ZERO,
@@ -45,7 +46,8 @@ mod tests {
             deployer,
             contract,
             &addCommitteeCall {
-                data: bcs_bytes.into(),
+                blockProof: bcs_bytes.into(),
+                transactionBcs: transaction_bcs,
                 committeeBlob: committee_bytes.into(),
             },
         );
@@ -68,14 +70,15 @@ mod tests {
         let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
 
         let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
-        let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
-            .expect("BCS serialization failed");
+        let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
         let (_, _, gas_used) = call_contract(
             &mut db,
             deployer,
             microchain,
             &addBlockCall {
-                data: bcs_bytes.into(),
+                blockProof: block_proof,
+                eventBcs: event_bcs,
+                eventsPerTx: events_per_tx,
             },
         );
 

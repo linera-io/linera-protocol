@@ -297,7 +297,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         &evm_client,
         admin_chain_id,
         admin_chain_height,
-        max_retries,
     )
     .await
     .context("committee catch-up failed")?;
@@ -493,7 +492,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                             &evm_client,
                             admin_chain_id,
                             scan_upto,
-                            max_retries,
                         )
                         .await
                         {

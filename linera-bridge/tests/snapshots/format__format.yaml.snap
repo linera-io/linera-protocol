@@ -139,13 +139,6 @@ BlockProof:
   STRUCT:
     - header:
         TYPENAME: BlockHeader
-    - transactions:
-        SEQ:
-          TYPENAME: Transaction
-    - events:
-        SEQ:
-          SEQ:
-            TYPENAME: Event
     - round:
         TYPENAME: Round
     - signatures:
