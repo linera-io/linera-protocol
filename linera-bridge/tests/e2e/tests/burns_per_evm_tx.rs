@@ -12,7 +12,7 @@
 
 use alloy::{providers::ProviderBuilder, sol};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::abi::BridgeOperation;
+use linera_bridge::{abi::BridgeOperation, block_proof::BlockProof};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token_with_supply, fetch_latest_cert,
     fund_bridge_erc20, light_client_address, publish_and_create_evm_bridge,
@@ -52,10 +52,9 @@ const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(38);
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 10u128.pow(15);
 
-// Floors recalibrated for the bridge-driven burn flow: each burn now carries a
-// funding `Credit` plus a `BridgeMessage::Burn` in the chain-A block, so the
-// `verifyBlock` paid by `addBlock`/`processBurns` sees a heavier block.
-// The floors are a sanity lower bound at the new capacity, not a tight target.
+// Floors are a safe lower bound for the bridge-driven burn flow (each burn carries a
+// funding `Credit` plus a `BridgeMessage::Burn` in the chain-A block), measured against
+// the heaviest payload. The lighter `BlockProof` only raises capacity, so these stay valid.
 #[test_case("ethereum",     30_000_000,  Some(30); "ethereum")]
 #[test_case("base",         240_000_000, Some(140); "base")]
 #[tokio::test]
@@ -270,8 +269,8 @@ async fn burns_per_evm_tx(
 /// each routes a funding transfer + tracked `BridgeMessage::Burn` to the
 /// bridge chain (chain A). Drives `cc_a.process_inbox()` (which produces
 /// one chain-A block with `n` `BurnEvent`s), reads the resulting
-/// `ConfirmedBlockCertificate`, BCS-encodes it, and asks anvil to
-/// estimate the gas required by `bridge.addBlock(cert_bytes)`.
+/// `ConfirmedBlockCertificate`, BCS-encodes its `BlockProof`, and asks
+/// anvil to estimate the gas required by `bridge.addBlock(proof_bytes)`.
 ///
 /// Returns the estimated gas. Reverts surface as `Err`.
 async fn build_and_estimate<P, E>(
@@ -324,11 +323,12 @@ where
     );
 
     let cert = fetch_latest_cert(cc_a).await?;
-    let cert_bytes = bcs::to_bytes(&*cert).context("BCS-serialize cert")?;
+    let proof_bytes =
+        bcs::to_bytes(&BlockProof::from_certificate(&cert)).context("BCS-serialize block proof")?;
 
     let bridge = IFungibleBridge::new(bridge_addr, provider);
     let gas = bridge
-        .addBlock(cert_bytes.into())
+        .addBlock(proof_bytes.into())
         .estimate_gas()
         .await
         .with_context(|| format!("estimate_gas(addBlock) for n={n}"))?;
