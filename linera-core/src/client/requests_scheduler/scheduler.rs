@@ -321,6 +321,14 @@ impl<Env: Environment> RequestsScheduler<Env> {
             return Ok(Some(Vec::new()));
         }
 
+        // Streaming endpoint aborts if the server echoes a blob ID twice; deduplicate upfront.
+        let blob_ids: Vec<BlobId> = blob_ids
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
         let mut shuffled_peers = peers.to_vec();
         shuffled_peers.shuffle(&mut rand::thread_rng());
 
