@@ -174,9 +174,10 @@ async fn submit_addblock<P: Provider>(
     }
 }
 
-/// Per-tx chunked fallback: split each tx group's positions to fit under
-/// the block gas limit, mark any individually-oversized burn as `failed`,
-/// then submit each fitting chunk as an independent `processBurns` tx.
+/// Per-tx chunked fallback: register the block, split each tx group's
+/// positions to fit under the block gas limit, mark any
+/// individually-oversized burn as `failed`, then submit each fitting chunk
+/// as an independent `processBurns` tx.
 async fn submit_chunked<P: Provider>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<P>,
@@ -185,6 +186,31 @@ async fn submit_chunked<P: Provider>(
     by_tx: &[(u32, Vec<u32>)],
     max_retries: u32,
 ) {
+    // Chunked settlement proves each burn against the block's registered `events_hash`, so the
+    // block must be registered before any gas estimate or `processBurns` — both revert otherwise.
+    if let Err(error) = evm_client.register_block(cert).await {
+        tracing::warn!(?height, ?error, "registerBlock submission failed");
+        let to_bump: Vec<u32> = {
+            let state = monitor.read().await;
+            let mut event_indices = Vec::new();
+            for (tx_index, positions) in by_tx {
+                for &pos in positions {
+                    if let Some(ei) = state.event_index_for_pos(height, *tx_index, pos) {
+                        event_indices.push(ei);
+                    }
+                }
+            }
+            event_indices
+        };
+        let mut state = monitor.write().await;
+        for event_index in to_bump {
+            state
+                .mark_burn_retried(height, event_index, max_retries)
+                .await;
+        }
+        return;
+    }
+
     for (tx_index, positions) in by_tx {
         let (chunks, oversized, errored) =
             split_to_fit(evm_client, cert, *tx_index, positions).await;
