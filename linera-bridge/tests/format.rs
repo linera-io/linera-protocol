@@ -3,7 +3,7 @@
 
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{BlobContent, OracleResponse, Round},
+    data_types::{BlobContent, Event, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
     vm::VmRuntime,
 };
@@ -62,6 +62,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<Transaction>(&samples)?;
     tracer.trace_type::<VoteValue>(&samples)?;
     tracer.trace_type::<BlockProof>(&samples)?;
+    tracer.trace_type::<Event>(&samples)?;
     tracer.registry()
 }
 

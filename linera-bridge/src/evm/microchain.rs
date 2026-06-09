@@ -7,7 +7,7 @@ use alloy_sol_types::sol;
 pub const SOURCE: &str = include_str!("../solidity/Microchain.sol");
 
 sol! {
-    function addBlock(bytes calldata data) external;
+    function addBlock(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx) external;
 
     function lightClient() external view returns (address);
 
@@ -148,14 +148,15 @@ mod tests {
                 self.chain_id,
                 height,
             );
-            let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
-                .expect("BCS serialization failed");
+            let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
             call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
                 &addBlockCall {
-                    data: bcs_bytes.into(),
+                    blockProof: block_proof,
+                    eventBcs: event_bcs,
+                    eventsPerTx: events_per_tx,
                 },
             );
         }
@@ -167,14 +168,15 @@ mod tests {
         ) -> Result<(), String> {
             let cert =
                 create_signed_certificate_for_chain(&self.secret, &self.public, chain_id, height);
-            let bcs_bytes = bcs::to_bytes(&crate::block_proof::BlockProof::from_certificate(&cert))
-                .expect("BCS serialization failed");
+            let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
             try_call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
                 &addBlockCall {
-                    data: bcs_bytes.into(),
+                    blockProof: block_proof,
+                    eventBcs: event_bcs,
+                    eventsPerTx: events_per_tx,
                 },
             )
             .map(|_| ())

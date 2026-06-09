@@ -8,7 +8,7 @@ contract MicrochainTest is Microchain {
 
     constructor(address _lightClient, bytes32 _chainId) Microchain(_lightClient, _chainId) {}
 
-    function _onBlock(BridgeTypes.BlockProof memory) internal override {
+    function _onBlock(BridgeTypes.BlockHeader memory, bytes[] calldata) internal override {
         blockCount++;
     }
 }
