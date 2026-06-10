@@ -381,11 +381,18 @@ mod tests {
             outerSiblings: outer.clone(),
         };
 
+        // `eventBcs` are exactly the events at `positions` within `tx_index`.
+        let good_bcs: Vec<Bytes> = positions
+            .iter()
+            .map(|&p| {
+                bcs::to_bytes(&events[tx_index][p as usize])
+                    .expect("BCS serialization failed")
+                    .into()
+            })
+            .collect();
+
         // The correct event verifies.
-        let event_bcs: Vec<Bytes> = vec![bcs::to_bytes(&events[tx_index][1])
-            .expect("BCS serialization failed")
-            .into()];
-        call_contract(&mut lc.db, lc.deployer, lc.contract, &make_call(event_bcs));
+        call_contract(&mut lc.db, lc.deployer, lc.contract, &make_call(good_bcs.clone()));
 
         // A tampered event does not.
         let bad: Vec<Bytes> = vec![bcs::to_bytes(&make_event(b"x", 9))
@@ -396,14 +403,8 @@ mod tests {
             "tampered event must fail inclusion"
         );
 
-        let good_bcs = || -> Vec<Bytes> {
-            vec![bcs::to_bytes(&events[tx_index][1])
-                .expect("BCS serialization failed")
-                .into()]
-        };
-
         // An unregistered block hash is rejected.
-        let mut unregistered = make_call(good_bcs());
+        let mut unregistered = make_call(good_bcs.clone());
         unregistered.blockHash = B256::ZERO;
         assert!(
             try_call_contract(&mut lc.db, lc.deployer, lc.contract, &unregistered).is_err(),
@@ -411,7 +412,7 @@ mod tests {
         );
 
         // A txIndex past the block's transaction count is rejected.
-        let mut bad_tx = make_call(good_bcs());
+        let mut bad_tx = make_call(good_bcs);
         bad_tx.txIndex = proof.num_txs;
         assert!(
             try_call_contract(&mut lc.db, lc.deployer, lc.contract, &bad_tx).is_err(),
