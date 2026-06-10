@@ -197,34 +197,6 @@ impl<N: ValidatorNode> RemoteNode<N> {
         Ok(())
     }
 
-    #[instrument(level = "trace")]
-    pub async fn download_blob(&self, blob_id: BlobId) -> Result<Option<Blob>, NodeError> {
-        match self.node.download_blob(blob_id).await {
-            Ok(blob) => {
-                let blob = Blob::new(blob);
-                if blob.id() != blob_id {
-                    tracing::info!(
-                        address = self.address(),
-                        %blob_id,
-                        "validator sent an invalid blob.",
-                    );
-                    Ok(None)
-                } else {
-                    Ok(Some(blob))
-                }
-            }
-            Err(NodeError::BlobsNotFound(_error)) => {
-                tracing::debug!(
-                    ?blob_id,
-                    address = self.address(),
-                    "validator is missing the blob",
-                );
-                Ok(None)
-            }
-            Err(error) => Err(error),
-        }
-    }
-
     /// Streams a batch of blobs from the validator. Each yielded item is
     /// a `Result<Blob, NodeError>` — the caller can drive the stream incrementally
     /// and, on error, track which blob IDs still need to be fetched.
