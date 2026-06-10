@@ -34,6 +34,9 @@ pub const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 30;
 /// A background task periodically sweeps dead `Weak` entries from the index
 /// to prevent unbounded memory growth.
 pub struct ValueCache<K, V> {
+    /// Stable instance name distinguishing this cache in metrics; several
+    /// caches may share the same key/value types within one process.
+    name: &'static str,
     cache: Arc<Cache<K, crate::Arc<V>>>,
     weak_index: Arc<papaya::HashMap<K, Weak<V>>>,
 }
@@ -43,38 +46,51 @@ where
     K: Hash + Eq + Clone + Send + Sync + 'static,
     V: Send + Sync + 'static,
 {
-    /// Creates a new `ValueCache` with the given bounded-cache capacity
-    /// and cleanup interval for the weak-reference index.
+    /// Creates a new `ValueCache` with the given instance name (used as the
+    /// `cache` metric label), bounded-cache capacity, and cleanup interval
+    /// for the weak-reference index.
     #[cfg(not(web))]
-    pub fn new(size: usize, cleanup_interval_secs: u64) -> Self {
+    pub fn new(name: &'static str, size: usize, cleanup_interval_secs: u64) -> Self {
         let cache = Arc::new(Cache::new(size));
         let weak_index = Arc::new(papaya::HashMap::new());
+        // Report quick_cache's actual capacity, which may round the requested
+        // size up, so that occupancy (entries / capacity) cannot exceed 1.
         #[cfg(with_metrics)]
         metrics::CACHE_CAPACITY
-            .with_label_values(&[type_name::<K>(), type_name::<V>()])
-            .set(i64::try_from(size).unwrap_or(i64::MAX));
+            .with_label_values(&[name, type_name::<K>(), type_name::<V>()])
+            .set(i64::try_from(cache.capacity()).unwrap_or(i64::MAX));
         Self::spawn_cleanup_task(
             Arc::clone(&weak_index),
             #[cfg(with_metrics)]
-            Arc::clone(&cache),
+            (name, Arc::clone(&cache)),
             std::time::Duration::from_secs(cleanup_interval_secs),
         );
-        ValueCache { cache, weak_index }
+        ValueCache {
+            name,
+            cache,
+            weak_index,
+        }
     }
 
     /// Creates a new `ValueCache` (web variant, no background cleanup task).
     #[cfg(web)]
-    pub fn new(size: usize, _cleanup_interval_secs: u64) -> Self {
+    pub fn new(name: &'static str, size: usize, _cleanup_interval_secs: u64) -> Self {
         ValueCache {
+            name,
             cache: Arc::new(Cache::new(size)),
             weak_index: Arc::new(papaya::HashMap::new()),
         }
     }
 
+    /// Returns the instance name of this cache.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
     /// Returns the number of entries currently held in the bounded cache.
     ///
     /// This is the live occupancy (excludes the weak dedup index), and is
-    /// exported as the `value_cache_entries` gauge for the
+    /// periodically sampled as the `value_cache_entries` gauge for the
     /// occupancy-vs-capacity diagnosis.
     pub fn len(&self) -> usize {
         self.cache.len()
@@ -82,7 +98,7 @@ where
 
     /// Returns `true` if the bounded cache currently holds no entries.
     pub fn is_empty(&self) -> bool {
-        self.cache.len() == 0
+        self.cache.is_empty()
     }
 
     /// Inserts a value into the cache, returning the canonical [`crate::Arc`].
@@ -105,7 +121,7 @@ where
         if value.is_some() {
             self.cache.remove(key);
         }
-        Self::track_cache_usage(value)
+        self.track_cache_usage(value)
     }
 
     /// Returns an [`crate::Arc`] to the value, checking both the bounded
@@ -113,7 +129,7 @@ where
     pub fn get(&self, key: &K) -> Option<crate::Arc<V>> {
         // Tier 1: bounded cache (hot path)
         if let Some(arc) = self.cache.get(key) {
-            return Self::track_cache_usage(Some(arc));
+            return self.track_cache_usage(Some(arc));
         }
 
         // Tier 2: weak index (catches evicted-but-still-held entries)
@@ -123,11 +139,11 @@ where
                 let arc = crate::Arc(arc);
                 // Re-insert into bounded cache for future fast lookups
                 self.cache.insert(key.clone(), arc.clone());
-                return Self::track_cache_usage(Some(arc));
+                return self.track_cache_usage(Some(arc));
             }
         }
 
-        Self::track_cache_usage(None)
+        self.track_cache_usage(None)
     }
 
     /// Returns `true` if the value exists in either the bounded cache or
@@ -156,7 +172,7 @@ where
     #[cfg(not(web))]
     fn spawn_cleanup_task(
         weak_index: Arc<papaya::HashMap<K, Weak<V>>>,
-        #[cfg(with_metrics)] cache: Arc<Cache<K, crate::Arc<V>>>,
+        #[cfg(with_metrics)] metrics_handle: (&'static str, Arc<Cache<K, crate::Arc<V>>>),
         cleanup_interval: std::time::Duration,
     ) {
         if tokio::runtime::Handle::try_current().is_err() {
@@ -166,14 +182,19 @@ where
             let mut interval = tokio::time::interval(cleanup_interval);
             loop {
                 interval.tick().await;
-                let guard = weak_index.guard();
-                weak_index.retain(|_, weak| weak.strong_count() > 0, &guard);
-                // Refresh the occupancy gauge on the same cadence as the sweep;
-                // keeps it off the cache hot path.
+                {
+                    let guard = weak_index.guard();
+                    weak_index.retain(|_, weak| weak.strong_count() > 0, &guard);
+                }
+                // Refresh the occupancy gauge on the same cadence as the sweep
+                // (after the guard is dropped); keeps it off the cache hot path.
                 #[cfg(with_metrics)]
-                metrics::CACHE_ENTRIES
-                    .with_label_values(&[type_name::<K>(), type_name::<V>()])
-                    .set(i64::try_from(cache.len()).unwrap_or(i64::MAX));
+                {
+                    let (name, cache) = &metrics_handle;
+                    metrics::CACHE_ENTRIES
+                        .with_label_values(&[name, type_name::<K>(), type_name::<V>()])
+                        .set(i64::try_from(cache.len()).unwrap_or(i64::MAX));
+                }
             }
         });
     }
@@ -207,7 +228,7 @@ where
         canonical_arc
     }
 
-    fn track_cache_usage(maybe_value: Option<crate::Arc<V>>) -> Option<crate::Arc<V>> {
+    fn track_cache_usage(&self, maybe_value: Option<crate::Arc<V>>) -> Option<crate::Arc<V>> {
         #[cfg(with_metrics)]
         {
             let metric = if maybe_value.is_some() {
@@ -217,7 +238,7 @@ where
             };
 
             metric
-                .with_label_values(&[type_name::<K>(), type_name::<V>()])
+                .with_label_values(&[self.name, type_name::<K>(), type_name::<V>()])
                 .inc();
         }
         maybe_value
@@ -273,35 +294,33 @@ mod metrics {
     use linera_base::prometheus_util::{register_int_counter_vec, register_int_gauge_vec};
     use prometheus::{IntCounterVec, IntGaugeVec};
 
+    /// Shared label set: `cache` is the per-instance name passed to
+    /// [`super::ValueCache::new`], required because several caches may share
+    /// the same key/value types within one process.
+    const LABELS: &[&str] = &["cache", "key_type", "value_type"];
+
     pub static CACHE_HIT_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "value_cache_hit",
-            "Cache hits in `ValueCache`",
-            &["key_type", "value_type"],
-        )
+        register_int_counter_vec("value_cache_hit", "Cache hits in `ValueCache`", LABELS)
     });
 
     pub static CACHE_MISS_COUNT: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec(
-            "value_cache_miss",
-            "Cache misses in `ValueCache`",
-            &["key_type", "value_type"],
-        )
+        register_int_counter_vec("value_cache_miss", "Cache misses in `ValueCache`", LABELS)
     });
 
     pub static CACHE_ENTRIES: LazyLock<IntGaugeVec> = LazyLock::new(|| {
         register_int_gauge_vec(
             "value_cache_entries",
-            "Current number of entries held in the bounded `ValueCache`",
-            &["key_type", "value_type"],
+            "Number of entries held in the bounded `ValueCache`, sampled at \
+             each cleanup sweep",
+            LABELS,
         )
     });
 
     pub static CACHE_CAPACITY: LazyLock<IntGaugeVec> = LazyLock::new(|| {
         register_int_gauge_vec(
             "value_cache_capacity",
-            "Configured maximum number of entries of the bounded `ValueCache`",
-            &["key_type", "value_type"],
+            "Maximum number of entries of the bounded `ValueCache`",
+            LABELS,
         )
     });
 }
@@ -340,11 +359,11 @@ mod tests {
     }
 
     fn new_hashed_cache(size: usize) -> ValueCache<CryptoHash, TestValue> {
-        ValueCache::new(size, DEFAULT_CLEANUP_INTERVAL_SECS)
+        ValueCache::new("test_hashed", size, DEFAULT_CLEANUP_INTERVAL_SECS)
     }
 
     fn new_string_cache(size: usize) -> ValueCache<u64, String> {
-        ValueCache::new(size, DEFAULT_CLEANUP_INTERVAL_SECS)
+        ValueCache::new("test_string", size, DEFAULT_CLEANUP_INTERVAL_SECS)
     }
 
     #[test]
@@ -438,12 +457,13 @@ mod tests {
         assert_eq!(cache.len(), 2);
 
         // Filling well beyond capacity caps the bounded-cache occupancy, which
-        // is exactly what the `value_cache_entries` gauge reports.
+        // is exactly what the `value_cache_entries` gauge reports. Note that
+        // `len()` counts only the bounded cache, not the weak dedup index.
         for i in 3..(TEST_CACHE_SIZE as u64 * 3) {
             cache.insert(&i, format!("v{i}"));
         }
         assert!(
-            cache.len() <= TEST_CACHE_SIZE + 1,
+            cache.len() <= TEST_CACHE_SIZE,
             "bounded-cache occupancy {} must not exceed capacity {TEST_CACHE_SIZE}",
             cache.len(),
         );
