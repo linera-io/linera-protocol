@@ -4838,3 +4838,154 @@ where
 
     Ok(())
 }
+
+/// Regression test for #5664: when the chain advances (e.g. a notification or background
+/// sync commits another owner's block at our height) while a client is in the middle of
+/// `execute_block`, the staged pending proposal is cleared without committing ours. This
+/// used to surface as a hard `BlockProposalError("Unexpected block proposal error")`.
+/// The client must instead re-stage at the new height and never raise that error.
+///
+/// Two owners hammer the same multi-owner chain concurrently while each client runs a
+/// notification listener that advances its local node underneath the proposer task,
+/// reproducing the race. Requires the multi-threaded runtime: on a single thread the
+/// listener cannot advance the local node between staging and re-processing.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
+async fn test_execute_block_retries_when_chain_advances<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const ROUNDS: usize = 50;
+
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
+    let owner0 = client0.identity().await?;
+
+    // Make the chain a two-owner chain so both clients can propose at the same height.
+    let ownership = ChainOwnership {
+        super_owners: BTreeSet::new(),
+        owners: BTreeMap::from_iter([(owner0, 100), (owner1, 100)]),
+        first_leader: None,
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    };
+    client0.change_ownership(ownership).await.unwrap();
+
+    let mut client1 = builder
+        .make_client(
+            chain_id,
+            client0.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
+        .await?;
+    client1.set_preferred_owner(owner1);
+    client1.synchronize_from_validators().await.unwrap();
+
+    // Run a notification listener on each client so its local node is advanced by the other
+    // owner's commits in the background — the same way the node service's background sync
+    // advances the chain while `execute_block` is running.
+    let (listener0, _abort0, _notifs0) = client0.listen().await?;
+    let (listener1, _abort1, _notifs1) = client1.listen().await?;
+    tokio::spawn(listener0);
+    tokio::spawn(listener1);
+
+    // Both owners publish a stream of data blobs to the same chain concurrently. They
+    // collide at the same height repeatedly; whichever loses a race may observe the chain
+    // advancing mid-proposal. None of these calls may fail with the "unexpected block
+    // proposal error".
+    async fn race(client: &ChainClient<impl Environment>, tag: u8) {
+        for i in 0..ROUNDS {
+            let data = vec![tag, i as u8];
+            match client.publish_data_blob(data).await {
+                // Committed / Conflict / WaitForTimeout are all acceptable outcomes of a
+                // concurrent proposal.
+                Ok(_) => {}
+                Err(err) => {
+                    let message = err.to_string();
+                    assert!(
+                        !message.contains("Unexpected block proposal error"),
+                        "execute_block raised the #5664 error instead of retrying: {message}",
+                    );
+                    // Other transient errors (communication, conflicts surfaced as errors)
+                    // are not what this test guards; resynchronize and continue.
+                    client.synchronize_from_validators().await.ok();
+                }
+            }
+        }
+    }
+
+    futures::join!(race(&client0, 0), race(&client1, 1));
+
+    Ok(())
+}
+
+/// Regression test for the no-signer-key branch in `process_pending_block_without_prepare`:
+/// when a pending proposal is authenticated by an owner whose key the signer no longer holds
+/// (e.g. an autosigner key that staged the block is later withdrawn), the client must discard
+/// the stale proposal and report `Committed(None)` rather than erroring or wedging. This is the
+/// second of the two ways `execute_block`'s retry loop can observe `Committed(None)` — the
+/// other being the chain advancing past the staged height
+/// (`test_execute_block_retries_when_chain_advances`).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_discarded_when_signer_key_missing<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in multi-leader
+    // (non-fast) rounds — the branch that discards rather than erroring.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending, authenticated
+    // by `a` (signing it here requires `a`'s key, which the signer still holds at this point).
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    assert_eq!(
+        client
+            .pending_proposal()
+            .await
+            .expect("a pending proposal authored by `a` should remain")
+            .block
+            .authenticated_owner,
+        Some(owner_a),
+    );
+
+    // Bring the validators back, then withdraw owner `a`'s key from the signer and act as `b`.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    assert!(
+        builder.signer.forget_key(&owner_a),
+        "owner `a`'s key should have been present before we forget it"
+    );
+    client.set_preferred_owner(owner_b);
+
+    // Processing the pending block must discard the stale proposal (we can no longer sign as `a`)
+    // and report `Committed(None)`, rather than raising an error or looping.
+    assert_matches!(
+        client.process_pending_block().await?,
+        ClientOutcome::Committed(None)
+    );
+    assert!(client.pending_proposal().await.is_none());
+
+    Ok(())
+}

@@ -124,6 +124,13 @@ mod in_mem {
             let inner = self.0.read().unwrap();
             inner.keys()
         }
+
+        /// Removes the key for `owner`, returning whether one was present. Useful to
+        /// simulate a key becoming unavailable (e.g. an autosigner key that is rotated or
+        /// withdrawn after a block was already staged by it).
+        pub fn forget_key(&self, owner: &AccountOwner) -> bool {
+            self.0.write().unwrap().keys.remove(owner).is_some()
+        }
     }
 
     #[derive(Debug, Deserialize, Serialize)]
