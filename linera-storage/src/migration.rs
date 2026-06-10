@@ -550,6 +550,9 @@ mod tests {
                     RootKey::BlockByHeight(_) => {
                         // Nothing to be done
                     }
+                    RootKey::EventBlockHeight(_) => {
+                        // Nothing to be done
+                    }
                 }
             }
         }
