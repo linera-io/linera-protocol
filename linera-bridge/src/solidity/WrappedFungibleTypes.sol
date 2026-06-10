@@ -1,6 +1,5 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
-
 import "BridgeTypes.sol";
 
 library WrappedFungibleTypes {
@@ -323,9 +322,11 @@ library WrappedFungibleTypes {
         );
     }
 
-    function WrappedFungibleOperation_case_register_authorized_caller(
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller
-    ) internal pure returns (WrappedFungibleOperation memory) {
+    function WrappedFungibleOperation_case_register_authorized_caller(WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller)
+        internal
+        pure
+        returns (WrappedFungibleOperation memory)
+    {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
@@ -346,9 +347,11 @@ library WrappedFungibleTypes {
         );
     }
 
-    function WrappedFungibleOperation_case_mint_and_transfer(
-        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer
-    ) internal pure returns (WrappedFungibleOperation memory) {
+    function WrappedFungibleOperation_case_mint_and_transfer(WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer)
+        internal
+        pure
+        returns (WrappedFungibleOperation memory)
+    {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
@@ -501,9 +504,10 @@ library WrappedFungibleTypes {
             return abi.encodePacked(hex"d091d862", bcs_serialize_WrappedFungibleOperation_Balance(input.balance_));
         }
         if (input.choice == 214048906) {
-            return abi.encodePacked(
-                hex"8ac18866", bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from)
-            );
+            return
+                abi.encodePacked(
+                    hex"8ac18866", bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from)
+                );
         }
         if (input.choice == 239329758) {
             return abi.encodePacked(hex"dec38f72", bcs_serialize_WrappedFungibleOperation_Burn(input.burn));
@@ -754,9 +758,11 @@ library WrappedFungibleTypes {
         uint128 amount;
     }
 
-    function bcs_serialize_WrappedFungibleOperation_MintAndTransfer(
-        WrappedFungibleOperation_MintAndTransfer memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_WrappedFungibleOperation_MintAndTransfer(WrappedFungibleOperation_MintAndTransfer memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = BridgeTypes.bcs_serialize_Account(input.target_account);
         return abi.encodePacked(result, bcs_serialize_uint128(input.amount));
     }
@@ -790,9 +796,11 @@ library WrappedFungibleTypes {
         ApplicationId app_id;
     }
 
-    function bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory input
-    ) internal pure returns (bytes memory) {
+    function bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(WrappedFungibleOperation_RegisterAuthorizedCaller memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         return bcs_serialize_ApplicationId(input.app_id);
     }
 

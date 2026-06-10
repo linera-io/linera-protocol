@@ -14,6 +14,7 @@ contract LightClient {
         // Admin-chain height of the block that created this committee.
         uint64 createdAtHeight;
     }
+
     mapping(uint32 => EpochCommittee) private committees;
     uint32 public currentEpoch;
     // Certificates whose epoch is below this are rejected. Defaults to 0 (no
