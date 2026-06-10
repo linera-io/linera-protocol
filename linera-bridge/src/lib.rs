@@ -25,6 +25,11 @@ pub mod monitor;
 #[cfg(feature = "relay")]
 pub mod relay;
 
+/// Shared `sol!` bindings for the bridge's EVM contracts, used by the revm tests, the relay,
+/// and the e2e tests.
+#[cfg(feature = "offchain")]
+pub mod contracts;
+
 /// A light proof that a Linera block was confirmed: header + body fields + signatures.
 #[cfg(feature = "offchain")]
 pub mod block_proof;
