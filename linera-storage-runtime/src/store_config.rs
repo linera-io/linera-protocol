@@ -23,6 +23,10 @@ use serde::{Deserialize, Serialize};
 use {linera_storage::ChainStatesFirstAssignment, linera_views::backends::dual::DualDatabase};
 
 /// The configuration of the key value store in use.
+// The RocksDB / dual variants carry the full backend tuning configuration, which
+// is legitimately larger than the other variants. This config is built once at
+// startup, so the size disparity is not a concern.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum StoreConfig {
     /// The memory key value store

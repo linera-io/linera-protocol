@@ -113,6 +113,7 @@ impl RocksDbRunner {
             spawn_mode,
             path_with_guard,
             max_stream_queries: config.client.max_stream_queries,
+            tuning_options: Default::default(),
         };
         let store_config = RocksDbStoreConfig {
             inner_config,

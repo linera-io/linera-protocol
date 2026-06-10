@@ -302,6 +302,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`
+* `--rocksdb-opt <KEY=VALUE>` — Extra RocksDB tuning options, passed as repeated `KEY=VALUE` pairs, e.g. `--rocksdb-opt write_buffer_size=268435456 --rocksdb-opt max_open_files=512`. Can also be set via the `LINERA_ROCKSDB_OPTS` environment variable as a comma-separated list. These only affect runtime behavior, never the on-disk storage format; format-defining keys are rejected. Run with an unknown key to see the list of supported options
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--with-application-logs` — Output log messages from contract execution
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use

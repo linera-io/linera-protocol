@@ -332,10 +332,14 @@ impl StorageConfig {
             #[cfg(feature = "rocksdb")]
             InnerStorageConfig::RocksDb { path, spawn_mode } => {
                 let path_with_guard = PathWithGuard::new(path.to_path_buf());
+                let tuning_options = linera_views::rocks_db::RocksDbTuningOptions::from_kv_pairs(
+                    &options.rocksdb_opts,
+                )?;
                 let inner_config = linera_views::rocks_db::RocksDbStoreInternalConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard,
                     max_stream_queries: options.storage_max_stream_queries,
+                    tuning_options,
                 };
                 let config = linera_views::rocks_db::RocksDbStoreConfig {
                     inner_config,
@@ -345,11 +349,15 @@ impl StorageConfig {
             }
             #[cfg(feature = "scylladb")]
             InnerStorageConfig::ScyllaDb { uri } => {
+                let tuning_options = linera_views::scylla_db::ScyllaDbTuningOptions::from_kv_pairs(
+                    &options.scylladb_opts,
+                )?;
                 let inner_config = linera_views::scylla_db::ScyllaDbStoreInternalConfig {
                     uri: uri.clone(),
                     max_stream_queries: options.storage_max_stream_queries,
                     max_concurrent_queries: options.storage_max_concurrent_queries,
                     replication_factor: options.storage_replication_factor,
+                    tuning_options,
                 };
                 let config = linera_views::scylla_db::ScyllaDbStoreConfig {
                     inner_config,
@@ -363,21 +371,29 @@ impl StorageConfig {
                 spawn_mode,
                 uri,
             } => {
+                let tuning_options = linera_views::rocks_db::RocksDbTuningOptions::from_kv_pairs(
+                    &options.rocksdb_opts,
+                )?;
                 let inner_config = linera_views::rocks_db::RocksDbStoreInternalConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard: path_with_guard.clone(),
                     max_stream_queries: options.storage_max_stream_queries,
+                    tuning_options,
                 };
                 let first_config = linera_views::rocks_db::RocksDbStoreConfig {
                     inner_config,
                     storage_cache_config: options.views_storage_cache_config(),
                 };
 
+                let tuning_options = linera_views::scylla_db::ScyllaDbTuningOptions::from_kv_pairs(
+                    &options.scylladb_opts,
+                )?;
                 let inner_config = linera_views::scylla_db::ScyllaDbStoreInternalConfig {
                     uri: uri.clone(),
                     max_stream_queries: options.storage_max_stream_queries,
                     max_concurrent_queries: options.storage_max_concurrent_queries,
                     replication_factor: options.storage_replication_factor,
+                    tuning_options,
                 };
                 let second_config = linera_views::scylla_db::ScyllaDbStoreConfig {
                     inner_config,

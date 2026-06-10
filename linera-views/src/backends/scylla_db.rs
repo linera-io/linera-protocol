@@ -9,12 +9,13 @@
 
 use std::{
     collections::{BTreeSet, HashMap},
+    num::NonZeroUsize,
     ops::Deref,
     sync::{
         atomic::{AtomicI64, Ordering},
         Arc,
     },
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use async_lock::{Semaphore, SemaphoreGuard};
@@ -25,6 +26,7 @@ use scylla::{
         execution_profile::{ExecutionProfile, ExecutionProfileHandle},
         session::Session,
         session_builder::SessionBuilder,
+        Compression, PoolSize,
     },
     deserialize::{DeserializationError, TypeCheckError},
     errors::{
@@ -251,33 +253,57 @@ impl ScyllaDbClient {
         })
     }
 
-    fn build_default_policy() -> Arc<dyn LoadBalancingPolicy> {
-        DefaultPolicy::builder().token_aware(true).build()
+    fn build_default_policy(tuning: &ScyllaDbTuningOptions) -> Arc<dyn LoadBalancingPolicy> {
+        DefaultPolicy::builder()
+            .token_aware(tuning.token_aware.unwrap_or(true))
+            .build()
     }
 
     fn build_default_execution_profile_handle(
         policy: Arc<dyn LoadBalancingPolicy>,
+        tuning: &ScyllaDbTuningOptions,
     ) -> ExecutionProfileHandle {
-        let default_profile = ExecutionProfile::builder()
+        let mut builder = ExecutionProfile::builder()
             .load_balancing_policy(policy)
             .retry_policy(Arc::new(DefaultRetryPolicy::new()))
-            .consistency(Consistency::LocalQuorum)
-            .build();
-        default_profile.into_handle()
+            .consistency(
+                tuning
+                    .consistency
+                    .map_or(Consistency::LocalQuorum, |c| c.to_scylla()),
+            );
+        if let Some(ms) = tuning.request_timeout_ms {
+            // A timeout of zero disables the per-request timeout entirely.
+            let timeout = (ms != 0).then(|| Duration::from_millis(ms));
+            builder = builder.request_timeout(timeout);
+        }
+        builder.build().into_handle()
     }
 
-    async fn build_default_session(uri: &str) -> Result<Session, ScyllaDbStoreInternalError> {
+    async fn build_default_session(
+        config: &ScyllaDbStoreInternalConfig,
+    ) -> Result<Session, ScyllaDbStoreInternalError> {
         // This explicitly sets a lot of default parameters for clarity and for making future changes
         // easier.
-        SessionBuilder::new()
-            .known_node(uri)
+        let tuning = &config.tuning_options;
+        let mut builder = SessionBuilder::new()
+            .known_node(&config.uri)
             .default_execution_profile_handle(Self::build_default_execution_profile_handle(
-                Self::build_default_policy(),
-            ))
-            .build()
-            .boxed_sync()
-            .await
-            .map_err(Into::into)
+                Self::build_default_policy(tuning),
+                tuning,
+            ));
+        if let Some(compression) = tuning.compression {
+            builder = builder.compression(compression.to_scylla());
+        }
+        if let Some(pool_size) = tuning.connection_pool_size_per_host {
+            // The parser guarantees this is non-zero, but guard defensively.
+            let pool_size = NonZeroUsize::new(pool_size).ok_or_else(|| {
+                ScyllaDbStoreInternalError::InvalidTuningOption(
+                    "`connection_pool_size_per_host` must be at least 1".to_string(),
+                )
+            })?;
+            builder = builder.pool_size(PoolSize::PerHost(pool_size));
+        }
+        builder.build().boxed_sync().await.map_err(Into::into)
     }
 
     async fn get_multi_key_values_statement(
@@ -798,6 +824,10 @@ pub enum ScyllaDbStoreInternalError {
     #[error("Namespace contains forbidden characters")]
     InvalidNamespace,
 
+    /// A ScyllaDB tuning option could not be parsed.
+    #[error("invalid ScyllaDB tuning option: {0}")]
+    InvalidTuningOption(String),
+
     /// The key must have at most `MAX_KEY_SIZE` bytes
     #[error("The key must have at most MAX_KEY_SIZE")]
     KeyTooLong,
@@ -1037,6 +1067,203 @@ pub struct ScyllaDbStoreInternalConfig {
     pub max_stream_queries: usize,
     /// The replication factor.
     pub replication_factor: u32,
+    /// Runtime-tunable ScyllaDB driver options that override the built-in defaults.
+    #[serde(default)]
+    pub tuning_options: ScyllaDbTuningOptions,
+}
+
+/// Runtime-tunable ScyllaDB driver and session options.
+///
+/// These options only affect how the client connects to and talks to ScyllaDB
+/// (consistency, timeouts, connection pooling, transport compression, load
+/// balancing). They never change the on-disk storage format or the table
+/// schema, so they are safe to change between restarts. Every field defaults to
+/// `None`, meaning the built-in default is used.
+///
+/// Note that table-creation properties (compaction strategy, table compression,
+/// `gc_grace_seconds`, …) are deliberately *not* exposed here: they are part of
+/// the `CREATE TABLE` statement and only take effect at namespace creation time.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct ScyllaDbTuningOptions {
+    /// The consistency level used for queries.
+    pub consistency: Option<ScyllaDbConsistency>,
+    /// Per-request timeout in milliseconds. `0` disables the timeout.
+    pub request_timeout_ms: Option<u64>,
+    /// Number of connections to open per node.
+    pub connection_pool_size_per_host: Option<usize>,
+    /// Transport-level compression for the CQL protocol.
+    pub compression: Option<ScyllaDbCompression>,
+    /// Whether the load-balancing policy is token-aware.
+    pub token_aware: Option<bool>,
+}
+
+/// The consistency level used by the ScyllaDB client.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[allow(missing_docs)]
+pub enum ScyllaDbConsistency {
+    Any,
+    One,
+    Two,
+    Three,
+    Quorum,
+    All,
+    LocalQuorum,
+    EachQuorum,
+    LocalOne,
+    Serial,
+    LocalSerial,
+}
+
+impl ScyllaDbConsistency {
+    fn to_scylla(self) -> Consistency {
+        match self {
+            ScyllaDbConsistency::Any => Consistency::Any,
+            ScyllaDbConsistency::One => Consistency::One,
+            ScyllaDbConsistency::Two => Consistency::Two,
+            ScyllaDbConsistency::Three => Consistency::Three,
+            ScyllaDbConsistency::Quorum => Consistency::Quorum,
+            ScyllaDbConsistency::All => Consistency::All,
+            ScyllaDbConsistency::LocalQuorum => Consistency::LocalQuorum,
+            ScyllaDbConsistency::EachQuorum => Consistency::EachQuorum,
+            ScyllaDbConsistency::LocalOne => Consistency::LocalOne,
+            ScyllaDbConsistency::Serial => Consistency::Serial,
+            ScyllaDbConsistency::LocalSerial => Consistency::LocalSerial,
+        }
+    }
+
+    fn from_token(token: &str) -> Option<Self> {
+        Some(match token.to_ascii_lowercase().as_str() {
+            "any" => ScyllaDbConsistency::Any,
+            "one" => ScyllaDbConsistency::One,
+            "two" => ScyllaDbConsistency::Two,
+            "three" => ScyllaDbConsistency::Three,
+            "quorum" => ScyllaDbConsistency::Quorum,
+            "all" => ScyllaDbConsistency::All,
+            "local_quorum" => ScyllaDbConsistency::LocalQuorum,
+            "each_quorum" => ScyllaDbConsistency::EachQuorum,
+            "local_one" => ScyllaDbConsistency::LocalOne,
+            "serial" => ScyllaDbConsistency::Serial,
+            "local_serial" => ScyllaDbConsistency::LocalSerial,
+            _ => return None,
+        })
+    }
+}
+
+/// The transport-level compression used by the ScyllaDB client.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum ScyllaDbCompression {
+    /// No compression.
+    None,
+    /// LZ4.
+    Lz4,
+    /// Snappy.
+    Snappy,
+}
+
+impl ScyllaDbCompression {
+    fn to_scylla(self) -> Option<Compression> {
+        match self {
+            ScyllaDbCompression::None => None,
+            ScyllaDbCompression::Lz4 => Some(Compression::Lz4),
+            ScyllaDbCompression::Snappy => Some(Compression::Snappy),
+        }
+    }
+
+    fn from_token(token: &str) -> Option<Self> {
+        Some(match token.to_ascii_lowercase().as_str() {
+            "none" => ScyllaDbCompression::None,
+            "lz4" => ScyllaDbCompression::Lz4,
+            "snappy" => ScyllaDbCompression::Snappy,
+            _ => return None,
+        })
+    }
+}
+
+impl ScyllaDbTuningOptions {
+    /// The list of supported option keys, for use in error messages and docs.
+    pub fn supported_keys() -> &'static [&'static str] {
+        &[
+            "consistency",
+            "request_timeout_ms",
+            "connection_pool_size_per_host",
+            "compression",
+            "token_aware",
+        ]
+    }
+
+    /// Parses a list of `KEY=VALUE` strings into typed tuning options.
+    ///
+    /// Unknown keys, malformed entries, and values that fail to parse all
+    /// produce a descriptive error.
+    pub fn from_kv_pairs<I, S>(pairs: I) -> Result<Self, ScyllaDbStoreInternalError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut options = Self::default();
+        for pair in pairs {
+            let pair = pair.as_ref();
+            let (key, value) = pair.split_once('=').ok_or_else(|| {
+                ScyllaDbStoreInternalError::InvalidTuningOption(format!(
+                    "expected `KEY=VALUE`, got `{pair}`"
+                ))
+            })?;
+            let key = key.trim();
+            let value = value.trim();
+            match key {
+                "consistency" => {
+                    options.consistency =
+                        Some(ScyllaDbConsistency::from_token(value).ok_or_else(|| {
+                            ScyllaDbStoreInternalError::InvalidTuningOption(format!(
+                                "unknown consistency `{value}`; expected one of any, one, two, \
+                                 three, quorum, all, local_quorum, each_quorum, local_one, \
+                                 serial, local_serial"
+                            ))
+                        })?)
+                }
+                "request_timeout_ms" => {
+                    options.request_timeout_ms = Some(parse_tuning_value(key, value)?)
+                }
+                "connection_pool_size_per_host" => {
+                    let n = parse_tuning_value(key, value)?;
+                    if n == 0 {
+                        return Err(ScyllaDbStoreInternalError::InvalidTuningOption(
+                            "`connection_pool_size_per_host` must be at least 1".to_string(),
+                        ));
+                    }
+                    options.connection_pool_size_per_host = Some(n)
+                }
+                "compression" => {
+                    options.compression =
+                        Some(ScyllaDbCompression::from_token(value).ok_or_else(|| {
+                            ScyllaDbStoreInternalError::InvalidTuningOption(format!(
+                                "unknown compression `{value}`; expected one of none, lz4, snappy"
+                            ))
+                        })?)
+                }
+                "token_aware" => options.token_aware = Some(parse_tuning_value(key, value)?),
+                _ => {
+                    return Err(ScyllaDbStoreInternalError::InvalidTuningOption(format!(
+                        "unknown option `{key}`; supported options are: {}",
+                        Self::supported_keys().join(", ")
+                    )))
+                }
+            }
+        }
+        Ok(options)
+    }
+}
+
+fn parse_tuning_value<T>(key: &str, value: &str) -> Result<T, ScyllaDbStoreInternalError>
+where
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    value.parse::<T>().map_err(|err| {
+        ScyllaDbStoreInternalError::InvalidTuningOption(format!(
+            "invalid value `{value}` for option `{key}`: {err}"
+        ))
+    })
 }
 
 impl KeyValueDatabase for ScyllaDbDatabaseInternal {
@@ -1052,7 +1279,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         namespace: &str,
     ) -> Result<Self, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = ScyllaDbClient::build_default_session(&config.uri).await?;
+        let session = ScyllaDbClient::build_default_session(config).await?;
         let store = ScyllaDbClient::new(session, namespace).await?;
         let store = Arc::new(store);
         let semaphore = config
@@ -1097,7 +1324,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
     }
 
     async fn list_all(config: &Self::Config) -> Result<Vec<String>, ScyllaDbStoreInternalError> {
-        let session = ScyllaDbClient::build_default_session(&config.uri).await?;
+        let session = ScyllaDbClient::build_default_session(config).await?;
         let statement = session
             .prepare(format!("DESCRIBE KEYSPACE {KEYSPACE}"))
             .await?;
@@ -1153,7 +1380,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
     }
 
     async fn delete_all(store_config: &Self::Config) -> Result<(), ScyllaDbStoreInternalError> {
-        let session = ScyllaDbClient::build_default_session(&store_config.uri).await?;
+        let session = ScyllaDbClient::build_default_session(store_config).await?;
         let statement = session
             .prepare(format!("DROP KEYSPACE IF EXISTS {KEYSPACE}"))
             .await?;
@@ -1170,7 +1397,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         namespace: &str,
     ) -> Result<bool, ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = ScyllaDbClient::build_default_session(&config.uri).await?;
+        let session = ScyllaDbClient::build_default_session(config).await?;
 
         // We check the way the test can fail. It can fail in different ways.
         let result = session
@@ -1214,7 +1441,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         namespace: &str,
     ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = ScyllaDbClient::build_default_session(&config.uri).await?;
+        let session = ScyllaDbClient::build_default_session(config).await?;
 
         // Create a keyspace if it doesn't exist
         let statement = session
@@ -1268,7 +1495,7 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         namespace: &str,
     ) -> Result<(), ScyllaDbStoreInternalError> {
         Self::check_namespace(namespace)?;
-        let session = ScyllaDbClient::build_default_session(&config.uri).await?;
+        let session = ScyllaDbClient::build_default_session(config).await?;
         let statement = session
             .prepare(format!("DROP TABLE IF EXISTS {KEYSPACE}.\"{namespace}\";"))
             .await?;
@@ -1315,6 +1542,7 @@ impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInterna
             max_concurrent_queries: Some(10),
             max_stream_queries: 10,
             replication_factor: 1,
+            tuning_options: ScyllaDbTuningOptions::default(),
         })
     }
 }
@@ -1342,3 +1570,70 @@ pub type ScyllaDbStoreConfig = LruCachingConfig<ScyllaDbStoreInternalConfig>;
 
 /// The combined error type for the `ScyllaDbDatabase`.
 pub type ScyllaDbStoreError = ValueSplittingError<JournalingError<ScyllaDbStoreInternalError>>;
+
+#[cfg(test)]
+mod tests {
+    use super::{ScyllaDbCompression, ScyllaDbConsistency, ScyllaDbTuningOptions};
+
+    #[test]
+    fn parses_typed_values() {
+        let options = ScyllaDbTuningOptions::from_kv_pairs([
+            "consistency=local_quorum",
+            "request_timeout_ms=5000",
+            "connection_pool_size_per_host=4",
+            "compression=lz4",
+            "token_aware=false",
+        ])
+        .unwrap();
+        assert_eq!(options.consistency, Some(ScyllaDbConsistency::LocalQuorum));
+        assert_eq!(options.request_timeout_ms, Some(5000));
+        assert_eq!(options.connection_pool_size_per_host, Some(4));
+        assert_eq!(options.compression, Some(ScyllaDbCompression::Lz4));
+        assert_eq!(options.token_aware, Some(false));
+    }
+
+    #[test]
+    fn empty_input_is_all_defaults() {
+        let options = ScyllaDbTuningOptions::from_kv_pairs(Vec::<String>::new()).unwrap();
+        assert!(options.consistency.is_none());
+        assert!(options.compression.is_none());
+        assert!(options.token_aware.is_none());
+    }
+
+    #[test]
+    fn rejects_unknown_key() {
+        let error = ScyllaDbTuningOptions::from_kv_pairs(["not_a_real_option=1"]).unwrap_err();
+        assert!(error.to_string().contains("unknown option"));
+    }
+
+    #[test]
+    fn rejects_unknown_consistency() {
+        let error = ScyllaDbTuningOptions::from_kv_pairs(["consistency=banana"]).unwrap_err();
+        assert!(error.to_string().contains("unknown consistency"));
+    }
+
+    #[test]
+    fn rejects_unknown_compression() {
+        let error = ScyllaDbTuningOptions::from_kv_pairs(["compression=gzip"]).unwrap_err();
+        assert!(error.to_string().contains("unknown compression"));
+    }
+
+    #[test]
+    fn rejects_zero_pool_size() {
+        let error =
+            ScyllaDbTuningOptions::from_kv_pairs(["connection_pool_size_per_host=0"]).unwrap_err();
+        assert!(error.to_string().contains("at least 1"));
+    }
+
+    #[test]
+    fn rejects_malformed_pair() {
+        let error = ScyllaDbTuningOptions::from_kv_pairs(["consistency"]).unwrap_err();
+        assert!(error.to_string().contains("KEY=VALUE"));
+    }
+
+    #[test]
+    fn rejects_unparseable_value() {
+        let error = ScyllaDbTuningOptions::from_kv_pairs(["request_timeout_ms=soon"]).unwrap_err();
+        assert!(error.to_string().contains("invalid value"));
+    }
+}
