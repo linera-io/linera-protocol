@@ -15,11 +15,7 @@ use linera_sdk::{
     views::{linera_views, RegisterView, RootView, SetView, View, ViewStorageContext},
     Contract, ContractRuntime,
 };
-<<<<<<< HEAD
-use wrapped_fungible::{Account, WrappedFungibleOperation, WrappedFungibleTokenAbi};
-=======
-use wrapped_fungible::{BurnEvent, WrappedFungibleOperation, WrappedFungibleTokenAbi};
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+use wrapped_fungible::{Account, BurnEvent, WrappedFungibleOperation, WrappedFungibleTokenAbi};
 
 /// On-chain state: tracks processed deposits, verified block hashes, and the
 /// registered EVM FungibleBridge contract address. The wrapped-fungible
@@ -77,19 +73,6 @@ impl Contract for EvmBridge {
 
     async fn execute_operation(&mut self, operation: BridgeOperation) {
         match operation {
-<<<<<<< HEAD
-            BridgeOperation::RegisterFungibleApp { app_id } => {
-                self.runtime
-                    .authenticated_owner()
-                    .expect("RegisterFungibleApp requires an authenticated signer");
-                assert!(
-                    self.state.fungible_app_id.get().is_none(),
-                    "fungible app is already registered and cannot be changed"
-                );
-                self.state.fungible_app_id.set(Some(app_id));
-            }
-=======
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
             BridgeOperation::ProcessDeposit {
                 block_header_rlp,
                 receipt_rlp,
@@ -323,7 +306,7 @@ impl EvmBridge {
         assert!(amount.0 > 0, "Burn amount must be non-zero");
         let signer = self
             .runtime
-            .authenticated_signer()
+            .authenticated_owner()
             .expect("Burn requires an authenticated signer");
         let params = self.runtime.application_parameters();
         let bridge_chain_id = params.bridge_chain_id;
@@ -375,7 +358,7 @@ impl EvmBridge {
     fn execute_burn(&mut self, amount: U128, evm_target: [u8; 20]) {
         let signer = self
             .runtime
-            .authenticated_signer()
+            .authenticated_owner()
             .expect("burn message carries the originating authenticated signer");
         let fungible_app_id = self
             .runtime

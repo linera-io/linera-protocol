@@ -52,46 +52,6 @@ fn wrapped_params(mint_chain_id: ChainId) -> WrappedParameters {
 }
 
 #[tokio::test]
-<<<<<<< HEAD
-async fn test_mint_from_unauthorized_signer() {
-    let (validator, module_id) = TestValidator::with_current_module::<
-        WrappedFungibleTokenAbi,
-        WrappedParameters,
-        InitialState,
-    >()
-    .await;
-    let mut chain = validator.new_chain().await;
-    let chain_owner = AccountOwner::from(chain.public_key());
-
-    // Minter is a different account
-    let other_minter = AccountOwner::Address20([0xBB; 20]);
-    let params = test_params(other_minter, chain.id(), dummy_bridge_app_id());
-    let initial_state = InitialStateBuilder::default().build();
-    let application_id = chain
-        .create_application(module_id, params, initial_state, vec![])
-        .await;
-
-    // Chain owner tries to mint, but they're not the minter — should fail
-    let result = chain
-        .try_add_block(|block| {
-            block.with_operation(
-                application_id,
-                WrappedFungibleOperation::MintAndTransfer {
-                    target_account: Account {
-                        chain_id: chain.id(),
-                        owner: chain_owner,
-                    },
-                    amount: U128(100u128 * 10u128.pow(18)),
-                },
-            );
-        })
-        .await;
-    assert!(result.is_err(), "mint from unauthorized signer should fail");
-}
-
-#[tokio::test]
-=======
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 async fn test_wrapped_fungible_standard_transfer() {
     let (validator, module_id) = TestValidator::with_current_module::<
         WrappedFungibleTokenAbi,

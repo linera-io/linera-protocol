@@ -2,13 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use linera_sdk::{
-<<<<<<< HEAD
-    linera_base_types::{AccountOwner, OwnerSpender, U128},
-    views::{linera_views, MapView, RootView, ViewStorageContext},
-=======
-    linera_base_types::{AccountOwner, ApplicationId, U128},
+    linera_base_types::{AccountOwner, ApplicationId, OwnerSpender, U128},
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 };
 use wrapped_fungible::InitialState;
 

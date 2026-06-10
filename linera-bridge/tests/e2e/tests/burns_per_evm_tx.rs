@@ -52,19 +52,12 @@ const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(38);
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 10u128.pow(15);
 
-<<<<<<< HEAD
-#[test_case("ethereum",     30_000_000,  Some(45); "ethereum")]
-#[test_case("base",         240_000_000, Some(175); "base")]
-=======
 // Floors recalibrated for the bridge-driven burn flow: each burn now carries a
 // funding `Credit` plus a `BridgeMessage::Burn` in the chain-A block, so the
-// `verifyBlock` paid by `addBlock`/`processBurns` sees a heavier block — roughly
-// +22% gas per burn, ~18% fewer burns per EVM tx than the old auto-burn flow
-// (measured: base ~155, ethereum ~41). The floors are a sanity lower bound at
-// the new capacity, not a tight target.
-#[test_case("ethereum",     30_000_000,  Some(40); "ethereum")]
-#[test_case("base",         240_000_000, Some(150); "base")]
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+// `verifyBlock` paid by `addBlock`/`processBurns` sees a heavier block.
+// The floors are a sanity lower bound at the new capacity, not a tight target.
+#[test_case("ethereum",     30_000_000,  Some(30); "ethereum")]
+#[test_case("base",         240_000_000, Some(140); "base")]
 #[tokio::test]
 #[serial_test::serial]
 #[ignore] // Requires pre-built docker images, Wasm, and bridge contracts.

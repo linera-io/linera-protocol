@@ -120,15 +120,11 @@ impl Contract for WrappedFungibleTokenContract {
             WrappedFungibleOperation::MintAndTransfer {
                 target_account,
                 amount,
-<<<<<<< HEAD
-            } => self.execute_mint_and_transfer(target_account, amount).await,
-=======
             } => {
                 self.require_authorized_chain();
-                self.execute_mint(target_account, amount).await;
+                self.execute_mint_and_transfer(target_account, amount).await;
                 FungibleResponse::Ok
             }
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 
             WrappedFungibleOperation::Burn { owner, amount } => {
                 self.require_authorized_chain();
@@ -138,11 +134,11 @@ impl Contract for WrappedFungibleTokenContract {
 
             WrappedFungibleOperation::RegisterAuthorizedCaller { app_id } => {
                 self.runtime
-                    .authenticated_signer()
+                    .authenticated_owner()
                     .expect("RegisterAuthorizedCaller requires an authenticated signer");
-                // The authorized caller is only consulted by `Mint`/`Burn`, which
-                // runs only on the mint chain. Restrict registration to that chain
-                // so it cannot be set (even inertly) on user-owned chains.
+                // The authorized caller is only consulted by `MintAndTransfer`/`Burn`,
+                // which run only on the mint chain. Restrict registration to that
+                // chain so it cannot be set (even inertly) on user-owned chains.
                 let mint_chain_id = self.runtime.application_parameters().mint_chain_id;
                 assert!(
                     self.runtime.chain_id() == mint_chain_id,
@@ -195,51 +191,14 @@ impl Contract for WrappedFungibleTokenContract {
 }
 
 impl WrappedFungibleTokenContract {
-<<<<<<< HEAD
-    /// Checks the configured minting restrictions. Each check is only
-    /// enforced when the corresponding parameter is `Some`.
-    fn require_mint_authorized(&mut self) {
-        let params: WrappedParameters = self.runtime.application_parameters();
-        if let Some(bridge_app_id) = params.bridge_app_id {
-            let caller = self.runtime.authenticated_caller_id();
-            assert!(
-                caller == Some(bridge_app_id),
-                "minting is only allowed via the bridge application"
-            );
-        }
-        if let Some(minter) = params.minter {
-            let signer = self
-                .runtime
-                .authenticated_owner()
-                .expect("minter is configured but no authenticated signer");
-            assert!(
-                signer == minter,
-                "only the minter can perform this operation"
-            );
-        }
-        if let Some(mint_chain_id) = params.mint_chain_id {
-            assert!(
-                self.runtime.chain_id() == mint_chain_id,
-                "minting is only allowed on the designated mint chain"
-            );
-        }
-    }
-
-    async fn execute_mint_and_transfer(
-        &mut self,
-        target_account: Account,
-        amount: U128,
-    ) -> FungibleResponse {
-        self.require_mint_authorized();
-=======
-    /// Enforces the authorization shared by `Mint` and `Burn`: the
+    /// Enforces the authorization shared by `MintAndTransfer` and `Burn`: the
     /// cross-application caller must be the registered authorized caller (set via
     /// `RegisterAuthorizedCaller`), and the operation must run on the designated
-    /// `mint_chain_id`. Both are **mandatory**: `Mint` and `Burn` may be driven
-    /// only by the authorized caller, so a wrapped token with no caller registered
-    /// — or no mint chain configured — must never change supply. Requiring
-    /// registration also removes any setup window in which an impostor application
-    /// could mint or burn.
+    /// `mint_chain_id`. Both are **mandatory**: `MintAndTransfer` and `Burn` may be
+    /// driven only by the authorized caller, so a wrapped token with no caller
+    /// registered — or no mint chain configured — must never change supply.
+    /// Requiring registration also removes any setup window in which an impostor
+    /// application could mint or burn.
     ///
     /// There is intentionally no signer check: the authorized caller is the sole
     /// caller and is trusted to act only on its own validated input, so the
@@ -260,8 +219,7 @@ impl WrappedFungibleTokenContract {
         );
     }
 
-    async fn execute_mint(&mut self, target_account: Account, amount: U128) {
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+    async fn execute_mint_and_transfer(&mut self, target_account: Account, amount: U128) {
         if target_account.chain_id == self.runtime.chain_id() {
             self.state.credit(target_account.owner, amount).await;
         } else {

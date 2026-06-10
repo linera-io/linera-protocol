@@ -16,6 +16,7 @@ use crate::relay::{
     self,
     evm::EvmClient,
     linera::{find_burn_events, LineraClient},
+    settlement::estimate_fits,
 };
 
 /// Background task that scans Linera block history for BurnEvent stream
@@ -102,20 +103,6 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 
             persist_cert_bytes(monitor, height, &event_indices, &cert).await;
 
-<<<<<<< HEAD
-            if evm_client.estimate_add_block_gas(&cert).await.is_ok() {
-                submit_addblock(
-                    monitor,
-                    evm_client,
-                    &cert,
-                    height,
-                    &event_indices,
-                    max_retries,
-                )
-                .await;
-            } else {
-                submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
-=======
             match estimate_fits(evm_client.estimate_add_block_gas(&cert).await) {
                 Ok(true) => {
                     submit_addblock(
@@ -152,9 +139,7 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
                     submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
                     relay::update_balance_metrics(evm_client, linera_client).await;
                 }
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
             }
-            relay::update_balance_metrics(evm_client, linera_client).await;
         }
     }
 }
@@ -247,15 +232,6 @@ async fn split_to_fit<P: Provider>(
     let mut oversized: Vec<u32> = Vec::new();
     let mut errored: Vec<u32> = Vec::new();
     while let Some(slice) = stack.pop() {
-<<<<<<< HEAD
-        let fits = evm_client
-            .estimate_process_burns_gas(cert, tx_index, &slice)
-            .await
-            .is_ok();
-        if fits {
-            chunks.push(slice);
-            continue;
-=======
         let fits = estimate_fits(
             evm_client
                 .estimate_process_burns_gas(cert, tx_index, &slice)
@@ -279,7 +255,6 @@ async fn split_to_fit<P: Provider>(
                 );
                 errored.extend_from_slice(&slice);
             }
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
         }
     }
     (chunks, oversized, errored)

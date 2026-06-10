@@ -189,10 +189,11 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     // `bridgeApplicationId`.
     tracing::info!("Publishing evm-bridge module...");
     let eb_contract =
-        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm"))?;
-    let eb_service = Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_service.wasm"))?;
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_service.wasm")).await?;
     let (eb_module_id, eb_publish_cert) = cc_a
-        .publish_module(eb_contract, eb_service, VmRuntime::Wasm)
+        .publish_module(eb_contract, eb_service, VmRuntime::Wasm, None)
         .await?
         .expect("publish evm-bridge module committed");
     tracing::info!(height=?eb_publish_cert.inner().block().header.height, "evm-bridge module published");

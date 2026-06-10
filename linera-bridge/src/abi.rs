@@ -10,15 +10,11 @@
 //!
 //! Hosting them here ensures all three sites stay in lockstep without manual copying.
 
-<<<<<<< HEAD
-use linera_base::identifiers::ApplicationId;
-use linera_sdk::formats::StableEnum;
-=======
 use linera_base::{
     data_types::U128,
     identifiers::{ApplicationId, ChainId},
 };
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+use linera_sdk::formats::StableEnum;
 use serde::{Deserialize, Serialize};
 
 /// Parameters for a deployed bridge instance.

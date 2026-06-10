@@ -1,9 +1,9 @@
 /// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
+
 import "BridgeTypes.sol";
 
 library WrappedFungibleTypes {
-<<<<<<< HEAD
     function bcs_serialize_uleb128(uint256 x) internal pure returns (bytes memory) {
         bytes memory result;
         bytes1 entry;
@@ -42,7 +42,8 @@ library WrappedFungibleTypes {
         }
         require(false, "This line is unreachable");
         return (0, 0);
-=======
+    }
+
     struct ApplicationId {
         BridgeTypes.CryptoHash application_description_hash;
     }
@@ -68,7 +69,6 @@ library WrappedFungibleTypes {
         (new_pos, value) = bcs_deserialize_offset_ApplicationId(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     }
 
     struct BurnEvent {
@@ -237,6 +237,8 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Transfer transfer_;
         // choice=158617459 corresponds to Approve
         WrappedFungibleOperation_Approve approve;
+        // choice=170732950 corresponds to RegisterAuthorizedCaller
+        WrappedFungibleOperation_RegisterAuthorizedCaller register_authorized_caller;
         // choice=198295567 corresponds to MintAndTransfer
         WrappedFungibleOperation_MintAndTransfer mint_and_transfer;
         // choice=204322437 corresponds to Claim
@@ -247,62 +249,27 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_TransferFrom transfer_from;
         // choice=239329758 corresponds to Burn
         WrappedFungibleOperation_Burn burn;
-        // choice=8 corresponds to RegisterAuthorizedCaller
-        WrappedFungibleOperation_RegisterAuthorizedCaller register_authorized_caller;
     }
 
-<<<<<<< HEAD
-=======
-    function WrappedFungibleOperation_case_balance(WrappedFungibleOperation_Balance memory balance_)
-        internal
-        pure
-        returns (WrappedFungibleOperation memory)
-    {
-        WrappedFungibleOperation_Approve memory approve;
-        WrappedFungibleOperation_Transfer memory transfer_;
-        WrappedFungibleOperation_TransferFrom memory transfer_from;
-        WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
-        WrappedFungibleOperation_Burn memory burn;
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        return WrappedFungibleOperation(
-            uint8(0), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
-        );
-    }
-
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     function WrappedFungibleOperation_case_ticker_symbol() internal pure returns (WrappedFungibleOperation memory) {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
-<<<<<<< HEAD
-=======
-        WrappedFungibleOperation_Mint memory mint;
-        WrappedFungibleOperation_Burn memory burn;
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        return WrappedFungibleOperation(
-            uint8(1), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
-        );
-    }
-
-    function WrappedFungibleOperation_case_approve(WrappedFungibleOperation_Approve memory approve)
-        internal
-        pure
-        returns (WrappedFungibleOperation memory)
-    {
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-<<<<<<< HEAD
         return WrappedFungibleOperation(
-            uint64(142627141), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
-=======
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        return WrappedFungibleOperation(
-            uint8(2), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+            uint64(142627141),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -312,19 +279,22 @@ library WrappedFungibleTypes {
         returns (WrappedFungibleOperation memory)
     {
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-<<<<<<< HEAD
         return WrappedFungibleOperation(
-            uint64(144297355), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
-=======
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        return WrappedFungibleOperation(
-            uint8(3), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+            uint64(144297355),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -334,35 +304,68 @@ library WrappedFungibleTypes {
         returns (WrappedFungibleOperation memory)
     {
         WrappedFungibleOperation_Transfer memory transfer_;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-<<<<<<< HEAD
         return WrappedFungibleOperation(
-            uint64(158617459), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(158617459),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
-    function WrappedFungibleOperation_case_mint_and_transfer(WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer)
-        internal
-        pure
-        returns (WrappedFungibleOperation memory)
-    {
+    function WrappedFungibleOperation_case_register_authorized_caller(
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller
+    ) internal pure returns (WrappedFungibleOperation memory) {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(198295567), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
-=======
+            uint64(170732950),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
+        );
+    }
+
+    function WrappedFungibleOperation_case_mint_and_transfer(
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer
+    ) internal pure returns (WrappedFungibleOperation memory) {
+        WrappedFungibleOperation_Transfer memory transfer_;
+        WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
+        WrappedFungibleOperation_Claim memory claim;
+        WrappedFungibleOperation_Balance memory balance_;
+        WrappedFungibleOperation_TransferFrom memory transfer_from;
+        WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint8(4), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+            uint64(198295567),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -373,18 +376,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-<<<<<<< HEAD
         return WrappedFungibleOperation(
-            uint64(204322437), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
-=======
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        return WrappedFungibleOperation(
-            uint8(5), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+            uint64(204322437),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -395,13 +401,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-<<<<<<< HEAD
         return WrappedFungibleOperation(
-            uint64(206964944), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(206964944),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -412,17 +426,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(214048906), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
-=======
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        return WrappedFungibleOperation(
-            uint8(6), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+            uint64(214048906),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -433,36 +451,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
-<<<<<<< HEAD
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         return WrappedFungibleOperation(
-            uint64(239329758), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
-=======
-        WrappedFungibleOperation_Mint memory mint;
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        return WrappedFungibleOperation(
-            uint8(7), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
-        );
-    }
-
-    function WrappedFungibleOperation_case_register_authorized_caller(WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller)
-        internal
-        pure
-        returns (WrappedFungibleOperation memory)
-    {
-        WrappedFungibleOperation_Balance memory balance_;
-        WrappedFungibleOperation_Approve memory approve;
-        WrappedFungibleOperation_Transfer memory transfer_;
-        WrappedFungibleOperation_TransferFrom memory transfer_from;
-        WrappedFungibleOperation_Claim memory claim;
-        WrappedFungibleOperation_Mint memory mint;
-        WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint8(8), balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+            uint64(239329758),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -480,6 +483,12 @@ library WrappedFungibleTypes {
         if (input.choice == 158617459) {
             return abi.encodePacked(hex"f39ed14b", bcs_serialize_WrappedFungibleOperation_Approve(input.approve));
         }
+        if (input.choice == 170732950) {
+            return abi.encodePacked(
+                hex"96dbb451",
+                bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(input.register_authorized_caller)
+            );
+        }
         if (input.choice == 198295567) {
             return abi.encodePacked(
                 hex"8f80c75e", bcs_serialize_WrappedFungibleOperation_MintAndTransfer(input.mint_and_transfer)
@@ -492,31 +501,14 @@ library WrappedFungibleTypes {
             return abi.encodePacked(hex"d091d862", bcs_serialize_WrappedFungibleOperation_Balance(input.balance_));
         }
         if (input.choice == 214048906) {
-            return
-                abi.encodePacked(
-                    hex"8ac18866", bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from)
-                );
+            return abi.encodePacked(
+                hex"8ac18866", bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from)
+            );
         }
         if (input.choice == 239329758) {
             return abi.encodePacked(hex"dec38f72", bcs_serialize_WrappedFungibleOperation_Burn(input.burn));
         }
-<<<<<<< HEAD
         revert("invalid variant index");
-=======
-        if (input.choice == 6) {
-            return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_Mint(input.mint));
-        }
-        if (input.choice == 7) {
-            return abi.encodePacked(input.choice, bcs_serialize_WrappedFungibleOperation_Burn(input.burn));
-        }
-        if (input.choice == 8) {
-            return abi.encodePacked(
-                input.choice,
-                bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(input.register_authorized_caller)
-            );
-        }
-        return abi.encodePacked(input.choice);
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
     }
 
     function bcs_deserialize_offset_WrappedFungibleOperation(uint256 pos, bytes memory input)
@@ -530,8 +522,9 @@ library WrappedFungibleTypes {
         require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
         uint64 choice = uint64(choice_raw);
         require(
-            choice == 142627141 || choice == 144297355 || choice == 158617459 || choice == 198295567
-                || choice == 204322437 || choice == 206964944 || choice == 214048906 || choice == 239329758,
+            choice == 142627141 || choice == 144297355 || choice == 158617459 || choice == 170732950
+                || choice == 198295567 || choice == 204322437 || choice == 206964944 || choice == 214048906
+                || choice == 239329758,
             "invalid variant index"
         );
         WrappedFungibleOperation_Transfer memory transfer_;
@@ -541,6 +534,11 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Approve memory approve;
         if (choice == 158617459) {
             (new_pos, approve) = bcs_deserialize_offset_WrappedFungibleOperation_Approve(new_pos, input);
+        }
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
+        if (choice == 170732950) {
+            (new_pos, register_authorized_caller) =
+                bcs_deserialize_offset_WrappedFungibleOperation_RegisterAuthorizedCaller(new_pos, input);
         }
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         if (choice == 198295567) {
@@ -563,23 +561,18 @@ library WrappedFungibleTypes {
         if (choice == 239329758) {
             (new_pos, burn) = bcs_deserialize_offset_WrappedFungibleOperation_Burn(new_pos, input);
         }
-<<<<<<< HEAD
         return (
             new_pos,
             WrappedFungibleOperation(
-                choice, transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
-=======
-        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
-        if (choice == 8) {
-            (new_pos, register_authorized_caller) =
-                bcs_deserialize_offset_WrappedFungibleOperation_RegisterAuthorizedCaller(new_pos, input);
-        }
-        require(choice < 9);
-        return (
-            new_pos,
-            WrappedFungibleOperation(
-                choice, balance_, approve, transfer_, transfer_from, claim, mint, burn, register_authorized_caller
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
+                choice,
+                transfer_,
+                approve,
+                register_authorized_caller,
+                mint_and_transfer,
+                claim,
+                balance_,
+                transfer_from,
+                burn
             )
         );
     }
@@ -761,11 +754,9 @@ library WrappedFungibleTypes {
         uint128 amount;
     }
 
-    function bcs_serialize_WrappedFungibleOperation_MintAndTransfer(WrappedFungibleOperation_MintAndTransfer memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function bcs_serialize_WrappedFungibleOperation_MintAndTransfer(
+        WrappedFungibleOperation_MintAndTransfer memory input
+    ) internal pure returns (bytes memory) {
         bytes memory result = BridgeTypes.bcs_serialize_Account(input.target_account);
         return abi.encodePacked(result, bcs_serialize_uint128(input.amount));
     }
@@ -799,11 +790,9 @@ library WrappedFungibleTypes {
         ApplicationId app_id;
     }
 
-    function bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(WrappedFungibleOperation_RegisterAuthorizedCaller memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory input
+    ) internal pure returns (bytes memory) {
         return bcs_serialize_ApplicationId(input.app_id);
     }
 

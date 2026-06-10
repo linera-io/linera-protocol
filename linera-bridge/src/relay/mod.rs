@@ -17,6 +17,7 @@ mod committee;
 pub mod evm;
 pub mod linera;
 pub(crate) mod metrics;
+pub(crate) mod settlement;
 
 use std::{path::Path, sync::Arc, time::Duration};
 

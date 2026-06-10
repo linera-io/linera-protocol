@@ -1,13 +1,4 @@
 packages:
-<<<<<<< HEAD
-- ../web/@linera/client
-- ../web/@linera/metamask
-- bridge-demo
-- counter
-- counter/metamask
-- native-fungible
-- native-fungible/metamask
-=======
   - ../web/@linera/client
   - ../web/@linera/metamask
   - bridge-demo
@@ -15,6 +6,5 @@ packages:
   - counter/metamask
   - native-fungible
   - native-fungible/metamask
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
 allowBuilds:
   esbuild: true

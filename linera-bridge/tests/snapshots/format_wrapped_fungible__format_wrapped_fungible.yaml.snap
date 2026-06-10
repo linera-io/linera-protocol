@@ -80,6 +80,11 @@ WrappedFungibleOperation:
           - spender:
               TYPENAME: AccountOwner
           - allowance: U128
+    170732950:
+      RegisterAuthorizedCaller:
+        STRUCT:
+          - app_id:
+              TYPENAME: ApplicationId
     198295567:
       MintAndTransfer:
         STRUCT:
@@ -115,8 +120,3 @@ WrappedFungibleOperation:
           - owner:
               TYPENAME: AccountOwner
           - amount: U128
-    8:
-      RegisterAuthorizedCaller:
-        STRUCT:
-          - app_id:
-              TYPENAME: ApplicationId

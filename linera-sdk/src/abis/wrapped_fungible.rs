@@ -107,22 +107,17 @@ pub enum WrappedFungibleOperation {
         amount: U128,
         target_account: Account,
     },
-<<<<<<< HEAD
-    /// Mints new tokens and transfers them to a target account. Only the authorized
-    /// minter can call this.
+    /// Mints new tokens and transfers them to a target account. Driven by the
+    /// registered authorized caller (see [`Self::RegisterAuthorizedCaller`]) on the
+    /// designated mint chain.
     MintAndTransfer {
-=======
-    /// Mints new tokens to a target account. Driven by the registered authorized
-    /// caller (see [`Self::RegisterAuthorizedCaller`]) on the designated mint chain.
-    Mint {
->>>>>>> e5560bbc9 (Linera->EVM burns go through `EvmBridge` contract. (#6444))
         target_account: Account,
         amount: U128,
     },
     /// Burns tokens from an account. Authorized only via the registered authorized
     /// caller (see [`Self::RegisterAuthorizedCaller`]) on the designated mint chain.
     Burn { owner: AccountOwner, amount: U128 },
-    /// Registers the application authorized to drive `Mint`/`Burn`. Must run on
+    /// Registers the application authorized to drive `MintAndTransfer`/`Burn`. Must run on
     /// the designated `mint_chain_id` — the only chain where it is consulted — and
     /// requires an authenticated signer. Because an authorized caller may take
     /// this token's id as a creation parameter, the two cannot reference each

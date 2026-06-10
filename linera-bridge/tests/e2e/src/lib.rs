@@ -521,10 +521,10 @@ where
         .to_path_buf();
     let wasm_dir =
         repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
-    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm"))?;
-    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm"))?;
+    let eb_contract = Bytecode::load_from_file(wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service = Bytecode::load_from_file(wasm_dir.join("evm_bridge_service.wasm")).await?;
     let (eb_module_id, _) = chain_client
-        .publish_module(eb_contract, eb_service, VmRuntime::Wasm)
+        .publish_module(eb_contract, eb_service, VmRuntime::Wasm, None)
         .await?
         .expect("publish evm-bridge module committed");
     chain_client.synchronize_from_validators().await?;
