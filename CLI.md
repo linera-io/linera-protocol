@@ -174,7 +174,6 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `3600000`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--allow-fast-blocks` — Whether to allow creating blocks in the fast round. Fast blocks have lower latency but must be used carefully so that there are never any conflicting fast block proposals
-* `--disable-multi-leader-jitter` — Disable the multi-leader jitter delay. By default, when proposing in a multi-leader round with index `>= 1`, the client waits a deterministic delay derived from the owner and round before re-proposing. This spreads out concurrent proposals from honest clients; the owner with the lowest `hash(owner, round)` still proposes immediately
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 
