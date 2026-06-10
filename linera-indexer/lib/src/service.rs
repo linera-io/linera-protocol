@@ -7,12 +7,9 @@ use async_tungstenite::{
     tokio::connect_async,
     tungstenite::{client::IntoClientRequest, http::HeaderValue},
 };
-use futures::{
-    task::{FutureObj, Spawn, SpawnError},
-    StreamExt,
-};
+use futures::StreamExt;
 use graphql_client::reqwest::post_graphql;
-use graphql_ws_client::{graphql::StreamingOperation, GraphQLClientClientBuilder};
+use graphql_ws_client::{graphql::StreamingOperation, Client};
 use linera_base::{
     crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId, time::Duration,
 };
@@ -20,19 +17,9 @@ use linera_chain::types::ConfirmedBlock;
 use linera_core::worker::Reason;
 use linera_service_graphql_client::{block, chains, notifications, Block, Chains, Notifications};
 use linera_views::store::{KeyValueDatabase, KeyValueStore};
-use tokio::runtime::Handle;
 use tracing::error;
 
 use crate::{common::IndexerError, indexer::Indexer};
-
-struct TokioSpawner(Handle);
-
-impl Spawn for TokioSpawner {
-    fn spawn_obj(&self, obj: FutureObj<'static, ()>) -> Result<(), SpawnError> {
-        self.0.spawn(obj);
-        Ok(())
-    }
-}
 
 pub enum Protocol {
     Http,
@@ -139,13 +126,9 @@ impl Listener {
             HeaderValue::from_str("graphql-transport-ws")?,
         );
         let (connection, _) = connect_async(request).await?;
-        let (sink, stream) = connection.split();
-        let mut client = GraphQLClientClientBuilder::new()
-            .build(stream, sink, TokioSpawner(Handle::current()))
-            .await?;
         let operation: StreamingOperation<Notifications> =
             StreamingOperation::new(notifications::Variables { chain_id });
-        let mut stream = client.streaming_operation(operation).await?;
+        let mut stream = Client::build(connection).subscribe(operation).await?;
         while let Some(item) = stream.next().await {
             match item {
                 Ok(response) => {

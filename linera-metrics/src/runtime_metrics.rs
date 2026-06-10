@@ -121,11 +121,11 @@ impl Collector for TokioRuntimeCollector {
 }
 
 fn gauge_family(desc: &Desc, value: f64) -> MetricFamily {
-    let mut gauge = Gauge::new();
+    let mut gauge = Gauge::default();
     gauge.set_value(value);
-    let mut metric = Metric::new();
+    let mut metric = Metric::default();
     metric.set_gauge(gauge);
-    let mut family = MetricFamily::new();
+    let mut family = MetricFamily::default();
     family.set_name(desc.fq_name.clone());
     family.set_help(desc.help.clone());
     family.set_field_type(MetricType::GAUGE);
@@ -134,7 +134,7 @@ fn gauge_family(desc: &Desc, value: f64) -> MetricFamily {
 }
 
 fn counter_family(desc: &Desc) -> MetricFamily {
-    let mut family = MetricFamily::new();
+    let mut family = MetricFamily::default();
     family.set_name(desc.fq_name.clone());
     family.set_help(desc.help.clone());
     family.set_field_type(MetricType::COUNTER);
@@ -142,16 +142,16 @@ fn counter_family(desc: &Desc) -> MetricFamily {
 }
 
 fn counter_metric(value: f64, labels: &[LabelPair]) -> Metric {
-    let mut counter = Counter::new();
+    let mut counter = Counter::default();
     counter.set_value(value);
-    let mut metric = Metric::new();
+    let mut metric = Metric::default();
     metric.set_counter(counter);
-    metric.set_label(labels.to_vec().into());
+    metric.set_label(labels.to_vec());
     metric
 }
 
 fn worker_label(i: usize) -> [LabelPair; 1] {
-    let mut lp = LabelPair::new();
+    let mut lp = LabelPair::default();
     lp.set_name("worker".into());
     lp.set_value(i.to_string());
     [lp]

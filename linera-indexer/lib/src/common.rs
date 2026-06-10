@@ -4,12 +4,12 @@
 use std::net::AddrParseError;
 
 use async_graphql::http::GraphiQLSource;
+use async_tungstenite::tungstenite::http::header::InvalidHeaderValue;
 use axum::{
     http::Uri,
     response::{self, IntoResponse},
 };
 use linera_base::crypto::CryptoHash;
-use reqwest::header::InvalidHeaderValue;
 use thiserror::Error;
 
 use crate::db::sqlite::SqliteError;
