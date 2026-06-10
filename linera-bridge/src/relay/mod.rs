@@ -23,16 +23,21 @@ pub(crate) mod settlement;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use alloy::{
-    network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
+    network::EthereumWallet,
+    primitives::Address,
+    providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
 };
 use anyhow::{Context as _, Result};
 use futures::StreamExt as _;
-use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
+use linera_base::{
+    data_types::BlockHeight,
+    identifiers::{AccountOwner, ApplicationId, ChainId},
+};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{client::ChainClient, worker::Reason};
+use linera_core::{client::ChainClient, environment::Environment, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
-use linera_storage::DbStorage;
+use linera_storage::{DbStorage, Storage as _, WallClock};
 use linera_views::{
     backends::{
         lru_caching::LruCachingConfig,
@@ -49,10 +54,7 @@ use crate::{
 };
 
 /// Queries both chain balances and updates the prometheus metrics.
-pub(crate) async fn update_balance_metrics<
-    P: alloy::providers::Provider,
-    E: linera_core::environment::Environment,
->(
+pub(crate) async fn update_balance_metrics<P: Provider, E: Environment>(
     evm_client: &evm::EvmClient<P>,
     linera_client: &linera::LineraClient<E>,
 ) {
@@ -60,9 +62,7 @@ pub(crate) async fn update_balance_metrics<
     update_linera_balance_metric(linera_client).await;
 }
 
-pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
-    evm_client: &evm::EvmClient<P>,
-) {
+pub(crate) async fn update_evm_balance_metric<P: Provider>(evm_client: &evm::EvmClient<P>) {
     match evm_client.get_relayer_balance().await {
         Ok(balance) => {
             // U256::to::<u128> panics if >u128::MAX, but ETH supply fits in u128.
@@ -73,7 +73,7 @@ pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
     }
 }
 
-pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::Environment>(
+pub(crate) async fn update_linera_balance_metric<E: Environment>(
     linera_client: &linera::LineraClient<E>,
 ) {
     match linera_client.chain_balance().await {
@@ -215,7 +215,7 @@ pub async fn run(
     .await
 }
 
-type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
+type RocksDbStorage = DbStorage<RocksDbDatabase, WallClock>;
 
 async fn create_rocksdb_storage(
     path: &Path,
@@ -249,7 +249,7 @@ async fn create_rocksdb_storage(
 }
 
 #[expect(clippy::too_many_arguments)]
-async fn serve_loop<E: linera_core::environment::Environment + 'static>(
+async fn serve_loop<E: Environment + 'static>(
     chain_client: ChainClient<E>,
     rpc_url: &str,
     evm_bridge_address: &str,
@@ -265,7 +265,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     sqlite_path_override: Option<&Path>,
     storage_dir: &Path,
     admin_chain_id: ChainId,
-    admin_chain_height: linera_base::data_types::BlockHeight,
+    admin_chain_height: BlockHeight,
 ) -> Result<()> {
     // ── Set up centralized clients ──
     let bridge_addr: Address = evm_bridge_address
@@ -297,7 +297,6 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         &evm_client,
         admin_chain_id,
         admin_chain_height,
-        max_retries,
     )
     .await
     .context("committee catch-up failed")?;
@@ -480,24 +479,34 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     }
                 };
 
-                // Handle admin chain committee updates. Reconcile against the
-                // LightClient's current epoch (gap-filling, with bounded retry per
-                // relay) so a transient relay failure self-heals on a later admin
-                // block instead of stranding the LightClient at a stale epoch.
+                // Handle admin chain committee updates.
                 if notification.chain_id == admin_chain_id {
                     if let Reason::NewBlock { height, .. } = &notification.reason {
-                        tracing::debug!(%height, "New admin chain block, reconciling committees");
-                        let scan_upto = linera_base::data_types::BlockHeight(height.0 + 1);
-                        if let Err(e) = committee::catch_up(
-                            chain_client.storage_client(),
-                            &evm_client,
-                            admin_chain_id,
-                            scan_upto,
-                            max_retries,
-                        )
-                        .await
+                        tracing::debug!(%height, "New admin chain block, checking for committee update");
+                        let heights = vec![*height];
+                        if let Ok(certs) = chain_client
+                            .storage_client()
+                            .read_certificates_by_heights(admin_chain_id, &heights)
+                            .await
                         {
-                            tracing::error!(error = %e, "Committee reconcile failed; will retry on the next admin block");
+                            for cert in certs.into_iter().flatten() {
+                                if let Some((epoch, blob_hash)) = committee::find_create_committee(&cert) {
+                                    let blob_id = linera_base::identifiers::BlobId::new(
+                                        blob_hash,
+                                        linera_base::identifiers::BlobType::Committee,
+                                    );
+                                    match chain_client.storage_client().read_blob(blob_id).await {
+                                        Ok(Some(blob)) => {
+                                            match committee::relay_committee(&evm_client, &cert, blob.bytes()).await {
+                                                Ok(()) => tracing::info!(?epoch, "Committee update relayed"),
+                                                Err(e) => tracing::error!(?epoch, error = %e, "Failed to relay committee"),
+                                            }
+                                        }
+                                        Ok(None) => tracing::error!(?blob_id, "Committee blob not found"),
+                                        Err(e) => tracing::error!(error = %e, "Failed to read committee blob"),
+                                    }
+                                }
+                            }
                         }
                     }
                     continue;

@@ -11,7 +11,7 @@ use alloy::{
             BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
             WalletFiller,
         },
-        Provider, ProviderBuilder, RootProvider,
+        Identity, Provider, ProviderBuilder, RootProvider,
     },
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
@@ -30,7 +30,7 @@ pub struct EvmLightClient {
     provider: FillProvider<
         JoinFill<
             JoinFill<
-                alloy::providers::Identity,
+                Identity,
                 JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
             >,
             WalletFiller<EthereumWallet>,

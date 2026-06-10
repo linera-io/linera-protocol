@@ -11,8 +11,8 @@ use linera_base::{
     data_types::{Amount, Event},
     identifiers::{ApplicationId, GenericApplicationId},
 };
-use linera_chain::types::ConfirmedBlockCertificate;
-use linera_core::client::ChainClient;
+use linera_chain::{block::ConfirmedBlock, types::ConfirmedBlockCertificate};
+use linera_core::{client::ChainClient, data_types::ChainInfo, environment::Environment};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::proof::DepositKey;
@@ -34,14 +34,14 @@ pub(crate) enum ChainOperation {
 ///
 /// Read operations use the `ChainClient` directly (safe on clones).
 /// Write operations (block proposals) go through a channel to the main loop.
-pub struct LineraClient<E: linera_core::environment::Environment> {
+pub struct LineraClient<E: Environment> {
     chain_client: ChainClient<E>,
     op_tx: mpsc::Sender<ChainOperation>,
     bridge_app_id: ApplicationId,
     fungible_app_id: ApplicationId,
 }
 
-impl<E: linera_core::environment::Environment> LineraClient<E> {
+impl<E: Environment> LineraClient<E> {
     pub(crate) fn new(
         chain_client: ChainClient<E>,
         op_tx: mpsc::Sender<ChainOperation>,
@@ -74,7 +74,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         Ok(())
     }
 
-    pub async fn chain_info(&self) -> Result<Box<linera_core::data_types::ChainInfo>> {
+    pub async fn chain_info(&self) -> Result<Box<ChainInfo>> {
         self.chain_client
             .chain_info()
             .await
@@ -87,10 +87,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         Ok(info.chain_balance)
     }
 
-    pub async fn read_confirmed_block(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<Arc<linera_chain::block::ConfirmedBlock>> {
+    pub async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<Arc<ConfirmedBlock>> {
         self.chain_client
             .read_confirmed_block(hash)
             .await
@@ -137,7 +134,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
     }
 }
 
-impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
+impl<E: Environment> Clone for LineraClient<E> {
     fn clone(&self) -> Self {
         Self {
             chain_client: self.chain_client.clone(),

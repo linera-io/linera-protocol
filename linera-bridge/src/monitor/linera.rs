@@ -9,6 +9,8 @@ use std::{sync::Arc, time::Duration};
 
 use alloy::{primitives::Address, providers::Provider};
 use linera_base::data_types::BlockHeight;
+use linera_chain::types::ConfirmedBlockCertificate;
+use linera_core::environment::Environment;
 use tokio::sync::{Notify, RwLock};
 
 use super::{MonitorState, PendingBurn};
@@ -22,7 +24,7 @@ use crate::relay::{
 /// Background task that scans Linera block history for BurnEvent stream
 /// events and checks EVM for completion. Newly-discovered burns are written
 /// to `MonitorState` (and SQLite) and the consumer is woken via `notify`.
-pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static>(
+pub async fn linera_scan_loop<E: Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
@@ -58,7 +60,7 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
 /// to per-tx chunked `processBurns(cert, tx_index, positions)` when it doesn't
 /// fit. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
 /// (whichever comes first) when nothing is ready.
-pub(crate) async fn process_pending_burns<E: linera_core::environment::Environment + 'static>(
+pub(crate) async fn process_pending_burns<E: Environment + 'static>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
     linera_client: &LineraClient<E>,
@@ -151,7 +153,7 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 async fn submit_addblock<P: Provider>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     height: BlockHeight,
     event_indices: &[u32],
     max_retries: u32,
@@ -181,7 +183,7 @@ async fn submit_addblock<P: Provider>(
 async fn submit_chunked<P: Provider>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     height: BlockHeight,
     by_tx: &[(u32, Vec<u32>)],
     max_retries: u32,
@@ -249,7 +251,7 @@ async fn submit_chunked<P: Provider>(
 ///   retry (`max_retries`) instead of immediate failure.
 async fn split_to_fit<P: Provider>(
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     tx_index: u32,
     positions: &[u32],
 ) -> (Vec<Vec<u32>>, Vec<u32>, Vec<u32>) {
@@ -385,7 +387,7 @@ async fn mark_estimate_errored_retry(
 async fn submit_chunks_with_retry<P: Provider>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     height: BlockHeight,
     tx_index: u32,
     events_chunks: Vec<Vec<u32>>,
@@ -424,7 +426,7 @@ async fn persist_cert_bytes(
     monitor: &RwLock<MonitorState>,
     height: BlockHeight,
     event_indices: &[u32],
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
 ) {
     let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
     let state = monitor.read().await;
@@ -441,7 +443,7 @@ async fn persist_cert_bytes(
     }
 }
 
-async fn linera_scan_iteration<E: linera_core::environment::Environment>(
+async fn linera_scan_iteration<E: Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
     notify: &Notify,
