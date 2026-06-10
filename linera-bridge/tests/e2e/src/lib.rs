@@ -711,8 +711,10 @@ pub fn add_block_args(
 ) {
     use alloy::primitives::Bytes;
     let proof = Bytes::from(
-        bcs::to_bytes(&linera_bridge::block_proof::BlockProof::from_certificate(certificate))
-            .expect("BCS serialization failed"),
+        bcs::to_bytes(&linera_bridge::block_proof::BlockProof::from_certificate(
+            certificate,
+        ))
+        .expect("BCS serialization failed"),
     );
     let events = &certificate.block().body.events;
     let event_bcs = events

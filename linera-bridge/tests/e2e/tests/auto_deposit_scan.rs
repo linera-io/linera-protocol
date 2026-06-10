@@ -24,7 +24,6 @@ use alloy::{
     primitives::{FixedBytes, U256},
     providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
-    sol,
 };
 use anyhow::Context as _;
 use linera_base::{
@@ -33,7 +32,10 @@ use linera_base::{
     identifiers::AccountOwner,
     vm::VmRuntime,
 };
-use linera_bridge::abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters};
+use linera_bridge::{
+    abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
+    contracts::{IFungibleBridge, IERC20},
+};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok, light_client_address,
     start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
@@ -45,24 +47,6 @@ use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use wrapped_fungible::{InitialState, WrappedParameters};
-
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function approve(address spender, uint256 amount) external returns (bool);
-        function balanceOf(address account) external view returns (uint256);
-    }
-
-    #[sol(rpc)]
-    interface IFungibleBridge {
-        function deposit(
-            bytes32 target_chain_id,
-            bytes32 target_application_id,
-            bytes32 target_account_owner,
-            uint256 amount
-        ) external;
-    }
-}
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary
@@ -326,9 +310,9 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             relay_port,
             0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
-            std::time::Duration::from_secs(5),  // monitor_scan_interval
-            0,  // monitor_start_block
-            5,  // max_retries
+            std::time::Duration::from_secs(5), // monitor_scan_interval
+            0,                                 // monitor_start_block
+            5,                                 // max_retries
             None,
         ))
         .await

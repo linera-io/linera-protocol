@@ -3,62 +3,19 @@
 
 //! Centralized EVM client for all bridge EVM interactions.
 
-// `processBurns` carries the inclusion-proof components as separate arguments, so its
-// `sol!`-generated binding exceeds clippy's argument-count threshold.
-#![allow(clippy::too_many_arguments)]
-
 use alloy::{
     primitives::{Address, Bytes, B256, U256},
     providers::Provider,
     rpc::types::{Filter, Log},
-    sol,
 };
-use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
 
 use crate::{
     block_proof::{BlockProof, EventInclusionProof},
+    contracts::{IFungibleBridge, ILightClient, IERC20},
     proof::deposit_event_signature,
 };
-
-sol! {
-    #[sol(rpc)]
-    interface IFungibleBridge {
-        function addBlock(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx) external;
-        function processBurns(
-            bytes32 blockHash,
-            bytes[] calldata eventBcs,
-            uint32 txIndex,
-            uint32 numTxs,
-            uint32 numEventsInTx,
-            uint32[] calldata positions,
-            bytes32[] calldata innerSiblings,
-            bytes32[] calldata outerSiblings
-        ) external;
-        function lightClient() external view returns (address);
-        function token() external view returns (address);
-        function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool);
-    }
-
-    #[sol(rpc)]
-    interface IERC20Decimals {
-        function decimals() external view returns (uint8);
-    }
-}
-
-sol! {
-    function addCommittee(
-        bytes calldata blockProof,
-        bytes[] calldata transactionBcs,
-        bytes calldata committeeBlob,
-        bytes[] calldata validators
-    ) external;
-
-    function registerBlock(bytes calldata blockProof) external returns (bytes32);
-
-    function currentEpoch() external view returns (uint32);
-}
 
 /// Maximum block range per `eth_getLogs` query.
 const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
@@ -126,7 +83,7 @@ impl<P: Provider> EvmClient<P> {
             .call()
             .await
             .context("failed to query FungibleBridge.token()")?;
-        let token = IERC20Decimals::new(token_addr, &self.provider);
+        let token = IERC20::new(token_addr, &self.provider);
         let decimals = token
             .decimals()
             .call()
@@ -243,15 +200,10 @@ impl<P: Provider> EvmClient<P> {
         let lc_addr = self.get_light_client_address().await?;
         let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
             .context("failed to BCS-serialize block proof")?;
-        let call = registerBlockCall {
-            blockProof: proof_bytes.into(),
-        };
-        let tx = alloy::rpc::types::TransactionRequest::default()
-            .to(lc_addr)
-            .input(call.abi_encode().into());
-        let receipt = self
-            .provider
-            .send_transaction(tx)
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let receipt = light_client
+            .registerBlock(proof_bytes.into())
+            .send()
             .await
             .context("registerBlock send failed")?
             .get_receipt()
@@ -379,17 +331,12 @@ impl<P: Provider> EvmClient<P> {
     /// Queries the LightClient's current epoch.
     pub async fn get_current_epoch(&self) -> Result<Epoch> {
         let lc_addr = self.get_light_client_address().await?;
-        let call = currentEpochCall {};
-        let tx = alloy::rpc::types::TransactionRequest::default()
-            .to(lc_addr)
-            .input(call.abi_encode().into());
-        let result = self
-            .provider
-            .call(tx)
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let epoch = light_client
+            .currentEpoch()
+            .call()
             .await
             .context("failed to query LightClient.currentEpoch()")?;
-        let epoch = currentEpochCall::abi_decode_returns(&result)
-            .context("failed to decode currentEpoch response")?;
         Ok(Epoch(epoch))
     }
 
@@ -410,18 +357,15 @@ impl<P: Provider> EvmClient<P> {
             .iter()
             .map(|txn| Bytes::from(bcs::to_bytes(txn).expect("BCS-serialize transaction")))
             .collect();
-        let call = addCommitteeCall {
-            blockProof: Bytes::copy_from_slice(&proof_bytes),
-            transactionBcs: transaction_bcs,
-            committeeBlob: Bytes::copy_from_slice(committee_blob),
-            validators: validator_keys.into_iter().map(Bytes::from).collect(),
-        };
-        let tx = alloy::rpc::types::TransactionRequest::default()
-            .to(lc_addr)
-            .input(call.abi_encode().into());
-        let receipt = self
-            .provider
-            .send_transaction(tx)
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let receipt = light_client
+            .addCommittee(
+                Bytes::copy_from_slice(&proof_bytes),
+                transaction_bcs,
+                Bytes::copy_from_slice(committee_blob),
+                validator_keys.into_iter().map(Bytes::from).collect(),
+            )
+            .send()
             .await
             .context("addCommittee send failed")?
             .get_receipt()

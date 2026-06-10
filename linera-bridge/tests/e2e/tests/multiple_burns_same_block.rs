@@ -18,9 +18,9 @@
 
 use std::time::Duration;
 
-use alloy::{primitives::U256, providers::ProviderBuilder, sol};
+use alloy::{primitives::U256, providers::ProviderBuilder};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::abi::BridgeOperation;
+use linera_bridge::{abi::BridgeOperation, contracts::IERC20};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_evm_bridge,
@@ -33,13 +33,6 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-    }
-}
 
 const NUM_BURNS: usize = 4;
 const BURN_AMOUNT_TOKENS: u128 = 1;

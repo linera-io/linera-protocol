@@ -1,39 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy_sol_types::sol;
-
 /// Solidity source for the LightClient contract.
 pub const SOURCE: &str = include_str!("../solidity/LightClient.sol");
-
-sol! {
-    function addCommittee(
-        bytes calldata blockProof,
-        bytes[] calldata transactionBcs,
-        bytes calldata committeeBlob,
-        bytes[] calldata validators
-    ) external;
-
-    function registerBlock(bytes calldata blockProof) external returns (bytes32);
-
-    function registeredBlocks(bytes32 blockHash)
-        external
-        view
-        returns (bytes32 eventsHash, uint64 height, bytes32 chainId);
-
-    function verifyEventInclusion(
-        bytes32 blockHash,
-        bytes[] calldata eventBcs,
-        uint32 txIndex,
-        uint32 numTxs,
-        uint32 numEventsInTx,
-        uint32[] calldata positions,
-        bytes32[] calldata innerSiblings,
-        bytes32[] calldata outerSiblings
-    ) external view;
-
-    function currentEpoch() external view returns (uint32);
-}
 
 #[cfg(test)]
 mod tests {
@@ -48,11 +17,13 @@ mod tests {
         primitives::Address,
     };
 
-    use super::{
-        addCommitteeCall, currentEpochCall, registerBlockCall, registeredBlocksCall,
-        verifyEventInclusionCall,
+    use crate::{
+        contracts::ILightClient::{
+            addCommitteeCall, currentEpochCall, registerBlockCall, registeredBlocksCall,
+            verifyEventInclusionCall,
+        },
+        test_helpers::*,
     };
-    use crate::test_helpers::*;
 
     #[test]
     fn test_light_client_add_committee() {
@@ -392,7 +363,12 @@ mod tests {
             .collect();
 
         // The correct event verifies.
-        call_contract(&mut lc.db, lc.deployer, lc.contract, &make_call(good_bcs.clone()));
+        call_contract(
+            &mut lc.db,
+            lc.deployer,
+            lc.contract,
+            &make_call(good_bcs.clone()),
+        );
 
         // A tampered event does not.
         let bad: Vec<Bytes> = vec![bcs::to_bytes(&make_event(b"x", 9))

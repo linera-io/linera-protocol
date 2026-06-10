@@ -22,8 +22,7 @@ use linera_chain::types::ConfirmedBlockCertificate;
 use linera_execution::committee::Committee;
 use url::Url;
 
-use super::light_client::addCommitteeCall;
-use crate::block_proof::BlockProof;
+use crate::{block_proof::BlockProof, contracts::ILightClient::addCommitteeCall};
 
 /// Client for interacting with a deployed LightClient contract on an EVM chain.
 #[expect(clippy::type_complexity)]

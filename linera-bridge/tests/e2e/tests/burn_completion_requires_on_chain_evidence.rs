@@ -22,10 +22,9 @@ use alloy::{
     primitives::U256,
     providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
-    sol,
 };
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::abi::BridgeOperation;
+use linera_bridge::{abi::BridgeOperation, contracts::IERC20};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_evm_bridge,
@@ -38,13 +37,6 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-    }
-}
 
 /// `bytes32` value with no relation to any real evm-bridge application
 /// description hash. Used as the `_bridgeApplicationId` in the deployed
