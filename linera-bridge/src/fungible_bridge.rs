@@ -7,8 +7,8 @@
 mod tests {
     use alloy_sol_types::SolEvent;
     use linera_base::{
-        crypto::{CryptoHash, TestString, ValidatorSecretKey},
-        data_types::{BlockHeight, U128},
+        crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
+        data_types::{BlockHeight, Event, U128},
     };
     use revm::{
         database::{CacheDB, EmptyDB},
@@ -56,7 +56,7 @@ mod tests {
         db: CacheDB<EmptyDB>,
         deployer: Address,
         secret: ValidatorSecretKey,
-        public: linera_base::crypto::ValidatorPublicKey,
+        public: ValidatorPublicKey,
         chain_id: CryptoHash,
         app_id: CryptoHash,
         bridge: Address,
@@ -140,7 +140,7 @@ mod tests {
         /// Submits a block with the given events.
         fn submit_block_with_events(
             &mut self,
-            events: Vec<Vec<linera_base::data_types::Event>>,
+            events: Vec<Vec<Event>>,
         ) -> (Vec<revm::primitives::Log>, u64) {
             let height = BlockHeight(self.next_height);
             self.next_height += 1;

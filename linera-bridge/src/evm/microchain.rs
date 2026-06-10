@@ -8,7 +8,7 @@ pub const SOURCE: &str = include_str!("../solidity/Microchain.sol");
 mod tests {
     use alloy_sol_types::sol;
     use linera_base::{
-        crypto::{CryptoHash, TestString, ValidatorSecretKey},
+        crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
         data_types::BlockHeight,
     };
     use revm::{
@@ -106,7 +106,7 @@ mod tests {
         db: CacheDB<EmptyDB>,
         deployer: Address,
         secret: ValidatorSecretKey,
-        public: linera_base::crypto::ValidatorPublicKey,
+        public: ValidatorPublicKey,
         chain_id: CryptoHash,
         contract: Address,
     }

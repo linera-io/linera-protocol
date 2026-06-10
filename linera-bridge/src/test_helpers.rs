@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp, U128},
+    data_types::{Amount, BlobContent, BlockHeight, Epoch, Event, Round, Timestamp, U128},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
@@ -130,7 +130,7 @@ pub fn create_signed_certificate_with_events(
     public: &ValidatorPublicKey,
     chain_id: CryptoHash,
     height: BlockHeight,
-    events: Vec<Vec<linera_base::data_types::Event>>,
+    events: Vec<Vec<Event>>,
 ) -> ConfirmedBlockCertificate {
     let block = build_block(chain_id, Epoch::ZERO, height, vec![], events);
     let confirmed = ConfirmedBlock::new(block);
@@ -261,14 +261,9 @@ pub fn fungible_message_transaction(
 }
 
 /// Creates a BurnEvent as a linera_base Event on the "burns" stream for a given application.
-pub fn burn_event(
-    application_id: CryptoHash,
-    target: [u8; 20],
-    amount: U128,
-    index: u32,
-) -> linera_base::data_types::Event {
+pub fn burn_event(application_id: CryptoHash, target: [u8; 20], amount: U128, index: u32) -> Event {
     use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};
-    linera_base::data_types::Event {
+    Event {
         stream_id: StreamId {
             application_id: GenericApplicationId::User(ApplicationId::new(application_id)),
             stream_name: StreamName(b"burns".to_vec()),
@@ -284,7 +279,7 @@ pub fn create_certificate_with_events(
     public: &ValidatorPublicKey,
     chain_id: CryptoHash,
     height: BlockHeight,
-    events: Vec<Vec<linera_base::data_types::Event>>,
+    events: Vec<Vec<Event>>,
 ) -> ConfirmedBlockCertificate {
     let block = build_block(chain_id, Epoch::ZERO, height, vec![], events);
     let confirmed = ConfirmedBlock::new(block);
@@ -413,7 +408,7 @@ fn build_block(
     epoch: Epoch,
     height: BlockHeight,
     transactions: Vec<Transaction>,
-    events: Vec<Vec<linera_base::data_types::Event>>,
+    events: Vec<Vec<Event>>,
 ) -> Block {
     let proposed = ProposedBlock {
         chain_id: ChainId(chain_id),
