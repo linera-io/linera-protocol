@@ -54,12 +54,12 @@ sol! {
 
 const NUM_BURNS: usize = 8;
 const BURN_AMOUNT_TOKENS: u128 = 1;
-/// Per-block gas ceiling for the chunked-fallback test. `addBlock(cert)` for `NUM_BURNS` burns
-/// relays and re-verifies the whole block and needs > 2.8M gas, so a 2M ceiling forces the relayer
-/// onto the chunked path. That path is now cheap per tx — a one-time `registerBlock` (verify the
-/// quorum once) plus a `processBurns` per tx that only proves its events' inclusion against the
-/// registered block (no re-verification) — so each chunked tx fits comfortably under the ceiling.
-const ANVIL_BLOCK_GAS_LIMIT: u64 = 2_000_000;
+/// Per-block gas ceiling for the chunked-fallback test, set below `addBlock`'s cost for `NUM_BURNS`
+/// burns (~750-850K with the header-proof scheme) so the relayer is forced off the fast path. The
+/// chunked path stays under it: a one-time `registerBlock` (verify the quorum once) plus
+/// `processBurns` chunks that `split_to_fit` shrinks until each fits — so every burn still settles,
+/// across at least two EVM transactions. Re-tune if `addBlock`/`processBurns` gas shifts.
+const ANVIL_BLOCK_GAS_LIMIT: u64 = 500_000;
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary.
