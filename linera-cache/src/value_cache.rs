@@ -36,6 +36,13 @@ pub const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 30;
 pub struct ValueCache<K, V> {
     /// Stable instance name distinguishing this cache in metrics; several
     /// caches may share the same key/value types within one process.
+    ///
+    /// Must be unique among the `ValueCache` instances of a process:
+    /// instances sharing a name and key/value types report into the same
+    /// metric series, so their gauges would overwrite each other. The name
+    /// is used verbatim as the `cache` Prometheus label value; any UTF-8
+    /// string is valid, but prefer a short, stable `snake_case` identifier
+    /// since dashboards and alerts query it.
     name: &'static str,
     cache: Arc<Cache<K, crate::Arc<V>>>,
     weak_index: Arc<papaya::HashMap<K, Weak<V>>>,
