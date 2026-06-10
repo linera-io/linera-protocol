@@ -863,6 +863,7 @@ where
             storage,
             chain_worker_config,
             block_cache: Arc::new(ValueCache::new(
+                "worker_block",
                 block_cache_size,
                 DEFAULT_CLEANUP_INTERVAL_SECS,
             )),
