@@ -96,12 +96,8 @@ pub async fn run(
     evm_private_key: &str,
     evm_light_client_address: Option<&str>,
     port: u16,
-<<<<<<< HEAD
-    cache_sizes: linera_storage::StorageCacheConfig,
-=======
     admin_port: u16,
-    common_storage_options: &CommonStorageOptions,
->>>>>>> ea86ce4db (Bridge admin retry endpoint (#6451))
+    cache_sizes: linera_storage::StorageCacheConfig,
     monitor_scan_interval: Duration,
     monitor_start_block: u64,
     max_retries: u32,

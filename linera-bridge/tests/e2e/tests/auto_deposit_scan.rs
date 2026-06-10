@@ -324,18 +324,11 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
-<<<<<<< HEAD
+            0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             std::time::Duration::from_secs(5),  // monitor_scan_interval
             0,  // monitor_start_block
             5,  // max_retries
-=======
-            0, // admin port (unused in e2e)
-            &linera_storage_runtime::CommonStorageOptions::with_defaults(),
-            std::time::Duration::from_secs(5), // monitor_scan_interval
-            0,                                 // monitor_start_block
-            5,                                 // max_retries
->>>>>>> ea86ce4db (Bridge admin retry endpoint (#6451))
             None,
         ))
         .await
