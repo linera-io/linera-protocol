@@ -90,7 +90,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call,
+            &call,
         );
 
         // The committee for epoch 1 records the admin-chain height of the block
@@ -323,7 +323,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call_1,
+            &call_1,
         );
         assert_eq!(light_client.query_current_epoch(), Epoch(1));
 
@@ -335,7 +335,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            committeeTotalWeightCall { epoch: 0 },
+            &committeeTotalWeightCall { epoch: 0 },
         );
         assert!(
             weight_before > 0,
@@ -347,13 +347,13 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            expireEpochsBelowCall { newMinEpoch: 1 },
+            &expireEpochsBelowCall { newMinEpoch: 1 },
         );
         let (min_epoch, _, _) = call_contract(
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            minAcceptedEpochCall {},
+            &minAcceptedEpochCall {},
         );
         assert_eq!(min_epoch, 1, "minAcceptedEpoch should be raised to 1");
 
@@ -362,7 +362,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            committeeTotalWeightCall { epoch: 0 },
+            &committeeTotalWeightCall { epoch: 0 },
         );
         assert_eq!(
             weight_after, 0,
@@ -398,7 +398,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                expireEpochsBelowCall { newMinEpoch: 1 },
+                &expireEpochsBelowCall { newMinEpoch: 1 },
             )
             .is_err(),
             "cannot expire at epoch 0"
@@ -418,7 +418,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            call_1,
+            &call_1,
         );
 
         // The current epoch can never be retired: newMinEpoch may not exceed
@@ -428,7 +428,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                expireEpochsBelowCall { newMinEpoch: 2 },
+                &expireEpochsBelowCall { newMinEpoch: 2 },
             )
             .is_err(),
             "cannot expire the current epoch"
@@ -439,7 +439,7 @@ mod tests {
             &mut light_client.db,
             light_client.deployer,
             light_client.contract,
-            expireEpochsBelowCall { newMinEpoch: 1 },
+            &expireEpochsBelowCall { newMinEpoch: 1 },
         );
 
         // Monotonic: cannot repeat or decrease the floor.
@@ -448,7 +448,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                expireEpochsBelowCall { newMinEpoch: 1 },
+                &expireEpochsBelowCall { newMinEpoch: 1 },
             )
             .is_err(),
             "minAcceptedEpoch must strictly increase"
@@ -458,7 +458,7 @@ mod tests {
                 &mut light_client.db,
                 light_client.deployer,
                 light_client.contract,
-                expireEpochsBelowCall { newMinEpoch: 0 },
+                &expireEpochsBelowCall { newMinEpoch: 0 },
             )
             .is_err(),
             "minAcceptedEpoch cannot decrease"
@@ -694,7 +694,7 @@ mod tests {
                 &mut self.db,
                 self.deployer,
                 self.contract,
-                committeeHeightCall { epoch },
+                &committeeHeightCall { epoch },
             );
             height
         }

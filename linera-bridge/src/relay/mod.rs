@@ -32,8 +32,7 @@ use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
-<<<<<<< HEAD
-use linera_storage::{DbStorage, Storage as _};
+use linera_storage::DbStorage;
 use linera_views::{
     backends::{
         lru_caching::LruCachingConfig,
@@ -41,11 +40,6 @@ use linera_views::{
     },
     lru_prefix_cache::StorageCacheConfig,
 };
-=======
-use linera_storage::DbStorage;
-use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
-use linera_views::backends::rocks_db::RocksDbDatabase;
->>>>>>> 9f4f48235 (Linera bridge various fixes (#6467))
 use linera_wallet_json::PersistentWallet;
 use tokio::sync::{mpsc, Notify, RwLock};
 
