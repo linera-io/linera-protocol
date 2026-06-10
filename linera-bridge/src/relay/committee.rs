@@ -7,6 +7,7 @@
 use alloy::providers::Provider;
 use anyhow::{Context as _, Result};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{BlockHeight, Epoch},
     identifiers::{BlobId, BlobType, ChainId},
 };
@@ -19,9 +20,7 @@ use crate::evm::client::extract_validator_keys;
 
 /// Scans a certificate for a `CreateCommittee` operation.
 /// Returns the epoch and blob hash if found.
-pub fn find_create_committee(
-    cert: &ConfirmedBlockCertificate,
-) -> Option<(Epoch, linera_base::crypto::CryptoHash)> {
+pub fn find_create_committee(cert: &ConfirmedBlockCertificate) -> Option<(Epoch, CryptoHash)> {
     cert.inner().block().body.operations().find_map(|op| {
         if let Operation::System(boxed) = op {
             if let SystemOperation::Admin(AdminOperation::CreateCommittee {

@@ -4,12 +4,16 @@
 //! Centralized EVM client for all bridge EVM interactions.
 
 use alloy::{
-    primitives::{Address, Bytes, B256, U256},
+    primitives::{Address, Bytes, TxHash, B256, U256},
     providers::Provider,
     rpc::types::{Filter, Log},
 };
 use anyhow::{Context as _, Result};
-use linera_base::data_types::{BlockHeight, Epoch};
+use linera_base::{
+    crypto::CryptoHash,
+    data_types::{BlockHeight, Epoch},
+};
+use linera_chain::types::ConfirmedBlockCertificate;
 
 use crate::{
     block_proof::{BlockProof, EventInclusionProof},
@@ -123,9 +127,7 @@ impl<P: Provider> EvmClient<P> {
     /// BCS-serialize and forward a certified block to FungibleBridge on EVM.
     /// The arguments for an `addBlock` call from a certificate: the lean block proof, the per-event
     /// BCS encodings (flattened across transactions), and the number of events in each transaction.
-    fn add_block_args(
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
-    ) -> (Bytes, Vec<Bytes>, Vec<u32>) {
+    fn add_block_args(cert: &ConfirmedBlockCertificate) -> (Bytes, Vec<Bytes>, Vec<u32>) {
         let proof = Bytes::from(
             bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof"),
         );
@@ -142,10 +144,7 @@ impl<P: Provider> EvmClient<P> {
         (proof, event_bcs, events_per_tx)
     }
 
-    pub async fn forward_cert(
-        &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
-    ) -> Result<()> {
+    pub async fn forward_cert(&self, cert: &ConfirmedBlockCertificate) -> Result<()> {
         let (proof, event_bcs, events_per_tx) = Self::add_block_args(cert);
 
         tracing::info!(
@@ -179,7 +178,7 @@ impl<P: Provider> EvmClient<P> {
     /// caller treats any error as "route to chunked `processBurns`".
     pub async fn estimate_add_block_gas(
         &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        cert: &ConfirmedBlockCertificate,
     ) -> alloy::contract::Result<u64> {
         let (proof, event_bcs, events_per_tx) = Self::add_block_args(cert);
         tracing::trace!(events = event_bcs.len(), "Estimating gas for addBlock");
@@ -193,10 +192,7 @@ impl<P: Provider> EvmClient<P> {
     /// Registers a block on the LightClient from its header and signatures alone, so its events can
     /// later be settled in chunks. Must succeed before `estimate_process_burns_gas` or
     /// `process_burns`, both of which prove events against the registered block.
-    pub async fn register_block(
-        &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
-    ) -> Result<()> {
+    pub async fn register_block(&self, cert: &ConfirmedBlockCertificate) -> Result<()> {
         let lc_addr = self.get_light_client_address().await?;
         let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
             .context("failed to BCS-serialize block proof")?;
@@ -217,7 +213,7 @@ impl<P: Provider> EvmClient<P> {
     /// `tx_index` of `cert`: the chunk's BCS-encoded events plus the inclusion proof binding them to
     /// the block's registered `events_hash`. The block must already be registered.
     fn process_burns_args(
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        cert: &ConfirmedBlockCertificate,
         tx_index: u32,
         positions: &[u32],
     ) -> ProcessBurnsArgs {
@@ -232,7 +228,7 @@ impl<P: Provider> EvmClient<P> {
                 )
             })
             .collect();
-        let to_b256 = |h: &linera_base::crypto::CryptoHash| B256::from(*h.as_bytes());
+        let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
         ProcessBurnsArgs {
             block_hash: B256::from(*cert.hash().as_bytes()),
             event_bcs,
@@ -249,7 +245,7 @@ impl<P: Provider> EvmClient<P> {
     /// positions_in_tx)` path.
     pub async fn estimate_process_burns_gas(
         &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        cert: &ConfirmedBlockCertificate,
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
@@ -279,7 +275,7 @@ impl<P: Provider> EvmClient<P> {
     /// `split_to_fit` returns a chunk.
     pub async fn process_burns(
         &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        cert: &ConfirmedBlockCertificate,
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> Result<()> {
@@ -343,10 +339,10 @@ impl<P: Provider> EvmClient<P> {
     /// Relays a committee update to the LightClient contract.
     pub async fn add_committee(
         &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        cert: &ConfirmedBlockCertificate,
         committee_blob: &[u8],
         validator_keys: Vec<Vec<u8>>,
-    ) -> Result<alloy::primitives::TxHash> {
+    ) -> Result<TxHash> {
         let lc_addr = self.get_light_client_address().await?;
         let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
             .context("failed to BCS-serialize block proof")?;

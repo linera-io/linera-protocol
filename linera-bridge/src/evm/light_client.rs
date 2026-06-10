@@ -8,7 +8,9 @@ pub const SOURCE: &str = include_str!("../solidity/LightClient.sol");
 mod tests {
     use alloy_primitives::U256;
     use linera_base::{
-        crypto::{CryptoHash, TestString, ValidatorSecretKey, ValidatorSignature},
+        crypto::{
+            CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
+        },
         data_types::{BlockHeight, Epoch, Round},
     };
     use linera_chain::{block::ConfirmedBlock, data_types::Vote, types::ConfirmedBlockCertificate};
@@ -783,7 +785,7 @@ mod tests {
         db: CacheDB<EmptyDB>,
         deployer: Address,
         secret: ValidatorSecretKey,
-        public: linera_base::crypto::ValidatorPublicKey,
+        public: ValidatorPublicKey,
         contract: Address,
     }
 
@@ -808,7 +810,7 @@ mod tests {
 
         fn add_committee_call(
             &self,
-            new_public: &linera_base::crypto::ValidatorPublicKey,
+            new_public: &ValidatorPublicKey,
             new_epoch: Epoch,
             block_epoch: Epoch,
             height: BlockHeight,
@@ -875,8 +877,8 @@ mod tests {
     /// epoch's validator) and placed on the admin chain at the given block epoch and height.
     fn create_add_committee_call(
         signer_secret: &ValidatorSecretKey,
-        signer_public: &linera_base::crypto::ValidatorPublicKey,
-        new_public: &linera_base::crypto::ValidatorPublicKey,
+        signer_public: &ValidatorPublicKey,
+        new_public: &ValidatorPublicKey,
         new_epoch: Epoch,
         block_epoch: Epoch,
         height: BlockHeight,
@@ -1002,9 +1004,7 @@ mod tests {
     }
 
     /// Creates a committee blob with multiple validators and returns `(committee_bytes, blob_hash)`.
-    fn create_multi_committee_blob(
-        publics: &[linera_base::crypto::ValidatorPublicKey],
-    ) -> (Vec<u8>, CryptoHash) {
+    fn create_multi_committee_blob(publics: &[ValidatorPublicKey]) -> (Vec<u8>, CryptoHash) {
         use std::collections::BTreeMap;
 
         use linera_base::{crypto::AccountPublicKey, data_types::BlobContent};
@@ -1037,8 +1037,8 @@ mod tests {
     /// validators. The block is signed by `signer_secret`/`signer_public`.
     fn create_add_committee_call_multi(
         signer_secret: &ValidatorSecretKey,
-        signer_public: &linera_base::crypto::ValidatorPublicKey,
-        new_publics: &[linera_base::crypto::ValidatorPublicKey],
+        signer_public: &ValidatorPublicKey,
+        new_publics: &[ValidatorPublicKey],
         new_epoch: Epoch,
         block_epoch: Epoch,
         height: BlockHeight,
