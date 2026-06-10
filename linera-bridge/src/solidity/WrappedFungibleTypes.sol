@@ -43,6 +43,33 @@ library WrappedFungibleTypes {
         return (0, 0);
     }
 
+    struct ApplicationId {
+        BridgeTypes.CryptoHash application_description_hash;
+    }
+
+    function bcs_serialize_ApplicationId(ApplicationId memory input) internal pure returns (bytes memory) {
+        return BridgeTypes.bcs_serialize_CryptoHash(input.application_description_hash);
+    }
+
+    function bcs_deserialize_offset_ApplicationId(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, ApplicationId memory)
+    {
+        uint256 new_pos;
+        BridgeTypes.CryptoHash memory application_description_hash;
+        (new_pos, application_description_hash) = BridgeTypes.bcs_deserialize_offset_CryptoHash(pos, input);
+        return (new_pos, ApplicationId(application_description_hash));
+    }
+
+    function bcs_deserialize_ApplicationId(bytes memory input) internal pure returns (ApplicationId memory) {
+        uint256 new_pos;
+        ApplicationId memory value;
+        (new_pos, value) = bcs_deserialize_offset_ApplicationId(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct BurnEvent {
         bytes20 target;
         uint128 amount;
@@ -209,6 +236,8 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Transfer transfer_;
         // choice=158617459 corresponds to Approve
         WrappedFungibleOperation_Approve approve;
+        // choice=170732950 corresponds to RegisterAuthorizedCaller
+        WrappedFungibleOperation_RegisterAuthorizedCaller register_authorized_caller;
         // choice=198295567 corresponds to MintAndTransfer
         WrappedFungibleOperation_MintAndTransfer mint_and_transfer;
         // choice=204322437 corresponds to Claim
@@ -224,13 +253,22 @@ library WrappedFungibleTypes {
     function WrappedFungibleOperation_case_ticker_symbol() internal pure returns (WrappedFungibleOperation memory) {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(142627141), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(142627141),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -240,13 +278,22 @@ library WrappedFungibleTypes {
         returns (WrappedFungibleOperation memory)
     {
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(144297355), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(144297355),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -256,13 +303,47 @@ library WrappedFungibleTypes {
         returns (WrappedFungibleOperation memory)
     {
         WrappedFungibleOperation_Transfer memory transfer_;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(158617459), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(158617459),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
+        );
+    }
+
+    function WrappedFungibleOperation_case_register_authorized_caller(WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller)
+        internal
+        pure
+        returns (WrappedFungibleOperation memory)
+    {
+        WrappedFungibleOperation_Transfer memory transfer_;
+        WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
+        WrappedFungibleOperation_Claim memory claim;
+        WrappedFungibleOperation_Balance memory balance_;
+        WrappedFungibleOperation_TransferFrom memory transfer_from;
+        WrappedFungibleOperation_Burn memory burn;
+        return WrappedFungibleOperation(
+            uint64(170732950),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -273,12 +354,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(198295567), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(198295567),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -289,12 +379,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(204322437), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(204322437),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -305,12 +404,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(206964944), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(206964944),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -321,12 +429,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_Burn memory burn;
         return WrappedFungibleOperation(
-            uint64(214048906), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(214048906),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -337,12 +454,21 @@ library WrappedFungibleTypes {
     {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         return WrappedFungibleOperation(
-            uint64(239329758), transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+            uint64(239329758),
+            transfer_,
+            approve,
+            register_authorized_caller,
+            mint_and_transfer,
+            claim,
+            balance_,
+            transfer_from,
+            burn
         );
     }
 
@@ -359,6 +485,12 @@ library WrappedFungibleTypes {
         }
         if (input.choice == 158617459) {
             return abi.encodePacked(hex"f39ed14b", bcs_serialize_WrappedFungibleOperation_Approve(input.approve));
+        }
+        if (input.choice == 170732950) {
+            return abi.encodePacked(
+                hex"96dbb451",
+                bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(input.register_authorized_caller)
+            );
         }
         if (input.choice == 198295567) {
             return abi.encodePacked(
@@ -394,8 +526,9 @@ library WrappedFungibleTypes {
         require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
         uint64 choice = uint64(choice_raw);
         require(
-            choice == 142627141 || choice == 144297355 || choice == 158617459 || choice == 198295567
-                || choice == 204322437 || choice == 206964944 || choice == 214048906 || choice == 239329758,
+            choice == 142627141 || choice == 144297355 || choice == 158617459 || choice == 170732950
+                || choice == 198295567 || choice == 204322437 || choice == 206964944 || choice == 214048906
+                || choice == 239329758,
             "invalid variant index"
         );
         WrappedFungibleOperation_Transfer memory transfer_;
@@ -405,6 +538,11 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Approve memory approve;
         if (choice == 158617459) {
             (new_pos, approve) = bcs_deserialize_offset_WrappedFungibleOperation_Approve(new_pos, input);
+        }
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
+        if (choice == 170732950) {
+            (new_pos, register_authorized_caller) =
+                bcs_deserialize_offset_WrappedFungibleOperation_RegisterAuthorizedCaller(new_pos, input);
         }
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         if (choice == 198295567) {
@@ -430,7 +568,15 @@ library WrappedFungibleTypes {
         return (
             new_pos,
             WrappedFungibleOperation(
-                choice, transfer_, approve, mint_and_transfer, claim, balance_, transfer_from, burn
+                choice,
+                transfer_,
+                approve,
+                register_authorized_caller,
+                mint_and_transfer,
+                claim,
+                balance_,
+                transfer_from,
+                burn
             )
         );
     }
@@ -642,6 +788,41 @@ library WrappedFungibleTypes {
         uint256 new_pos;
         WrappedFungibleOperation_MintAndTransfer memory value;
         (new_pos, value) = bcs_deserialize_offset_WrappedFungibleOperation_MintAndTransfer(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct WrappedFungibleOperation_RegisterAuthorizedCaller {
+        ApplicationId app_id;
+    }
+
+    function bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(WrappedFungibleOperation_RegisterAuthorizedCaller memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bcs_serialize_ApplicationId(input.app_id);
+    }
+
+    function bcs_deserialize_offset_WrappedFungibleOperation_RegisterAuthorizedCaller(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, WrappedFungibleOperation_RegisterAuthorizedCaller memory)
+    {
+        uint256 new_pos;
+        ApplicationId memory app_id;
+        (new_pos, app_id) = bcs_deserialize_offset_ApplicationId(pos, input);
+        return (new_pos, WrappedFungibleOperation_RegisterAuthorizedCaller(app_id));
+    }
+
+    function bcs_deserialize_WrappedFungibleOperation_RegisterAuthorizedCaller(bytes memory input)
+        internal
+        pure
+        returns (WrappedFungibleOperation_RegisterAuthorizedCaller memory)
+    {
+        uint256 new_pos;
+        WrappedFungibleOperation_RegisterAuthorizedCaller memory value;
+        (new_pos, value) = bcs_deserialize_offset_WrappedFungibleOperation_RegisterAuthorizedCaller(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

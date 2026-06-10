@@ -5,14 +5,14 @@
 //! the EVM side has provably released the underlying tokens, not merely
 //! because `addBlock` returned Ok.
 //!
-//! The setup deploys `FungibleBridge` with a `fungibleApplicationId`
-//! that does not match the real wrapped-fungible app the scanner
-//! watches, so `_onBlock`'s app-id check rejects every burn event the
-//! relayer forwards. `addBlock` still succeeds (the cert is valid)
-//! but no `token.transfer` runs. Completion is gated on the per-burn
-//! `isBurnProcessed(height, eventIndex)` query, which stays false, so
-//! `linera_bridge_burns_completed` must remain at 0 for every detected
-//! burn.
+//! The setup deploys `FungibleBridge` with a `bridgeApplicationId`
+//! that does not match the real evm-bridge app whose "burns" stream the
+//! scanner watches, so `_onBlock`'s `_isMatchingBurn` app-id check
+//! rejects every burn event the relayer forwards. `addBlock` still
+//! succeeds (the cert is valid) but no `token.transfer` runs. Completion
+//! is gated on the per-burn `isBurnProcessed(height, eventIndex)` query,
+//! which stays false, so `linera_bridge_burns_completed` must remain at 0
+//! for every detected burn.
 
 #![recursion_limit = "512"]
 
@@ -25,9 +25,11 @@ use alloy::{
     sol,
 };
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
+use linera_bridge::abi::BridgeOperation;
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
-    light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
+    light_client_address, parse_metric_value, publish_and_create_evm_bridge,
+    publish_and_create_wrapped_fungible, register_bridge_app, start_compose,
     wait_for_light_client, wait_for_relay_http_ready, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
@@ -36,7 +38,6 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-use wrapped_fungible::{Account, WrappedFungibleOperation};
 
 sol! {
     #[sol(rpc)]
@@ -45,10 +46,12 @@ sol! {
     }
 }
 
-/// `bytes32` value with no relation to any real wrapped-fungible application
-/// description hash. Used as the `_fungibleApplicationId` in the deployed
-/// `FungibleBridge` so that `_onBlock`'s app-id check rejects every burn
-/// event the scanner forwards. Non-zero to satisfy the constructor guard.
+/// `bytes32` value with no relation to any real evm-bridge application
+/// description hash. Used as the `_bridgeApplicationId` in the deployed
+/// `FungibleBridge` so that `_onBlock`'s `_isMatchingBurn` app-id check
+/// rejects every burn event the scanner forwards (the BurnEvents are
+/// emitted on the evm-bridge app's "burns" stream, matched against
+/// `bridgeApplicationId`). Non-zero to satisfy the constructor guard.
 const SYNTHETIC_APP_ID_BYTES32: &str =
     "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
@@ -101,8 +104,9 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     )
     .await?;
 
-    // Chain A hosts the wrapped-fungible app and is the chain the relayer
-    // operates on. Chain B is the user chain initiating the burn.
+    // Chain A is the bridge/mint chain: it hosts the evm-bridge app and is
+    // the chain the relayer operates on. Chain B is the user chain that
+    // holds the wrapped tokens and initiates the burn.
     let owner_a = AccountOwner::from(signer.generate_new());
     let chain_a_desc = faucet.claim(&owner_a).await?;
     let chain_a = chain_a_desc.id();
@@ -119,19 +123,40 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
 
-    // The created app's `application_description_hash` is the *real*
-    // fungible_app_id the scanner will see in burn events. The deployed
-    // `FungibleBridge` is given a *different* id
-    // (`SYNTHETIC_APP_ID_BYTES32`) below so `_onBlock` rejects every
-    // burn event the relayer forwards.
-    let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
-    let real_app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    // The evm-bridge app drives the burn; create it on the bridge/mint chain
+    // (chain A) before the wrapped-fungible app so its id can be baked in.
+    // Its `application_description_hash` is the *real* bridge app id the
+    // scanner will see as the burn event's stream application. The deployed
+    // `FungibleBridge` is given a *different* `bridgeApplicationId`
+    // (`SYNTHETIC_APP_ID_BYTES32`) below so `_onBlock`'s `_isMatchingBurn`
+    // rejects every burn event the relayer forwards.
+    let fungible_app_id = publish_and_create_wrapped_fungible(
+        &cc_b,
+        owner_b,
+        chain_a,
+        erc20_addr,
+        1_000 * 10u128.pow(18),
+    )
+    .await?;
+
+    let bridge_app_id = publish_and_create_evm_bridge(&cc_a, erc20_addr, chain_a, fungible_app_id).await?;
+
+    // Register the wrapped-fungible app with the evm-bridge so it can drive
+    // the escrow transfer + burn.
+    register_bridge_app(&cc_a, fungible_app_id, bridge_app_id).await?;
+
+    let real_app_id_bytes32 = format!("0x{}", bridge_app_id.application_description_hash);
     assert_ne!(
         real_app_id_bytes32, SYNTHETIC_APP_ID_BYTES32,
-        "real app ID collided with the synthetic value used to misconfigure the bridge"
+        "real bridge app ID collided with the synthetic value used to misconfigure the bridge"
     );
 
+    // `fungibleApplicationId` is set to the real wrapped-fungible app (used
+    // only by the deposit path, which never runs here). The match that
+    // `_onBlock` actually uses for burn events is `bridgeApplicationId`,
+    // which we deliberately set to the non-matching synthetic value so every
+    // forwarded burn event is rejected.
+    let fungible_app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
     let bridge_addr = deploy_fungible_bridge(
         &compose,
@@ -140,6 +165,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
         light_client_address(),
         &chain_a_bytes32,
         erc20_addr,
+        &fungible_app_id_bytes32,
         SYNTHETIC_APP_ID_BYTES32,
     )
     .await?;
@@ -183,10 +209,11 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     let relay_port = 3003u16;
     let bridge_addr_str = format!("{bridge_addr}");
-    // The relayer needs an evm-bridge app ID even though this test never
-    // uses the EVM→Linera direction. Reuse the wrapped-fungible app ID as
-    // a syntactically valid placeholder — no deposit flow runs against it.
-    let bridge_app_str = format!("{fungible_app_id}");
+    // The relayer monitors the evm-bridge app's "burns" stream, so its
+    // bridge app ID must be the real `bridge_app_id`. It is the source of
+    // the BurnEvents the scanner detects and forwards. `fungible_app_id` is
+    // kept for its existing use.
+    let bridge_app_str = format!("{bridge_app_id}");
     let fungible_app_str = format!("{fungible_app_id}");
     let sqlite_path_for_relay = sqlite_path.clone();
     let relay_handle = tokio::spawn(async move {
@@ -203,6 +230,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
+            0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             Duration::from_secs(2),
             0,
@@ -220,32 +248,35 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
         return Err(error);
     }
 
-    // Trigger a single burn: chain B transfers wrapped tokens to an
-    // Address20 owner on chain A. The wrapped-fungible app on chain A
-    // detects the Credit-to-Address20 message and emits a `BurnEvent` on
-    // the "burns" stream, which the relayer's Linera scanner will pick up.
+    // Trigger a single burn: chain B submits a `BridgeOperation::Burn` to
+    // the evm-bridge app. The bridge app escrows + burns the wrapped tokens
+    // and routes a tracked `BridgeMessage::Burn` to the bridge chain
+    // (chain A); processing chain A's inbox materialises the `BurnEvent` on
+    // the evm-bridge app's "burns" stream, which the relayer's Linera
+    // scanner will pick up.
     let evm_recipient_hex = "70997970C51812dc3A010C7d01b50e0d17dc79C8";
-    let receiver: AccountOwner = format!("0x{evm_recipient_hex}").parse()?;
+    let recipient: alloy::primitives::Address = format!("0x{evm_recipient_hex}").parse()?;
     let burn_amount = U128(25u128 * 10u128.pow(18));
 
     cc_b.synchronize_from_validators().await?;
-    let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
-        owner: owner_b,
+    let burn_bytes = bcs::to_bytes(&BridgeOperation::Burn {
         amount: burn_amount,
-        target_account: Account {
-            chain_id: chain_a,
-            owner: receiver,
-        },
+        evm_target: recipient.0 .0,
     })?;
     cc_b.execute_operations(
         vec![Operation::User {
-            application_id: fungible_app_id,
-            bytes: withdraw_bytes,
+            application_id: bridge_app_id,
+            bytes: burn_bytes,
         }],
         vec![],
     )
     .await?
-    .expect("cross-chain withdrawal committed on chain B");
+    .expect("burn operation committed on chain B");
+
+    // Drive chain A's inbox so the tracked `BridgeMessage::Burn` is
+    // processed and the `BurnEvent` lands on the evm-bridge "burns" stream.
+    cc_a.synchronize_from_validators().await?;
+    cc_a.process_inbox().await?;
 
     // Wait until the relayer has had a chance to detect the burn AND to
     // attempt forwarding it. `bridge_burns_detected` increments when the
@@ -306,9 +337,8 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     let burns_failed = parse_metric_value(&metrics_body, "linera_bridge_burns_failed");
     let burns_pending = parse_metric_value(&metrics_body, "linera_bridge_burns_pending");
 
-    let evm_recipient: alloy::primitives::Address = format!("0x{evm_recipient_hex}").parse()?;
     let token_balance = IERC20::new(erc20_addr, &provider)
-        .balanceOf(evm_recipient)
+        .balanceOf(recipient)
         .call()
         .await?;
 
@@ -330,7 +360,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
         token_balance,
         U256::ZERO,
         "no on-chain Transfer should have happened — \
-         _onBlock skips every event because fungibleApplicationId is mismatched"
+         _onBlock skips every event because bridgeApplicationId is mismatched"
     );
 
     // Bug demonstration: the relayer must not mark a burn as completed

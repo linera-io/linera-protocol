@@ -113,7 +113,7 @@ importers:
         version: link:../../../web/@linera/metamask
     devDependencies:
       vite:
-        specifier: ^7.1.7
+        specifier: 7.1.7
         version: 7.1.7(yaml@2.8.3)
 
   native-fungible:
@@ -151,7 +151,7 @@ importers:
         version: link:../../../web/@linera/metamask
     devDependencies:
       vite:
-        specifier: ^7.1.7
+        specifier: 7.1.7
         version: 7.1.7(yaml@2.8.3)
 
 packages:
@@ -1717,6 +1717,7 @@ packages:
 
   uuid@9.0.1:
     resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   vite-node@3.2.4:

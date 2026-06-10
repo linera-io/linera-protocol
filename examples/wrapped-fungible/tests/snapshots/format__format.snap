@@ -91,6 +91,11 @@ REGISTRY:
             - spender:
                 TYPENAME: AccountOwner
             - allowance: U128
+      170732950:
+        RegisterAuthorizedCaller:
+          STRUCT:
+            - app_id:
+                TYPENAME: ApplicationId
       198295567:
         MintAndTransfer:
           STRUCT:
@@ -130,20 +135,13 @@ REGISTRY:
     STRUCT:
       - ticker_symbol: STR
       - decimals: U8
-      - minter:
-          OPTION:
-            TYPENAME: AccountOwner
       - mint_chain_id:
-          OPTION:
-            TYPENAME: ChainId
+          TYPENAME: ChainId
       - evm_token_address:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
       - evm_source_chain_id: U64
-      - bridge_app_id:
-          OPTION:
-            TYPENAME: ApplicationId
 OPERATION:
   TYPENAME: WrappedFungibleOperation
 RESPONSE:

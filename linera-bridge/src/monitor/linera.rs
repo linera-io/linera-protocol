@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Linera-side monitoring: scans for BurnEvent stream events (auto-burns),
+//! Linera-side monitoring: scans for BurnEvent stream events,
 //! forwards certificates to EVM, checks EVM for completion via ERC-20
 //! Transfer events, and retries unforwarded burns.
 
@@ -16,6 +16,7 @@ use crate::relay::{
     self,
     evm::EvmClient,
     linera::{find_burn_events, LineraClient},
+    settlement::estimate_fits,
 };
 
 /// Background task that scans Linera block history for BurnEvent stream
@@ -102,20 +103,43 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 
             persist_cert_bytes(monitor, height, &event_indices, &cert).await;
 
-            if evm_client.estimate_add_block_gas(&cert).await.is_ok() {
-                submit_addblock(
-                    monitor,
-                    evm_client,
-                    &cert,
-                    height,
-                    &event_indices,
-                    max_retries,
-                )
-                .await;
-            } else {
-                submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
+            match estimate_fits(evm_client.estimate_add_block_gas(&cert).await) {
+                Ok(true) => {
+                    submit_addblock(
+                        monitor,
+                        evm_client,
+                        &cert,
+                        height,
+                        &event_indices,
+                        max_retries,
+                    )
+                    .await;
+                    relay::update_balance_metrics(evm_client, linera_client).await;
+                }
+                Ok(false) => {
+                    submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
+                    relay::update_balance_metrics(evm_client, linera_client).await;
+                }
+                Err(error) => {
+                    // `eth_estimateGas` on the whole-block `addBlock` reverted.
+                    // This happens when the block is too large to even estimate
+                    // (it would exceed the EVM block gas limit) — common now that
+                    // a bridge-driven burn adds a funding `Credit` plus a
+                    // `BridgeMessage::Burn` to the block — but also for a
+                    // genuinely invalid cert. Either way, fall back to the per-tx
+                    // chunked `processBurns` path: it estimates each chunk
+                    // independently, submits the ones that fit, and marks any
+                    // single burn that still can't fit as `failed` (so an invalid
+                    // cert terminates instead of being re-polled forever).
+                    tracing::warn!(
+                        ?height,
+                        ?error,
+                        "estimate_add_block_gas failed; falling back to chunked processBurns"
+                    );
+                    submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
+                    relay::update_balance_metrics(evm_client, linera_client).await;
+                }
             }
-            relay::update_balance_metrics(evm_client, linera_client).await;
         }
     }
 }
@@ -162,8 +186,10 @@ async fn submit_chunked<P: Provider>(
     max_retries: u32,
 ) {
     for (tx_index, positions) in by_tx {
-        let (chunks, oversized) = split_to_fit(evm_client, cert, *tx_index, positions).await;
+        let (chunks, oversized, errored) =
+            split_to_fit(evm_client, cert, *tx_index, positions).await;
         mark_oversized_failed(monitor, height, *tx_index, &oversized).await;
+        mark_estimate_errored_retry(monitor, height, *tx_index, &errored, max_retries).await;
         submit_chunks_with_retry(
             monitor,
             evm_client,
@@ -184,36 +210,84 @@ async fn submit_chunked<P: Provider>(
 /// `&EvmClient` across awaits (which trips an HRTB Send bound under
 /// `tokio::spawn`).
 ///
-/// Returns `(chunks, oversized)`. Chunks are in input order because each
-/// split pushes right then left.
+/// Returns `(chunks, oversized, errored)`:
+/// - `chunks`: slices that fit, in input order (each split pushes right then
+///   left).
+/// - `oversized`: single positions whose gas estimate *succeeded* and reported
+///   the burn cannot fit under the EVM block gas limit — genuinely
+///   un-relayable, hence terminal.
+/// - `errored`: positions whose estimate *failed* (transient transport/RPC
+///   error, or a revert) rather than returning a verdict. These must NOT be
+///   treated as "doesn't fit": a single node hiccup must not permanently fail
+///   a burn that would otherwise settle, so the caller routes them to bounded
+///   retry (`max_retries`) instead of immediate failure.
 async fn split_to_fit<P: Provider>(
     evm_client: &EvmClient<P>,
     cert: &linera_chain::types::ConfirmedBlockCertificate,
     tx_index: u32,
     positions: &[u32],
-) -> (Vec<Vec<u32>>, Vec<u32>) {
+) -> (Vec<Vec<u32>>, Vec<u32>, Vec<u32>) {
     let mut stack: Vec<Vec<u32>> = vec![positions.to_vec()];
     let mut chunks: Vec<Vec<u32>> = Vec::new();
     let mut oversized: Vec<u32> = Vec::new();
+    let mut errored: Vec<u32> = Vec::new();
     while let Some(slice) = stack.pop() {
-        let fits = evm_client
-            .estimate_process_burns_gas(cert, tx_index, &slice)
-            .await
-            .is_ok();
-        if fits {
-            chunks.push(slice);
-            continue;
+        let fits = estimate_fits(
+            evm_client
+                .estimate_process_burns_gas(cert, tx_index, &slice)
+                .await,
+        );
+        match classify_slice(&fits, slice.len()) {
+            SliceVerdict::Fits => chunks.push(slice),
+            SliceVerdict::Oversized => oversized.push(slice[0]),
+            SliceVerdict::Bisect => {
+                let mid = slice.len() / 2;
+                let (left, right) = slice.split_at(mid);
+                stack.push(right.to_vec());
+                stack.push(left.to_vec());
+            }
+            SliceVerdict::Errored => {
+                tracing::warn!(
+                    tx_index,
+                    ?slice,
+                    error = ?fits,
+                    "estimate_process_burns_gas failed; scheduling retry instead of failing"
+                );
+                errored.extend_from_slice(&slice);
+            }
         }
-        if slice.len() == 1 {
-            oversized.push(slice[0]);
-            continue;
-        }
-        let mid = slice.len() / 2;
-        let (left, right) = slice.split_at(mid);
-        stack.push(right.to_vec());
-        stack.push(left.to_vec());
     }
-    (chunks, oversized)
+    (chunks, oversized, errored)
+}
+
+/// How `split_to_fit` should dispose of one slice, decided purely from the
+/// gas-estimate verdict and the slice length. Factored out so the
+/// transient-error vs. genuinely-oversized distinction — the property that
+/// keeps a single RPC hiccup from permanently failing a relayable burn — is
+/// unit-testable without a live EVM provider.
+#[derive(Debug, PartialEq, Eq)]
+enum SliceVerdict {
+    /// Estimate succeeded and the slice fits — submit it as a chunk.
+    Fits,
+    /// Estimate succeeded and a single burn exceeds the block gas limit —
+    /// genuinely un-relayable, fail it.
+    Oversized,
+    /// Estimate succeeded, the slice doesn't fit but holds more than one burn —
+    /// bisect and re-test the halves.
+    Bisect,
+    /// The estimate itself failed (transient transport/RPC error or a revert)
+    /// rather than returning a verdict — must NOT be read as "doesn't fit";
+    /// route to bounded retry instead.
+    Errored,
+}
+
+fn classify_slice(fits: &anyhow::Result<bool>, slice_len: usize) -> SliceVerdict {
+    match fits {
+        Ok(true) => SliceVerdict::Fits,
+        Ok(false) if slice_len == 1 => SliceVerdict::Oversized,
+        Ok(false) => SliceVerdict::Bisect,
+        Err(_) => SliceVerdict::Errored,
+    }
 }
 
 /// Marks oversized positions `failed` so they drop out of subsequent
@@ -244,6 +318,38 @@ async fn mark_oversized_failed(
             "single burn does not fit under the EVM block gas limit; marking failed"
         );
         state.mark_burn_failed(height, event_index).await;
+    }
+}
+
+/// Bumps the retry budget for positions whose chunk-gas estimate hit a
+/// transient/infra error (a *failed* estimate, not a successful over-limit
+/// verdict). Routing these through `mark_burn_retried` — the same path a failed
+/// `processBurns` submission uses — keeps a single RPC hiccup from permanently
+/// failing a relayable burn: a persistent failure still terminates once
+/// `max_retries` is exhausted, while a transient one is re-estimated and
+/// settles on a later poll.
+async fn mark_estimate_errored_retry(
+    monitor: &RwLock<MonitorState>,
+    height: BlockHeight,
+    tx_index: u32,
+    errored: &[u32],
+    max_retries: u32,
+) {
+    if errored.is_empty() {
+        return;
+    }
+    let to_retry = {
+        let state = monitor.read().await;
+        errored
+            .iter()
+            .filter_map(|&pos| state.event_index_for_pos(height, tx_index, pos))
+            .collect::<Vec<u32>>()
+    };
+    let mut state = monitor.write().await;
+    for event_index in to_retry {
+        state
+            .mark_burn_retried(height, event_index, max_retries)
+            .await;
     }
 }
 
@@ -323,7 +429,10 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
         return Ok(());
     }
 
-    let fungible_app_id = linera_client.fungible_app_id();
+    // Burns are now driven by the bridge application, which emits the
+    // `BurnEvent` on its own "burns" stream — so scan the bridge app's events,
+    // not the wrapped-fungible app's.
+    let bridge_app_id = linera_client.bridge_app_id();
 
     let mut blocks = Vec::new();
     let mut hash = info.block_hash;
@@ -341,7 +450,7 @@ async fn linera_scan_iteration<E: linera_core::environment::Environment>(
     let mut new_burns = Vec::new();
     for (block_hash, block) in &blocks {
         let height = block.block().header.height;
-        let burn_events = find_burn_events(&block.block().body.events, fungible_app_id);
+        let burn_events = find_burn_events(&block.block().body.events, bridge_app_id);
         for (tx_index, event_pos_in_tx, event_index, burn_event) in burn_events {
             new_burns.push((
                 height,
@@ -429,4 +538,42 @@ async fn check_burn_completion(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_slice, SliceVerdict};
+
+    #[test]
+    fn fitting_slice_is_a_chunk() {
+        assert_eq!(classify_slice(&Ok(true), 1), SliceVerdict::Fits);
+        assert_eq!(classify_slice(&Ok(true), 8), SliceVerdict::Fits);
+    }
+
+    #[test]
+    fn single_over_limit_burn_is_oversized() {
+        assert_eq!(classify_slice(&Ok(false), 1), SliceVerdict::Oversized);
+    }
+
+    #[test]
+    fn multi_burn_non_fit_bisects() {
+        assert_eq!(classify_slice(&Ok(false), 2), SliceVerdict::Bisect);
+        assert_eq!(classify_slice(&Ok(false), 9), SliceVerdict::Bisect);
+    }
+
+    #[test]
+    fn estimate_error_routes_to_retry_not_failure() {
+        // A failed estimate (transient transport/RPC error, or a revert) must
+        // NOT be classified `Oversized` — not even for a single-position slice.
+        // Otherwise one node hiccup would permanently fail a burn whose escrow
+        // is already gone on Linera. It must route to bounded retry instead.
+        assert_eq!(
+            classify_slice(&Err(anyhow::anyhow!("connection reset")), 1),
+            SliceVerdict::Errored
+        );
+        assert_eq!(
+            classify_slice(&Err(anyhow::anyhow!("execution reverted")), 5),
+            SliceVerdict::Errored
+        );
+    }
 }

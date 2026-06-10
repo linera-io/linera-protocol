@@ -1,0 +1,5 @@
+packages:
+  - ../web/@linera/client
+  - ../web/@linera/metamask
+allowBuilds:
+  esbuild: true

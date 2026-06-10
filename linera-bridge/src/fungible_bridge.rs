@@ -93,8 +93,15 @@ mod tests {
 
             let chain_id = CryptoHash::new(&TestString::new("test_chain"));
             let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-            let bridge =
-                deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token, app_id);
+            let bridge = deploy_fungible_bridge(
+                &mut db,
+                deployer,
+                light_client,
+                chain_id,
+                token,
+                app_id,
+                app_id,
+            );
 
             // Fund the bridge with the full token supply
             call_contract(
@@ -285,8 +292,15 @@ mod tests {
 
         let chain_id = CryptoHash::new(&TestString::new("test_chain"));
         let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-        let bridge =
-            deploy_fungible_bridge(&mut db, deployer, light_client, chain_id, token, app_id);
+        let bridge = deploy_fungible_bridge(
+            &mut db,
+            deployer,
+            light_client,
+            chain_id,
+            token,
+            app_id,
+            app_id,
+        );
 
         // Give depositor tokens (instead of funding the bridge)
         call_contract(
@@ -555,14 +569,49 @@ mod tests {
             "FungibleBridge",
         );
         let zero_app_id: [u8; 32] = [0u8; 32];
-        let constructor_args =
-            (light_client, chain_id_bytes, token, zero_app_id).abi_encode_params();
-        let mut deploy_data = bytecode;
-        deploy_data.extend_from_slice(&constructor_args);
+        let valid_app_id: [u8; 32] =
+            (*CryptoHash::new(&TestString::new("valid_app")).as_bytes()).into();
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            deploy_contract(&mut db, deployer, deploy_data)
-        }));
-        assert!(result.is_err(), "deployment with zero app id must revert");
+        // Zero fungible application id must revert.
+        {
+            let mut deploy_data = bytecode.clone();
+            let constructor_args = (
+                light_client,
+                chain_id_bytes,
+                token,
+                zero_app_id,
+                valid_app_id,
+            )
+                .abi_encode_params();
+            deploy_data.extend_from_slice(&constructor_args);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                deploy_contract(&mut db, deployer, deploy_data)
+            }));
+            assert!(
+                result.is_err(),
+                "deployment with zero fungible app id must revert"
+            );
+        }
+
+        // Zero bridge application id must revert.
+        {
+            let mut deploy_data = bytecode;
+            let constructor_args = (
+                light_client,
+                chain_id_bytes,
+                token,
+                valid_app_id,
+                zero_app_id,
+            )
+                .abi_encode_params();
+            deploy_data.extend_from_slice(&constructor_args);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                deploy_contract(&mut db, deployer, deploy_data)
+            }));
+            assert!(
+                result.is_err(),
+                "deployment with zero bridge app id must revert"
+            );
+        }
     }
 }

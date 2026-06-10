@@ -124,6 +124,7 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     // application ID baked into the constructor (immutable since #6173).
     let target_chain_id = B256::from([0xAA; 32]);
     let target_application_id = B256::from([0xBB; 32]);
+    let bridge_application_id = B256::from([0xDD; 32]);
 
     let bridge_bytecode = compile_contract(
         FUNGIBLE_BRIDGE_SOURCE,
@@ -135,6 +136,7 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         <[u8; 32]>::from(target_chain_id),       // chainId
         token_address,                           // token
         <[u8; 32]>::from(target_application_id), // fungibleApplicationId
+        <[u8; 32]>::from(bridge_application_id), // bridgeApplicationId
     )
         .abi_encode_params();
 

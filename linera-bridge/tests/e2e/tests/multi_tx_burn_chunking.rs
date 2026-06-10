@@ -10,9 +10,12 @@
 //! `evm_setBlockGasLimit`) before the bridge is deployed, so `addBlock`
 //! at `NUM_BURNS = 8` does not fit and the relayer must take the
 //! `processBurns` chunk path. Chain B submits one block with N
-//! `Transfer` operations to N distinct recipients on chain A. After the
-//! relayer is spawned, every recipient must hold the correct ERC-20
-//! balance and `linera_bridge_burns_completed` must reach N.
+//! `BridgeOperation::Burn` operations toward N distinct EVM recipients;
+//! each routes a funding transfer + tracked `BridgeMessage::Burn` to the
+//! bridge chain (chain A), which processes its inbox in a single block
+//! that carries all N `BurnEvent`s. After the relayer is spawned, every
+//! recipient must hold the correct ERC-20 balance and
+//! `linera_bridge_burns_completed` must reach N.
 
 #![recursion_limit = "512"]
 
@@ -27,11 +30,13 @@ use alloy::{
     sol,
 };
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
+use linera_bridge::abi::BridgeOperation;
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
-    light_client_address, parse_metric_value, publish_and_create_wrapped_fungible,
-    set_anvil_block_gas_limit, start_compose, wait_for_light_client, wait_for_relay_http_ready,
-    wait_for_relay_metrics, ANVIL_PRIVATE_KEY,
+    light_client_address, parse_metric_value, publish_and_create_evm_bridge,
+    publish_and_create_wrapped_fungible, register_bridge_app, set_anvil_block_gas_limit,
+    start_compose, wait_for_light_client, wait_for_relay_http_ready, wait_for_relay_metrics,
+    ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -39,7 +44,6 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::{DbStorage, StorageCacheConfig};
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-use wrapped_fungible::{Account, WrappedFungibleOperation};
 
 sol! {
     #[sol(rpc)]
@@ -51,10 +55,12 @@ sol! {
 const NUM_BURNS: usize = 8;
 const BURN_AMOUNT_TOKENS: u128 = 1;
 /// Per-block gas ceiling sized to live between `processBurns(cert, tx, [single])`
-/// (dominated by cert verification, ~3.0M gas) and `addBlock(cert)` for
-/// `NUM_BURNS` burns (~3.4M gas). The relayer must therefore route through
-/// chunked `processBurns` per tx.
-const ANVIL_BLOCK_GAS_LIMIT: u64 = 3_200_000;
+/// (~3.8M gas, measured — dominated by `verifyBlock` in the
+/// bridge-driven burn flow where each burn adds a funding `Credit` plus a
+/// `BridgeMessage::Burn` to the chain-A block) and `addBlock(cert)` for all
+/// `NUM_BURNS` burns (~4.21M gas, measured). `addBlock` therefore cannot fit,
+/// so the relayer routes through chunked per-tx `processBurns` instead.
+const ANVIL_BLOCK_GAS_LIMIT: u64 = 4_000_000;
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary.
@@ -125,10 +131,26 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
     cc_b.synchronize_from_validators().await?;
 
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
-    let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
+
+    // The evm-bridge app drives the burn; create it on the bridge/mint chain
+    // (chain A) before the wrapped-fungible app so its id can be baked in.
+    let fungible_app_id = publish_and_create_wrapped_fungible(
+        &cc_b,
+        owner_b,
+        chain_a,
+        erc20_addr,
+        1_000 * 10u128.pow(18),
+    )
+    .await?;
+
+    let bridge_app_id = publish_and_create_evm_bridge(&cc_a, erc20_addr, chain_a, fungible_app_id).await?;
+
+    // Register the wrapped-fungible app with the evm-bridge so it can drive
+    // the escrow transfer + burn.
+    register_bridge_app(&cc_a, fungible_app_id, bridge_app_id).await?;
 
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    let bridge_app_id_bytes32 = format!("0x{}", bridge_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
     let bridge_addr = deploy_fungible_bridge(
         &compose,
@@ -138,6 +160,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
         &chain_a_bytes32,
         erc20_addr,
         &app_id_bytes32,
+        &bridge_app_id_bytes32,
     )
     .await?;
 
@@ -169,24 +192,20 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
     ];
     let burn_amount = U128(BURN_AMOUNT_TOKENS * 10u128.pow(18));
 
-    // Bundle every Transfer into one chain-B block; chain-A's
-    // process_inbox produces a single chain-A block with N BurnEvents.
+    // Bundle every Burn into one chain-B block; each routes a funding
+    // transfer + tracked BridgeMessage::Burn to chain A, whose process_inbox
+    // then produces a single chain-A block with N BurnEvents.
     let operations = recipients
         .iter()
         .map(|recipient| {
-            let owner = AccountOwner::Address20(recipient.0 .0);
-            let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
-                owner: owner_b,
+            let burn_bytes = bcs::to_bytes(&BridgeOperation::Burn {
                 amount: burn_amount,
-                target_account: Account {
-                    chain_id: chain_a,
-                    owner,
-                },
+                evm_target: recipient.0 .0,
             })
             .expect("BCS serialization");
             Operation::User {
-                application_id: fungible_app_id,
-                bytes: withdraw_bytes,
+                application_id: bridge_app_id,
+                bytes: burn_bytes,
             }
         })
         .collect();
@@ -222,7 +241,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
 
     let relay_port = 3009u16;
     let bridge_addr_str = format!("{bridge_addr}");
-    let bridge_app_str = format!("{fungible_app_id}");
+    let bridge_app_str = format!("{bridge_app_id}");
     let fungible_app_str = format!("{fungible_app_id}");
     let sqlite_path_for_relay = sqlite_path.clone();
     let relay_handle = tokio::spawn(async move {
@@ -239,6 +258,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
+            0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             Duration::from_secs(2),
             0,
