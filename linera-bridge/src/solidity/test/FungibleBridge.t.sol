@@ -129,13 +129,13 @@ contract FungibleBridgeProcessBurnsTest is Test {
         bridge.processBurns(BLOCK_HASH, eventBcs, TX, 1, uint32(eventBcs.length), positions, noSiblings, noSiblings);
     }
 
-    function _chunk(bytes memory a) internal pure returns (bytes[] memory) {
+    function _bytesArray(bytes memory a) internal pure returns (bytes[] memory) {
         bytes[] memory arr = new bytes[](1);
         arr[0] = a;
         return arr;
     }
 
-    function _chunk(bytes memory a, bytes memory b) internal pure returns (bytes[] memory) {
+    function _bytesArray(bytes memory a, bytes memory b) internal pure returns (bytes[] memory) {
         bytes[] memory arr = new bytes[](2);
         arr[0] = a;
         arr[1] = b;
@@ -150,7 +150,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
         MockLightClient lc = new MockLightClient(CHAIN_ID, HEIGHT);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
 
         assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "stream index 5 should be processed");
         assertFalse(bridge.isBurnProcessed(HEIGHT, 6), "stream index 6 should not be processed yet");
@@ -161,7 +161,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         address recip1 = address(uint160(RECIP_0) + 1);
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT), _burnBcs(6, recip1, AMOUNT)), _u32s(0, 1));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT), _burnBcs(6, recip1, AMOUNT)), _u32s(0, 1));
 
         assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "stream index 5 should be processed");
         assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "stream index 6 should be processed");
@@ -174,12 +174,12 @@ contract FungibleBridgeProcessBurnsTest is Test {
         MockLightClient lc = new MockLightClient(CHAIN_ID, HEIGHT);
         (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
 
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
         uint256 firstBal = tok.balanceOf(RECIP_0);
         assertEq(firstBal, AMOUNT, "first call should have released to recipient");
 
         // Second call: must not revert and must not double-release.
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
         assertEq(tok.balanceOf(RECIP_0), firstBal, "second call must not double-release");
         assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "burn stays marked processed");
     }
@@ -189,7 +189,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
         MockLightClient lc = new MockLightClient(CHAIN_ID, HEIGHT);
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
-        bytes[] memory chunk = _chunk(_eventBcs(5, RECIP_0, AMOUNT, bytes("deposits")));
+        bytes[] memory chunk = _bytesArray(_eventBcs(5, RECIP_0, AMOUNT, bytes("deposits")));
         vm.expectRevert(bytes("not a matching burn"));
         _settle(bridge, chunk, _u32s_single(0));
     }
@@ -212,7 +212,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("chain id mismatch"));
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
     }
 
     function test_processBurns_failed_inclusion_proof_reverts() public {
@@ -222,7 +222,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
         (FungibleBridge bridge,) = _deployBridge(address(lc), AMOUNT * 10);
 
         vm.expectRevert(bytes("event inclusion proof failed"));
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT)), _u32s_single(0));
     }
 
     function test_processBurns_emits_BurnReleased() public {
@@ -236,7 +236,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
         vm.expectEmit(true, true, true, true, address(bridge));
         emit BurnReleased(HEIGHT, 6, recip1, AMOUNT);
 
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT), _burnBcs(6, recip1, AMOUNT)), _u32s(0, 1));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT), _burnBcs(6, recip1, AMOUNT)), _u32s(0, 1));
     }
 
     function test_processBurns_partial_overlap_releases_remaining() public {
@@ -247,12 +247,12 @@ contract FungibleBridgeProcessBurnsTest is Test {
         (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
         address recip1 = address(uint160(RECIP_0) + 1);
 
-        _settle(bridge, _chunk(_burnBcs(6, recip1, AMOUNT)), _u32s_single(0));
+        _settle(bridge, _bytesArray(_burnBcs(6, recip1, AMOUNT)), _u32s_single(0));
         assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "burn 6 should now be processed");
         assertEq(tok.balanceOf(recip1), AMOUNT, "burn 6 recipient should hold released amount");
 
         // Overlapping chunk — burn 5 settles, burn 6 silently skipped.
-        _settle(bridge, _chunk(_burnBcs(5, RECIP_0, AMOUNT), _burnBcs(6, recip1, AMOUNT)), _u32s(0, 1));
+        _settle(bridge, _bytesArray(_burnBcs(5, RECIP_0, AMOUNT), _burnBcs(6, recip1, AMOUNT)), _u32s(0, 1));
 
         assertTrue(bridge.isBurnProcessed(HEIGHT, 5), "burn 5 should now be processed");
         assertTrue(bridge.isBurnProcessed(HEIGHT, 6), "burn 6 stays processed");
