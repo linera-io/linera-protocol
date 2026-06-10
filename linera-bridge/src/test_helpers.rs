@@ -29,7 +29,7 @@ use revm::{
 use revm_context::result::{ExecutionResult, Output};
 
 use crate::evm;
-pub use crate::evm::client::{validator_evm_address, validator_uncompressed_key};
+pub use crate::evm::client::validator_evm_address;
 
 pub const GAS_LIMIT: u64 = 500_000_000;
 

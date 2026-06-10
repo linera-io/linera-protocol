@@ -18,7 +18,6 @@ use alloy::{
 };
 use alloy_sol_types::SolCall;
 use linera_base::crypto::ValidatorPublicKey;
-use linera_execution::committee::Committee;
 use url::Url;
 
 use super::light_client::addCommitteeCall;
@@ -63,9 +62,6 @@ impl EvmLightClient {
 
     /// Calls `LightClient.addCommittee()` on the EVM chain.
     ///
-    /// Extracts uncompressed validator keys from the committee blob internally,
-    /// then submits the transaction to the LightClient contract.
-    ///
     /// - `certificate_bytes`: BCS-serialized `ConfirmedBlockCertificate`
     /// - `committee_blob`: raw committee blob bytes (BCS-serialized `Committee`)
     pub async fn add_committee(
@@ -73,12 +69,9 @@ impl EvmLightClient {
         certificate_bytes: &[u8],
         committee_blob: &[u8],
     ) -> anyhow::Result<TxHash> {
-        let validator_keys = extract_validator_keys(committee_blob)?;
-
         let call = addCommitteeCall {
             data: Bytes::copy_from_slice(certificate_bytes),
             committeeBlob: Bytes::copy_from_slice(committee_blob),
-            validators: validator_keys.into_iter().map(Bytes::from).collect(),
         };
 
         let tx = TransactionRequest::default()
@@ -96,29 +89,8 @@ impl EvmLightClient {
     }
 }
 
-/// Extracts uncompressed validator public keys from a BCS-serialized committee blob.
-///
-/// Returns 64-byte uncompressed keys (without the 0x04 prefix) for each validator,
-/// sorted by their compressed byte representation to match BCS canonical map ordering.
-///
-/// BCS serializes map entries sorted by serialized key bytes, which may differ from
-/// Rust's `BTreeMap` iteration order (based on `Ord` for `VerifyingKey`).
-pub fn extract_validator_keys(committee_blob: &[u8]) -> anyhow::Result<Vec<Vec<u8>>> {
-    let committee: Committee = bcs::from_bytes(committee_blob)?;
-    let mut keys: Vec<ValidatorPublicKey> = committee.validators().keys().copied().collect();
-    keys.sort_by_key(|a| a.as_bytes());
-    Ok(keys.iter().map(validator_uncompressed_key).collect())
-}
-
 /// Derives the Ethereum address from a secp256k1 validator public key.
 pub fn validator_evm_address(public: &ValidatorPublicKey) -> Address {
-    let uncompressed = public.0.to_encoded_point(false);
-    let hash = keccak256(&uncompressed.as_bytes()[1..]); // skip 0x04 prefix
+    let hash = keccak256(&public.as_bytes()[1..]); // skip 0x04 prefix
     Address::from_slice(&hash[12..])
-}
-
-/// Returns the 64-byte uncompressed public key (without the 0x04 prefix).
-pub fn validator_uncompressed_key(public: &ValidatorPublicKey) -> Vec<u8> {
-    let uncompressed = public.0.to_encoded_point(false);
-    uncompressed.as_bytes()[1..].to_vec()
 }

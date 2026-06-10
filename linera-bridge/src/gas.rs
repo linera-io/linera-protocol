@@ -39,7 +39,6 @@ mod tests {
             transactions,
         );
         let bcs_bytes = sign_and_serialize(&secret, &public, block);
-        let new_uncompressed = validator_uncompressed_key(&new_public);
 
         let (_, _, gas_used) = call_contract(
             &mut db,
@@ -48,7 +47,6 @@ mod tests {
             &addCommitteeCall {
                 data: bcs_bytes.into(),
                 committeeBlob: committee_bytes.into(),
-                validators: vec![new_uncompressed.into()],
             },
         );
 
