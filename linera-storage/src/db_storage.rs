@@ -460,11 +460,31 @@ impl StorageCaches {
     pub fn new(sizes: StorageCacheConfig) -> Self {
         let interval = sizes.cache_cleanup_interval_secs;
         Self {
-            blob: Arc::new(ValueCache::new(sizes.blob_cache_size, interval)),
-            confirmed_block: Arc::new(ValueCache::new(sizes.confirmed_block_cache_size, interval)),
-            certificate: Arc::new(ValueCache::new(sizes.certificate_cache_size, interval)),
-            certificate_raw: Arc::new(ValueCache::new(sizes.certificate_raw_cache_size, interval)),
-            event: Arc::new(ValueCache::new(sizes.event_cache_size, interval)),
+            blob: Arc::new(ValueCache::new(
+                "storage_blob",
+                sizes.blob_cache_size,
+                interval,
+            )),
+            confirmed_block: Arc::new(ValueCache::new(
+                "storage_confirmed_block",
+                sizes.confirmed_block_cache_size,
+                interval,
+            )),
+            certificate: Arc::new(ValueCache::new(
+                "storage_certificate",
+                sizes.certificate_cache_size,
+                interval,
+            )),
+            certificate_raw: Arc::new(ValueCache::new(
+                "storage_certificate_raw",
+                sizes.certificate_raw_cache_size,
+                interval,
+            )),
+            event: Arc::new(ValueCache::new(
+                "storage_event",
+                sizes.event_cache_size,
+                interval,
+            )),
         }
     }
 }
