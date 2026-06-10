@@ -1,46 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy_sol_types::sol;
-
 /// Solidity source for the LightClient contract.
 pub const SOURCE: &str = include_str!("../solidity/LightClient.sol");
-
-sol! {
-    function addCommittee(
-        bytes calldata blockProof,
-        bytes[] calldata transactionBcs,
-        bytes calldata committeeBlob,
-    ) external;
-
-    function registerBlock(bytes calldata blockProof) external returns (bytes32);
-
-    function registeredBlocks(bytes32 blockHash)
-        external
-        view
-        returns (bytes32 eventsHash, uint64 height, bytes32 chainId);
-
-    function verifyEventInclusion(
-        bytes32 blockHash,
-        bytes[] calldata eventBcs,
-        uint32 txIndex,
-        uint32 numTxs,
-        uint32 numEventsInTx,
-        uint32[] calldata positions,
-        bytes32[] calldata innerSiblings,
-        bytes32[] calldata outerSiblings
-    ) external view;
-
-    function currentEpoch() external view returns (uint32);
-
-    function minAcceptedEpoch() external view returns (uint32);
-
-    function expireEpochsBelow(uint32 newMinEpoch) external;
-
-    function committeeTotalWeight(uint32 epoch) external view returns (uint64);
-
-    function committeeHeight(uint32 epoch) external view returns (uint64);
-}
 
 #[cfg(test)]
 mod tests {
@@ -55,12 +17,14 @@ mod tests {
         primitives::Address,
     };
 
-    use super::{
-        addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
-        expireEpochsBelowCall, minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
-        verifyEventInclusionCall,
+    use crate::{
+        contracts::ILightClient::{
+            addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
+            expireEpochsBelowCall, minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
+            verifyEventInclusionCall,
+        },
+        test_helpers::*,
     };
-    use crate::test_helpers::*;
 
     #[test]
     fn test_light_client_add_committee() {
@@ -212,6 +176,7 @@ mod tests {
         let blob_hash = CryptoHash::new(&BlobContent::new_committee(committee_bytes.clone()));
 
         let transactions = create_committee_transaction(Epoch(1), blob_hash);
+        let transaction_bcs = transaction_bcs(&transactions);
         let block = create_test_block(
             test_admin_chain_id(),
             Epoch::ZERO,
@@ -220,7 +185,8 @@ mod tests {
         );
         let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
         let call = addCommitteeCall {
-            data: bcs_bytes.into(),
+            blockProof: bcs_bytes.into(),
+            transactionBcs: transaction_bcs,
             committeeBlob: committee_bytes.into(),
         };
 
@@ -407,7 +373,12 @@ mod tests {
             .collect();
 
         // The correct event verifies.
-        call_contract(&mut lc.db, lc.deployer, lc.contract, &make_call(good_bcs.clone()));
+        call_contract(
+            &mut lc.db,
+            lc.deployer,
+            lc.contract,
+            &make_call(good_bcs.clone()),
+        );
 
         // A tampered event does not.
         let bad: Vec<Bytes> = vec![bcs::to_bytes(&make_event(b"x", 9))

@@ -1,18 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy_sol_types::sol;
-
 /// Solidity source for the Microchain abstract contract.
 pub const SOURCE: &str = include_str!("../solidity/Microchain.sol");
-
-sol! {
-    function addBlock(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx) external;
-
-    function lightClient() external view returns (address);
-
-    function chainId() external view returns (bytes32);
-}
 
 #[cfg(test)]
 mod tests {
@@ -26,8 +16,10 @@ mod tests {
         primitives::Address,
     };
 
-    use super::{addBlockCall, chainIdCall, lightClientCall};
-    use crate::test_helpers::*;
+    use crate::{
+        contracts::IMicrochain::{addBlockCall, chainIdCall, lightClientCall},
+        test_helpers::*,
+    };
 
     sol! {
         function blockCount() external view returns (uint64);

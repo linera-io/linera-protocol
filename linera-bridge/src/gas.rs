@@ -12,7 +12,7 @@ mod tests {
     use revm::{database::CacheDB, primitives::Address};
 
     use crate::{
-        evm::{light_client::addCommitteeCall, microchain::addBlockCall},
+        contracts::{ILightClient::addCommitteeCall, IMicrochain::addBlockCall},
         test_helpers::*,
     };
 
