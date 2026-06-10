@@ -1468,37 +1468,62 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::Committed(None) => {}
         }
 
-        // Collect pending messages and epoch changes after acquiring the lock to avoid
-        // race conditions where messages valid for one block height are proposed at a
-        // different height.
-        let transactions = self.prepend_epochs_messages_and_events(operations).await?;
+        loop {
+            // Collect pending messages and epoch changes after acquiring the lock to avoid
+            // race conditions where messages valid for one block height are proposed at a
+            // different height. This is recomputed on every retry because the set of
+            // receivable messages and epoch changes can differ at a new height.
+            let transactions = self
+                .prepend_epochs_messages_and_events(operations.clone())
+                .await?;
 
-        if transactions.is_empty() {
-            return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
-                WorkerError::ChainError(Box::new(ChainError::EmptyBlock)),
-            )));
-        }
+            if transactions.is_empty() {
+                return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
+                    WorkerError::ChainError(Box::new(ChainError::EmptyBlock)),
+                )));
+            }
 
-        let block = self
-            .new_pending_block(transactions, blobs, &mut proposal_guard)
-            .await?;
+            let block = self
+                .new_pending_block(transactions, blobs.clone(), &mut proposal_guard)
+                .await?;
 
-        match self
-            .process_pending_block_without_prepare(&mut proposal_guard)
-            .await?
-        {
-            ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
-                Ok(ClientOutcome::Committed(certificate))
+            match self
+                .process_pending_block_without_prepare(&mut proposal_guard)
+                .await?
+            {
+                ClientOutcome::Committed(Some(certificate)) if certificate.block() == &block => {
+                    return Ok(ClientOutcome::Committed(certificate));
+                }
+                ClientOutcome::Committed(Some(certificate)) => {
+                    return Ok(ClientOutcome::Conflict(Box::new(certificate)));
+                }
+                // `process_pending_block_without_prepare` cleared the pending proposal
+                // without committing ours, so our operations were not applied. This happens
+                // in two ways:
+                //   * the chain advanced past the height we staged at while we were
+                //     proposing (e.g. a notification or background sync committed another
+                //     block at our height) — the common #5664 case; or
+                //   * the staged proposal's authenticated signer's key is no longer held
+                //     (the preferred owner changed since we staged), so the stale proposal
+                //     was discarded.
+                // Either way, re-stage and retry: `new_pending_block` recomputes the block
+                // at the current height and signs as the current identity, so the first
+                // case advances to the new height (genuine external progress) and the
+                // second adopts a signer we hold, so the retry converges. See #5664.
+                ClientOutcome::Committed(None) => {
+                    tracing::debug!(
+                        chain_id = %self.chain_id,
+                        "pending proposal cleared without committing ours; re-staging and retrying"
+                    );
+                    continue;
+                }
+                ClientOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+                ClientOutcome::Conflict(certificate) => {
+                    return Ok(ClientOutcome::Conflict(certificate));
+                }
             }
-            ClientOutcome::Committed(Some(certificate)) => {
-                Ok(ClientOutcome::Conflict(Box::new(certificate)))
-            }
-            // Unreachable: We just set the pending proposal in the guard.
-            ClientOutcome::Committed(None) => {
-                Err(Error::BlockProposalError("Unexpected block proposal error"))
-            }
-            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
-            ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
     }
 
