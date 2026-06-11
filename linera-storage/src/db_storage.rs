@@ -35,7 +35,7 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{debug, instrument};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
@@ -1896,9 +1896,10 @@ where
     ) -> Result<Vec<IndexAndEvent>, ViewError> {
         let root_key = RootKey::Event(*chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
+        // Pair each index with its cached value, or `None` for a cache miss to be
+        // read from the database, so results keep the key-scan order.
+        let mut entries = Vec::new();
         let mut db_keys = Vec::new();
-        let mut db_indices = Vec::new();
-        let mut returned_values = Vec::new();
         let prefix = bcs::to_bytes(stream_id).unwrap();
         for short_key in store.find_keys_by_prefix(&prefix).await? {
             let index = bcs::from_bytes::<u32>(&short_key)?;
@@ -1908,36 +1909,41 @@ where
                     stream_id: stream_id.clone(),
                     index,
                 };
-                if let Some(cached) = self.caches.event.get(&event_id) {
-                    returned_values.push(IndexAndEvent {
-                        index,
-                        event: (*cached).clone(),
-                    });
-                } else {
+                let cached = self.caches.event.get(&event_id).map(|arc| (*arc).clone());
+                if cached.is_none() {
                     let mut key = prefix.clone();
                     key.extend(short_key);
                     db_keys.push(key);
-                    db_indices.push(index);
                 }
+                entries.push((index, cached));
             }
         }
-        if !db_keys.is_empty() {
-            let values = store.read_multi_values_bytes(&db_keys).await?;
-            for (index, value) in db_indices.into_iter().zip(values) {
-                let event_bytes = value.unwrap();
-                let event_id = EventId {
-                    chain_id: *chain_id,
-                    stream_id: stream_id.clone(),
-                    index,
-                };
-                self.caches.event.insert(&event_id, event_bytes.clone());
-                returned_values.push(IndexAndEvent {
-                    index,
-                    event: event_bytes,
-                });
-            }
+        let mut db_values = if db_keys.is_empty() {
+            Vec::new()
+        } else {
+            store.read_multi_values_bytes(&db_keys).await?
         }
-        returned_values.sort_unstable_by_key(|ie| ie.index);
+        .into_iter();
+        let mut returned_values = Vec::with_capacity(entries.len());
+        for (index, cached) in entries {
+            let event = match cached {
+                Some(event) => event,
+                None => {
+                    let event_bytes = db_values
+                        .next()
+                        .expect("one database value per cache miss")
+                        .unwrap();
+                    let event_id = EventId {
+                        chain_id: *chain_id,
+                        stream_id: stream_id.clone(),
+                        index,
+                    };
+                    self.caches.event.insert(&event_id, event_bytes.clone());
+                    event_bytes
+                }
+            };
+            returned_values.push(IndexAndEvent { index, event });
+        }
         Ok(returned_values)
     }
 
@@ -1971,8 +1977,9 @@ where
             .with_label_values(&[metrics::DB])
             .inc();
         if let Some(ref desc) = maybe_value {
-            // Ignore the error: another thread may have populated the cache concurrently.
-            drop(self.caches.network_description.set(desc.clone()));
+            if self.caches.network_description.set(desc.clone()).is_err() {
+                debug!("network description cache was already populated concurrently");
+            }
         }
         Ok(maybe_value)
     }
