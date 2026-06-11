@@ -561,9 +561,11 @@ where
     E: linera_core::environment::Environment,
 {
     use linera_execution::Operation;
-    let bytes = bcs::to_bytes(&wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
-        app_id: bridge_app_id,
-    })?;
+    let bytes = bcs::to_bytes(
+        &wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
+            app_id: bridge_app_id,
+        },
+    )?;
     chain_client
         .execute_operations(
             vec![Operation::User {
@@ -697,4 +699,18 @@ where
     let info = chain_client.chain_info().await?;
     let hash = info.block_hash.context("chain has no blocks yet")?;
     Ok(chain_client.read_certificate(hash).await?)
+}
+
+/// Storage cache configuration used by the e2e tests.
+pub fn test_storage_cache_config() -> linera_storage::StorageCacheConfig {
+    linera_storage::StorageCacheConfig {
+        blob_cache_size: 1000,
+        confirmed_block_cache_size: 1000,
+        certificate_cache_size: 1000,
+        certificate_raw_cache_size: 1000,
+        event_cache_size: 1000,
+        block_hash_by_height_cache_size: 1000,
+        event_block_height_cache_size: 1000,
+        cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
+    }
 }

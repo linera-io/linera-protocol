@@ -23,7 +23,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use test_case::test_case;
 
@@ -93,14 +93,7 @@ async fn burns_per_evm_tx(
         &store_config,
         &format!("burns-per-tx-{name}-e2e"),
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
     genesis_config.initialize_storage(&mut storage).await?;
@@ -184,28 +177,14 @@ async fn burns_per_evm_tx(
     .await;
 
     let mut hi: u32 = 8;
-    let mut hi_gas = build_and_estimate(
-        hi,
-        &cc_a,
-        &cc_b,
-        bridge_app_id,
-        bridge_addr,
-        &provider,
-    )
-    .await?;
+    let mut hi_gas =
+        build_and_estimate(hi, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider).await?;
     tracing::info!(n = hi, gas = hi_gas, "search: initial `Burn` ops count");
 
     while hi_gas <= block_gas_limit && hi < MAX_SEARCH_N {
         let next_hi = hi.saturating_mul(2).min(MAX_SEARCH_N);
-        let gas = build_and_estimate(
-            next_hi,
-            &cc_a,
-            &cc_b,
-            bridge_app_id,
-            bridge_addr,
-            &provider,
-        )
-        .await?;
+        let gas = build_and_estimate(next_hi, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider)
+            .await?;
         hi = next_hi;
         hi_gas = gas;
         if hi_gas > block_gas_limit {
@@ -226,15 +205,7 @@ async fn burns_per_evm_tx(
     let mut lo_gas = if hi == 1 {
         hi_gas
     } else {
-        build_and_estimate(
-            lo,
-            &cc_a,
-            &cc_b,
-            bridge_app_id,
-            bridge_addr,
-            &provider,
-        )
-        .await?
+        build_and_estimate(lo, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider).await?
     };
     anyhow::ensure!(
         lo_gas <= block_gas_limit,
@@ -268,15 +239,8 @@ async fn burns_per_evm_tx(
 
     while lo + 1 < hi {
         let mid = lo + (hi - lo) / 2;
-        let g = build_and_estimate(
-            mid,
-            &cc_a,
-            &cc_b,
-            bridge_app_id,
-            bridge_addr,
-            &provider,
-        )
-        .await?;
+        let g =
+            build_and_estimate(mid, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider).await?;
         tracing::info!(n = mid, gas = g, "search: bisect");
         if g <= block_gas_limit {
             lo = mid;

@@ -35,7 +35,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, Query, QueryResponse, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use serde::Serialize;
 use wrapped_fungible::{InitialState, WrappedParameters};
@@ -84,14 +84,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         &config,
         "e2l-bridge-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
 
@@ -140,8 +133,10 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
 
     // 4a. Publish and create wrapped-fungible app
     tracing::info!("Publishing wrapped-fungible module...");
-    let wf_contract = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
-    let wf_service = Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
+    let wf_contract =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
+    let wf_service =
+        Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_service.wasm")).await?;
 
     let (wf_module_id, _) = cc
         .publish_module(wf_contract, wf_service, VmRuntime::Wasm, None)
