@@ -17,7 +17,7 @@ contract LightClient {
     bytes32 public adminChainId;
 
     /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
-    /// individual events can later be proven against it (`verifyEventInclusion`) and settled
+    /// individual events can later be proven against it (`proveEventsCommitted`) and settled
     /// (`processBurns`) without re-checking the certificate or re-parsing the header per chunk.
     /// `eventsHash` is never zero for a valid header, so a zero `eventsHash` means "unregistered".
     struct RegisteredBlock {
@@ -35,72 +35,85 @@ contract LightClient {
         adminChainId = _adminChainId;
     }
 
+    /// Installs a new validator committee, proven from the admin-chain block that created it. That
+    /// block emits an epoch event (system stream `[0]`) holding the new committee's blob hash; the
+    /// caller supplies that single event in `eventBcs` and an inclusion proof
+    /// (`txIndex`/`numTxs`/`numEventsInTx`/`positions`/`innerSiblings`/`outerSiblings`, exactly as
+    /// `processBurns`) proving it belongs to the signed block — the same `proveEventsCommitted` check
+    /// the burn path uses. The new epoch and blob hash are read from that event; `committeeBlob` must
+    /// hash to it, and `validators` are its uncompressed keys (verified against the blob).
     function addCommittee(
         bytes calldata blockProof,
-        bytes[] calldata transactionBcs,
+        bytes[] calldata eventBcs,
+        uint32 txIndex,
+        uint32 numTxs,
+        uint32 numEventsInTx,
+        uint32[] calldata positions,
+        bytes32[] calldata innerSiblings,
+        bytes32[] calldata outerSiblings,
         bytes calldata committeeBlob,
         bytes[] calldata validators
     ) external {
-        _verifyAdminTransactions(blockProof, transactionBcs);
+        (BridgeTypes.BlockHeader memory header,) = _verifyBlockProof(blockProof);
+        require(header.chain_id.value.value == adminChainId, "block must be from admin chain");
+        require(header.epoch.value == currentEpoch, "block epoch must match current epoch");
+        require(eventBcs.length == 1, "expected exactly one committee event");
 
-        (bool found, uint32 newEpoch, bytes32 expectedBlobHash) = _findCreateCommittee(transactionBcs);
-        require(found, "no CreateCommittee operation found");
+        // Prove the supplied event belongs to the block — the same inclusion check `processBurns`
+        // runs for burns.
+        proveEventsCommitted(
+            header.events_hash.value, eventBcs, txIndex, numTxs, numEventsInTx, positions, innerSiblings, outerSiblings
+        );
 
-        // Verify committeeBlob hash matches the blob_hash from CreateCommittee
+        (uint32 newEpoch, bytes32 expectedBlobHash) = _readCommitteeEvent(eventBcs[0]);
+
+        // Verify committeeBlob hash matches the blob_hash from the committee event.
         BridgeTypes.BlobContent memory blobContent =
             BridgeTypes.BlobContent(BridgeTypes.BlobType.Committee, committeeBlob);
         bytes32 computedHash =
             keccak256(abi.encodePacked("BlobContent::", BridgeTypes.bcs_serialize_BlobContent(blobContent)));
         require(computedHash == expectedBlobHash, "committee blob hash mismatch");
 
-        // Parse blob to extract addresses and weights, verified against caller's keys
+        // Parse blob to extract addresses and weights, verified against caller's keys.
         (address[] memory addrs, uint64[] memory weights) = _parseCommitteeBlob(committeeBlob, validators);
 
-        // Store the new committee
+        // Store the new committee.
         _setCommittee(newEpoch, addrs, weights);
     }
 
-    /// Verifies the header proof's quorum, that the block is from the admin chain at the current
-    /// epoch, and that `transactionBcs` (the per-transaction BCS encodings) are the transactions the
-    /// header commits to.
-    function _verifyAdminTransactions(bytes calldata blockProof, bytes[] calldata transactionBcs) internal view {
-        (BridgeTypes.BlockProof memory proof, bytes32 blockHash) = _deserializeAndHash(blockProof);
-        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
-
-        require(proof.header.chain_id.value.value == adminChainId, "block must be from admin chain");
-        require(proof.header.epoch.value == currentEpoch, "block epoch must match current epoch");
-        require(
-            _hashTransactionsFromBcs(transactionBcs) == proof.header.transactions_hash.value,
-            "transactions do not match header"
-        );
-    }
-
-    /// Scans the per-transaction BCS encodings for a `CreateCommittee` admin operation, returning
-    /// its epoch and blob hash if found.
-    function _findCreateCommittee(bytes[] calldata transactionBcs)
+    /// Reads the new epoch (the event's index) and committee blob hash (from its `EpochEventData`
+    /// payload) out of `eventBcs`, requiring it to be the system epoch event
+    /// (`StreamId::system([0])`). Reverts otherwise, so a proven event from a user stream cannot
+    /// trigger a rotation.
+    function _readCommitteeEvent(bytes calldata eventBcs)
         internal
         pure
-        returns (bool found, uint32 newEpoch, bytes32 expectedBlobHash)
+        returns (uint32 newEpoch, bytes32 expectedBlobHash)
     {
-        for (uint256 i = 0; i < transactionBcs.length; i++) {
-            BridgeTypes.Transaction memory txn = BridgeTypes.bcs_deserialize_Transaction(transactionBcs[i]);
-            // choice=1 is ExecuteOperation
-            if (txn.choice != 1) continue;
-            BridgeTypes.Operation memory op = txn.execute_operation;
-            // choice=0 is System
-            if (op.choice != 0) continue;
-            BridgeTypes.SystemOperation memory sysOp = op.system;
-            // choice=10 is Admin
-            if (sysOp.choice != 10) continue;
-            BridgeTypes.AdminOperation memory adminOp = sysOp.admin;
-            // choice=1 is CreateCommittee
-            if (adminOp.choice != 1) continue;
+        BridgeTypes.Event memory evt = BridgeTypes.bcs_deserialize_Event(eventBcs);
+        // application_id choice=0 is System; the epoch stream name is the single byte 0x00.
+        require(evt.stream_id.application_id.choice == 0, "not a system event");
+        require(
+            evt.stream_id.stream_name.value.length == 1 && evt.stream_id.stream_name.value[0] == 0x00,
+            "not the epoch stream"
+        );
+        BridgeTypes.EpochEventData memory data = BridgeTypes.bcs_deserialize_EpochEventData(evt.value);
+        newEpoch = evt.index;
+        expectedBlobHash = data.blob_hash.value;
+    }
 
-            newEpoch = adminOp.create_committee.epoch.value;
-            expectedBlobHash = adminOp.create_committee.blob_hash.value;
-            found = true;
-            break;
-        }
+    /// Deserializes a block proof and verifies its validator signatures form a quorum, returning the
+    /// header and the block hash (`keccak256("BlockHeader::" ++ BCS(header))`). The body never travels
+    /// in the proof; callers prove specific events against `header.events_hash` separately.
+    function _verifyBlockProof(bytes calldata blockProof)
+        internal
+        view
+        returns (BridgeTypes.BlockHeader memory header, bytes32 blockHash)
+    {
+        BridgeTypes.BlockProof memory proof;
+        (proof, blockHash) = _deserializeAndHash(blockProof);
+        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
+        header = proof.header;
     }
 
     /// Verifies a confirmed block from its header proof and the events it commits to, returning the
@@ -108,17 +121,12 @@ contract LightClient {
     /// BCS encodings and `eventsPerTx` how many belong to each transaction — together they
     /// reconstruct `events_hash`, checked against the header.
     function verifyBlockFromEvents(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx)
-        external
+        public
         view
         returns (BridgeTypes.BlockHeader memory header, bytes32 blockHash)
     {
-        BridgeTypes.BlockProof memory proof;
-        (proof, blockHash) = _deserializeAndHash(blockProof);
-        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
-        require(
-            _hashEventsFromBcs(eventBcs, eventsPerTx) == proof.header.events_hash.value, "events do not match header"
-        );
-        header = proof.header;
+        (header, blockHash) = _verifyBlockProof(blockProof);
+        require(_hashEventsFromBcs(eventBcs, eventsPerTx) == header.events_hash.value, "events do not match header");
     }
 
     /// Reconstructs `events_hash` (`hash_vec_vec`) from the per-event BCS encodings grouped by
@@ -144,38 +152,29 @@ contract LightClient {
         return _hashCryptoHashVec(txHashes);
     }
 
-    /// Recomputes `transactions_hash` (`hash_vec`) from the per-transaction BCS encodings: each
-    /// hashes to `keccak256("Transaction::" ++ transactionBcs[i])`, then the leaves fold once.
-    function _hashTransactionsFromBcs(bytes[] calldata transactionBcs) internal pure returns (bytes32) {
-        BridgeTypes.CryptoHash[] memory leaves = new BridgeTypes.CryptoHash[](transactionBcs.length);
-        for (uint256 i = 0; i < transactionBcs.length; i++) {
-            leaves[i] = BridgeTypes.CryptoHash(keccak256(abi.encodePacked("Transaction::", transactionBcs[i])));
-        }
-        return _hashCryptoHashVec(leaves);
-    }
-
     /// Verifies a block's signatures from its header and records its `events_hash`, so that
-    /// individual events can later be proven against it (via `verifyEventInclusion`) without
+    /// individual events can later be proven against it (via `proveEventsCommitted`) without
     /// re-checking the whole certificate. Returns the block hash
     /// (`keccak256("BlockHeader::" ++ BCS(header))`).
     function registerBlock(bytes calldata blockProof) external returns (bytes32) {
-        (BridgeTypes.BlockProof memory proof, bytes32 blockHash) = _deserializeAndHash(blockProof);
-        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
-        registeredBlocks[blockHash] = RegisteredBlock(
-            proof.header.events_hash.value, proof.header.height.value, proof.header.chain_id.value.value
-        );
+        (BridgeTypes.BlockHeader memory header, bytes32 blockHash) = _verifyBlockProof(blockProof);
+        registeredBlocks[blockHash] =
+            RegisteredBlock(header.events_hash.value, header.height.value, header.chain_id.value.value);
         return blockHash;
     }
 
     /// Proves that the events whose canonical BCS encodings are `eventBcs` sit at `positions`
-    /// (ascending) within transaction `txIndex` of the block registered under `blockHash`. Reverts
-    /// unless they fold — with the supplied sibling hashes — to the block's registered
-    /// `events_hash`. `numTxs`/`numEventsInTx` are the outer/inner vector lengths; `innerSiblings`
-    /// are the leaf hashes of the unproven events in `txIndex` (position order) and `outerSiblings`
-    /// the per-transaction hashes of the other transactions (transaction order). This lets a caller
-    /// settle a subset of a block's events without re-hashing the whole block.
-    function verifyEventInclusion(
-        bytes32 blockHash,
+    /// (ascending) within transaction `txIndex` of the events a block commits to via `eventsHash`
+    /// (the `hash_vec_vec` over its per-transaction event lists, i.e. `BlockHeader.events_hash`).
+    /// Reverts unless they fold — with the supplied sibling hashes — to `eventsHash`.
+    /// `numTxs`/`numEventsInTx` are the outer/inner vector lengths; `innerSiblings` are the leaf
+    /// hashes of the other events in `txIndex` (position order) and `outerSiblings` the
+    /// per-transaction hashes of the other transactions (transaction order). A successful call
+    /// proves the events belong to that block without re-hashing all of them — the caller supplies
+    /// `eventsHash` from a source it trusts: a registered block (see `registerBlock`, as
+    /// `FungibleBridge.processBurns` does) or a freshly verified header.
+    function proveEventsCommitted(
+        bytes32 eventsHash,
         bytes[] calldata eventBcs,
         uint32 txIndex,
         uint32 numTxs,
@@ -183,9 +182,7 @@ contract LightClient {
         uint32[] calldata positions,
         bytes32[] calldata innerSiblings,
         bytes32[] calldata outerSiblings
-    ) external view {
-        bytes32 eventsHash = registeredBlocks[blockHash].eventsHash;
-        require(eventsHash != 0, "block not registered");
+    ) public pure {
         require(txIndex < numTxs, "txIndex out of range");
         require(eventBcs.length == positions.length, "events/positions length mismatch");
         require(positions.length + innerSiblings.length == numEventsInTx, "inner sibling count mismatch");

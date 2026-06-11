@@ -490,9 +490,10 @@ async fn serve_loop<E: Environment + 'static>(
                             .await
                         {
                             for cert in certs.into_iter().flatten() {
-                                if let Some((epoch, blob_hash)) = committee::find_create_committee(&cert) {
+                                if let Some(committee_event) = committee::find_committee_event(&cert) {
+                                    let epoch = committee_event.epoch;
                                     let blob_id = linera_base::identifiers::BlobId::new(
-                                        blob_hash,
+                                        committee_event.blob_hash,
                                         linera_base::identifiers::BlobType::Committee,
                                     );
                                     match chain_client.storage_client().read_blob(blob_id).await {

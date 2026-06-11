@@ -31,7 +31,7 @@ use linera_bridge::{
         parse_deposit_event, verify_receipt_inclusion,
     },
 };
-use linera_execution::test_utils::solidity::compile_solidity_contract;
+use linera_execution::test_utils::solidity::compile_solidity_contract_with_options;
 
 const LINERA_TOKEN_SOL: &str = include_str!("../src/solidity/LineraToken.sol");
 
@@ -54,9 +54,12 @@ alloy_sol_types::sol! {
     }
 }
 
-/// Compiles a Solidity contract via `solc`, returning deployment bytecode.
+/// Compiles a Solidity contract via `solc`, returning deployment bytecode. Compiles with the
+/// optimizer (runs = 1), matching how the contracts are deployed (forge) and the other Rust tests:
+/// `LightClient.addCommittee` takes enough calldata arguments that the via-IR Yul stack scheduler
+/// only fits them when the optimizer runs.
 fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
-    compile_solidity_contract(
+    compile_solidity_contract_with_options(
         source_code,
         file_name,
         contract_name,
@@ -67,6 +70,7 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
             ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
             ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),
         ],
+        Some(1),
     )
     .expect("solc compilation failed")
 }

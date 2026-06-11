@@ -1,111 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! EVM client for relaying committee changes to a LightClient contract.
+//! Helpers for deriving EVM-facing validator keys from a Linera committee blob.
 
-use alloy::{
-    network::{Ethereum, EthereumWallet},
-    primitives::{keccak256, Address, Bytes, TxHash},
-    providers::{
-        fillers::{
-            BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-            WalletFiller,
-        },
-        Identity, Provider, ProviderBuilder, RootProvider,
-    },
-    rpc::types::TransactionRequest,
-    signers::local::PrivateKeySigner,
-};
-use alloy_sol_types::SolCall;
+use alloy::primitives::{keccak256, Address};
 use linera_base::crypto::ValidatorPublicKey;
-use linera_chain::types::ConfirmedBlockCertificate;
 use linera_execution::committee::Committee;
-use url::Url;
-
-use crate::{block_proof::BlockProof, contracts::ILightClient::addCommitteeCall};
-
-/// Client for interacting with a deployed LightClient contract on an EVM chain.
-#[expect(clippy::type_complexity)]
-pub struct EvmLightClient {
-    provider: FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<EthereumWallet>,
-        >,
-        RootProvider<Ethereum>,
-    >,
-    contract_address: Address,
-}
-
-impl EvmLightClient {
-    /// Creates a new EVM light client.
-    ///
-    /// - `endpoint`: HTTP JSON-RPC URL of the EVM node
-    /// - `contract_address`: deployed LightClient contract address
-    /// - `private_key`: hex-encoded private key for signing transactions
-    pub fn new(
-        endpoint: &str,
-        contract_address: Address,
-        private_key: &str,
-    ) -> anyhow::Result<Self> {
-        let rpc_url = Url::parse(endpoint)?;
-        let signer: PrivateKeySigner = private_key.parse()?;
-        let wallet = EthereumWallet::from(signer);
-        let provider = ProviderBuilder::new().wallet(wallet).connect_http(rpc_url);
-
-        Ok(Self {
-            provider,
-            contract_address,
-        })
-    }
-
-    /// Calls `LightClient.addCommittee()` on the EVM chain.
-    ///
-    /// Derives the block proof and the per-transaction BCS encodings from `certificate`,
-    /// extracts uncompressed validator keys from the committee blob, then submits the
-    /// transaction to the LightClient contract.
-    ///
-    /// - `certificate`: the confirmed block whose admin transaction creates the new committee
-    /// - `committee_blob`: raw committee blob bytes (BCS-serialized `Committee`)
-    pub async fn add_committee(
-        &self,
-        certificate: &ConfirmedBlockCertificate,
-        committee_blob: &[u8],
-    ) -> anyhow::Result<TxHash> {
-        let validator_keys = extract_validator_keys(committee_blob)?;
-        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(certificate))?;
-        let transaction_bcs: Vec<Bytes> = certificate
-            .block()
-            .body
-            .transactions
-            .iter()
-            .map(|txn| Bytes::from(bcs::to_bytes(txn).expect("BCS-serialize transaction")))
-            .collect();
-
-        let call = addCommitteeCall {
-            blockProof: Bytes::from(proof_bytes),
-            transactionBcs: transaction_bcs,
-            committeeBlob: Bytes::copy_from_slice(committee_blob),
-            validators: validator_keys.into_iter().map(Bytes::from).collect(),
-        };
-
-        let tx = TransactionRequest::default()
-            .to(self.contract_address)
-            .input(call.abi_encode().into());
-
-        let receipt = self
-            .provider
-            .send_transaction(tx)
-            .await?
-            .get_receipt()
-            .await?;
-
-        Ok(receipt.transaction_hash)
-    }
-}
 
 /// Extracts uncompressed validator public keys from a BCS-serialized committee blob.
 ///

@@ -5,11 +5,12 @@
 
 use std::collections::BTreeMap;
 
+use alloy_primitives::B256;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
     data_types::{Amount, BlobContent, BlockHeight, Epoch, Event, Round, Timestamp, U128},
-    identifiers::{ApplicationId, ChainId},
+    identifiers::{ApplicationId, ChainId, StreamId},
 };
 use linera_chain::{
     block::{Block, ConfirmedBlock},
@@ -20,9 +21,10 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
-    committee::ValidatorState, system::AdminOperation,
-    test_utils::solidity::compile_solidity_contract_with_options, Message, MessageKind, Operation,
-    ResourceControlPolicy, SystemOperation,
+    committee::ValidatorState,
+    system::{EpochEventData, EPOCH_STREAM_NAME},
+    test_utils::solidity::compile_solidity_contract_with_options,
+    Message, MessageKind, Operation, ResourceControlPolicy,
 };
 use revm::{
     database::{CacheDB, EmptyDB},
@@ -32,7 +34,7 @@ use revm::{
 use revm_context::result::{ExecutionResult, Output};
 
 pub use crate::evm::client::{validator_evm_address, validator_uncompressed_key};
-use crate::{block_proof::BlockProof, evm};
+use crate::{block_proof::BlockProof, contracts::ILightClient::addCommitteeCall, evm};
 
 pub const GAS_LIMIT: u64 = 500_000_000;
 
@@ -61,24 +63,64 @@ pub fn create_committee_blob(public: &ValidatorPublicKey) -> (Vec<u8>, CryptoHas
     (bytes, blob_hash)
 }
 
-/// Creates a `CreateCommittee` transaction list for the given epoch and blob hash.
-pub fn create_committee_transaction(epoch: Epoch, blob_hash: CryptoHash) -> Vec<Transaction> {
-    vec![Transaction::ExecuteOperation(Operation::System(Box::new(
-        SystemOperation::Admin(AdminOperation::CreateCommittee { epoch, blob_hash }),
-    )))]
+/// Creates the system epoch event Linera emits on `CreateCommittee`: indexed by the new epoch,
+/// carrying the committee blob hash in its `EpochEventData` payload.
+pub fn epoch_event(new_epoch: Epoch, blob_hash: CryptoHash) -> Event {
+    Event {
+        stream_id: StreamId::system(EPOCH_STREAM_NAME),
+        index: new_epoch.0,
+        value: bcs::to_bytes(&EpochEventData {
+            blob_hash,
+            timestamp: Timestamp::from(0),
+        })
+        .expect("epoch event serialization failed"),
+    }
 }
 
-/// Signs a block and returns the BCS-serialized `ConfirmedBlockCertificate`.
+/// Builds an event identical to [`epoch_event`] in index, stream-name bytes, and payload, but
+/// emitted on a *user* application stream (`GenericApplicationId::User`) instead of the system
+/// stream. Used to verify the LightClient upgrades committees only from the system stream.
+pub fn forged_user_epoch_event(
+    application_id: CryptoHash,
+    new_epoch: Epoch,
+    blob_hash: CryptoHash,
+) -> Event {
+    use linera_base::identifiers::{GenericApplicationId, StreamName};
+    Event {
+        stream_id: StreamId {
+            application_id: GenericApplicationId::User(ApplicationId::new(application_id)),
+            stream_name: StreamName(EPOCH_STREAM_NAME.to_vec()),
+        },
+        index: new_epoch.0,
+        value: bcs::to_bytes(&EpochEventData {
+            blob_hash,
+            timestamp: Timestamp::from(0),
+        })
+        .expect("epoch event serialization failed"),
+    }
+}
+
+/// Signs a block with a single validator and returns the `ConfirmedBlockCertificate`.
+pub fn sign_certificate(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+    block: Block,
+) -> ConfirmedBlockCertificate {
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
+    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
+}
+
+/// Signs a block and returns the BCS-serialized `BlockProof`.
 pub fn sign_and_serialize(
     secret: &ValidatorSecretKey,
     public: &ValidatorPublicKey,
     block: Block,
 ) -> Vec<u8> {
-    let confirmed = ConfirmedBlock::new(block);
-    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
-    let certificate =
-        ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)]);
-    bcs::to_bytes(&BlockProof::from_certificate(&certificate)).expect("BCS serialization failed")
+    bcs::to_bytes(&BlockProof::from_certificate(&sign_certificate(
+        secret, public, block,
+    )))
+    .expect("BCS serialization failed")
 }
 
 /// Builds the three `addBlock` arguments from a certificate: the lean block proof, the per-event
@@ -101,12 +143,91 @@ pub fn add_block_args(certificate: &ConfirmedBlockCertificate) -> (Bytes, Vec<By
     (proof, event_bcs, events_per_tx)
 }
 
-/// BCS-encodes each transaction, for the `transactionBcs` argument of `addCommittee`.
-pub fn transaction_bcs(transactions: &[Transaction]) -> Vec<Bytes> {
-    transactions
-        .iter()
-        .map(|txn| Bytes::from(bcs::to_bytes(txn).expect("BCS serialization failed")))
-        .collect()
+/// The block-proof and inclusion-proof arguments for an `addCommittee` call: the lean block proof,
+/// the single committee event's BCS encoding, and the inclusion proof binding it to the block.
+pub struct CommitteeCallArgs {
+    pub block_proof: Bytes,
+    pub event_bcs: Vec<Bytes>,
+    pub tx_index: u32,
+    pub num_txs: u32,
+    pub num_events_in_tx: u32,
+    pub positions: Vec<u32>,
+    pub inner_siblings: Vec<B256>,
+    pub outer_siblings: Vec<B256>,
+}
+
+/// Builds the `addCommittee` proof arguments for a block whose sole event (transaction 0, position
+/// 0) is `event`, signed by the given validator on `chain_id` at `block_epoch`/`height`. The
+/// inclusion proof binds `event` to the block's `events_hash`.
+pub fn committee_call_args_for_event(
+    signer_secret: &ValidatorSecretKey,
+    signer_public: &ValidatorPublicKey,
+    event: Event,
+    block_epoch: Epoch,
+    height: BlockHeight,
+    chain_id: CryptoHash,
+) -> CommitteeCallArgs {
+    let events = vec![vec![event]];
+    let block = build_block(chain_id, block_epoch, height, vec![], events.clone());
+    let cert = sign_certificate(signer_secret, signer_public, block);
+    let proof = crate::block_proof::EventInclusionProof::new(&events, 0, &[0]);
+    let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
+    CommitteeCallArgs {
+        block_proof: Bytes::from(
+            bcs::to_bytes(&BlockProof::from_certificate(&cert)).expect("BCS serialization failed"),
+        ),
+        event_bcs: vec![Bytes::from(
+            bcs::to_bytes(&events[0][0]).expect("BCS serialization failed"),
+        )],
+        tx_index: proof.tx_index,
+        num_txs: proof.num_txs,
+        num_events_in_tx: proof.num_events_in_tx,
+        positions: vec![0],
+        inner_siblings: proof.inner_siblings.iter().map(to_b256).collect(),
+        outer_siblings: proof.outer_siblings.iter().map(to_b256).collect(),
+    }
+}
+
+/// Like `committee_call_args_for_event`, but the event is the system epoch event for
+/// `new_epoch`/`blob_hash` — the real `CreateCommittee` event.
+pub fn committee_block_args(
+    signer_secret: &ValidatorSecretKey,
+    signer_public: &ValidatorPublicKey,
+    new_epoch: Epoch,
+    blob_hash: CryptoHash,
+    block_epoch: Epoch,
+    height: BlockHeight,
+    chain_id: CryptoHash,
+) -> CommitteeCallArgs {
+    committee_call_args_for_event(
+        signer_secret,
+        signer_public,
+        epoch_event(new_epoch, blob_hash),
+        block_epoch,
+        height,
+        chain_id,
+    )
+}
+
+/// Assembles an `addCommitteeCall` from the inclusion-proof args, the committee blob, and the
+/// caller's uncompressed validator keys.
+pub fn build_add_committee_call(
+    args: CommitteeCallArgs,
+    committee_blob: Vec<u8>,
+    validators: Vec<Bytes>,
+) -> addCommitteeCall {
+    addCommitteeCall {
+        blockProof: args.block_proof,
+        eventBcs: args.event_bcs,
+        txIndex: args.tx_index,
+        numTxs: args.num_txs,
+        numEventsInTx: args.num_events_in_tx,
+        positions: args.positions,
+        innerSiblings: args.inner_siblings,
+        outerSiblings: args.outer_siblings,
+        committeeBlob: committee_blob.into(),
+        validators,
+    }
 }
 
 /// Creates a certificate with custom transactions for a specific chain and height.
