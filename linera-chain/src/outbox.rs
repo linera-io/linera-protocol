@@ -8,8 +8,8 @@ use linera_base::data_types::{ArithmeticError, BlockHeight};
 #[cfg(with_testing)]
 use linera_views::context::MemoryContext;
 use linera_views::{
-    bucket_queue_view::BucketQueueView,
     context::Context,
+    queue_view::QueueView,
     register_view::RegisterView,
     views::{ClonableView, View},
     ViewError,
@@ -36,11 +36,6 @@ pub(crate) mod metrics {
     });
 }
 
-/// The number of block heights in a bucket.
-///
-/// The current value keeps buckets comfortably under 1KB.
-const BLOCK_HEIGHT_BUCKET_SIZE: usize = 100;
-
 /// The state of an outbox
 /// * An outbox is used to send messages to another chain.
 /// * Internally, this is implemented as a FIFO queue of (increasing) block heights.
@@ -59,7 +54,7 @@ where
     pub next_height_to_schedule: RegisterView<C, BlockHeight>,
     /// Keep sending these certified blocks of ours until they are acknowledged by
     /// receivers.
-    pub queue: BucketQueueView<C, BlockHeight, BLOCK_HEIGHT_BUCKET_SIZE>,
+    pub queue: QueueView<C, BlockHeight>,
 }
 
 impl<C> OutboxStateView<C>
@@ -112,11 +107,11 @@ where
         height: BlockHeight,
     ) -> Result<Vec<BlockHeight>, ViewError> {
         let mut updates = Vec::new();
-        while let Some(h) = self.queue.front().copied() {
+        while let Some(h) = self.queue.front().await? {
             if h > height {
                 break;
             }
-            self.queue.delete_front().await?;
+            self.queue.delete_front();
             updates.push(h);
         }
         #[cfg(with_metrics)]
