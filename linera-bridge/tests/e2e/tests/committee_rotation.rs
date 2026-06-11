@@ -23,7 +23,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::environment::wallet::Memory;
 use linera_execution::WasmRuntime;
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 sol! {
@@ -74,16 +74,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
         &config,
         "committee-rotation-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            block_hash_by_height_cache_size: 1000,
-            event_block_height_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
     genesis_config.initialize_storage(&mut storage).await?;
@@ -188,9 +179,9 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             relay_port,
             0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
-            std::time::Duration::from_secs(5),  // monitor_scan_interval
-            0,  // monitor_start_block
-            5,  // max_retries
+            std::time::Duration::from_secs(5), // monitor_scan_interval
+            0,                                 // monitor_start_block
+            5,                                 // max_retries
             None,
         ))
         .await

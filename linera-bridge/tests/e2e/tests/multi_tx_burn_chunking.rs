@@ -42,7 +42,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 sol! {
@@ -91,16 +91,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
         &store_config,
         "multi-tx-burn-chunking-e2e",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            block_hash_by_height_cache_size: 1000,
-            event_block_height_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
     genesis_config.initialize_storage(&mut storage).await?;
@@ -145,7 +136,8 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
     )
     .await?;
 
-    let bridge_app_id = publish_and_create_evm_bridge(&cc_a, erc20_addr, chain_a, fungible_app_id).await?;
+    let bridge_app_id =
+        publish_and_create_evm_bridge(&cc_a, erc20_addr, chain_a, fungible_app_id).await?;
 
     // Register the wrapped-fungible app with the evm-bridge so it can drive
     // the escrow transfer + burn.

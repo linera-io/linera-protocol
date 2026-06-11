@@ -24,14 +24,14 @@ use linera_bridge::abi::BridgeOperation;
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_evm_bridge,
-    publish_and_create_wrapped_fungible, register_bridge_app, start_compose,
-    wait_for_light_client, wait_for_relay_http_ready, wait_for_relay_metrics, ANVIL_PRIVATE_KEY,
+    publish_and_create_wrapped_fungible, register_bridge_app, start_compose, wait_for_light_client,
+    wait_for_relay_http_ready, wait_for_relay_metrics, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 sol! {
@@ -67,16 +67,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
         &store_config,
         "multi-burn-same-block-e2e",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            block_hash_by_height_cache_size: 1000,
-            event_block_height_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
     genesis_config.initialize_storage(&mut storage).await?;

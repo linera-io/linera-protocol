@@ -42,7 +42,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use wrapped_fungible::{InitialState, WrappedParameters};
 
@@ -91,16 +91,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
         &config,
         "auto-scan-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            block_hash_by_height_cache_size: 1000,
-            event_block_height_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
 
@@ -225,9 +216,11 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
 
     // ── Phase 6: Register app IDs on both sides ──
     tracing::info!("Registering bridge app in wrapped-fungible...");
-    let register_bytes = bcs::to_bytes(&wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
-        app_id: bridge_app_id,
-    })?;
+    let register_bytes = bcs::to_bytes(
+        &wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
+            app_id: bridge_app_id,
+        },
+    )?;
     let register_operation = Operation::User {
         application_id: fungible_app_id,
         bytes: register_bytes,
@@ -328,9 +321,9 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             relay_port,
             0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
-            std::time::Duration::from_secs(5),  // monitor_scan_interval
-            0,  // monitor_start_block
-            5,  // max_retries
+            std::time::Duration::from_secs(5), // monitor_scan_interval
+            0,                                 // monitor_start_block
+            5,                                 // max_retries
             None,
         ))
         .await

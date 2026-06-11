@@ -20,7 +20,7 @@ use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Bytecode, U128},
-    identifiers::AccountOwner,
+    identifiers::{Account, AccountOwner},
     vm::VmRuntime,
 };
 use linera_bridge::abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters};
@@ -32,12 +32,11 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::{environment::wallet::Memory, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_base::identifiers::Account;
+use linera_storage::DbStorage;
+use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use wrapped_fungible::{
     InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
-use linera_storage::{DbStorage, StorageCacheConfig};
-use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 sol! {
     #[sol(rpc)]
@@ -77,16 +76,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &config,
         "bridge-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            block_hash_by_height_cache_size: 1000,
-            event_block_height_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
 
