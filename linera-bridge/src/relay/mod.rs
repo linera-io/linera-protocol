@@ -297,6 +297,7 @@ async fn serve_loop<E: Environment + 'static>(
         &evm_client,
         admin_chain_id,
         admin_chain_height,
+        max_retries,
     )
     .await
     .context("committee catch-up failed")?;
@@ -479,16 +480,20 @@ async fn serve_loop<E: Environment + 'static>(
                     }
                 };
 
-                // Handle admin chain committee updates.
+                // Handle admin chain committee updates. Reconcile against the
+                // LightClient's current epoch (gap-filling, with bounded retry per
+                // relay) so a transient relay failure self-heals on a later admin
+                // block instead of stranding the LightClient at a stale epoch.
                 if notification.chain_id == admin_chain_id {
                     if let Reason::NewBlock { height, .. } = &notification.reason {
                         tracing::debug!(%height, "New admin chain block, reconciling committees");
-                        let scan_upto = linera_base::data_types::BlockHeight(height.0 + 1);
+                        let scan_upto = BlockHeight(height.0 + 1);
                         if let Err(e) = committee::catch_up(
                             chain_client.storage_client(),
                             &evm_client,
                             admin_chain_id,
                             scan_upto,
+                            max_retries,
                         )
                         .await
                         {
