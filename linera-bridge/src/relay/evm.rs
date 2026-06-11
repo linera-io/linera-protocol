@@ -336,6 +336,20 @@ impl<P: Provider> EvmClient<P> {
         Ok(Epoch(epoch))
     }
 
+    /// Queries the admin-chain height that installed `epoch`'s committee, as
+    /// recorded by the LightClient. Returns height 0 for the genesis committee
+    /// or an unknown epoch, so callers degrade to a full scan.
+    pub async fn committee_height(&self, epoch: Epoch) -> Result<BlockHeight> {
+        let lc_addr = self.get_light_client_address().await?;
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let height = light_client
+            .committeeHeight(epoch.0)
+            .call()
+            .await
+            .context("failed to query LightClient.committeeHeight()")?;
+        Ok(BlockHeight(height))
+    }
+
     /// Relays a committee update to the LightClient contract.
     pub async fn add_committee(
         &self,
