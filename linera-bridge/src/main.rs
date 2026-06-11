@@ -123,6 +123,14 @@ struct ServeOptions {
     #[arg(long, default_value = "1000")]
     event_cache_size: usize,
 
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000")]
+    block_hash_by_height_cache_size: usize,
+
+    /// The maximal number of entries in the event-block-height cache.
+    #[arg(long, default_value = "1000")]
+    event_block_height_cache_size: usize,
+
     /// Interval between monitor scan loops, in seconds.
     #[arg(long, default_value = "30")]
     monitor_scan_interval: u64,
@@ -184,6 +192,8 @@ impl ServeOptions {
                 certificate_cache_size: self.certificate_cache_size,
                 certificate_raw_cache_size: self.certificate_raw_cache_size,
                 event_cache_size: self.event_cache_size,
+                block_hash_by_height_cache_size: self.block_hash_by_height_cache_size,
+                event_block_height_cache_size: self.event_block_height_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
             std::time::Duration::from_secs(self.monitor_scan_interval),
