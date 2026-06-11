@@ -11,10 +11,7 @@ mod tests {
     };
     use revm::{database::CacheDB, primitives::Address};
 
-    use crate::{
-        contracts::{ILightClient::addCommitteeCall, IMicrochain::addBlockCall},
-        test_helpers::*,
-    };
+    use crate::{contracts::IMicrochain::addBlockCall, test_helpers::*};
 
     #[test]
     fn test_gas_light_client_add_committee() {
@@ -31,28 +28,19 @@ mod tests {
             deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
-        let transactions = create_committee_transaction(Epoch(1), blob_hash);
-        let transaction_bcs = transaction_bcs(&transactions);
-        let block = create_test_block(
-            test_admin_chain_id(),
+        let args = committee_block_args(
+            &secret,
+            &public,
+            Epoch(1),
+            blob_hash,
             Epoch::ZERO,
             BlockHeight(1),
-            transactions,
+            test_admin_chain_id(),
         );
-        let bcs_bytes = sign_and_serialize(&secret, &public, block);
         let new_uncompressed = validator_uncompressed_key(&new_public);
+        let call = build_add_committee_call(args, committee_bytes, vec![new_uncompressed.into()]);
 
-        let (_, _, gas_used) = call_contract(
-            &mut db,
-            deployer,
-            contract,
-            &addCommitteeCall {
-                blockProof: bcs_bytes.into(),
-                transactionBcs: transaction_bcs,
-                committeeBlob: committee_bytes.into(),
-                validators: vec![new_uncompressed.into()],
-            },
-        );
+        let (_, _, gas_used) = call_contract(&mut db, deployer, contract, &call);
 
         println!("LightClient.addCommittee gas used: {gas_used}");
     }

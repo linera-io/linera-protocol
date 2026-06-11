@@ -27,11 +27,11 @@ bytes32 constant FUNGIBLE_APP_ID = bytes32(uint256(0xBEEF));
 // ------------------------------------------------------------------
 // MockLightClient
 //
-// Stands in for the real LightClient. `verifyEventInclusion` is a no-op
+// Stands in for the real LightClient. `proveEventsCommitted` is a no-op
 // (or reverts when armed) — the fold itself is covered by LightClient's
-// own tests. `registeredBlocks` returns the configured chain id and
-// height, so `FungibleBridge.processBurns` can read them and release the
-// burns it is handed.
+// own tests. `registeredBlocks` returns a nonzero events hash plus the
+// configured chain id and height, so `FungibleBridge.processBurns` can
+// read them and release the burns it is handed.
 // ------------------------------------------------------------------
 contract MockLightClient {
     bytes32 public chainIdRet;
@@ -47,7 +47,7 @@ contract MockLightClient {
         inclusionReverts = value;
     }
 
-    function verifyEventInclusion(
+    function proveEventsCommitted(
         bytes32,
         bytes[] calldata,
         uint32,
@@ -123,7 +123,7 @@ contract FungibleBridgeProcessBurnsTest is Test {
     }
 
     // Settles the chunk `eventBcs` at `positions`. The inclusion-proof structure (sibling counts,
-    // tx/event sizes) is irrelevant here because `MockLightClient.verifyEventInclusion` is a no-op;
+    // tx/event sizes) is irrelevant here because `MockLightClient.proveEventsCommitted` is a no-op;
     // these tests exercise FungibleBridge's release logic, not the fold.
     function _settle(FungibleBridge bridge, bytes[] memory eventBcs, uint32[] memory positions) internal {
         bridge.processBurns(BLOCK_HASH, eventBcs, TX, 1, uint32(eventBcs.length), positions, noSiblings, noSiblings);

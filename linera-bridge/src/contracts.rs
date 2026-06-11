@@ -42,7 +42,13 @@ sol! {
     interface ILightClient {
         function addCommittee(
             bytes calldata blockProof,
-            bytes[] calldata transactionBcs,
+            bytes[] calldata eventBcs,
+            uint32 txIndex,
+            uint32 numTxs,
+            uint32 numEventsInTx,
+            uint32[] calldata positions,
+            bytes32[] calldata innerSiblings,
+            bytes32[] calldata outerSiblings,
             bytes calldata committeeBlob,
             bytes[] calldata validators
         ) external;
@@ -51,8 +57,8 @@ sol! {
             external
             view
             returns (bytes32 eventsHash, uint64 height, bytes32 chainId);
-        function verifyEventInclusion(
-            bytes32 blockHash,
+        function proveEventsCommitted(
+            bytes32 eventsHash,
             bytes[] calldata eventBcs,
             uint32 txIndex,
             uint32 numTxs,
@@ -60,7 +66,7 @@ sol! {
             uint32[] calldata positions,
             bytes32[] calldata innerSiblings,
             bytes32[] calldata outerSiblings
-        ) external view;
+        ) external pure;
         function currentEpoch() external view returns (uint32);
     }
 

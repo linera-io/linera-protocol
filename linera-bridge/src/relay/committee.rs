@@ -9,31 +9,46 @@ use anyhow::{Context as _, Result};
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, Epoch},
-    identifiers::{BlobId, BlobType, ChainId},
+    identifiers::{BlobId, BlobType, ChainId, StreamId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_execution::{system::AdminOperation, Operation, SystemOperation};
+use linera_execution::system::{EpochEventData, EPOCH_STREAM_NAME};
 use linera_storage::Storage;
 
 use super::evm::EvmClient;
 use crate::evm::client::extract_validator_keys;
 
-/// Scans a certificate for a `CreateCommittee` operation.
-/// Returns the epoch and blob hash if found.
-pub fn find_create_committee(cert: &ConfirmedBlockCertificate) -> Option<(Epoch, CryptoHash)> {
-    cert.inner().block().body.operations().find_map(|op| {
-        if let Operation::System(boxed) = op {
-            if let SystemOperation::Admin(AdminOperation::CreateCommittee {
-                epoch,
-                blob_hash,
-                ..
-            }) = boxed.as_ref()
-            {
-                return Some((*epoch, *blob_hash));
+/// The epoch event Linera emits when a new committee is created, located within a block.
+pub struct CommitteeEvent {
+    /// Index of the transaction whose events contain the epoch event.
+    pub tx_index: usize,
+    /// Position of the epoch event within that transaction's events.
+    pub position: usize,
+    /// The new epoch — the event's index.
+    pub epoch: Epoch,
+    /// The committee blob hash, from the event's `EpochEventData` payload.
+    pub blob_hash: CryptoHash,
+}
+
+/// Locates the epoch event Linera emits when a new committee is created. Returns its position in the
+/// block (so callers can build an inclusion proof) plus the new epoch and committee blob hash.
+pub fn find_committee_event(cert: &ConfirmedBlockCertificate) -> Option<CommitteeEvent> {
+    let epoch_stream = StreamId::system(EPOCH_STREAM_NAME);
+    for (tx_index, tx_events) in cert.inner().block().body.events.iter().enumerate() {
+        for (position, event) in tx_events.iter().enumerate() {
+            if event.stream_id != epoch_stream {
+                continue;
             }
+            let data: EpochEventData = bcs::from_bytes(&event.value).ok()?;
+            return Some(CommitteeEvent {
+                tx_index,
+                position,
+                epoch: Epoch(event.index),
+                blob_hash: data.blob_hash,
+            });
         }
-        None
-    })
+    }
+    None
 }
 
 /// Relays a single committee update to the LightClient contract.
@@ -92,11 +107,12 @@ where
 
     let mut relayed = 0u32;
     for cert in certs.into_iter().flatten() {
-        if let Some((epoch, blob_hash)) = find_create_committee(&cert) {
+        if let Some(committee_event) = find_committee_event(&cert) {
+            let epoch = committee_event.epoch;
             if epoch <= current_epoch {
                 continue;
             }
-            let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+            let blob_id = BlobId::new(committee_event.blob_hash, BlobType::Committee);
             let blob = storage
                 .read_blob(blob_id)
                 .await?

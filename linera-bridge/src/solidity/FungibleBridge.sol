@@ -131,7 +131,7 @@ contract FungibleBridge is Microchain {
 
     /// Releases the burns whose canonical BCS encodings are `eventBcs`, after proving they sit at
     /// `positions` within transaction `txIndex` of the block registered under `blockHash` (see
-    /// `LightClient.verifyEventInclusion`). The off-chain relayer uses this when `addBlock` would
+    /// `LightClient.proveEventsCommitted`). The off-chain relayer uses this when `addBlock` would
     /// not fit in a single EVM tx: it registers the block once, then settles burns in chunks, each
     /// proving only its own events instead of re-verifying the whole certificate.
     ///
@@ -141,9 +141,10 @@ contract FungibleBridge is Microchain {
     ///
     /// Reverts (atomically — no `processedBurns` flag is set if the call reverts) on:
     /// - empty `positions` (`"empty positions"`)
-    /// - a failed inclusion proof (block not registered, or events/siblings do not fold to its
-    ///   `events_hash`)
+    /// - a block that was never registered (`"block not registered"`)
     /// - a block registered for a different chain (`"chain id mismatch"`)
+    /// - a failed inclusion proof: events/siblings do not fold to the block's `events_hash`
+    ///   (`"event inclusion proof failed"`)
     /// - any event that is not a matching burn for this app (`"not a matching burn"`)
     /// - any failed `token.transfer` (`"safeTransfer failed"`)
     function processBurns(
@@ -158,14 +159,14 @@ contract FungibleBridge is Microchain {
     ) external {
         require(positions.length > 0, "empty positions");
 
-        // Prove the events belong to the registered block (reverts if not registered or the proof
-        // does not fold to its events_hash).
-        lightClient.verifyEventInclusion(
-            blockHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, innerSiblings, outerSiblings
-        );
-
-        (, uint64 height, bytes32 blockChainId) = lightClient.registeredBlocks(blockHash);
+        // The block must have been registered (its signatures were checked once, then); fetch its
+        // committed events hash and metadata, then prove these events are part of it.
+        (bytes32 eventsHash, uint64 height, bytes32 blockChainId) = lightClient.registeredBlocks(blockHash);
+        require(eventsHash != 0, "block not registered");
         require(blockChainId == chainId, "chain id mismatch");
+        lightClient.proveEventsCommitted(
+            eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, innerSiblings, outerSiblings
+        );
 
         _releaseBurns(eventBcs, height);
     }
