@@ -273,8 +273,7 @@ where
                 // overwritten below if the front moved). The back is preserved since
                 // remaining_count >= 2.
                 for offset in 1..plan.remaining_offset {
-                    let index = self.stored_first_index
-                        + u32::try_from(offset).map_err(|_| ArithmeticError::Overflow)?;
+                    let index = checked_bucket_index(self.stored_first_index, offset)?;
                     batch.delete_key(self.get_middle_key(index)?);
                 }
                 // Promote the new front bucket if the cursor crossed buckets.
@@ -295,14 +294,19 @@ where
                     let chunks = merged.chunks(N).collect::<Vec<_>>();
                     let num_new_chunks =
                         u32::try_from(chunks.len()).map_err(|_| ArithmeticError::Overflow)?;
-                    let new_middle_start = new_first_index + remaining_count - 1;
+                    // The old back becomes the first re-chunked bucket; it sits just past the
+                    // surviving middles (`remaining_count - 1` buckets after the new front).
+                    let new_middle_start =
+                        checked_bucket_index(new_first_index, remaining_count as usize - 1)?;
                     for (i, chunk) in chunks.iter().enumerate().take(chunks.len() - 1) {
-                        let i = u32::try_from(i).map_err(|_| ArithmeticError::Overflow)?;
-                        let key = self.get_middle_key(new_middle_start + i)?;
+                        let key =
+                            self.get_middle_key(checked_bucket_index(new_middle_start, i)?)?;
                         batch.put_key_value(key, &chunk.to_vec())?;
                     }
                     batch.put_key_value(self.back_key(), &chunks.last().unwrap().to_vec())?;
-                    (remaining_count - 1) + num_new_chunks
+                    (remaining_count - 1)
+                        .checked_add(num_new_chunks)
+                        .ok_or(ArithmeticError::Overflow)?
                 };
 
                 batch.put_key_value(
@@ -475,6 +479,16 @@ struct SavePlan {
     has_storage: bool,
 }
 
+/// Adds a relative `offset` to a base bucket index with checked arithmetic.
+///
+/// Bucket indices are `u32` (the width stored in `BucketLayout`); a queue would need
+/// billions of bucket rotations to overflow, but the additions that walk a base index
+/// across bucket offsets are guarded here to stay consistent with the rest of the view.
+fn checked_bucket_index(base: u32, offset: usize) -> Result<u32, ArithmeticError> {
+    let offset = u32::try_from(offset).map_err(|_| ArithmeticError::Overflow)?;
+    base.checked_add(offset).ok_or(ArithmeticError::Overflow)
+}
+
 impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
     fn front_key(&self) -> Vec<u8> {
         self.context.base_key().base_tag(KeyTag::Front as u8)
@@ -548,8 +562,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
             SaveCase::Rewrite
         } else {
             SaveCase::Patch {
-                new_first_index: self.stored_first_index
-                    + u32::try_from(remaining_offset).map_err(|_| ArithmeticError::Overflow)?,
+                new_first_index: checked_bucket_index(self.stored_first_index, remaining_offset)?,
                 remaining_count: u32::try_from(remaining_count)
                     .map_err(|_| ArithmeticError::Overflow)?,
             }
@@ -584,8 +597,7 @@ impl<C: Context, T, const N: usize> BucketQueueView<C, T, N> {
             .skip(1)
             .take(chunks.len().saturating_sub(2))
         {
-            let i = u32::try_from(i).map_err(|_| ArithmeticError::Overflow)?;
-            let key = self.get_middle_key(first_index + i)?;
+            let key = self.get_middle_key(checked_bucket_index(first_index, i)?)?;
             batch.put_key_value(key, &chunk.to_vec())?;
         }
         if num_buckets >= 2 {
@@ -735,8 +747,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
                 // The back bucket is already materialized.
                 self.current_middle = None;
             } else {
-                let index = self.stored_first_index
-                    + u32::try_from(offset).map_err(|_| ArithmeticError::Overflow)?;
+                let index = checked_bucket_index(self.stored_first_index, offset)?;
                 let key = self.get_middle_key(index)?;
                 let data = self
                     .context
@@ -838,8 +849,7 @@ impl<C: Context, T: DeserializeOwned + Clone, const N: usize> BucketQueueView<C,
             let mut remain = count;
             for offset in cursor.offset..num_buckets {
                 if offset != 0 && offset + 1 != num_buckets {
-                    let index = self.stored_first_index
-                        + u32::try_from(offset).map_err(|_| ArithmeticError::Overflow)?;
+                    let index = checked_bucket_index(self.stored_first_index, offset)?;
                     keys.push(self.get_middle_key(index)?);
                 }
                 let size = self.bucket_len(offset) - position;
@@ -1239,6 +1249,71 @@ mod tests {
         view.push_back(100);
         assert!(matches!(view.save_plan()?.case, SaveCase::Patch { .. }));
 
+        Ok(())
+    }
+
+    /// The most intricate single save: in one `Patch` the cursor has crossed a bucket
+    /// boundary (so the front is promoted from a former middle), one or more middles
+    /// survive unchanged, *and* enough new values are pending that merging them with the
+    /// old back re-chunks into several new middles plus a new back. This exercises front
+    /// promotion, middle key preservation, and the re-chunk path simultaneously — the one
+    /// combination `save_plan_covers_each_case` only hits piecemeal.
+    #[tokio::test]
+    async fn patch_promotes_front_keeps_middles_and_rechunks() -> Result<(), ViewError> {
+        const N: usize = 3;
+        let context = MemoryContext::new_for_testing(());
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        // 14 elements -> front [0,1,2], middles [3,4,5] [6,7,8] [9,10,11], back [12,13].
+        for i in 0..14u32 {
+            view.push_back(i);
+        }
+        save(&context, &mut view).await?;
+
+        let mut view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        // Drop 0,1,2,3: the cursor crosses out of the front bucket and lands at value 4
+        // inside the former middle [3,4,5], which must now be promoted to the front.
+        for _ in 0..4 {
+            view.delete_front().await?;
+        }
+        // Push 6 values so that merging with the partial back [12,13] yields
+        // [12,13,100][101,102,103][104,105]: two new middles and a new back.
+        for v in 100..106u32 {
+            view.push_back(v);
+        }
+
+        // Confirm we are about to take the Patch path with the front having moved by a
+        // whole bucket (remaining_offset == 1) and four buckets surviving the cursor.
+        let plan = view.save_plan()?;
+        assert_eq!(plan.remaining_offset, 1);
+        assert!(matches!(
+            plan.case,
+            SaveCase::Patch {
+                remaining_count: 4,
+                ..
+            }
+        ));
+
+        save(&context, &mut view).await?;
+
+        // Reload from storage and check the full sequence survived the re-chunk.
+        let view = BucketQueueView::<_, u32, N>::load(context.clone()).await?;
+        let expected: Vec<u32> = (4..14).chain(100..106).collect();
+        assert_eq!(view.elements().await?, expected);
+        assert_eq!(view.count(), expected.len());
+
+        // The layout grew to 6 buckets (front + 4 middles + back) and every middle still
+        // holds exactly N — the invariant the whole design rests on.
+        assert_eq!(view.stored_num_buckets, 6);
+        let first_index = view.stored_first_index;
+        for offset in 1..view.stored_num_buckets - 1 {
+            let key = view.get_middle_key(first_index + offset)?;
+            let data = context
+                .store()
+                .read_value::<Vec<u32>>(&key)
+                .await?
+                .expect("middle bucket should be present in storage");
+            assert_eq!(data.len(), N, "middle at offset {offset} must hold N");
+        }
         Ok(())
     }
 
