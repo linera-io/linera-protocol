@@ -2501,6 +2501,107 @@ where
     Ok(())
 }
 
+/// Regression test for the multi-leader jitter liveness bug.
+///
+/// In a non-final multi-leader round (which has no round timeout, so the round start cannot
+/// be derived from a deadline), the jitter target must be anchored to a fixed point — the
+/// time the round was first observed — not recomputed from the current time on every call.
+/// The original code anchored to `now` in that case, so `propose_at` receded by `delay` on
+/// every call and the owner never reached it: the chain wedged in the round, never proposing.
+#[test]
+fn multi_leader_jitter_target_is_anchored_not_receding() {
+    use std::sync::Mutex;
+
+    use linera_chain::manager::ChainManagerInfo;
+
+    // Large base timeout so the hash-derived jitter delay is comfortably non-trivial.
+    let timeout_config = TimeoutConfig {
+        base_timeout: TimeDelta::from_secs(1000),
+        ..TimeoutConfig::default()
+    };
+    // `multi_leader_rounds = 3` makes `MultiLeader(1)` a non-final multi-leader round: it has
+    // no round timeout, which is the branch that used to fall back to `now`.
+    let owner_a: AccountOwner = AccountSecretKey::generate().public().into();
+    let owner_b: AccountOwner = AccountSecretKey::generate().public().into();
+    let ownership = ChainOwnership::multiple([(owner_a, 100), (owner_b, 100)], 3, timeout_config);
+    let round = Round::MultiLeader(1);
+
+    // Use a non-preferred owner; the preferred one has delay zero and proposes immediately.
+    let owner = [owner_a, owner_b]
+        .into_iter()
+        .find(|owner| {
+            !matches!(
+                ownership.multi_leader_proposal_delay(owner, round),
+                None | Some(TimeDelta::ZERO)
+            )
+        })
+        .expect("one of two distinct owners must be non-preferred at this round");
+    let delay = ownership
+        .multi_leader_proposal_delay(&owner, round)
+        .expect("non-preferred owner has a delay");
+
+    let manager = ChainManagerInfo {
+        ownership,
+        current_round: round,
+        round_timeout: None,
+        ..ChainManagerInfo::default()
+    };
+    let anchor = Mutex::new(None);
+
+    let t0 = Timestamp::from(1_000_000);
+    let target1 =
+        chain_client::multi_leader_jitter_target(true, &manager, &owner, round, t0, &anchor)
+            .expect("non-preferred owner must wait before proposing");
+    assert_eq!(target1, t0.saturating_add(delay));
+
+    // Advance the clock (still before the target) and recompute: the target must NOT move.
+    let later = t0.saturating_add(TimeDelta::from_micros(delay.as_micros() / 2));
+    let target2 =
+        chain_client::multi_leader_jitter_target(true, &manager, &owner, round, later, &anchor)
+            .expect("still waiting before the anchored target");
+    assert_eq!(
+        target1, target2,
+        "jitter target must stay anchored to the round start, not recede with the clock"
+    );
+
+    // Once the clock reaches the anchored target, the owner proposes (returns `None`).
+    let at_target =
+        chain_client::multi_leader_jitter_target(true, &manager, &owner, round, target1, &anchor);
+    assert!(
+        at_target.is_none(),
+        "at the anchored target the owner must propose, not keep waiting"
+    );
+
+    // A different round re-anchors to when it was first seen rather than reusing the stale one.
+    let other_round = Round::MultiLeader(2);
+    if let Some(other_delay) = manager
+        .ownership
+        .multi_leader_proposal_delay(&owner, other_round)
+        .filter(|delay| *delay != TimeDelta::ZERO)
+    {
+        let manager2 = ChainManagerInfo {
+            current_round: other_round,
+            round_timeout: None,
+            ..manager.clone()
+        };
+        let first_seen = target1.saturating_add(TimeDelta::from_secs(1));
+        let other_target = chain_client::multi_leader_jitter_target(
+            true,
+            &manager2,
+            &owner,
+            other_round,
+            first_seen,
+            &anchor,
+        )
+        .expect("new round must wait");
+        assert_eq!(
+            other_target,
+            first_seen.saturating_add(other_delay),
+            "a new round anchors to the time it was first observed"
+        );
+    }
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
