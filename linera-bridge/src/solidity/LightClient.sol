@@ -32,7 +32,7 @@ contract LightClient {
         adminChainId = _adminChainId;
     }
 
-    function addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators) external {
+    function addCommittee(bytes calldata data, bytes calldata committeeBlob) external {
         (BridgeTypes.Block memory blockValue,) = verifyCertificate(data);
 
         // The block must be from the admin chain and the current epoch
@@ -74,8 +74,8 @@ contract LightClient {
             keccak256(abi.encodePacked("BlobContent::", BridgeTypes.bcs_serialize_BlobContent(blobContent)));
         require(computedHash == expectedBlobHash, "committee blob hash mismatch");
 
-        // Parse blob to extract addresses and weights, verified against caller's keys
-        (address[] memory addrs, uint64[] memory weights) = _parseCommitteeBlob(committeeBlob, validators);
+        // Parse blob to extract addresses and weights
+        (address[] memory addrs, uint64[] memory weights) = _parseCommitteeBlob(committeeBlob);
 
         // Store the new committee, recording the admin-chain height of the
         // block that created it so the relayer can resume scanning from here.
@@ -229,33 +229,32 @@ contract LightClient {
         currentEpoch = epoch;
     }
 
-    /// Parses a BCS-serialized CommitteeMinimal blob and derives Ethereum addresses.
-    /// The caller must provide `uncompressedKeys` in the same order as the blob's
-    /// compressed keys (BCS canonical map order, i.e. sorted by serialized key bytes).
+    // secp256k1 curve order
+    uint256 private constant SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
+
+    /// Parses a BCS-serialized committee blob and derives Ethereum addresses
+    /// directly from the uncompressed validator keys it contains.
     /// Returns (addresses, weights) extracted from the blob.
-    function _parseCommitteeBlob(bytes memory blob, bytes[] calldata uncompressedKeys)
-        internal
-        pure
-        returns (address[] memory, uint64[] memory)
-    {
+    function _parseCommitteeBlob(bytes memory blob) internal pure returns (address[] memory, uint64[] memory) {
         uint256 pos;
         uint256 count;
         (pos, count) = BridgeTypes.bcs_deserialize_offset_uleb128(0, blob);
-        require(count == uncompressedKeys.length, "validator count mismatch");
 
         address[] memory addrs = new address[](count);
         uint64[] memory weights = new uint64[](count);
 
         for (uint256 i = 0; i < count; i++) {
-            // _verifyKeyCompression checks the x-coordinate against blob[pos+1..pos+33],
-            // so a wrong-order or wrong-key entry reverts there.
-            require(uncompressedKeys[i].length == 64, "uncompressed key must be 64 bytes");
-            _verifyKeyCompression(uncompressedKeys[i], blob, pos);
+            // Validator key: 65-byte uncompressed SEC1 encoding (0x04 ++ x ++ y)
+            require(pos + 65 <= blob.length, "truncated validator key");
+            require(uint8(blob[pos]) == 0x04, "invalid uncompressed key prefix");
 
-            // Derive Ethereum address from the verified uncompressed key
-            addrs[i] = address(uint160(uint256(keccak256(uncompressedKeys[i]))));
-
-            pos += 33; // skip compressed key
+            // Derive the Ethereum address: keccak256 of the 64-byte x ++ y
+            bytes32 keyHash;
+            assembly ("memory-safe") {
+                keyHash := keccak256(add(add(blob, 33), pos), 64)
+            }
+            addrs[i] = address(uint160(uint256(keyHash)));
+            pos += 65;
 
             // Skip network_address (ULEB128 length-prefixed string)
             uint256 strLen;
@@ -271,46 +270,14 @@ contract LightClient {
             pos += 1;
             if (tag == 0) {
                 pos += 32; // Ed25519: 32 bytes
+            } else if (tag == 1) {
+                pos += 65; // Secp256k1: 65 bytes (uncompressed)
             } else {
-                pos += 33; // Secp256k1 or EvmSecp256k1: 33 bytes
+                pos += 33; // EvmSecp256k1: 33 bytes (compressed)
             }
         }
 
         return (addrs, weights);
-    }
-
-    /// Verifies that a caller-provided 64-byte uncompressed key matches
-    /// the 33-byte compressed key in the blob at the given position.
-    // secp256k1 field prime
-    uint256 private constant SECP256K1_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F;
-    // secp256k1 curve order
-    uint256 private constant SECP256K1_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141;
-
-    function _verifyKeyCompression(bytes calldata uncompressed, bytes memory blob, uint256 keyPos) internal pure {
-        // Compressed key format: prefix (0x02 if y is even, 0x03 if odd) + 32-byte x
-        // Uncompressed key: 32-byte x + 32-byte y (no 0x04 prefix)
-
-        // Check x-coordinate matches (bytes 1..33 of compressed == bytes 0..32 of uncompressed)
-        for (uint256 i = 0; i < 32; i++) {
-            require(blob[keyPos + 1 + i] == uncompressed[i], "key x-coordinate mismatch");
-        }
-
-        // Check y-parity: last byte of y determines even/odd
-        uint8 yLastByte = uint8(uncompressed[63]);
-        uint8 expectedPrefix = (yLastByte % 2 == 0) ? 0x02 : 0x03;
-        require(uint8(blob[keyPos]) == expectedPrefix, "key y-parity mismatch");
-
-        // Verify (x, y) is on secp256k1: y^2 = x^3 + 7 (mod p)
-        uint256 x;
-        uint256 y;
-        assembly {
-            x := calldataload(uncompressed.offset)
-            y := calldataload(add(uncompressed.offset, 32))
-        }
-        uint256 lhs = mulmod(y, y, SECP256K1_P);
-        uint256 x2 = mulmod(x, x, SECP256K1_P);
-        uint256 rhs = addmod(mulmod(x2, x, SECP256K1_P), 7, SECP256K1_P);
-        require(lhs == rhs, "key not on secp256k1 curve");
     }
 
     /// Reads 8 bytes from data at pos as a little-endian uint64.

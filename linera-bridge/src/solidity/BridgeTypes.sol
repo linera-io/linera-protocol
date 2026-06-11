@@ -2103,11 +2103,11 @@ library BridgeTypes {
     }
 
     struct Secp256k1PublicKey {
-        tuplearray33_uint8 value;
+        tuplearray65_uint8 value;
     }
 
     function bcs_serialize_Secp256k1PublicKey(Secp256k1PublicKey memory input) internal pure returns (bytes memory) {
-        return bcs_serialize_tuplearray33_uint8(input.value);
+        return bcs_serialize_tuplearray65_uint8(input.value);
     }
 
     function bcs_deserialize_offset_Secp256k1PublicKey(uint256 pos, bytes memory input)
@@ -2116,8 +2116,8 @@ library BridgeTypes {
         returns (uint256, Secp256k1PublicKey memory)
     {
         uint256 new_pos;
-        tuplearray33_uint8 memory value;
-        (new_pos, value) = bcs_deserialize_offset_tuplearray33_uint8(pos, input);
+        tuplearray65_uint8 memory value;
+        (new_pos, value) = bcs_deserialize_offset_tuplearray65_uint8(pos, input);
         return (new_pos, Secp256k1PublicKey(value));
     }
 

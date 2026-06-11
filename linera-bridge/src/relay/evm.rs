@@ -283,13 +283,11 @@ impl<P: Provider> EvmClient<P> {
         &self,
         certificate_bytes: &[u8],
         committee_blob: &[u8],
-        validator_keys: Vec<Vec<u8>>,
     ) -> Result<alloy::primitives::TxHash> {
         let lc_addr = self.get_light_client_address().await?;
         let call = addCommitteeCall {
             data: Bytes::copy_from_slice(certificate_bytes),
             committeeBlob: Bytes::copy_from_slice(committee_blob),
-            validators: validator_keys.into_iter().map(Bytes::from).collect(),
         };
         let tx = alloy::rpc::types::TransactionRequest::default()
             .to(lc_addr)

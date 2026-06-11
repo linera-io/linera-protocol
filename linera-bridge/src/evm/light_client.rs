@@ -9,8 +9,7 @@ pub const SOURCE: &str = include_str!("../solidity/LightClient.sol");
 sol! {
     function addCommittee(
         bytes calldata data,
-        bytes calldata committeeBlob,
-        bytes[] calldata validators
+        bytes calldata committeeBlob
     ) external;
 
     function verifyBlock(bytes calldata data) external view;
@@ -179,24 +178,33 @@ mod tests {
     }
 
     #[test]
-    fn test_light_client_add_committee_rejects_off_curve_key() {
+    fn test_light_client_add_committee_rejects_invalid_key_prefix() {
+        use linera_base::data_types::BlobContent;
+
         let mut light_client: TestLightClient = TestLightClient::new();
         let new_secret = ValidatorSecretKey::generate();
         let new_public = new_secret.public();
 
-        let mut call = light_client.add_committee_call(
-            &new_public,
-            Epoch(1),
+        // Corrupt the blob: change the first validator key's SEC1 prefix from
+        // 0x04 (uncompressed) to 0x02. The blob hash commitment is recomputed
+        // over the corrupted bytes, so the failure comes from key parsing.
+        let (mut committee_bytes, _) = create_committee_blob(&new_public);
+        assert_eq!(committee_bytes[1], 0x04);
+        committee_bytes[1] = 0x02;
+        let blob_hash = CryptoHash::new(&BlobContent::new_committee(committee_bytes.clone()));
+
+        let transactions = create_committee_transaction(Epoch(1), blob_hash);
+        let block = create_test_block(
+            test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
-            test_admin_chain_id(),
+            transactions,
         );
-
-        // Construct a fake uncompressed key: correct x and y-parity, but y is
-        // not the actual square root — the point is not on secp256k1.
-        let mut fake_key = validator_uncompressed_key(&new_public);
-        fake_key[32] ^= 0xFF; // corrupt y-coordinate while preserving parity
-        call.validators = vec![fake_key.into()];
+        let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
+        let call = addCommitteeCall {
+            data: bcs_bytes.into(),
+            committeeBlob: committee_bytes.into(),
+        };
 
         assert!(
             try_call_contract(
@@ -206,7 +214,7 @@ mod tests {
                 &call
             )
             .is_err(),
-            "should reject uncompressed key that is not on the secp256k1 curve"
+            "should reject validator key without the uncompressed SEC1 prefix"
         );
     }
 
@@ -253,38 +261,6 @@ mod tests {
             )
             .is_err(),
             "should reject committee transition from wrong epoch block"
-        );
-    }
-
-    #[test]
-    fn test_light_client_add_committee_rejects_substituted_keys() {
-        let mut light_client: TestLightClient = TestLightClient::new();
-
-        let real_secret = ValidatorSecretKey::generate();
-        let real_public = real_secret.public();
-
-        let attacker_secret = ValidatorSecretKey::generate();
-        let attacker_public = attacker_secret.public();
-
-        let mut call = light_client.add_committee_call(
-            &real_public,
-            Epoch(1),
-            Epoch::ZERO,
-            BlockHeight(1),
-            test_admin_chain_id(),
-        );
-        // Substitute the attacker's uncompressed key
-        call.validators = vec![validator_uncompressed_key(&attacker_public).into()];
-
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                light_client.deployer,
-                light_client.contract,
-                &call
-            )
-            .is_err(),
-            "should reject substituted keys that don't match the blob"
         );
     }
 
@@ -735,11 +711,9 @@ mod tests {
         let transactions = create_committee_transaction(new_epoch, blob_hash);
         let block = create_test_block(chain_id, block_epoch, height, transactions);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
-        let new_uncompressed = validator_uncompressed_key(new_public);
         addCommitteeCall {
             data: bcs_bytes.into(),
             committeeBlob: committee_bytes.into(),
-            validators: vec![new_uncompressed.into()],
         }
     }
 
@@ -823,18 +797,9 @@ mod tests {
         );
         let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
 
-        // Extract uncompressed keys in BCS blob order (sorted by compressed bytes).
-        // The contract requires `validators` to align positionally with the blob.
-        let uncompressed_keys = crate::evm::client::extract_validator_keys(&committee_bytes)
-            .expect("validator key extraction failed")
-            .into_iter()
-            .map(alloy_primitives::Bytes::from)
-            .collect::<Vec<_>>();
-
         let call = addCommitteeCall {
             data: bcs_bytes.into(),
             committeeBlob: committee_bytes.into(),
-            validators: uncompressed_keys,
         };
         call_contract(
             &mut light_client.db,
@@ -894,18 +859,9 @@ mod tests {
         let block = create_test_block(chain_id, block_epoch, height, transactions);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
 
-        // Extract uncompressed keys in BCS blob order (sorted by compressed bytes).
-        // The contract requires `validators` to align positionally with the blob.
-        let uncompressed_keys = crate::evm::client::extract_validator_keys(&committee_bytes)
-            .expect("validator key extraction failed")
-            .into_iter()
-            .map(alloy_primitives::Bytes::from)
-            .collect::<Vec<_>>();
-
         addCommitteeCall {
             data: bcs_bytes.into(),
             committeeBlob: committee_bytes.into(),
-            validators: uncompressed_keys,
         }
     }
 
