@@ -23,8 +23,7 @@ sol! {
             uint32 numTxs,
             uint32 numEventsInTx,
             uint32[] calldata positions,
-            bytes32[] calldata innerSiblings,
-            bytes32[] calldata outerSiblings
+            bytes32[] calldata siblings
         ) external;
         function deposit(
             bytes32 target_chain_id,
@@ -41,24 +40,28 @@ sol! {
     interface ILightClient {
         function addCommittee(
             bytes calldata blockProof,
-            bytes[] calldata transactionBcs,
-            bytes calldata committeeBlob
+            bytes[] calldata eventBcs,
+            uint32 txIndex,
+            uint32 numTxs,
+            uint32 numEventsInTx,
+            uint32[] calldata positions,
+            bytes32[] calldata siblings,
+            bytes calldata committeeBlob,
         ) external;
         function registerBlock(bytes calldata blockProof) external returns (bytes32);
         function registeredBlocks(bytes32 blockHash)
             external
             view
             returns (bytes32 eventsHash, uint64 height, bytes32 chainId);
-        function verifyEventInclusion(
-            bytes32 blockHash,
+        function proveEventsCommitted(
+            bytes32 eventsHash,
             bytes[] calldata eventBcs,
             uint32 txIndex,
             uint32 numTxs,
             uint32 numEventsInTx,
             uint32[] calldata positions,
-            bytes32[] calldata innerSiblings,
-            bytes32[] calldata outerSiblings
-        ) external view;
+            bytes32[] calldata siblings
+        ) external pure;
         function currentEpoch() external view returns (uint32);
         function minAcceptedEpoch() external view returns (uint32);
         function expireEpochsBelow(uint32 newMinEpoch) external;

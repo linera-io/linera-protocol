@@ -106,6 +106,18 @@ impl EventInclusionProof {
         }
     }
 
+    /// The sibling hashes as the on-chain `proveEventsCommitted` ABI expects them: inner siblings
+    /// followed by outer siblings, in one array. The contract splits it back at
+    /// `num_events_in_tx - positions.len()` (the two arrays are merged into one argument to keep the
+    /// verification call under the EVM's 16-slot stack limit).
+    pub fn siblings(&self) -> Vec<CryptoHash> {
+        self.inner_siblings
+            .iter()
+            .chain(self.outer_siblings.iter())
+            .copied()
+            .collect()
+    }
+
     /// Recomputes the `events_hash` this proof folds to, given the leaf hashes of the proven events
     /// in `positions` order. A block's header commits to this value, so comparing the result to
     /// `header.events_hash` proves the events belong to the block.

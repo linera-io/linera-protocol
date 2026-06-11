@@ -19,8 +19,8 @@ mod tests {
     use crate::{
         contracts::ILightClient::{
             addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
-            expireEpochsBelowCall, minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
-            verifyEventInclusionCall,
+            expireEpochsBelowCall, minAcceptedEpochCall, proveEventsCommittedCall,
+            registerBlockCall, registeredBlocksCall,
         },
         test_helpers::*,
     };
@@ -174,20 +174,16 @@ mod tests {
         committee_bytes[1] = 0x02;
         let blob_hash = CryptoHash::new(&BlobContent::new_committee(committee_bytes.clone()));
 
-        let transactions = create_committee_transaction(Epoch(1), blob_hash);
-        let transaction_bcs = transaction_bcs(&transactions);
-        let block = create_test_block(
-            test_admin_chain_id(),
+        let args = committee_block_args(
+            &light_client.secret,
+            &light_client.public,
+            Epoch(1),
+            blob_hash,
             Epoch::ZERO,
             BlockHeight(1),
-            transactions,
+            test_admin_chain_id(),
         );
-        let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
-        let call = addCommitteeCall {
-            blockProof: bcs_bytes.into(),
-            transactionBcs: transaction_bcs,
-            committeeBlob: committee_bytes.into(),
-        };
+        let call = build_add_committee_call(args, committee_bytes);
 
         assert!(
             try_call_contract(
@@ -248,6 +244,50 @@ mod tests {
     }
 
     #[test]
+    fn test_light_client_add_committee_rejects_user_stream_lookalike_event() {
+        let mut light_client = TestLightClient::new();
+        let new_secret = ValidatorSecretKey::generate();
+        let new_public = new_secret.public();
+
+        // Forge an event with the same index, stream-name bytes, and `EpochEventData` payload as
+        // the real epoch event (the blob hash even matches the committee below), but emitted on a
+        // user application stream rather than the system stream. Its inclusion proof checks out, so
+        // the only thing that can reject the upgrade is the system-stream requirement.
+        let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
+        let forged = forged_user_epoch_event(
+            CryptoHash::new(&TestString::new("evil_app")),
+            Epoch(1),
+            blob_hash,
+        );
+        let args = committee_call_args_for_event(
+            &light_client.secret,
+            &light_client.public,
+            forged,
+            Epoch::ZERO,
+            BlockHeight(1),
+            test_admin_chain_id(),
+        );
+        let call = build_add_committee_call(args, committee_bytes);
+
+        let Err(err) = try_call_contract(
+            &mut light_client.db,
+            light_client.deployer,
+            light_client.contract,
+            &call,
+        ) else {
+            panic!("user-stream look-alike event must not upgrade the committee");
+        };
+        // Confirm it was the system-stream requirement that rejected it, not an incidental check:
+        // the revert reason is ABI-encoded in the output.
+        let reason_hex = hex::encode("not a system event");
+        assert!(
+            err.contains(&reason_hex),
+            "expected 'not a system event' revert, got: {err}"
+        );
+        assert_eq!(light_client.query_current_epoch(), Epoch::ZERO);
+    }
+
+    #[test]
     fn test_light_client_verify_block() {
         let mut light_client: TestLightClient = TestLightClient::new();
 
@@ -297,14 +337,14 @@ mod tests {
     }
 
     #[test]
-    fn test_light_client_verify_event_inclusion() {
+    fn test_light_client_prove_events_committed_against_header() {
         use alloy_primitives::{Bytes, B256};
         use linera_base::{
             data_types::Event,
             identifiers::{GenericApplicationId, StreamId, StreamName},
         };
 
-        use crate::block_proof::{BlockProof, EventInclusionProof};
+        use crate::block_proof::EventInclusionProof;
 
         let mut lc = TestLightClient::new();
         let chain = CryptoHash::new(&TestString::new("test_chain"));
@@ -329,39 +369,24 @@ mod tests {
             BlockHeight(1),
             events.clone(),
         );
-
-        // Register the block from its header and signatures alone.
-        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(&certificate))
-            .expect("BCS serialization failed");
-        let (block_hash, _, _) = call_contract(
-            &mut lc.db,
-            lc.deployer,
-            lc.contract,
-            &registerBlockCall {
-                blockProof: proof_bytes.into(),
-            },
-        );
+        // The events commitment is taken straight from the signed header — no `registerBlock`.
+        let events_hash = B256::from(*certificate.block().header.events_hash.as_bytes());
 
         let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
-
-        // Prove the second event of transaction 1.
         let tx_index = 1usize;
         let positions = [1u32];
         let proof = EventInclusionProof::new(&events, tx_index, &positions);
-        let inner: Vec<B256> = proof.inner_siblings.iter().map(to_b256).collect();
-        let outer: Vec<B256> = proof.outer_siblings.iter().map(to_b256).collect();
-        let make_call = |event_bcs: Vec<Bytes>| verifyEventInclusionCall {
-            blockHash: block_hash,
+        let siblings: Vec<B256> = proof.siblings().iter().map(to_b256).collect();
+        let make_call = |event_bcs: Vec<Bytes>| proveEventsCommittedCall {
+            eventsHash: events_hash,
             eventBcs: event_bcs,
             txIndex: proof.tx_index,
             numTxs: proof.num_txs,
             numEventsInTx: proof.num_events_in_tx,
             positions: positions.to_vec(),
-            innerSiblings: inner.clone(),
-            outerSiblings: outer.clone(),
+            siblings: siblings.clone(),
         };
 
-        // `eventBcs` are exactly the events at `positions` within `tx_index`.
         let good_bcs: Vec<Bytes> = positions
             .iter()
             .map(|&p| {
@@ -371,7 +396,7 @@ mod tests {
             })
             .collect();
 
-        // The correct event verifies.
+        // The event the header commits to folds back to its events_hash.
         call_contract(
             &mut lc.db,
             lc.deployer,
@@ -385,15 +410,15 @@ mod tests {
             .into()];
         assert!(
             try_call_contract(&mut lc.db, lc.deployer, lc.contract, &make_call(bad)).is_err(),
-            "tampered event must fail inclusion"
+            "tampered event must not fold to the header's events_hash"
         );
 
-        // An unregistered block hash is rejected.
-        let mut unregistered = make_call(good_bcs.clone());
-        unregistered.blockHash = B256::ZERO;
+        // An unrelated events_hash is rejected.
+        let mut wrong_hash = make_call(good_bcs.clone());
+        wrong_hash.eventsHash = B256::ZERO;
         assert!(
-            try_call_contract(&mut lc.db, lc.deployer, lc.contract, &unregistered).is_err(),
-            "unregistered block must be rejected"
+            try_call_contract(&mut lc.db, lc.deployer, lc.contract, &wrong_hash).is_err(),
+            "events must not fold to an unrelated events_hash"
         );
 
         // A txIndex past the block's transaction count is rejected.
@@ -861,15 +886,16 @@ mod tests {
         chain_id: CryptoHash,
     ) -> addCommitteeCall {
         let (committee_bytes, blob_hash) = create_committee_blob(new_public);
-        let transactions = create_committee_transaction(new_epoch, blob_hash);
-        let transaction_bcs = transaction_bcs(&transactions);
-        let block = create_test_block(chain_id, block_epoch, height, transactions);
-        let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
-        addCommitteeCall {
-            blockProof: bcs_bytes.into(),
-            transactionBcs: transaction_bcs,
-            committeeBlob: committee_bytes.into(),
-        }
+        let args = committee_block_args(
+            signer_secret,
+            signer_public,
+            new_epoch,
+            blob_hash,
+            block_epoch,
+            height,
+            chain_id,
+        );
+        build_add_committee_call(args, committee_bytes)
     }
 
     #[test]
@@ -943,21 +969,16 @@ mod tests {
         let blob_content = BlobContent::new_committee(committee_bytes.clone());
         let blob_hash = CryptoHash::new(&blob_content);
 
-        let transactions = create_committee_transaction(Epoch(1), blob_hash);
-        let transaction_bcs = transaction_bcs(&transactions);
-        let block = create_test_block(
-            test_admin_chain_id(),
+        let args = committee_block_args(
+            &light_client.secret,
+            &light_client.public,
+            Epoch(1),
+            blob_hash,
             Epoch::ZERO,
             BlockHeight(1),
-            transactions,
+            test_admin_chain_id(),
         );
-        let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
-
-        let call = addCommitteeCall {
-            blockProof: bcs_bytes.into(),
-            transactionBcs: transaction_bcs,
-            committeeBlob: committee_bytes.into(),
-        };
+        let call = build_add_committee_call(args, committee_bytes);
         call_contract(
             &mut light_client.db,
             light_client.deployer,
@@ -1010,16 +1031,17 @@ mod tests {
         chain_id: CryptoHash,
     ) -> addCommitteeCall {
         let (committee_bytes, blob_hash) = create_multi_committee_blob(new_publics);
-        let transactions = create_committee_transaction(new_epoch, blob_hash);
-        let transaction_bcs = transaction_bcs(&transactions);
-        let block = create_test_block(chain_id, block_epoch, height, transactions);
-        let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
+        let args = committee_block_args(
+            signer_secret,
+            signer_public,
+            new_epoch,
+            blob_hash,
+            block_epoch,
+            height,
+            chain_id,
+        );
 
-        addCommitteeCall {
-            blockProof: bcs_bytes.into(),
-            transactionBcs: transaction_bcs,
-            committeeBlob: committee_bytes.into(),
-        }
+        build_add_committee_call(args, committee_bytes)
     }
 
     /// Proptest: generates random secp256k1 keys and tests two-validator addCommittee.

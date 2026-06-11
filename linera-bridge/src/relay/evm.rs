@@ -33,8 +33,9 @@ struct ProcessBurnsArgs {
     num_txs: u32,
     num_events_in_tx: u32,
     positions: Vec<u32>,
-    inner_siblings: Vec<B256>,
-    outer_siblings: Vec<B256>,
+    // Inner siblings followed by outer siblings; the contract splits this single array (see
+    // `EventInclusionProof::siblings`).
+    siblings: Vec<B256>,
 }
 
 /// Centralized client for all EVM interactions. Safe to share via `Arc`.
@@ -171,8 +172,7 @@ impl<P: Provider> EvmClient<P> {
             num_txs: proof.num_txs,
             num_events_in_tx: proof.num_events_in_tx,
             positions: positions.to_vec(),
-            inner_siblings: proof.inner_siblings.iter().map(to_b256).collect(),
-            outer_siblings: proof.outer_siblings.iter().map(to_b256).collect(),
+            siblings: proof.siblings().iter().map(to_b256).collect(),
         }
     }
 
@@ -200,8 +200,7 @@ impl<P: Provider> EvmClient<P> {
                 args.num_txs,
                 args.num_events_in_tx,
                 args.positions,
-                args.inner_siblings,
-                args.outer_siblings,
+                args.siblings,
             )
             .estimate_gas()
             .await
@@ -230,8 +229,7 @@ impl<P: Provider> EvmClient<P> {
                 args.num_txs,
                 args.num_events_in_tx,
                 args.positions,
-                args.inner_siblings,
-                args.outer_siblings,
+                args.siblings,
             )
             .send()
             .await
@@ -286,27 +284,39 @@ impl<P: Provider> EvmClient<P> {
         Ok(BlockHeight(height))
     }
 
-    /// Relays a committee update to the LightClient contract.
+    /// Relays a committee update to the LightClient contract. Locates the epoch event in `cert`,
+    /// builds an inclusion proof binding that single event to the signed block, and submits
+    /// `addCommittee` — the same inclusion proof shape `processBurns` uses.
     pub async fn add_committee(
         &self,
         cert: &ConfirmedBlockCertificate,
         committee_blob: &[u8],
     ) -> Result<alloy::primitives::TxHash> {
         let lc_addr = self.get_light_client_address().await?;
-        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
-            .context("failed to BCS-serialize block proof")?;
-        let transaction_bcs = cert
-            .block()
-            .body
-            .transactions
-            .iter()
-            .map(|txn| Bytes::from(bcs::to_bytes(txn).expect("BCS-serialize transaction")))
-            .collect();
+        let proof = Bytes::from(
+            bcs::to_bytes(&BlockProof::from_certificate(cert))
+                .context("failed to BCS-serialize block proof")?,
+        );
+        let committee_event = super::committee::find_committee_event(cert)
+            .context("block has no committee epoch event")?;
+        let position = u32::try_from(committee_event.position).expect("event position exceeds u32");
+        let events = &cert.block().body.events;
+        let incl = EventInclusionProof::new(events, committee_event.tx_index, &[position]);
+        let event_bcs = vec![Bytes::from(
+            bcs::to_bytes(&events[committee_event.tx_index][committee_event.position])
+                .expect("BCS-serialize event"),
+        )];
+        let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
         let light_client = ILightClient::new(lc_addr, &self.provider);
         let receipt = light_client
             .addCommittee(
-                Bytes::copy_from_slice(&proof_bytes),
-                transaction_bcs,
+                proof,
+                event_bcs,
+                incl.tx_index,
+                incl.num_txs,
+                incl.num_events_in_tx,
+                vec![position],
+                incl.siblings().iter().map(to_b256).collect(),
                 Bytes::copy_from_slice(committee_blob),
             )
             .send()
