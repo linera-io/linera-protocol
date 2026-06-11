@@ -1398,7 +1398,41 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         // Verify the certificate before doing any expensive networking.
         if let ReceiveCertificateMode::NeedsCheck = mode {
-            self.check_certificate(&certificate).await?.into_result()?;
+            let mut check_result = self.check_certificate(&certificate).await?;
+            if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                // The certificate is from an epoch our local view of the admin chain
+                // hasn't caught up to yet. Catch up and check again instead of failing.
+                // Prefer the nodes that gave us the certificate: they evidently know
+                // the newer epoch even if our own committee view is stale or its
+                // members are unreachable. A sync only counts if it actually made the
+                // epoch known; otherwise fall back to the known committee.
+                let admin_chain_id = self.admin_chain_id;
+                let epoch = certificate.block().header.epoch;
+                info!(
+                    %epoch,
+                    "certificate is from an unknown epoch; synchronizing the admin chain"
+                );
+                for node in nodes.iter().flatten() {
+                    match Box::pin(self.synchronize_chain_state_from(node, admin_chain_id)).await {
+                        Ok(()) => {
+                            check_result = self.check_certificate(&certificate).await?;
+                            if !matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                                break;
+                            }
+                        }
+                        Err(error) => warn!(
+                            %error,
+                            validator = %node.public_key,
+                            "failed to synchronize the admin chain from validator",
+                        ),
+                    }
+                }
+                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                    Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
+                    check_result = self.check_certificate(&certificate).await?;
+                }
+            }
+            check_result.into_result()?;
         }
         // Recover history from the network.
         let nodes = if let Some(nodes) = nodes {
@@ -2200,7 +2234,7 @@ impl<Env: Environment> Client<Env> {
                         "failed to download certificate-for-blob from validator",
                     );
                 }
-                chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+                blob_recovery_error(errors, blob_id)
             })
         }))
         .buffer_unordered(self.options.max_joined_tasks)
@@ -2406,6 +2440,26 @@ impl CheckCertificateResult {
     }
 }
 
+/// Chooses the error to surface when every validator failed to provide the certificate
+/// introducing a blob. A committee-epoch failure is local and node-independent: if any
+/// node ran into it, it is the real cause — surface it rather than fabricating a
+/// `BlobsNotFound` for a blob the network may well have.
+fn blob_recovery_error(
+    mut errors: Vec<(ValidatorPublicKey, chain_client::Error)>,
+    blob_id: BlobId,
+) -> chain_client::Error {
+    if let Some(position) = errors.iter().position(|(_, error)| {
+        matches!(
+            error,
+            chain_client::Error::CommitteeSynchronizationError
+                | chain_client::Error::CommitteeDeprecationError
+        )
+    }) {
+        return errors.swap_remove(position).1;
+    }
+    chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+}
+
 /// Creates a compressed Contract, Service and bytecode, plus an optional
 /// `ApplicationFormats` blob built from the JSON-encoded `Formats` description
 /// bytes.
@@ -2450,4 +2504,65 @@ pub async fn create_bytecode_blobs(
         blobs.push(blob);
     }
     (blobs, module_id)
+}
+
+#[cfg(test)]
+mod blob_recovery_error_tests {
+    use linera_base::crypto::ValidatorKeypair;
+
+    use super::*;
+
+    fn test_blob_id(name: &str) -> BlobId {
+        BlobId::new(CryptoHash::test_hash(name), BlobType::Data)
+    }
+
+    fn validator() -> ValidatorPublicKey {
+        ValidatorKeypair::generate().public_key
+    }
+
+    #[test]
+    fn surfaces_committee_synchronization_failure() {
+        let blob_id = test_blob_id("blob");
+        let errors = vec![
+            (
+                validator(),
+                chain_client::Error::from(NodeError::BlobsNotFound(vec![test_blob_id("other")])),
+            ),
+            (
+                validator(),
+                chain_client::Error::CommitteeSynchronizationError,
+            ),
+        ];
+        assert_matches::assert_matches!(
+            blob_recovery_error(errors, blob_id),
+            chain_client::Error::CommitteeSynchronizationError
+        );
+    }
+
+    #[test]
+    fn surfaces_committee_deprecation_failure() {
+        let blob_id = test_blob_id("blob");
+        let errors = vec![(validator(), chain_client::Error::CommitteeDeprecationError)];
+        assert_matches::assert_matches!(
+            blob_recovery_error(errors, blob_id),
+            chain_client::Error::CommitteeDeprecationError
+        );
+    }
+
+    #[test]
+    fn falls_back_to_blobs_not_found() {
+        let blob_id = test_blob_id("blob");
+        let errors = vec![(
+            validator(),
+            chain_client::Error::from(NodeError::BlobsNotFound(vec![test_blob_id("other")])),
+        )];
+        assert_matches::assert_matches!(
+            blob_recovery_error(errors, blob_id),
+            chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(ids)) if ids == vec![blob_id]
+        );
+        assert_matches::assert_matches!(
+            blob_recovery_error(Vec::new(), blob_id),
+            chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(ids)) if ids == vec![blob_id]
+        );
+    }
 }
