@@ -5137,8 +5137,22 @@ async fn test_controller(config: impl LineraNetConfig) -> Result<()> {
     );
 
     let admin_app = admin_node_service.make_application(&admin_chain, &controller_id)?;
-    let response = admin_app.query("workers { keys }").await?;
-    let worker_keys: Vec<String> = serde_json::from_value(response["workers"]["keys"].clone())?;
+    // A worker's registration only lands in the admin chain's `workers` map once the
+    // admin chain has processed the cross-chain message, which can be after the worker
+    // already sees itself as registered locally. Poll until both registrations arrive.
+    let worker_keys = loop {
+        let response = admin_app.query("workers { keys }").await?;
+        let worker_keys: Vec<String> = serde_json::from_value(response["workers"]["keys"].clone())?;
+        if worker_keys.len() >= 2 {
+            break worker_keys;
+        }
+        admin_notifications
+            .wait_for_block(None)
+            .await
+            .unwrap_or_else(|_| {
+                panic!("timed out waiting for both worker registrations on {admin_chain}")
+            });
+    };
     assert_eq!(
         worker_keys.len(),
         2,
