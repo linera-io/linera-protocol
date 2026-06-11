@@ -8,12 +8,15 @@ use std::collections::BTreeMap;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
-    data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp, U128},
+    data_types::{Amount, BlobContent, BlockHeight, Epoch, Event, Round, Timestamp, U128},
     identifiers::{ApplicationId, ChainId},
 };
 use linera_chain::{
-    block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
-    data_types::{IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction, Vote},
+    block::{Block, ConfirmedBlock},
+    data_types::{
+        BlockExecutionOutcome, IncomingBundle, MessageAction, MessageBundle, PostedMessage,
+        ProposedBlock, Transaction, Vote,
+    },
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
@@ -28,8 +31,8 @@ use revm::{
 };
 use revm_context::result::{ExecutionResult, Output};
 
-use crate::evm;
 pub use crate::evm::client::{validator_evm_address, validator_uncompressed_key};
+use crate::{block_proof::BlockProof, evm};
 
 pub const GAS_LIMIT: u64 = 500_000_000;
 
@@ -75,7 +78,35 @@ pub fn sign_and_serialize(
     let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
     let certificate =
         ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)]);
-    bcs::to_bytes(&certificate).expect("BCS serialization failed")
+    bcs::to_bytes(&BlockProof::from_certificate(&certificate)).expect("BCS serialization failed")
+}
+
+/// Builds the three `addBlock` arguments from a certificate: the lean block proof, the per-event
+/// BCS encodings (flattened across transactions), and the number of events in each transaction.
+pub fn add_block_args(certificate: &ConfirmedBlockCertificate) -> (Bytes, Vec<Bytes>, Vec<u32>) {
+    let proof = Bytes::from(
+        bcs::to_bytes(&BlockProof::from_certificate(certificate))
+            .expect("BCS serialization failed"),
+    );
+    let events = &certificate.block().body.events;
+    let event_bcs = events
+        .iter()
+        .flatten()
+        .map(|event| Bytes::from(bcs::to_bytes(event).expect("BCS serialization failed")))
+        .collect();
+    let events_per_tx = events
+        .iter()
+        .map(|tx_events| u32::try_from(tx_events.len()).expect("event count exceeds u32"))
+        .collect();
+    (proof, event_bcs, events_per_tx)
+}
+
+/// BCS-encodes each transaction, for the `transactionBcs` argument of `addCommittee`.
+pub fn transaction_bcs(transactions: &[Transaction]) -> Vec<Bytes> {
+    transactions
+        .iter()
+        .map(|txn| Bytes::from(bcs::to_bytes(txn).expect("BCS serialization failed")))
+        .collect()
 }
 
 /// Creates a certificate with custom transactions for a specific chain and height.
@@ -87,6 +118,21 @@ pub fn create_certificate_with_transactions(
     transactions: Vec<Transaction>,
 ) -> ConfirmedBlockCertificate {
     let block = create_test_block(chain_id, Epoch::ZERO, height, transactions);
+    let confirmed = ConfirmedBlock::new(block);
+    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
+    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
+}
+
+/// Creates a certificate for a block carrying `events` (one inner vector per transaction), signed
+/// by the given validator. Used to exercise event-inclusion proofs.
+pub fn create_signed_certificate_with_events(
+    secret: &ValidatorSecretKey,
+    public: &ValidatorPublicKey,
+    chain_id: CryptoHash,
+    height: BlockHeight,
+    events: Vec<Vec<Event>>,
+) -> ConfirmedBlockCertificate {
+    let block = build_block(chain_id, Epoch::ZERO, height, vec![], events);
     let confirmed = ConfirmedBlock::new(block);
     let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
@@ -215,14 +261,9 @@ pub fn fungible_message_transaction(
 }
 
 /// Creates a BurnEvent as a linera_base Event on the "burns" stream for a given application.
-pub fn burn_event(
-    application_id: CryptoHash,
-    target: [u8; 20],
-    amount: U128,
-    index: u32,
-) -> linera_base::data_types::Event {
+pub fn burn_event(application_id: CryptoHash, target: [u8; 20], amount: U128, index: u32) -> Event {
     use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};
-    linera_base::data_types::Event {
+    Event {
         stream_id: StreamId {
             application_id: GenericApplicationId::User(ApplicationId::new(application_id)),
             stream_name: StreamName(b"burns".to_vec()),
@@ -238,37 +279,9 @@ pub fn create_certificate_with_events(
     public: &ValidatorPublicKey,
     chain_id: CryptoHash,
     height: BlockHeight,
-    events: Vec<Vec<linera_base::data_types::Event>>,
+    events: Vec<Vec<Event>>,
 ) -> ConfirmedBlockCertificate {
-    let block = Block {
-        header: BlockHeader {
-            chain_id: ChainId(chain_id),
-            epoch: Epoch::ZERO,
-            height,
-            timestamp: Timestamp::from(0),
-            state_hash: CryptoHash::new(&TestString::new("state")),
-            previous_block_hash: None,
-            authenticated_owner: None,
-            transactions_hash: CryptoHash::new(&TestString::new("tx")),
-            messages_hash: CryptoHash::new(&TestString::new("msg")),
-            previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg")),
-            previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_evt")),
-            oracle_responses_hash: CryptoHash::new(&TestString::new("oracle")),
-            events_hash: CryptoHash::new(&TestString::new("events")),
-            blobs_hash: CryptoHash::new(&TestString::new("blobs")),
-            operation_results_hash: CryptoHash::new(&TestString::new("op_results")),
-        },
-        body: BlockBody {
-            transactions: vec![],
-            messages: vec![],
-            previous_message_blocks: Default::default(),
-            previous_event_blocks: Default::default(),
-            oracle_responses: vec![],
-            events,
-            blobs: vec![],
-            operation_results: vec![],
-        },
-    };
+    let block = build_block(chain_id, Epoch::ZERO, height, vec![], events);
     let confirmed = ConfirmedBlock::new(block);
     let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
@@ -388,41 +401,44 @@ pub fn try_call_contract<C: SolCall>(
     }
 }
 
+/// Builds a test block whose header is consistent with its body (the header is computed from
+/// the body via `Block::new`), so it round-trips through the light client's verification.
+fn build_block(
+    chain_id: CryptoHash,
+    epoch: Epoch,
+    height: BlockHeight,
+    transactions: Vec<Transaction>,
+    events: Vec<Vec<Event>>,
+) -> Block {
+    let proposed = ProposedBlock {
+        chain_id: ChainId(chain_id),
+        epoch,
+        transactions,
+        height,
+        timestamp: Timestamp::from(0),
+        authenticated_owner: None,
+        previous_block_hash: None,
+    };
+    let outcome = BlockExecutionOutcome {
+        state_hash: CryptoHash::new(&TestString::new("state")),
+        messages: vec![],
+        previous_message_blocks: Default::default(),
+        previous_event_blocks: Default::default(),
+        oracle_responses: vec![],
+        events,
+        blobs: vec![],
+        operation_results: vec![],
+    };
+    Block::new(proposed, outcome)
+}
+
 pub fn create_test_block(
     chain_id: CryptoHash,
     epoch: Epoch,
     height: BlockHeight,
     transactions: Vec<Transaction>,
 ) -> Block {
-    Block {
-        header: BlockHeader {
-            chain_id: ChainId(chain_id),
-            epoch,
-            height,
-            timestamp: Timestamp::from(0),
-            state_hash: CryptoHash::new(&TestString::new("state")),
-            previous_block_hash: None,
-            authenticated_owner: None,
-            transactions_hash: CryptoHash::new(&TestString::new("tx")),
-            messages_hash: CryptoHash::new(&TestString::new("msg")),
-            previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg")),
-            previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_evt")),
-            oracle_responses_hash: CryptoHash::new(&TestString::new("oracle")),
-            events_hash: CryptoHash::new(&TestString::new("events")),
-            blobs_hash: CryptoHash::new(&TestString::new("blobs")),
-            operation_results_hash: CryptoHash::new(&TestString::new("op_results")),
-        },
-        body: BlockBody {
-            transactions,
-            messages: vec![],
-            previous_message_blocks: Default::default(),
-            previous_event_blocks: Default::default(),
-            oracle_responses: vec![],
-            events: vec![],
-            blobs: vec![],
-            operation_results: vec![],
-        },
-    }
+    build_block(chain_id, epoch, height, transactions, vec![])
 }
 
 pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {

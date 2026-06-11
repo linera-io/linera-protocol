@@ -1,24 +1,14 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use alloy_sol_types::sol;
-
 /// Solidity source for the Microchain abstract contract.
 pub const SOURCE: &str = include_str!("../solidity/Microchain.sol");
-
-sol! {
-    function addBlock(bytes calldata data) external;
-
-    function lightClient() external view returns (address);
-
-    function chainId() external view returns (bytes32);
-}
 
 #[cfg(test)]
 mod tests {
     use alloy_sol_types::sol;
     use linera_base::{
-        crypto::{CryptoHash, TestString, ValidatorSecretKey},
+        crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
         data_types::BlockHeight,
     };
     use revm::{
@@ -26,8 +16,10 @@ mod tests {
         primitives::Address,
     };
 
-    use super::{addBlockCall, chainIdCall, lightClientCall};
-    use crate::test_helpers::*;
+    use crate::{
+        contracts::IMicrochain::{addBlockCall, chainIdCall, lightClientCall},
+        test_helpers::*,
+    };
 
     sol! {
         function blockCount() external view returns (uint64);
@@ -114,7 +106,7 @@ mod tests {
         db: CacheDB<EmptyDB>,
         deployer: Address,
         secret: ValidatorSecretKey,
-        public: linera_base::crypto::ValidatorPublicKey,
+        public: ValidatorPublicKey,
         chain_id: CryptoHash,
         contract: Address,
     }
@@ -148,13 +140,15 @@ mod tests {
                 self.chain_id,
                 height,
             );
-            let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+            let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
             call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
                 &addBlockCall {
-                    data: bcs_bytes.into(),
+                    blockProof: block_proof,
+                    eventBcs: event_bcs,
+                    eventsPerTx: events_per_tx,
                 },
             );
         }
@@ -166,13 +160,15 @@ mod tests {
         ) -> Result<(), String> {
             let cert =
                 create_signed_certificate_for_chain(&self.secret, &self.public, chain_id, height);
-            let bcs_bytes = bcs::to_bytes(&cert).expect("BCS serialization failed");
+            let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
             try_call_contract(
                 &mut self.db,
                 self.deployer,
                 self.contract,
                 &addBlockCall {
-                    data: bcs_bytes.into(),
+                    blockProof: block_proof,
+                    eventBcs: event_bcs,
+                    eventsPerTx: events_per_tx,
                 },
             )
             .map(|_| ())

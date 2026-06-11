@@ -27,10 +27,9 @@ use alloy::{
     primitives::{B256, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::Filter,
-    sol,
 };
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::abi::BridgeOperation;
+use linera_bridge::{abi::BridgeOperation, contracts::IERC20};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_evm_bridge,
@@ -45,22 +44,14 @@ use linera_faucet_client::Faucet;
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-    }
-}
-
 const NUM_BURNS: usize = 8;
 const BURN_AMOUNT_TOKENS: u128 = 1;
-/// Per-block gas ceiling sized to live between `processBurns(cert, tx, [single])`
-/// (~3.8M gas, measured — dominated by `verifyBlock` in the
-/// bridge-driven burn flow where each burn adds a funding `Credit` plus a
-/// `BridgeMessage::Burn` to the chain-A block) and `addBlock(cert)` for all
-/// `NUM_BURNS` burns (~4.21M gas, measured). `addBlock` therefore cannot fit,
-/// so the relayer routes through chunked per-tx `processBurns` instead.
-const ANVIL_BLOCK_GAS_LIMIT: u64 = 4_000_000;
+/// Per-block gas ceiling for the chunked-fallback test, set below `addBlock`'s cost for `NUM_BURNS`
+/// burns (~750-850K with the header-proof scheme) so the relayer is forced off the fast path. The
+/// chunked path stays under it: a one-time `registerBlock` (verify the quorum once) plus
+/// `processBurns` chunks that `split_to_fit` shrinks until each fits — so every burn still settles,
+/// across at least two EVM transactions. Re-tune if `addBlock`/`processBurns` gas shifts.
+const ANVIL_BLOCK_GAS_LIMIT: u64 = 500_000;
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images, Wasm, and relay binary.

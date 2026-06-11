@@ -7,15 +7,15 @@
 mod tests {
     use alloy_sol_types::SolEvent;
     use linera_base::{
-        crypto::{CryptoHash, TestString, ValidatorSecretKey},
-        data_types::{BlockHeight, U128},
+        crypto::{CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
+        data_types::{BlockHeight, Event, U128},
     };
     use revm::{
         database::{CacheDB, EmptyDB},
         primitives::Address,
     };
 
-    use crate::{evm::microchain::addBlockCall, test_helpers::*};
+    use crate::{contracts::IMicrochain::addBlockCall, test_helpers::*};
 
     mod erc20 {
         use alloy_sol_types::sol;
@@ -56,7 +56,7 @@ mod tests {
         db: CacheDB<EmptyDB>,
         deployer: Address,
         secret: ValidatorSecretKey,
-        public: linera_base::crypto::ValidatorPublicKey,
+        public: ValidatorPublicKey,
         chain_id: CryptoHash,
         app_id: CryptoHash,
         bridge: Address,
@@ -140,7 +140,7 @@ mod tests {
         /// Submits a block with the given events.
         fn submit_block_with_events(
             &mut self,
-            events: Vec<Vec<linera_base::data_types::Event>>,
+            events: Vec<Vec<Event>>,
         ) -> (Vec<revm::primitives::Log>, u64) {
             let height = BlockHeight(self.next_height);
             self.next_height += 1;
@@ -151,12 +151,15 @@ mod tests {
                 height,
                 events,
             );
+            let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
             let (_, logs, gas) = call_contract(
                 &mut self.db,
                 self.deployer,
                 self.bridge,
                 &addBlockCall {
-                    data: bcs::to_bytes(&cert).unwrap().into(),
+                    blockProof: block_proof,
+                    eventBcs: event_bcs,
+                    eventsPerTx: events_per_tx,
                 },
             );
             (logs, gas)

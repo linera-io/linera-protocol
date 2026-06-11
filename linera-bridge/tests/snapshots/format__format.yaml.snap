@@ -99,52 +99,6 @@ BlobType:
       ApplicationFormats: UNIT
     8:
       CheckpointExecutionState: UNIT
-Block:
-  STRUCT:
-    - header:
-        TYPENAME: BlockHeader
-    - body:
-        TYPENAME: BlockBody
-BlockBody:
-  STRUCT:
-    - transactions:
-        SEQ:
-          TYPENAME: Transaction
-    - messages:
-        SEQ:
-          SEQ:
-            TYPENAME: OutgoingMessage
-    - previous_message_blocks:
-        MAP:
-          KEY:
-            TYPENAME: ChainId
-          VALUE:
-            TUPLE:
-              - TYPENAME: CryptoHash
-              - TYPENAME: BlockHeight
-    - previous_event_blocks:
-        MAP:
-          KEY:
-            TYPENAME: StreamId
-          VALUE:
-            TUPLE:
-              - TYPENAME: CryptoHash
-              - TYPENAME: BlockHeight
-    - oracle_responses:
-        SEQ:
-          SEQ:
-            TYPENAME: OracleResponse
-    - events:
-        SEQ:
-          SEQ:
-            TYPENAME: Event
-    - blobs:
-        SEQ:
-          SEQ:
-            TYPENAME: BlobContent
-    - operation_results:
-        SEQ:
-          TYPENAME: OperationResult
 BlockHeader:
   STRUCT:
     - chain_id:
@@ -163,8 +117,35 @@ BlockHeader:
     - authenticated_owner:
         OPTION:
           TYPENAME: AccountOwner
+    - transactions_hash:
+        TYPENAME: CryptoHash
+    - messages_hash:
+        TYPENAME: CryptoHash
+    - previous_message_blocks_hash:
+        TYPENAME: CryptoHash
+    - previous_event_blocks_hash:
+        TYPENAME: CryptoHash
+    - oracle_responses_hash:
+        TYPENAME: CryptoHash
+    - events_hash:
+        TYPENAME: CryptoHash
+    - blobs_hash:
+        TYPENAME: CryptoHash
+    - operation_results_hash:
+        TYPENAME: CryptoHash
 BlockHeight:
   NEWTYPESTRUCT: U64
+BlockProof:
+  STRUCT:
+    - header:
+        TYPENAME: BlockHeader
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: Secp256k1PublicKey
+            - TYPENAME: Secp256k1Signature
 CertificateKind:
   ENUM:
     0:
@@ -193,17 +174,6 @@ ChainOwnership:
     - open_multi_leader_rounds: BOOL
     - timeout_config:
         TYPENAME: TimeoutConfig
-ConfirmedBlockCertificate:
-  STRUCT:
-    - value:
-        TYPENAME: Block
-    - round:
-        TYPENAME: Round
-    - signatures:
-        SEQ:
-          TUPLE:
-            - TYPENAME: Secp256k1PublicKey
-            - TYPENAME: Secp256k1Signature
 CryptoHash:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -330,8 +300,6 @@ Operation:
           - application_id:
               TYPENAME: ApplicationId
           - bytes: BYTES
-OperationResult:
-  NEWTYPESTRUCT: BYTES
 OracleResponse:
   ENUM:
     0:
@@ -377,22 +345,6 @@ OracleResponse:
                 TUPLE:
                   - TYPENAME: ChainId
                   - TYPENAME: Cursor
-OutgoingMessage:
-  STRUCT:
-    - destination:
-        TYPENAME: ChainId
-    - authenticated_owner:
-        OPTION:
-          TYPENAME: AccountOwner
-    - grant:
-        TYPENAME: Amount
-    - refund_grant_to:
-        OPTION:
-          TYPENAME: Account
-    - kind:
-        TYPENAME: MessageKind
-    - message:
-        TYPENAME: Message
 PostedMessage:
   STRUCT:
     - authenticated_owner:

@@ -556,110 +556,6 @@ library BridgeTypes {
         return value;
     }
 
-    struct Block {
-        BlockHeader header;
-        BlockBody body;
-    }
-
-    function bcs_serialize_Block(Block memory input) internal pure returns (bytes memory) {
-        bytes memory result = bcs_serialize_BlockHeader(input.header);
-        return abi.encodePacked(result, bcs_serialize_BlockBody(input.body));
-    }
-
-    function bcs_deserialize_offset_Block(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Block memory)
-    {
-        uint256 new_pos;
-        BlockHeader memory header;
-        (new_pos, header) = bcs_deserialize_offset_BlockHeader(pos, input);
-        BlockBody memory body;
-        (new_pos, body) = bcs_deserialize_offset_BlockBody(new_pos, input);
-        return (new_pos, Block(header, body));
-    }
-
-    function bcs_deserialize_Block(bytes memory input) internal pure returns (Block memory) {
-        uint256 new_pos;
-        Block memory value;
-        (new_pos, value) = bcs_deserialize_offset_Block(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct BlockBody {
-        Transaction[] transactions;
-        OutgoingMessage[][] messages;
-        key_values_ChainId_tuple_CryptoHash_BlockHeight[] previous_message_blocks;
-        key_values_StreamId_tuple_CryptoHash_BlockHeight[] previous_event_blocks;
-        OracleResponse[][] oracle_responses;
-        Event[][] events;
-        BlobContent[][] blobs;
-        OperationResult[] operation_results;
-    }
-
-    function bcs_serialize_BlockBody(BlockBody memory input) internal pure returns (bytes memory) {
-        bytes memory result = bcs_serialize_seq_Transaction(input.transactions);
-        result = abi.encodePacked(result, bcs_serialize_seq_seq_OutgoingMessage(input.messages));
-        result = abi.encodePacked(
-            result, bcs_serialize_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(input.previous_message_blocks)
-        );
-        result = abi.encodePacked(
-            result, bcs_serialize_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(input.previous_event_blocks)
-        );
-        result = abi.encodePacked(result, bcs_serialize_seq_seq_OracleResponse(input.oracle_responses));
-        result = abi.encodePacked(result, bcs_serialize_seq_seq_Event(input.events));
-        result = abi.encodePacked(result, bcs_serialize_seq_seq_BlobContent(input.blobs));
-        return abi.encodePacked(result, bcs_serialize_seq_OperationResult(input.operation_results));
-    }
-
-    function bcs_deserialize_offset_BlockBody(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, BlockBody memory)
-    {
-        uint256 new_pos;
-        Transaction[] memory transactions;
-        (new_pos, transactions) = bcs_deserialize_offset_seq_Transaction(pos, input);
-        OutgoingMessage[][] memory messages;
-        (new_pos, messages) = bcs_deserialize_offset_seq_seq_OutgoingMessage(new_pos, input);
-        key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory previous_message_blocks;
-        (new_pos, previous_message_blocks) =
-            bcs_deserialize_offset_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(new_pos, input);
-        key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory previous_event_blocks;
-        (new_pos, previous_event_blocks) =
-            bcs_deserialize_offset_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(new_pos, input);
-        OracleResponse[][] memory oracle_responses;
-        (new_pos, oracle_responses) = bcs_deserialize_offset_seq_seq_OracleResponse(new_pos, input);
-        Event[][] memory events;
-        (new_pos, events) = bcs_deserialize_offset_seq_seq_Event(new_pos, input);
-        BlobContent[][] memory blobs;
-        (new_pos, blobs) = bcs_deserialize_offset_seq_seq_BlobContent(new_pos, input);
-        OperationResult[] memory operation_results;
-        (new_pos, operation_results) = bcs_deserialize_offset_seq_OperationResult(new_pos, input);
-        return (
-            new_pos,
-            BlockBody(
-                transactions,
-                messages,
-                previous_message_blocks,
-                previous_event_blocks,
-                oracle_responses,
-                events,
-                blobs,
-                operation_results
-            )
-        );
-    }
-
-    function bcs_deserialize_BlockBody(bytes memory input) internal pure returns (BlockBody memory) {
-        uint256 new_pos;
-        BlockBody memory value;
-        (new_pos, value) = bcs_deserialize_offset_BlockBody(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct BlockHeader {
         ChainId chain_id;
         Epoch epoch;
@@ -668,6 +564,14 @@ library BridgeTypes {
         CryptoHash state_hash;
         opt_CryptoHash previous_block_hash;
         opt_AccountOwner authenticated_owner;
+        CryptoHash transactions_hash;
+        CryptoHash messages_hash;
+        CryptoHash previous_message_blocks_hash;
+        CryptoHash previous_event_blocks_hash;
+        CryptoHash oracle_responses_hash;
+        CryptoHash events_hash;
+        CryptoHash blobs_hash;
+        CryptoHash operation_results_hash;
     }
 
     function bcs_serialize_BlockHeader(BlockHeader memory input) internal pure returns (bytes memory) {
@@ -677,7 +581,15 @@ library BridgeTypes {
         result = abi.encodePacked(result, bcs_serialize_Timestamp(input.timestamp));
         result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.state_hash));
         result = abi.encodePacked(result, bcs_serialize_opt_CryptoHash(input.previous_block_hash));
-        return abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.authenticated_owner));
+        result = abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.authenticated_owner));
+        result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.transactions_hash));
+        result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.messages_hash));
+        result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.previous_message_blocks_hash));
+        result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.previous_event_blocks_hash));
+        result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.oracle_responses_hash));
+        result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.events_hash));
+        result = abi.encodePacked(result, bcs_serialize_CryptoHash(input.blobs_hash));
+        return abi.encodePacked(result, bcs_serialize_CryptoHash(input.operation_results_hash));
     }
 
     function bcs_deserialize_offset_BlockHeader(uint256 pos, bytes memory input)
@@ -700,9 +612,41 @@ library BridgeTypes {
         (new_pos, previous_block_hash) = bcs_deserialize_offset_opt_CryptoHash(new_pos, input);
         opt_AccountOwner memory authenticated_owner;
         (new_pos, authenticated_owner) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
+        CryptoHash memory transactions_hash;
+        (new_pos, transactions_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        CryptoHash memory messages_hash;
+        (new_pos, messages_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        CryptoHash memory previous_message_blocks_hash;
+        (new_pos, previous_message_blocks_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        CryptoHash memory previous_event_blocks_hash;
+        (new_pos, previous_event_blocks_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        CryptoHash memory oracle_responses_hash;
+        (new_pos, oracle_responses_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        CryptoHash memory events_hash;
+        (new_pos, events_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        CryptoHash memory blobs_hash;
+        (new_pos, blobs_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
+        CryptoHash memory operation_results_hash;
+        (new_pos, operation_results_hash) = bcs_deserialize_offset_CryptoHash(new_pos, input);
         return (
             new_pos,
-            BlockHeader(chain_id, epoch, height, timestamp, state_hash, previous_block_hash, authenticated_owner)
+            BlockHeader(
+                chain_id,
+                epoch,
+                height,
+                timestamp,
+                state_hash,
+                previous_block_hash,
+                authenticated_owner,
+                transactions_hash,
+                messages_hash,
+                previous_message_blocks_hash,
+                previous_event_blocks_hash,
+                oracle_responses_hash,
+                events_hash,
+                blobs_hash,
+                operation_results_hash
+            )
         );
     }
 
@@ -737,6 +681,41 @@ library BridgeTypes {
         uint256 new_pos;
         BlockHeight memory value;
         (new_pos, value) = bcs_deserialize_offset_BlockHeight(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct BlockProof {
+        BlockHeader header;
+        Round round;
+        tuple_Secp256k1PublicKey_Secp256k1Signature[] signatures;
+    }
+
+    function bcs_serialize_BlockProof(BlockProof memory input) internal pure returns (bytes memory) {
+        bytes memory result = bcs_serialize_BlockHeader(input.header);
+        result = abi.encodePacked(result, bcs_serialize_Round(input.round));
+        return abi.encodePacked(result, bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(input.signatures));
+    }
+
+    function bcs_deserialize_offset_BlockProof(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, BlockProof memory)
+    {
+        uint256 new_pos;
+        BlockHeader memory header;
+        (new_pos, header) = bcs_deserialize_offset_BlockHeader(pos, input);
+        Round memory round;
+        (new_pos, round) = bcs_deserialize_offset_Round(new_pos, input);
+        tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
+        (new_pos, signatures) = bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(new_pos, input);
+        return (new_pos, BlockProof(header, round, signatures));
+    }
+
+    function bcs_deserialize_BlockProof(bytes memory input) internal pure returns (BlockProof memory) {
+        uint256 new_pos;
+        BlockProof memory value;
+        (new_pos, value) = bcs_deserialize_offset_BlockProof(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -846,49 +825,6 @@ library BridgeTypes {
         uint256 new_pos;
         ChainOwnership memory value;
         (new_pos, value) = bcs_deserialize_offset_ChainOwnership(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct ConfirmedBlockCertificate {
-        Block value;
-        Round round;
-        tuple_Secp256k1PublicKey_Secp256k1Signature[] signatures;
-    }
-
-    function bcs_serialize_ConfirmedBlockCertificate(ConfirmedBlockCertificate memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_Block(input.value);
-        result = abi.encodePacked(result, bcs_serialize_Round(input.round));
-        return abi.encodePacked(result, bcs_serialize_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(input.signatures));
-    }
-
-    function bcs_deserialize_offset_ConfirmedBlockCertificate(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, ConfirmedBlockCertificate memory)
-    {
-        uint256 new_pos;
-        Block memory value;
-        (new_pos, value) = bcs_deserialize_offset_Block(pos, input);
-        Round memory round;
-        (new_pos, round) = bcs_deserialize_offset_Round(new_pos, input);
-        tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
-        (new_pos, signatures) = bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(new_pos, input);
-        return (new_pos, ConfirmedBlockCertificate(value, round, signatures));
-    }
-
-    function bcs_deserialize_ConfirmedBlockCertificate(bytes memory input)
-        internal
-        pure
-        returns (ConfirmedBlockCertificate memory)
-    {
-        uint256 new_pos;
-        ConfirmedBlockCertificate memory value;
-        (new_pos, value) = bcs_deserialize_offset_ConfirmedBlockCertificate(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1556,33 +1492,6 @@ library BridgeTypes {
         return value;
     }
 
-    struct OperationResult {
-        bytes value;
-    }
-
-    function bcs_serialize_OperationResult(OperationResult memory input) internal pure returns (bytes memory) {
-        return bcs_serialize_bytes(input.value);
-    }
-
-    function bcs_deserialize_offset_OperationResult(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OperationResult memory)
-    {
-        uint256 new_pos;
-        bytes memory value;
-        (new_pos, value) = bcs_deserialize_offset_bytes(pos, input);
-        return (new_pos, OperationResult(value));
-    }
-
-    function bcs_deserialize_OperationResult(bytes memory input) internal pure returns (OperationResult memory) {
-        uint256 new_pos;
-        OperationResult memory value;
-        (new_pos, value) = bcs_deserialize_offset_OperationResult(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct Operation_User {
         ApplicationId application_id;
         bytes bytes_;
@@ -1887,53 +1796,6 @@ library BridgeTypes {
         uint256 new_pos;
         OracleResponse_Event memory value;
         (new_pos, value) = bcs_deserialize_offset_OracleResponse_Event(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct OutgoingMessage {
-        ChainId destination;
-        opt_AccountOwner authenticated_owner;
-        Amount grant;
-        opt_Account refund_grant_to;
-        MessageKind kind;
-        Message message;
-    }
-
-    function bcs_serialize_OutgoingMessage(OutgoingMessage memory input) internal pure returns (bytes memory) {
-        bytes memory result = bcs_serialize_ChainId(input.destination);
-        result = abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.authenticated_owner));
-        result = abi.encodePacked(result, bcs_serialize_Amount(input.grant));
-        result = abi.encodePacked(result, bcs_serialize_opt_Account(input.refund_grant_to));
-        result = abi.encodePacked(result, bcs_serialize_MessageKind(input.kind));
-        return abi.encodePacked(result, bcs_serialize_Message(input.message));
-    }
-
-    function bcs_deserialize_offset_OutgoingMessage(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OutgoingMessage memory)
-    {
-        uint256 new_pos;
-        ChainId memory destination;
-        (new_pos, destination) = bcs_deserialize_offset_ChainId(pos, input);
-        opt_AccountOwner memory authenticated_owner;
-        (new_pos, authenticated_owner) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
-        Amount memory grant;
-        (new_pos, grant) = bcs_deserialize_offset_Amount(new_pos, input);
-        opt_Account memory refund_grant_to;
-        (new_pos, refund_grant_to) = bcs_deserialize_offset_opt_Account(new_pos, input);
-        MessageKind kind;
-        (new_pos, kind) = bcs_deserialize_offset_MessageKind(new_pos, input);
-        Message memory message;
-        (new_pos, message) = bcs_deserialize_offset_Message(new_pos, input);
-        return (new_pos, OutgoingMessage(destination, authenticated_owner, grant, refund_grant_to, kind, message));
-    }
-
-    function bcs_deserialize_OutgoingMessage(bytes memory input) internal pure returns (OutgoingMessage memory) {
-        uint256 new_pos;
-        OutgoingMessage memory value;
-        (new_pos, value) = bcs_deserialize_offset_OutgoingMessage(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -3727,84 +3589,6 @@ library BridgeTypes {
         return value;
     }
 
-    struct key_values_ChainId_tuple_CryptoHash_BlockHeight {
-        ChainId key;
-        tuple_CryptoHash_BlockHeight value;
-    }
-
-    function bcs_serialize_key_values_ChainId_tuple_CryptoHash_BlockHeight(key_values_ChainId_tuple_CryptoHash_BlockHeight memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_ChainId(input.key);
-        return abi.encodePacked(result, bcs_serialize_tuple_CryptoHash_BlockHeight(input.value));
-    }
-
-    function bcs_deserialize_offset_key_values_ChainId_tuple_CryptoHash_BlockHeight(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, key_values_ChainId_tuple_CryptoHash_BlockHeight memory)
-    {
-        uint256 new_pos;
-        ChainId memory key;
-        (new_pos, key) = bcs_deserialize_offset_ChainId(pos, input);
-        tuple_CryptoHash_BlockHeight memory value;
-        (new_pos, value) = bcs_deserialize_offset_tuple_CryptoHash_BlockHeight(new_pos, input);
-        return (new_pos, key_values_ChainId_tuple_CryptoHash_BlockHeight(key, value));
-    }
-
-    function bcs_deserialize_key_values_ChainId_tuple_CryptoHash_BlockHeight(bytes memory input)
-        internal
-        pure
-        returns (key_values_ChainId_tuple_CryptoHash_BlockHeight memory)
-    {
-        uint256 new_pos;
-        key_values_ChainId_tuple_CryptoHash_BlockHeight memory value;
-        (new_pos, value) = bcs_deserialize_offset_key_values_ChainId_tuple_CryptoHash_BlockHeight(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct key_values_StreamId_tuple_CryptoHash_BlockHeight {
-        StreamId key;
-        tuple_CryptoHash_BlockHeight value;
-    }
-
-    function bcs_serialize_key_values_StreamId_tuple_CryptoHash_BlockHeight(key_values_StreamId_tuple_CryptoHash_BlockHeight memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_StreamId(input.key);
-        return abi.encodePacked(result, bcs_serialize_tuple_CryptoHash_BlockHeight(input.value));
-    }
-
-    function bcs_deserialize_offset_key_values_StreamId_tuple_CryptoHash_BlockHeight(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, key_values_StreamId_tuple_CryptoHash_BlockHeight memory)
-    {
-        uint256 new_pos;
-        StreamId memory key;
-        (new_pos, key) = bcs_deserialize_offset_StreamId(pos, input);
-        tuple_CryptoHash_BlockHeight memory value;
-        (new_pos, value) = bcs_deserialize_offset_tuple_CryptoHash_BlockHeight(new_pos, input);
-        return (new_pos, key_values_StreamId_tuple_CryptoHash_BlockHeight(key, value));
-    }
-
-    function bcs_deserialize_key_values_StreamId_tuple_CryptoHash_BlockHeight(bytes memory input)
-        internal
-        pure
-        returns (key_values_StreamId_tuple_CryptoHash_BlockHeight memory)
-    {
-        uint256 new_pos;
-        key_values_StreamId_tuple_CryptoHash_BlockHeight memory value;
-        (new_pos, value) = bcs_deserialize_offset_key_values_StreamId_tuple_CryptoHash_BlockHeight(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct opt_Account {
         bool has_value;
         Account value;
@@ -4099,41 +3883,6 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_BlobContent(BlobContent[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_BlobContent(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_BlobContent(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, BlobContent[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        BlobContent[] memory result;
-        result = new BlobContent[](len);
-        BlobContent memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_BlobContent(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_BlobContent(bytes memory input) internal pure returns (BlobContent[] memory) {
-        uint256 new_pos;
-        BlobContent[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_BlobContent(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     function bcs_serialize_seq_BlobId(BlobId[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_uleb128(len);
@@ -4204,41 +3953,6 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_Event(Event[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_Event(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_Event(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Event[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        Event[] memory result;
-        result = new Event[](len);
-        Event memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_Event(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_Event(bytes memory input) internal pure returns (Event[] memory) {
-        uint256 new_pos;
-        Event[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_Event(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     function bcs_serialize_seq_Header(Header[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_uleb128(len);
@@ -4274,111 +3988,6 @@ library BridgeTypes {
         return value;
     }
 
-    function bcs_serialize_seq_OperationResult(OperationResult[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_OperationResult(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_OperationResult(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OperationResult[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        OperationResult[] memory result;
-        result = new OperationResult[](len);
-        OperationResult memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_OperationResult(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_OperationResult(bytes memory input) internal pure returns (OperationResult[] memory) {
-        uint256 new_pos;
-        OperationResult[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_OperationResult(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_OracleResponse(OracleResponse[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_OracleResponse(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_OracleResponse(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OracleResponse[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        OracleResponse[] memory result;
-        result = new OracleResponse[](len);
-        OracleResponse memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_OracleResponse(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_OracleResponse(bytes memory input) internal pure returns (OracleResponse[] memory) {
-        uint256 new_pos;
-        OracleResponse[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_OracleResponse(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_OutgoingMessage(OutgoingMessage[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_OutgoingMessage(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_OutgoingMessage(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OutgoingMessage[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        OutgoingMessage[] memory result;
-        result = new OutgoingMessage[](len);
-        OutgoingMessage memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_OutgoingMessage(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_OutgoingMessage(bytes memory input) internal pure returns (OutgoingMessage[] memory) {
-        uint256 new_pos;
-        OutgoingMessage[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_OutgoingMessage(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     function bcs_serialize_seq_PostedMessage(PostedMessage[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_uleb128(len);
@@ -4410,41 +4019,6 @@ library BridgeTypes {
         uint256 new_pos;
         PostedMessage[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_PostedMessage(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_Transaction(Transaction[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_Transaction(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_Transaction(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Transaction[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        Transaction[] memory result;
-        result = new Transaction[](len);
-        Transaction memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_Transaction(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_Transaction(bytes memory input) internal pure returns (Transaction[] memory) {
-        uint256 new_pos;
-        Transaction[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_Transaction(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -4488,247 +4062,6 @@ library BridgeTypes {
         uint256 new_pos;
         key_values_AccountOwner_uint64[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_key_values_ChainId_tuple_CryptoHash_BlockHeight(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory result;
-        result = new key_values_ChainId_tuple_CryptoHash_BlockHeight[](len);
-        key_values_ChainId_tuple_CryptoHash_BlockHeight memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_key_values_ChainId_tuple_CryptoHash_BlockHeight(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(bytes memory input)
-        internal
-        pure
-        returns (key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory)
-    {
-        uint256 new_pos;
-        key_values_ChainId_tuple_CryptoHash_BlockHeight[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_key_values_ChainId_tuple_CryptoHash_BlockHeight(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_key_values_StreamId_tuple_CryptoHash_BlockHeight(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(
-        uint256 pos,
-        bytes memory input
-    ) internal pure returns (uint256, key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory) {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory result;
-        result = new key_values_StreamId_tuple_CryptoHash_BlockHeight[](len);
-        key_values_StreamId_tuple_CryptoHash_BlockHeight memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_key_values_StreamId_tuple_CryptoHash_BlockHeight(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(bytes memory input)
-        internal
-        pure
-        returns (key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory)
-    {
-        uint256 new_pos;
-        key_values_StreamId_tuple_CryptoHash_BlockHeight[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_key_values_StreamId_tuple_CryptoHash_BlockHeight(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_seq_BlobContent(BlobContent[][] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_seq_BlobContent(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_seq_BlobContent(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, BlobContent[][] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        BlobContent[][] memory result;
-        result = new BlobContent[][](len);
-        BlobContent[] memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_seq_BlobContent(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_seq_BlobContent(bytes memory input) internal pure returns (BlobContent[][] memory) {
-        uint256 new_pos;
-        BlobContent[][] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_seq_BlobContent(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_seq_Event(Event[][] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_seq_Event(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_seq_Event(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Event[][] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        Event[][] memory result;
-        result = new Event[][](len);
-        Event[] memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_seq_Event(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_seq_Event(bytes memory input) internal pure returns (Event[][] memory) {
-        uint256 new_pos;
-        Event[][] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_seq_Event(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_seq_OracleResponse(OracleResponse[][] memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_seq_OracleResponse(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_seq_OracleResponse(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OracleResponse[][] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        OracleResponse[][] memory result;
-        result = new OracleResponse[][](len);
-        OracleResponse[] memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_seq_OracleResponse(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_seq_OracleResponse(bytes memory input)
-        internal
-        pure
-        returns (OracleResponse[][] memory)
-    {
-        uint256 new_pos;
-        OracleResponse[][] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_seq_OracleResponse(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_seq_OutgoingMessage(OutgoingMessage[][] memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_seq_OutgoingMessage(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_seq_OutgoingMessage(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, OutgoingMessage[][] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        OutgoingMessage[][] memory result;
-        result = new OutgoingMessage[][](len);
-        OutgoingMessage[] memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_seq_OutgoingMessage(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_seq_OutgoingMessage(bytes memory input)
-        internal
-        pure
-        returns (OutgoingMessage[][] memory)
-    {
-        uint256 new_pos;
-        OutgoingMessage[][] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_seq_OutgoingMessage(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -4988,45 +4321,6 @@ library BridgeTypes {
         uint256 new_pos;
         tuple_ChainId_Cursor memory value;
         (new_pos, value) = bcs_deserialize_offset_tuple_ChainId_Cursor(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct tuple_CryptoHash_BlockHeight {
-        CryptoHash entry0;
-        BlockHeight entry1;
-    }
-
-    function bcs_serialize_tuple_CryptoHash_BlockHeight(tuple_CryptoHash_BlockHeight memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_CryptoHash(input.entry0);
-        return abi.encodePacked(result, bcs_serialize_BlockHeight(input.entry1));
-    }
-
-    function bcs_deserialize_offset_tuple_CryptoHash_BlockHeight(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, tuple_CryptoHash_BlockHeight memory)
-    {
-        uint256 new_pos;
-        CryptoHash memory entry0;
-        (new_pos, entry0) = bcs_deserialize_offset_CryptoHash(pos, input);
-        BlockHeight memory entry1;
-        (new_pos, entry1) = bcs_deserialize_offset_BlockHeight(new_pos, input);
-        return (new_pos, tuple_CryptoHash_BlockHeight(entry0, entry1));
-    }
-
-    function bcs_deserialize_tuple_CryptoHash_BlockHeight(bytes memory input)
-        internal
-        pure
-        returns (tuple_CryptoHash_BlockHeight memory)
-    {
-        uint256 new_pos;
-        tuple_CryptoHash_BlockHeight memory value;
-        (new_pos, value) = bcs_deserialize_offset_tuple_CryptoHash_BlockHeight(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

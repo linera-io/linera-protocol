@@ -9,6 +9,8 @@ use std::{sync::Arc, time::Duration};
 
 use alloy::{primitives::Address, providers::Provider};
 use linera_base::data_types::BlockHeight;
+use linera_chain::types::ConfirmedBlockCertificate;
+use linera_core::environment::Environment;
 use tokio::sync::{Notify, RwLock};
 
 use super::{MonitorState, PendingBurn};
@@ -22,7 +24,7 @@ use crate::relay::{
 /// Background task that scans Linera block history for BurnEvent stream
 /// events and checks EVM for completion. Newly-discovered burns are written
 /// to `MonitorState` (and SQLite) and the consumer is woken via `notify`.
-pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static>(
+pub async fn linera_scan_loop<E: Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
@@ -58,7 +60,7 @@ pub async fn linera_scan_loop<E: linera_core::environment::Environment + 'static
 /// to per-tx chunked `processBurns(cert, tx_index, positions)` when it doesn't
 /// fit. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
 /// (whichever comes first) when nothing is ready.
-pub(crate) async fn process_pending_burns<E: linera_core::environment::Environment + 'static>(
+pub(crate) async fn process_pending_burns<E: Environment + 'static>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
     linera_client: &LineraClient<E>,
@@ -151,7 +153,7 @@ pub(crate) async fn process_pending_burns<E: linera_core::environment::Environme
 async fn submit_addblock<P: Provider>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     height: BlockHeight,
     event_indices: &[u32],
     max_retries: u32,
@@ -174,17 +176,43 @@ async fn submit_addblock<P: Provider>(
     }
 }
 
-/// Per-tx chunked fallback: split each tx group's positions to fit under
-/// the block gas limit, mark any individually-oversized burn as `failed`,
-/// then submit each fitting chunk as an independent `processBurns` tx.
+/// Per-tx chunked fallback: register the block, split each tx group's
+/// positions to fit under the block gas limit, mark any
+/// individually-oversized burn as `failed`, then submit each fitting chunk
+/// as an independent `processBurns` tx.
 async fn submit_chunked<P: Provider>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     height: BlockHeight,
     by_tx: &[(u32, Vec<u32>)],
     max_retries: u32,
 ) {
+    // Chunked settlement proves each burn against the block's registered `events_hash`, so the
+    // block must be registered before any gas estimate or `processBurns` — both revert otherwise.
+    if let Err(error) = evm_client.register_block(cert).await {
+        tracing::warn!(?height, ?error, "registerBlock submission failed");
+        let to_bump: Vec<u32> = {
+            let state = monitor.read().await;
+            let mut event_indices = Vec::new();
+            for (tx_index, positions) in by_tx {
+                for &pos in positions {
+                    if let Some(ei) = state.event_index_for_pos(height, *tx_index, pos) {
+                        event_indices.push(ei);
+                    }
+                }
+            }
+            event_indices
+        };
+        let mut state = monitor.write().await;
+        for event_index in to_bump {
+            state
+                .mark_burn_retried(height, event_index, max_retries)
+                .await;
+        }
+        return;
+    }
+
     for (tx_index, positions) in by_tx {
         let (chunks, oversized, errored) =
             split_to_fit(evm_client, cert, *tx_index, positions).await;
@@ -223,7 +251,7 @@ async fn submit_chunked<P: Provider>(
 ///   retry (`max_retries`) instead of immediate failure.
 async fn split_to_fit<P: Provider>(
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     tx_index: u32,
     positions: &[u32],
 ) -> (Vec<Vec<u32>>, Vec<u32>, Vec<u32>) {
@@ -359,7 +387,7 @@ async fn mark_estimate_errored_retry(
 async fn submit_chunks_with_retry<P: Provider>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<P>,
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
     height: BlockHeight,
     tx_index: u32,
     events_chunks: Vec<Vec<u32>>,
@@ -398,7 +426,7 @@ async fn persist_cert_bytes(
     monitor: &RwLock<MonitorState>,
     height: BlockHeight,
     event_indices: &[u32],
-    cert: &linera_chain::types::ConfirmedBlockCertificate,
+    cert: &ConfirmedBlockCertificate,
 ) {
     let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
     let state = monitor.read().await;
@@ -415,7 +443,7 @@ async fn persist_cert_bytes(
     }
 }
 
-async fn linera_scan_iteration<E: linera_core::environment::Environment>(
+async fn linera_scan_iteration<E: Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
     notify: &Notify,

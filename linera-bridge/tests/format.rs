@@ -3,13 +3,14 @@
 
 use linera_base::{
     crypto::{CryptoHash, TestString},
-    data_types::{OracleResponse, Round},
+    data_types::{BlobContent, Event, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
     vm::VmRuntime,
 };
+use linera_bridge::block_proof::BlockProof;
 use linera_chain::{
     data_types::{MessageAction, Transaction, VoteValue},
-    types::{CertificateKind, ConfirmedBlockCertificate},
+    types::CertificateKind,
 };
 use linera_execution::{
     system::AdminOperation, Message, MessageKind, Operation, SystemMessage, SystemOperation,
@@ -45,6 +46,7 @@ fn get_registry() -> Result<Registry> {
     // Trace enums that appear in the ConfirmedBlockCertificate type graph.
     tracer.trace_type::<AccountOwner>(&samples)?;
     tracer.trace_type::<BlobType>(&samples)?;
+    tracer.trace_type::<BlobContent>(&samples)?;
     tracer.trace_type::<GenericApplicationId>(&samples)?;
     tracer.trace_type::<Message>(&samples)?;
     tracer.trace_type::<MessageAction>(&samples)?;
@@ -59,7 +61,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<CertificateKind>(&samples)?;
     tracer.trace_type::<Transaction>(&samples)?;
     tracer.trace_type::<VoteValue>(&samples)?;
-    tracer.trace_type::<ConfirmedBlockCertificate>(&samples)?;
+    tracer.trace_type::<BlockProof>(&samples)?;
+    tracer.trace_type::<Event>(&samples)?;
     tracer.registry()
 }
 
