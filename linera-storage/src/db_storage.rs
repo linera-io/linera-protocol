@@ -14,6 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    time::Duration,
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
@@ -1088,6 +1089,10 @@ impl Clock for WallClock {
         if delta > TimeDelta::ZERO {
             linera_base::time::timer::sleep(delta.as_duration()).await
         }
+    }
+
+    async fn sleep_for(&self, duration: Duration) {
+        linera_base::time::timer::sleep(duration).await
     }
 }
 
