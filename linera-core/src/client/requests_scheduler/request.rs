@@ -4,7 +4,7 @@
 use std::fmt;
 
 use linera_base::{
-    data_types::{Blob, BlobContent, BlockHeight},
+    data_types::{BlobContent, BlockHeight},
     identifiers::{BlobId, ChainId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
@@ -21,8 +21,6 @@ pub enum RequestKey {
         chain_id: ChainId,
         heights: Vec<BlockHeight>,
     },
-    /// Download a blob by ID
-    Blob(BlobId),
     /// Download a pending blob
     PendingBlob { chain_id: ChainId, blob_id: BlobId },
     /// Download certificate for a specific blob
@@ -37,7 +35,6 @@ impl fmt::Debug for RequestKey {
                 .field("chain_id", chain_id)
                 .field("heights", &CompressedHeights(heights))
                 .finish(),
-            RequestKey::Blob(blob_id) => f.debug_tuple("Blob").field(blob_id).finish(),
             RequestKey::PendingBlob { chain_id, blob_id } => f
                 .debug_struct("PendingBlob")
                 .field("chain_id", chain_id)
@@ -67,7 +64,7 @@ impl RequestKey {
     ///
     /// # Returns
     /// - `Some((chain_id, heights))` for certificate requests, where heights are sorted
-    /// - `None` for non-certificate requests (Blob, PendingBlob, CertificateForBlob)
+    /// - `None` for non-certificate requests (PendingBlob, CertificateForBlob)
     fn heights(&self) -> Option<Vec<BlockHeight>> {
         match self {
             RequestKey::Certificates { heights, .. } => Some(heights.clone()),
@@ -80,7 +77,6 @@ impl RequestKey {
 #[derive(Debug, Clone)]
 pub enum RequestResult {
     Certificates(Vec<ConfirmedBlockCertificate>),
-    Blob(Option<Blob>),
     BlobContent(BlobContent),
     Certificate(Box<ConfirmedBlockCertificate>),
 }
@@ -89,12 +85,6 @@ pub enum RequestResult {
 /// for use in the requests cache.
 pub trait Cacheable: TryFrom<RequestResult> + Into<RequestResult> {}
 impl<T> Cacheable for T where T: TryFrom<RequestResult> + Into<RequestResult> {}
-
-impl From<Option<Blob>> for RequestResult {
-    fn from(blob: Option<Blob>) -> Self {
-        RequestResult::Blob(blob)
-    }
-}
 
 impl From<Vec<ConfirmedBlockCertificate>> for RequestResult {
     fn from(certs: Vec<ConfirmedBlockCertificate>) -> Self {
@@ -111,17 +101,6 @@ impl From<BlobContent> for RequestResult {
 impl From<ConfirmedBlockCertificate> for RequestResult {
     fn from(cert: ConfirmedBlockCertificate) -> Self {
         RequestResult::Certificate(Box::new(cert))
-    }
-}
-
-impl TryFrom<RequestResult> for Option<Blob> {
-    type Error = ();
-
-    fn try_from(result: RequestResult) -> Result<Self, Self::Error> {
-        match result {
-            RequestResult::Blob(blob) => Ok(blob),
-            _ => Err(()),
-        }
     }
 }
 
@@ -322,7 +301,7 @@ mod tests {
         };
 
         // Non-certificate result should return None
-        let blob_result = RequestResult::Blob(None);
+        let blob_result = RequestResult::BlobContent(super::BlobContent::new_data(Vec::new()));
         assert!(req1.try_extract_result(&req2, &blob_result).is_none());
     }
 
