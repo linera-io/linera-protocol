@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["main","run_operation"],"struct":["CheckFile","FileComparator","WitGeneratorOptions","WriteToFile"],"trait":["Operation"]};

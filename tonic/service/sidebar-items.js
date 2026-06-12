@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["interceptor","recover_error"],"struct":["AxumBody","AxumRouter","InterceptorLayer","Layered","Routes","RoutesBuilder"],"trait":["Interceptor","LayerExt"]};

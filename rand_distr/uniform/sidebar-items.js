@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Uniform","UniformChar","UniformDuration","UniformFloat","UniformInt"],"trait":["SampleBorrow","SampleRange","SampleUniform","UniformSampler"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Decision"],"fn":["destructor_callback","filter_callback","name_callback"],"struct":["CompactionFilterCallback"],"trait":["CompactionFilter","CompactionFilterFn"]};

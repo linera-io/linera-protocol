@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["general","mixed_radix","radix2"],"trait":["DomainCoeff","EvaluationDomain"]};

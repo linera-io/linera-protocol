@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_TAG_LEN","NONCE_LEN"],"mod":["chacha20_poly1305_openssh","quic"],"static":["AES_128_GCM","AES_256_GCM","CHACHA20_POLY1305"],"struct":["Aad","Algorithm","LessSafeKey","Nonce","OpeningKey","SealingKey","Tag","UnboundKey"],"trait":["BoundKey","NonceSequence"]};

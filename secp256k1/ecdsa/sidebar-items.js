@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RecoveryId"],"mod":["serialized_signature"],"struct":["RecoverableSignature","Signature"]};

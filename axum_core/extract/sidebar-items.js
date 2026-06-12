@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["rejection"],"struct":["DefaultBodyLimit"],"trait":["FromRef","FromRequest","FromRequestParts","OptionalFromRequest","OptionalFromRequestParts"],"type":["Request"]};

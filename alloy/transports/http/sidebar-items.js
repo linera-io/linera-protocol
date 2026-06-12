@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["reqwest"],"struct":["Client","Http"],"type":["ReqwestConnect","ReqwestTransport"]};

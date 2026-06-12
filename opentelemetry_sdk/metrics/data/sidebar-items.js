@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AggregatedMetrics","MetricData"],"struct":["Exemplar","ExponentialBucket","ExponentialHistogram","ExponentialHistogramDataPoint","Gauge","GaugeDataPoint","Histogram","HistogramDataPoint","Metric","ResourceMetrics","ScopeMetrics","Sum","SumDataPoint"]};

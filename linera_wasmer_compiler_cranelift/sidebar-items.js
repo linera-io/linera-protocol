@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["VERSION"],"enum":["CraneliftOptLevel","ModuleInfoMemoryOffset"],"fn":["make_trampoline_function_call"],"struct":["Cranelift","CraneliftCompiler","ModuleInfoVmctxInfo"],"type":["ValueLabelsRanges"]};

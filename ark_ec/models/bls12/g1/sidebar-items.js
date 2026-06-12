@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["G1Prepared"],"type":["G1Affine","G1Projective"]};

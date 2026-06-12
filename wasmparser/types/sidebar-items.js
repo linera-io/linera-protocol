@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EntityType"],"struct":["CoreTypeId","RecGroupId","Types","TypesRef"],"trait":["TypeData","TypeIdentifier"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"derive":["Deserialize","Serialize"],"macro":["forward_to_deserialize_any"],"mod":["de","ser"],"trait":["Deserialize","Deserializer","Serialize","Serializer"]};
