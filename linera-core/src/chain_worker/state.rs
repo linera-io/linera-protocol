@@ -2584,7 +2584,7 @@ where
         )
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
-        let block_hash = CryptoHash::new(&executed_block);
+        let block_hash = executed_block.hash();
         if let Some(cache) = &self.execution_state_cache {
             cache.insert(
                 &block_hash,
