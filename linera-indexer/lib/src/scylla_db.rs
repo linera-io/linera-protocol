@@ -87,6 +87,10 @@ pub struct ScyllaDbConfig {
     #[arg(long, default_value = "1000")]
     pub block_hash_by_height_cache_size: usize,
 
+    /// The maximal number of entries in the event-block-height cache.
+    #[arg(long, default_value = "1000")]
+    pub event_block_height_cache_size: usize,
+
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1")]
     pub replication_factor: u32,
@@ -132,6 +136,7 @@ impl ScyllaDbRunner {
                     certificate_raw_cache_size: config.client.certificate_raw_cache_size,
                     event_cache_size: config.client.event_cache_size,
                     block_hash_by_height_cache_size: config.client.block_hash_by_height_cache_size,
+                    event_block_height_cache_size: config.client.event_block_height_cache_size,
                     cache_cleanup_interval_secs:
                         linera_service::storage::DEFAULT_CLEANUP_INTERVAL_SECS,
                 },
