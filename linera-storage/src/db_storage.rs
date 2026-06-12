@@ -484,6 +484,7 @@ pub enum RootKey {
     BlockExporterState(u32),
     /// The partition holding the height-to-hash certificate index of the given chain.
     BlockByHeight(ChainId),
+    /// The partition holding the event-to-block-height index of the given chain.
     EventBlockHeight(ChainId),
 }
 

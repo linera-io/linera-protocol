@@ -108,6 +108,9 @@ service ValidatorNode {
 
   // Returns the previous event blocks for a chain's streams.
   rpc PreviousEventBlocks(PreviousEventBlocksRequest) returns (PreviousEventBlocksResponse);
+
+  // Look up the block heights where the given events were published.
+  rpc EventBlockHeights(EventBlockHeightsRequest) returns (EventBlockHeightsResponse);
 }
 
 // Batch of raw certificates.
@@ -462,4 +465,16 @@ message PreviousEventBlock {
 // Response for previous event blocks.
 message PreviousEventBlocksResponse {
   repeated PreviousEventBlock previous_event_blocks = 1;
+}
+
+// A request for looking up block heights where events were published.
+message EventBlockHeightsRequest {
+  // BCS-serialized `Vec<EventId>`.
+  bytes event_ids = 1;
+}
+
+// Response with block heights for each requested event.
+message EventBlockHeightsResponse {
+  // BCS-serialized `Vec<Option<BlockHeight>>`.
+  bytes heights = 1;
 }

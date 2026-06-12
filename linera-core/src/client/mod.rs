@@ -773,11 +773,172 @@ impl<Env: Environment> Client<Env> {
     /// using the event block height index on validators. Queries a validator for
     /// the block heights, downloads those certificates, and processes them — all
     /// as one atomic unit per validator attempt, with staggered fallback.
+    ///
+    /// The index has no backfill, so events published before the validators were
+    /// upgraded resolve to `None`; callers fall back to walking
+    /// `previous_event_blocks` whenever this fails.
+    #[instrument(level = "trace", skip_all)]
+    async fn download_certificates_for_events_from_index(
+        &self,
+        event_ids: &[EventId],
+    ) -> Result<(), chain_client::Error> {
+        let mut validators = self.validator_nodes().await?;
+        let timeout = self.options.certificate_batch_download_timeout;
+        let (max_epoch, committees) = self.admin_committees().await?;
+        let committees_ref = &committees;
+        let mut remaining_event_ids = event_ids.to_vec();
+
+        while !remaining_event_ids.is_empty() {
+            let remaining_ref = &remaining_event_ids;
+            let result = communicate_concurrently(
+                &validators,
+                move |remote_node| {
+                    let validator_key = remote_node.public_key;
+                    let validator_address = remote_node.address();
+                    Box::pin(async move {
+                        // Query this validator for the block heights.
+                        let heights = remote_node
+                            .node
+                            .event_block_heights(remaining_ref.to_vec())
+                            .await?;
+
+                        // Separate resolved and unresolved events.
+                        let mut chain_heights = BTreeMap::<_, BTreeSet<_>>::new();
+                        let mut expected_events = BTreeMap::<_, HashSet<EventId>>::new();
+                        let mut unresolved = Vec::new();
+                        for (event_id, maybe_height) in remaining_ref.iter().zip(heights) {
+                            if let Some(height) = maybe_height {
+                                chain_heights
+                                    .entry(event_id.chain_id)
+                                    .or_default()
+                                    .insert(height);
+                                expected_events
+                                    .entry((event_id.chain_id, height))
+                                    .or_default()
+                                    .insert(event_id.clone());
+                            } else {
+                                unresolved.push(event_id.clone());
+                            }
+                        }
+                        if chain_heights.is_empty() {
+                            // This validator has no useful information.
+                            return Err(chain_client::Error::from(NodeError::EventsNotFound(
+                                remaining_ref.clone(),
+                            )));
+                        }
+
+                        // Download certificates and verify them.
+                        let mut checked_certificates = Vec::<ConfirmedBlockCertificate>::new();
+                        for (chain_id, heights) in chain_heights {
+                            let heights_vec = heights.into_iter().collect::<Vec<_>>();
+                            let certificates = self
+                                .requests_scheduler
+                                .download_certificates_by_heights(
+                                    &remote_node,
+                                    chain_id,
+                                    heights_vec,
+                                )
+                                .await?;
+                            for cert in &certificates {
+                                // Verify the block contains the expected events.
+                                let block = cert.block();
+                                let block_event_ids = block.event_ids().collect::<HashSet<_>>();
+                                if let Some(expected_event_ids) =
+                                    expected_events.get(&(chain_id, block.header.height))
+                                {
+                                    if !expected_event_ids.is_subset(&block_event_ids) {
+                                        tracing::debug!(
+                                            %validator_address, ?expected_event_ids, ?block_event_ids,
+                                            "validator lied about events in block."
+                                        );
+                                        return Err(NodeError::UnexpectedCertificateValue.into());
+                                    }
+                                }
+                            }
+                            for cert in certificates {
+                                Self::check_certificate(max_epoch, committees_ref, &cert)
+                                    .map_err(|error| {
+                                        tracing::debug!(
+                                            %validator_address, %error,
+                                            "invalid certificate"
+                                        );
+                                        error
+                                    })?
+                                    .into_result()
+                                    .map_err(|error| {
+                                        tracing::debug!(
+                                            %validator_address, %error,
+                                            "could not check certificate"
+                                        );
+                                        error
+                                    })?;
+                                checked_certificates.push(cert);
+                            }
+                        }
+                        Ok((checked_certificates, unresolved, validator_key))
+                    })
+                },
+                |errors| {
+                    for (validator, error) in &errors {
+                        debug!(
+                            %validator,
+                            %error,
+                            "failed to download event certificates from validator",
+                        );
+                    }
+                },
+                timeout,
+            )
+            .await;
+
+            match result {
+                Ok((certificates, unresolved, validator_key)) => {
+                    for certificate in certificates {
+                        let mode = ReceiveCertificateMode::AlreadyChecked;
+                        self.receive_sender_certificate(
+                            self.storage_client().cache_certificate(certificate),
+                            mode,
+                            None,
+                        )
+                        .await?;
+                    }
+                    validators.retain(|node| node.public_key != validator_key);
+                    remaining_event_ids = unresolved;
+                }
+                Err(()) => {
+                    // All validators failed; no point retrying.
+                    return Err(NodeError::EventsNotFound(remaining_event_ids).into());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Downloads the publisher chain certificates that contain the given events.
+    ///
+    /// First tries the validators' event block height index, which downloads exactly
+    /// the publishing blocks. If that fails — e.g. because the events predate the
+    /// index, or the validators don't serve the RPC yet — falls back to walking the
+    /// `previous_event_blocks` linked list, so the resulting error is the same as
+    /// before the index existed.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn download_certificates_for_events(
         &self,
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
+        match self
+            .download_certificates_for_events_from_index(event_ids)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                debug!(
+                    %error,
+                    "event block height index lookup failed; \
+                     falling back to walking previous event blocks",
+                );
+            }
+        }
         let validators = self.validator_nodes().await?;
         let timeout = self.options.certificate_batch_download_timeout;
         // Group by chain, keeping only the max required index per stream.

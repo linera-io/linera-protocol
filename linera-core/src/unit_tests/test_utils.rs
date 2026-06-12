@@ -17,7 +17,7 @@ use futures::{
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey},
     data_types::*,
-    identifiers::{AccountOwner, BlobId, ChainId, StreamId},
+    identifiers::{AccountOwner, BlobId, ChainId, EventId, StreamId},
     ownership::ChainOwnership,
 };
 use linera_chain::{
@@ -291,6 +291,16 @@ where
     ) -> Result<ConfirmedBlockCertificate, NodeError> {
         self.spawn_and_receive(move |validator, sender| {
             validator.do_blob_last_used_by_certificate(blob_id, sender)
+        })
+        .await
+    }
+
+    async fn event_block_heights(
+        &self,
+        event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
+        self.spawn_and_receive(move |validator, sender| {
+            validator.do_event_block_heights(event_ids, sender)
         })
         .await
     }
@@ -721,6 +731,21 @@ where
             }
             Err(err) => sender.send(Err(err)),
         }
+    }
+
+    async fn do_event_block_heights(
+        self,
+        event_ids: Vec<EventId>,
+        sender: oneshot::Sender<Result<Vec<Option<BlockHeight>>, NodeError>>,
+    ) -> Result<(), Result<Vec<Option<BlockHeight>>, NodeError>> {
+        let validator = self.client.lock().await;
+        let heights = validator
+            .state
+            .storage_client()
+            .read_event_block_heights(&event_ids)
+            .await
+            .map_err(Into::into);
+        sender.send(heights)
     }
 
     #[allow(clippy::type_complexity)]

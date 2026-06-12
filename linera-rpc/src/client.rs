@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId, StreamId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::BlockProposal,
@@ -316,6 +316,18 @@ impl ValidatorNode for Client {
             Client::Simple(simple_client) => {
                 simple_client.blob_last_used_by_certificate(blob_id).await?
             }
+        })
+    }
+
+    async fn event_block_heights(
+        &self,
+        event_ids: Vec<EventId>,
+    ) -> Result<Vec<Option<BlockHeight>>, NodeError> {
+        Ok(match self {
+            Client::Grpc(grpc_client) => grpc_client.event_block_heights(event_ids).await?,
+
+            #[cfg(with_simple_network)]
+            Client::Simple(simple_client) => simple_client.event_block_heights(event_ids).await?,
         })
     }
 

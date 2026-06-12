@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlobContent, BlockHeight, NetworkDescription},
-    identifiers::{BlobId, ChainId, StreamId},
+    identifiers::{BlobId, ChainId, EventId, StreamId},
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteVote},
@@ -72,6 +72,10 @@ pub enum RpcMessage {
     PreviousEventBlocksResponse(Box<BTreeMap<StreamId, (BlockHeight, CryptoHash)>>),
 
     DownloadBlobs(Vec<BlobId>),
+
+    // Appended at the end to preserve the wire encoding of earlier variants.
+    EventBlockHeights(Vec<EventId>),
+    EventBlockHeightsResponse(Vec<Option<BlockHeight>>),
 }
 
 impl RpcMessage {
@@ -116,6 +120,8 @@ impl RpcMessage {
             | BlobLastUsedByCertificateResponse(_)
             | MissingBlobIds(_)
             | MissingBlobIdsResponse(_)
+            | EventBlockHeights(_)
+            | EventBlockHeightsResponse(_)
             | DownloadCertificatesResponse(_)
             | PreviousEventBlocksResponse(_) => {
                 return None;
@@ -140,6 +146,7 @@ impl RpcMessage {
             | BlobLastUsedBy(_)
             | BlobLastUsedByCertificate(_)
             | MissingBlobIds(_)
+            | EventBlockHeights(_)
             | DownloadCertificates(_)
             | DownloadCertificatesByHeights(_, _) => true,
             BlockProposal(_)
@@ -166,7 +173,19 @@ impl RpcMessage {
             | DownloadCertificatesResponse(_)
             | DownloadCertificatesByHeightsResponse(_)
             | PreviousEventBlocks(_)
-            | PreviousEventBlocksResponse(_) => false,
+            | PreviousEventBlocksResponse(_)
+            | EventBlockHeightsResponse(_) => false,
+        }
+    }
+}
+
+impl TryFrom<RpcMessage> for Vec<Option<BlockHeight>> {
+    type Error = NodeError;
+    fn try_from(message: RpcMessage) -> Result<Self, Self::Error> {
+        match message {
+            RpcMessage::EventBlockHeightsResponse(heights) => Ok(heights),
+            RpcMessage::Error(error) => Err(*error),
+            _ => Err(NodeError::UnexpectedMessage),
         }
     }
 }
