@@ -78,8 +78,10 @@ mod validator_trackers;
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
-    use prometheus::HistogramVec;
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
     pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
         LazyLock::new(|| {
@@ -124,6 +126,14 @@ mod metrics {
             "find_received_certificates latency",
             &[],
             exponential_bucket_latencies(10_000.0),
+        )
+    });
+
+    pub static BLOCK_STAGING_FAILURES_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "block_staging_failures_total",
+            "Total number of client block staging (execute_block) failures, labelled by error type",
+            &["error_type"],
         )
     });
 }

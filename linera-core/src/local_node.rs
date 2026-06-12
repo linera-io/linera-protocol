@@ -49,7 +49,7 @@ where
 }
 
 /// Error type for the operations on a local node.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, strum::IntoStaticStr)]
 pub enum LocalNodeError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
@@ -74,6 +74,20 @@ pub enum LocalNodeError {
 
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
+}
+
+impl LocalNodeError {
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// delegating to [`WorkerError::error_type`] for wrapped worker errors.
+    pub fn error_type(&self) -> String {
+        match self {
+            LocalNodeError::WorkerError(worker_error) => worker_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("LocalNodeError::{variant}")
+            }
+        }
+    }
 }
 
 impl From<ExecutionError> for LocalNodeError {
@@ -501,5 +515,26 @@ where
             .state
             .get_next_height_to_preprocess(chain_id)
             .await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_type_delegates_to_worker_error() {
+        assert_eq!(
+            LocalNodeError::WorkerError(WorkerError::InvalidOwner).error_type(),
+            "WorkerError::InvalidOwner"
+        );
+    }
+
+    #[test]
+    fn error_type_falls_back_to_local_node_variant() {
+        assert_eq!(
+            LocalNodeError::InvalidChainInfoResponse.error_type(),
+            "LocalNodeError::InvalidChainInfoResponse"
+        );
     }
 }
