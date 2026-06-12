@@ -2623,7 +2623,16 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    // Give the chain a single multi-leader round at genesis so that its initial round
+    // (`MultiLeader(0)`) times out: without multi-leader jitter, earlier multi-leader rounds
+    // do not time out. The chain still has no blocks of its own, which is the case this
+    // regression test exercises: requesting a timeout certificate then only fetches the
+    // chain's genesis description blob.
+    let client = builder
+        .add_root_chain_with_ownership(1, Amount::from_tokens(10), |owner| {
+            ChainOwnership::multiple([(owner, 100)], 1, TimeoutConfig::default())
+        })
+        .await?;
 
     // Advance the clock past the (default 10s) round timeout.
     clock.set(Timestamp::from(20_000_000));

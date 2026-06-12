@@ -1014,6 +1014,21 @@ where
         index: u32,
         balance: Amount,
     ) -> anyhow::Result<ChainClient<B::Storage>> {
+        self.add_root_chain_with_ownership(index, balance, ChainOwnership::single)
+            .await
+    }
+
+    /// Creates the root chain with the given `index` and a genesis ownership built from its
+    /// freshly generated owner key, and returns a client for it.
+    ///
+    /// Root chain 0 is the admin chain and needs to be initialized first, otherwise its balance
+    /// is automatically set to zero.
+    pub async fn add_root_chain_with_ownership(
+        &mut self,
+        index: u32,
+        balance: Amount,
+        make_ownership: impl FnOnce(AccountOwner) -> ChainOwnership,
+    ) -> anyhow::Result<ChainClient<B::Storage>> {
         // Make sure the admin chain is initialized.
         if self.admin_description.is_none() && index != 0 {
             Box::pin(self.add_root_chain(0, Amount::ZERO)).await?;
@@ -1021,7 +1036,7 @@ where
         let origin = ChainOrigin::Root(index);
         let public_key = self.signer.generate_new();
         let open_chain_config = InitialChainConfig {
-            ownership: ChainOwnership::single(public_key.into()),
+            ownership: make_ownership(public_key.into()),
             epoch: Epoch(0),
             balance,
             application_permissions: ApplicationPermissions::default(),
