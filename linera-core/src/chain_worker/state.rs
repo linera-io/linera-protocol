@@ -1280,7 +1280,10 @@ where
     ///
     /// Both update and confirmation requests are handled together so that a
     /// single write-lock acquisition covers all pending work for the chain.
-    pub(crate) async fn process_batch(&mut self, requests: Vec<BatchRequest>) {
+    pub(crate) async fn process_batch(
+        &mut self,
+        requests: Vec<BatchRequest>,
+    ) -> Result<(), WorkerError> {
         let mut update_results = Vec::new();
         let mut confirm_results = Vec::new();
         let mut need_save = false;
@@ -1348,10 +1351,12 @@ where
                 }
             }
         }
+        let mut save_error = None;
         if !need_rollback && need_save {
             if let Err(error) = self.save().await {
                 tracing::error!(%error, "failed to save batch; rolling back");
                 need_rollback = true;
+                save_error = Some(error);
             }
         }
         if need_rollback {
@@ -1361,7 +1366,14 @@ where
             for (result_sender, _) in confirm_results {
                 send_result(result_sender, Err(WorkerError::BatchRolledBack));
             }
-            return;
+            // Surface a *save* failure to the caller so `chain_write` can evict or
+            // reset the worker if it was left poisoned or corrupted. Processing
+            // errors that also trigger a rollback were already reported to their
+            // individual senders and leave the worker healthy, so they return `Ok`.
+            return match save_error {
+                Some(error) => Err(error),
+                None => Ok(()),
+            };
         }
 
         if let Some(height) = max_delivered_height {
@@ -1377,6 +1389,7 @@ where
                 .await;
             send_result(result_sender, result);
         }
+        Ok(())
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
