@@ -95,7 +95,7 @@ const MAX_STREAM_NAME_LEN: usize = 64;
 pub const FLAG_ZERO_HASH: &str = "FLAG_ZERO_HASH.linera.network";
 /// The flag that, if present in `http_request_allow_list` field of the content policy of the
 /// current committee, switches the execution-state hash to *historical hashing*: the first block
-/// after activation seeds the rolling hash from a full content hash (via [`HashableView`]), and
+/// after activation seeds the rolling hash from a full content hash (via `HashableView`), and
 /// every subsequent block extends it cheaply from the written batch. Takes effect only when
 /// `FLAG_ZERO_HASH` is absent. Enforced in consensus.
 // Note: testnet-only! This should not survive to mainnet.
