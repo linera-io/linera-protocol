@@ -225,6 +225,22 @@ async fn historical_hashing_shadow_reports_zero_but_advances() -> anyhow::Result
 }
 
 #[tokio::test]
+async fn legacy_hash_matches_pre_change_value() -> anyhow::Result<()> {
+    // Regression golden: with no historical/zero flag, `crypto_hash_mut` must reproduce exactly the
+    // value the pre-change `#[derive(HashableView)]` implementation produced for this fixed state.
+    // The constant was captured from the `testnet_conway` base (commit 801ca8f118) before this
+    // change. Any drift here would silently change the legacy execution-state hash, which is
+    // consensus-breaking, so this test must only change deliberately.
+    let (mut view, _) = new_view_and_context().await;
+    let recorded = CryptoHash::from([
+        146, 2, 171, 91, 66, 52, 95, 140, 217, 91, 65, 171, 135, 96, 184, 168, 137, 188, 74, 230,
+        101, 129, 37, 163, 165, 5, 233, 111, 203, 213, 151, 165,
+    ]);
+    assert_eq!(view.crypto_hash_mut().await?, recorded);
+    Ok(())
+}
+
+#[tokio::test]
 async fn historical_hashing_resets_when_deactivated() -> anyhow::Result<()> {
     let zero_hash = CryptoHash::from([0u8; 32]);
     let (mut view, _) = new_view_and_context().await;
