@@ -111,8 +111,12 @@ where
 {
     pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
         match self.hashing_mode().await? {
-            HashingMode::Zero => Ok(CryptoHash::from([0; 32])),
+            HashingMode::Zero => {
+                self.reset_historical_hash();
+                Ok(CryptoHash::from([0; 32]))
+            }
             HashingMode::Legacy => {
+                self.reset_historical_hash();
                 let hash = self.hash_mut().await?;
                 Ok(Self::wrap_state_hash(hash))
             }
@@ -180,6 +184,16 @@ where
         };
         self.historical_hash.set(Some(hash));
         Ok(hash)
+    }
+
+    /// Drops any stored rolling hash while historical hashing is inactive. This keeps inactive
+    /// chains free of stale state and, crucially, forces a fresh full-content re-seed if historical
+    /// hashing is ever re-activated: otherwise the chain would be extended from a hash that predates
+    /// the blocks executed while it was inactive, which no longer reflects the state.
+    fn reset_historical_hash(&mut self) {
+        if self.historical_hash.get().is_some() {
+            self.historical_hash.set(None);
+        }
     }
 
     /// Wraps a raw 32-byte hash into a domain-separated [`CryptoHash`], matching the convention

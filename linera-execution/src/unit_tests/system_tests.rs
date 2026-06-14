@@ -225,6 +225,30 @@ async fn historical_hashing_shadow_reports_zero_but_advances() -> anyhow::Result
 }
 
 #[tokio::test]
+async fn historical_hashing_resets_when_deactivated() -> anyhow::Result<()> {
+    let zero_hash = CryptoHash::from([0u8; 32]);
+    let (mut view, _) = new_view_and_context().await;
+
+    // Activate and seed: the rolling hash is populated.
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    assert_ne!(view.crypto_hash_mut().await?, zero_hash);
+    assert!(view.historical_hash.get().is_some());
+
+    // Deactivate (back to zero-hashing): the stored rolling hash is dropped so it cannot be
+    // extended later from a stale anchor.
+    install_committee_with_flag(&mut view, FLAG_ZERO_HASH);
+    assert_eq!(view.crypto_hash_mut().await?, zero_hash);
+    assert!(view.historical_hash.get().is_none());
+
+    // Re-activate: a fresh seed is produced (non-zero, populated again).
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    assert_ne!(view.crypto_hash_mut().await?, zero_hash);
+    assert!(view.historical_hash.get().is_some());
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn historical_hashing_is_deterministic() -> anyhow::Result<()> {
     // Two runs with identical state and identical operations must agree; a different operation
     // must diverge.
