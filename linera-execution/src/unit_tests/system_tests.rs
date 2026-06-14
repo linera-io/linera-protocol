@@ -237,14 +237,71 @@ async fn historical_hashing_is_deterministic() -> anyhow::Result<()> {
         Ok((seed, chained))
     }
 
-    let (seed_a, chained_a) = run(42).await?;
-    let (seed_b, chained_b) = run(42).await?;
+    let (seed_a, chained_a) = Box::pin(run(42)).await?;
+    let (seed_b, chained_b) = Box::pin(run(42)).await?;
     assert_eq!(seed_a, seed_b);
     assert_eq!(chained_a, chained_b);
 
-    let (seed_c, chained_c) = run(99).await?;
+    let (seed_c, chained_c) = Box::pin(run(99)).await?;
     assert_eq!(seed_a, seed_c); // seed is computed before the differing mutation
     assert_ne!(chained_a, chained_c); // the differing mutation changes the chained hash
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn historical_hashing_persists_and_chains_across_reload() -> anyhow::Result<()> {
+    use linera_views::{
+        batch::Batch, context::Context as _, store::WritableKeyValueStore as _, views::View as _,
+    };
+
+    // Flushes a view's pending changes to its (shared) store and clears the in-memory dirty state,
+    // exactly as the core save lifecycle does between blocks.
+    async fn save(view: &mut ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>) {
+        let mut batch = Batch::new();
+        view.pre_save(&mut batch).unwrap();
+        view.context().store().write_batch(batch).await.unwrap();
+        view.post_save();
+    }
+
+    // The committee lives in a `HashedLazyRegisterView`, which the ad-hoc `save` helper above does
+    // not round-trip (production persists the whole `RootView`). So the enforce flag is
+    // re-installed in memory after every reload; this is a test-harness concern, not a property of
+    // the historical hashing itself, whose rolling hash lives in a plain `RegisterView`.
+    let zero_hash = CryptoHash::from([0u8; 32]);
+
+    // Persist a chain's pre-activation content. The `historical_hash` register is never written,
+    // mirroring a chain created before activation.
+    let (mut view, _) = new_view_and_context().await;
+    let context = view.context().clone();
+    save(&mut view).await;
+
+    // Reload as a pre-activation chain: the appended field is absent in storage, so it loads as
+    // `None` without any migration (format compatibility).
+    let mut view = ExecutionStateView::load(context.clone()).await?;
+    assert!(view.historical_hash.get().is_none());
+
+    // Block 1 — seed, then persist and reload. The seeded rolling hash must survive the round-trip.
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    let seed = view.crypto_hash_mut().await?;
+    assert_ne!(seed, zero_hash);
+    let seed_raw = *view.historical_hash.get();
+    assert!(seed_raw.is_some());
+    save(&mut view).await;
+    let mut view = ExecutionStateView::load(context.clone()).await?;
+    assert_eq!(*view.historical_hash.get(), seed_raw); // rolling hash round-trips
+
+    // Block 2 — mutate and chain *from the reloaded* stored hash. The result differs from the seed
+    // (the chain advanced) and persists across the next reload.
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+    view.system.timestamp.set(Timestamp::from(42));
+    let chained = view.crypto_hash_mut().await?;
+    assert_ne!(chained, seed);
+    assert_ne!(chained, zero_hash);
+    let chained_raw = *view.historical_hash.get();
+    save(&mut view).await;
+    let view = ExecutionStateView::load(context.clone()).await?;
+    assert_eq!(*view.historical_hash.get(), chained_raw);
 
     Ok(())
 }

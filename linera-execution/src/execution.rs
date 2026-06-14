@@ -175,24 +175,11 @@ where
                 self.system.pre_save(&mut batch)?;
                 self.users.pre_save(&mut batch)?;
                 self.stream_event_counts.pre_save(&mut batch)?;
-                Self::make_hash(Some(stored), &batch)?
+                make_historical_hash(Some(stored), &batch)?
             }
         };
         self.historical_hash.set(Some(hash));
         Ok(hash)
-    }
-
-    /// Extends a stored hash with a batch: `SHA3-256(stored || bcs(batch))`. An empty batch
-    /// leaves the hash unchanged. Mirrors `HistoricallyHashableView::make_hash`.
-    fn make_hash(stored: Option<HasherOutput>, batch: &Batch) -> Result<HasherOutput, ViewError> {
-        let stored = stored.unwrap_or_default();
-        if batch.is_empty() {
-            return Ok(stored);
-        }
-        let mut hasher = linera_views::sha3::Sha3_256::default();
-        hasher.update_with_bytes(stored.as_ref())?;
-        hasher.update_with_bcs_bytes(&batch)?;
-        Ok(hasher.finalize())
     }
 
     /// Wraps a raw 32-byte hash into a domain-separated [`CryptoHash`], matching the convention
@@ -203,6 +190,23 @@ where
         impl BcsHashable<'_> for ExecutionStateViewHash {}
         CryptoHash::new(&ExecutionStateViewHash(hash.into()))
     }
+}
+
+/// Extends a stored hash with a batch: `SHA3-256(stored || bcs(batch))`. An empty batch leaves the
+/// hash unchanged. Mirrors `HistoricallyHashableView::make_hash`. Changing this function changes
+/// consensus-visible execution-state hashes — see `make_historical_hash_matches_recorded_value`.
+fn make_historical_hash(
+    stored: Option<HasherOutput>,
+    batch: &Batch,
+) -> Result<HasherOutput, ViewError> {
+    let stored = stored.unwrap_or_default();
+    if batch.is_empty() {
+        return Ok(stored);
+    }
+    let mut hasher = linera_views::sha3::Sha3_256::default();
+    hasher.update_with_bytes(stored.as_ref())?;
+    hasher.update_with_bcs_bytes(&batch)?;
+    Ok(hasher.finalize())
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
@@ -496,5 +500,44 @@ where
             applications.push((app_id, application_description));
         }
         Ok(applications)
+    }
+}
+
+#[cfg(test)]
+mod historical_hash_tests {
+    use linera_views::{batch::Batch, common::HasherOutput};
+
+    use super::make_historical_hash;
+
+    const RECORDED_CHAIN_HASH: [u8; 32] = [
+        148, 130, 122, 191, 71, 219, 62, 147, 185, 157, 252, 71, 40, 90, 125, 182, 36, 55, 7, 233,
+        90, 114, 77, 56, 106, 151, 21, 246, 183, 174, 65, 74,
+    ];
+
+    /// Golden test pinning the historical-hash chaining primitive. The recorded value is the
+    /// SHA3-256 of `stored || bcs(batch)`; a change to either the algorithm or the `Batch`
+    /// serialization would alter consensus-visible execution-state hashes and break this test
+    /// deliberately.
+    #[test]
+    fn make_historical_hash_matches_recorded_value() {
+        let stored: HasherOutput = [7u8; 32].into();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![0, 1, 2], vec![3, 4, 5]);
+        batch.put_key_value_bytes(vec![6, 7], vec![8]);
+
+        let hash = make_historical_hash(Some(stored), &batch).unwrap();
+        assert_eq!(<[u8; 32]>::from(hash), RECORDED_CHAIN_HASH);
+
+        // An empty batch is a no-op: the stored hash is returned unchanged.
+        assert_eq!(
+            make_historical_hash(Some(stored), &Batch::new()).unwrap(),
+            stored,
+        );
+        // A `None` stored hash behaves like all-zeros, so the same batch over `None` differs from
+        // the same batch over a non-zero stored hash.
+        assert_ne!(
+            make_historical_hash(None, &batch).unwrap(),
+            make_historical_hash(Some(stored), &batch).unwrap(),
+        );
     }
 }
