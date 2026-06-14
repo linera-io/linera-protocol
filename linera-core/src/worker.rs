@@ -984,6 +984,15 @@ where
     /// until the DB round-trip and `post_save` have fully completed — subsequent
     /// readers, including a freshly-loaded replacement worker, only see the
     /// committed state.
+    ///
+    /// The outcome inspection and recovery dispatch (poisoned-worker eviction and
+    /// corrupted-state reset) also run *inside* the detached task. Otherwise, if the
+    /// caller dropped this future after the detached write produced a recoverable
+    /// error but before the outer `.await` resumed, the recovery would be skipped: a
+    /// `CorruptedChainState` error neither poisons nor evicts the worker, so the chain
+    /// would be left at a partial tip serving stale reads with no `RevertConfirm`
+    /// retransmission. Running recovery in the detached task makes it survive caller
+    /// cancellation, just like the write itself.
     async fn chain_write<R, F, Fut>(&self, chain_id: ChainId, f: F) -> Result<R, WorkerError>
     where
         F: FnOnce(handle::RollbackGuard<StorageClient>) -> Fut
@@ -993,20 +1002,23 @@ where
         R: linera_base::task::MaybeSend + 'static,
     {
         let state = self.get_or_create_chain_worker(chain_id).await?;
-        let state_for_task = state.clone();
-        let result = Box::pin(wrap_future(linera_base::task::run_detached(async move {
-            let guard = handle::write_lock(&state_for_task).await?;
-            f(guard).await
-        })))
-        .await;
-        if let Err(error) = &result {
-            if error.must_reload_view() {
-                self.evict_poisoned_worker(chain_id, &state);
-            } else if error.indicates_corrupted_chain_state() {
-                self.spawn_reset_corrupted_chain_state(chain_id, state);
+        let this = self.clone();
+        Box::pin(wrap_future(linera_base::task::run_detached(async move {
+            let result = async {
+                let guard = handle::write_lock(&state).await?;
+                f(guard).await
             }
-        }
-        result
+            .await;
+            if let Err(error) = &result {
+                if error.must_reload_view() {
+                    this.evict_poisoned_worker(chain_id, &state);
+                } else if error.indicates_corrupted_chain_state() {
+                    this.spawn_reset_corrupted_chain_state(chain_id, state);
+                }
+            }
+            result
+        })))
+        .await
     }
 
     /// Spawns a detached task that re-acquires the write lock and recovers the
