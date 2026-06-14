@@ -88,19 +88,31 @@ where
 
     async fn hash_mut(&mut self) -> Result<HasherOutput, ViewError> {
         use std::io::Write as _;
+        let Self {
+            system,
+            users,
+            stream_event_counts,
+            historical_hash: _,
+        } = self;
         let mut hasher = Self::Hasher::default();
-        hasher.write_all(self.system.hash_mut().await?.as_ref())?;
-        hasher.write_all(self.users.hash_mut().await?.as_ref())?;
-        hasher.write_all(self.stream_event_counts.hash_mut().await?.as_ref())?;
+        hasher.write_all(system.hash_mut().await?.as_ref())?;
+        hasher.write_all(users.hash_mut().await?.as_ref())?;
+        hasher.write_all(stream_event_counts.hash_mut().await?.as_ref())?;
         Ok(hasher.finalize())
     }
 
     async fn hash(&self) -> Result<HasherOutput, ViewError> {
         use std::io::Write as _;
+        let Self {
+            system,
+            users,
+            stream_event_counts,
+            historical_hash: _,
+        } = self;
         let mut hasher = Self::Hasher::default();
-        hasher.write_all(self.system.hash().await?.as_ref())?;
-        hasher.write_all(self.users.hash().await?.as_ref())?;
-        hasher.write_all(self.stream_event_counts.hash().await?.as_ref())?;
+        hasher.write_all(system.hash().await?.as_ref())?;
+        hasher.write_all(users.hash().await?.as_ref())?;
+        hasher.write_all(stream_event_counts.hash().await?.as_ref())?;
         Ok(hasher.finalize())
     }
 }
@@ -172,14 +184,20 @@ where
         let hash = match *self.historical_hash.get() {
             None => self.hash_mut().await?,
             Some(stored) => {
-                // Hash only the content fields' pending writes. The `historical_hash` register is
-                // intentionally excluded so the rolling hash never depends on its own value (it
-                // may still be a pending, unsaved write at this point). This mirrors `main`, where
-                // the wrapper's hash key sits outside the hashed inner view.
+                // Hash only the content fields' pending writes. `historical_hash` is intentionally
+                // excluded so the rolling hash never depends on its own (possibly still pending)
+                // value. This mirrors `main`, where the wrapper's hash key sits outside the hashed
+                // inner view.
+                let Self {
+                    system,
+                    users,
+                    stream_event_counts,
+                    historical_hash: _,
+                } = self;
                 let mut batch = Batch::new();
-                self.system.pre_save(&mut batch)?;
-                self.users.pre_save(&mut batch)?;
-                self.stream_event_counts.pre_save(&mut batch)?;
+                system.pre_save(&mut batch)?;
+                users.pre_save(&mut batch)?;
+                stream_event_counts.pre_save(&mut batch)?;
                 make_historical_hash(Some(stored), &batch)?
             }
         };
