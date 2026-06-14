@@ -1,7 +1,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use linera_base::data_types::{Blob, BlockHeight, Bytecode};
+use linera_base::data_types::{Blob, BlockHeight, Bytecode, Timestamp};
 #[cfg(with_testing)]
 use linera_base::vm::VmRuntime;
 use linera_views::context::MemoryContext;
@@ -9,7 +9,7 @@ use linera_views::context::MemoryContext;
 use super::*;
 use crate::{
     test_utils::dummy_chain_description, ExecutionStateView, TestExecutionRuntimeContext,
-    FLAG_ZERO_HASH,
+    FLAG_HISTORICAL_HASH, FLAG_HISTORICAL_HASH_SHADOW, FLAG_ZERO_HASH,
 };
 
 /// Returns an execution state view and a matching operation context, for epoch 1, with root
@@ -158,6 +158,93 @@ async fn hashing_test() -> anyhow::Result<()> {
     view.system.epoch.set(Epoch(1));
     // Starting from this epoch, the hash should be all zeros.
     assert_eq!(view.crypto_hash_mut().await?, zero_hash);
+
+    Ok(())
+}
+
+/// Installs a single committee at epoch 1 (the epoch `new_view_and_context` uses) whose content
+/// policy carries `flag`, so that `crypto_hash_mut` selects the corresponding hashing mode.
+fn install_committee_with_flag(
+    view: &mut ExecutionStateView<MemoryContext<TestExecutionRuntimeContext>>,
+    flag: &str,
+) {
+    let mut committee = Committee::default();
+    committee
+        .policy_mut()
+        .http_request_allow_list
+        .insert(flag.to_owned());
+    let mut committees = BTreeMap::new();
+    committees.insert(Epoch(1), committee);
+    view.system.committees.set(committees);
+    view.system.epoch.set(Epoch(1));
+}
+
+#[tokio::test]
+async fn historical_hashing_enforce_seeds_then_chains() -> anyhow::Result<()> {
+    let zero_hash = CryptoHash::from([0u8; 32]);
+    let (mut view, _) = new_view_and_context().await;
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+
+    // The first block seeds the rolling hash: a non-zero hash is reported and the register is
+    // populated.
+    assert!(view.historical_hash.get().is_none());
+    let seed = view.crypto_hash_mut().await?;
+    assert_ne!(seed, zero_hash);
+    let seed_raw = *view.historical_hash.get();
+    assert!(seed_raw.is_some());
+
+    // A later block with a content change extends the chain: a different, still non-zero hash,
+    // and the stored rolling hash advances.
+    view.system.timestamp.set(Timestamp::from(42));
+    let chained = view.crypto_hash_mut().await?;
+    assert_ne!(chained, zero_hash);
+    assert_ne!(chained, seed);
+    assert_ne!(*view.historical_hash.get(), seed_raw);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn historical_hashing_shadow_reports_zero_but_advances() -> anyhow::Result<()> {
+    let zero_hash = CryptoHash::from([0u8; 32]);
+    let (mut view, _) = new_view_and_context().await;
+    install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH_SHADOW);
+
+    // Shadow mode reports an all-zeros hash to consensus...
+    let reported = view.crypto_hash_mut().await?;
+    assert_eq!(reported, zero_hash);
+    // ...yet still computes and stores the rolling hash for cross-validator comparison.
+    let seed_raw = *view.historical_hash.get();
+    assert!(seed_raw.is_some());
+
+    view.system.timestamp.set(Timestamp::from(42));
+    assert_eq!(view.crypto_hash_mut().await?, zero_hash);
+    assert_ne!(*view.historical_hash.get(), seed_raw);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn historical_hashing_is_deterministic() -> anyhow::Result<()> {
+    // Two runs with identical state and identical operations must agree; a different operation
+    // must diverge.
+    async fn run(timestamp: u64) -> anyhow::Result<(CryptoHash, CryptoHash)> {
+        let (mut view, _) = new_view_and_context().await;
+        install_committee_with_flag(&mut view, FLAG_HISTORICAL_HASH);
+        let seed = view.crypto_hash_mut().await?;
+        view.system.timestamp.set(Timestamp::from(timestamp));
+        let chained = view.crypto_hash_mut().await?;
+        Ok((seed, chained))
+    }
+
+    let (seed_a, chained_a) = run(42).await?;
+    let (seed_b, chained_b) = run(42).await?;
+    assert_eq!(seed_a, seed_b);
+    assert_eq!(chained_a, chained_b);
+
+    let (seed_c, chained_c) = run(99).await?;
+    assert_eq!(seed_a, seed_c); // seed is computed before the differing mutation
+    assert_ne!(chained_a, chained_c); // the differing mutation changes the chained hash
 
     Ok(())
 }
