@@ -10,6 +10,7 @@ use linera_base::{
     data_types::{BlobContent, BlockHeight, StreamUpdate},
     identifiers::{AccountOwner, BlobId, StreamId},
     time::Instant,
+    visit_allocative_simple,
 };
 use linera_views::{
     batch::Batch,
@@ -58,7 +59,7 @@ pub struct ExecutionStateView<C> {
     /// cheaply from the batch that block persists. Appended last so that existing chains load it
     /// as `None` without moving the storage keys of the other fields, and deliberately excluded
     /// from the hand-written [`HashableView`] impl below (so it never hashes itself).
-    #[allocative(skip)]
+    #[allocative(visit = visit_allocative_simple)]
     pub historical_hash: RegisterView<C, Option<HasherOutput>>,
 }
 
