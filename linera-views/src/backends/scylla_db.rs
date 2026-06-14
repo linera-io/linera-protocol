@@ -58,6 +58,57 @@ use crate::{
     value_splitting::{ValueSplittingDatabase, ValueSplittingError},
 };
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::register_int_counter;
+    use prometheus::IntCounter;
+
+    /// Number of exclusive-mode timestamp-floor reseeds (one per store, on its
+    /// first write after open).
+    pub static TS_FLOOR_RESEEDS: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "scylla_ts_floor_reseeds",
+            "Number of ScyllaDB exclusive-mode timestamp-floor reseeds",
+        )
+    });
+
+    /// Reseeds where the persisted floor was mildly ahead of the wall clock
+    /// (likely clock skew; safe but worth noticing).
+    pub static TS_FLOOR_CLOCK_BELOW_SENTINEL: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "scylla_ts_floor_clock_below_sentinel",
+            "Reseeds where the persisted ScyllaDB timestamp floor was ahead of the wall clock",
+        )
+    });
+
+    /// Reseeds where the persisted floor was implausibly far ahead of the wall
+    /// clock — until the clock catches up, new writes risk being shadowed by
+    /// last-write-wins (the silent-dropped-write precondition).
+    pub static TS_FLOOR_SENTINEL_IN_FUTURE: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "scylla_ts_floor_sentinel_in_future",
+            "Reseeds where the persisted ScyllaDB timestamp floor was far ahead of the wall clock",
+        )
+    });
+}
+
+/// Safety margin (microseconds) added to the exclusive-mode timestamp-floor
+/// seed, so a slightly stale sentinel read still lands strictly above anything
+/// already on disk.
+const TS_RESEED_SAFETY_MARGIN_MICROS: i64 = 1_000_000;
+
+/// At reseed, if the persisted floor is more than this far ahead of the wall
+/// clock, log a warning (mild skew). Below this, the floor running slightly
+/// ahead is expected for high-write-rate stores and is not reported.
+const TS_RESEED_CLOCK_LAG_WARN_MICROS: i64 = 1_000_000;
+
+/// At reseed, if the persisted floor is more than this far ahead of the wall
+/// clock, log an error: every new write would lose to last-write-wins until
+/// the clock catches up.
+const TS_RESEED_CLOCK_LAG_ALARM_MICROS: i64 = 3_600_000_000;
+
 /// Fundamental constant in ScyllaDB: The maximum size of a multi keys query
 /// The limit is in reality 100. But we need one entry for the root key.
 const MAX_MULTI_KEYS: usize = 100 - 1;
@@ -974,9 +1025,46 @@ impl ScyllaDbStoreInternal {
             .ok()
             .and_then(|d| i64::try_from(d.as_micros()).ok())
             .unwrap_or(0);
+
+        // Defense-in-depth observability. The floor seeds Scylla's
+        // `USING TIMESTAMP` writes; if it is ever seeded *below* a timestamp
+        // already on disk, later writes silently lose to last-write-wins. The
+        // `seed` below stays safe (it takes the max), but a floor running far
+        // ahead of the wall clock is the precondition for that silent loss, so
+        // surface it loudly here instead of wedging a chain days later.
+        #[cfg(with_metrics)]
+        metrics::TS_FLOOR_RESEEDS.inc();
+        let lag_us = writetime.saturating_sub(now_us);
+        if lag_us > TS_RESEED_CLOCK_LAG_ALARM_MICROS {
+            #[cfg(with_metrics)]
+            metrics::TS_FLOOR_SENTINEL_IN_FUTURE.inc();
+            tracing::error!(
+                now_us,
+                sentinel_writetime = writetime,
+                ahead_us = lag_us,
+                "ScyllaDB exclusive-mode timestamp floor is far ahead of the wall \
+                 clock; new writes risk being shadowed by last-write-wins until \
+                 the clock catches up. Check NTP / clock skew."
+            );
+        } else if lag_us > TS_RESEED_CLOCK_LAG_WARN_MICROS {
+            #[cfg(with_metrics)]
+            metrics::TS_FLOOR_CLOCK_BELOW_SENTINEL.inc();
+            tracing::warn!(
+                now_us,
+                sentinel_writetime = writetime,
+                ahead_us = lag_us,
+                "ScyllaDB exclusive-mode timestamp floor is ahead of the wall \
+                 clock; trusting the floor. Likely mild clock skew."
+            );
+        }
+
         // `writetime` is the last batch's `T + 1`, i.e. the highest timestamp it
         // consumed; that is exactly what `ts_floor` tracks, so seed it directly.
-        let seed = now_us.max(writetime);
+        // Add a safety margin so a slightly stale sentinel read still lands
+        // strictly above anything already on disk.
+        let seed = now_us
+            .max(writetime)
+            .saturating_add(TS_RESEED_SAFETY_MARGIN_MICROS);
         if self
             .ts_floor
             .compare_exchange(0, seed, Ordering::Relaxed, Ordering::Relaxed)
