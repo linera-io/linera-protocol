@@ -73,9 +73,9 @@ use crate::{
         inputs::{
             ensure_message_length, ensure_selector_presence, forbid_execute_operation_origin,
             get_revm_execute_message_bytes, get_revm_instantiation_bytes,
-            get_revm_process_streams_bytes, has_selector, EXECUTE_MESSAGE_SELECTOR, FAUCET_ADDRESS,
-            INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS, PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS,
-            ZERO_ADDRESS,
+            get_revm_process_streams_bytes, get_revm_summarize_events_bytes, has_selector,
+            EXECUTE_MESSAGE_SELECTOR, FAUCET_ADDRESS, INSTANTIATE_SELECTOR, PRECOMPILE_ADDRESS,
+            PROCESS_STREAMS_SELECTOR, SERVICE_ADDRESS, SUMMARIZE_EVENTS_SELECTOR, ZERO_ADDRESS,
         },
     },
     BaseRuntime, ContractRuntime, ContractSyncRuntimeHandle, DataBlobHash, EvmExecutionError,
@@ -1335,6 +1335,20 @@ where
         let caller = Address::ZERO;
         let value = U256::ZERO;
         self.execute_no_return_operation(operation, "process_streams", value, caller)
+    }
+
+    fn summarize_events(&mut self, streams: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
+        self.db.inner.set_contract_address()?;
+        let operation = get_revm_summarize_events_bytes(streams);
+        ensure_selector_presence(
+            &self.module,
+            SUMMARIZE_EVENTS_SELECTOR,
+            "function summarize_events(Linera.StreamUpdate[] memory streams)",
+        )?;
+        // For summarize_events, authenticated_owner and authenticated_called_id are None.
+        let caller = Address::ZERO;
+        let value = U256::ZERO;
+        self.execute_no_return_operation(operation, "summarize_events", value, caller)
     }
 
     fn finalize(&mut self) -> Result<(), ExecutionError> {

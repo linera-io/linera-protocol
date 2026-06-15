@@ -167,6 +167,14 @@ where
     }
 
     #[instrument(skip_all)]
+    fn summarize_events(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError> {
+        ContractEntrypoints::new(&mut self.instance)
+            .summarize_events(updates)
+            .map_err(WasmExecutionError::from)?;
+        Ok(())
+    }
+
+    #[instrument(skip_all)]
     fn finalize(&mut self) -> Result<(), ExecutionError> {
         ContractEntrypoints::new(&mut self.instance)
             .finalize()

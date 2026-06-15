@@ -985,7 +985,9 @@ where
         );
         let is_free = matches!(
             &action,
-            UserAction::Message(..) | UserAction::ProcessStreams(..)
+            UserAction::Message(..)
+                | UserAction::ProcessStreams(..)
+                | UserAction::SummarizeEvents(..)
         ) && self
             .resource_controller
             .policy()

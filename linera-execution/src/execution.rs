@@ -304,6 +304,7 @@ pub enum UserAction {
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
     ProcessStreams(ProcessStreamsContext, Vec<StreamUpdate>),
+    SummarizeEvents(ProcessStreamsContext, Vec<StreamUpdate>),
 }
 
 impl UserAction {
@@ -312,6 +313,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.authenticated_owner,
             UserAction::Operation(context, _) => context.authenticated_owner,
             UserAction::ProcessStreams(_, _) => None,
+            UserAction::SummarizeEvents(_, _) => None,
             UserAction::Message(context, _) => context.authenticated_owner,
         }
     }
@@ -321,6 +323,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
             UserAction::ProcessStreams(context, _) => context.height,
+            UserAction::SummarizeEvents(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
         }
     }
@@ -330,6 +333,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,
             UserAction::ProcessStreams(context, _) => context.round,
+            UserAction::SummarizeEvents(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
         }
     }
@@ -339,6 +343,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.timestamp,
             UserAction::Operation(context, _) => context.timestamp,
             UserAction::ProcessStreams(context, _) => context.timestamp,
+            UserAction::SummarizeEvents(context, _) => context.timestamp,
             UserAction::Message(context, _) => context.timestamp,
         }
     }
