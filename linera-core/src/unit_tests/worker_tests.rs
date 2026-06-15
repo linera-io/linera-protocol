@@ -712,7 +712,7 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(bad_signature_block_proposal)
-            .await.0,
+            .await,
             Err(WorkerError::CryptoError(error))
                 if matches!(error, linera_base::crypto::CryptoError::InvalidSignature {..})
     );
@@ -752,7 +752,7 @@ where
     assert_matches!(
     env.executing_worker()
         .handle_block_proposal(zero_amount_block_proposal)
-        .await.0,
+        .await,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
@@ -800,8 +800,7 @@ where
         assert_matches!(
             env.executing_worker()
                 .handle_block_proposal(block_proposal)
-                .await
-                .0,
+                .await,
             Err(WorkerError::InvalidTimestamp { .. })
         );
     }
@@ -841,7 +840,7 @@ where
             .unwrap();
         // Timestamp older than previous one
         assert_matches!(
-            env.executing_worker().handle_block_proposal(block_proposal).await.0,
+            env.executing_worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(error))
                 if matches!(*error, ChainError::InvalidBlockTimestamp { .. })
         );
@@ -902,7 +901,7 @@ where
         )
         .await?;
     // Past timestamp should be handled immediately (and succeed).
-    let (result, _actions) = env
+    let result = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
         .await;
@@ -933,7 +932,7 @@ where
             BundleExecutionPolicy::committed(),
         )
         .await?;
-    let (result, _actions) = env
+    let result = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
         .await;
@@ -984,7 +983,7 @@ where
     clock.set(future_timestamp);
 
     // Now the future should complete.
-    let (result, _actions) = future.as_mut().await;
+    let result = future.as_mut().await;
     assert!(
         result.is_ok(),
         "Future timestamp within grace period should succeed after delay"
@@ -1009,8 +1008,7 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(block_proposal)
-            .await
-            .0,
+            .await,
         Err(WorkerError::InvalidTimestamp { .. })
     );
 
@@ -1047,8 +1045,7 @@ where
     assert_matches!(
         env.executing_worker()
             .handle_block_proposal(unknown_sender_block_proposal)
-            .await
-            .0,
+            .await,
         Err(WorkerError::InvalidOwner)
     );
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
@@ -1098,7 +1095,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal1.clone()).await.0,
+        env.worker().handle_block_proposal(block_proposal1.clone()).await,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -1114,8 +1111,7 @@ where
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal0.clone())
-        .await
-        .0?;
+        .await?;
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
     let block = chain.manager.validated_vote().unwrap().value().block();
@@ -1143,8 +1139,7 @@ where
     drop(chain);
     env.worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await
-        .0?;
+        .await?;
 
     let chain = env.worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
@@ -1153,7 +1148,7 @@ where
     assert!(chain.manager.confirmed_vote().is_none());
     drop(chain);
     assert_matches!(
-        env.worker().handle_block_proposal(block_proposal0).await.0,
+        env.worker().handle_block_proposal(block_proposal0).await,
         Err(WorkerError::ChainError(error)) if matches!(
             *error,
             ChainError::UnexpectedBlockHeight {
@@ -1245,8 +1240,7 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await
-        .0;
+        .await;
     assert_matches!(
         proposal_result,
         Err(WorkerError::ChainError(err)) if matches!(*err, ChainError::UnexpectedBlockHeight {
@@ -1282,8 +1276,7 @@ where
     let proposal_result = env
         .worker()
         .handle_block_proposal(block_proposal1.clone())
-        .await
-        .0;
+        .await;
     assert_matches!(proposal_result, Ok(_));
 
     Ok(())
@@ -1413,7 +1406,7 @@ where
             .unwrap();
         // Insufficient funding
         assert_matches!(
-                env.worker().handle_block_proposal(block_proposal).await.0,
+                env.worker().handle_block_proposal(block_proposal).await,
                 Err(
                     WorkerError::ChainError(error)
                 ) if matches!(&*error, ChainError::ExecutionError(
@@ -1469,7 +1462,7 @@ where
             .unwrap();
         // Inconsistent received messages.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await.0,
+            env.worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::UnexpectedMessage { .. })
         );
@@ -1495,7 +1488,7 @@ where
             .unwrap();
         // Skipped message.
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await.0,
+            env.worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1546,7 +1539,7 @@ where
             .unwrap();
         // Inconsistent order in received messages (heights).
         assert_matches!(
-            env.worker().handle_block_proposal(block_proposal).await.0,
+            env.worker().handle_block_proposal(block_proposal).await,
             Err(WorkerError::ChainError(chain_error))
                 if matches!(*chain_error, ChainError::CannotSkipMessage { .. })
         );
@@ -1576,8 +1569,7 @@ where
         // Taking the first message only is ok.
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await
-            .0?;
+            .await?;
         let certificate = env
             .execute_proposal(block_proposal.content.block, vec![])
             .await?;
@@ -1634,8 +1626,7 @@ where
             .unwrap();
         env.worker()
             .handle_block_proposal(block_proposal.clone())
-            .await
-            .0?;
+            .await?;
     }
     Ok(())
 }
@@ -1666,7 +1657,7 @@ where
         .await
         .unwrap();
     assert_matches!(
-        env.executing_worker().handle_block_proposal(block_proposal).await.0,
+        env.executing_worker().handle_block_proposal(block_proposal).await,
         Err(
             WorkerError::ChainError(error)
         ) if matches!(&*error, ChainError::ExecutionError(
@@ -1706,11 +1697,10 @@ where
         .await
         .unwrap();
 
-    let chain_info_response = env
+    let (chain_info_response, _actions) = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
-        .await
-        .0?;
+        .await?;
     chain_info_response.check(env.executing_worker().public_key())?;
     let chain = env.executing_worker().chain_state_view(chain_1).await?;
     assert!(chain.is_active().await?);
@@ -1762,17 +1752,15 @@ where
         .await
         .unwrap();
 
-    let response = env
+    let (response, _) = env
         .executing_worker()
         .handle_block_proposal(block_proposal.clone())
-        .await
-        .0?;
+        .await?;
     response.check(env.executing_worker().public_key())?;
-    let replay_response = env
+    let (replay_response, _) = env
         .executing_worker()
         .handle_block_proposal(block_proposal)
-        .await
-        .0?;
+        .await?;
     // Workaround lack of equality.
     assert_eq!(
         CryptoHash::new(&*response.info),
@@ -3512,14 +3500,14 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(0))
         .await
         .unwrap();
-    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .with_simple_transfer(chain_1, small_transfer)
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
 
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::SingleLeader(0)))
@@ -3578,19 +3566,17 @@ where
     let result = env
         .executing_worker()
         .handle_block_proposal(proposal1_wrong_owner)
-        .await
-        .0;
+        .await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal1 = proposed_block1
         .clone()
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(1))
         .await
         .unwrap();
-    let response = env
+    let (response, _) = env
         .executing_worker()
         .handle_block_proposal(proposal1)
-        .await
-        .0?;
+        .await?;
     let value1 = ValidatedBlock::new(block1.clone());
 
     // If we send the validated block certificate to the worker, it votes to confirm.
@@ -3654,7 +3640,7 @@ where
         .into_proposal_with_round(owner1, &signer, Round::SingleLeader(5))
         .await
         .unwrap();
-    let (result, _actions) = env
+    let result = env
         .executing_worker()
         .handle_block_proposal(proposal.clone())
         .await;
@@ -3676,8 +3662,7 @@ where
     let lite_value2 = LiteValue::new(&value2);
     env.executing_worker()
         .handle_block_proposal(proposal)
-        .await
-        .0?;
+        .await?;
     let response = env
         .executing_worker()
         .handle_chain_info_query(query_values.clone())
@@ -3705,7 +3690,7 @@ where
         .into_proposal_with_round(owner0, &signer, Round::SingleLeader(6))
         .await
         .unwrap();
-    let (result, _actions) = env
+    let result = env
         .executing_worker()
         .handle_block_proposal(proposal.clone())
         .await;
@@ -3798,13 +3783,13 @@ where
         .into_proposal_with_round(owner1, &signer, Round::Fast)
         .await
         .unwrap();
-    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::InvalidOwner));
     let proposal = make_child_block(&value0)
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let (result, _actions) = env.executing_worker().handle_block_proposal(proposal).await;
+    let result = env.executing_worker().handle_block_proposal(proposal).await;
     assert_matches!(result, Err(WorkerError::ChainError(ref error))
         if matches!(**error, ChainError::WrongRound(Round::Fast))
     );
@@ -3842,26 +3827,32 @@ where
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
 
-    // Now any owner can propose a block. And multi-leader rounds can be skipped without timeout.
+    // Now any owner can propose a block — but only in the current round.
     let block1 = make_child_block(&value0).with_simple_transfer(chain_id, small_transfer);
-    let proposal1 = block1
+    let skip_proposal = block1
         .clone()
         .with_authenticated_owner(Some(owner1))
         .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
         .await
         .unwrap();
-    let (result, actions) = env
+    let result = env
+        .executing_worker()
+        .handle_block_proposal(skip_proposal)
+        .await;
+    assert_matches!(result, Err(WorkerError::ChainError(ref error))
+        if matches!(**error, ChainError::WrongRound(Round::MultiLeader(0)))
+    );
+    let proposal1 = block1
+        .with_authenticated_owner(Some(owner1))
+        .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
+        .await
+        .unwrap();
+    let (response, _) = env
         .executing_worker()
         .handle_block_proposal(proposal1)
-        .await;
-    result?;
-    assert_matches!(actions.notifications[0].reason, Reason::NewRound { .. });
-    let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
-    let response = env
-        .executing_worker()
-        .handle_chain_info_query(query_values)
         .await?;
-    assert_eq!(response.info.manager.current_round, Round::MultiLeader(1));
+    assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
+    assert!(response.info.manager.pending.is_some());
     Ok(())
 }
 
@@ -3944,11 +3935,10 @@ where
         )
         .await?;
     let value1 = ConfirmedBlock::new(block1);
-    let response = env
+    let (response, _) = env
         .executing_worker()
         .handle_block_proposal(proposal1.clone())
-        .await
-        .0?;
+        .await?;
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.round, Round::Fast);
     assert_eq!(vote.value.value_hash, value1.hash());
@@ -3966,45 +3956,48 @@ where
     assert_eq!(response.info.manager.current_round, Round::MultiLeader(0));
     assert_eq!(response.info.manager.leader, None);
 
-    // Now any owner can propose a block. But block1 is locked. Re-proposing it is allowed.
-    let proposal1b =
-        BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
-            .await
-            .unwrap();
-    let response = env
-        .executing_worker()
-        .handle_block_proposal(proposal1b)
-        .await
-        .0?;
-
-    let vote = response.info.manager.pending.as_ref().unwrap();
-    assert_eq!(vote.round, Round::MultiLeader(0));
-    assert_eq!(vote.value.value_hash, value1.hash());
-
-    // Proposing a different block is not.
+    // Proposing a different block in the current MultiLeader(0) round is not allowed,
+    // because we already confirmed block1 in the Fast round.
     let proposed_block2 = make_child_block(&value0)
         .with_simple_transfer(chain_id, Amount::ONE)
         .with_authenticated_owner(Some(owner1));
     let proposal2 = proposed_block2
         .clone()
-        .into_proposal_with_round(owner1, &signer, Round::MultiLeader(1))
+        .into_proposal_with_round(owner1, &signer, Round::MultiLeader(0))
         .await
         .unwrap();
-    let (result, _actions) = env
+    let result = env
         .executing_worker()
         .handle_block_proposal(proposal2)
         .await;
     assert_matches!(result, Err(WorkerError::ChainError(err))
         if matches!(*err, ChainError::HasIncompatibleConfirmedVote(_, Round::Fast))
     );
-    let proposal3 =
-        BlockProposal::new_retry_fast(owner0, Round::MultiLeader(2), proposal1.clone(), &signer)
+
+    // Re-proposing the locked block1 in MultiLeader(0) is allowed.
+    let proposal1b =
+        BlockProposal::new_retry_fast(owner1, Round::MultiLeader(0), proposal1.clone(), &signer)
             .await
             .unwrap();
+    let (response, _) = env
+        .executing_worker()
+        .handle_block_proposal(proposal1b)
+        .await?;
+
+    let vote = response.info.manager.pending.as_ref().unwrap();
+    assert_eq!(vote.round, Round::MultiLeader(0));
+    assert_eq!(vote.value.value_hash, value1.hash());
+
+    // Advance to MultiLeader(2) via two timeout certificates.
+    let ml_timeout = Timeout::new(chain_id, BlockHeight::from(1), Epoch::from(0));
+    let cert_ml0 = env.make_certificate_with_round(ml_timeout.clone(), Round::MultiLeader(0));
     env.executing_worker()
-        .handle_block_proposal(proposal3)
-        .await
-        .0?;
+        .handle_timeout_certificate(cert_ml0)
+        .await?;
+    let cert_ml1 = env.make_certificate_with_round(ml_timeout, Round::MultiLeader(1));
+    env.executing_worker()
+        .handle_timeout_certificate(cert_ml1)
+        .await?;
 
     // A validated block certificate from a later round can override the locked fast block.
     let (_, block2, _, _, _) = env
@@ -4017,10 +4010,10 @@ where
         )
         .await?;
     let value2 = ValidatedBlock::new(block2.clone());
-    let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(0));
+    let certificate2 = env.make_certificate_with_round(value2.clone(), Round::MultiLeader(1));
     let proposal = BlockProposal::new_retry_regular(
         owner1,
-        Round::MultiLeader(3),
+        Round::MultiLeader(2),
         certificate2.clone(),
         &signer,
     )
@@ -4029,8 +4022,7 @@ where
     let lite_value2 = LiteValue::new(&value2);
     env.executing_worker()
         .handle_block_proposal(proposal)
-        .await
-        .0?;
+        .await?;
     let query_values = ChainInfoQuery::new(chain_id).with_manager_values();
     let response = env
         .executing_worker()
@@ -4042,7 +4034,7 @@ where
     );
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
-    assert_eq!(vote.round, Round::MultiLeader(3));
+    assert_eq!(vote.round, Round::MultiLeader(2));
     Ok(())
 }
 
@@ -4323,8 +4315,7 @@ where
         .unwrap();
     env.executing_worker()
         .handle_block_proposal(block_proposal)
-        .await
-        .0?;
+        .await?;
 
     for local_time in queries_before_confirmation {
         clock.set(local_time);
@@ -4537,7 +4528,7 @@ where
         .unwrap();
 
     assert_matches!(
-        env.executing_worker().handle_block_proposal(bad_proposal).await.0,
+        env.executing_worker().handle_block_proposal(bad_proposal).await,
         Err(WorkerError::ChainError(chain_error))
             if matches!(*chain_error, ChainError::IncorrectMessageOrder { .. })
     );

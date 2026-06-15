@@ -2357,27 +2357,19 @@ impl<Env: Environment> ChainClient<Env> {
     ) -> Result<Either<Round, RoundTimeout>, Error> {
         let manager = &info.manager;
         let seed = manager.seed;
-        // If there is a conflicting proposal in the current round, we can only propose if the
-        // next round can be started without a timeout, i.e. if we are in a multi-leader round.
-        // Similarly, we cannot propose a block that uses oracles in the fast round, and also
-        // skip the fast round if fast blocks are not allowed.
+        // We cannot propose a block that uses oracles in the fast round, and also need to
+        // skip the fast round if fast blocks are not allowed. Under timeout-only round
+        // advancement, that means waiting for the Fast round to time out — chains with
+        // `fast_round_duration: None` and a super owner can't skip Fast.
         let skip_fast = manager.current_round.is_fast()
             && (has_oracle_responses || !self.options.allow_fast_blocks);
         let conflict = manager
-            .requested_signed_proposal
+            .requested_proposed
             .as_ref()
-            .into_iter()
-            .chain(&manager.requested_proposed)
-            .any(|proposal| proposal.content.round == manager.current_round)
+            .is_some_and(|proposal| proposal.content.round == manager.current_round)
             || skip_fast;
         let round = if !conflict {
             manager.current_round
-        } else if let Some(round) = manager
-            .ownership
-            .next_round(manager.current_round)
-            .filter(|_| manager.current_round.is_multi_leader() || manager.current_round.is_fast())
-        {
-            round
         } else if let Some(timeout) = info.round_timeout() {
             return Ok(Either::Right(timeout));
         } else {
