@@ -142,7 +142,9 @@ mod metrics {
     });
 }
 
+/// A user contract in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmContractModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -203,6 +205,7 @@ impl UserContractModule for EvmContractModule {
 
 /// A user service in a compiled EVM module.
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum EvmServiceModule {
     #[cfg(with_revm)]
     Revm { module: Vec<u8> },
@@ -262,6 +265,7 @@ type ContractCtx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut ContractD
 
 type ServiceCtx<'a, Runtime> = MainnetContext<WrapDatabaseRef<&'a mut ServiceDatabase<Runtime>>>;
 
+/// Converts an EVM address into the corresponding Linera application ID.
 pub fn address_to_user_application_id(address: Address) -> ApplicationId {
     let mut vec = vec![0_u8; 32];
     vec[..20].copy_from_slice(address.as_ref());
@@ -1187,6 +1191,7 @@ impl<Runtime: ServiceRuntime> CallInterceptorService<Runtime> {
     }
 }
 
+/// An instance of a user contract running on the Revm EVM.
 pub struct RevmContractInstance<Runtime> {
     module: Vec<u8>,
     db: ContractDatabase<Runtime>,
@@ -1393,6 +1398,7 @@ impl<Runtime> RevmContractInstance<Runtime>
 where
     Runtime: ContractRuntime,
 {
+    /// Prepares a contract instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = ContractDatabase::new(runtime);
         Self { module, db }
@@ -1565,6 +1571,7 @@ where
     }
 }
 
+/// An instance of a user service running on the Revm EVM.
 pub struct RevmServiceInstance<Runtime> {
     module: Vec<u8>,
     db: ServiceDatabase<Runtime>,
@@ -1574,6 +1581,7 @@ impl<Runtime> RevmServiceInstance<Runtime>
 where
     Runtime: ServiceRuntime,
 {
+    /// Prepares a service instance from its EVM module and the given runtime.
     pub fn prepare(module: Vec<u8>, runtime: Runtime) -> Self {
         let db = ServiceDatabase::new(runtime);
         Self { module, db }
