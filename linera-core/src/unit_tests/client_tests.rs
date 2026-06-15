@@ -1405,8 +1405,7 @@ where
 ///
 /// The blob-recovery path downloads the publishing certificate from a validator, but
 /// validating it locally yields `CheckCertificateResult::FutureEpoch`. The client must
-/// react by catching up on the admin chain and retrying — instead of failing, let alone
-/// misreporting the failure as `BlobsNotFound` for the originally requested blob.
+/// react by catching up on the admin chain and retrying, so the blob read succeeds.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]

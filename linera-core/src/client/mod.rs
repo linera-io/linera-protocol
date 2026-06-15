@@ -1404,29 +1404,34 @@ impl<Env: Environment> Client<Env> {
                 // hasn't caught up to yet. Catch up and check again instead of failing.
                 // Prefer the nodes that gave us the certificate: they evidently know
                 // the newer epoch even if our own committee view is stale or its
-                // members are unreachable. A sync only counts if it actually made the
-                // epoch known; otherwise fall back to the known committee.
+                // members are unreachable. Race them concurrently rather than blocking
+                // on a slow one, then fall back to the known committee. A sync only
+                // counts if it actually made the epoch known.
                 let admin_chain_id = self.admin_chain_id;
                 let epoch = certificate.block().header.epoch;
                 info!(
                     %epoch,
                     "certificate is from an unknown epoch; synchronizing the admin chain"
                 );
-                for node in nodes.iter().flatten() {
-                    match Box::pin(self.synchronize_chain_state_from(node, admin_chain_id)).await {
-                        Ok(()) => {
-                            check_result = self.check_certificate(&certificate).await?;
-                            if !matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                                break;
+                if let Some(nodes) = &nodes {
+                    let certificate = &certificate;
+                    let _ = communicate_concurrently(
+                        nodes,
+                        async move |node| {
+                            Box::pin(self.synchronize_chain_state_from(&node, admin_chain_id))
+                                .await?;
+                            match self.check_certificate(certificate).await? {
+                                CheckCertificateResult::FutureEpoch => {
+                                    Err(chain_client::Error::CommitteeSynchronizationError)
+                                }
+                                _ => Result::<(), chain_client::Error>::Ok(()),
                             }
-                        }
-                        Err(error) => warn!(
-                            %error,
-                            validator = %node.public_key,
-                            "failed to synchronize the admin chain from validator",
-                        ),
-                    }
+                        },
+                        self.options.blob_download_timeout,
+                    )
+                    .await;
                 }
+                check_result = self.check_certificate(&certificate).await?;
                 if matches!(check_result, CheckCertificateResult::FutureEpoch) {
                     Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
                     check_result = self.check_certificate(&certificate).await?;
