@@ -1174,6 +1174,22 @@ where
             let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
             inbox.restore_from_checkpoint(cursor).await?;
         }
+        // Seed `next_expected_events` from the restored per-stream event counts. Re-executing
+        // the checkpoint re-emits each summarized stream's summary event; without this seed
+        // the summary's index would look like a gap on the freshly-restored node, so the
+        // tracker would never advance and future events on that stream would never be
+        // delivered to subscribers. The counts are contiguous, so this matches the producer's
+        // tracker as of just before the checkpoint block.
+        for (stream_id, count) in self
+            .chain
+            .execution_state
+            .system
+            .stream_event_counts
+            .index_values()
+            .await?
+        {
+            self.chain.next_expected_events.insert(&stream_id, count)?;
+        }
         // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
         // (for outbox-referenced pre-checkpoint heights), and the outbox views.
         // The other `ChainStateView` fields are either (a) already default for

@@ -15,7 +15,7 @@ use linera_base::{
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, GenericApplicationId, StreamId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
@@ -1564,27 +1564,34 @@ where
     }
 
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
-    /// no event stream tracker is set.
+    /// no *system* event stream tracker is set.
     ///
     /// The structural invariant that Checkpoint must be the *first* transaction in its
     /// block is enforced unconditionally in `execute_block`, independently of these
-    /// preconditions. Sender-side event conditions (no events ever published) are
-    /// validated inside `ExecutionStateView::prepare_checkpoint`. Outgoing messages
-    /// and consumed incoming bundles are no longer preconditions: the on-chain
-    /// `unfinalized_message_blocks` map and the per-inbox `restored_cursor` (seeded
-    /// from the checkpoint's oracle response) together carry everything a
-    /// bootstrapping node needs.
+    /// preconditions. Sender-side event conditions are validated inside
+    /// `ExecutionStateView::prepare_checkpoint`. Outgoing messages and consumed incoming
+    /// bundles are no longer preconditions: the on-chain `unfinalized_message_blocks` map
+    /// and the per-inbox `restored_cursor` (seeded from the checkpoint's oracle response)
+    /// together carry everything a bootstrapping node needs.
+    ///
+    /// User event streams are summarized by the checkpoint, so a tracker for one no longer
+    /// blocks checkpointing. System event streams (the admin chain's epoch streams) are not
+    /// yet summarized, so a tracker for one still does.
     async fn check_checkpoint_preconditions(&self) -> Result<(), ChainError> {
-        let mut had_event_tracker = false;
+        let mut had_system_event_tracker = false;
         self.next_expected_events
-            .for_each_index_while(|_| {
-                had_event_tracker = true;
-                Ok(false)
+            .for_each_index_while(|stream_id| {
+                if matches!(stream_id.application_id, GenericApplicationId::System) {
+                    had_system_event_tracker = true;
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
             })
             .await?;
         ensure!(
-            !had_event_tracker,
-            ChainError::CheckpointPreconditionFailed("chain has consumed events")
+            !had_system_event_tracker,
+            ChainError::CheckpointPreconditionFailed("chain has consumed system events")
         );
 
         Ok(())
