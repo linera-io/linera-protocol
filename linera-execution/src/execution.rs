@@ -13,7 +13,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlobContent, BlockHeight, OracleResponse, StreamUpdate},
     ensure,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
     time::Instant,
 };
 use linera_views::{
@@ -127,16 +127,24 @@ where
         &mut self,
         maximum_blob_size: u64,
     ) -> Result<Vec<Blob>, ExecutionError> {
-        let mut had_event_block = false;
+        // User event streams are summarized and pruned by the checkpoint itself (see
+        // `ExecutionStateActor`'s checkpoint handler), so they no longer block checkpointing.
+        // System event streams (e.g. the epoch streams on the admin chain) are not yet
+        // summarized, so a chain that published any is still not allowed to checkpoint.
+        let mut had_system_event_block = false;
         self.previous_event_blocks
-            .for_each_index_while(|_| {
-                had_event_block = true;
-                Ok(false)
+            .for_each_index_while(|stream_id| {
+                if matches!(stream_id.application_id, GenericApplicationId::System) {
+                    had_system_event_block = true;
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
             })
             .await?;
         ensure!(
-            !had_event_block,
-            ExecutionError::CheckpointPreconditionFailed("chain has published events")
+            !had_system_event_block,
+            ExecutionError::CheckpointPreconditionFailed("chain has published system events")
         );
 
         let (bytes, _content_hash) = self.inner.dump_content().await?;

@@ -15,11 +15,12 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
-        Timestamp,
+        StreamUpdate, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, OwnerSpender, StreamId,
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId,
+        OwnerSpender, StreamId,
     },
     ownership::ChainOwnership,
     time::Instant,
@@ -903,6 +904,83 @@ where
         }
     }
 
+    /// Calls `summarize_events` for every application that has published events to one of its
+    /// streams since the previous checkpoint, then drops those streams' pre-checkpoint anchors.
+    ///
+    /// The work list is exactly the set of user streams currently in `previous_event_blocks`:
+    /// the previous checkpoint cleared the map, so an entry means the stream published a
+    /// summary at (or any event since) the previous checkpoint. Each application may emit a
+    /// fresh summary event, which re-anchors its stream to the checkpoint height (without a
+    /// recertification link to the now-unguaranteed older blocks). A stream whose application
+    /// emits nothing is dropped from `previous_event_blocks` and is effectively closed: it
+    /// won't be summarized again unless it publishes new events.
+    async fn summarize_events_at_checkpoint(
+        &mut self,
+        context: OperationContext,
+    ) -> Result<(), ExecutionError> {
+        let mut updates_by_app = BTreeMap::<ApplicationId, Vec<StreamUpdate>>::new();
+        for stream_id in self.state.previous_event_blocks.indices().await? {
+            let GenericApplicationId::User(application_id) = stream_id.application_id else {
+                continue;
+            };
+            let next_index = self
+                .state
+                .system
+                .stream_event_counts
+                .get(&stream_id)
+                .await?
+                .unwrap_or(0);
+            let previous_index = self
+                .state
+                .system
+                .event_stream_checkpoint_index
+                .get(&stream_id)
+                .await?
+                .unwrap_or(0);
+            updates_by_app
+                .entry(application_id)
+                .or_default()
+                .push(StreamUpdate {
+                    chain_id: context.chain_id,
+                    stream_id,
+                    previous_index,
+                    next_index,
+                });
+        }
+
+        let process_context = ProcessStreamsContext::from(context);
+        let mut work_streams = Vec::new();
+        for (application_id, updates) in updates_by_app {
+            work_streams.extend(updates.iter().map(|update| update.stream_id.clone()));
+            self.run_user_action(
+                application_id,
+                UserAction::SummarizeEvents(process_context, updates),
+                None,
+                None,
+            )
+            .await?;
+        }
+
+        // Record the new per-stream index (including any summary just emitted) and drop the
+        // pre-checkpoint anchor. Streams that were re-summarized are re-anchored to the
+        // checkpoint height by the block-level event-stream bookkeeping after execution.
+        for stream_id in work_streams {
+            let count = self
+                .state
+                .system
+                .stream_event_counts
+                .get(&stream_id)
+                .await?
+                .unwrap_or(0);
+            self.state
+                .system
+                .event_stream_checkpoint_index
+                .insert(&stream_id, count)?;
+            self.state.previous_event_blocks.remove(&stream_id)?;
+        }
+        Ok(())
+    }
+
     pub(crate) async fn run_user_action(
         &mut self,
         application_id: ApplicationId,
@@ -1077,6 +1155,7 @@ where
                     self.state
                         .apply_checkpoint(prepared, self.txn_tracker)
                         .await?;
+                    self.summarize_events_at_checkpoint(context).await?;
                 }
                 op => {
                     let new_application = self
