@@ -2234,7 +2234,7 @@ impl<Env: Environment> Client<Env> {
                         "failed to download certificate-for-blob from validator",
                     );
                 }
-                blob_recovery_error(errors, blob_id)
+                chain_client::Error::BlobRecoveryFailed(blob_id)
             })
         }))
         .buffer_unordered(self.options.max_joined_tasks)
@@ -2440,26 +2440,6 @@ impl CheckCertificateResult {
     }
 }
 
-/// Chooses the error to surface when every validator failed to provide the certificate
-/// introducing a blob. A committee-epoch failure is local and node-independent: if any
-/// node ran into it, it is the real cause — surface it rather than fabricating a
-/// `BlobsNotFound` for a blob the network may well have.
-fn blob_recovery_error(
-    mut errors: Vec<(ValidatorPublicKey, chain_client::Error)>,
-    blob_id: BlobId,
-) -> chain_client::Error {
-    if let Some(position) = errors.iter().position(|(_, error)| {
-        matches!(
-            error,
-            chain_client::Error::CommitteeSynchronizationError
-                | chain_client::Error::CommitteeDeprecationError
-        )
-    }) {
-        return errors.swap_remove(position).1;
-    }
-    chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
-}
-
 /// Creates a compressed Contract, Service and bytecode, plus an optional
 /// `ApplicationFormats` blob built from the JSON-encoded `Formats` description
 /// bytes.
@@ -2504,65 +2484,4 @@ pub async fn create_bytecode_blobs(
         blobs.push(blob);
     }
     (blobs, module_id)
-}
-
-#[cfg(test)]
-mod blob_recovery_error_tests {
-    use linera_base::crypto::ValidatorKeypair;
-
-    use super::*;
-
-    fn test_blob_id(name: &str) -> BlobId {
-        BlobId::new(CryptoHash::test_hash(name), BlobType::Data)
-    }
-
-    fn validator() -> ValidatorPublicKey {
-        ValidatorKeypair::generate().public_key
-    }
-
-    #[test]
-    fn surfaces_committee_synchronization_failure() {
-        let blob_id = test_blob_id("blob");
-        let errors = vec![
-            (
-                validator(),
-                chain_client::Error::from(NodeError::BlobsNotFound(vec![test_blob_id("other")])),
-            ),
-            (
-                validator(),
-                chain_client::Error::CommitteeSynchronizationError,
-            ),
-        ];
-        assert_matches::assert_matches!(
-            blob_recovery_error(errors, blob_id),
-            chain_client::Error::CommitteeSynchronizationError
-        );
-    }
-
-    #[test]
-    fn surfaces_committee_deprecation_failure() {
-        let blob_id = test_blob_id("blob");
-        let errors = vec![(validator(), chain_client::Error::CommitteeDeprecationError)];
-        assert_matches::assert_matches!(
-            blob_recovery_error(errors, blob_id),
-            chain_client::Error::CommitteeDeprecationError
-        );
-    }
-
-    #[test]
-    fn falls_back_to_blobs_not_found() {
-        let blob_id = test_blob_id("blob");
-        let errors = vec![(
-            validator(),
-            chain_client::Error::from(NodeError::BlobsNotFound(vec![test_blob_id("other")])),
-        )];
-        assert_matches::assert_matches!(
-            blob_recovery_error(errors, blob_id),
-            chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(ids)) if ids == vec![blob_id]
-        );
-        assert_matches::assert_matches!(
-            blob_recovery_error(Vec::new(), blob_id),
-            chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(ids)) if ids == vec![blob_id]
-        );
-    }
 }
