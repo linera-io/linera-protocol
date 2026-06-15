@@ -2287,7 +2287,7 @@ where
                 metrics::BLOCK_PROPOSALS_REJECTED_TOTAL
                     .with_label_values(&[error_type.as_str()])
                     .inc();
-                info!(%chain_id, %height, %error_type, "Block proposal rejected");
+                debug!(%chain_id, %height, %error_type, "Block proposal rejected");
                 // Even on error, the manager's `current_round` may have advanced
                 // (the `HasIncompatibleConfirmedVote` recovery path calls
                 // `update_signed_proposal`). Surface the resulting `NewRound`
