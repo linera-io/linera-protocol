@@ -2607,6 +2607,133 @@ where
     Ok(())
 }
 
+/// In a multi-leader round, the jitter delay places each owner's proposal at a fixed
+/// timestamp derived from the round's start. All retries within the round resolve to the
+/// same target, and once the clock reaches it the owner proposes.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[test_log::test(tokio::test)]
+async fn test_multi_leader_jitter_target_is_anchored<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let mut signer = InMemorySigner::new(None);
+    let owner_b = signer.generate_new().into();
+    let clock = storage_builder.clock().clone();
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let mut client_a = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client_a.chain_id();
+    let owner_a = client_a.preferred_owner().unwrap();
+
+    // Large base_timeout so the jitter delay (`hash(owner, round) mod duration`) sits
+    // comfortably inside the round, and the round itself doesn't time out during the test.
+    let timeout_config = TimeoutConfig {
+        base_timeout: TimeDelta::from_secs(1000),
+        timeout_increment: TimeDelta::ZERO,
+        ..TimeoutConfig::default()
+    };
+    let ownership = ChainOwnership::multiple([(owner_a, 100), (owner_b, 100)], 3, timeout_config);
+    client_a.change_ownership(ownership.clone()).await?;
+
+    let info = client_a.chain_info().await?;
+    let mut client_b = builder
+        .make_client(chain_id, info.block_hash, info.next_block_height)
+        .await?;
+    client_b.set_preferred_owner(owner_b);
+
+    // Tests default to jitter disabled; enable it here since this test exercises the
+    // jitter path.
+    client_a.options_mut().multi_leader_jitter = true;
+    client_b.options_mut().multi_leader_jitter = true;
+
+    // Identify the owner the protocol asks to wait (the non-preferred one for ML(1)).
+    let round = Round::MultiLeader(1);
+    let (delayed_client, preferred_client, delayed_owner) = match (
+        ownership.multi_leader_proposal_delay(&owner_a, round),
+        ownership.multi_leader_proposal_delay(&owner_b, round),
+    ) {
+        (Some(d), _) if d != TimeDelta::ZERO => (&client_a, &client_b, owner_a),
+        (_, Some(d)) if d != TimeDelta::ZERO => (&client_b, &client_a, owner_b),
+        delays => panic!("expected one non-zero jitter delay, got {delays:?}"),
+    };
+    let delay = ownership
+        .multi_leader_proposal_delay(&delayed_owner, round)
+        .expect("delayed owner has a delay");
+
+    // The preferred client proposes in MultiLeader(0) with one extra validator offline,
+    // so quorum fails (validator 0 was already faulty from `TestBuilder::new`) but the
+    // two remaining honest validators absorb the proposal.
+    builder.set_fault_type([2], FaultType::OfflineWithInfo);
+    let result = preferred_client
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await;
+    assert!(result.is_err(), "burn must fail without quorum");
+    let info = preferred_client.chain_info_with_manager_values().await?;
+    let proposal = info.manager.requested_proposed.unwrap();
+    builder.node(1).handle_block_proposal(*proposal).await?;
+
+    // Restore validators and let the delayed client see the conflicting proposal.
+    builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
+    delayed_client.synchronize_from_validators().await?;
+    let manager = delayed_client
+        .chain_info_with_manager_values()
+        .await?
+        .manager;
+    assert_eq!(manager.current_round, Round::MultiLeader(0));
+
+    let round_start = manager
+        .round_timeout
+        .unwrap()
+        .saturating_sub(ownership.round_timeout(Round::MultiLeader(0)).unwrap());
+
+    // Move strictly past `round_start` so the assertions distinguish a target anchored
+    // on the round's start from one anchored on the current clock.
+    clock.set(round_start.saturating_add(TimeDelta::from_secs(5)));
+
+    let timeout1 = match delayed_client
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await?
+    {
+        ClientOutcome::WaitForTimeout(t) => t,
+        other => panic!("expected WaitForTimeout, got {other:?}"),
+    };
+    assert_eq!(timeout1.current_round, Round::MultiLeader(1));
+    let expected = round_start.saturating_add(delay);
+    assert_eq!(
+        timeout1.timestamp, expected,
+        "first jitter target must be anchored to round_start + delay"
+    );
+
+    // Advance the clock partway toward the target, still strictly before it.
+    clock.set(
+        clock
+            .current_time()
+            .saturating_add(TimeDelta::from_micros(delay.as_micros() / 4)),
+    );
+    let timeout2 = match delayed_client
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await?
+    {
+        ClientOutcome::WaitForTimeout(t) => t,
+        other => panic!("expected WaitForTimeout on retry, got {other:?}"),
+    };
+    assert_eq!(
+        timeout1.timestamp, timeout2.timestamp,
+        "jitter target must stay anchored as the clock advances"
+    );
+
+    // Once the clock reaches the anchored target, the client proposes instead of waiting.
+    clock.set(expected);
+    let outcome = delayed_client
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await?;
+    assert!(
+        !matches!(outcome, ClientOutcome::WaitForTimeout(_)),
+        "client must propose once the anchored target is reached, got {outcome:?}"
+    );
+
+    Ok(())
+}
+
 /// On a fresh root chain whose `ChainDescription` is defined by the genesis
 /// config (not published by any block), `request_leader_timeout` must succeed
 /// once the round has timed out: collecting the timeout certificate and then

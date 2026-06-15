@@ -2415,9 +2415,9 @@ impl<Env: Environment> ChainClient<Env> {
     /// the owner should propose immediately (either because the round is not a multi-leader
     /// round, the owner is the preferred proposer, or the jitter target is already in the past).
     ///
-    /// The delay is deterministic per `(owner, round)` and is anchored at the round's start
-    /// time when known, so that retrying after an interrupting notification does not extend
-    /// the wait further.
+    /// The delay is deterministic per `(owner, round)` and anchored to the current round's
+    /// start time as tracked by the chain manager, so all retries during the same round
+    /// converge on the same target.
     fn multi_leader_jitter_target(
         &self,
         info: &ChainInfo,
@@ -2427,21 +2427,18 @@ impl<Env: Environment> ChainClient<Env> {
         if !self.options.multi_leader_jitter {
             return None;
         }
-        let ownership = &info.manager.ownership;
+        let manager = &info.manager;
+        let ownership = &manager.ownership;
         let delay = ownership.multi_leader_proposal_delay(owner, round)?;
         if delay == TimeDelta::ZERO {
             return None;
         }
-        let now = self.storage_client().clock().current_time();
-        let round_start = if round == info.manager.current_round {
-            match (info.manager.round_timeout, ownership.round_timeout(round)) {
-                (Some(end), Some(duration)) => end.saturating_sub(duration),
-                _ => now,
-            }
-        } else {
-            now
-        };
+        let current_round_duration = ownership.round_timeout(manager.current_round)?;
+        let round_start = manager
+            .round_timeout?
+            .saturating_sub(current_round_duration);
         let propose_at = round_start.saturating_add(delay);
+        let now = self.storage_client().clock().current_time();
         (propose_at > now).then_some(propose_at)
     }
 
