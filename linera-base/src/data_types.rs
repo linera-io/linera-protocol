@@ -938,6 +938,43 @@ impl FromStr for BlockHeight {
     }
 }
 
+/// A logical position in a chain's stream of outgoing messages: the height of the block
+/// that produced the message and the index of the message-producing transaction within
+/// that block.
+#[derive(
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    Hash,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    SimpleObject,
+    Allocative,
+)]
+pub struct Cursor {
+    /// The height of the producing block.
+    pub height: BlockHeight,
+    /// The transaction index within the block.
+    pub index: u32,
+}
+
+impl Cursor {
+    /// Returns the cursor pointing to the next position within the same block, or
+    /// [`ArithmeticError::Overflow`] if `index` is already at the maximum.
+    pub fn try_add_one(self) -> Result<Self, ArithmeticError> {
+        let value = Self {
+            height: self.height,
+            index: self.index.checked_add(1).ok_or(ArithmeticError::Overflow)?,
+        };
+        Ok(value)
+    }
+}
+
 impl Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1381,6 +1418,20 @@ pub enum OracleResponse {
         /// storage before applying the checkpoint, otherwise subsequent operations on
         /// the chain could try to read blob content the node doesn't actually have.
         used_blobs: Vec<BlobId>,
+        /// Hashes of every block on this chain that the chain's outboxes still reference
+        /// at the time of the checkpoint — i.e. the heights with cross-chain messages
+        /// that recipients haven't acknowledged yet. The current-epoch certificate over
+        /// the checkpoint block transitively certifies these older blocks: a node that
+        /// later receives one of these block's bytes can verify the bytes hash to a
+        /// hash in this set, without trusting the (possibly revoked) validator
+        /// signatures on the older block's own certificate.
+        outbox_block_hashes: Vec<CryptoHash>,
+        /// For each chain whose messages we've consumed, the `next_cursor_to_remove`
+        /// of the corresponding inbox. A bootstrapping node uses these to seed each
+        /// inbox's `restored_cursor`, so subsequent sender re-pushes below that cursor
+        /// are silently dropped (their effects are already baked into the restored
+        /// execution state).
+        inbox_cursors: Vec<(ChainId, Cursor)>,
     },
 }
 

@@ -31,7 +31,7 @@ use linera_bridge::{
         parse_deposit_event, verify_receipt_inclusion,
     },
 };
-use linera_execution::test_utils::solidity::compile_solidity_contract;
+use linera_execution::test_utils::solidity::compile_solidity_contract_with_options;
 
 const LINERA_TOKEN_SOL: &str = include_str!("../src/solidity/LineraToken.sol");
 
@@ -54,9 +54,12 @@ alloy_sol_types::sol! {
     }
 }
 
-/// Compiles a Solidity contract via `solc`, returning deployment bytecode.
+/// Compiles a Solidity contract via `solc`, returning deployment bytecode. Compiles with the
+/// optimizer (runs = 1), matching how the contracts are deployed (forge) and the other Rust tests:
+/// `LightClient.addCommittee` takes enough calldata arguments that the via-IR Yul stack scheduler
+/// only fits them when the optimizer runs.
 fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
-    compile_solidity_contract(
+    compile_solidity_contract_with_options(
         source_code,
         file_name,
         contract_name,
@@ -64,9 +67,10 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
             ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
             ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
             ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
-            ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
-            ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),
+            ("LightClient.sol", linera_bridge::evm::LIGHTCLIENT_SOURCE),
+            ("Microchain.sol", linera_bridge::evm::MICROCHAIN_SOURCE),
         ],
+        Some(1),
     )
     .expect("solc compilation failed")
 }
@@ -124,6 +128,7 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
     // application ID baked into the constructor (immutable since #6173).
     let target_chain_id = B256::from([0xAA; 32]);
     let target_application_id = B256::from([0xBB; 32]);
+    let bridge_application_id = B256::from([0xDD; 32]);
 
     let bridge_bytecode = compile_contract(
         FUNGIBLE_BRIDGE_SOURCE,
@@ -135,6 +140,7 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         <[u8; 32]>::from(target_chain_id),       // chainId
         token_address,                           // token
         <[u8; 32]>::from(target_application_id), // fungibleApplicationId
+        <[u8; 32]>::from(bridge_application_id), // bridgeApplicationId
     )
         .abi_encode_params();
 

@@ -13,8 +13,9 @@ use linera_base::{
 };
 use linera_execution::{
     execution_state_actor::ExecutionStateActor, ExecutionRuntimeContext, ExecutionStateView,
-    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, ResourceController,
-    ResourceTracker, SystemExecutionStateView, TransactionOutcome, TransactionTracker,
+    Message, MessageContext, MessageKind, OperationContext, OutgoingMessage, PreparedCheckpoint,
+    ResourceController, ResourceTracker, SystemExecutionStateView, TransactionOutcome,
+    TransactionTracker,
 };
 use linera_views::context::Context;
 use tracing::instrument;
@@ -59,11 +60,11 @@ pub struct BlockExecutionTracker<'resources, 'blobs> {
     // Blobs published in the block.
     published_blobs: BTreeMap<BlobId, &'blobs Blob>,
 
-    // Checkpoint blobs computed pre-block, to be handed to the matching
-    // `SystemOperation::Checkpoint` operation handler when it runs. A single dump may
-    // span multiple blobs to respect `maximum_blob_size` from the current epoch's policy.
+    // Checkpoint inputs computed pre-block (state dump split into blobs and the per-origin
+    // inbox cursors), to be handed to the matching `SystemOperation::Checkpoint`
+    // operation handler when it runs.
     #[debug(skip_if = Option::is_none)]
-    prepared_checkpoint_blobs: Option<Vec<Blob>>,
+    prepared_checkpoint: Option<PreparedCheckpoint>,
 }
 
 impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
@@ -99,14 +100,14 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             operation_results: Vec::new(),
             transaction_index: 0,
             published_blobs,
-            prepared_checkpoint_blobs: None,
+            prepared_checkpoint: None,
         })
     }
 
-    /// Stashes pre-computed checkpoint blobs to be handed to the matching
+    /// Stashes pre-computed checkpoint inputs to be handed to the matching
     /// `SystemOperation::Checkpoint` handler when its transaction runs.
-    pub fn set_prepared_checkpoint_blobs(&mut self, blobs: Vec<Blob>) {
-        self.prepared_checkpoint_blobs = Some(blobs);
+    pub fn set_prepared_checkpoint(&mut self, prepared: PreparedCheckpoint) {
+        self.prepared_checkpoint = Some(prepared);
     }
 
     /// Executes a transaction in the context of the block.
@@ -191,9 +192,9 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             self.oracle_responses()?,
             &self.blobs,
         );
-        // Cloning each blob is cheap — its bytes are behind an `Arc`.
-        if let Some(blobs) = self.prepared_checkpoint_blobs.as_ref() {
-            tracker.set_prepared_checkpoint_blobs(blobs.clone());
+        // Cloning is cheap — blob bytes are behind an `Arc`.
+        if let Some(prepared) = self.prepared_checkpoint.as_ref() {
+            tracker.set_prepared_checkpoint(prepared.clone());
         }
         Ok(tracker)
     }
@@ -223,6 +224,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let context = MessageContext {
             chain_id: self.chain_id,
             origin: incoming_bundle.origin,
+            origin_certificate_hash: incoming_bundle.bundle.certificate_hash,
             origin_timestamp: incoming_bundle.bundle.timestamp,
             is_bouncing: posted_message.is_bouncing(),
             height: self.block_height,
@@ -277,6 +279,16 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                         .with_execution_context(ChainExecutionContext::Block)?;
                 }
             }
+        }
+        // Record that this origin has sent us a real message; we owe them a
+        // `SystemMessage::CheckpointAck` at our next checkpoint. `CheckpointAck`
+        // messages themselves are excluded so they don't keep the notification
+        // ping-pong alive forever.
+        if !posted_message.message.is_checkpoint_ack() {
+            chain
+                .system
+                .pending_checkpoint_ack_targets
+                .insert(&incoming_bundle.origin)?;
         }
         Ok(())
     }
@@ -389,6 +401,27 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
             .flatten()
             .map(|msg| msg.destination)
             .collect()
+    }
+
+    /// For each recipient that received at least one non-`SystemMessage::CheckpointAck`
+    /// message in this block, returns the transaction indices that produced such a
+    /// message. The chain-level bookkeeping (`previous_message_blocks`,
+    /// `unfinalized_message_blocks`) is updated only for these recipients, so that
+    /// `CheckpointAck`-only blocks don't pin a slot that would never get trimmed (the
+    /// recipient never acknowledges back). The transaction indices feed
+    /// `unfinalized_message_blocks` as full `(block.height, tx_index)` cursors, so a
+    /// later ack with a cursor past the last unfinalized bundle can fully evict the
+    /// recipient.
+    pub fn non_checkpoint_ack_tx_indices(&self) -> BTreeMap<ChainId, BTreeSet<u32>> {
+        let mut result = BTreeMap::<ChainId, BTreeSet<u32>>::new();
+        for (tx_idx, msgs) in (0u32..).zip(&self.messages) {
+            for msg in msgs {
+                if !msg.message.is_checkpoint_ack() {
+                    result.entry(msg.destination).or_default().insert(tx_idx);
+                }
+            }
+        }
+        result
     }
 
     /// Returns stream IDs for events published in the block.

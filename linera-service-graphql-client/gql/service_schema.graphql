@@ -385,11 +385,12 @@ type ChainStateExtendedView {
 	"""
 	nonemptyInboxes: [ChainId!]!
 	"""
-	The local wall-clock time when block 0 was last executed. Used to prevent
-	reset-on-incorrect-outcome from looping: if not enough time has elapsed since
-	the last reset, the error is returned instead.
+	The local wall-clock time when this chain's state was last established — by
+	executing block 0, or by installing a checkpoint snapshot (on bootstrap or reset).
+	Used to prevent reset-on-incorrect-outcome from looping: if not enough time has
+	elapsed since the last reset, the error is returned instead.
 	"""
-	blockZeroExecutedAt: Timestamp!
+	chainInitializedAt: Timestamp!
 	"""
 	The height at which the next block can be preprocessed: one past the highest
 	height in `block_hashes` (executed or preprocessed), or `next_block_height` if
@@ -407,6 +408,25 @@ type ChainStateExtendedView {
 	`SystemOperation::Checkpoint` is executed.
 	"""
 	latestCheckpointHeight: BlockHeight
+	"""
+	Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
+	vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
+	in storage. The worker errors a checkpoint push with
+	`MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+	referenced cert (regardless of its own — possibly revoked — epoch) and
+	removes the entry. Once the set is empty, the checkpoint restoration can run
+	end-to-end.
+	"""
+	preCheckpointBlockTrust: SetView_CryptoHash_87fbb60c!
+	"""
+	The hash of the set of fully-tracked chains that `nonempty_outboxes` and
+	`outbox_counters` were last reconciled against. On a client these two indices only hold
+	entries for tracked targets; when the tracked set changes this hash stops matching and the
+	indices are reconciled (`reconcile_outbox_index`). `None` means
+	they have never been filtered — a pre-existing database entry (migration), or a validator
+	that tracks all chains and never filters.
+	"""
+	outboxIndexTrackedHash: CryptoHash
 }
 
 """
@@ -457,6 +477,13 @@ type ChangeOwnershipOperationMetadata {
 	multiLeaderRounds: Int!
 	openMultiLeaderRounds: Boolean!
 	timeoutConfig: TimeoutConfigMetadata!
+}
+
+"""
+CheckpointAck message metadata.
+"""
+type CheckpointAckMessageMetadata {
+	latestReceivedCursor: Cursor!
 }
 
 """
@@ -526,8 +553,19 @@ A Keccak256 value
 """
 scalar CryptoHash
 
+"""
+A logical position in a chain's stream of outgoing messages: the height of the block
+that produced the message and the index of the message-producing transaction within
+that block.
+"""
 type Cursor {
+	"""
+	The height of the producing block.
+	"""
 	height: BlockHeight!
+	"""
+	The transaction index within the block.
+	"""
 	index: Int!
 }
 
@@ -665,6 +703,15 @@ type InboxStateView {
 	At least one of `added_bundles` and `removed_bundles` should be empty.
 	"""
 	removedBundles: QueueView_MessageBundle_f4399f0b!
+	"""
+	When this inbox was restored from a checkpoint, the sender's
+	`next_cursor_to_remove` at that time. Bundles with cursors strictly below this
+	are silently dropped from `add_bundle` / `remove_bundle`: their effects are
+	already baked into the restored execution state, so re-delivering them on this
+	validator (e.g. when a sender re-pushes) must be a no-op rather than re-enter
+	the inbox or the removed-by-anticipation queue.
+	"""
+	restoredCursor: Cursor!
 }
 
 """
@@ -1400,6 +1447,11 @@ A number to identify successive attempts to decide a value in a consensus protoc
 """
 scalar Round
 
+type SetView_CryptoHash_87fbb60c {
+	elements(count: Int): [CryptoHash!]!
+	count: Int!
+}
+
 """
 An event stream ID.
 """
@@ -1485,6 +1537,10 @@ type SystemMessageMetadata {
 	Withdraw message details
 	"""
 	withdraw: WithdrawMessageMetadata
+	"""
+	CheckpointAck message details
+	"""
+	checkpointAck: CheckpointAckMessageMetadata
 }
 
 """

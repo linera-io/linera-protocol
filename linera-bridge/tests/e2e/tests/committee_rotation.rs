@@ -8,29 +8,24 @@
 
 use std::time::{Duration, Instant};
 
-use alloy::{providers::ProviderBuilder, sol};
+use alloy::providers::ProviderBuilder;
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner, ValidatorKeypair},
     identifiers::AccountOwner,
 };
+use linera_bridge::contracts::ILightClient;
 use linera_bridge_e2e::{
     compose_file_path, create_extra_wallet, deploy_fungible_bridge, deploy_linera_token,
     dump_compose_logs, exec_ok, extra_wallet_env, light_client_address,
-    publish_and_create_wrapped_fungible, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
+    publish_and_create_evm_bridge, publish_and_create_wrapped_fungible, register_bridge_app,
+    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
 use linera_execution::WasmRuntime;
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-
-sol! {
-    #[sol(rpc)]
-    interface ILightClient {
-        function currentEpoch() external view returns (uint32);
-    }
-}
 
 /// Queries the current epoch from the LightClient contract on Anvil.
 async fn query_current_epoch() -> anyhow::Result<u32> {
@@ -73,14 +68,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
         &config,
         "committee-rotation-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
     genesis_config.initialize_storage(&mut storage).await?;
@@ -122,8 +110,19 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
     .await?;
     tracing::info!(%fungible_app_id, "wrapped-fungible app created");
 
+    // The evm-bridge app drives the burn; create it on the bridge/mint chain
+    // (the relay chain) after the wrapped-fungible app so its id can be baked in.
+    let bridge_app_id =
+        publish_and_create_evm_bridge(&cc, erc20_addr, relay_chain_id, fungible_app_id).await?;
+    tracing::info!(%bridge_app_id, "evm-bridge app created");
+
+    // Register the wrapped-fungible app with the evm-bridge so it can drive
+    // the escrow transfer + burn.
+    register_bridge_app(&cc, fungible_app_id, bridge_app_id).await?;
+
     let chain_id_bytes32 = format!("0x{relay_chain_id}");
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    let bridge_app_id_bytes32 = format!("0x{}", bridge_app_id.application_description_hash);
     let light_client = light_client_address();
     let bridge_addr = deploy_fungible_bridge(
         &compose,
@@ -133,6 +132,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
         &chain_id_bytes32,
         erc20_addr,
         &app_id_bytes32,
+        &bridge_app_id_bytes32,
     )
     .await?;
     tracing::info!(%bridge_addr, "FungibleBridge deployed");
@@ -155,9 +155,8 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
     linera_wallet_json::PersistentWallet::create(&wallet_path, relay_genesis_config)?;
 
     let bridge_addr_str = format!("{bridge_addr}");
+    let bridge_app_str = format!("{bridge_app_id}");
     let fungible_app_str = format!("{fungible_app_id}");
-    // evm-bridge app is not needed for committee relay; use a placeholder that parses.
-    let dummy_bridge_app = "0000000000000000000000000000000000000000000000000000000000000000";
     let relay_handle = tokio::spawn(async move {
         Box::pin(linera_bridge::relay::run(
             "http://localhost:8545",
@@ -167,15 +166,17 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             relay_chain_id,
             relay_owner,
             &bridge_addr_str,
-            dummy_bridge_app,
+            &bridge_app_str,
             &fungible_app_str,
             ANVIL_PRIVATE_KEY,
             Some(&light_client.to_string()),
             relay_port,
+            0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
-            std::time::Duration::from_secs(5),  // monitor_scan_interval
-            0,  // monitor_start_block
-            5,  // max_retries
+            std::time::Duration::from_secs(5), // monitor_scan_interval
+            0,                                 // monitor_start_block
+            5,                                 // max_retries
+            None,
             None,
         ))
         .await

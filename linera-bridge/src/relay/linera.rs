@@ -11,8 +11,8 @@ use linera_base::{
     data_types::{Amount, Event},
     identifiers::{ApplicationId, GenericApplicationId},
 };
-use linera_chain::types::ConfirmedBlockCertificate;
-use linera_core::client::ChainClient;
+use linera_chain::{block::ConfirmedBlock, types::ConfirmedBlockCertificate};
+use linera_core::{client::ChainClient, data_types::ChainInfo, environment::Environment};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::proof::DepositKey;
@@ -34,14 +34,14 @@ pub(crate) enum ChainOperation {
 ///
 /// Read operations use the `ChainClient` directly (safe on clones).
 /// Write operations (block proposals) go through a channel to the main loop.
-pub struct LineraClient<E: linera_core::environment::Environment> {
+pub struct LineraClient<E: Environment> {
     chain_client: ChainClient<E>,
     op_tx: mpsc::Sender<ChainOperation>,
     bridge_app_id: ApplicationId,
     fungible_app_id: ApplicationId,
 }
 
-impl<E: linera_core::environment::Environment> LineraClient<E> {
+impl<E: Environment> LineraClient<E> {
     pub(crate) fn new(
         chain_client: ChainClient<E>,
         op_tx: mpsc::Sender<ChainOperation>,
@@ -74,7 +74,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         Ok(())
     }
 
-    pub async fn chain_info(&self) -> Result<Box<linera_core::data_types::ChainInfo>> {
+    pub async fn chain_info(&self) -> Result<Box<ChainInfo>> {
         self.chain_client
             .chain_info()
             .await
@@ -87,10 +87,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         Ok(info.chain_balance)
     }
 
-    pub async fn read_confirmed_block(
-        &self,
-        hash: CryptoHash,
-    ) -> Result<Arc<linera_chain::block::ConfirmedBlock>> {
+    pub async fn read_confirmed_block(&self, hash: CryptoHash) -> Result<Arc<ConfirmedBlock>> {
         self.chain_client
             .read_confirmed_block(hash)
             .await
@@ -137,7 +134,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
     }
 }
 
-impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
+impl<E: Environment> Clone for LineraClient<E> {
     fn clone(&self) -> Self {
         Self {
             chain_client: self.chain_client.clone(),
@@ -148,7 +145,8 @@ impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
     }
 }
 
-/// Finds all `BurnEvent`s in a block's event streams for a given application.
+/// Finds all `BurnEvent`s emitted by the bridge application on its "burns"
+/// stream within a block's event streams.
 ///
 /// Returns `(tx_index, event_pos_in_tx, event_index, BurnEvent)` for each burn:
 /// - `tx_index`: position of the transaction within `body.events` (outer index)
@@ -156,12 +154,12 @@ impl<E: linera_core::environment::Environment> Clone for LineraClient<E> {
 /// - `event_index`: `Event.index` — the stream index, used as the on-chain dedup key
 pub(crate) fn find_burn_events(
     events: &[Vec<Event>],
-    fungible_app_id: ApplicationId,
+    bridge_app_id: ApplicationId,
 ) -> Vec<(u32, u32, u32, wrapped_fungible::BurnEvent)> {
     let mut result = Vec::new();
     for (tx_index, tx_events) in (0u32..).zip(events) {
         for (event_pos, event) in (0u32..).zip(tx_events) {
-            if event.stream_id.application_id != GenericApplicationId::User(fungible_app_id) {
+            if event.stream_id.application_id != GenericApplicationId::User(bridge_app_id) {
                 continue;
             }
             if event.stream_id.stream_name.0 != b"burns" {
@@ -173,4 +171,79 @@ pub(crate) fn find_burn_events(
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_base::{
+        crypto::{CryptoHash, TestString},
+        data_types::{Event, U128},
+        identifiers::{ApplicationId, GenericApplicationId, StreamId, StreamName},
+    };
+
+    use super::find_burn_events;
+
+    fn app_id(tag: &str) -> ApplicationId {
+        ApplicationId::new(CryptoHash::new(&TestString::new(tag)))
+    }
+
+    fn encoded_burn(target: [u8; 20], amount: u128) -> Vec<u8> {
+        bcs::to_bytes(&wrapped_fungible::BurnEvent {
+            target,
+            amount: U128(amount),
+        })
+        .unwrap()
+    }
+
+    fn event(app: ApplicationId, stream: &str, value: Vec<u8>, index: u32) -> Event {
+        Event {
+            stream_id: StreamId {
+                application_id: GenericApplicationId::User(app),
+                stream_name: StreamName::from(stream),
+            },
+            index,
+            value,
+        }
+    }
+
+    /// The relayer must match burns by the *bridge* application's "burns"
+    /// stream — not by any other application or stream.
+    #[test]
+    fn matches_only_the_given_app_burns_stream() {
+        let bridge_app_id = app_id("bridge");
+        let other = app_id("other");
+        let burn_target = [0xE7; 20];
+        let burn_amount = 123;
+        let value = encoded_burn(burn_target, burn_amount);
+
+        let events = vec![
+            // tx 0: a burn emitted by the bridge app.
+            vec![event(bridge_app_id, "burns", value.clone(), 7)],
+            // tx 1: a burn from a different app, and a non-"burns" stream event
+            // from the bridge app — neither should match when keyed on `bridge_app_id`.
+            vec![
+                event(other, "burns", value.clone(), 0),
+                event(bridge_app_id, "transfers", value.clone(), 1),
+            ],
+        ];
+
+        let found = find_burn_events(&events, bridge_app_id);
+        assert_eq!(
+            found.len(),
+            1,
+            "only the bridge app's burns-stream event must match"
+        );
+        let (tx_index, event_pos, event_index, decoded) = &found[0];
+        assert_eq!((*tx_index, *event_pos, *event_index), (0, 0, 7));
+        assert_eq!(decoded.target, burn_target);
+        assert_eq!(decoded.amount, U128(burn_amount));
+
+        // Keyed on a different application, the bridge app's burn is ignored.
+        let found_other = find_burn_events(&events, other);
+        assert_eq!(found_other.len(), 1);
+        assert_eq!(
+            found_other[0].2, 0,
+            "matches the other app's burn at index 0"
+        );
+    }
 }

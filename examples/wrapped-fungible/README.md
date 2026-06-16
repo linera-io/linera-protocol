@@ -1,42 +1,36 @@
 # Wrapped Fungible Token Example Application
 
-This example application implements a wrapped (bridged) fungible token for the EVM<>Linera bridge. It extends the base fungible token with minting, burning, and bridge-specific authorization.
-
-Tokens are minted when a deposit proof from EVM is verified by the `evm-bridge` application, and burned automatically when transferred cross-chain to an Ethereum address (`Address20`) on the bridge chain.
+This example application implements a wrapped (bridged) fungible token, used by the EVM↔Linera bridge. It extends the base `fungible` token with `MintAndTransfer` and `Burn` operations whose authority is restricted to a single registered application — the *authorized caller* — on a designated mint chain. In the bridge, that authorized caller is the `evm-bridge` application.
 
 ## How It Works
 
-The wrapped fungible token shares the same account model as the `fungible` example: individual chains have accounts with owners and balances. It adds three bridge-specific features:
+The wrapped fungible token shares the same account model as the `fungible` example: individual chains have accounts with owners and balances. It adds supply control (`MintAndTransfer`/`Burn`) gated to a registered authorized caller.
 
-### Minting
+### Authorization
 
-Minting creates new wrapped tokens backed by locked ERC-20 tokens on EVM. Authorization is configurable via `WrappedParameters`:
+`MintAndTransfer` and `Burn` are driven only by the registered authorized caller, and only on the designated mint chain. Two checks, both mandatory:
 
-- `bridge_app_id` (optional): if set, minting is only allowed via cross-application call from the bridge app
-- `minter` (optional): if set, the block signer must match this account
-- `mint_chain_id` (optional): if set, minting is restricted to this chain
+- The cross-application caller must equal the application registered via `RegisterAuthorizedCaller`.
+- The operation must run on `mint_chain_id` (a `WrappedParameters` field).
 
-Each check is enforced only when the corresponding parameter is `Some`. A fully unconfigured token allows unrestricted minting.
+`RegisterAuthorizedCaller` is itself restricted to the mint chain — the only chain where the authorized caller is consulted — and requires an authenticated signer. The caller is registered after creation rather than passed as a parameter, so an authorized caller that takes this token's id as a creation parameter can be created first (see Deployment).
 
-### Auto-Burning
-
-When tokens are transferred cross-chain to an `Address20` target (Ethereum address) on the designated bridge chain, they are automatically burned instead of credited. The contract emits a `BurnEvent` on the `"burns"` stream, which the off-chain relayer detects and forwards to the EVM bridge contract to release the corresponding ERC-20 tokens.
-
-This replaces the previous flow where the relayer had to propose a separate `Burn` operation.
+There is no signer check on `MintAndTransfer`/`Burn`: the authorized caller is trusted to validate its own input, so whoever relays the request is irrelevant. This keeps relaying permissionless.
 
 ### Operations
 
 All standard fungible operations are supported (`Transfer`, `TransferFrom`, `Approve`, `Claim`, `Balance`, `TickerSymbol`), plus:
 
-- `MintAndTransfer { target_account, amount }` - Creates new tokens (subject to authorization checks)
-- `Burn { owner, amount }` - Rejected at the contract level. Burning happens automatically via cross-chain transfer to an Address20 on the bridge chain.
+- `MintAndTransfer { target_account, amount }` — creates new tokens; authorized caller only, on the mint chain.
+- `Burn { owner, amount }` — burns tokens from an account; authorized caller only, on the mint chain.
+- `RegisterAuthorizedCaller { app_id }` — registers the application allowed to `MintAndTransfer`/`Burn`; mint chain only, requires an authenticated signer.
 
 ## Deployment
 
-The wrapped fungible token is deployed as part of the EVM<>Linera bridge. The deployment order is:
+The wrapped fungible token is deployed as part of the EVM↔Linera bridge. Because the `evm-bridge` application takes this token's id as a creation parameter, the token is created first:
 
-1. Deploy the `evm-bridge` Linera application
-2. Deploy `wrapped-fungible` with `bridge_app_id` pointing to the bridge app
-3. Register the wrapped-fungible app ID in the bridge via `RegisterFungibleApp`
+1. Deploy `wrapped-fungible`.
+2. Deploy the `evm-bridge` application, pointing it at the wrapped-fungible app id.
+3. On the mint chain, register the bridge as the authorized caller via `RegisterAuthorizedCaller`.
 
 See `examples/bridge-demo/setup.sh` for the complete deployment script.

@@ -23,6 +23,10 @@ AccountOwner:
           TUPLEARRAY:
             CONTENT: U8
             SIZE: 20
+ApplicationId:
+  STRUCT:
+    - application_description_hash:
+        TYPENAME: CryptoHash
 BurnEvent:
   STRUCT:
     - target:
@@ -76,6 +80,11 @@ WrappedFungibleOperation:
           - spender:
               TYPENAME: AccountOwner
           - allowance: U128
+    170732950:
+      RegisterAuthorizedCaller:
+        STRUCT:
+          - app_id:
+              TYPENAME: ApplicationId
     198295567:
       MintAndTransfer:
         STRUCT:

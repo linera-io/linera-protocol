@@ -8,14 +8,16 @@
 //!
 //! Setup: 5 burns to the same EVM recipient, materialised as 5
 //! separate Linera blocks on the bridge chain BEFORE the relayer is
-//! spawned. The test process drives both the cross-chain `Transfer`
-//! on the user chain and the inbox processing on the bridge chain,
-//! so each `Credit` lands in its own block deterministically (no
-//! race with the relayer's notification loop batching multiple
-//! `Credit`s into one block). When the relayer starts, its first
-//! scan iteration finds all 5 pending burns at once.
+//! spawned. Each iteration submits one `BridgeOperation::Burn` to the
+//! evm-bridge app on the user chain — the app escrows + burns the
+//! wrapped tokens and routes a tracked `BridgeMessage::Burn` to the
+//! bridge chain (chain A) — and the test process then drives chain
+//! A's inbox once, so each `BurnEvent` lands in its own block
+//! deterministically (no race with the relayer's notification loop
+//! batching multiple events into one block). When the relayer
+//! starts, its first scan iteration finds all 5 pending burns at once.
 //!
-//! The relayer must forward every burn via `addBlock` and the
+//! The relayer must settle every burn via `registerBlock` + `processBurns` and the
 //! per-burn `isBurnProcessed(height, eventIndex)` query must return
 //! true for every entry; the recipient's ERC-20 balance must equal
 //! `5 * amount`.
@@ -24,27 +26,21 @@
 
 use std::time::Duration;
 
-use alloy::{primitives::U256, providers::ProviderBuilder, sol};
+use alloy::{primitives::U256, providers::ProviderBuilder};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
+use linera_bridge::{abi::BridgeOperation, contracts::IERC20};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
-    light_client_address, parse_metric_value, publish_and_create_wrapped_fungible, start_compose,
-    wait_for_light_client, wait_for_relay_http_ready, wait_for_relay_metrics, ANVIL_PRIVATE_KEY,
+    light_client_address, parse_metric_value, publish_and_create_evm_bridge,
+    publish_and_create_wrapped_fungible, register_bridge_app, start_compose, wait_for_light_client,
+    wait_for_relay_http_ready, wait_for_relay_metrics, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-use wrapped_fungible::{Account, WrappedFungibleOperation};
-
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-    }
-}
 
 const NUM_BURNS: u32 = 5;
 const BURN_AMOUNT_TOKENS: u128 = 1;
@@ -72,14 +68,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
         &store_config,
         "multi-burn-same-recipient-e2e",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
     genesis_config.initialize_storage(&mut storage).await?;
@@ -115,10 +104,24 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
 
     let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
 
-    let fungible_app_id =
-        publish_and_create_wrapped_fungible(&cc_b, owner_b, chain_a, erc20_addr, 1_000 * 10u128.pow(18)).await?;
+    let fungible_app_id = publish_and_create_wrapped_fungible(
+        &cc_b,
+        owner_b,
+        chain_a,
+        erc20_addr,
+        1_000 * 10u128.pow(18),
+    )
+    .await?;
+
+    let bridge_app_id =
+        publish_and_create_evm_bridge(&cc_a, erc20_addr, chain_a, fungible_app_id).await?;
+
+    // Register the wrapped-fungible app with the evm-bridge so it can drive
+    // the escrow transfer + burn.
+    register_bridge_app(&cc_a, fungible_app_id, bridge_app_id).await?;
 
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    let bridge_app_id_bytes32 = format!("0x{}", bridge_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
     let bridge_addr = deploy_fungible_bridge(
         &compose,
@@ -128,6 +131,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
         &chain_a_bytes32,
         erc20_addr,
         &app_id_bytes32,
+        &bridge_app_id_bytes32,
     )
     .await?;
 
@@ -143,28 +147,28 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
 
     let evm_recipient: alloy::primitives::Address =
         "0x70997970C51812dc3A010C7d01b50e0d17dc79C8".parse()?;
-    let receiver = AccountOwner::Address20(evm_recipient.0 .0);
     let burn_amount = U128(BURN_AMOUNT_TOKENS * 10u128.pow(18));
 
+    // One Burn per chain-B block, draining chain A's inbox after each so
+    // every `BurnEvent` to the same EVM recipient lands in its own
+    // chain-A block. Each `BridgeOperation::Burn` routes a funding
+    // transfer + tracked `BridgeMessage::Burn` to chain A; the evm-bridge
+    // app escrows + burns the wrapped tokens before emitting the event.
     for _ in 0..NUM_BURNS {
         cc_b.synchronize_from_validators().await?;
-        let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
-            owner: owner_b,
+        let burn_bytes = bcs::to_bytes(&BridgeOperation::Burn {
             amount: burn_amount,
-            target_account: Account {
-                chain_id: chain_a,
-                owner: receiver,
-            },
+            evm_target: evm_recipient.0 .0,
         })?;
         cc_b.execute_operations(
             vec![Operation::User {
-                application_id: fungible_app_id,
-                bytes: withdraw_bytes,
+                application_id: bridge_app_id,
+                bytes: burn_bytes,
             }],
             vec![],
         )
         .await?
-        .expect("cross-chain withdrawal committed on chain B");
+        .expect("burn committed on chain B");
 
         cc_a.synchronize_from_validators().await?;
         cc_a.process_inbox().await?;
@@ -185,7 +189,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
 
     let relay_port = 3004u16;
     let bridge_addr_str = format!("{bridge_addr}");
-    let bridge_app_str = format!("{fungible_app_id}");
+    let bridge_app_str = format!("{bridge_app_id}");
     let fungible_app_str = format!("{fungible_app_id}");
     let sqlite_path_for_relay = sqlite_path.clone();
     let relay_handle = tokio::spawn(async move {
@@ -202,11 +206,13 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
             ANVIL_PRIVATE_KEY,
             None,
             relay_port,
+            0, // admin port (unused in e2e)
             linera_storage_runtime::CommonStorageOptions::with_defaults().storage_cache_config(),
             Duration::from_secs(2),
             0,
             5,
             Some(sqlite_path_for_relay.as_path()),
+            None,
         ))
         .await
     });
@@ -223,7 +229,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     // all NUM_BURNS appear in burns_completed. Pre-fix gets there via
     // mark-by-existence flipping every pending burn complete after the
     // first transfer lands; post-fix gets there via per-burn
-    // `isBurnProcessed` flipping each entry only as its own `addBlock`
+    // `isBurnProcessed` flipping each entry only as its own `processBurns`
     // confirms.
     let settle_result = wait_for_relay_metrics(
         &http,

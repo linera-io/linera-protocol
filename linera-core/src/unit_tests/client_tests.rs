@@ -1399,6 +1399,56 @@ where
     Ok(())
 }
 
+/// Tests that a client whose local view of the admin chain is stale can still use a blob
+/// whose publishing certificate was signed by a committee from an epoch the client has
+/// not heard of yet.
+///
+/// The blob-recovery path downloads the publishing certificate from a validator, but
+/// validating it locally yields `CheckCertificateResult::FutureEpoch`. The client must
+/// react by catching up on the admin chain and retrying, so the blob read succeeds.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_blob_published_in_future_epoch<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1. The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default())?;
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // The stale client needs the blob: it is missing locally, so the client downloads
+    // the publishing certificate from a validator and must accept it after catching up
+    // on the admin chain, rather than choking on the unknown epoch.
+    stale.read_data_blob(blob_id.hash).await.unwrap().unwrap();
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1606,8 +1656,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
-            if not_found_blob_ids == [blob0_id]
+        Err(chain_client::Error::CannotDownloadBlob(blob_id)) if blob_id == blob0_id
     );
 
     // Take one validator down
@@ -2406,19 +2455,33 @@ where
     Ok(())
 }
 
+/// Exercises the lazy locking-block fetch on proposal rejection.
+///
+/// Sets up a state where validators 2 and 3 hold a `Regular` locking block at
+/// `MultiLeader(0)` but validators 0 and 1 do not. `client_a` — which has no
+/// local knowledge of the lock — proposes a new (different) block. All four
+/// validators reject the proposal with `ChainError` (each has
+/// `validated_vote @ ML(0)` from `client_b`'s earlier attempt, so a fresh
+/// proposal at the same round fails the strict-round check). The per-validator
+/// updater's `NodeError::ChainError` arm pulls manager state from each
+/// rejecter, absorbing the locking block from validators 2 and 3 into
+/// `client_a`'s local node. `process_pending_block_without_prepare` detects the
+/// snapshot advance and retries; the retry finalizes the absorbed locking block
+/// (`client_b`'s transfer) and the chain advances. The outcome is `Conflict`
+/// because the committed block is `client_b`'s transfer, not `client_a`'s
+/// intended burn.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
-async fn test_new_round_notification_pulls_lower_round_locking_block<B>(
+async fn test_lazy_pull_absorbs_locking_block_on_proposal_rejection<B>(
     storage_builder: B,
 ) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
-    let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
     let client_a = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
     let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
@@ -2427,10 +2490,8 @@ where
     let owner_a = client_a.identity().await?;
     let owner_b: AccountOwner = builder.signer.generate_new().into();
 
-    // Single multi-leader round, so ML(0) has a non-`None` round duration and times out
-    // into SL(0).
     let owners = [(owner_a, 100), (owner_b, 100)];
-    let ownership = ChainOwnership::multiple(owners, 1, TimeoutConfig::default());
+    let ownership = ChainOwnership::multiple(owners, 4, TimeoutConfig::default());
     client_a.change_ownership(ownership).await?;
 
     let info = client_a.chain_info().await?;
@@ -2439,11 +2500,13 @@ where
         .await?;
     client_b.set_preferred_owner(owner_b);
 
-    // client_b proposes at MultiLeader(0). All four validators vote validate, but
-    // validators 0 and 1 refuse to absorb the resulting certificate and validator 3
-    // refuses to confirm: validators 2 and 3 end up holding a `LockingBlock::Regular @
-    // MultiLeader(0)` and a `confirmed_vote` for it, while the block never reaches a
-    // confirmation quorum and stays uncommitted.
+    // Setup: `client_b` proposes a transfer at `MultiLeader(0)`. All four validators
+    // vote to validate, but validators 0 and 1 refuse to absorb the resulting
+    // validated certificate and validator 3 refuses to send its confirm vote. So
+    // validators 2 and 3 end up holding a `LockingBlock::Regular @ MultiLeader(0)`
+    // and a `confirmed_vote` for it; validators 0 and 1 hold only a
+    // `validated_vote @ MultiLeader(0)`. The block never reaches a confirmation
+    // quorum, so `client_b`'s transfer fails.
     builder.set_fault_type([0, 1], FaultType::DontProcessValidated);
     builder.set_fault_type([3], FaultType::DontSendConfirmVote);
     client_b.synchronize_from_validators().await?;
@@ -2456,35 +2519,9 @@ where
         .await;
     assert!(b_result.is_err());
 
-    let manager_v2 = builder
-        .node(2)
-        .chain_info_with_manager_values(chain_id)
-        .await?
-        .manager;
-    let v2_locking = *manager_v2
-        .requested_locking
-        .expect("validator 2 should hold a locking block");
-    let LockingBlock::Regular(v2_validated) = v2_locking else {
-        panic!("expected a Regular locking block on validator 2");
-    };
-    assert_eq!(v2_validated.round, Round::MultiLeader(0));
-
-    // Restore honest behavior and drive timeout certificates until client_a is the leader
-    // of the current round. request_leader_timeout only fetches the timeout cert, not
-    // manager values, so client_a advances rounds without absorbing the locking block.
+    // Restore honest behavior. `client_a`'s local node has not been touched since
+    // `change_ownership` — it has no proposed block and no locking block.
     builder.set_fault_type([0, 1, 2, 3], FaultType::Honest);
-    let target_round = loop {
-        let manager = client_a.chain_info().await?.manager;
-        if manager.leader == Some(owner_a) {
-            break manager.current_round;
-        }
-        clock.set(
-            manager
-                .round_timeout
-                .expect("round_timeout should be set outside the early multi-leader rounds"),
-        );
-        client_a.request_leader_timeout().await?;
-    };
     assert!(
         client_a
             .chain_info_with_manager_values()
@@ -2495,172 +2532,20 @@ where
         "client_a must not yet hold a locking block"
     );
 
-    // Validator 2 delivers a NewRound notification reporting that it is in the current
-    // round. The resulting `synchronize_chain_state_from` pulls validator 2's locking
-    // block into client_a.
-    let pk_v2 = builder.node(2).name();
-    let validator_2 = builder
-        .initial_committee
-        .validator_addresses()
-        .find(|(pk, _)| *pk == pk_v2)
-        .expect("validator 2 should be in the committee");
-    let notification = Notification {
-        chain_id,
-        reason: Reason::NewRound {
-            height: BlockHeight::from(1),
-            round: target_round,
-        },
-    };
-    client_a
-        .process_notification_from(notification, validator_2)
-        .await;
-
-    // Now client_a can drive the chain forward. The locking block (owner_b's transfer)
-    // is finalized — classified as a Conflict because the authenticated signer doesn't
-    // match owner_a's intended burn — and the chain advances to height 2.
+    // `client_a` burns. The proposal goes out at `MultiLeader(0)`; every validator
+    // rejects it (each has `validated_vote @ ML(0)` from `client_b`'s transfer
+    // attempt, so a fresh proposal at the same round fails the strict-round check).
+    // The per-validator `NodeError::ChainError` arm pulls manager state, and
+    // `client_a`'s local node absorbs the locking block from validators 2/3. The
+    // retry then finalizes the locked block via `finalize_locking_block` and the
+    // chain advances to height 2 with `client_b`'s transfer committed — classified
+    // as `Conflict` because the committed block is not `client_a`'s intended burn.
     let burn_result = client_a.burn(AccountOwner::CHAIN, Amount::ONE).await?;
     assert_matches!(burn_result, ClientOutcome::Conflict(_));
     assert_eq!(
         client_a.chain_info().await?.next_block_height,
         BlockHeight::from(2)
     );
-
-    Ok(())
-}
-
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
-#[test_log::test(tokio::test)]
-async fn test_sync_consensus_round_pushes_locking_below_current_round<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let signer = InMemorySigner::new(None);
-    let clock = storage_builder.clock().clone();
-    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client_a = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
-    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
-    let chain_id = client_a.chain_id();
-    let recipient_id = recipient.chain_id();
-    let owner_a = client_a.identity().await?;
-    let owner_b: AccountOwner = builder.signer.generate_new().into();
-
-    let owners = [(owner_a, 100), (owner_b, 100)];
-    let ownership = ChainOwnership::multiple(owners, 1, TimeoutConfig::default());
-    client_a.change_ownership(ownership).await?;
-
-    let info = client_a.chain_info().await?;
-    let mut client_b = builder
-        .make_client(chain_id, info.block_hash, info.next_block_height)
-        .await?;
-    client_b.set_preferred_owner(owner_b);
-
-    // client_b proposes at MultiLeader(0). All four validators vote validate, but only
-    // validator 2 absorbs the resulting certificate: validators 0, 1, 3 refuse to process
-    // it. So validator 2 ends up holding a `LockingBlock::Regular @ MultiLeader(0)` and
-    // `confirmed_vote @ MultiLeader(0)`; the other three hold neither.
-    builder.set_fault_type([0, 1, 3], FaultType::DontProcessValidated);
-    client_b.synchronize_from_validators().await?;
-    let b_result = client_b
-        .transfer(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(recipient_id),
-        )
-        .await;
-    assert!(b_result.is_err());
-    assert!(
-        builder
-            .node(2)
-            .chain_info_with_manager_values(chain_id)
-            .await?
-            .manager
-            .requested_locking
-            .is_some(),
-        "validator 2 should hold the locking block",
-    );
-
-    // Take validator 1 offline and let the other three timeout out of MultiLeader(0) into
-    // SingleLeader(0). Validator 1 stays at MultiLeader(0) without any locking block.
-    builder.set_fault_type([0, 2, 3], FaultType::Honest);
-    builder.set_fault_type([1], FaultType::OfflineWithInfo);
-    let manager_a = client_a.chain_info().await?.manager;
-    clock.set(manager_a.round_timeout.expect("round_timeout"));
-    client_a.request_leader_timeout().await?;
-    assert_eq!(
-        client_a.chain_info().await?.manager.current_round,
-        Round::SingleLeader(0)
-    );
-
-    builder.set_fault_type([1], FaultType::Honest);
-    let manager_v1 = builder
-        .node(1)
-        .chain_info_with_manager_values(chain_id)
-        .await?
-        .manager;
-    assert_eq!(manager_v1.current_round, Round::MultiLeader(0));
-    assert!(manager_v1.requested_locking.is_none());
-
-    // Pull validator 2's locking block into client_a via a NewRound notification (the
-    // mechanism added by the same branch).
-    let pk_v2 = builder.node(2).name();
-    let validator_2 = builder
-        .initial_committee
-        .validator_addresses()
-        .find(|(pk, _)| *pk == pk_v2)
-        .expect("validator 2 should be in the committee");
-    let notification = Notification {
-        chain_id,
-        reason: Reason::NewRound {
-            height: BlockHeight::from(1),
-            round: Round::SingleLeader(0),
-        },
-    };
-    client_a
-        .process_notification_from(notification, validator_2)
-        .await;
-    let info_a = client_a.chain_info_with_manager_values().await?;
-    let locking = *info_a
-        .manager
-        .requested_locking
-        .expect("client_a should hold the locking block");
-    let LockingBlock::Regular(client_locking_cert) = locking else {
-        panic!("expected Regular locking block on client_a");
-    };
-
-    // Advance the clock past the SingleLeader(0) round_timeout and call
-    // `request_leader_timeout` again. The per-validator request for validator 1 hits the
-    // `WrongRound(MultiLeader(0))` path, which routes through `send_chain_information` →
-    // `sync_consensus_round`. Branch 2 of that function now pushes the locking
-    // certificate because its round (`MultiLeader(0)`) is at least the remote validator's
-    // current round (`MultiLeader(0)`).
-    clock.set(
-        client_a
-            .chain_info()
-            .await?
-            .manager
-            .round_timeout
-            .expect("round_timeout for SingleLeader(0)"),
-    );
-    client_a.request_leader_timeout().await?;
-
-    let manager_v1_after = builder
-        .node(1)
-        .chain_info_with_manager_values(chain_id)
-        .await?
-        .manager;
-    let v1_locking = *manager_v1_after
-        .requested_locking
-        .expect("validator 1 should have absorbed the pushed locking block");
-    let LockingBlock::Regular(v1_validated) = v1_locking else {
-        panic!("expected Regular locking block on validator 1");
-    };
-    assert_eq!(v1_validated.round, Round::MultiLeader(0));
-    assert_eq!(v1_validated.hash(), client_locking_cert.hash());
 
     Ok(())
 }
@@ -2787,7 +2672,16 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    // Give the chain a single multi-leader round at genesis so that its initial round
+    // (`MultiLeader(0)`) times out: without multi-leader jitter, earlier multi-leader rounds
+    // do not time out. The chain still has no blocks of its own, which is the case this
+    // regression test exercises: requesting a timeout certificate then only fetches the
+    // chain's genesis description blob.
+    let client = builder
+        .add_root_chain_with_ownership(1, Amount::from_tokens(10), |owner| {
+            ChainOwnership::multiple([(owner, 100)], 1, TimeoutConfig::default())
+        })
+        .await?;
 
     // Advance the clock past the (default 10s) round timeout.
     clock.set(Timestamp::from(20_000_000));
@@ -4260,89 +4154,505 @@ where
     Ok(())
 }
 
-/// Publishes a checkpoint from one client and verifies that a fresh follower client
-/// (whose storage knows only the genesis chain description) can bootstrap directly
-/// from the checkpoint, skipping pre-checkpoint history.
-///
-/// Setup: the producer creates two blocks — a burn at height 0, then a checkpoint
-/// at height 1. The follower should reach the producer's state hash at height 2
-/// while having downloaded *only* the checkpoint cert, not the height-0 burn.
+/// Verifies the end-to-end `CheckpointAck` cycle now that recipients can also checkpoint
+/// after consuming incoming messages: producer sends, recipient consumes and
+/// checkpoints (sending the ack back), producer consumes the ack and trims its
+/// `unfinalized_message_blocks`, producer's next checkpoint emits no `CheckpointAck`
+/// back to the recipient (the otherwise-perpetual ping-pong is broken).
 #[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[test_log::test(tokio::test)]
-async fn test_checkpoint_bootstrap<B>(storage_builder: B) -> anyhow::Result<()>
+async fn test_checkpoint_ack_cycle_terminates<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
     let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
-    let chain_id = producer.chain_id();
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let producer_id = producer.chain_id();
+    let recipient_id = recipient.chain_id();
 
-    // Height 0: a plain burn, so the chain has some history to skip.
-    let burn_cert = producer
+    // Producer.0: transfer to recipient.
+    producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient_id),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // Producer.1: checkpoint #1. unfinalized_message_blocks[recipient] = {(0, 0)}.
+    producer.checkpoint().await.unwrap().unwrap();
+
+    // Recipient.0: consume the transfer. Now the inbox's `next_cursor_to_remove[producer]`
+    // is past the transfer's cursor and `pending_checkpoint_ack_targets` contains the
+    // producer.
+    recipient.synchronize_from_validators().await?;
+    recipient.process_inbox().await?;
+
+    // Recipient.1: checkpoint — only possible because we lifted the
+    // "no consumed incoming messages" precondition. The checkpoint's apply hook
+    // emits a `SystemMessage::CheckpointAck` to the producer.
+    let recipient_checkpoint = recipient.checkpoint().await.unwrap().unwrap();
+    let ack_to_producer = recipient_checkpoint
+        .block()
+        .body
+        .messages
+        .iter()
+        .flatten()
+        .find(|msg| {
+            msg.destination == producer_id
+                && matches!(
+                    &msg.message,
+                    Message::System(SystemMessage::CheckpointAck { .. })
+                )
+        })
+        .expect("recipient's checkpoint should send a CheckpointAck back to the producer");
+    let acked_cursor = match &ack_to_producer.message {
+        Message::System(SystemMessage::CheckpointAck {
+            latest_received_cursor,
+        }) => *latest_received_cursor,
+        _ => unreachable!(),
+    };
+
+    // Producer consumes the ack. Its `unfinalized_message_blocks[recipient]` is trimmed
+    // and — since the only consumed cursor was strictly below the ack — fully evicted.
+    producer.synchronize_from_validators().await?;
+    producer.process_inbox().await?;
+    {
+        let producer_state = producer
+            .client
+            .local_node
+            .chain_state_view(producer_id)
+            .await?;
+        assert!(
+            producer_state
+                .execution_state
+                .system
+                .unfinalized_message_blocks
+                .get(&recipient_id)
+                .await?
+                .is_none(),
+            "the CheckpointAck at {acked_cursor:?} should evict the recipient entirely",
+        );
+        assert!(
+            !producer_state
+                .execution_state
+                .system
+                .pending_checkpoint_ack_targets
+                .contains(&recipient_id)
+                .await?,
+            "consuming a CheckpointAck must not seed a fresh ack target — that's how \
+             the otherwise-perpetual notification ping-pong is broken",
+        );
+    }
+
+    // Producer's checkpoint #2: nothing left to certify, nothing to notify.
+    let checkpoint_2 = producer.checkpoint().await.unwrap().unwrap();
+    let block = checkpoint_2.block();
+    let outbox_block_hashes = match block.body.oracle_responses.first().and_then(|t| t.first()) {
+        Some(OracleResponse::Checkpoint {
+            outbox_block_hashes,
+            ..
+        }) => outbox_block_hashes.clone(),
+        other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
+    };
+    assert!(
+        outbox_block_hashes.is_empty(),
+        "all sent messages have been acked; checkpoint #2 has nothing left to certify",
+    );
+    assert!(
+        !block
+            .body
+            .messages
+            .iter()
+            .flatten()
+            .any(|msg| msg.destination == recipient_id),
+        "cycle should terminate: producer's next checkpoint must not notify the recipient",
+    );
+
+    Ok(())
+}
+
+/// Verifies the push side of the checkpoint flow: a validator that missed the whole
+/// chain is brought up to speed by the proposing client pushing only the latest
+/// checkpoint plus the pre-checkpoint sender blocks it certifies, not every
+/// pre-checkpoint block. The lagging validator's vote is needed for quorum.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_proposal_pushes_checkpoint_to_lagging_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+
+    // Validator 0 refuses everything for the duration of block production, so its
+    // storage holds only the chain description blob from `add_root_chain` and never
+    // sees any of the chain's certificates. We'll bring it back honest later.
+    builder.set_fault_type([0], FaultType::NoChains);
+
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = producer.chain_id();
+    let validator_0_key = builder.node(0).name();
+
+    // Height 0: cross-chain transfer — becomes a pre-checkpoint sender block that the
+    // checkpoint certifies via `outbox_block_hashes`. The recipient never consumes it.
+    let transfer_0 = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(transfer_0.block().header.height, BlockHeight::ZERO);
+
+    // Height 1: same-chain burn — no outgoing messages, so it's not referenced by any
+    // subsequent `outbox_block_hashes`. The push path must skip it.
+    let burn_1 = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_1.block().header.height, BlockHeight::from(1));
+
+    // Height 2: the checkpoint that will be pushed to validator 0.
+    let checkpoint = producer.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint.block().header.height, BlockHeight::from(2));
+    let outbox_block_hashes = match checkpoint
+        .block()
+        .body
+        .oracle_responses
+        .first()
+        .and_then(|t| t.first())
+    {
+        Some(OracleResponse::Checkpoint {
+            outbox_block_hashes,
+            ..
+        }) => outbox_block_hashes.clone(),
+        other => panic!("Expected OracleResponse::Checkpoint, got {other:?}"),
+    };
+    assert_eq!(outbox_block_hashes, vec![transfer_0.hash()]);
+
+    // Height 3: post-checkpoint burn — must be pushed to validator 0 as part of the
+    // post-checkpoint gap fill.
+    let burn_3 = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_3.block().header.height, BlockHeight::from(3));
+
+    let validator_0_storage = builder
+        .validator_storages
+        .get(&validator_0_key)
+        .expect("validator 0 storage")
+        .clone();
+    for cert in [&transfer_0, &burn_1, &checkpoint, &burn_3] {
+        assert!(
+            !validator_0_storage
+                .contains_certificate(cert.hash())
+                .await?,
+            "validator 0 should not yet hold height {}",
+            cert.block().header.height,
+        );
+    }
+
+    // Bring validator 0 back honest and take validator 1 offline. Quorum (3 of 4) for
+    // the next proposal now requires validators 0, 2, 3 — forcing the client to push
+    // enough state to validator 0 for it to vote.
+    builder.set_fault_type([0], FaultType::Honest);
+    builder.set_fault_type([1], FaultType::Offline);
+
+    // Height 4: a new block whose quorum needs validator 0.
+    let burn_4 = producer
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_4.block().header.height, BlockHeight::from(4));
+
+    // Validator 0 received the checkpoint, the pre-checkpoint sender block it
+    // certifies, the post-checkpoint burn, and the newly committed proposal.
+    assert!(
+        validator_0_storage
+            .contains_certificate(checkpoint.hash())
+            .await?,
+        "validator 0 should have received the checkpoint",
+    );
+    assert!(
+        validator_0_storage
+            .contains_certificate(transfer_0.hash())
+            .await?,
+        "validator 0 should have received the pre-checkpoint sender block",
+    );
+    assert!(
+        validator_0_storage
+            .contains_certificate(burn_3.hash())
+            .await?,
+        "validator 0 should have received the post-checkpoint block",
+    );
+    assert!(
+        validator_0_storage
+            .contains_certificate(burn_4.hash())
+            .await?,
+        "validator 0 should have received the new block it voted on",
+    );
+
+    // The pre-checkpoint same-chain burn isn't referenced by `outbox_block_hashes`
+    // and must not have been pushed.
+    assert!(
+        !validator_0_storage
+            .contains_certificate(burn_1.hash())
+            .await?,
+        "validator 0 must not have received the pre-checkpoint non-sender block",
+    );
+
+    // The trust-mark flow consumed every entry: the validator's first attempt at
+    // the checkpoint errored with `BlocksNotFound`, the client uploaded the missing
+    // sender block (entering the trust-mark accept path on the worker, which
+    // removed the entry), and the second attempt restored the chain cleanly.
+    {
+        let chain_view = validator_0_storage.load_chain(chain_id).await?;
+        let trusted = chain_view.pre_checkpoint_block_trust.indices().await?;
+        assert!(
+            trusted.is_empty(),
+            "validator 0's trust set should be empty after the flow, was {trusted:?}",
+        );
+    }
+
+    Ok(())
+}
+
+/// Verifies that corruption-recovery reset re-executes from the latest checkpoint, not from
+/// block 0. After the reset the chain reaches the same tip and state hash, but the
+/// pre-checkpoint, message-free block is no longer in `block_hashes`: it sits below the
+/// checkpoint and isn't recertified, so a from-checkpoint reset never replays it — which a
+/// from-block-0 reset would have.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_reset_from_latest_checkpoint<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let target = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = chain.chain_id();
+
+    // Height 0: a message-free burn — below the checkpoint and not recertified, so it is the
+    // block a from-checkpoint reset must drop. Height 1: the checkpoint. Height 2: a transfer,
+    // so there is post-checkpoint state to replay.
+    let burn_cert = chain
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
     assert_eq!(burn_cert.block().header.height, BlockHeight::ZERO);
+    let checkpoint_cert = chain.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint_cert.block().header.height, BlockHeight::from(1));
+    chain
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(target.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
 
-    // Height 1: the checkpoint itself.
-    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
-    let block = checkpoint_cert.block();
-    assert_eq!(block.header.height, BlockHeight::from(1));
-    assert_eq!(block.body.transactions.len(), 1);
-    assert_matches!(
-        &block.body.transactions[0],
-        Transaction::ExecuteOperation(Operation::System(op)) if matches!(**op, SystemOperation::Checkpoint),
-        "Unexpected first transaction",
-    );
-    let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first()) {
-        Some(OracleResponse::Checkpoint {
-            execution_state_blobs,
-            used_blobs: _,
-        }) => execution_state_blobs.clone(),
-        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
-    };
+    let info_before = chain.chain_info().await?;
+    assert_eq!(info_before.next_block_height, BlockHeight::from(3));
+    let state_hash_before = info_before.state_hash;
+
+    // Reset the chain on the producer's own worker and re-execute it.
+    chain
+        .client
+        .local_node
+        .reset_and_reexecute_chain(chain_id)
+        .await?;
+
+    // It re-executed to the same tip and state hash...
+    let info_after = chain.chain_info().await?;
+    assert_eq!(info_after.next_block_height, BlockHeight::from(3));
+    assert_eq!(info_after.state_hash, state_hash_before);
+
+    // ...but started from the checkpoint: the checkpoint (height 1) and the post-checkpoint
+    // transfer (height 2) are present in `block_hashes`, while the pre-checkpoint burn is gone.
+    let chain_state = chain.client.local_node.chain_state_view(chain_id).await?;
+    assert!(chain_state
+        .block_hashes
+        .get(&BlockHeight::from(1))
+        .await?
+        .is_some());
+    assert!(chain_state
+        .block_hashes
+        .get(&BlockHeight::from(2))
+        .await?
+        .is_some());
     assert!(
-        !execution_state_blobs.is_empty(),
-        "Checkpoint must list at least one execution-state blob",
+        chain_state
+            .block_hashes
+            .get(&BlockHeight::ZERO)
+            .await?
+            .is_none(),
+        "a from-checkpoint reset must not replay the pre-checkpoint burn",
     );
 
-    let producer_info = producer.chain_info().await?;
-    assert_eq!(producer_info.next_block_height, BlockHeight::from(2));
-    let producer_state_hash = producer_info
-        .state_hash
-        .expect("producer should expose a state hash after the checkpoint");
+    Ok(())
+}
 
-    // A fresh follower client starts with empty storage (other than the genesis
-    // chain description) and must bootstrap from the validator's checkpoint
-    // rather than replay history.
-    let follower = builder
-        .make_client_with_options(
+/// Regression test for #5664: when the chain advances (e.g. a notification or background
+/// sync commits another owner's block at our height) while a client is in the middle of
+/// `execute_block`, the staged pending proposal is cleared without committing ours. This
+/// used to surface as a hard `BlockProposalError("Unexpected block proposal error")`.
+/// The client must instead re-stage at the new height and never raise that error.
+///
+/// Two owners hammer the same multi-owner chain concurrently while each client runs a
+/// notification listener that advances its local node underneath the proposer task,
+/// reproducing the race. Requires the multi-threaded runtime: on a single thread the
+/// listener cannot advance the local node between staging and re-processing.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
+async fn test_execute_block_retries_when_chain_advances<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const ROUNDS: usize = 50;
+
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
+    let owner0 = client0.identity().await?;
+
+    // Make the chain a two-owner chain so both clients can propose at the same height.
+    let ownership = ChainOwnership {
+        super_owners: BTreeSet::new(),
+        owners: BTreeMap::from_iter([(owner0, 100), (owner1, 100)]),
+        first_leader: None,
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    };
+    client0.change_ownership(ownership).await.unwrap();
+
+    let mut client1 = builder
+        .make_client(
             chain_id,
-            None,
-            BlockHeight::ZERO,
-            chain_client::Options::test_default(),
-            true,
+            client0.chain_info().await?.block_hash,
+            BlockHeight::from(1),
         )
         .await?;
+    client1.set_preferred_owner(owner1);
+    client1.synchronize_from_validators().await.unwrap();
+
+    // Run a notification listener on each client so its local node is advanced by the other
+    // owner's commits in the background — the same way the node service's background sync
+    // advances the chain while `execute_block` is running.
+    let (listener0, _abort0, _notifs0) = client0.listen().await?;
+    let (listener1, _abort1, _notifs1) = client1.listen().await?;
+    tokio::spawn(listener0);
+    tokio::spawn(listener1);
+
+    // Both owners publish a stream of data blobs to the same chain concurrently. They
+    // collide at the same height repeatedly; whichever loses a race may observe the chain
+    // advancing mid-proposal. None of these calls may fail with the "unexpected block
+    // proposal error".
+    async fn race(client: &ChainClient<impl Environment>, tag: u8) {
+        for i in 0..ROUNDS {
+            let data = vec![tag, i as u8];
+            match client.publish_data_blob(data).await {
+                // Committed / Conflict / WaitForTimeout are all acceptable outcomes of a
+                // concurrent proposal.
+                Ok(_) => {}
+                Err(err) => {
+                    let message = err.to_string();
+                    assert!(
+                        !message.contains("Unexpected block proposal error"),
+                        "execute_block raised the #5664 error instead of retrying: {message}",
+                    );
+                    // Other transient errors (communication, conflicts surfaced as errors)
+                    // are not what this test guards; resynchronize and continue.
+                    client.synchronize_from_validators().await.ok();
+                }
+            }
+        }
+    }
+
+    futures::join!(race(&client0, 0), race(&client1, 1));
+
+    Ok(())
+}
+
+/// Regression test for the no-signer-key branch in `process_pending_block_without_prepare`:
+/// when a pending proposal is authenticated by an owner whose key the signer no longer holds
+/// (e.g. an autosigner key that staged the block is later withdrawn), the client must discard
+/// the stale proposal and report `Committed(None)` rather than erroring or wedging. This is the
+/// second of the two ways `execute_block`'s retry loop can observe `Committed(None)` — the
+/// other being the chain advancing past the staged height
+/// (`test_execute_block_retries_when_chain_advances`).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_discarded_when_signer_key_missing<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in multi-leader
+    // (non-fast) rounds — the branch that discards rather than erroring.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending, authenticated
+    // by `a` (signing it here requires `a`'s key, which the signer still holds at this point).
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
     assert_eq!(
-        follower.chain_info().await?.next_block_height,
-        BlockHeight::ZERO,
+        client
+            .pending_proposal()
+            .await
+            .expect("a pending proposal authored by `a` should remain")
+            .block
+            .authenticated_owner,
+        Some(owner_a),
     );
 
-    follower.synchronize_from_validators().await?;
+    // Bring the validators back, then withdraw owner `a`'s key from the signer and act as `b`.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    assert!(
+        builder.signer.forget_key(&owner_a),
+        "owner `a`'s key should have been present before we forget it"
+    );
+    client.set_preferred_owner(owner_b);
 
-    let follower_info = follower.chain_info().await?;
-    assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
-    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
-
-    // The follower should have applied the checkpoint cert but skipped the
-    // pre-checkpoint burn at height 0.
-    let storage = follower.storage_client();
-    assert!(!storage.contains_certificate(burn_cert.hash()).await?);
-    assert!(storage.contains_certificate(checkpoint_cert.hash()).await?);
+    // Processing the pending block must discard the stale proposal (we can no longer sign as `a`)
+    // and report `Committed(None)`, rather than raising an error or looping.
+    assert_matches!(
+        client.process_pending_block().await?,
+        ClientOutcome::Committed(None)
+    );
+    assert!(client.pending_proposal().await.is_none());
 
     Ok(())
 }

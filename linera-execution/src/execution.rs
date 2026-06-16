@@ -13,7 +13,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlobContent, BlockHeight, OracleResponse, StreamUpdate},
     ensure,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
     time::Instant,
 };
 use linera_views::{
@@ -37,10 +37,13 @@ use {
 
 use super::{execution_state_actor::ExecutionRequest, runtime::ServiceRuntimeRequest};
 use crate::{
-    execution_state_actor::ExecutionStateActor, resources::ResourceController,
-    system::SystemExecutionStateView, ApplicationDescription, ApplicationId, ExecutionError,
-    ExecutionRuntimeContext, JsVec, MessageContext, OperationContext, ProcessStreamsContext, Query,
-    QueryContext, QueryOutcome, ServiceSyncRuntime, Timestamp, TransactionTracker,
+    execution_state_actor::ExecutionStateActor,
+    resources::ResourceController,
+    system::{SystemExecutionStateView, SystemMessage},
+    transaction_tracker::PreparedCheckpoint,
+    ApplicationDescription, ApplicationId, ExecutionError, ExecutionRuntimeContext, JsVec, Message,
+    MessageContext, OperationContext, OutgoingMessage, ProcessStreamsContext, Query, QueryContext,
+    QueryOutcome, ServiceSyncRuntime, Timestamp, TransactionTracker,
 };
 
 /// An inner view accessing the execution state of a chain, for hashing purposes.
@@ -124,28 +127,24 @@ where
         &mut self,
         maximum_blob_size: u64,
     ) -> Result<Vec<Blob>, ExecutionError> {
-        let mut had_event_block = false;
+        // User event streams are summarized and pruned by the checkpoint itself (see
+        // `ExecutionStateActor`'s checkpoint handler), so they do not block checkpointing.
+        // System event streams (e.g. the epoch streams on the admin chain) are not
+        // summarized, so a chain that published any is still not allowed to checkpoint.
+        let mut had_system_event_block = false;
         self.previous_event_blocks
-            .for_each_index_while(|_| {
-                had_event_block = true;
-                Ok(false)
+            .for_each_index_while(|stream_id| {
+                if matches!(stream_id.application_id, GenericApplicationId::System) {
+                    had_system_event_block = true;
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
             })
             .await?;
         ensure!(
-            !had_event_block,
-            ExecutionError::CheckpointPreconditionFailed("chain has published events")
-        );
-
-        let mut had_message_block = false;
-        self.previous_message_blocks
-            .for_each_index_while(|_| {
-                had_message_block = true;
-                Ok(false)
-            })
-            .await?;
-        ensure!(
-            !had_message_block,
-            ExecutionError::CheckpointPreconditionFailed("chain has sent cross-chain messages")
+            !had_system_event_block,
+            ExecutionError::CheckpointPreconditionFailed("chain has published system events")
         );
 
         let (bytes, _content_hash) = self.inner.dump_content().await?;
@@ -161,16 +160,24 @@ where
             .collect())
     }
 
-    /// Registers the checkpoint blobs (produced by [`Self::prepare_checkpoint`]) with the
-    /// transaction tracker and records the matching [`OracleResponse::Checkpoint`]. The
-    /// oracle response also lists every blob the chain currently references in its
-    /// `used_blobs` set: a bootstrapping node restores those references from the dump but
-    /// must independently ensure each blob's content is present in shared storage.
+    /// Registers the pre-block-computed checkpoint inputs (from
+    /// [`Self::prepare_checkpoint`]) with the transaction tracker. This: publishes the
+    /// execution-state blobs, records the matching [`OracleResponse::Checkpoint`] (which
+    /// also lists every blob the chain currently references in `used_blobs` so a
+    /// bootstrapping node can fetch them from shared storage), and emits a
+    /// [`SystemMessage::CheckpointAck`] to each origin chain so the origin can later trim
+    /// its outbox dump of already-delivered messages.
     pub async fn apply_checkpoint(
-        &self,
-        blobs: Vec<Blob>,
+        &mut self,
+        prepared: PreparedCheckpoint,
         txn_tracker: &mut TransactionTracker,
     ) -> Result<(), ExecutionError> {
+        let PreparedCheckpoint {
+            blobs,
+            origin_cursors,
+            inbox_cursors,
+            outbox_block_hashes,
+        } = prepared;
         let execution_state_blobs = blobs.iter().map(|blob| blob.id().hash).collect();
         let used_blobs = self.system.used_blobs.indices().await?;
         for blob in blobs {
@@ -179,23 +186,22 @@ where
         txn_tracker.replay_oracle_response(OracleResponse::Checkpoint {
             execution_state_blobs,
             used_blobs,
+            outbox_block_hashes,
+            inbox_cursors,
         })?;
+        for (origin, latest_received_cursor) in origin_cursors {
+            txn_tracker.add_outgoing_message(OutgoingMessage::new(
+                origin,
+                Message::System(SystemMessage::CheckpointAck {
+                    latest_received_cursor,
+                }),
+            ));
+        }
+        // We just emitted notifications for everyone in `pending_checkpoint_ack_targets`;
+        // reset the set so the next own checkpoint only fires for origins that send
+        // us a fresh non-`Checkpoint` message in the meantime.
+        self.system.pending_checkpoint_ack_targets.clear();
         Ok(())
-    }
-
-    /// Convenience helper that combines [`Self::prepare_checkpoint`] and
-    /// [`Self::apply_checkpoint`] in a single call. Production block-execution code
-    /// invokes the two halves separately so the dump runs before any block-level state
-    /// mutation; this helper is only used by unit tests that exercise the operation in
-    /// isolation.
-    #[cfg(test)]
-    pub async fn execute_checkpoint(
-        &mut self,
-        maximum_blob_size: u64,
-        txn_tracker: &mut TransactionTracker,
-    ) -> Result<(), ExecutionError> {
-        let blobs = self.prepare_checkpoint(maximum_blob_size).await?;
-        self.apply_checkpoint(blobs, txn_tracker).await
     }
 
     /// Replaces the persisted execution state with the content of a checkpoint blob,
@@ -306,6 +312,7 @@ pub enum UserAction {
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
     ProcessStreams(ProcessStreamsContext, Vec<StreamUpdate>),
+    SummarizeEvents(ProcessStreamsContext, Vec<StreamUpdate>),
 }
 
 impl UserAction {
@@ -314,6 +321,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.authenticated_owner,
             UserAction::Operation(context, _) => context.authenticated_owner,
             UserAction::ProcessStreams(_, _) => None,
+            UserAction::SummarizeEvents(_, _) => None,
             UserAction::Message(context, _) => context.authenticated_owner,
         }
     }
@@ -323,6 +331,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
             UserAction::ProcessStreams(context, _) => context.height,
+            UserAction::SummarizeEvents(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
         }
     }
@@ -332,6 +341,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,
             UserAction::ProcessStreams(context, _) => context.round,
+            UserAction::SummarizeEvents(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
         }
     }
@@ -341,6 +351,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.timestamp,
             UserAction::Operation(context, _) => context.timestamp,
             UserAction::ProcessStreams(context, _) => context.timestamp,
+            UserAction::SummarizeEvents(context, _) => context.timestamp,
             UserAction::Message(context, _) => context.timestamp,
         }
     }

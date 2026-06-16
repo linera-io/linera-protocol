@@ -9,7 +9,8 @@ use std::{
 
 use custom_debug_derive::Debug;
 use linera_base::{
-    data_types::{Blob, BlobContent, Event, OracleResponse, StreamUpdate, Timestamp},
+    crypto::CryptoHash,
+    data_types::{Blob, BlobContent, Cursor, Event, OracleResponse, StreamUpdate, Timestamp},
     ensure,
     identifiers::{ApplicationId, BlobId, ChainId, StreamId},
 };
@@ -56,14 +57,36 @@ pub struct TransactionTracker {
     blobs_published: BTreeSet<BlobId>,
     /// Blob IDs created or published by free apps (fees waived).
     free_blob_ids: BTreeSet<BlobId>,
-    /// Checkpoint blobs computed pre-block by `ExecutionStateView::prepare_checkpoint`,
-    /// stashed here so that the matching `SystemOperation::Checkpoint` operation handler
-    /// can publish them without re-dumping mid-block (which would fail because the inner
-    /// view has by then accumulated pending changes from block-level setup). The dump is
-    /// chunked at the current epoch's `maximum_blob_size`, so even a large state respects
-    /// the per-blob size limit.
+    /// Inputs computed pre-block by the checkpoint pre-hook, stashed here so that the
+    /// matching `SystemOperation::Checkpoint` operation handler can use them when it
+    /// runs. The state dump and the inbox snapshot must both be captured before any
+    /// block-level mutation taints the chain state, so we collect them up front and
+    /// hand them off through this tracker.
     #[debug(skip_if = Option::is_none)]
-    prepared_checkpoint_blobs: Option<Vec<Blob>>,
+    prepared_checkpoint: Option<PreparedCheckpoint>,
+}
+
+/// Pre-block-computed inputs for a `SystemOperation::Checkpoint` transaction.
+#[derive(Clone, Debug)]
+pub struct PreparedCheckpoint {
+    /// The execution-state dump split into blobs at the current epoch's
+    /// `maximum_blob_size`.
+    pub blobs: Vec<Blob>,
+    /// For each chain we've received messages from since our last own checkpoint, the
+    /// position past the last bundle we've consumed. Used to emit a
+    /// `SystemMessage::CheckpointAck` to each origin so the origin can later trim its
+    /// outbox dump. This is the delta over the previous checkpoint, filtered by
+    /// `pending_checkpoint_ack_targets` to break the notification ping-pong.
+    pub origin_cursors: Vec<(ChainId, Cursor)>,
+    /// For *every* inbox with a non-default `next_cursor_to_remove`, the cursor itself.
+    /// A bootstrapping node uses these to seed each inbox's `restored_cursor`, so a
+    /// sender that hasn't seen the matching `CheckpointAck` yet and re-pushes an
+    /// already-consumed bundle is a silent no-op rather than a duplicate consumption.
+    pub inbox_cursors: Vec<(ChainId, Cursor)>,
+    /// Hashes of every block on this chain that the chain's outboxes still reference,
+    /// taken before the block runs. Included in the oracle response so the checkpoint
+    /// block's certificate transitively certifies those older blocks.
+    pub outbox_block_hashes: Vec<CryptoHash>,
 }
 
 /// The [`TransactionTracker`] contents after a transaction has finished.
@@ -118,16 +141,16 @@ impl TransactionTracker {
         self
     }
 
-    /// Stashes pre-block-computed checkpoint blobs on the tracker. The matching
+    /// Stashes pre-block-computed checkpoint inputs on the tracker. The matching
     /// `SystemOperation::Checkpoint` operation handler will retrieve them via
-    /// [`Self::take_prepared_checkpoint_blobs`] when the operation runs.
-    pub fn set_prepared_checkpoint_blobs(&mut self, blobs: Vec<Blob>) {
-        self.prepared_checkpoint_blobs = Some(blobs);
+    /// [`Self::take_prepared_checkpoint`] when the operation runs.
+    pub fn set_prepared_checkpoint(&mut self, prepared: PreparedCheckpoint) {
+        self.prepared_checkpoint = Some(prepared);
     }
 
-    /// Takes the pre-block-computed checkpoint blobs, if any were stashed.
-    pub fn take_prepared_checkpoint_blobs(&mut self) -> Option<Vec<Blob>> {
-        self.prepared_checkpoint_blobs.take()
+    /// Takes the pre-block-computed checkpoint inputs, if any were stashed.
+    pub fn take_prepared_checkpoint(&mut self) -> Option<PreparedCheckpoint> {
+        self.prepared_checkpoint.take()
     }
 
     pub fn local_time(&self) -> Timestamp {
@@ -328,7 +351,7 @@ impl TransactionTracker {
             streams_to_process,
             blobs_published,
             free_blob_ids,
-            prepared_checkpoint_blobs: _,
+            prepared_checkpoint: _,
         } = self;
         ensure!(
             streams_to_process.is_empty(),

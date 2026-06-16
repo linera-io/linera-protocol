@@ -17,7 +17,8 @@ use linera_base::{
         ValidatorPublicKey, ValidatorSecretKey, ValidatorSignature,
     },
     data_types::{
-        Amount, Blob, BlockHeight, Epoch, Event, MessagePolicy, OracleResponse, Round, Timestamp,
+        Amount, Blob, BlockHeight, Cursor, Epoch, Event, MessagePolicy, OracleResponse, Round,
+        Timestamp,
     },
     doc_scalar, ensure, hex, hex_debug,
     identifiers::{
@@ -617,6 +618,15 @@ impl LiteVote {
 }
 
 impl MessageBundle {
+    /// Returns the logical position of this bundle in its sender chain's outgoing
+    /// stream.
+    pub fn cursor(&self) -> Cursor {
+        Cursor {
+            height: self.height,
+            index: self.transaction_index,
+        }
+    }
+
     /// Returns a rough estimate of the serialized size in bytes, for chunking.
     pub fn estimated_size(&self) -> usize {
         // Fixed overhead: height (8) + timestamp (8) + hash (32) + tx_index (4) + vec len (8)

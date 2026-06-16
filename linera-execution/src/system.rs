@@ -6,7 +6,10 @@
 #[path = "./unit_tests/system_tests.rs"]
 mod tests;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use allocative::Allocative;
 use custom_debug_derive::Debug;
@@ -14,7 +17,8 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, ChainOrigin, Epoch, InitialChainConfig, OracleResponse, Timestamp,
+        ChainDescription, ChainOrigin, Cursor, Epoch, InitialChainConfig, OracleResponse,
+        Timestamp,
     },
     ensure, hex_debug,
     identifiers::{
@@ -105,6 +109,30 @@ pub struct SystemExecutionStateView<C> {
     pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
+    /// For each chain that previously received messages from this one and has since
+    /// notified us via [`SystemMessage::CheckpointAck`], records the cursor past the last
+    /// message we sent that the recipient finalized, together with the hash of the
+    /// recipient's block carrying the notification.
+    pub finalized_sent_messages: MapView<C, ChainId, (Cursor, CryptoHash)>,
+    /// For each recipient chain, the cursors `(block_height, transaction_index)` of
+    /// our outgoing bundles that haven't yet been acknowledged via
+    /// [`SystemMessage::CheckpointAck`]. Maintained on-chain (as opposed to the local
+    /// off-chain outbox in chain state) so it is identical across validators and can
+    /// feed the checkpoint oracle response's `outbox_block_hashes` (the unique heights
+    /// across all cursors). We store cursors rather than heights so that an ack at a
+    /// finer-grained cursor than the last bundle in a block can fully evict the entry
+    /// — important for high-fanout chains whose recipients only interact once.
+    ///
+    /// Excludes bundles whose only messages to a given recipient were
+    /// `SystemMessage::CheckpointAck`: those don't trigger a return notification
+    /// from the recipient, so tracking them would accumulate forever.
+    pub unfinalized_message_blocks: MapView<C, ChainId, BTreeSet<Cursor>>,
+    /// Chains from which we've received at least one non-`CheckpointAck` message
+    /// since our last `SystemOperation::Checkpoint`. Determines whom to notify with a
+    /// `SystemMessage::CheckpointAck` at the next checkpoint operation. Excluding
+    /// `CheckpointAck` messages here is what breaks the otherwise-perpetual
+    /// notification ping-pong between two chains that ever exchanged a real message.
+    pub pending_checkpoint_ack_targets: SetView<C, ChainId>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -129,6 +157,15 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             used_blobs: self.used_blobs.with_context(ctx.clone()).await,
             event_subscriptions: self.event_subscriptions.with_context(ctx.clone()).await,
             stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
+            finalized_sent_messages: self.finalized_sent_messages.with_context(ctx.clone()).await,
+            unfinalized_message_blocks: self
+                .unfinalized_message_blocks
+                .with_context(ctx.clone())
+                .await,
+            pending_checkpoint_ack_targets: self
+                .pending_checkpoint_ack_targets
+                .with_context(ctx.clone())
+                .await,
         }
     }
 }
@@ -303,6 +340,13 @@ pub enum SystemMessage {
         amount: Amount,
         recipient: Account,
     },
+    /// Sent by a chain that just executed `SystemOperation::Checkpoint` to each chain
+    /// it has received at least one non-`CheckpointAck` message from since its
+    /// previous checkpoint. `latest_received_cursor` is the position past the last
+    /// bundle from the recipient that the sender has consumed. The recipient records
+    /// this in `finalized_sent_messages` so that, when it later checkpoints its own
+    /// state, it can drop already-delivered outgoing messages from its outbox dump.
+    CheckpointAck { latest_received_cursor: Cursor },
 }
 
 /// A query to the system state.
@@ -849,6 +893,30 @@ where
                     .await?
                 {
                     outcome.push(message);
+                }
+            }
+            CheckpointAck {
+                latest_received_cursor,
+            } => {
+                self.finalized_sent_messages.insert(
+                    &context.origin,
+                    (latest_received_cursor, context.origin_certificate_hash),
+                )?;
+                // Drop every cursor the recipient has consumed. `split_off(&k)` on a
+                // `BTreeSet<Cursor>` returns the entries `>= k`, so this trims the
+                // strict prefix below `latest_received_cursor` and leaves any
+                // still-unfinalized bundles in place. A recipient that has consumed
+                // everything we ever sent ends up with an empty set and is evicted.
+                if let Some(mut cursors) =
+                    self.unfinalized_message_blocks.get(&context.origin).await?
+                {
+                    let retained = cursors.split_off(&latest_received_cursor);
+                    if retained.is_empty() {
+                        self.unfinalized_message_blocks.remove(&context.origin)?;
+                    } else {
+                        self.unfinalized_message_blocks
+                            .insert(&context.origin, retained)?;
+                    }
                 }
             }
         }

@@ -13,44 +13,34 @@ use alloy::{
     primitives::{Address, U256},
     providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
-    sol,
 };
 use anyhow::Context as _;
 use futures::StreamExt as _;
 use linera_base::{
     crypto::InMemorySigner,
     data_types::{Bytecode, U128},
-    identifiers::AccountOwner,
+    identifiers::{Account, AccountOwner},
     vm::VmRuntime,
 };
+use linera_bridge::{
+    abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
+    contracts::IERC20,
+    relay::evm::EvmClient,
+};
 use linera_bridge_e2e::{
-    compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok, light_client_address,
-    start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
+    burn_positions_by_tx, compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok,
+    light_client_address, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{environment::wallet::Memory, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_base::identifiers::Account;
+use linera_storage::DbStorage;
+use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use wrapped_fungible::{
     InitialState, WrappedFungibleOperation, WrappedFungibleTokenAbi, WrappedParameters,
 };
-use linera_storage::{DbStorage, StorageCacheConfig};
-use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-    }
-}
-
-sol! {
-    #[sol(rpc)]
-    interface IFungibleBridge {
-        function addBlock(bytes calldata data) external;
-    }
-}
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
@@ -76,14 +66,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &config,
         "bridge-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
 
@@ -114,17 +97,26 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
-    // Collect all chain A certificate bytes to submit to the bridge in sequential order.
-    let mut chain_a_cert_bytes: Vec<Vec<u8>> = Vec::new();
+    // ── 2b. Deploy LineraToken on Anvil ──
+    // Done before creating the Linera apps so its address can be baked into both the
+    // evm-bridge `token_address` and the wrapped-fungible `evm_token_address`.
+    tracing::info!("Deploying LineraToken via forge script...");
+    let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
+    tracing::info!(%erc20_addr, "LineraToken deployed");
 
-    // ── 3. Publish and create wrapped-fungible app on chain A ──
-    tracing::info!("Publishing wrapped-fungible module...");
+    // ── 3. Publish and create the wrapped-fungible app, then evm-bridge, on chain A ──
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(3)
         .context("manifest dir has fewer than 3 ancestors")?
         .to_path_buf();
+    let evm_bridge_wasm_dir =
+        repo_root.join("linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release");
     let wasm_dir = repo_root.join("examples/target/wasm32-unknown-unknown/release");
+
+    // 3a. Publish and create the wrapped-fungible app first. The evm-bridge app takes the
+    // wrapped-fungible app id as a creation parameter, so it must exist beforehand.
+    tracing::info!("Publishing wrapped-fungible module...");
     let contract_bytecode =
         Bytecode::load_from_file(wasm_dir.join("wrapped_fungible_contract.wasm")).await?;
     let service_bytecode =
@@ -135,30 +127,22 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("publish module committed");
     tracing::info!(height=?cert.inner().block().header.height, "Module published");
-    chain_a_cert_bytes.push(bcs::to_bytes(&cert)?);
 
     cc_a.synchronize_from_validators().await?;
-    let (inbox_certs, _) = cc_a.process_inbox().await?;
-    for c in &inbox_certs {
-        chain_a_cert_bytes.push(bcs::to_bytes(c)?);
-    }
+    cc_a.process_inbox().await?;
 
     tracing::info!("Creating wrapped-fungible application...");
     let params = WrappedParameters {
         ticker_symbol: "TEST".to_string(),
         decimals: 18,
-        minter: Some(owner_a),
-        mint_chain_id: Some(chain_a),
-        evm_token_address: [0u8; 20],
+        mint_chain_id: chain_a,
+        evm_token_address: erc20_addr.0 .0,
         evm_source_chain_id: 31337,
-        // This test doesn't deploy the evm-bridge Linera app (only the Solidity side),
-        // so bridge_app_id is unused. Mint is never called in this test.
-        bridge_app_id: None,
     };
     let init_state = InitialState {
         accounts: BTreeMap::from([(owner_a, U128(1000u128 * 10u128.pow(18)))]),
     };
-    let (app_id, create_cert): (
+    let (app_id, _create_cert): (
         linera_base::identifiers::ApplicationId<WrappedFungibleTokenAbi>,
         _,
     ) = cc_a
@@ -172,7 +156,56 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .expect("create application committed");
     let app_id = app_id.forget_abi();
     tracing::info!(%app_id, "Application created");
-    chain_a_cert_bytes.push(bcs::to_bytes(&create_cert)?);
+
+    // 3b. Publish and create the evm-bridge app, pointing it at the wrapped-fungible app
+    // via `fungible_app_id`. It drives the burn: a user submits `BridgeOperation::Burn`
+    // here, and the app emits the `BurnEvent` that FungibleBridge matches against its
+    // `bridgeApplicationId`.
+    tracing::info!("Publishing evm-bridge module...");
+    let eb_contract =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm")).await?;
+    let eb_service =
+        Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_service.wasm")).await?;
+    let (eb_module_id, eb_publish_cert) = cc_a
+        .publish_module(eb_contract, eb_service, VmRuntime::Wasm, None)
+        .await?
+        .expect("publish evm-bridge module committed");
+    tracing::info!(height=?eb_publish_cert.inner().block().header.height, "evm-bridge module published");
+    cc_a.synchronize_from_validators().await?;
+    cc_a.process_inbox().await?;
+
+    tracing::info!("Creating evm-bridge application...");
+    let (bridge_app_id, _eb_create_cert) = cc_a
+        .create_application_untyped(
+            eb_module_id,
+            serde_json::to_vec(&BridgeParameters {
+                source_chain_id: 31337,
+                token_address: erc20_addr.0 .0,
+                bridge_chain_id: chain_a,
+                fungible_app_id: app_id,
+            })?,
+            serde_json::to_vec(&BridgeInstantiationArgument {
+                rpc_endpoint: String::new(),
+            })?,
+            vec![],
+        )
+        .await?
+        .expect("create evm-bridge app committed");
+    tracing::info!(%bridge_app_id, "evm-bridge app created");
+
+    // 3c. Register the evm-bridge app on the wrapped-fungible app so the bridge can
+    // drive the burn. This must happen before any Burn operation is submitted.
+    tracing::info!("Registering evm-bridge app in wrapped-fungible...");
+    let register_bytes = bcs::to_bytes(&WrappedFungibleOperation::RegisterAuthorizedCaller {
+        app_id: bridge_app_id,
+    })?;
+    let register_op = Operation::User {
+        application_id: app_id,
+        bytes: register_bytes,
+    };
+    cc_a.execute_operations(vec![register_op], vec![])
+        .await?
+        .expect("register bridge app committed");
 
     // ── 4. Claim chain B (user chain) from faucet and subscribe to notifications ──
     tracing::info!("Claiming chain B from faucet...");
@@ -187,13 +220,12 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let (listener, _abort_handle, _) = cc_b.listen().await?;
     tokio::spawn(listener);
 
-    // ── 5. Deploy LineraToken on Anvil ──
-    tracing::info!("Deploying LineraToken via forge script...");
-    let erc20_addr = deploy_linera_token(&compose, project_name, &compose_file).await?;
-    tracing::info!(%erc20_addr, "LineraToken deployed");
-
     // ── 6. Deploy FungibleBridge on Anvil ──
+    // The wrapped-fungible app id (`app_id_bytes32`) is still required as the deposit
+    // target; the new `bridge_app_id_bytes32` is what the bridge matches BurnEvents
+    // against (burns are now driven and emitted by the evm-bridge app).
     let app_id_bytes32 = format!("0x{}", app_id.application_description_hash);
+    let bridge_app_id_bytes32 = format!("0x{}", bridge_app_id.application_description_hash);
     let chain_a_bytes32 = format!("0x{chain_a}");
 
     tracing::info!("Deploying FungibleBridge via forge script...");
@@ -205,6 +237,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         &chain_a_bytes32,
         erc20_addr,
         &app_id_bytes32,
+        &bridge_app_id_bytes32,
     )
     .await?;
     tracing::info!(%bridge_addr, "FungibleBridge deployed");
@@ -255,7 +288,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         recipients=?transfer_block.recipients(),
         "Transfer block submitted"
     );
-    chain_a_cert_bytes.push(bcs::to_bytes(&transfer_cert)?);
 
     // ── 9. Wait for incoming bundle notification, then process inbox on chain B ──
     tracing::info!("Waiting for NewIncomingBundle notification on chain B...");
@@ -279,56 +311,65 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         "process_inbox should produce at least one certificate"
     );
 
-    // ── 10. Withdraw: owner_b transfers tokens from chain B to evm_recipient on chain A ──
-    tracing::info!("Withdrawing tokens from chain B to evm_recipient on chain A...");
-    let withdraw_bytes = bcs::to_bytes(&WrappedFungibleOperation::Transfer {
-        owner: owner_b,
-        amount: U128(100u128 * 10u128.pow(18)),
-        target_account: Account {
-            chain_id: chain_a,
-            owner: receiver,
-        },
-    })?;
-    let withdraw_op = Operation::User {
-        application_id: app_id,
-        bytes: withdraw_bytes,
+    // ── 10. Burn: owner_b submits a `BridgeOperation::Burn` to the evm-bridge app on
+    // chain B. The bridge moves the tokens into its escrow on the bridge chain
+    // (chain A) and burns them, emitting the `BurnEvent` there. ──
+    let evm_target: [u8; 20] = match receiver {
+        AccountOwner::Address20(bytes) => bytes,
+        other => anyhow::bail!("expected Address20 receiver, got {other:?}"),
     };
-    cc_b.execute_operations(vec![withdraw_op], vec![])
-        .await?
-        .expect("withdrawal committed");
 
-    // ── 11. Process inbox on chain A to receive the withdrawal ──
-    tracing::info!("Processing inbox on chain A...");
+    tracing::info!("Submitting Burn operation to evm-bridge app on chain B...");
+    let burn_bytes = bcs::to_bytes(&BridgeOperation::Burn {
+        amount: U128(100u128 * 10u128.pow(18)),
+        evm_target,
+    })?;
+    let burn_op = Operation::User {
+        application_id: bridge_app_id,
+        bytes: burn_bytes,
+    };
+    cc_b.execute_operations(vec![burn_op], vec![])
+        .await?
+        .expect("burn operation committed");
+
+    // ── 11. Process inbox on chain A so the Credit+Burn bundle lands and the
+    // evm-bridge app emits the `BurnEvent` in a chain A block. Collect those certs
+    // so the BurnEvent block can be settled on FungibleBridge. ──
+    tracing::info!("Processing inbox on chain A to drive the burn...");
     cc_a.synchronize_from_validators().await?;
     let (inbox_a_certs, _) = cc_a.process_inbox().await?;
-    for c in &inbox_a_certs {
-        chain_a_cert_bytes.push(bcs::to_bytes(c)?);
-    }
 
-    // ── 12. Submit all chain A blocks to FungibleBridge sequentially ──
-    // The inbox processing in step 11 auto-burned the tokens and emitted a
-    // BurnEvent, so no explicit Burn operation is needed.
-    tracing::info!(
-        count = chain_a_cert_bytes.len(),
-        "Submitting all chain A blocks to bridge"
-    );
-
+    // ── 12. Settle the burn on FungibleBridge via the relayer's production path:
+    // `registerBlock` the BurnEvent block, then `processBurns` its burn events. The
+    // evm-bridge app emitted the `BurnEvent` (matched against `bridgeApplicationId`)
+    // in one of the chain-A blocks collected above; the other lifecycle blocks carry
+    // no burns and need no on-chain submission. ──
     let rpc_url = "http://localhost:8545".parse()?;
     let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse()?;
+    let relayer_addr = evm_signer.address();
     let evm_wallet = EthereumWallet::from(evm_signer);
     let provider = ProviderBuilder::new()
         .wallet(evm_wallet)
         .connect_http(rpc_url);
 
-    let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-    for (i, cert_bytes) in chain_a_cert_bytes.iter().enumerate() {
-        let tx = bridge_contract
-            .addBlock(cert_bytes.clone().into())
-            .send()
-            .await?;
-        let receipt = tx.get_receipt().await?;
-        tracing::info!(i, tx=?receipt.transaction_hash, "addBlock transaction submitted");
+    let evm_client = EvmClient::new(provider.clone(), bridge_addr, relayer_addr, None);
+    let mut settled_burns = 0usize;
+    for cert in &inbox_a_certs {
+        let by_tx = burn_positions_by_tx(cert, bridge_app_id);
+        if by_tx.is_empty() {
+            continue;
+        }
+        evm_client.register_block(cert).await?;
+        for (tx_index, positions) in by_tx {
+            evm_client
+                .process_burns(cert, tx_index, &positions)
+                .await
+                .with_context(|| format!("processBurns for tx {tx_index}"))?;
+            settled_burns += positions.len();
+        }
     }
+    tracing::info!(settled_burns, "Burns settled via registerBlock + processBurns");
+    assert!(settled_burns > 0, "expected at least one BurnEvent to settle");
 
     // ── 14. Verify ERC20 balance ──
     let evm_recipient_addr: Address = format!("0x{evm_recipient}").parse()?;

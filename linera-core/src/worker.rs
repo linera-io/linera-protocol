@@ -64,12 +64,10 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle,
-        state::{send_result, ChainWorkerState},
-        BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult, DeliveryNotifier,
-        ProcessConfirmedBlockMode,
+        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
+        DeliveryNotifier, ProcessConfirmedBlockMode,
     },
-    client::ListeningMode,
+    client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     notifier::Notifier,
 };
@@ -397,6 +395,14 @@ pub enum WorkerError {
     FastBlockUsingOracles,
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
+    /// Variant raised when the chain references these block hashes via a
+    /// verified-checkpoint trust mark (`pre_checkpoint_block_trust`) but the
+    /// actual content isn't in storage yet. The caller is expected to upload
+    /// each missing block via `handle_confirmed_certificate`; the trust-mark
+    /// accept path verifies the cert against its own (possibly revoked)
+    /// epoch's committee and writes it through.
+    #[error("Blocks not found: {0:?}")]
+    BlocksNotFound(Vec<CryptoHash>),
     #[error("Block hash at height {height} for chain {chain_id} not found")]
     BlockHashNotFound {
         height: BlockHeight,
@@ -442,6 +448,7 @@ impl WorkerError {
             | WorkerError::InvalidLiteCertificate
             | WorkerError::FastBlockUsingOracles
             | WorkerError::BlobsNotFound(_)
+            | WorkerError::BlocksNotFound(_)
             | WorkerError::InvalidBlockProposal(_)
             | WorkerError::UnexpectedBlob
             | WorkerError::TooManyPublishedBlobs(_)
@@ -477,7 +484,7 @@ impl WorkerError {
 
     /// Returns `true` if this error indicates that the chain worker's in-memory
     /// state may be inconsistent and must be evicted from the cache.
-    fn must_reload_view(&self) -> bool {
+    pub(crate) fn must_reload_view(&self) -> bool {
         matches!(
             self,
             WorkerError::PoisonedWorker
@@ -491,7 +498,7 @@ impl WorkerError {
     /// Returns `true` if this error indicates that the chain's persisted state is
     /// internally inconsistent, so the worker should consider resetting and
     /// re-executing it from storage.
-    fn indicates_corrupted_chain_state(&self) -> bool {
+    pub(crate) fn indicates_corrupted_chain_state(&self) -> bool {
         matches!(
             self,
             WorkerError::ChainError(chain_error)
@@ -571,8 +578,9 @@ pub(crate) enum BatchRequest {
 ///
 /// Wrapped in `Shared<BatchFuture>` so that all tasks waiting for
 /// cross-chain operations on the same chain can cooperatively poll a
-/// single driver. The driver loops: wait for an item from the request channel, acquire the
-/// write lock, drain the channel, process all requests in one batch, repeat.
+/// single driver. The driver loops: wait for an item from the request channel,
+/// drain the channel, then process all requests in one batch through
+/// [`WorkerState::chain_write`] (one write lock, one save), repeat.
 #[cfg(not(web))]
 type BatchFuture = pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 #[cfg(web)]
@@ -589,7 +597,8 @@ struct ChainBatchRequestProcessor {
 
 impl ChainBatchRequestProcessor {
     fn create<StorageClient>(
-        state: ChainWorkerArc<StorageClient>,
+        worker: WorkerState<StorageClient>,
+        chain_id: ChainId,
         batch_size_limit: usize,
     ) -> (ChainBatchRequestProcessor, Shared<BatchFuture>)
     where
@@ -599,31 +608,31 @@ impl ChainBatchRequestProcessor {
         let future: BatchFuture = Box::pin(async move {
             while let Some(first) = receiver.recv().await {
                 let mut requests = vec![first];
-                match handle::write_lock(&state).await {
-                    Ok(mut guard) => {
-                        while requests.len() < batch_size_limit {
-                            match receiver.try_recv() {
-                                Ok(request) => requests.push(request),
-                                Err(_) => break,
-                            }
-                        }
-                        #[cfg(with_metrics)]
-                        metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
+                while requests.len() < batch_size_limit {
+                    match receiver.try_recv() {
+                        Ok(request) => requests.push(request),
+                        Err(_) => break,
+                    }
+                }
+                #[cfg(with_metrics)]
+                metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
+                // Process the batch through `chain_write` so it inherits the same
+                // cancellation safety (the write and `save` run on a detached task)
+                // and recovery (poisoned-worker eviction / corrupted-state reset) as
+                // every other write path, rather than duplicating that logic here.
+                // `process_batch` reports a result to each request's sender on every
+                // internal path; an `Err` here means `chain_write` failed *before*
+                // running the closure — a worker load error, or an already-poisoned
+                // worker that it has now evicted. In that case the request senders are
+                // dropped, which `enqueue_and_drive` surfaces to callers as
+                // `PoisonedWorker`.
+                if let Err(error) = worker
+                    .chain_write(chain_id, move |mut guard| async move {
                         guard.process_batch(requests).await
-                    }
-                    Err(error) => {
-                        tracing::error!(%error, "failed to obtain write lock");
-                        for request in requests {
-                            match request {
-                                BatchRequest::Update { result_sender, .. } => {
-                                    send_result(result_sender, Err(WorkerError::PoisonedWorker));
-                                }
-                                BatchRequest::Confirm { result_sender, .. } => {
-                                    send_result(result_sender, Err(WorkerError::PoisonedWorker));
-                                }
-                            }
-                        }
-                    }
+                    })
+                    .await
+                {
+                    tracing::warn!(%chain_id, %error, "cross-chain batch could not be processed");
                 }
             }
         });
@@ -680,7 +689,7 @@ pub struct WorkerState<StorageClient: Storage> {
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
     /// Chains tracked by a worker, along with their listening modes.
-    chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    pub(crate) chain_modes: Option<Arc<RwLock<ChainModes>>>,
     /// One-shot channels to notify callers when messages of a particular chain have been
     /// delivered.
     delivery_notifiers: Arc<Mutex<DeliveryNotifiers>>,
@@ -851,7 +860,7 @@ where
     pub fn new(
         storage: StorageClient,
         chain_worker_config: ChainWorkerConfig,
-        chain_modes: Option<Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+        chain_modes: Option<Arc<RwLock<ChainModes>>>,
     ) -> Self {
         let chain_workers = Arc::new(papaya::HashMap::new());
         start_sweep(&chain_workers, &chain_worker_config);
@@ -861,6 +870,7 @@ where
             storage,
             chain_worker_config,
             block_cache: Arc::new(ValueCache::new(
+                "worker_block",
                 block_cache_size,
                 DEFAULT_CLEANUP_INTERVAL_SECS,
             )),
@@ -1098,9 +1108,9 @@ where
                 return Ok((batch_processor.sender.clone(), future));
             }
         }
-        let state = self.get_or_create_chain_worker(chain_id).await?;
         let (new_request_processor, new_future) = ChainBatchRequestProcessor::create(
-            state,
+            self.clone(),
+            chain_id,
             self.chain_worker_config.cross_chain_batch_size_limit,
         );
         match self
@@ -1438,7 +1448,12 @@ where
             // return it immediately without driving the batch future further.
             match future::select(pin::pin!(&mut receiver), future).await {
                 Either::Left((result, _)) => {
-                    return result.expect("batch result sender dropped");
+                    // `Ok(inner)` is the normal reply. `Err(Canceled)` means the
+                    // sender was dropped without one — `chain_write` failed before
+                    // `process_batch` ran (e.g. an already-poisoned worker, which it
+                    // has now evicted). Surface it as `PoisonedWorker`; the next
+                    // attempt loads a fresh worker.
+                    return result.unwrap_or(Err(WorkerError::PoisonedWorker));
                 }
                 Either::Right(((), _)) => match receiver.try_recv() {
                     Ok(result) => return result,
@@ -1491,6 +1506,18 @@ where
                 bundles,
             )
             .await
+    }
+
+    /// Test helper that runs `ChainWorkerState::reset_and_reexecute_chain` for the given
+    /// chain (the same routine the corruption-recovery path invokes).
+    #[cfg(with_testing)]
+    pub async fn reset_and_reexecute_chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let mut guard = handle::write_lock(&state).await?;
+        guard.reset_and_reexecute_chain().await
     }
 
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
@@ -1959,8 +1986,21 @@ where
         &self,
         chain_id: ChainId,
     ) -> Result<NetworkActions, WorkerError> {
-        self.chain_read(chain_id, |guard| async move {
-            guard.cross_chain_network_actions().await
+        // Fast path: when the outbox index is already reconciled to the current tracked set,
+        // the network actions are built from a read-only view, so a shared lock with no save
+        // suffices — avoiding the write lock, task spawn and `save()` of the slow path.
+        if let Some(actions) = self
+            .chain_read(chain_id, |guard| async move {
+                guard.cross_chain_network_actions_if_reconciled().await
+            })
+            .await?
+        {
+            return Ok(actions);
+        }
+        // Slow path (first load after migration, or the tracked set changed): reconcile and
+        // persist the index under an exclusive lock before building.
+        self.chain_write(chain_id, |mut guard| async move {
+            guard.reconcile_and_cross_chain_network_actions().await
         })
         .await
     }

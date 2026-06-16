@@ -279,6 +279,9 @@ pub enum NodeError {
     #[error("Blobs not found: {0:?}")]
     BlobsNotFound(Vec<BlobId>),
 
+    #[error("Blocks not found: {0:?}")]
+    BlocksNotFound(Vec<CryptoHash>),
+
     #[error("Events not found: {0:?}")]
     EventsNotFound(Vec<EventId>),
 
@@ -368,6 +371,7 @@ impl NodeError {
             // Expected: validators return these during normal operation and the client
             // handles them automatically by supplying missing data and retrying.
             NodeError::BlobsNotFound(_)
+            | NodeError::BlocksNotFound(_)
             | NodeError::EventsNotFound(_)
             | NodeError::MissingCrossChainUpdate { .. }
             | NodeError::WrongRound(_)
@@ -496,6 +500,7 @@ impl From<WorkerError> for NodeError {
             WorkerError::ChainError(error) => (*error).into(),
             WorkerError::MissingCertificateValue => Self::MissingCertificateValue,
             WorkerError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),
+            WorkerError::BlocksNotFound(hashes) => Self::BlocksNotFound(hashes),
             WorkerError::EventsNotFound(event_ids) => Self::EventsNotFound(event_ids),
             WorkerError::UnexpectedBlockHeight {
                 expected_block_height,

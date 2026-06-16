@@ -10,7 +10,7 @@
 use async_graphql::SimpleObject;
 use linera_base::{
     crypto::CryptoHash,
-    data_types::{Amount, ApplicationPermissions},
+    data_types::{Amount, ApplicationPermissions, Cursor},
     hex,
     identifiers::{Account, AccountOwner, ApplicationId, ChainId},
     ownership::{ChainOwnership, TimeoutConfig},
@@ -235,6 +235,8 @@ pub struct SystemMessageMetadata {
     pub credit: Option<CreditMessageMetadata>,
     /// Withdraw message details
     pub withdraw: Option<WithdrawMessageMetadata>,
+    /// CheckpointAck message details
+    pub checkpoint_ack: Option<CheckpointAckMessageMetadata>,
 }
 
 /// Credit message metadata.
@@ -251,6 +253,12 @@ pub struct WithdrawMessageMetadata {
     pub owner: AccountOwner,
     pub amount: Amount,
     pub recipient: Account,
+}
+
+/// CheckpointAck message metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+pub struct CheckpointAckMessageMetadata {
+    pub latest_received_cursor: Cursor,
 }
 
 /// Structured representation of a message for GraphQL.
@@ -454,6 +462,7 @@ impl From<&SystemMessage> for SystemMessageMetadata {
                     source: *source,
                 }),
                 withdraw: None,
+                checkpoint_ack: None,
             },
             SystemMessage::Withdraw {
                 owner,
@@ -466,6 +475,17 @@ impl From<&SystemMessage> for SystemMessageMetadata {
                     owner: *owner,
                     amount: *amount,
                     recipient: *recipient,
+                }),
+                checkpoint_ack: None,
+            },
+            SystemMessage::CheckpointAck {
+                latest_received_cursor,
+            } => SystemMessageMetadata {
+                system_message_type: "CheckpointAck".to_string(),
+                credit: None,
+                withdraw: None,
+                checkpoint_ack: Some(CheckpointAckMessageMetadata {
+                    latest_received_cursor: *latest_received_cursor,
                 }),
             },
         }

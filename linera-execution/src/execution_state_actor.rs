@@ -15,11 +15,12 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     data_types::{
         Amount, ApplicationPermissions, ArithmeticError, BlobContent, BlockHeight, OracleResponse,
-        Timestamp,
+        StreamUpdate, Timestamp,
     },
     ensure, hex_debug, hex_vec_debug, http,
     identifiers::{
-        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, OwnerSpender, StreamId,
+        Account, AccountOwner, BlobId, BlobType, ChainId, EventId, GenericApplicationId,
+        OwnerSpender, StreamId,
     },
     ownership::ChainOwnership,
     time::Instant,
@@ -903,6 +904,63 @@ where
         }
     }
 
+    /// Calls `summarize_events` for every application that has published events to one of its
+    /// streams since the previous checkpoint, then drops those streams' pre-checkpoint anchors.
+    ///
+    /// The work list is exactly the set of user streams currently in `previous_event_blocks`:
+    /// the previous checkpoint cleared the map, so an entry means the stream published a
+    /// summary at (or any event since) the previous checkpoint. Each application may emit a
+    /// fresh summary event; the block-level event-stream bookkeeping then re-anchors that
+    /// stream to the checkpoint height (with no recertification link to the now-unguaranteed
+    /// older blocks, since the map was cleared here). A stream whose application emits nothing
+    /// stays dropped and is effectively closed: it won't be summarized again unless it
+    /// publishes new events.
+    async fn summarize_events_at_checkpoint(
+        &mut self,
+        context: OperationContext,
+    ) -> Result<(), ExecutionError> {
+        let mut updates_by_app = BTreeMap::<ApplicationId, Vec<StreamUpdate>>::new();
+        for stream_id in self.state.previous_event_blocks.indices().await? {
+            let GenericApplicationId::User(application_id) = stream_id.application_id else {
+                continue;
+            };
+            let next_index = self
+                .state
+                .system
+                .stream_event_counts
+                .get(&stream_id)
+                .await?
+                .unwrap_or(0);
+            // A summary is an absolute-state snapshot, so the application is not handed an
+            // incremental range to fold in; `previous_index` is left at 0.
+            updates_by_app
+                .entry(application_id)
+                .or_default()
+                .push(StreamUpdate {
+                    chain_id: context.chain_id,
+                    stream_id,
+                    previous_index: 0,
+                    next_index,
+                });
+        }
+
+        // Drop every pre-checkpoint anchor. Only user streams are present, since
+        // `prepare_checkpoint` rejects chains that published system events.
+        self.state.previous_event_blocks.clear();
+
+        let process_context = ProcessStreamsContext::from(context);
+        for (application_id, updates) in updates_by_app {
+            self.run_user_action(
+                application_id,
+                UserAction::SummarizeEvents(process_context, updates),
+                None,
+                None,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     pub(crate) async fn run_user_action(
         &mut self,
         application_id: ApplicationId,
@@ -985,7 +1043,9 @@ where
         );
         let is_free = matches!(
             &action,
-            UserAction::Message(..) | UserAction::ProcessStreams(..)
+            UserAction::Message(..)
+                | UserAction::ProcessStreams(..)
+                | UserAction::SummarizeEvents(..)
         ) && self
             .resource_controller
             .policy()
@@ -1066,13 +1126,16 @@ where
         match operation {
             Operation::System(op) => match *op {
                 SystemOperation::Checkpoint => {
-                    let blobs = self.txn_tracker.take_prepared_checkpoint_blobs().ok_or(
+                    let prepared = self.txn_tracker.take_prepared_checkpoint().ok_or(
                         ExecutionError::CheckpointPreconditionFailed(
-                            "Checkpoint operation reached the actor without prepared blobs; \
+                            "Checkpoint operation reached the actor without prepared inputs; \
                              the chain-level pre-block hook must run prepare_checkpoint first",
                         ),
                     )?;
-                    self.state.apply_checkpoint(blobs, self.txn_tracker).await?;
+                    self.state
+                        .apply_checkpoint(prepared, self.txn_tracker)
+                        .await?;
+                    self.summarize_events_at_checkpoint(context).await?;
                 }
                 op => {
                     let new_application = self

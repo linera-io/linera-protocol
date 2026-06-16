@@ -7,6 +7,7 @@
 use std::{sync::Arc, time::Duration};
 
 use alloy::providers::Provider;
+use linera_core::environment::Environment;
 use tokio::sync::{Notify, RwLock};
 
 use super::{MonitorState, PendingDeposit};
@@ -18,7 +19,7 @@ use crate::{
 /// Background task that polls EVM for `DepositInitiated` events and checks
 /// Linera for completion. Newly-discovered deposits are written to
 /// `MonitorState` (and SQLite) and the consumer is woken via `notify`.
-pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
+pub async fn evm_scan_loop<E: Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
@@ -53,7 +54,7 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
 /// Drains `MonitorState.deposits` for items ready for retry, processing one at
 /// a time. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
 /// (whichever comes first) when nothing is ready.
-pub(crate) async fn process_pending_deposits<E: linera_core::environment::Environment>(
+pub(crate) async fn process_pending_deposits<E: Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
     proof_client: &crate::proof::gen::HttpDepositProofClient,
@@ -81,7 +82,7 @@ pub(crate) async fn process_pending_deposits<E: linera_core::environment::Enviro
 
         let tx_hash = pending.tx_hash;
         tracing::info!(%tx_hash, "Processing pending deposit...");
-        match proof_client.generate_deposit_proof(tx_hash).await {
+        let succeeded = match proof_client.generate_deposit_proof(tx_hash).await {
             Ok(proof) => {
                 // Persist raw BCS operation bytes so deposits can be replayed without the relayer.
                 if let Some(db) = monitor.read().await.db() {
@@ -105,22 +106,56 @@ pub(crate) async fn process_pending_deposits<E: linera_core::environment::Enviro
                     Ok(()) => {
                         tracing::info!(%tx_hash, "Deposit processed successfully");
                         relay::update_linera_balance_metric(linera_client).await;
+                        true
                     }
                     Err(e) => {
                         tracing::warn!(%tx_hash, "Deposit processing failed: {e}");
+                        false
                     }
                 }
             }
             Err(error) => {
                 tracing::warn!(%tx_hash, ?error, "Proof generation failed");
+                false
             }
+        };
+
+        if succeeded {
+            monitor.write().await.complete_deposit(&pending.key).await;
+            continue;
         }
 
-        monitor
-            .write()
-            .await
-            .mark_deposit_retried(&pending.key, max_retries)
-            .await;
+        // The submission did not report success — but a previous attempt may have
+        // already minted this deposit (the relayer could have crashed after
+        // submitting, or this attempt hit the on-chain `processed_deposits` replay
+        // guard). Confirm on-chain before counting a retry: an already-processed
+        // deposit is complete, not failed, so it never accrues a doomed retry or a
+        // permanent false `failed` — which the admin requeue could never clear,
+        // since every re-submission would just hit the replay guard again.
+        match linera_client.query_deposit_processed(&pending.key).await {
+            Ok(true) => {
+                tracing::info!(%tx_hash, "Deposit already processed on-chain; marking complete");
+                monitor.write().await.complete_deposit(&pending.key).await;
+            }
+            Ok(false) => {
+                monitor
+                    .write()
+                    .await
+                    .mark_deposit_retried(&pending.key, max_retries)
+                    .await;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    %tx_hash, ?error,
+                    "Could not confirm deposit-processed status; counting a retry"
+                );
+                monitor
+                    .write()
+                    .await
+                    .mark_deposit_retried(&pending.key, max_retries)
+                    .await;
+            }
+        }
     }
 }
 
@@ -195,7 +230,7 @@ async fn evm_scan_iteration(
     }
 
     let mut state = monitor.write().await;
-    state.last_scanned_evm_block = current_block;
+    state.advance_evm_cursor(current_block).await;
     crate::relay::metrics::set_last_scanned_evm_block(current_block);
 
     if tracked_any {
@@ -204,7 +239,7 @@ async fn evm_scan_iteration(
     Ok(())
 }
 
-async fn check_deposit_completion<E: linera_core::environment::Environment>(
+async fn check_deposit_completion<E: Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
 ) -> anyhow::Result<()> {

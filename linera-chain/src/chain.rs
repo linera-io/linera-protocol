@@ -10,18 +10,19 @@ use allocative::Allocative;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Epoch,
-        NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
+        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Cursor,
+        Epoch, NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
     },
     ensure,
-    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, StreamId},
+    hashed::Hashed,
+    identifiers::{AccountOwner, ApplicationId, BlobType, ChainId, GenericApplicationId, StreamId},
     ownership::ChainOwnership,
     time::{Duration, Instant},
 };
 use linera_execution::{
     committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
-    Message, Operation, OutgoingMessage, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    Message, Operation, OutgoingMessage, PreparedCheckpoint, Query, QueryContext, QueryOutcome,
+    ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -29,6 +30,7 @@ use linera_views::{
     map_view::{CustomMapView, MapView},
     reentrant_collection_view::{ReadGuardedView, ReentrantCollectionView},
     register_view::RegisterView,
+    set_view::SetView,
     views::{ClonableView, RootView, View},
 };
 use serde::{Deserialize, Serialize};
@@ -41,7 +43,7 @@ use crate::{
         BlockExecutionOutcome, BundleExecutionPolicy, BundleFailurePolicy, ChainAndHeight,
         IncomingBundle, MessageAction, MessageBundle, ProposedBlock, Transaction,
     },
-    inbox::{Cursor, InboxError, InboxStateView},
+    inbox::{InboxError, InboxStateView},
     manager::ChainManager,
     outbox::OutboxStateView,
     pending_blobs::PendingBlobsView,
@@ -193,6 +195,24 @@ pub(crate) mod metrics {
 /// The BCS-serialized size of an empty [`Block`].
 pub(crate) const EMPTY_BLOCK_SIZE: usize = 94;
 
+/// A set of fully-tracked chains. Wrapped in [`Hashed`] (as `Hashed<ChainIdSet>`) so the hash that
+/// identifies the set — stored in [`ChainStateView::outbox_index_tracked_hash`] to detect when the
+/// outbox indices must be reconciled — is computed once when the tracked set changes rather than on
+/// every cross-chain operation. The hash is order-independent because `BTreeSet` iterates in sorted
+/// order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChainIdSet(pub BTreeSet<ChainId>);
+
+impl linera_base::crypto::BcsHashable<'_> for ChainIdSet {}
+
+impl std::ops::Deref for ChainIdSet {
+    type Target = BTreeSet<ChainId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// A view accessing the state of a chain.
 #[cfg_attr(
     with_graphql,
@@ -244,10 +264,11 @@ where
     /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
     pub nonempty_inboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
-    /// The local wall-clock time when block 0 was last executed. Used to prevent
-    /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
-    /// the last reset, the error is returned instead.
-    pub block_zero_executed_at: RegisterView<C, Timestamp>,
+    /// The local wall-clock time when this chain's state was last established — by
+    /// executing block 0, or by installing a checkpoint snapshot (on bootstrap or reset).
+    /// Used to prevent reset-on-incorrect-outcome from looping: if not enough time has
+    /// elapsed since the last reset, the error is returned instead.
+    pub chain_initialized_at: RegisterView<C, Timestamp>,
 
     /// The height at which the next block can be preprocessed: one past the highest
     /// height in `block_hashes` (executed or preprocessed), or `next_block_height` if
@@ -263,6 +284,23 @@ where
     /// Maintained by `apply_confirmed_block` whenever a block starting with
     /// `SystemOperation::Checkpoint` is executed.
     pub latest_checkpoint_height: RegisterView<C, Option<BlockHeight>>,
+
+    /// Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
+    /// vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
+    /// in storage. The worker errors a checkpoint push with
+    /// `MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+    /// referenced cert (regardless of its own — possibly revoked — epoch) and
+    /// removes the entry. Once the set is empty, the checkpoint restoration can run
+    /// end-to-end.
+    pub pre_checkpoint_block_trust: SetView<C, CryptoHash>,
+
+    /// The hash of the set of fully-tracked chains that `nonempty_outboxes` and
+    /// `outbox_counters` were last reconciled against. On a client these two indices only hold
+    /// entries for tracked targets; when the tracked set changes this hash stops matching and the
+    /// indices are reconciled (`reconcile_outbox_index`). `None` means
+    /// they have never been filtered — a pre-existing database entry (migration), or a validator
+    /// that tracks all chains and never filters.
+    pub outbox_index_tracked_hash: RegisterView<C, Option<CryptoHash>>,
 }
 
 /// Block-chaining state.
@@ -410,24 +448,33 @@ where
         &mut self,
         target: &ChainId,
         height: BlockHeight,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<bool, ChainError> {
         let mut outbox = self.outboxes.try_load_entry_mut(target).await?;
         let updates = outbox.mark_messages_as_received(height).await?;
         if updates.is_empty() {
             return Ok(false);
         }
-        for update in updates {
-            let counter = self
-                .outbox_counters
-                .get_mut()
-                .get_mut(&update)
-                .ok_or_else(|| {
-                    ChainError::CorruptedChainState("message counter should be present".into())
-                })?;
-            *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
-            if *counter == 0 {
-                // Important for the test in `all_messages_delivered_up_to`.
-                self.outbox_counters.get_mut().remove(&update);
+        // `outbox_counters` is keyed by block height and shared across all recipients of that
+        // block, but only counts targets we index: every chain on a validator (`tracked == None`),
+        // or tracked targets on a client. An untracked target was never counted, so confirming it
+        // must NOT touch the counters at all — a present `counter[height]` belongs to a tracked
+        // sibling recipient of the same block and must be left intact. We only drain the queue
+        // (done above) for such a target.
+        if tracked.is_none_or(|tracked| tracked.contains(target)) {
+            for update in updates {
+                let counter = self
+                    .outbox_counters
+                    .get_mut()
+                    .get_mut(&update)
+                    .ok_or_else(|| {
+                        ChainError::CorruptedChainState("message counter should be present".into())
+                    })?;
+                *counter = counter.checked_sub(1).ok_or(ArithmeticError::Underflow)?;
+                if *counter == 0 {
+                    // Important for the test in `all_messages_delivered_up_to`.
+                    self.outbox_counters.get_mut().remove(&update);
+                }
             }
         }
         if outbox.queue.count() == 0 {
@@ -694,6 +741,65 @@ where
         optional_vec.ok_or_else(|| ChainError::CorruptedChainState("Missing outboxes".into()))
     }
 
+    /// Reconciles the `nonempty_outboxes` and `outbox_counters` indices from the retained outbox
+    /// queues, rebuilding only when the tracked set changed since the last call (i.e. the stored
+    /// [`Self::outbox_index_tracked_hash`] no longer matches). The per-target outbox *queues* in
+    /// `outboxes` are always kept; only these indices are filtered. Returns whether a rebuild
+    /// actually happened, so a read-only caller can skip persisting when nothing changed.
+    pub async fn reconcile_outbox_index(
+        &mut self,
+        tracked: Option<&Hashed<ChainIdSet>>,
+    ) -> Result<bool, ChainError> {
+        if *self.outbox_index_tracked_hash.get() == tracked.map(|tracked| tracked.hash()) {
+            return Ok(false);
+        }
+        self.rebuild_outbox_index(tracked).await?;
+        Ok(true)
+    }
+
+    /// Rebuilds `nonempty_outboxes` and `outbox_counters` from the retained outbox queues for the
+    /// tracked set (every retained queue on a validator, `tracked == None`), and stamps
+    /// [`Self::outbox_index_tracked_hash`]. Unlike [`Self::reconcile_outbox_index`] this always
+    /// rebuilds, so callers that have just rewritten the queues can refresh the indices regardless
+    /// of the stored stamp.
+    async fn rebuild_outbox_index(
+        &mut self,
+        tracked: Option<&Hashed<ChainIdSet>>,
+    ) -> Result<(), ChainError> {
+        self.nonempty_outboxes.get_mut().clear();
+        self.outbox_counters.get_mut().clear();
+        // In full mode (`None`) there is no tracked subset to iterate, so re-index from the keys of
+        // every retained outbox queue.
+        let targets = match tracked {
+            Some(tracked) => tracked.inner().iter().copied().collect::<Vec<_>>(),
+            None => self.outboxes.indices().await?,
+        };
+        for target in &targets {
+            let heights = {
+                let Some(outbox) = self.outboxes.try_load_entry(target).await? else {
+                    continue;
+                };
+                outbox.queue.elements().await?
+            };
+            if heights.is_empty() {
+                continue;
+            }
+            for height in heights {
+                *self.outbox_counters.get_mut().entry(height).or_default() += 1;
+            }
+            self.nonempty_outboxes.get_mut().insert(*target);
+        }
+        self.outbox_index_tracked_hash
+            .set(tracked.map(|tracked| tracked.hash()));
+        Ok(())
+    }
+
+    /// Returns whether the outbox index is already reconciled to `tracked` (the stored hash
+    /// matches), so the read-only network-actions path can read it without a write-lock rebuild.
+    pub fn outbox_index_is_reconciled(&self, tracked: Option<&Hashed<ChainIdSet>>) -> bool {
+        *self.outbox_index_tracked_hash.get() == tracked.map(|tracked| tracked.hash())
+    }
+
     /// Executes a block with a specified policy for handling bundle failures.
     #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
@@ -709,6 +815,9 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
+        checkpoint_origin_cursors: Vec<(ChainId, Cursor)>,
+        checkpoint_inbox_cursors: Vec<(ChainId, Cursor)>,
+        checkpoint_outbox_block_hashes: Vec<CryptoHash>,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
@@ -740,14 +849,21 @@ where
         // execution state from storage *now*, before any block-level mutation taints the
         // inner view's pending-changes set. The matching operation handler will publish
         // the resulting blobs without re-dumping; subsequent fees and other state changes
-        // accumulate normally and end up persisted with the override hash on save.
-        let prepared_checkpoint_blobs = if block.starts_with_checkpoint() {
-            Some(
-                chain
-                    .prepare_checkpoint(committee_policy.maximum_blob_size)
-                    .await
-                    .with_execution_context(ChainExecutionContext::Block)?,
-            )
+        // accumulate normally and end up persisted with the override hash on save. The
+        // inbox snapshot was already taken by the outer `execute_block` and passed in as
+        // `checkpoint_origin_cursors`; we bundle the two halves into a
+        // [`PreparedCheckpoint`] for the handler.
+        let prepared_checkpoint = if block.starts_with_checkpoint() {
+            let blobs = chain
+                .prepare_checkpoint(committee_policy.maximum_blob_size)
+                .await
+                .with_execution_context(ChainExecutionContext::Block)?;
+            Some(PreparedCheckpoint {
+                blobs,
+                origin_cursors: checkpoint_origin_cursors,
+                inbox_cursors: checkpoint_inbox_cursors,
+                outbox_block_hashes: checkpoint_outbox_block_hashes,
+            })
         } else {
             None
         };
@@ -779,8 +895,8 @@ where
             replaying_oracle_responses,
             block,
         )?;
-        if let Some(blobs) = prepared_checkpoint_blobs {
-            block_execution_tracker.set_prepared_checkpoint_blobs(blobs);
+        if let Some(prepared) = prepared_checkpoint {
+            block_execution_tracker.set_prepared_checkpoint(prepared);
         }
 
         // Extract failure-policy parameters from exec_policy.
@@ -964,15 +1080,46 @@ where
         ensure!(!block.transactions.is_empty(), ChainError::EmptyBlock);
 
         let recipients = block_execution_tracker.recipients();
+        let non_ack_tx_indices = block_execution_tracker.non_checkpoint_ack_tx_indices();
         let mut recipient_heights = Vec::new();
         for (recipient, height) in chain
             .previous_message_blocks
             .multi_get_pairs(recipients)
             .await?
         {
-            chain
-                .previous_message_blocks
-                .insert(&recipient, block.height)?;
+            // Only `CheckpointAck`-only blocks are excluded from the chain-level
+            // tracking. Otherwise the recipient never acknowledges (a
+            // `CheckpointAck` doesn't trigger a return `CheckpointAck`), so the
+            // entry would never get trimmed. Off-chain outbox bookkeeping further
+            // down still queues these for delivery; only the
+            // `previous_message_blocks` / `unfinalized_message_blocks` chain skips
+            // them.
+            if let Some(tx_indices) = non_ack_tx_indices.get(&recipient) {
+                chain
+                    .previous_message_blocks
+                    .insert(&recipient, block.height)?;
+                // Track each non-CheckpointAck bundle's cursor as pending
+                // acknowledgement from the recipient. We don't know this block's
+                // hash yet (we're mid-execution); the checkpoint pre-block hook
+                // resolves heights to hashes via `block_hashes` when it builds the
+                // oracle response.
+                let mut cursors = chain
+                    .system
+                    .unfinalized_message_blocks
+                    .get(&recipient)
+                    .await?
+                    .unwrap_or_default();
+                for index in tx_indices {
+                    cursors.insert(Cursor {
+                        height: block.height,
+                        index: *index,
+                    });
+                }
+                chain
+                    .system
+                    .unfinalized_message_blocks
+                    .insert(&recipient, cursors)?;
+            }
             if let Some(height) = height {
                 recipient_heights.push((recipient, height));
             }
@@ -1140,9 +1287,16 @@ where
                 "Checkpoint must be the first transaction in its block",
             )
         );
-        if block.starts_with_checkpoint() {
+        let (origin_cursors, inbox_cursors, outbox_block_hashes) = if block.starts_with_checkpoint()
+        {
             self.check_checkpoint_preconditions().await?;
-        }
+            let origin_cursors = self.collect_inbox_cursors().await?;
+            let inbox_cursors = self.collect_all_inbox_cursors().await?;
+            let hashes = self.collect_unfinalized_block_hashes().await?;
+            (origin_cursors, inbox_cursors, hashes)
+        } else {
+            (Vec::new(), Vec::new(), Vec::new())
+        };
 
         Self::execute_block_inner(
             &mut self.execution_state,
@@ -1153,11 +1307,150 @@ where
             published_blobs,
             replaying_oracle_responses,
             policy,
+            origin_cursors,
+            inbox_cursors,
+            outbox_block_hashes,
         )
         .await
         .map(|(outcome, tracker, never_reject_origins)| {
             (block, outcome, tracker, never_reject_origins)
         })
+    }
+
+    /// Snapshots `(origin, next_cursor_to_remove)` for each chain we've received a
+    /// non-`Checkpoint` message from since our last own checkpoint. Used by the
+    /// pre-block hook so the matching operation handler can emit a
+    /// [`SystemMessage::CheckpointAck`] to each origin chain. Iterating
+    /// `pending_checkpoint_ack_targets` (instead of every inbox) is what prevents the
+    /// notification ping-pong: a chain that only ever sent us `Checkpoint`s is
+    /// excluded here, so we never reply with a `Checkpoint` of our own.
+    async fn collect_inbox_cursors(&self) -> Result<Vec<(ChainId, Cursor)>, ChainError> {
+        let targets = self
+            .execution_state
+            .system
+            .pending_checkpoint_ack_targets
+            .indices()
+            .await?;
+        let mut cursors = Vec::with_capacity(targets.len());
+        for origin in targets {
+            let Some(inbox) = self.inboxes.try_load_entry(&origin).await? else {
+                continue;
+            };
+            cursors.push((origin, *inbox.next_cursor_to_remove.get()));
+        }
+        Ok(cursors)
+    }
+
+    /// Snapshots `(origin, next_cursor_to_remove)` for every inbox with a non-default
+    /// `next_cursor_to_remove`. Recorded in the checkpoint's oracle response so a
+    /// bootstrapping node can seed each inbox's `restored_cursor` and silently drop
+    /// any sender re-pushes whose effects are already in the restored execution state.
+    async fn collect_all_inbox_cursors(&self) -> Result<Vec<(ChainId, Cursor)>, ChainError> {
+        let origins = self.inboxes.indices().await?;
+        let mut cursors = Vec::new();
+        for origin in origins {
+            let Some(inbox) = self.inboxes.try_load_entry(&origin).await? else {
+                continue;
+            };
+            let cursor = *inbox.next_cursor_to_remove.get();
+            if cursor != Cursor::default() {
+                cursors.push((origin, cursor));
+            }
+        }
+        Ok(cursors)
+    }
+
+    /// Re-populates `outboxes`, `outbox_counters`, and `nonempty_outboxes` from
+    /// the on-chain `unfinalized_message_blocks` map after a checkpoint
+    /// bootstrap. Called once after `execution_state.restore_from_content` so
+    /// the freshly-restored chain can pick up cross-chain delivery for
+    /// pre-checkpoint messages — the off-chain outbox state isn't part of the
+    /// certified checkpoint blob, so without this a bootstrapped node would
+    /// silently stop pushing pending messages forward.
+    pub async fn restore_outboxes_from_unfinalized(
+        &mut self,
+        tracked: Option<&Hashed<ChainIdSet>>,
+    ) -> Result<(), ChainError> {
+        // A lagging validator hit by a checkpoint push may already have outbox
+        // queues from blocks it processed before the gap. Clear them so the
+        // rebuild from `unfinalized_message_blocks` doesn't append duplicate
+        // heights onto stale queues (the counters/nonempty set below `set`
+        // wholesale, but the queues are appended to per recipient).
+        let prior_recipients = self.outboxes.indices().await?;
+        for recipient in prior_recipients {
+            let mut outbox = self.outboxes.try_load_entry_mut(&recipient).await?;
+            outbox.queue.clear();
+            outbox.next_height_to_schedule.set(BlockHeight::ZERO);
+        }
+        let entries = self
+            .execution_state
+            .system
+            .unfinalized_message_blocks
+            .index_values()
+            .await?;
+        for (recipient, cursors) in entries {
+            if cursors.is_empty() {
+                continue;
+            }
+            // Dedup by height: the outbox queue tracks block heights only (multiple
+            // bundles at the same height share a single queue entry).
+            let heights = cursors
+                .into_iter()
+                .map(|cursor| cursor.height)
+                .collect::<BTreeSet<_>>();
+            let mut outbox = self.outboxes.try_load_entry_mut(&recipient).await?;
+            for height in &heights {
+                outbox.queue.push_back(*height);
+            }
+            let max_height = *heights
+                .last()
+                .expect("the empty case was filtered out above");
+            outbox
+                .next_height_to_schedule
+                .set(max_height.try_add_one()?);
+        }
+        // The queues are now authoritative; rebuild the tracked-only indices from them.
+        self.rebuild_outbox_index(tracked).await?;
+        Ok(())
+    }
+
+    /// Collects the hashes of every block on this chain still listed in the on-chain
+    /// `unfinalized_message_blocks` map. The checkpoint pre-block hook calls this to
+    /// build the oracle response's `outbox_block_hashes`, so the checkpoint
+    /// certificate transitively re-certifies those older (possibly revoked-epoch)
+    /// blocks.
+    async fn collect_unfinalized_block_hashes(&self) -> Result<Vec<CryptoHash>, ChainError> {
+        let heights = self.collect_unfinalized_heights().await?;
+        let mut hashes = Vec::with_capacity(heights.len());
+        for height in heights {
+            let hash = self.block_hashes.get(&height).await?.ok_or_else(|| {
+                ChainError::CorruptedChainState(format!(
+                    "missing entry in block_hashes at height {height}"
+                ))
+            })?;
+            hashes.push(hash);
+        }
+        Ok(hashes)
+    }
+
+    /// Returns the sorted, deduplicated set of block heights referenced by the on-chain
+    /// `unfinalized_message_blocks` map (one entry per height even if multiple bundles
+    /// at that height are still unfinalized). Used both when building the checkpoint
+    /// oracle response (to resolve heights to hashes via `block_hashes`) and on the
+    /// bootstrap path (to zip with the certified `outbox_block_hashes` from the
+    /// response).
+    pub async fn collect_unfinalized_heights(&self) -> Result<BTreeSet<BlockHeight>, ChainError> {
+        let mut heights = BTreeSet::new();
+        let entries = self
+            .execution_state
+            .system
+            .unfinalized_message_blocks
+            .index_values()
+            .await?;
+        for (_, per_recipient) in entries {
+            heights.extend(per_recipient.into_iter().map(|cursor| cursor.height));
+        }
+        Ok(heights)
     }
 
     /// Applies an execution outcome to the chain, updating the outboxes, state hash and chain
@@ -1171,14 +1464,15 @@ where
         &mut self,
         block: &ConfirmedBlock,
         local_time: Timestamp,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
         if block.header.height == BlockHeight::ZERO {
-            self.block_zero_executed_at.set(local_time);
+            self.chain_initialized_at.set(local_time);
         }
         let updated_streams = self.process_emitted_events(block).await?;
-        self.process_outgoing_messages(block).await?;
+        self.process_outgoing_messages(block, tracked).await?;
 
         // Last, reset the consensus state based on the current ownership.
         self.reset_chain_manager(block.header.height.try_add_one()?, local_time)
@@ -1205,6 +1499,7 @@ where
     pub async fn preprocess_block(
         &mut self,
         block: &ConfirmedBlock,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
         let hash = block.inner().hash();
         let block = block.inner().inner();
@@ -1212,7 +1507,7 @@ where
         if height < self.tip_state.get().next_block_height {
             return Ok(BTreeSet::new());
         }
-        self.process_outgoing_messages(block).await?;
+        self.process_outgoing_messages(block, tracked).await?;
         let updated_streams = self.process_emitted_events(block).await?;
         self.insert_block_hash(height, hash)?;
         Ok(updated_streams)
@@ -1270,42 +1565,27 @@ where
     }
 
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
-    ///   * no inbox has consumed any incoming bundle (every `next_cursor_to_remove` is
-    ///     at default);
-    ///   * no outbox has pending outgoing messages;
-    ///   * no event stream tracker is set.
+    /// no *system* event stream tracker is set.
     ///
-    /// The structural invariant that Checkpoint must be the *first* transaction in its
+    /// The structural invariant that `Checkpoint` must be the *first* transaction in its
     /// block is enforced unconditionally in `execute_block`, independently of these
-    /// preconditions. Sender-side conditions (no events ever published, no cross-chain
-    /// messages ever sent) are validated inside `ExecutionStateView::prepare_checkpoint`.
+    /// preconditions. Sender-side event conditions are validated inside
+    /// `ExecutionStateView::prepare_checkpoint`.
     async fn check_checkpoint_preconditions(&self) -> Result<(), ChainError> {
-        let origins = self.inboxes.indices().await?;
-        for origin in &origins {
-            let Some(inbox) = self.inboxes.try_load_entry(origin).await? else {
-                continue;
-            };
-            ensure!(
-                *inbox.next_cursor_to_remove.get() == Cursor::default(),
-                ChainError::CheckpointPreconditionFailed("chain has consumed incoming messages")
-            );
-        }
-
-        ensure!(
-            self.nonempty_outboxes.get().is_empty(),
-            ChainError::CheckpointPreconditionFailed("chain has pending outgoing messages")
-        );
-
-        let mut had_event_tracker = false;
+        let mut had_system_event_tracker = false;
         self.next_expected_events
-            .for_each_index_while(|_| {
-                had_event_tracker = true;
-                Ok(false)
+            .for_each_index_while(|stream_id| {
+                if matches!(stream_id.application_id, GenericApplicationId::System) {
+                    had_system_event_tracker = true;
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
             })
             .await?;
         ensure!(
-            !had_event_tracker,
-            ChainError::CheckpointPreconditionFailed("chain has consumed events")
+            !had_system_event_tracker,
+            ChainError::CheckpointPreconditionFailed("chain has consumed system events")
         );
 
         Ok(())
@@ -1363,6 +1643,7 @@ where
     async fn process_outgoing_messages(
         &mut self,
         block: &Block,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<Vec<ChainId>, ChainError> {
         // Record the messages of the execution. Messages are understood within an
         // application.
@@ -1370,11 +1651,11 @@ where
         let block_height = block.header.height;
         let next_height = self.tip_state.get().next_block_height;
 
-        // Update the outboxes.
-        let outbox_counters = self.outbox_counters.get_mut();
-        let nonempty_outboxes = self.nonempty_outboxes.get_mut();
+        // Update the outboxes. Every recipient's per-target outbox queue is updated, but the
+        // `nonempty_outboxes` and `outbox_counters` indices are only populated for targets we track.
         let targets = recipients.into_iter().collect::<Vec<_>>();
         let outboxes = self.outboxes.try_load_entries_mut(&targets).await?;
+        let mut scheduled_tracked = Vec::new();
         for (mut outbox, target) in outboxes.into_iter().zip(&targets) {
             if block_height > next_height {
                 // There may be a gap in the chain before this block. We can only add it to this
@@ -1401,13 +1682,13 @@ where
                         // all good
                     }
                     (Some(_), None) => {
-                        // Outbox indicates there was a previous message block, but
-                        // previous_message_blocks has no idea about it - possible bug
-                        return Err(ChainError::CorruptedChainState(
-                            "block indicates no previous message block,\
-                            but we have one in the outbox"
-                                .into(),
-                        ));
+                        // The outbox already has a previous height for this recipient,
+                        // but this block's body recorded no predecessor — that means
+                        // this is the first non-`CheckpointAck` send to this recipient,
+                        // even though earlier `CheckpointAck`-only blocks have already
+                        // been added to the off-chain outbox. We can still schedule:
+                        // the bundle will carry `previous_height = None`, which the
+                        // receiver accepts as "first ever".
                     }
                     (None, Some((_, prev_msg_block_height))) => {
                         // We have no previously processed block in the outbox, but we are
@@ -1419,16 +1700,21 @@ where
                         }
                     }
                     (Some(ref prev_hash), Some((prev_msg_block_hash, _))) => {
-                        // Only process the outbox if the hashes match.
+                        // Only process the outbox if the hashes match. A mismatch can
+                        // arise legitimately when intermediate `CheckpointAck`-only
+                        // blocks sit in the off-chain outbox but are skipped from
+                        // `body.previous_message_blocks`; same fallback as the
+                        // `(Some, None)` arm above.
                         if prev_hash != prev_msg_block_hash {
                             continue;
                         }
                     }
                 }
             }
-            if outbox.schedule_message(block_height)? {
-                *outbox_counters.entry(block_height).or_default() += 1;
-                nonempty_outboxes.insert(*target);
+            if outbox.schedule_message(block_height)?
+                && tracked.is_none_or(|set| set.contains(target))
+            {
+                scheduled_tracked.push(*target);
             }
             #[cfg(with_metrics)]
             crate::outbox::metrics::OUTBOX_SIZE
@@ -1436,14 +1722,29 @@ where
                 .observe(outbox.queue.count() as f64);
         }
 
+        if !scheduled_tracked.is_empty() {
+            // All scheduled messages are at `block_height`.
+            let scheduled_count =
+                u32::try_from(scheduled_tracked.len()).map_err(|_| ArithmeticError::Overflow)?;
+            *self
+                .outbox_counters
+                .get_mut()
+                .entry(block_height)
+                .or_default() += scheduled_count;
+            let nonempty_outboxes = self.nonempty_outboxes.get_mut();
+            for target in &scheduled_tracked {
+                nonempty_outboxes.insert(*target);
+            }
+        }
+
         #[cfg(with_metrics)]
         metrics::NUM_OUTBOXES
             .with_label_values(&[])
-            .observe(nonempty_outboxes.len() as f64);
+            .observe(self.nonempty_outboxes.get().len() as f64);
         #[cfg(with_metrics)]
         metrics::OUTBOX_COUNTERS_SIZE
             .with_label_values(&[])
-            .observe(outbox_counters.len() as f64);
+            .observe(self.outbox_counters.get().len() as f64);
         Ok(targets)
     }
 

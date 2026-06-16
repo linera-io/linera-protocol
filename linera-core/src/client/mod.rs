@@ -22,6 +22,7 @@ use linera_base::{
         ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
 };
@@ -37,7 +38,7 @@ use linera_chain::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError,
+    ChainError, ChainIdSet,
 };
 use linera_execution::{committee::Committee, ExecutionError};
 use linera_storage::{Arc as CacheArc, Clock as _, ResultReadCertificates, Storage as _};
@@ -246,6 +247,72 @@ impl ListeningMode {
     }
 }
 
+/// The per-chain [`ListeningMode`]s tracked by a local node, together with a memoized
+/// [`Hashed`] of the fully-tracked subset.
+///
+/// The hash is the version of the outbox index (see
+/// [`ChainStateView::outbox_index_tracked_hash`]). Caching it here — recomputed only when a chain
+/// newly becomes `FullChain`, which is rare and client-side — lets every cross-chain operation
+/// compare and reconcile the index in `O(1)` instead of rehashing the tracked set each time.
+///
+/// [`ChainStateView::outbox_index_tracked_hash`]: linera_chain::ChainStateView
+#[derive(Debug)]
+pub struct ChainModes {
+    modes: BTreeMap<ChainId, ListeningMode>,
+    full: Arc<Hashed<ChainIdSet>>,
+}
+
+impl Default for ChainModes {
+    fn default() -> Self {
+        Self::new(BTreeMap::new())
+    }
+}
+
+impl ChainModes {
+    /// Builds the listening modes from `modes`, computing the tracked-set hash once.
+    pub fn new(modes: BTreeMap<ChainId, ListeningMode>) -> Self {
+        let full = Self::compute_full(&modes);
+        Self { modes, full }
+    }
+
+    fn compute_full(modes: &BTreeMap<ChainId, ListeningMode>) -> Arc<Hashed<ChainIdSet>> {
+        Arc::new(Hashed::new(ChainIdSet(
+            modes
+                .iter()
+                .filter(|(_, mode)| mode.is_full())
+                .map(|(id, _)| *id)
+                .collect(),
+        )))
+    }
+
+    /// The fully-tracked chains together with their memoized hash (`O(1)` clone).
+    pub fn full(&self) -> Arc<Hashed<ChainIdSet>> {
+        self.full.clone()
+    }
+
+    /// Returns the listening mode for `chain_id`, if it is tracked.
+    pub fn get(&self, chain_id: &ChainId) -> Option<&ListeningMode> {
+        self.modes.get(chain_id)
+    }
+
+    /// Merges `mode` into the entry for `chain_id` — monotonic in the listening-mode order, so it
+    /// never weakens an existing entry — and returns the resulting mode. The tracked-set hash is
+    /// recomputed only if the chain newly became `FullChain`.
+    pub fn extend_mode(&mut self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
+        let entry = self
+            .modes
+            .entry(chain_id)
+            .or_insert_with(|| ListeningMode::EventsOnly(BTreeSet::new()));
+        let was_full = entry.is_full();
+        entry.extend(Some(mode));
+        let result = entry.clone();
+        if !was_full && result.is_full() {
+            self.full = Self::compute_full(&self.modes);
+        }
+        result
+    }
+}
+
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
 pub struct Client<Env: Environment> {
     environment: Env,
@@ -258,7 +325,7 @@ pub struct Client<Env: Environment> {
     admin_chain_id: ChainId,
     /// Chains that should be tracked by the client, along with their listening mode.
     /// The presence of a chain in this map means it is tracked by the local node.
-    chain_modes: Arc<RwLock<BTreeMap<ChainId, ListeningMode>>>,
+    chain_modes: Arc<RwLock<ChainModes>>,
     /// References to clients waiting for chain notifications.
     notifier: Arc<ChannelNotifier<Notification>>,
     /// Chain state for the managed chains.
@@ -285,15 +352,15 @@ impl<Env: Environment> Client<Env> {
         execution_state_cache_size: usize,
         requests_scheduler_config: &requests_scheduler::RequestsSchedulerConfig,
     ) -> Self {
-        let mut chain_modes = chain_modes.into_iter().collect::<BTreeMap<_, _>>();
+        let mut modes = chain_modes.into_iter().collect::<BTreeMap<_, _>>();
         // The client needs the admin chain fully synced for epoch tracking, so
         // promote it (or insert) into `FullChain`. `extend` is monotonic in the
         // listening mode order, so this never weakens an existing entry.
-        chain_modes
+        modes
             .entry(admin_chain_id)
             .or_insert(ListeningMode::FullChain)
             .extend(Some(ListeningMode::FullChain));
-        let chain_modes = Arc::new(RwLock::new(chain_modes));
+        let chain_modes = Arc::new(RwLock::new(ChainModes::new(modes)));
         let config = ChainWorkerConfig {
             nickname: name.into(),
             long_lived_services,
@@ -416,13 +483,10 @@ impl<Env: Environment> Client<Env> {
     /// Returns the resulting mode.
     #[instrument(level = "trace", skip(self))]
     pub fn extend_chain_mode(&self, chain_id: ChainId, mode: ListeningMode) -> ListeningMode {
-        let mut chain_modes = self
-            .chain_modes
+        self.chain_modes
             .write()
-            .expect("Panics should not happen while holding a lock to `chain_modes`");
-        let entry = chain_modes.entry(chain_id).or_insert_with(|| mode.clone());
-        entry.extend(Some(mode));
-        entry.clone()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .extend_mode(chain_id, mode)
     }
 
     /// Returns the listening mode for a chain, if it is tracked.
@@ -891,6 +955,11 @@ impl<Env: Environment> Client<Env> {
             // skip and let the regular sync path take over.
             return Ok(());
         }
+        // The first attempt at processing the checkpoint cert will fall into the
+        // worker's `BlocksNotFound` pre-check if pre-checkpoint sender blocks are
+        // missing; `handle_certificate_with_retry` downloads them by hash and
+        // retries, so by the time `process_certificates` returns the chain has
+        // both its restored state and every certified sender block in storage.
         self.process_certificates(
             slice::from_ref(remote_node),
             certificates,
@@ -966,6 +1035,7 @@ impl<Env: Environment> Client<Env> {
         mode: ProcessConfirmedBlockMode,
     ) -> Result<ChainInfoResponse, chain_client::Error> {
         let mut downloaded_blobs = HashSet::<BlobId>::new();
+        let mut downloaded_blocks = HashSet::<CryptoHash>::new();
         let mut events = EventSetDownloader::new(self);
         loop {
             let result = self
@@ -979,6 +1049,15 @@ impl<Env: Environment> Client<Env> {
                     continue;
                 }
             }
+            if let Err(LocalNodeError::BlocksNotFound(hashes)) = &result {
+                let new_blocks = filter_new(hashes, &downloaded_blocks);
+                if !new_blocks.is_empty() {
+                    self.download_pre_checkpoint_blocks(nodes, &new_blocks)
+                        .await?;
+                    downloaded_blocks.extend(new_blocks);
+                    continue;
+                }
+            }
             if let Err(LocalNodeError::EventsNotFound(event_ids)) = &result {
                 if events.download_new(event_ids).await? {
                     continue;
@@ -986,6 +1065,41 @@ impl<Env: Environment> Client<Env> {
             }
             return Ok(result?);
         }
+    }
+
+    /// Downloads each missing pre-checkpoint sender block from `nodes` and feeds it
+    /// through the local worker. The worker's trust-mark accept path verifies the
+    /// cert against its own epoch's committee and writes it to storage. Routing
+    /// through `handle_certificate_with_retry` ensures the sender block's own
+    /// blob/event dependencies (e.g. a `ChainDescription` blob or an admin-chain
+    /// epoch event for a revoked epoch) get resolved before the cert is accepted.
+    async fn download_pre_checkpoint_blocks(
+        &self,
+        nodes: &[RemoteNode<Env::ValidatorNode>],
+        hashes: &[CryptoHash],
+    ) -> Result<(), chain_client::Error> {
+        for hash in hashes {
+            let mut last_error = None;
+            for node in nodes {
+                match node.node.download_certificate(*hash).await {
+                    Ok(certificate) => {
+                        Box::pin(self.handle_certificate_with_retry(
+                            &certificate,
+                            nodes,
+                            ProcessConfirmedBlockMode::Auto,
+                        ))
+                        .await?;
+                        last_error = None;
+                        break;
+                    }
+                    Err(error) => last_error = Some(error),
+                }
+            }
+            if let Some(error) = last_error {
+                return Err(error.into());
+            }
+        }
+        Ok(())
     }
 
     async fn handle_certificate<T: ProcessableCertificate>(
@@ -1293,7 +1407,41 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         // Verify the certificate before doing any expensive networking.
         if let ReceiveCertificateMode::NeedsCheck = mode {
-            self.check_certificate(&certificate).await?.into_result()?;
+            let mut check_result = self.check_certificate(&certificate).await?;
+            if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                // The certificate is from an epoch our local view of the admin chain
+                // hasn't caught up to yet. Catch up and check again instead of failing.
+                // Prefer the nodes that gave us the certificate: they evidently know
+                // the newer epoch even if our own committee view is stale or its
+                // members are unreachable. A sync only counts if it actually made the
+                // epoch known; otherwise fall back to the known committee.
+                let admin_chain_id = self.admin_chain_id;
+                let epoch = certificate.block().header.epoch;
+                info!(
+                    %epoch,
+                    "certificate is from an unknown epoch; synchronizing the admin chain"
+                );
+                for node in nodes.iter().flatten() {
+                    match Box::pin(self.synchronize_chain_state_from(node, admin_chain_id)).await {
+                        Ok(()) => {
+                            check_result = self.check_certificate(&certificate).await?;
+                            if !matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                                break;
+                            }
+                        }
+                        Err(error) => debug!(
+                            %error,
+                            validator = %node.public_key,
+                            "failed to synchronize the admin chain from validator",
+                        ),
+                    }
+                }
+                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                    Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
+                    check_result = self.check_certificate(&certificate).await?;
+                }
+            }
+            check_result.into_result()?;
         }
         // Recover history from the network.
         let nodes = if let Some(nodes) = nodes {
@@ -2097,7 +2245,7 @@ impl<Env: Environment> Client<Env> {
                         "failed to download certificate-for-blob from validator",
                     );
                 }
-                chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+                chain_client::Error::CannotDownloadBlob(blob_id)
             })
         }))
         .buffer_unordered(self.options.max_joined_tasks)
@@ -2148,7 +2296,7 @@ impl<Env: Environment> Client<Env> {
                 // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((_, executed_block, _, _, _)) = &result {
-                let hash = CryptoHash::new(executed_block);
+                let hash = executed_block.hash();
                 let notification = Notification {
                     chain_id: executed_block.header.chain_id,
                     reason: Reason::BlockExecuted {

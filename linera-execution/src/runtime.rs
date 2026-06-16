@@ -1137,6 +1137,9 @@ impl ContractSyncRuntimeHandle {
             UserAction::ProcessStreams(_context, updates) => {
                 code.process_streams(updates).map(|()| None)
             }
+            UserAction::SummarizeEvents(_context, updates) => {
+                code.summarize_events(updates).map(|()| None)
+            }
         };
 
         let result = self.execute(application_id, signer, closure)?;

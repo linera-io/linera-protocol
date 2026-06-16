@@ -255,6 +255,7 @@ where
 
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
+        let mut sent_blocks = false;
         loop {
             match result {
                 Err(NodeError::EventsNotFound(event_ids))
@@ -285,6 +286,24 @@ where
                         .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
                         .await?;
                     sent_blobs = true;
+                }
+                Err(NodeError::BlocksNotFound(hashes)) if !sent_blocks => {
+                    // The validator has recorded these hashes as trusted by a
+                    // checkpoint cert it verified, but is missing the actual block
+                    // bytes. Upload each from local storage; the worker's
+                    // trust-mark accept path lets them through regardless of their
+                    // (possibly revoked) epoch.
+                    let storage = self.client.local_node.storage_client();
+                    let certificates = storage.read_certificates(&hashes).await?;
+                    for (hash, maybe_cert) in hashes.iter().zip(certificates) {
+                        let cert = maybe_cert.ok_or_else(|| {
+                            chain_client::Error::ReadCertificatesError(vec![*hash])
+                        })?;
+                        self.remote_node
+                            .handle_confirmed_certificate(cert, delivery)
+                            .await?;
+                    }
+                    sent_blocks = true;
                 }
                 result => {
                     if let Err(err) = &result {
@@ -561,6 +580,31 @@ where
                     )
                     .await?;
                 }
+                Err(error @ NodeError::ChainError { .. }) => {
+                    // The validator rejected the proposal because of its local chain
+                    // manager state — most commonly an incompatible confirmed vote tied
+                    // to a locking block we don't yet have. Pull manager values from
+                    // this validator so the local node absorbs whatever justified the
+                    // rejection (signatures are checked locally, so the source can't
+                    // fool us), then surface the error. If our local state actually
+                    // advanced, `execute_operations` will rebuild and re-propose; if
+                    // not, the error propagates as usual.
+                    self.warn_if_unexpected(&error);
+                    tracing::debug!(
+                        remote_node = self.remote_node.address(),
+                        %chain_id,
+                        %error,
+                        "validator rejected proposal; pulling manager state",
+                    );
+                    if let Err(sync_err) = self
+                        .client
+                        .synchronize_chain_state_from(&self.remote_node, chain_id)
+                        .await
+                    {
+                        tracing::debug!(%sync_err, "failed to pull manager state from validator");
+                    }
+                    return Err(error.into());
+                }
                 Err(NodeError::BlobsNotFound(_) | NodeError::InactiveChain(_))
                     if !blob_ids.is_empty() =>
                 {
@@ -761,6 +805,12 @@ where
             }
         };
 
+        // Push a checkpoint if we have one above the validator's tip, to skip past
+        // pre-checkpoint blocks. Mirrors `bootstrap_chain_from_checkpoint`.
+        let info = self
+            .push_checkpoint_if_useful(chain_id, info, delivery)
+            .await?;
+
         // Calculate which block heights the validator is still missing
         let heights: Vec<_> = (info.next_block_height.0..target_block_height.0)
             .map(BlockHeight)
@@ -800,6 +850,44 @@ where
         Ok(certificates_by_height.into_iter().flatten().collect())
     }
 
+    /// If we hold a checkpoint at a height the validator hasn't reached yet, pushes
+    /// the checkpoint certificate so the validator can install our chain's execution
+    /// state without replaying every pre-checkpoint block. The worker's first attempt
+    /// will report any pre-checkpoint sender blocks it doesn't yet have via
+    /// `BlocksNotFound`, which `send_confirmed_certificate` then uploads before
+    /// retrying. Returns the validator's chain info after the push (unchanged if
+    /// there's nothing useful to push).
+    async fn push_checkpoint_if_useful(
+        &mut self,
+        chain_id: ChainId,
+        info: Box<ChainInfo>,
+        delivery: CrossChainMessageDelivery,
+    ) -> Result<Box<ChainInfo>, chain_client::Error> {
+        let local_query = ChainInfoQuery::new(chain_id).with_latest_checkpoint_height();
+        let local_info = self
+            .client
+            .local_node
+            .handle_chain_info_query(local_query)
+            .await?
+            .info;
+        let Some(checkpoint_height) = local_info.requested_latest_checkpoint_height else {
+            return Ok(info);
+        };
+        if checkpoint_height < info.next_block_height {
+            return Ok(info);
+        }
+        let Some(checkpoint_cert) = self
+            .read_certificates_for_heights(chain_id, vec![checkpoint_height])
+            .await?
+            .into_iter()
+            .next()
+        else {
+            return Ok(info);
+        };
+        self.send_confirmed_certificate(&checkpoint_cert, delivery)
+            .await
+    }
+
     /// Initializes a new chain on the validator by sending the chain description and dependencies.
     ///
     /// This is called when the validator doesn't know about the chain yet.
@@ -835,14 +923,12 @@ where
     ) -> Result<(), chain_client::Error> {
         let target_round = manager.current_round;
 
-        // First, push the locking certificate. A remote with an older lock rotates to this
-        // one (and one already locked at this round becomes able to accept a proposal
-        // carrying the cert). Pushing it does not necessarily advance the remote's current
-        // round — e.g. if the remote already holds this exact cert as its lock,
-        // `process_validated_block` returns `Skip` — so only early-return when the
-        // response shows the remote has actually reached our current round.
+        // First, push the locking certificate if it justifies our current round. A
+        // locking block from an earlier round is not enough on its own to advance the
+        // remote: the remote may still be ahead via a timeout or signed proposal, and
+        // pushing a stale lock would not move them. Push only the current-round lock.
         if let Some(LockingBlock::Regular(validated)) = manager.requested_locking.as_deref() {
-            if validated.round >= remote_round {
+            if validated.round == target_round {
                 match self
                     .remote_node
                     .handle_optimized_validated_certificate(

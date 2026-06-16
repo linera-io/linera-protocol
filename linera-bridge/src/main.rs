@@ -7,6 +7,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+#[cfg(feature = "relay")]
+use linera_base::identifiers::{AccountOwner, ChainId};
+#[cfg(feature = "relay")]
+use linera_storage::StorageCacheConfig;
 
 /// Linera Bridge CLI
 #[derive(Parser, Debug)]
@@ -68,11 +72,11 @@ struct ServeOptions {
 
     /// Linera bridge chain ID
     #[arg(long)]
-    linera_bridge_chain_id: linera_base::identifiers::ChainId,
+    linera_bridge_chain_id: ChainId,
 
     /// Owner of the bridge chain
     #[arg(long)]
-    linera_bridge_chain_owner: linera_base::identifiers::AccountOwner,
+    linera_bridge_chain_owner: AccountOwner,
 
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
@@ -99,6 +103,10 @@ struct ServeOptions {
     #[arg(long, default_value = "3001")]
     port: u16,
 
+    /// Port for the localhost-only admin HTTP server (retry endpoints).
+    #[arg(long, default_value = "3002")]
+    admin_port: u16,
+
     /// The maximal number of entries in the blob cache.
     #[arg(long, default_value = "1000")]
     blob_cache_size: usize,
@@ -119,6 +127,14 @@ struct ServeOptions {
     #[arg(long, default_value = "1000")]
     event_cache_size: usize,
 
+    /// The maximal number of entries in the block-hash-by-height cache.
+    #[arg(long, default_value = "1000")]
+    block_hash_by_height_cache_size: usize,
+
+    /// The maximal number of entries in the event-block-height cache.
+    #[arg(long, default_value = "1000")]
+    event_block_height_cache_size: usize,
+
     /// Interval between monitor scan loops, in seconds.
     #[arg(long, default_value = "30")]
     monitor_scan_interval: u64,
@@ -135,6 +151,15 @@ struct ServeOptions {
     /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
     #[arg(long)]
     sqlite_path: Option<std::path::PathBuf>,
+
+    /// Override the EVM provider's receipt poll interval, in milliseconds.
+    /// When unset, alloy picks the interval from the RPC URL: ~250ms for a
+    /// loopback host (localhost/127.0.0.1/::1), 7s otherwise. A local node
+    /// reached via a non-loopback host (e.g. a Docker service name like
+    /// `anvil`) is treated as remote and gets the slow 7s default, so set this
+    /// to match the node's block time for fast local settlement.
+    #[arg(long)]
+    evm_poll_interval_ms: Option<u64>,
 }
 
 fn main() -> Result<()> {
@@ -173,18 +198,23 @@ impl ServeOptions {
             &self.evm_private_key,
             self.evm_light_client_address.as_deref(),
             self.port,
-            linera_storage::StorageCacheConfig {
+            self.admin_port,
+            StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
                 certificate_cache_size: self.certificate_cache_size,
                 certificate_raw_cache_size: self.certificate_raw_cache_size,
                 event_cache_size: self.event_cache_size,
+                block_hash_by_height_cache_size: self.block_hash_by_height_cache_size,
+                event_block_height_cache_size: self.event_block_height_cache_size,
                 cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
             },
             std::time::Duration::from_secs(self.monitor_scan_interval),
             self.monitor_start_block,
             self.max_retries,
             self.sqlite_path.as_deref(),
+            self.evm_poll_interval_ms
+                .map(std::time::Duration::from_millis),
         ))
         .await
     }
