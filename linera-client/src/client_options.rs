@@ -28,6 +28,7 @@ use crate::client_metrics::TimingConfig;
 use crate::util;
 
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
@@ -39,6 +40,7 @@ pub enum Error {
 
 util::impl_from_infallible!(Error);
 
+/// Command-line options controlling the behavior of the chain client.
 #[derive(Clone, clap::Parser, serde::Deserialize, tsify::Tsify)]
 #[tsify(from_wasm_abi)]
 #[group(skip)]
@@ -314,6 +316,7 @@ pub struct Options {
     )]
     pub alternative_peers_retry_delay_ms: u64,
 
+    /// Configuration for the chain listener.
     #[serde(flatten)]
     #[clap(flatten)]
     pub chain_listener_config: crate::chain_listener::ChainListenerConfig,
@@ -405,6 +408,7 @@ impl Options {
     }
 }
 
+/// Command-line options for configuring the ownership of a chain.
 #[derive(Debug, Clone, clap::Args)]
 pub struct ChainOwnershipConfig {
     /// A JSON list of the new super owners. Absence of the option leaves the current
@@ -466,6 +470,7 @@ pub struct ChainOwnershipConfig {
 }
 
 impl ChainOwnershipConfig {
+    /// Applies the configured ownership overrides to the given chain ownership.
     pub fn update(self, chain_ownership: &mut ChainOwnership) -> Result<(), Error> {
         let ChainOwnershipConfig {
             super_owners,
@@ -519,6 +524,7 @@ impl TryFrom<ChainOwnershipConfig> for ChainOwnership {
     }
 }
 
+/// Command-line options for configuring application permissions on a chain.
 #[derive(Debug, Clone, clap::Args)]
 pub struct ApplicationPermissionsConfig {
     /// A JSON list of applications allowed to execute operations on this chain. If set to null, all
@@ -558,6 +564,7 @@ pub struct ApplicationPermissionsConfig {
 }
 
 impl ApplicationPermissionsConfig {
+    /// Applies the configured permission overrides to the given application permissions.
     pub fn update(self, application_permissions: &mut ApplicationPermissions) {
         if let Some(execute_operations) = self.execute_operations {
             application_permissions.execute_operations = execute_operations;
@@ -581,6 +588,7 @@ impl ApplicationPermissionsConfig {
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(missing_docs)]
 pub enum ResourceControlPolicyConfig {
     NoFees,
     Testnet,
@@ -591,6 +599,7 @@ pub enum ResourceControlPolicyConfig {
 }
 
 impl ResourceControlPolicyConfig {
+    /// Converts this config into the corresponding resource control policy.
     pub fn into_policy(self) -> ResourceControlPolicy {
         match self {
             ResourceControlPolicyConfig::NoFees => ResourceControlPolicy::no_fees(),

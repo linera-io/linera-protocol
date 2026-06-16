@@ -30,18 +30,23 @@ pub struct ValidatorConfig {
 /// The private configuration of a validator service.
 #[derive(Serialize, Deserialize)]
 pub struct ValidatorServerConfig {
+    /// The public configuration of the validator.
     pub validator: ValidatorConfig,
+    /// The secret key of the validator.
     pub validator_secret: ValidatorSecretKey,
+    /// The internal network configuration of the validator.
     pub internal_network: ValidatorInternalNetworkConfig,
 }
 
 /// The (public) configuration for all validators.
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct CommitteeConfig {
+    /// The public configurations of all validators in the committee.
     pub validators: Vec<ValidatorConfig>,
 }
 
 impl CommitteeConfig {
+    /// Converts this committee config into a `Committee` using the given resource control policy.
     pub fn into_committee(self, policy: ResourceControlPolicy) -> Committee {
         let validators = self
             .validators

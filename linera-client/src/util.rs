@@ -18,26 +18,32 @@ pub fn non_zero_duration(d: Duration) -> Option<Duration> {
     (d > Duration::ZERO).then_some(d)
 }
 
+/// Parses the trimmed string as JSON into a value of type `T`.
 pub fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> anyhow::Result<T> {
     Ok(serde_json::from_str(s.trim())?)
 }
 
+/// Parses the string as a number of milliseconds into a `Duration`.
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
 }
 
+/// Parses the string as a number of seconds into a `Duration`.
 pub fn parse_secs(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_secs(s.parse()?))
 }
 
+/// Parses the string as a number of milliseconds into a `TimeDelta`.
 pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
 }
 
+/// Parses the JSON string as an optional number of milliseconds into an `Option<TimeDelta>`.
 pub fn parse_json_optional_millis_delta(s: &str) -> anyhow::Result<Option<TimeDelta>> {
     Ok(parse_json::<Option<u64>>(s)?.map(TimeDelta::from_millis))
 }
 
+/// Parses a comma-separated list of chain IDs into a set.
 pub fn parse_chain_set(s: &str) -> Result<HashSet<ChainId>, CryptoError> {
     match s.trim() {
         "" => Ok(HashSet::new()),
@@ -45,6 +51,7 @@ pub fn parse_chain_set(s: &str) -> Result<HashSet<ChainId>, CryptoError> {
     }
 }
 
+/// Parses a comma-separated list of application IDs into a set.
 pub fn parse_app_set(s: &str) -> anyhow::Result<HashSet<GenericApplicationId>> {
     s.trim()
         .split(",")
