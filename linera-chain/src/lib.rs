@@ -3,15 +3,20 @@
 
 //! This module manages the state of a Linera chain, including cross-chain communication.
 
+#![deny(missing_docs)]
+
+/// Block types and the wrappers that pair them with their execution outcomes.
 pub mod block;
 mod certificate;
 
+/// Convenience re-exports of the public block and certificate types.
 pub mod types {
     pub use super::{block::*, certificate::*};
 }
 
 mod block_tracker;
 mod chain;
+/// Data types exchanged while proposing, voting on, and confirming blocks.
 pub mod data_types;
 mod inbox;
 pub mod manager;
@@ -32,7 +37,9 @@ use linera_execution::ExecutionError;
 use linera_views::ViewError;
 use thiserror::Error;
 
+/// An error that occurred while validating or executing a block on a chain.
 #[derive(Error, Debug, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum ChainError {
     #[error("Cryptographic error: {0}")]
     CryptoError(#[from] CryptoError),
@@ -236,8 +243,10 @@ impl ChainError {
     }
 }
 
+/// The phase of block execution during which an error occurred.
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[allow(missing_docs)]
 pub enum ChainExecutionContext {
     Query,
     DescribeApplication,
@@ -246,7 +255,9 @@ pub enum ChainExecutionContext {
     Block,
 }
 
+/// Extension trait for attaching a [`ChainExecutionContext`] to an execution error.
 pub trait ExecutionResultExt<T> {
+    /// Converts the error into a [`ChainError`], tagging it with the given execution context.
     fn with_execution_context(self, context: ChainExecutionContext) -> Result<T, ChainError>;
 }
 
