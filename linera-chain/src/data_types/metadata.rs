@@ -131,6 +131,7 @@ impl SystemOperationMetadata {
 
 /// Transfer operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct TransferOperationMetadata {
     pub owner: AccountOwner,
     pub recipient: Account,
@@ -139,6 +140,7 @@ pub struct TransferOperationMetadata {
 
 /// Claim operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct ClaimOperationMetadata {
     pub owner: AccountOwner,
     pub target_id: ChainId,
@@ -148,6 +150,7 @@ pub struct ClaimOperationMetadata {
 
 /// Open chain operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct OpenChainOperationMetadata {
     pub balance: Amount,
     pub ownership: ChainOwnershipMetadata,
@@ -156,6 +159,7 @@ pub struct OpenChainOperationMetadata {
 
 /// Change ownership operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct ChangeOwnershipOperationMetadata {
     pub super_owners: Vec<AccountOwner>,
     pub owners: Vec<OwnerWithWeight>,
@@ -166,6 +170,7 @@ pub struct ChangeOwnershipOperationMetadata {
 
 /// Owner with weight metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct OwnerWithWeight {
     pub owner: AccountOwner,
     pub weight: String, // Using String to represent u64 safely in GraphQL
@@ -173,12 +178,14 @@ pub struct OwnerWithWeight {
 
 /// Change application permissions operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct ChangeApplicationPermissionsMetadata {
     pub permissions: ApplicationPermissionsMetadata,
 }
 
 /// Admin operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct AdminOperationMetadata {
     pub admin_operation_type: String,
     pub epoch: Option<i32>,
@@ -187,6 +194,7 @@ pub struct AdminOperationMetadata {
 
 /// Create application operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct CreateApplicationOperationMetadata {
     pub module_id: String,
     pub parameters_hex: String,
@@ -196,24 +204,28 @@ pub struct CreateApplicationOperationMetadata {
 
 /// Publish data blob operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct PublishDataBlobMetadata {
     pub blob_hash: CryptoHash,
 }
 
 /// Verify blob operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct VerifyBlobMetadata {
     pub blob_id: String,
 }
 
 /// Publish module operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct PublishModuleMetadata {
     pub module_id: String,
 }
 
 /// Update stream metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct UpdateStreamMetadata {
     pub chain_id: ChainId,
     pub stream_id: String,
@@ -233,6 +245,7 @@ pub struct SystemMessageMetadata {
 
 /// Credit message metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct CreditMessageMetadata {
     pub target: AccountOwner,
     pub amount: Amount,
@@ -241,6 +254,7 @@ pub struct CreditMessageMetadata {
 
 /// Withdraw message metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
+#[allow(missing_docs)]
 pub struct WithdrawMessageMetadata {
     pub owner: AccountOwner,
     pub amount: Amount,

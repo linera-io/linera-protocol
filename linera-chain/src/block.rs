@@ -39,10 +39,12 @@ impl ValidatedBlock {
         Self(Hashed::new(block))
     }
 
+    /// Creates a `ValidatedBlock` from an already-hashed `Block`.
     pub fn from_hashed(block: Hashed<Block>) -> Self {
         Self(block)
     }
 
+    /// Returns a reference to the hashed [`Block`] contained in this `ValidatedBlock`.
     pub fn inner(&self) -> &Hashed<Block> {
         &self.0
     }
@@ -57,18 +59,22 @@ impl ValidatedBlock {
         self.0.into_inner()
     }
 
+    /// Returns a static string identifying this value kind, for logging.
     pub fn to_log_str(&self) -> &'static str {
         "validated_block"
     }
 
+    /// Returns the ID of the chain this block belongs to.
     pub fn chain_id(&self) -> ChainId {
         self.0.inner().header.chain_id
     }
 
+    /// Returns the height of this block.
     pub fn height(&self) -> BlockHeight {
         self.0.inner().header.height
     }
 
+    /// Returns the epoch this block belongs to.
     pub fn epoch(&self) -> Epoch {
         self.0.inner().header.epoch
     }
@@ -96,18 +102,22 @@ impl ConfirmedBlock {
 }
 
 impl ConfirmedBlock {
+    /// Creates a new `ConfirmedBlock` from a `Block`.
     pub fn new(block: Block) -> Self {
         Self(Hashed::new(block))
     }
 
+    /// Creates a `ConfirmedBlock` from an already-hashed `Block`.
     pub fn from_hashed(block: Hashed<Block>) -> Self {
         Self(block)
     }
 
+    /// Returns a reference to the hashed `Block` contained in this `ConfirmedBlock`.
     pub fn inner(&self) -> &Hashed<Block> {
         &self.0
     }
 
+    /// Consumes this `ConfirmedBlock`, returning the hashed `Block` it contains.
     pub fn into_inner(self) -> Hashed<Block> {
         self.0
     }
@@ -122,18 +132,22 @@ impl ConfirmedBlock {
         self.0.into_inner()
     }
 
+    /// Returns the ID of the chain this block belongs to.
     pub fn chain_id(&self) -> ChainId {
         self.0.inner().header.chain_id
     }
 
+    /// Returns the height of this block.
     pub fn height(&self) -> BlockHeight {
         self.0.inner().header.height
     }
 
+    /// Returns the timestamp of this block.
     pub fn timestamp(&self) -> Timestamp {
         self.0.inner().header.timestamp
     }
 
+    /// Returns a static string identifying this value kind, for logging.
     pub fn to_log_str(&self) -> &'static str {
         "confirmed_block"
     }
@@ -166,6 +180,8 @@ impl From<Hashed<Block>> for ValidatedBlock {
     }
 }
 
+/// A request to move on to the next consensus round, certified when no block is confirmed in
+/// time.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
 #[serde(transparent)]
 pub struct Timeout(Hashed<TimeoutInner>);
@@ -179,6 +195,7 @@ pub(crate) struct TimeoutInner {
 }
 
 impl Timeout {
+    /// Creates a new `Timeout` for the given chain, height and epoch.
     pub fn new(chain_id: ChainId, height: BlockHeight, epoch: Epoch) -> Self {
         let inner = TimeoutInner {
             chain_id,
@@ -188,18 +205,22 @@ impl Timeout {
         Self(Hashed::new(inner))
     }
 
+    /// Returns a static string identifying this value kind, for logging.
     pub fn to_log_str(&self) -> &'static str {
         "timeout"
     }
 
+    /// Returns the ID of the chain this timeout applies to.
     pub fn chain_id(&self) -> ChainId {
         self.0.inner().chain_id
     }
 
+    /// Returns the block height this timeout applies to.
     pub fn height(&self) -> BlockHeight {
         self.0.inner().height
     }
 
+    /// Returns the epoch this timeout applies to.
     pub fn epoch(&self) -> Epoch {
         self.0.inner().epoch
     }
@@ -407,6 +428,7 @@ impl BlockBody {
 }
 
 impl Block {
+    /// Creates a new `Block` from a proposed block and its execution outcome.
     pub fn new(block: ProposedBlock, outcome: BlockExecutionOutcome) -> Self {
         let transactions_hash = hashing::hash_vec(&block.transactions);
         let messages_hash = hashing::hash_vec_vec(&outcome.messages);
@@ -598,6 +620,7 @@ impl Block {
             && *previous_block_hash == self.header.previous_block_hash
     }
 
+    /// Splits this block back into the proposed block and its execution outcome.
     pub fn into_proposal(self) -> (ProposedBlock, BlockExecutionOutcome) {
         let proposed_block = ProposedBlock {
             chain_id: self.header.chain_id,
@@ -630,6 +653,8 @@ impl Block {
 
 impl BcsHashable<'_> for Block {}
 
+/// Hashable wrapper around the lookup table mapping each recipient chain to the previous
+/// block that sent it messages.
 #[derive(Serialize, Deserialize)]
 pub struct PreviousMessageBlocksMap<'a> {
     inner: Cow<'a, BTreeMap<ChainId, (CryptoHash, BlockHeight)>>,
@@ -637,6 +662,8 @@ pub struct PreviousMessageBlocksMap<'a> {
 
 impl<'de> BcsHashable<'de> for PreviousMessageBlocksMap<'de> {}
 
+/// Hashable wrapper around the lookup table mapping each stream to the previous block that
+/// published events to it.
 #[derive(Serialize, Deserialize)]
 pub struct PreviousEventBlocksMap<'a> {
     inner: Cow<'a, BTreeMap<StreamId, (CryptoHash, BlockHeight)>>,
