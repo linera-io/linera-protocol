@@ -132,6 +132,7 @@ impl Notifier for Arc<std::sync::Mutex<Vec<worker::Notification>>> {
 }
 
 #[cfg(test)]
+/// Unit tests for the [`Notifier`].
 pub mod tests {
     use std::{
         sync::{atomic::Ordering, Arc},
