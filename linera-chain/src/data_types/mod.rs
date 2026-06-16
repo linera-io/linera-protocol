@@ -191,9 +191,9 @@ impl Transaction {
     }
 }
 
-/// GraphQL-compatible metadata about an operation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
 #[graphql(name = "Operation")]
+#[allow(missing_docs)]
 pub struct OperationMetadata {
     /// The type of operation: "System" or "User"
     pub operation_type: String,
