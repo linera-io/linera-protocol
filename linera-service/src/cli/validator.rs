@@ -45,11 +45,14 @@ impl FromStr for Votes {
 /// Specification for a validator to add or modify.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(missing_docs)]
 pub struct Spec {
+    /// Public key identifying the validator.
     pub public_key: ValidatorPublicKey,
+    /// Account public key for receiving payments and rewards.
     pub account_key: AccountPublicKey,
+    /// Network address where the validator can be reached.
     pub network_address: url::Url,
+    /// Voting weight for consensus.
     #[serde(default)]
     pub votes: Votes,
 }
@@ -57,10 +60,12 @@ pub struct Spec {
 /// Represents an update to a validator's configuration in batch operations.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(missing_docs)]
 pub struct Change {
+    /// Account public key for receiving payments and rewards.
     pub account_key: AccountPublicKey,
+    /// Network address where the validator can be reached.
     pub address: url::Url,
+    /// Voting weight for consensus.
     #[serde(default)]
     pub votes: Votes,
 }
@@ -74,12 +79,15 @@ pub type BatchFile = HashMap<ValidatorPublicKey, Option<Change>>;
 
 /// Structure for batch validator queries from JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(missing_docs)]
 pub struct QueryBatch {
+    /// The validator specifications to query.
     pub validators: Vec<Spec>,
 }
 
 /// Validator subcommands.
+// Each variant delegates to a documented args struct; giving the variant its own
+// doc comment would shadow that struct's richer `--help` text, so `missing_docs`
+// is allowed here rather than duplicating those docs.
 #[derive(Debug, Clone, clap::Subcommand)]
 #[allow(missing_docs)]
 pub enum Command {

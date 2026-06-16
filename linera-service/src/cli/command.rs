@@ -349,8 +349,8 @@ pub struct ResourceControlPolicyOverrides {
     pub flags: Option<Vec<String>>,
 }
 
+/// The subcommands of the Linera client binary.
 #[derive(Clone, clap::Subcommand)]
-#[allow(missing_docs)]
 pub enum ClientCommand {
     /// Transfer funds
     Transfer {
@@ -396,9 +396,11 @@ pub enum ClientCommand {
         #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
+        /// Options configuring the new chain's ownership.
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
 
+        /// Options configuring the new chain's application permissions.
         #[clap(flatten)]
         application_permissions_config: ApplicationPermissionsConfig,
 
@@ -428,6 +430,7 @@ pub enum ClientCommand {
         #[clap(long)]
         chain_id: Option<ChainId>,
 
+        /// Options configuring the new chain's ownership.
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
     },
@@ -449,6 +452,7 @@ pub enum ClientCommand {
         #[arg(long)]
         chain_id: Option<ChainId>,
 
+        /// Options configuring the new chain's application permissions.
         #[clap(flatten)]
         application_permissions_config: ApplicationPermissionsConfig,
     },
@@ -536,10 +540,14 @@ pub enum ClientCommand {
     },
 
     /// Deprecates all committees up to and including the specified one.
-    RevokeEpochs { epoch: Epoch },
+    RevokeEpochs {
+        /// The highest epoch to deprecate.
+        epoch: Epoch,
+    },
 
     /// View or update the resource control policy
     ResourceControlPolicy {
+        /// Overrides for individual resource control policy parameters.
         #[command(flatten)]
         overrides: ResourceControlPolicyOverrides,
     },
@@ -756,6 +764,7 @@ pub enum ClientCommand {
 
     /// Run a GraphQL service to explore and extend the chains of the wallet.
     Service {
+        /// Configuration for the chain listener backing the service.
         #[command(flatten)]
         config: ChainListenerConfig,
 

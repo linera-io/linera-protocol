@@ -50,9 +50,10 @@ use crate::{
 const MAX_NUMBER_SHARDS: usize = 1000;
 
 /// Whether to process the inbox automatically before an operation.
-#[allow(missing_docs)]
 pub enum ProcessInbox {
+    /// Leaves the inbox untouched before the operation.
     Skip,
+    /// Processes the inbox automatically before the operation.
     Automatic,
 }
 
@@ -121,11 +122,13 @@ async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
 }
 
 /// A way to obtain the storage configuration for a local network.
-#[allow(missing_docs)]
 pub enum InnerStorageConfigBuilder {
+    /// Builds a fresh test configuration for the selected database engine.
     #[cfg(with_testing)]
     TestConfig,
+    /// Uses a storage configuration that has already been built.
     ExistingConfig {
+        /// The pre-built storage configuration to use.
         storage_config: InnerStorageConfig,
     },
 }
@@ -145,10 +148,17 @@ impl InnerStorageConfigBuilder {
 /// Path used for the run can come from a path whose lifetime is controlled
 /// by an external user or as a temporary directory
 #[derive(Clone)]
-#[allow(missing_docs)]
 pub enum PathProvider {
-    ExternalPath { path_buf: PathBuf },
-    TemporaryDirectory { tmp_dir: Arc<TempDir> },
+    /// A path whose lifetime is managed by an external caller.
+    ExternalPath {
+        /// The externally managed path.
+        path_buf: PathBuf,
+    },
+    /// A temporary directory whose lifetime is managed by this provider.
+    TemporaryDirectory {
+        /// The temporary directory, removed when the last reference is dropped.
+        tmp_dir: Arc<TempDir>,
+    },
 }
 
 impl PathProvider {
@@ -183,22 +193,36 @@ impl PathProvider {
 }
 
 /// The information needed to start a [`LocalNet`].
-#[allow(missing_docs)]
 pub struct LocalNetConfig {
+    /// The storage backend used by the validators.
     pub database: Database,
+    /// The network protocols used for the validators' internal and external endpoints.
     pub network: NetworkConfig,
+    /// The seed used to make key generation deterministic in tests, if any.
     pub testing_prng_seed: Option<u64>,
+    /// The namespace used for the validators' storage.
     pub namespace: String,
+    /// The number of additional chains to create in the genesis configuration.
     pub num_other_initial_chains: u32,
+    /// The initial balance assigned to each chain in the genesis configuration.
     pub initial_amount: Amount,
+    /// The number of validators to start initially.
     pub num_initial_validators: usize,
+    /// The number of shards to run per validator.
     pub num_shards: usize,
+    /// The number of proxies to run per validator.
     pub num_proxies: usize,
+    /// The resource control policy applied to the network.
     pub policy_config: ResourceControlPolicyConfig,
+    /// The list of hosts that applications are allowed to make HTTP requests to, if restricted.
     pub http_request_allow_list: Option<Vec<String>>,
+    /// The configuration for cross-chain message queuing between validators.
     pub cross_chain_config: CrossChainConfig,
+    /// The builder that produces the storage configuration for the network.
     pub storage_config_builder: InnerStorageConfigBuilder,
+    /// The provider for the working directory of the network.
     pub path_provider: PathProvider,
+    /// The setup describing how block exporters are started or connected to.
     pub block_exporters: ExportersSetup,
     /// Optional directory where the `linera`, `linera-proxy`, and `linera-server` binaries
     /// are located. If `None`, binaries are resolved from the current binary's directory.
@@ -207,11 +231,10 @@ pub struct LocalNetConfig {
 
 /// The setup for the block exporters.
 #[derive(Clone, PartialEq)]
-#[allow(missing_docs)]
 pub enum ExportersSetup {
-    // Block exporters are meant to be started and managed by the testing framework.
+    /// Block exporters are meant to be started and managed by the testing framework.
     Local(Vec<BlockExporterConfig>),
-    // Block exporters are already started and we just need to connect to them.
+    /// Block exporters are already started and we just need to connect to them.
     Remote(Vec<ExporterServiceConfig>),
 }
 
@@ -257,10 +280,12 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 
 /// Description of the database engine to use inside a local Linera network.
 #[derive(Copy, Clone, Eq, PartialEq)]
-#[allow(missing_docs)]
 pub enum Database {
+    /// The storage service backend.
     Service,
+    /// The ScyllaDB backend.
     ScyllaDb,
+    /// The dual backend combining RocksDB and ScyllaDB.
     DualRocksDbScyllaDb,
 }
 
