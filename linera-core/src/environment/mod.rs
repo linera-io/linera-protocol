@@ -13,7 +13,6 @@ trait_set::trait_set! {
     pub trait Network = crate::node::ValidatorNodeProvider + AutoTraits;
     /// The signer used to sign blocks and other messages on behalf of chain owners.
     pub trait Signer = linera_base::crypto::Signer + AutoTraits;
-    // TODO(#5064): we shouldn't hard-code `Send` + `Sync` here
     /// The persistent storage backend for chains and certificates.
     pub trait Storage = linera_storage::Storage + Clone + AutoTraits;
     /// The wallet tracking the set of chains followed by the client.
@@ -33,7 +32,6 @@ pub trait Environment: AutoTraits {
 
     /// The validator node type produced by the network provider.
     type ValidatorNode: crate::node::ValidatorNode + AutoTraits + Clone;
-    // TODO(#5064): we shouldn't hard-code `Send` + `Sync` here
     /// The storage context used by the storage backend.
     type StorageContext: linera_views::context::Context<Extra: linera_execution::ExecutionRuntimeContext>
         + AutoTraits;
