@@ -12,8 +12,17 @@ scalar AccountOwner
 Admin operation metadata.
 """
 type AdminOperationMetadata {
+	"""
+	The type of admin operation (e.g. `PublishCommitteeBlob`, `CreateCommittee`, `RemoveCommittee`).
+	"""
 	adminOperationType: String!
+	"""
+	The epoch the operation applies to, when relevant.
+	"""
 	epoch: Int
+	"""
+	The hash of the committee blob, when relevant.
+	"""
 	blobHash: CryptoHash
 }
 
@@ -477,6 +486,9 @@ type Chains {
 Change application permissions operation metadata.
 """
 type ChangeApplicationPermissionsMetadata {
+	"""
+	The new application permissions to set on the chain.
+	"""
 	permissions: ApplicationPermissionsMetadata!
 }
 
@@ -484,10 +496,25 @@ type ChangeApplicationPermissionsMetadata {
 Change ownership operation metadata.
 """
 type ChangeOwnershipOperationMetadata {
+	"""
+	The owners with full control over the chain in every round.
+	"""
 	superOwners: [AccountOwner!]!
+	"""
+	The regular owners and their voting weights.
+	"""
 	owners: [OwnerWithWeight!]!
+	"""
+	The number of initial rounds in which all owners can propose blocks.
+	"""
 	multiLeaderRounds: Int!
+	"""
+	Whether anyone can propose blocks during the multi-leader rounds.
+	"""
 	openMultiLeaderRounds: Boolean!
+	"""
+	The configuration of round timeouts.
+	"""
 	timeoutConfig: TimeoutConfigMetadata!
 }
 
@@ -495,9 +522,21 @@ type ChangeOwnershipOperationMetadata {
 Claim operation metadata.
 """
 type ClaimOperationMetadata {
+	"""
+	The account owner claiming the tokens.
+	"""
 	owner: AccountOwner!
+	"""
+	The chain from which the tokens are claimed.
+	"""
 	targetId: ChainId!
+	"""
+	The account receiving the claimed tokens.
+	"""
 	recipient: Account!
+	"""
+	The amount of tokens to claim.
+	"""
 	amount: Amount!
 }
 
@@ -538,9 +577,21 @@ type ConfirmedBlock {
 Create application operation metadata.
 """
 type CreateApplicationOperationMetadata {
+	"""
+	The ID of the module the application is instantiated from.
+	"""
 	moduleId: String!
+	"""
+	The application parameters, hex-encoded.
+	"""
 	parametersHex: String!
+	"""
+	The instantiation argument, hex-encoded.
+	"""
 	instantiationArgumentHex: String!
+	"""
+	The IDs of the applications that this application depends on.
+	"""
 	requiredApplicationIds: [ApplicationId!]!
 }
 
@@ -548,8 +599,17 @@ type CreateApplicationOperationMetadata {
 Credit message metadata.
 """
 type CreditMessageMetadata {
+	"""
+	The account owner credited with the tokens.
+	"""
 	target: AccountOwner!
+	"""
+	The amount of tokens credited.
+	"""
 	amount: Amount!
+	"""
+	The account owner the tokens originate from.
+	"""
 	source: AccountOwner!
 }
 
@@ -1053,11 +1113,23 @@ scalar Notification
 Open chain operation metadata.
 """
 type OpenChainOperationMetadata {
+	"""
+	The initial balance credited to the new chain.
+	"""
 	balance: Amount!
+	"""
+	The ownership configuration of the new chain.
+	"""
 	ownership: ChainOwnershipMetadata!
+	"""
+	The application permissions of the new chain.
+	"""
 	applicationPermissions: ApplicationPermissionsMetadata!
 }
 
+"""
+GraphQL-compatible structured representation of an operation.
+"""
 type Operation {
 	"""
 	The type of operation: "System" or "User"
@@ -1142,7 +1214,13 @@ type OutgoingMessage {
 Owner with weight metadata.
 """
 type OwnerWithWeight {
+	"""
+	The account owner.
+	"""
 	owner: AccountOwner!
+	"""
+	The owner's voting weight, as a string to safely represent a `u64` in GraphQL.
+	"""
 	weight: String!
 }
 
@@ -1206,6 +1284,9 @@ type PostedMessage {
 Publish data blob operation metadata.
 """
 type PublishDataBlobMetadata {
+	"""
+	The hash of the published data blob.
+	"""
 	blobHash: CryptoHash!
 }
 
@@ -1213,6 +1294,9 @@ type PublishDataBlobMetadata {
 Publish module operation metadata.
 """
 type PublishModuleMetadata {
+	"""
+	The ID of the published module.
+	"""
 	moduleId: String!
 }
 
@@ -1479,8 +1563,17 @@ type TransactionMetadata {
 Transfer operation metadata.
 """
 type TransferOperationMetadata {
+	"""
+	The account owner sending the tokens.
+	"""
 	owner: AccountOwner!
+	"""
+	The account receiving the transferred tokens.
+	"""
 	recipient: Account!
+	"""
+	The amount of tokens to transfer.
+	"""
 	amount: Amount!
 }
 
@@ -1488,8 +1581,17 @@ type TransferOperationMetadata {
 Update stream metadata.
 """
 type UpdateStreamMetadata {
+	"""
+	The chain that publishes the event stream.
+	"""
 	chainId: ChainId!
+	"""
+	The ID of the event stream.
+	"""
 	streamId: String!
+	"""
+	The next event index to read from the stream.
+	"""
 	nextIndex: Int!
 }
 
@@ -1497,6 +1599,9 @@ type UpdateStreamMetadata {
 Verify blob operation metadata.
 """
 type VerifyBlobMetadata {
+	"""
+	The ID of the blob whose existence is verified.
+	"""
 	blobId: String!
 }
 
@@ -1508,8 +1613,17 @@ scalar VmRuntime
 Withdraw message metadata.
 """
 type WithdrawMessageMetadata {
+	"""
+	The account owner the tokens are withdrawn from.
+	"""
 	owner: AccountOwner!
+	"""
+	The amount of tokens withdrawn.
+	"""
 	amount: Amount!
+	"""
+	The account receiving the withdrawn tokens.
+	"""
 	recipient: Account!
 }
 
