@@ -162,47 +162,6 @@ contract LightClient {
         }
     }
 
-    /// Verifies a confirmed block from its header proof and the events it commits to, returning the
-    /// header and the block hash. The body never travels in the proof; `eventBcs` are the per-event
-    /// BCS encodings and `eventsPerTx` how many belong to each transaction — together they
-    /// reconstruct `events_hash`, checked against the header.
-    function verifyBlockFromEvents(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx)
-        external
-        view
-        returns (BridgeTypes.BlockHeader memory header, bytes32 blockHash)
-    {
-        BridgeTypes.BlockProof memory proof;
-        (proof, blockHash) = _deserializeAndHash(blockProof);
-        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
-        require(
-            _hashEventsFromBcs(eventBcs, eventsPerTx) == proof.header.events_hash.value, "events do not match header"
-        );
-        header = proof.header;
-    }
-
-    /// Reconstructs `events_hash` (`hash_vec_vec`) from the per-event BCS encodings grouped by
-    /// `eventsPerTx`: each event hashes to `keccak256("Event::" ++ eventBcs[k])`, the leaves of each
-    /// transaction fold to its event hash, and those fold to `events_hash`.
-    function _hashEventsFromBcs(bytes[] calldata eventBcs, uint32[] calldata eventsPerTx)
-        internal
-        pure
-        returns (bytes32)
-    {
-        bytes32[] memory leaves = _eventLeaves(eventBcs);
-        BridgeTypes.CryptoHash[] memory txHashes = new BridgeTypes.CryptoHash[](eventsPerTx.length);
-        uint256 cursor = 0;
-        for (uint256 i = 0; i < eventsPerTx.length; i++) {
-            BridgeTypes.CryptoHash[] memory group = new BridgeTypes.CryptoHash[](eventsPerTx[i]);
-            for (uint256 j = 0; j < eventsPerTx[i]; j++) {
-                group[j] = BridgeTypes.CryptoHash(leaves[cursor]);
-                cursor++;
-            }
-            txHashes[i] = BridgeTypes.CryptoHash(_hashCryptoHashVec(group));
-        }
-        require(cursor == leaves.length, "events/eventsPerTx mismatch");
-        return _hashCryptoHashVec(txHashes);
-    }
-
     /// Recomputes `transactions_hash` (`hash_vec`) from the per-transaction BCS encodings: each
     /// hashes to `keccak256("Transaction::" ++ transactionBcs[i])`, then the leaves fold once.
     function _hashTransactionsFromBcs(bytes[] calldata transactionBcs) internal pure returns (bytes32) {

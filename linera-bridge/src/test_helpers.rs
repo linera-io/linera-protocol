@@ -81,26 +81,6 @@ pub fn sign_and_serialize(
     bcs::to_bytes(&BlockProof::from_certificate(&certificate)).expect("BCS serialization failed")
 }
 
-/// Builds the three `addBlock` arguments from a certificate: the lean block proof, the per-event
-/// BCS encodings (flattened across transactions), and the number of events in each transaction.
-pub fn add_block_args(certificate: &ConfirmedBlockCertificate) -> (Bytes, Vec<Bytes>, Vec<u32>) {
-    let proof = Bytes::from(
-        bcs::to_bytes(&BlockProof::from_certificate(certificate))
-            .expect("BCS serialization failed"),
-    );
-    let events = &certificate.block().body.events;
-    let event_bcs = events
-        .iter()
-        .flatten()
-        .map(|event| Bytes::from(bcs::to_bytes(event).expect("BCS serialization failed")))
-        .collect();
-    let events_per_tx = events
-        .iter()
-        .map(|tx_events| u32::try_from(tx_events.len()).expect("event count exceeds u32"))
-        .collect();
-    (proof, event_bcs, events_per_tx)
-}
-
 /// BCS-encodes each transaction, for the `transactionBcs` argument of `addCommittee`.
 pub fn transaction_bcs(transactions: &[Transaction]) -> Vec<Bytes> {
     transactions
@@ -159,21 +139,6 @@ pub fn create_signed_certificate(
 ) -> ConfirmedBlockCertificate {
     let chain_id = CryptoHash::new(&TestString::new("test_chain"));
     create_signed_certificate_for_chain(secret, public, chain_id, BlockHeight(1))
-}
-
-pub fn deploy_microchain(
-    db: &mut CacheDB<EmptyDB>,
-    deployer: Address,
-    light_client: Address,
-    chain_id: CryptoHash,
-) -> Address {
-    let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
-        .expect("MicrochainTest.sol not found");
-    let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
-    let constructor_args = (light_client, *chain_id.as_bytes()).abi_encode_params();
-    let mut deploy_data = bytecode;
-    deploy_data.extend_from_slice(&constructor_args);
-    deploy_contract(db, deployer, deploy_data)
 }
 
 pub fn deploy_fungible_bridge(

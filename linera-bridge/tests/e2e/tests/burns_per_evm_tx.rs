@@ -2,22 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! For each `ChainSpec` (Ethereum / Base / Base Sepolia / …), binary-searches
-//! the largest `N` such that `eth_estimateGas(bridge.addBlock(cert_N))` is
-//! `<= chain_spec.block_gas_limit`, where `cert_N` is a Linera block carrying
-//! exactly `N` `BurnEvent`s. `eth_estimateGas` runs the EVM in dry-run mode,
-//! so the bridge's `processedBurns` mapping stays untouched and a single
-//! bridge instance handles every iteration.
+//! the largest `N` such that settling a Linera block carrying exactly `N`
+//! `BurnEvent`s costs `<= chain_spec.block_gas_limit` in EVM gas. Each block is
+//! settled the way the relayer settles it: `registerBlock` once, then a
+//! `processBurns` call per transaction; the reported gas is the sum of the
+//! per-transaction `eth_estimateGas(processBurns)` estimates. `registerBlock`
+//! mutates chain state (one registered block per iteration), but the
+//! `processBurns` estimates are dry-run, so the bridge's `processedBurns`
+//! mapping stays untouched and a single bridge instance handles every iteration.
 
 #![recursion_limit = "512"]
 
-use alloy::providers::ProviderBuilder;
+use alloy::{network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::{abi::BridgeOperation, contracts::IFungibleBridge};
+use linera_bridge::{abi::BridgeOperation, relay::evm::EvmClient};
 use linera_bridge_e2e::{
-    add_block_args, compose_file_path, deploy_fungible_bridge, deploy_linera_token_with_supply,
-    fetch_latest_cert, fund_bridge_erc20, light_client_address, publish_and_create_evm_bridge,
-    publish_and_create_wrapped_fungible, register_bridge_app, set_anvil_block_gas_limit,
-    start_compose, wait_for_light_client,
+    burn_positions_by_tx, compose_file_path, deploy_fungible_bridge,
+    deploy_linera_token_with_supply, fetch_latest_cert, fund_bridge_erc20, light_client_address,
+    publish_and_create_evm_bridge, publish_and_create_wrapped_fungible, register_bridge_app,
+    set_anvil_block_gas_limit, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::environment::wallet::Memory;
@@ -45,11 +48,10 @@ const INITIAL_BALANCE_TOKENS: u128 = 10u128.pow(38);
 /// not by the amount value).
 const BURN_AMOUNT_TOKENS: u128 = 10u128.pow(15);
 
-// Floors are a sanity lower bound, not a tight target. Measured under the
-// bridge-driven burn flow (each burn adds a funding `Credit` plus a
-// `BridgeMessage::Burn` to the chain-A block) with whole-cert verification;
-// the header-proof scheme only cheapens `addBlock`, so they stay reachable.
-// Re-measure and bump once header-proof numbers are taken under this flow.
+// Floors are a sanity lower bound, not a tight target. The previous numbers were
+// measured under the whole-block `addBlock` path; the reported gas is now the summed
+// `processBurns` estimate across the block's transactions, a different figure.
+// Re-measure and bump these floors once `processBurns` numbers are taken under this flow.
 #[test_case("ethereum",     30_000_000,  Some(30); "ethereum")]
 #[test_case("base",         240_000_000, Some(140); "base")]
 #[tokio::test]
@@ -70,7 +72,13 @@ async fn burns_per_evm_tx(
     wait_for_light_client(&compose, &project_name, &compose_file).await;
 
     let rpc_url = "http://localhost:8545".parse()?;
-    let provider = ProviderBuilder::new().connect_http(rpc_url);
+    // A wallet-backed provider is required because settlement now `registerBlock`s each
+    // block (a signed, state-changing tx) before estimating its `processBurns` gas.
+    let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse()?;
+    let evm_wallet = EthereumWallet::from(evm_signer);
+    let provider = ProviderBuilder::new()
+        .wallet(evm_wallet)
+        .connect_http(rpc_url);
 
     // Raise anvil's own block gas ceiling well above the chain we are
     // measuring so `eth_estimateGas` never errors out on anvil's limit.
@@ -170,7 +178,7 @@ async fn burns_per_evm_tx(
     )
     .await;
 
-    // `n` is past the upper bound when its addBlock estimate exceeds the EVM block gas limit,
+    // `n` is past the upper bound when its processBurns estimate exceeds the EVM block gas limit,
     // or when `n` burns do not fit in a single Linera block (`None`).
     let over_limit = |gas: Option<u64>| !matches!(gas, Some(g) if g <= block_gas_limit);
 
@@ -298,9 +306,9 @@ async fn burns_per_evm_tx(
 /// each routes a funding transfer + tracked `BridgeMessage::Burn` to the
 /// bridge chain (chain A). Drives `cc_a.process_inbox()` (which produces
 /// one chain-A block with `n` `BurnEvent`s), reads the resulting
-/// `ConfirmedBlockCertificate`, builds the `addBlock` arguments (header proof,
-/// per-event BCS, per-transaction event counts), and asks anvil to estimate the
-/// gas required by `bridge.addBlock(...)`.
+/// `ConfirmedBlockCertificate`, `registerBlock`s it, and sums the
+/// `eth_estimateGas(processBurns)` estimate of each of its transactions —
+/// the EVM gas to settle the whole block the way the relayer does.
 ///
 /// Returns `Some(gas)` for the estimate, or `None` when `n` burns do not fit in a single
 /// Linera block (chain A split them across blocks) — an upper bound on `max_n` that the
@@ -314,7 +322,7 @@ async fn build_and_estimate<P, E>(
     provider: &P,
 ) -> anyhow::Result<Option<u64>>
 where
-    P: alloy::providers::Provider,
+    P: alloy::providers::Provider + Clone,
     E: linera_core::environment::Environment,
 {
     use anyhow::Context as _;
@@ -349,8 +357,9 @@ where
     let height_before = cc_a.chain_info().await?.next_block_height;
     cc_a.process_inbox().await?;
     let height_after = cc_a.chain_info().await?.next_block_height;
-    // One EVM tx carries one Linera block. If chain A split the burns across blocks, `n`
-    // exceeds a single block's capacity — an upper bound on `max_n`, not an error.
+    // All `n` burns must land in one chain-A block to be settled together. If chain A split
+    // them across blocks, `n` exceeds a single block's capacity — an upper bound on `max_n`,
+    // not an error.
     if height_after.0 != height_before.0 + 1 {
         tracing::info!(
             n,
@@ -362,14 +371,28 @@ where
     }
 
     let cert = fetch_latest_cert(cc_a).await?;
-    let (proof, event_bcs, events_per_tx) = add_block_args(&cert);
+    let by_tx = burn_positions_by_tx(&cert, bridge_app_id);
+    anyhow::ensure!(!by_tx.is_empty(), "chain-A block carried no BurnEvents for n={n}");
 
-    let bridge = IFungibleBridge::new(bridge_addr, provider);
-    let gas = bridge
-        .addBlock(proof, event_bcs, events_per_tx)
-        .estimate_gas()
-        .await
-        .with_context(|| format!("estimate_gas(addBlock) for n={n}"))?;
+    // Settle the block the way the relayer does: register it once, then estimate the
+    // `processBurns` gas of each of its transactions. The reported figure is the sum
+    // across the block's transactions.
+    let evm_client = EvmClient::new(
+        provider.clone(),
+        bridge_addr,
+        alloy::primitives::Address::ZERO,
+        Some(light_client_address()),
+    );
+    evm_client.register_block(&cert).await?;
 
-    Ok(Some(gas))
+    let mut total_gas: u64 = 0;
+    for (tx_index, positions) in by_tx {
+        let gas = evm_client
+            .estimate_process_burns_gas(&cert, tx_index, &positions)
+            .await
+            .with_context(|| format!("estimate_gas(processBurns) for n={n}, tx {tx_index}"))?;
+        total_gas = total_gas.saturating_add(gas);
+    }
+
+    Ok(Some(total_gas))
 }

@@ -4,7 +4,7 @@
 //! Shared `sol!` bindings for the bridge's EVM contracts.
 //!
 //! Defined once here so the off-chain relay and the end-to-end tests call the exact same ABI.
-//! A signature change (e.g. an `addBlock` argument) then updates every caller in lockstep instead
+//! A signature change (e.g. a `processBurns` argument) then updates every caller in lockstep instead
 //! of being copy-pasted into — and drifting between — each call site.
 
 // `processBurns` carries the inclusion-proof components as separate arguments, so its
@@ -16,7 +16,6 @@ use alloy::sol;
 sol! {
     #[sol(rpc)]
     interface IFungibleBridge {
-        function addBlock(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx) external;
         function processBurns(
             bytes32 blockHash,
             bytes[] calldata eventBcs,
@@ -65,13 +64,6 @@ sol! {
         function expireEpochsBelow(uint32 newMinEpoch) external;
         function committeeTotalWeight(uint32 epoch) external view returns (uint64);
         function committeeHeight(uint32 epoch) external view returns (uint64);
-    }
-
-    #[sol(rpc)]
-    interface IMicrochain {
-        function addBlock(bytes calldata blockProof, bytes[] calldata eventBcs, uint32[] calldata eventsPerTx) external;
-        function lightClient() external view returns (address);
-        function chainId() external view returns (bytes32);
     }
 
     #[sol(rpc)]

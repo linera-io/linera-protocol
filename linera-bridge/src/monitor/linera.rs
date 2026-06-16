@@ -56,10 +56,11 @@ pub async fn linera_scan_loop<E: Environment + 'static>(
     }
 }
 
-/// Batches pending burns per height, dry-runs `addBlock(cert)`, and falls back
-/// to per-tx chunked `processBurns(cert, tx_index, positions)` when it doesn't
-/// fit. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
-/// (whichever comes first) when nothing is ready.
+/// Batches pending burns per height and settles each via per-tx chunked
+/// `processBurns(cert, tx_index, positions)`: it registers the block once, then
+/// proves and releases each chunk's events independently. Sleeps on `notify`
+/// (woken by the scanner) or on `poll_interval` (whichever comes first) when
+/// nothing is ready.
 pub(crate) async fn process_pending_burns<E: Environment + 'static>(
     monitor: &RwLock<MonitorState>,
     evm_client: &EvmClient<impl Provider>,
@@ -105,78 +106,17 @@ pub(crate) async fn process_pending_burns<E: Environment + 'static>(
 
             persist_cert_bytes(monitor, height, &event_indices, &cert).await;
 
-            match estimate_fits(evm_client.estimate_add_block_gas(&cert).await) {
-                Ok(true) => {
-                    submit_addblock(
-                        monitor,
-                        evm_client,
-                        &cert,
-                        height,
-                        &event_indices,
-                        max_retries,
-                    )
-                    .await;
-                    relay::update_balance_metrics(evm_client, linera_client).await;
-                }
-                Ok(false) => {
-                    submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
-                    relay::update_balance_metrics(evm_client, linera_client).await;
-                }
-                Err(error) => {
-                    // `eth_estimateGas` on the whole-block `addBlock` reverted.
-                    // This happens when the block is too large to even estimate
-                    // (it would exceed the EVM block gas limit) — common now that
-                    // a bridge-driven burn adds a funding `Credit` plus a
-                    // `BridgeMessage::Burn` to the block — but also for a
-                    // genuinely invalid cert. Either way, fall back to the per-tx
-                    // chunked `processBurns` path: it estimates each chunk
-                    // independently, submits the ones that fit, and marks any
-                    // single burn that still can't fit as `failed` (so an invalid
-                    // cert terminates instead of being re-polled forever).
-                    tracing::warn!(
-                        ?height,
-                        ?error,
-                        "estimate_add_block_gas failed; falling back to chunked processBurns"
-                    );
-                    submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
-                    relay::update_balance_metrics(evm_client, linera_client).await;
-                }
-            }
+            // Every block settles through the per-tx chunked `processBurns` path: it registers the
+            // block once, estimates each chunk independently, submits the ones that fit, and marks
+            // any single burn that still can't fit as `failed` (so an invalid cert terminates
+            // instead of being re-polled forever).
+            submit_chunked(monitor, evm_client, &cert, height, &by_tx, max_retries).await;
+            relay::update_balance_metrics(evm_client, linera_client).await;
         }
     }
 }
 
-/// Submits the cert via `addBlock`. On success, leaves retry counts alone
-/// (completion is observed asynchronously by `check_burn_completion`). On
-/// failure, bumps retry once for every burn at the height — addBlock
-/// attempted all of them.
-async fn submit_addblock<P: Provider>(
-    monitor: &RwLock<MonitorState>,
-    evm_client: &EvmClient<P>,
-    cert: &ConfirmedBlockCertificate,
-    height: BlockHeight,
-    event_indices: &[u32],
-    max_retries: u32,
-) {
-    match evm_client.forward_cert(cert).await {
-        Ok(()) => {
-            tracing::info!(
-                ?height,
-                count = event_indices.len(),
-                "Burns forwarded via addBlock"
-            );
-        }
-        Err(error) => {
-            tracing::warn!(?height, ?error, "addBlock submission failed");
-            let mut state = monitor.write().await;
-            for ei in event_indices {
-                state.mark_burn_retried(height, *ei, max_retries).await;
-            }
-        }
-    }
-}
-
-/// Per-tx chunked fallback: register the block, split each tx group's
+/// Per-tx chunked settlement: register the block, split each tx group's
 /// positions to fit under the block gas limit, mark any
 /// individually-oversized burn as `failed`, then submit each fitting chunk
 /// as an independent `processBurns` tx.

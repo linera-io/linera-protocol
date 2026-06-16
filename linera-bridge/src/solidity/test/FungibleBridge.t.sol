@@ -168,9 +168,9 @@ contract FungibleBridgeProcessBurnsTest is Test {
     }
 
     function test_processBurns_already_processed_skips() public {
-        // Idempotent like `_onBlock`: re-processing the same burn must be a no-op, not a revert.
-        // Keeps the relayer robust to overlap between an addBlock-path settlement and a
-        // racing/retrying processBurns call covering the same (height, eventIndex).
+        // Idempotent: re-processing the same burn must be a no-op, not a revert.
+        // Keeps the relayer robust to overlap between a racing/retrying processBurns call
+        // covering the same (height, eventIndex).
         MockLightClient lc = new MockLightClient(CHAIN_ID, HEIGHT);
         (FungibleBridge bridge, LineraToken tok) = _deployBridge(address(lc), AMOUNT * 10);
 

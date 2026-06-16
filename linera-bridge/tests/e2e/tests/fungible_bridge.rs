@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, path::PathBuf, time::Duration};
 
 use alloy::{
     network::EthereumWallet,
-    primitives::{Address, Bytes, U256},
+    primitives::{Address, U256},
     providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
 };
@@ -24,10 +24,11 @@ use linera_base::{
 };
 use linera_bridge::{
     abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
-    contracts::{IFungibleBridge, IERC20},
+    contracts::IERC20,
+    relay::evm::EvmClient,
 };
 use linera_bridge_e2e::{
-    add_block_args, compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok,
+    burn_positions_by_tx, compose_file_path, deploy_fungible_bridge, deploy_linera_token, exec_ok,
     light_client_address, start_compose, wait_for_light_client, ANVIL_PRIVATE_KEY,
 };
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
@@ -96,9 +97,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     cc_a.synchronize_from_validators().await?;
     tracing::info!(%chain_a, %owner_a, "Chain A claimed");
 
-    // Collect all chain A certificate bytes to submit to the bridge in sequential order.
-    let mut add_block_calls: Vec<(Bytes, Vec<Bytes>, Vec<u32>)> = Vec::new();
-
     // ── 2b. Deploy LineraToken on Anvil ──
     // Done before creating the Linera apps so its address can be baked into both the
     // evm-bridge `token_address` and the wrapped-fungible `evm_token_address`.
@@ -129,13 +127,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("publish module committed");
     tracing::info!(height=?cert.inner().block().header.height, "Module published");
-    add_block_calls.push(add_block_args(&cert));
 
     cc_a.synchronize_from_validators().await?;
-    let (inbox_certs, _) = cc_a.process_inbox().await?;
-    for c in &inbox_certs {
-        add_block_calls.push(add_block_args(c));
-    }
+    cc_a.process_inbox().await?;
 
     tracing::info!("Creating wrapped-fungible application...");
     let params = WrappedParameters {
@@ -148,7 +142,7 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
     let init_state = InitialState {
         accounts: BTreeMap::from([(owner_a, U128(1000u128 * 10u128.pow(18)))]),
     };
-    let (app_id, create_cert): (
+    let (app_id, _create_cert): (
         linera_base::identifiers::ApplicationId<WrappedFungibleTokenAbi>,
         _,
     ) = cc_a
@@ -162,7 +156,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .expect("create application committed");
     let app_id = app_id.forget_abi();
     tracing::info!(%app_id, "Application created");
-    add_block_calls.push(add_block_args(&create_cert));
 
     // 3b. Publish and create the evm-bridge app, pointing it at the wrapped-fungible app
     // via `fungible_app_id`. It drives the burn: a user submits `BridgeOperation::Burn`
@@ -178,15 +171,11 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("publish evm-bridge module committed");
     tracing::info!(height=?eb_publish_cert.inner().block().header.height, "evm-bridge module published");
-    add_block_calls.push(add_block_args(&eb_publish_cert));
     cc_a.synchronize_from_validators().await?;
-    let (eb_inbox_certs, _) = cc_a.process_inbox().await?;
-    for c in &eb_inbox_certs {
-        add_block_calls.push(add_block_args(c));
-    }
+    cc_a.process_inbox().await?;
 
     tracing::info!("Creating evm-bridge application...");
-    let (bridge_app_id, eb_create_cert) = cc_a
+    let (bridge_app_id, _eb_create_cert) = cc_a
         .create_application_untyped(
             eb_module_id,
             serde_json::to_vec(&BridgeParameters {
@@ -203,7 +192,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         .await?
         .expect("create evm-bridge app committed");
     tracing::info!(%bridge_app_id, "evm-bridge app created");
-    add_block_calls.push(add_block_args(&eb_create_cert));
 
     // 3c. Register the evm-bridge app on the wrapped-fungible app so the bridge can
     // drive the burn. This must happen before any Burn operation is submitted.
@@ -215,11 +203,9 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         application_id: app_id,
         bytes: register_bytes,
     };
-    let register_cert = cc_a
-        .execute_operations(vec![register_op], vec![])
+    cc_a.execute_operations(vec![register_op], vec![])
         .await?
         .expect("register bridge app committed");
-    add_block_calls.push(add_block_args(&register_cert));
 
     // ── 4. Claim chain B (user chain) from faucet and subscribe to notifications ──
     tracing::info!("Claiming chain B from faucet...");
@@ -302,7 +288,6 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
         recipients=?transfer_block.recipients(),
         "Transfer block submitted"
     );
-    add_block_calls.push(add_block_args(&transfer_cert));
 
     // ── 9. Wait for incoming bundle notification, then process inbox on chain B ──
     tracing::info!("Waiting for NewIncomingBundle notification on chain B...");
@@ -349,39 +334,42 @@ async fn test_fungible_bridge_transfers_to_evm() -> anyhow::Result<()> {
 
     // ── 11. Process inbox on chain A so the Credit+Burn bundle lands and the
     // evm-bridge app emits the `BurnEvent` in a chain A block. Collect those certs
-    // so the BurnEvent block is submitted to FungibleBridge. ──
+    // so the BurnEvent block can be settled on FungibleBridge. ──
     tracing::info!("Processing inbox on chain A to drive the burn...");
     cc_a.synchronize_from_validators().await?;
     let (inbox_a_certs, _) = cc_a.process_inbox().await?;
-    for c in &inbox_a_certs {
-        add_block_calls.push(add_block_args(c));
-    }
 
-    // ── 12. Submit all chain A blocks to FungibleBridge sequentially ──
-    // Step 11's inbox processing landed the Credit+Burn bundle, so the evm-bridge app
-    // burned the escrowed tokens and emitted a `BurnEvent` in a chain A block (collected
-    // above). FungibleBridge matches that event against its `bridgeApplicationId`.
-    tracing::info!(
-        count = add_block_calls.len(),
-        "Submitting all chain A blocks to bridge"
-    );
-
+    // ── 12. Settle the burn on FungibleBridge via the relayer's production path:
+    // `registerBlock` the BurnEvent block, then `processBurns` its burn events. The
+    // evm-bridge app emitted the `BurnEvent` (matched against `bridgeApplicationId`)
+    // in one of the chain-A blocks collected above; the other lifecycle blocks carry
+    // no burns and need no on-chain submission. ──
     let rpc_url = "http://localhost:8545".parse()?;
     let evm_signer: PrivateKeySigner = ANVIL_PRIVATE_KEY.parse()?;
+    let relayer_addr = evm_signer.address();
     let evm_wallet = EthereumWallet::from(evm_signer);
     let provider = ProviderBuilder::new()
         .wallet(evm_wallet)
         .connect_http(rpc_url);
 
-    let bridge_contract = IFungibleBridge::new(bridge_addr, &provider);
-    for (i, (proof, event_bcs, events_per_tx)) in add_block_calls.into_iter().enumerate() {
-        let tx = bridge_contract
-            .addBlock(proof, event_bcs, events_per_tx)
-            .send()
-            .await?;
-        let receipt = tx.get_receipt().await?;
-        tracing::info!(i, tx=?receipt.transaction_hash, "addBlock transaction submitted");
+    let evm_client = EvmClient::new(provider.clone(), bridge_addr, relayer_addr, None);
+    let mut settled_burns = 0usize;
+    for cert in &inbox_a_certs {
+        let by_tx = burn_positions_by_tx(cert, bridge_app_id);
+        if by_tx.is_empty() {
+            continue;
+        }
+        evm_client.register_block(cert).await?;
+        for (tx_index, positions) in by_tx {
+            evm_client
+                .process_burns(cert, tx_index, &positions)
+                .await
+                .with_context(|| format!("processBurns for tx {tx_index}"))?;
+            settled_burns += positions.len();
+        }
     }
+    tracing::info!(settled_burns, "Burns settled via registerBlock + processBurns");
+    assert!(settled_burns > 0, "expected at least one BurnEvent to settle");
 
     // ── 14. Verify ERC20 balance ──
     let evm_recipient_addr: Address = format!("0x{evm_recipient}").parse()?;

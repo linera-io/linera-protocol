@@ -8,8 +8,8 @@
 //!   operations on the bridge chain.
 //! - **Linera client**: manages a "bridge chain", listens for `NewIncomingBundle` notifications,
 //!   processes the inbox, and burns any Address20 credits so the EVM contract can release tokens.
-//! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
-//!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
+//! - **EVM forwarder**: after processing inbox and burns, registers the resulting block on the
+//!   `LightClient` and calls `FungibleBridge.processBurns(...)` to release tokens on the EVM chain.
 
 use linera_base::crypto::Signer as _;
 
