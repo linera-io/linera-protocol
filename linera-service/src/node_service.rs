@@ -111,10 +111,12 @@ impl OutputType for RawJson {
     }
 }
 
+/// The set of chains tracked by the wallet.
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
-#[allow(missing_docs)]
 pub struct Chains {
+    /// The IDs of the tracked chains.
     pub list: Vec<ChainId>,
+    /// The default chain of the wallet, if one is set.
     pub default: Option<ChainId>,
 }
 
@@ -914,8 +916,8 @@ where
     }
 }
 
+/// A summary of an application registered on a chain.
 #[derive(SimpleObject)]
-#[allow(missing_docs)]
 pub struct ApplicationOverview {
     id: ApplicationId,
     description: ApplicationDescription,

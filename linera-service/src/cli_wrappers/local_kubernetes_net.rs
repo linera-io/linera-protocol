@@ -36,9 +36,10 @@ static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
 
 /// Whether to build the binaries in debug or release mode.
 #[derive(Clone, clap::Parser, clap::ValueEnum, Debug, Default)]
-#[allow(missing_docs)]
 pub enum BuildMode {
+    /// Builds the binaries in debug mode.
     Debug,
+    /// Builds the binaries in release mode.
     #[default]
     Release,
 }
@@ -58,22 +59,36 @@ impl std::fmt::Display for BuildMode {
 }
 
 /// The information needed to start a [`LocalKubernetesNet`].
-#[allow(missing_docs)]
 pub struct LocalKubernetesNetConfig {
+    /// The network configuration shared by the validators.
     pub network: Network,
+    /// The seed used to make key generation deterministic in tests, if any.
     pub testing_prng_seed: Option<u64>,
+    /// The number of additional chains to create in the genesis configuration.
     pub num_other_initial_chains: u32,
+    /// The initial balance granted to each genesis chain.
     pub initial_amount: Amount,
+    /// The number of validators to start.
     pub num_initial_validators: usize,
+    /// The number of shards to run per validator.
     pub num_shards: usize,
+    /// The source of the binaries baked into the Docker image.
     pub binaries: BuildArg,
+    /// Whether to skip building the Docker image.
     pub no_build: bool,
+    /// The name of the Docker image to run for the validators.
     pub docker_image_name: String,
+    /// The mode used to build the binaries.
     pub build_mode: BuildMode,
+    /// The resource control policy applied by the validators.
     pub policy_config: ResourceControlPolicyConfig,
+    /// The number of block exporters to run per validator.
     pub num_block_exporters: usize,
+    /// The name of the Docker image to run for the indexer.
     pub indexer_image_name: String,
+    /// The name of the Docker image to run for the explorer.
     pub explorer_image_name: String,
+    /// Whether to use dual storage for the validators.
     pub dual_store: bool,
 }
 

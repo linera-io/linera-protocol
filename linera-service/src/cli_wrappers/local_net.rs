@@ -50,9 +50,10 @@ use crate::{
 const MAX_NUMBER_SHARDS: usize = 1000;
 
 /// Whether to process the inbox automatically before an operation.
-#[allow(missing_docs)]
 pub enum ProcessInbox {
+    /// Leaves the inbox untouched before the operation.
     Skip,
+    /// Processes the inbox automatically before the operation.
     Automatic,
 }
 
@@ -121,11 +122,13 @@ async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
 }
 
 /// A way to obtain the storage configuration for a local network.
-#[allow(missing_docs)]
 pub enum InnerStorageConfigBuilder {
+    /// Derives a fresh test storage configuration for the database engine.
     #[cfg(with_testing)]
     TestConfig,
+    /// Uses a storage configuration that was already created.
     ExistingConfig {
+        /// The storage configuration to use as-is.
         storage_config: InnerStorageConfig,
     },
 }
@@ -145,10 +148,17 @@ impl InnerStorageConfigBuilder {
 /// Path used for the run can come from a path whose lifetime is controlled
 /// by an external user or as a temporary directory
 #[derive(Clone)]
-#[allow(missing_docs)]
 pub enum PathProvider {
-    ExternalPath { path_buf: PathBuf },
-    TemporaryDirectory { tmp_dir: Arc<TempDir> },
+    /// A path supplied by the caller, whose lifetime is managed externally.
+    ExternalPath {
+        /// The externally managed path.
+        path_buf: PathBuf,
+    },
+    /// A temporary directory created and owned by this provider.
+    TemporaryDirectory {
+        /// The temporary directory backing the path.
+        tmp_dir: Arc<TempDir>,
+    },
 }
 
 impl PathProvider {
@@ -183,32 +193,45 @@ impl PathProvider {
 }
 
 /// The information needed to start a [`LocalNet`].
-#[allow(missing_docs)]
 pub struct LocalNetConfig {
+    /// The database engine backing the validators' storage.
     pub database: Database,
+    /// The network configuration shared by the validators.
     pub network: NetworkConfig,
+    /// The seed used to make key generation deterministic in tests, if any.
     pub testing_prng_seed: Option<u64>,
+    /// The storage namespace shared by the validators.
     pub namespace: String,
+    /// The number of additional chains to create in the genesis configuration.
     pub num_other_initial_chains: u32,
+    /// The initial balance granted to each genesis chain.
     pub initial_amount: Amount,
+    /// The number of validators to start.
     pub num_initial_validators: usize,
+    /// The number of shards to run per validator.
     pub num_shards: usize,
+    /// The number of proxies to run per validator.
     pub num_proxies: usize,
+    /// The resource control policy applied by the validators.
     pub policy_config: ResourceControlPolicyConfig,
+    /// The list of hosts that applications are allowed to send HTTP requests to, if restricted.
     pub http_request_allow_list: Option<Vec<String>>,
+    /// The cross-chain message configuration shared by the validators.
     pub cross_chain_config: CrossChainConfig,
+    /// The builder used to obtain the storage configuration.
     pub storage_config_builder: InnerStorageConfigBuilder,
+    /// The provider of the working path for the network.
     pub path_provider: PathProvider,
+    /// The setup describing how block exporters are run or reached.
     pub block_exporters: ExportersSetup,
 }
 
 /// The setup for the block exporters.
 #[derive(Clone, PartialEq)]
-#[allow(missing_docs)]
 pub enum ExportersSetup {
-    // Block exporters are meant to be started and managed by the testing framework.
+    /// Block exporters are meant to be started and managed by the testing framework.
     Local(Vec<BlockExporterConfig>),
-    // Block exporters are already started and we just need to connect to them.
+    /// Block exporters are already started and we just need to connect to them.
     Remote(Vec<ExporterServiceConfig>),
 }
 
@@ -253,10 +276,12 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 
 /// Description of the database engine to use inside a local Linera network.
 #[derive(Copy, Clone, Eq, PartialEq)]
-#[allow(missing_docs)]
 pub enum Database {
+    /// The in-memory storage service.
     Service,
+    /// ScyllaDB-backed storage.
     ScyllaDb,
+    /// Dual storage combining RocksDB and ScyllaDB.
     DualRocksDbScyllaDb,
 }
 

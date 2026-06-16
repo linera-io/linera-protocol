@@ -63,11 +63,14 @@ pub trait LineraNet {
 
 /// Network protocol in use
 #[derive(Copy, Clone)]
-#[allow(missing_docs)]
 pub enum Network {
+    /// gRPC over cleartext (unencrypted) HTTP/2.
     Grpc,
+    /// gRPC over TLS.
     Grpcs,
+    /// A simple transport protocol over TCP.
     Tcp,
+    /// A simple transport protocol over UDP.
     Udp,
 }
 

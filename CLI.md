@@ -546,7 +546,7 @@ Deprecates all committees up to and including the specified one
 
 ###### **Arguments:**
 
-* `<EPOCH>`
+* `<EPOCH>` — The highest epoch to deprecate
 
 
 
