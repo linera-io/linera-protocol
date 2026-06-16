@@ -228,6 +228,7 @@ impl OpenChainConfig {
 
 /// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
@@ -310,6 +311,7 @@ pub enum SystemOperation {
 
 /// Operations that are only allowed on the admin chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum AdminOperation {
     /// Publishes a new committee as a blob. This can be assigned to an epoch using
     /// [`AdminOperation::CreateCommittee`] in a later block.
@@ -324,6 +326,7 @@ pub enum AdminOperation {
 
 /// A system message meant to be executed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
@@ -355,6 +358,7 @@ pub struct SystemQuery;
 
 /// The response to a system query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct SystemResponse {
     pub chain_id: ChainId,
     pub balance: Amount,
@@ -364,7 +368,9 @@ pub struct SystemResponse {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
+/// The result of creating a new application.
 #[derive(Debug)]
+#[allow(missing_docs)]
 pub struct CreateApplicationResult {
     pub app_id: ApplicationId,
 }
@@ -702,6 +708,7 @@ where
         }
     }
 
+    /// Transfers `amount` from `source` to `recipient`, debiting the source account.
     pub async fn transfer(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -732,6 +739,7 @@ where
         self.credit_or_send_message(source, recipient, amount).await
     }
 
+    /// Claims `amount` from `source`'s account on `target_id` and transfers it to `recipient`.
     pub async fn claim(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -767,6 +775,7 @@ where
         }
     }
 
+    /// Sets the allowance that `spender` may transfer on behalf of `owner` to `amount`.
     pub async fn approve(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -792,6 +801,7 @@ where
         Ok(())
     }
 
+    /// Transfers `amount` from `owner` to `recipient`, debiting the spender's allowance.
     pub async fn transfer_from(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -967,6 +977,7 @@ where
         Ok(false)
     }
 
+    /// Handles a query to the system state, returning the system response.
     pub fn handle_query(
         &mut self,
         context: QueryContext,
@@ -1007,10 +1018,12 @@ where
         Ok(child_id)
     }
 
+    /// Marks the chain as closed.
     pub fn close_chain(&mut self) {
         self.closed.set(true);
     }
 
+    /// Creates a new application from the given module and arguments, returning its ID.
     pub async fn create_application(
         &mut self,
         chain_id: ChainId,
@@ -1117,6 +1130,7 @@ where
         Ok(())
     }
 
+    /// Reads the content of the blob with the given ID.
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
             Ok(Some(blob)) => Ok(Arc::unwrap_or_clone(blob).into()),
@@ -1125,6 +1139,7 @@ where
         }
     }
 
+    /// Returns an error unless a blob with the given ID exists.
     pub async fn assert_blob_exists(&mut self, blob_id: BlobId) -> Result<(), ExecutionError> {
         if self.context().extra().contains_blob(blob_id).await? {
             Ok(())

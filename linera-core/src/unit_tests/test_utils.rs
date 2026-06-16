@@ -67,7 +67,9 @@ use crate::{
     },
 };
 
+/// The kind of misbehavior a test validator simulates.
 #[derive(Debug, PartialEq, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum FaultType {
     Honest,
     Offline,
@@ -92,6 +94,7 @@ where
     notifier: Arc<ChannelNotifier<Notification>>,
 }
 
+/// A client used by tests to talk to an in-process `LocalValidator`.
 #[derive(Clone)]
 pub struct LocalValidatorClient<S>
 where
@@ -340,10 +343,12 @@ where
         }
     }
 
+    /// Returns the validator's public key.
     pub fn name(&self) -> ValidatorPublicKey {
         self.public_key
     }
 
+    /// Returns the validator's currently configured [`FaultType`].
     pub fn fault_type(&self) -> FaultType {
         self.fault_type
     }
@@ -755,6 +760,7 @@ where
     }
 }
 
+/// A [`ValidatorNodeProvider`] holding the in-process test validator clients.
 #[derive(Clone)]
 pub struct NodeProvider<S>(Arc<std::sync::Mutex<Vec<LocalValidatorClient<S>>>>)
 where
@@ -820,6 +826,7 @@ where
 // * When using `LocalValidatorClient`, clients communicate with an exact quorum then stop.
 // * Most tests have 1 faulty validator out 4 so that there is exactly only 1 quorum to
 // communicate with.
+#[allow(missing_docs)]
 pub struct TestBuilder<B: StorageBuilder> {
     storage_builder: B,
     pub initial_committee: Committee,
@@ -834,12 +841,16 @@ pub struct TestBuilder<B: StorageBuilder> {
     pub signer: TestSigner,
 }
 
+/// Builds storage instances of a specific backend for use in tests.
 #[async_trait]
 pub trait StorageBuilder {
+    /// The storage type produced by this builder.
     type Storage: Storage + Clone + Send + Sync + 'static;
 
+    /// Builds a new storage instance.
     async fn build(&mut self) -> Result<Self::Storage, anyhow::Error>;
 
+    /// Returns the test clock shared by all storages built here.
     fn clock(&self) -> &TestClock;
 }
 
@@ -875,6 +886,7 @@ impl GenesisStorageBuilder {
     }
 }
 
+/// A chain client wired up to the in-process test validator network.
 pub type ChainClient<S> = crate::client::ChainClient<crate::environment::Impl<S, NodeProvider<S>>>;
 
 impl<S: Storage + Clone + Send + Sync + 'static> ChainClient<S> {
@@ -902,6 +914,7 @@ impl<B> TestBuilder<B>
 where
     B: StorageBuilder,
 {
+    /// Creates a test setup with `count` validators, `with_faulty_validators` of which are faulty.
     pub async fn new(
         mut storage_builder: B,
         count: usize,
@@ -961,6 +974,7 @@ where
         })
     }
 
+    /// Replaces the initial committee's resource control policy.
     pub fn with_policy(mut self, policy: ResourceControlPolicy) -> Self {
         let validators = self.initial_committee.validators().clone();
         self.initial_committee =
@@ -968,6 +982,7 @@ where
         self
     }
 
+    /// Sets the cross-chain message chunk limit on every validator in the test setup.
     pub fn with_cross_chain_message_chunk_limit(self, limit: usize) -> Self {
         let validator_clients = self.node_provider.0.lock().unwrap();
         for validator in validator_clients.iter() {
@@ -990,6 +1005,7 @@ where
             .map(|client| client.fault_type())
     }
 
+    /// Sets the [`FaultType`] for the validators at the given indexes.
     pub fn set_fault_type(&mut self, indexes: impl AsRef<[usize]>, fault_type: FaultType) {
         let mut faulty_validators = vec![];
         let mut validator_clients = self.node_provider.0.lock().unwrap();
@@ -1083,6 +1099,7 @@ where
         self.make_client(chain_id, None, BlockHeight::ZERO).await
     }
 
+    /// Returns the public key and balance of each genesis root chain.
     pub fn genesis_chains(&self) -> Vec<(AccountPublicKey, Amount)> {
         let mut result = Vec::new();
         for (i, genesis_account) in self.genesis_storage_builder.accounts.iter().enumerate() {
@@ -1098,6 +1115,7 @@ where
         result
     }
 
+    /// Returns the admin chain's ID, panicking if it has not been initialized.
     pub fn admin_chain_id(&self) -> ChainId {
         self.admin_description
             .as_ref()
@@ -1105,18 +1123,22 @@ where
             .id()
     }
 
+    /// Returns the admin chain description, if the admin chain has been initialized.
     pub fn admin_description(&self) -> Option<&ChainDescription> {
         self.admin_description.as_ref()
     }
 
+    /// Returns a clone of the node provider backing this test setup.
     pub fn make_node_provider(&self) -> NodeProvider<B::Storage> {
         self.node_provider.clone()
     }
 
+    /// Returns a clone of the validator client at the given index.
     pub fn node(&mut self, index: usize) -> LocalValidatorClient<B::Storage> {
         self.node_provider.0.lock().unwrap()[index].clone()
     }
 
+    /// Builds a fresh storage seeded with the network description and genesis chains.
     pub async fn make_storage(&mut self) -> anyhow::Result<B::Storage> {
         let storage = self.storage_builder.build().await?;
         let network_description = self.network_description.as_ref().unwrap();
@@ -1132,6 +1154,7 @@ where
         Ok(self.genesis_storage_builder.build(storage).await)
     }
 
+    /// Creates a chain client for the given chain with the given client options.
     pub async fn make_client_with_options(
         &mut self,
         chain_id: ChainId,
@@ -1179,6 +1202,7 @@ where
         ))
     }
 
+    /// Creates a chain client for the given chain with default test options.
     pub async fn make_client(
         &mut self,
         chain_id: ChainId,
@@ -1309,6 +1333,7 @@ impl CommonStorageBuilder {
     }
 }
 
+/// A [`StorageBuilder`] backed by in-memory storage.
 #[derive(Default)]
 pub struct MemoryStorageBuilder {
     inner: CommonStorageBuilder,
@@ -1339,6 +1364,7 @@ impl StorageBuilder for MemoryStorageBuilder {
 }
 
 #[cfg(feature = "rocksdb")]
+/// A [`StorageBuilder`] backed by RocksDB storage.
 pub struct RocksDbStorageBuilder {
     inner: CommonStorageBuilder,
     _permit: SemaphorePermit<'static>,
@@ -1346,6 +1372,7 @@ pub struct RocksDbStorageBuilder {
 
 #[cfg(feature = "rocksdb")]
 impl RocksDbStorageBuilder {
+    /// Creates a [`RocksDbStorageBuilder`], acquiring a concurrency permit.
     pub async fn new() -> Self {
         Self {
             inner: CommonStorageBuilder::default(),
@@ -1380,6 +1407,7 @@ impl StorageBuilder for RocksDbStorageBuilder {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "storage-service"))]
+/// A [`StorageBuilder`] backed by the storage service.
 #[derive(Default)]
 pub struct ServiceStorageBuilder {
     inner: CommonStorageBuilder,
@@ -1418,6 +1446,7 @@ impl StorageBuilder for ServiceStorageBuilder {
 }
 
 #[cfg(feature = "scylladb")]
+/// A [`StorageBuilder`] backed by ScyllaDB storage.
 #[derive(Default)]
 pub struct ScyllaDbStorageBuilder {
     inner: CommonStorageBuilder,
@@ -1449,6 +1478,7 @@ impl StorageBuilder for ScyllaDbStorageBuilder {
     }
 }
 
+/// Helpers for asserting on [`ClientOutcome`] results in tests.
 pub trait ClientOutcomeResultExt<T, E> {
     /// Unwraps the result and panics if it's not `Committed`.
     /// Use this when you expect the operation to succeed without conflicts.

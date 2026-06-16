@@ -358,6 +358,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         Ok(blobs.into_iter().collect::<Option<Vec<_>>>())
     }
 
+    /// Downloads a range of certificates, starting at the given height, from the given validator.
     pub async fn download_certificates(
         &self,
         peer: &RemoteNode<Env::ValidatorNode>,
@@ -435,6 +436,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         })
     }
 
+    /// Downloads the certificates at the given heights from the given validator.
     pub async fn download_certificates_by_heights(
         &self,
         peer: &RemoteNode<Env::ValidatorNode>,
@@ -458,6 +460,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         .await
     }
 
+    /// Downloads the certificate that published the given blob, from the given validator.
     pub async fn download_certificate_for_blob(
         &self,
         peer: &RemoteNode<Env::ValidatorNode>,
@@ -471,6 +474,7 @@ impl<Env: Environment> RequestsScheduler<Env> {
         .await
     }
 
+    /// Downloads a pending blob from the given validator.
     pub async fn download_pending_blob(
         &self,
         peer: &RemoteNode<Env::ValidatorNode>,

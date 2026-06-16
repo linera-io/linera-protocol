@@ -52,6 +52,7 @@ pub enum Certificate {
 }
 
 impl Certificate {
+    /// Returns the consensus round in which this certificate was created.
     pub fn round(&self) -> Round {
         match self {
             Certificate::Validated(cert) => cert.round,
@@ -60,6 +61,7 @@ impl Certificate {
         }
     }
 
+    /// Returns the block height this certificate applies to.
     pub fn height(&self) -> BlockHeight {
         match self {
             Certificate::Validated(cert) => cert.value().block().header.height,
@@ -68,6 +70,7 @@ impl Certificate {
         }
     }
 
+    /// Returns the ID of the chain this certificate applies to.
     pub fn chain_id(&self) -> ChainId {
         match self {
             Certificate::Validated(cert) => cert.value().block().header.chain_id,
@@ -76,6 +79,7 @@ impl Certificate {
         }
     }
 
+    /// Returns the validator signatures that certify this value.
     pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         match self {
             Certificate::Validated(cert) => cert.signatures(),
@@ -85,25 +89,34 @@ impl Certificate {
     }
 }
 
+/// The kind of value a certificate certifies.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Allocative)]
 #[repr(u8)]
+#[allow(missing_docs)]
 pub enum CertificateKind {
     Timeout = 0,
     Validated = 1,
     Confirmed = 2,
 }
 
+/// A value that can be certified by a quorum of validators.
 pub trait CertificateValue: Clone {
+    /// The kind of certificate this value produces.
     const KIND: CertificateKind;
 
+    /// Returns the ID of the chain this value applies to.
     fn chain_id(&self) -> ChainId;
 
+    /// Returns the epoch this value belongs to.
     fn epoch(&self) -> Epoch;
 
+    /// Returns the block height this value applies to.
     fn height(&self) -> BlockHeight;
 
+    /// Returns the IDs of all blobs required to validate this value.
     fn required_blob_ids(&self) -> BTreeSet<BlobId>;
 
+    /// Returns the hash that uniquely identifies this value.
     fn hash(&self) -> CryptoHash;
 }
 

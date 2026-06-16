@@ -33,6 +33,7 @@ impl GenericCertificate<ConfirmedBlock> {
             .message_bundles_for(recipient, certificate_hash)
     }
 
+    /// Returns the total number of outgoing messages in the certified block.
     #[cfg(with_testing)]
     pub fn outgoing_message_count(&self) -> usize {
         self.block().messages().iter().map(Vec::len).sum()

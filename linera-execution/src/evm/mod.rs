@@ -17,7 +17,9 @@ use revm_context::result::HaltReason;
 use revm_primitives::{Address, U256};
 use thiserror::Error;
 
+/// An error that occurred while executing an EVM application.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum EvmExecutionError {
     #[error(transparent)]
     AmountConversionError(#[from] AmountConversionError),

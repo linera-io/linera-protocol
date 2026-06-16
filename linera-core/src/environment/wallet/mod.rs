@@ -15,7 +15,9 @@ use crate::{client::PendingProposal, data_types::ChainInfo};
 mod memory;
 pub use memory::Memory;
 
+/// The locally tracked state of a single chain.
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
+#[allow(missing_docs)]
 pub struct Chain {
     pub owner: Option<AccountOwner>,
     pub block_hash: Option<CryptoHash>,
@@ -81,17 +83,25 @@ impl Chain {
 /// A trait for the wallet (i.e. set of chain states) tracked by the client.
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait Wallet {
+    /// The error type returned by the wallet's operations.
     type Error: std::error::Error + Send + Sync;
+    /// Returns the state of the chain with the given ID, if it is tracked.
     async fn get(&self, id: ChainId) -> Result<Option<Chain>, Self::Error>;
+    /// Removes the chain with the given ID, returning its previous state if any.
     async fn remove(&self, id: ChainId) -> Result<Option<Chain>, Self::Error>;
+    /// Returns a stream over all tracked chains and their states.
     fn items(&self) -> impl Stream<Item = Result<(ChainId, Chain), Self::Error>>;
+    /// Inserts or replaces the state of the given chain, returning the previous state if any.
     async fn insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error>;
+    /// Inserts the given chain only if it is not already tracked, returning the existing state otherwise.
     async fn try_insert(&self, id: ChainId, chain: Chain) -> Result<Option<Chain>, Self::Error>;
 
+    /// Returns a stream over the IDs of all tracked chains.
     fn chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
         self.items().map(|result| result.map(|kv| kv.0))
     }
 
+    /// Returns a stream over the IDs of the tracked chains that have an owner.
     fn owned_chain_ids(&self) -> impl Stream<Item = Result<ChainId, Self::Error>> {
         self.items()
             .try_filter_map(|(id, chain)| async move { Ok(chain.owner.map(|_| id)) })
