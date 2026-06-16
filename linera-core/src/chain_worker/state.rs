@@ -18,6 +18,7 @@ use linera_base::{
         ApplicationDescription, ArithmeticError, Blob, BlockHeight, Epoch, Round, Timestamp,
     },
     ensure,
+    hashed::Hashed,
     identifiers::{AccountOwner, ApplicationId, BlobId, ChainId, StreamId},
 };
 use linera_cache::{Arc as CacheArc, UniqueValueCache, ValueCache};
@@ -31,7 +32,8 @@ use linera_chain::{
         Block, ConfirmedBlock, ConfirmedBlockCertificate, TimeoutCertificate,
         ValidatedBlockCertificate,
     },
-    ChainError, ChainExecutionContext, ChainStateView, ChainTipState, ExecutionResultExt as _,
+    ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
+    ExecutionResultExt as _,
 };
 use linera_execution::{
     system::EventSubscriptions, ExecutionRuntimeContext as _, ExecutionStateView, Query,
@@ -43,11 +45,11 @@ use linera_views::{
     views::{ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::oneshot;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
-    client::ListeningMode,
+    client::{ChainModes, ListeningMode},
     data_types::{ChainInfo, ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
     worker::{BatchRequest, NetworkActions, Notification, Reason, WorkerError},
 };
@@ -105,7 +107,7 @@ where
     block_values: Arc<ValueCache<CryptoHash, ConfirmedBlock>>,
     execution_state_cache:
         Option<Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>>,
-    chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+    chain_modes: Option<Arc<sync::RwLock<ChainModes>>>,
     delivery_notifier: DeliveryNotifier,
     knows_chain_is_active: bool,
     /// Set to `true` if a database `save` failure has left storage potentially
@@ -168,7 +170,7 @@ where
         execution_state_cache: Option<
             Arc<UniqueValueCache<CryptoHash, ExecutionStateView<InactiveContext>>>,
         >,
-        chain_modes: Option<Arc<sync::RwLock<BTreeMap<ChainId, ListeningMode>>>>,
+        chain_modes: Option<Arc<sync::RwLock<ChainModes>>>,
         delivery_notifier: DeliveryNotifier,
         chain_id: ChainId,
         service_runtime_endpoint: Option<ServiceRuntimeEndpoint>,
@@ -236,13 +238,41 @@ where
         self.service_runtime_task.take()
     }
 
-    /// Returns the pending cross-chain network actions for this chain, without
-    /// initializing the chain's execution state. Intended for callers that only
-    /// need to re-emit cross-chain requests from the outbox of a sender chain
-    /// whose `ChainDescription` we may never have needed.
+    /// Returns the pending cross-chain network actions if the outbox index is already
+    /// reconciled to the current tracked set, or `None` if it must first be reconciled (which
+    /// needs a write lock).
+    pub(crate) async fn cross_chain_network_actions_if_reconciled(
+        &self,
+    ) -> Result<Option<NetworkActions>, WorkerError> {
+        let tracked = self.tracked_full_chains();
+        if !self.chain.outbox_index_is_reconciled(tracked.as_deref()) {
+            return Ok(None);
+        }
+        Ok(Some(
+            self.build_network_actions(None, tracked.as_deref().map(|h| h.inner()))
+                .await?,
+        ))
+    }
+
+    /// Reconciles the outbox index with the current tracked set, then returns the pending
+    /// cross-chain network actions for this chain, without initializing the chain's execution
+    /// state. Intended for callers that only need to re-emit cross-chain requests from the
+    /// outbox of a sender chain whose `ChainDescription` we may never have needed.
+    ///
+    /// This is the slow path of [`Self::cross_chain_network_actions_if_reconciled`].
     #[instrument(skip_all, fields(chain_id = %self.chain_id()))]
-    pub(crate) async fn cross_chain_network_actions(&self) -> Result<NetworkActions, WorkerError> {
-        self.create_network_actions(None).await
+    pub(crate) async fn reconcile_and_cross_chain_network_actions(
+        &mut self,
+    ) -> Result<NetworkActions, WorkerError> {
+        let tracked = self.tracked_full_chains();
+        self.chain
+            .reconcile_outbox_index(tracked.as_deref())
+            .await?;
+        let actions = self
+            .build_network_actions(None, tracked.as_deref().map(|h| h.inner()))
+            .await?;
+        self.save().await?;
+        Ok(actions)
     }
 
     /// Handles a [`ChainInfoQuery`], potentially voting on the next block.
@@ -400,21 +430,71 @@ where
         })
     }
 
-    /// Loads pending cross-chain requests, and adds `NewRound` notifications where appropriate.
+    /// Returns the set of chains tracked in full mode together with its memoized hash, or `None` if
+    /// every chain is implicitely in full-mode (e.g. on validator).
+    fn tracked_full_chains(&self) -> Option<Arc<Hashed<ChainIdSet>>> {
+        let chain_modes = self.chain_modes.as_ref()?;
+        let full = chain_modes
+            .read()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .full();
+        Some(full)
+    }
+
+    /// Returns whether the given chain is tracked in full mode (always `true` on a validator),
+    /// i.e. whether its outbox should be indexed.
+    fn is_tracked(&self, chain_id: &ChainId) -> bool {
+        self.chain_modes.as_ref().is_none_or(|chain_modes| {
+            chain_modes
+                .read()
+                .expect("Panics should not happen while holding a lock to `chain_modes`")
+                .get(chain_id)
+                .is_some_and(ListeningMode::is_full)
+        })
+    }
+
+    /// Reconciles the chain's `nonempty_outboxes` and `outbox_counters` indices with the current
+    /// set of fully-tracked chains.
+    async fn reconcile_tracked_outboxes(
+        &mut self,
+    ) -> Result<Option<Arc<Hashed<ChainIdSet>>>, WorkerError> {
+        let full_chains = self.tracked_full_chains();
+        self.chain
+            .reconcile_outbox_index(full_chains.as_deref())
+            .await?;
+        Ok(full_chains)
+    }
+
+    /// Reconciles the outbox index with the current tracked set, then loads pending cross-chain
+    /// requests and adds `NewRound` notifications where appropriate.
     async fn create_network_actions(
+        &mut self,
+        old_round: Option<Round>,
+    ) -> Result<NetworkActions, WorkerError> {
+        // Make the outbox index authoritative for the current tracked set first, so it already
+        // holds only `is_full` targets and needs no read-time filtering.
+        let tracked = self.reconcile_tracked_outboxes().await?;
+        self.build_network_actions(old_round, tracked.as_deref().map(|h| h.inner()))
+            .await
+    }
+
+    /// Builds the pending cross-chain actions from the already-reconciled outbox index.
+    async fn build_network_actions(
         &self,
         old_round: Option<Round>,
+        tracked: Option<&ChainIdSet>,
     ) -> Result<NetworkActions, WorkerError> {
         #[cfg(with_metrics)]
         let _latency = metrics::CREATE_NETWORK_ACTIONS_LATENCY.measure_latency();
         let mut heights_by_recipient = BTreeMap::<_, Vec<_>>::new();
-        let mut targets = self.chain.nonempty_outbox_chain_ids();
-        if let Some(chain_modes) = self.chain_modes.as_ref() {
-            let chain_modes = chain_modes
-                .read()
-                .expect("Panics should not happen while holding a lock to `chain_modes`");
-            // Only process outboxes for full chains (those whose inboxes we update).
-            targets.retain(|target| chain_modes.get(target).is_some_and(ListeningMode::is_full));
+        let targets = self.chain.nonempty_outbox_chain_ids();
+        if let Some(tracked) = tracked {
+            if let Some(target) = targets.iter().find(|target| !tracked.contains(*target)) {
+                return Err(ChainError::CorruptedChainState(format!(
+                    "outbox index contains untracked target {target}"
+                ))
+                .into());
+            }
         }
         let outboxes = self.chain.load_outboxes(&targets).await?;
         for (target, outbox) in targets.into_iter().zip(outboxes) {
@@ -559,38 +639,6 @@ where
             }
         }
         Ok(cross_chain_requests)
-    }
-
-    /// Returns true if there are no more outgoing messages in flight up to the given
-    /// block height for all tracked chains (those whose inboxes we update).
-    #[instrument(skip_all, fields(
-        chain_id = %self.chain_id(),
-        height = %height
-    ))]
-    async fn all_messages_to_tracked_chains_delivered_up_to(
-        &self,
-        height: BlockHeight,
-    ) -> Result<bool, WorkerError> {
-        if self.chain.all_messages_delivered_up_to(height) {
-            return Ok(true);
-        }
-        let Some(chain_modes) = self.chain_modes.as_ref() else {
-            return Ok(false);
-        };
-        let mut targets = self.chain.nonempty_outbox_chain_ids();
-        {
-            let chain_modes = chain_modes.read().unwrap();
-            // Only consider full chains (those whose inboxes we update).
-            targets.retain(|target| chain_modes.get(target).is_some_and(ListeningMode::is_full));
-        }
-        let outboxes = self.chain.load_outboxes(&targets).await?;
-        for outbox in outboxes {
-            let front = outbox.queue.front();
-            if front.is_some_and(|key| *key <= height) {
-                return Ok(false);
-            }
-        }
-        Ok(true)
     }
 
     /// Processes a leader timeout issued for this multi-owner chain.
@@ -783,10 +831,13 @@ where
         let index_values = self.chain.preprocessed_blocks.index_values().await?;
         let hashes = index_values.iter().map(|(_, hash)| *hash).collect();
         let blocks = self.read_confirmed_blocks(hashes).await?;
+        let tracked = self.reconcile_tracked_outboxes().await?;
         for ((height, _), maybe_block) in index_values.into_iter().zip(blocks) {
             let block =
                 maybe_block.ok_or_else(|| WorkerError::LocalBlockNotFound { height, chain_id })?;
-            self.chain.preprocess_block(&block).await?;
+            self.chain
+                .preprocess_block(&block, tracked.as_deref().map(|h| h.inner()))
+                .await?;
         }
         Ok(())
     }
@@ -913,7 +964,11 @@ where
         if block.body.events.iter().any(|events| !events.is_empty()) {
             self.initialize_next_expected_events().await?;
         }
-        let updated_event_streams = self.chain.preprocess_block(certificate.value()).await?;
+        let tracked = self.reconcile_tracked_outboxes().await?;
+        let updated_event_streams = self
+            .chain
+            .preprocess_block(certificate.value(), tracked.as_deref().map(|h| h.inner()))
+            .await?;
         self.save().await?;
         let mut actions = self.create_network_actions(None).await?;
         if !updated_event_streams.is_empty() {
@@ -981,6 +1036,7 @@ where
                 "Confirmed block has a timestamp in the future beyond the block time grace period"
             );
         }
+        let tracked = self.reconcile_tracked_outboxes().await?;
         let chain = &mut self.chain;
         chain
             .remove_bundles_from_inboxes(
@@ -1029,7 +1085,11 @@ where
         };
 
         let event_streams = chain
-            .apply_confirmed_block(&confirmed_block, local_time)
+            .apply_confirmed_block(
+                &confirmed_block,
+                local_time,
+                tracked.as_deref().map(|h| h.inner()),
+            )
             .await?;
         let mut actions = self.create_network_actions(None).await?;
         trace!("Processed confirmed block {height}");
@@ -1195,13 +1255,20 @@ where
         recipient: ChainId,
         latest_height: BlockHeight,
     ) -> Result<bool, WorkerError> {
+        // Reconcile the outbox indices with the *current* tracked set before draining the counter
+        // and checking delivery.
+        let tracked = self.reconcile_tracked_outboxes().await?;
+        // The indices are now reconciled to the tracked set, so `all_messages_delivered_up_to`
+        // (the `outbox_counters` fast path) is already the complete answer for tracked chains.
         Ok(self
             .chain
-            .mark_messages_as_received(&recipient, latest_height)
+            .mark_messages_as_received(
+                &recipient,
+                latest_height,
+                tracked.as_deref().map(|h| h.inner()),
+            )
             .await?
-            && self
-                .all_messages_to_tracked_chains_delivered_up_to(latest_height)
-                .await?)
+            && self.chain.all_messages_delivered_up_to(latest_height))
     }
 
     /// Notifies delivery waiters that all messages up to `height` have been delivered.
@@ -1213,11 +1280,15 @@ where
     ///
     /// Both update and confirmation requests are handled together so that a
     /// single write-lock acquisition covers all pending work for the chain.
-    pub(crate) async fn process_batch(&mut self, requests: Vec<BatchRequest>) {
+    pub(crate) async fn process_batch(
+        &mut self,
+        requests: Vec<BatchRequest>,
+    ) -> Result<(), WorkerError> {
         let mut update_results = Vec::new();
         let mut confirm_results = Vec::new();
         let mut need_save = false;
         let mut need_rollback = false;
+        let mut recovery_error = None;
         let mut max_delivered_height: Option<BlockHeight> = None;
 
         for request in requests {
@@ -1239,7 +1310,9 @@ where
                         Ok(update_result) => update_result,
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_sender, Err(error));
+                            let (recovery, to_send) = classify_processing_error(error);
+                            recovery_error = recovery_error.or(recovery);
+                            send_result(result_sender, Err(to_send));
                             continue;
                         }
                     };
@@ -1275,16 +1348,20 @@ where
                         }
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_sender, Err(error));
+                            let (recovery, to_send) = classify_processing_error(error);
+                            recovery_error = recovery_error.or(recovery);
+                            send_result(result_sender, Err(to_send));
                         }
                     }
                 }
             }
         }
+        let mut save_error = None;
         if !need_rollback && need_save {
             if let Err(error) = self.save().await {
                 tracing::error!(%error, "failed to save batch; rolling back");
                 need_rollback = true;
+                save_error = Some(error);
             }
         }
         if need_rollback {
@@ -1294,7 +1371,19 @@ where
             for (result_sender, _) in confirm_results {
                 send_result(result_sender, Err(WorkerError::BatchRolledBack));
             }
-            return;
+            // Surface an error that left the worker poisoned or the chain state
+            // corrupted so `chain_write` can evict or reset it. A `must_reload_view`
+            // error only reaches us from a failed `save`, since resolving the journal
+            // (the operation that raises it) happens only in `write_batch`. A
+            // processing step instead can raise `CorruptedChainState` while reconciling
+            // outboxes or message counters (see `confirm_updated_recipient`), which
+            // calls for a reset rather than eviction. Ordinary processing errors (bad
+            // height, validation failures) leave the worker healthy after rollback, so
+            // they return `Ok` and were already reported to their individual senders.
+            return match save_error.or(recovery_error) {
+                Some(error) => Err(error),
+                None => Ok(()),
+            };
         }
 
         if let Some(height) = max_delivered_height {
@@ -1310,6 +1399,7 @@ where
                 .await;
             send_result(result_sender, result);
         }
+        Ok(())
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -1326,6 +1416,7 @@ where
         recipient: ChainId,
         retransmit_from: BlockHeight,
     ) -> Result<NetworkActions, WorkerError> {
+        self.reconcile_tracked_outboxes().await?;
         // 1. Walk backward through previous_message_blocks to collect all heights
         //    that sent messages to this recipient, from the latest down to retransmit_from.
         let Some(latest_height) = self.chain.previous_message_blocks.get(&recipient).await? else {
@@ -1381,12 +1472,15 @@ where
             return Ok(NetworkActions::default());
         }
 
-        // 3. Update outbox_counters (+1 per new height for this one recipient).
+        // 3. Update the indices only for tracked recipients (mirroring `process_outgoing_messages`):
+        //    an untracked recipient keeps its re-added outbox queue but is not counted or indexed.
         let new_heights_len = new_heights.len();
-        for h in new_heights {
-            *self.chain.outbox_counters.get_mut().entry(h).or_default() += 1;
+        if self.is_tracked(&recipient) {
+            for h in new_heights {
+                *self.chain.outbox_counters.get_mut().entry(h).or_default() += 1;
+            }
+            self.chain.nonempty_outboxes.get_mut().insert(recipient);
         }
-        self.chain.nonempty_outboxes.get_mut().insert(recipient);
 
         // 4. Create cross-chain requests for this recipient.
         let actions = self
@@ -1464,8 +1558,16 @@ where
         );
 
         // 4. Re-load certificates one at a time by hash and re-process them.
+        let num_confirmed = hashes.len();
+        let num_preprocessed = preprocessed.len();
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
+            if index % 1000 == 0 {
+                info!(
+                    %chain_id, confirmed = index, total = num_confirmed,
+                    "Re-executing confirmed blocks after reset"
+                );
+            }
             let cert = self
                 .storage
                 .read_certificate(hash)
@@ -1475,7 +1577,13 @@ where
             Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Execute, None))
                 .await?;
         }
-        for (height, hash) in preprocessed {
+        for (index, (height, hash)) in preprocessed.into_iter().enumerate() {
+            if index % 1000 == 0 {
+                info!(
+                    %chain_id, preprocessed = index, total = num_preprocessed,
+                    "Re-preprocessing blocks after reset"
+                );
+            }
             let cert = self
                 .storage
                 .read_certificate(hash)
@@ -2387,6 +2495,21 @@ where
         // chain-local `committees` map doesn't need to sit in memory across worker calls.
         self.chain.execution_state.system.committees.evict();
         Ok(())
+    }
+}
+
+/// Classifies an error returned while processing a single cross-chain batch request.
+///
+/// If the error indicates a poisoned worker or corrupted chain state, it is returned
+/// as the first element so `process_batch` can hand it to `chain_write` for recovery
+/// (eviction or reset), and the originating caller is told `BatchRolledBack` so it
+/// retries against a freshly loaded worker. Any other error leaves the worker healthy
+/// after rollback and is reported to the caller unchanged.
+fn classify_processing_error(error: WorkerError) -> (Option<WorkerError>, WorkerError) {
+    if error.must_reload_view() || error.indicates_corrupted_chain_state() {
+        (Some(error), WorkerError::BatchRolledBack)
+    } else {
+        (None, error)
     }
 }
 

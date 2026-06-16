@@ -1,7 +1,11 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    sync::{Arc, OnceLock},
+};
 
 use async_trait::async_trait;
 #[cfg(with_metrics)]
@@ -32,7 +36,7 @@ use linera_views::{
     ViewError,
 };
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{debug, instrument};
 #[cfg(with_testing)]
 use {
     futures::channel::oneshot::{self, Receiver},
@@ -214,6 +218,17 @@ pub mod metrics {
         )
     });
 
+    /// The metric counting how often a block hash is read by height from storage.
+    #[doc(hidden)]
+    pub(super) static READ_BLOCK_HASH_BY_HEIGHT_COUNTER: LazyLock<IntCounterVec> =
+        LazyLock::new(|| {
+            register_int_counter_vec(
+                "read_block_hash_by_height",
+                "The metric counting how often a block hash is read by height from storage",
+                &[SOURCE_LABEL],
+            )
+        });
+
     /// The metric counting how often the network description is read from storage.
     #[doc(hidden)]
     pub(super) static READ_NETWORK_DESCRIPTION: LazyLock<IntCounterVec> = LazyLock::new(|| {
@@ -365,6 +380,8 @@ pub struct StorageCacheConfig {
     pub certificate_raw_cache_size: usize,
     /// The maximum number of events held in the event cache.
     pub event_cache_size: usize,
+    /// The maximum number of block hashes to cache, keyed by `(chain, height)`.
+    pub block_hash_by_height_cache_size: usize,
     /// The interval, in seconds, between cache cleanup passes.
     pub cache_cleanup_interval_secs: u64,
 }
@@ -377,6 +394,7 @@ pub const DEFAULT_STORAGE_CACHE_CONFIG: StorageCacheConfig = StorageCacheConfig 
     certificate_cache_size: 1000,
     certificate_raw_cache_size: 1000,
     event_cache_size: 1000,
+    block_hash_by_height_cache_size: 1000,
     cache_cleanup_interval_secs: linera_cache::DEFAULT_CLEANUP_INTERVAL_SECS,
 };
 
@@ -395,6 +413,8 @@ pub struct StorageCaches {
     pub(crate) certificate: Arc<ValueCache<CryptoHash, ConfirmedBlockCertificate>>,
     pub(crate) certificate_raw: Arc<ValueCache<CryptoHash, RawCertificate>>,
     pub(crate) event: Arc<ValueCache<EventId, Vec<u8>>>,
+    pub(crate) block_hash_by_height: Arc<ValueCache<(ChainId, BlockHeight), CryptoHash>>,
+    pub(crate) network_description: Arc<OnceLock<NetworkDescription>>,
 }
 
 impl StorageCaches {
@@ -402,11 +422,37 @@ impl StorageCaches {
     pub fn new(sizes: StorageCacheConfig) -> Self {
         let interval = sizes.cache_cleanup_interval_secs;
         Self {
-            blob: Arc::new(ValueCache::new(sizes.blob_cache_size, interval)),
-            confirmed_block: Arc::new(ValueCache::new(sizes.confirmed_block_cache_size, interval)),
-            certificate: Arc::new(ValueCache::new(sizes.certificate_cache_size, interval)),
-            certificate_raw: Arc::new(ValueCache::new(sizes.certificate_raw_cache_size, interval)),
-            event: Arc::new(ValueCache::new(sizes.event_cache_size, interval)),
+            blob: Arc::new(ValueCache::new(
+                "storage_blob",
+                sizes.blob_cache_size,
+                interval,
+            )),
+            confirmed_block: Arc::new(ValueCache::new(
+                "storage_confirmed_block",
+                sizes.confirmed_block_cache_size,
+                interval,
+            )),
+            certificate: Arc::new(ValueCache::new(
+                "storage_certificate",
+                sizes.certificate_cache_size,
+                interval,
+            )),
+            certificate_raw: Arc::new(ValueCache::new(
+                "storage_certificate_raw",
+                sizes.certificate_raw_cache_size,
+                interval,
+            )),
+            event: Arc::new(ValueCache::new(
+                "storage_event",
+                sizes.event_cache_size,
+                interval,
+            )),
+            block_hash_by_height: Arc::new(ValueCache::new(
+                "storage_block_hash_by_height",
+                sizes.block_hash_by_height_cache_size,
+                interval,
+            )),
+            network_description: Arc::new(OnceLock::new()),
         }
     }
 }
@@ -1527,7 +1573,16 @@ where
             batch.add_blob(blob);
         }
         batch.add_certificate(certificate)?;
-        self.write_batch(batch).await
+        self.write_batch(batch).await?;
+        // Populate the block-hash-by-height cache so subsequent reads are served from memory.
+        let block = certificate.value().block();
+        let chain_id = block.header.chain_id;
+        let height = block.header.height;
+        let hash = certificate.hash();
+        self.caches
+            .block_hash_by_height
+            .insert(&(chain_id, height), hash);
+        Ok(())
     }
 
     fn cache_certificate(
@@ -1685,19 +1740,49 @@ where
             return Ok(Vec::new());
         }
 
-        let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
-        let store = self.database.open_shared(&index_root_key)?;
-        let height_keys: Vec<Vec<u8>> = heights.iter().map(|h| to_height_key(*h)).collect();
-        let hash_bytes = store.read_multi_values_bytes(&height_keys).await?;
-        let hash_options: Vec<Option<CryptoHash>> = hash_bytes
-            .into_iter()
-            .map(|opt| {
-                opt.map(|bytes| bcs::from_bytes::<CryptoHash>(&bytes))
-                    .transpose()
-            })
-            .collect::<Result<_, _>>()?;
+        let mut results = vec![None; heights.len()];
+        let mut misses = Vec::new();
+        for (i, &height) in heights.iter().enumerate() {
+            if let Some(hash) = self.caches.block_hash_by_height.get(&(chain_id, height)) {
+                results[i] = Some(*hash);
+            } else {
+                misses.push(i);
+            }
+        }
+        #[cfg(with_metrics)]
+        {
+            let cache_hits = (heights.len() - misses.len()) as u64;
+            if cache_hits > 0 {
+                metrics::READ_BLOCK_HASH_BY_HEIGHT_COUNTER
+                    .with_label_values(&[metrics::CACHE])
+                    .inc_by(cache_hits);
+            }
+        }
+        if !misses.is_empty() {
+            let miss_keys: Vec<Vec<u8>> =
+                misses.iter().map(|&i| to_height_key(heights[i])).collect();
+            let index_root_key = RootKey::BlockByHeight(chain_id).bytes();
+            let store = self.database.open_shared(&index_root_key)?;
+            let hash_bytes = store.read_multi_values_bytes(&miss_keys).await?;
+            #[cfg(with_metrics)]
+            {
+                let db_reads = misses.len() as u64;
+                metrics::READ_BLOCK_HASH_BY_HEIGHT_COUNTER
+                    .with_label_values(&[metrics::DB])
+                    .inc_by(db_reads);
+            }
+            for (miss_idx, opt_bytes) in misses.iter().zip(hash_bytes) {
+                if let Some(bytes) = opt_bytes {
+                    let hash = bcs::from_bytes::<CryptoHash>(&bytes)?;
+                    self.caches
+                        .block_hash_by_height
+                        .insert(&(chain_id, heights[*miss_idx]), hash);
+                    results[*miss_idx] = Some(hash);
+                }
+            }
+        }
 
-        Ok(hash_options)
+        Ok(results)
     }
 
     #[instrument(skip_all)]
@@ -1837,22 +1922,52 @@ where
     ) -> Result<Vec<IndexAndEvent>, ViewError> {
         let root_key = RootKey::Event(*chain_id).bytes();
         let store = self.database.open_shared(&root_key)?;
-        let mut keys = Vec::new();
-        let mut indices = Vec::new();
+        // Pair each index with its cached value, or `None` for a cache miss to be
+        // read from the database, so results keep the key-scan order.
+        let mut entries = Vec::new();
+        let mut db_keys = Vec::new();
         let prefix = bcs::to_bytes(stream_id).unwrap();
         for short_key in store.find_keys_by_prefix(&prefix).await? {
             let index = bcs::from_bytes::<u32>(&short_key)?;
             if index >= start_index {
-                let mut key = prefix.clone();
-                key.extend(short_key);
-                keys.push(key);
-                indices.push(index);
+                let event_id = EventId {
+                    chain_id: *chain_id,
+                    stream_id: stream_id.clone(),
+                    index,
+                };
+                let cached = self.caches.event.get(&event_id).map(|arc| (*arc).clone());
+                if cached.is_none() {
+                    let mut key = prefix.clone();
+                    key.extend(short_key);
+                    db_keys.push(key);
+                }
+                entries.push((index, cached));
             }
         }
-        let values = store.read_multi_values_bytes(&keys).await?;
-        let mut returned_values = Vec::new();
-        for (index, value) in indices.into_iter().zip(values) {
-            let event = value.unwrap();
+        let mut db_values = if db_keys.is_empty() {
+            Vec::new()
+        } else {
+            store.read_multi_values_bytes(&db_keys).await?
+        }
+        .into_iter();
+        let mut returned_values = Vec::with_capacity(entries.len());
+        for (index, cached) in entries {
+            let event = match cached {
+                Some(event) => event,
+                None => {
+                    let event_bytes = db_values
+                        .next()
+                        .expect("one database value per cache miss")
+                        .unwrap();
+                    let event_id = EventId {
+                        chain_id: *chain_id,
+                        stream_id: stream_id.clone(),
+                        index,
+                    };
+                    self.caches.event.insert(&event_id, event_bytes.clone());
+                    event_bytes
+                }
+            };
             returned_values.push(IndexAndEvent { index, event });
         }
         Ok(returned_values)
@@ -1872,13 +1987,26 @@ where
 
     #[instrument(skip_all)]
     async fn read_network_description(&self) -> Result<Option<NetworkDescription>, ViewError> {
+        if let Some(desc) = self.caches.network_description.get() {
+            #[cfg(with_metrics)]
+            metrics::READ_NETWORK_DESCRIPTION
+                .with_label_values(&[metrics::CACHE])
+                .inc();
+            return Ok(Some(desc.clone()));
+        }
         let root_key = RootKey::NetworkDescription.bytes();
         let store = self.database.open_shared(&root_key)?;
-        let maybe_value = store.read_value(NETWORK_DESCRIPTION_KEY).await?;
+        let maybe_value: Option<NetworkDescription> =
+            store.read_value(NETWORK_DESCRIPTION_KEY).await?;
         #[cfg(with_metrics)]
         metrics::READ_NETWORK_DESCRIPTION
             .with_label_values(&[metrics::DB])
             .inc();
+        if let Some(ref desc) = maybe_value {
+            if self.caches.network_description.set(desc.clone()).is_err() {
+                debug!("network description cache was already populated concurrently");
+            }
+        }
         Ok(maybe_value)
     }
 

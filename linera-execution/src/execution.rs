@@ -10,16 +10,19 @@ use linera_base::{
     data_types::{BlobContent, BlockHeight, StreamUpdate},
     identifiers::{AccountOwner, BlobId, StreamId},
     time::Instant,
+    visit_allocative_simple,
 };
 use linera_views::{
+    batch::Batch,
+    common::HasherOutput,
     context::Context,
     key_value_store_view::KeyValueStoreView,
     map_view::MapView,
     reentrant_collection_view::HashedReentrantCollectionView,
-    views::{ClonableView, HashableView as _, ReplaceContext, View},
+    register_view::RegisterView,
+    views::{ClonableView, HashableView, Hasher as _, ReplaceContext, View},
     ViewError,
 };
-use linera_views_derive::HashableView;
 #[cfg(with_testing)]
 use {
     crate::{
@@ -36,11 +39,12 @@ use crate::{
     system::SystemExecutionStateView, ApplicationDescription, ApplicationId, BcsHashable,
     Deserialize, ExecutionError, ExecutionRuntimeContext, JsVec, MessageContext, OperationContext,
     ProcessStreamsContext, Query, QueryContext, QueryOutcome, Serialize, ServiceSyncRuntime,
-    Timestamp, TransactionTracker, FLAG_ZERO_HASH,
+    Timestamp, TransactionTracker, FLAG_HISTORICAL_HASH, FLAG_HISTORICAL_HASH_SHADOW,
+    FLAG_ZERO_HASH,
 };
 
 /// A view accessing the execution state of a chain.
-#[derive(Debug, ClonableView, HashableView, Allocative)]
+#[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
 pub struct ExecutionStateView<C> {
     /// System application.
@@ -49,6 +53,68 @@ pub struct ExecutionStateView<C> {
     pub users: HashedReentrantCollectionView<C, ApplicationId, KeyValueStoreView<C>>,
     /// The number of events in the streams that this chain is writing to.
     pub stream_event_counts: MapView<C, StreamId, u32>,
+    /// Rolling *historical* hash of the execution state, used when `FLAG_HISTORICAL_HASH`
+    /// (or its shadow variant) is active. `None` until the first block after activation, which
+    /// seeds it from the full content hash (via [`HashableView`]); subsequent blocks extend it
+    /// cheaply from the batch that block persists. Appended last so that existing chains load it
+    /// as `None` without moving the storage keys of the other fields, and deliberately excluded
+    /// from the hand-written [`HashableView`] impl below (so it never hashes itself).
+    #[allocative(visit = visit_allocative_simple)]
+    pub historical_hash: RegisterView<C, Option<HasherOutput>>,
+}
+
+/// Selects how [`ExecutionStateView::crypto_hash_mut`] computes the execution-state hash,
+/// based on the feature flags in the current committee's policy.
+#[derive(Clone, Copy, Debug)]
+enum HashingMode {
+    /// Report an all-zeros hash without hashing the state (`FLAG_ZERO_HASH`).
+    Zero,
+    /// Full content hash of the state on every block (the default, legacy behavior).
+    Legacy,
+    /// Rolling historical hash. In shadow mode (`enforce == false`) the hash is computed,
+    /// persisted and logged but the reported hash stays all-zeros.
+    Historical { enforce: bool },
+}
+
+/// Hashes only the content fields of [`ExecutionStateView`], mirroring the `HashableView`
+/// derive but omitting the appended `historical_hash` register. Keeping this by hand means the
+/// rolling hash never feeds back into the content hash that seeds it.
+impl<C> HashableView for ExecutionStateView<C>
+where
+    C: Context + Clone + 'static,
+    C::Extra: ExecutionRuntimeContext,
+{
+    type Hasher = linera_views::sha3::Sha3_256;
+
+    async fn hash_mut(&mut self) -> Result<HasherOutput, ViewError> {
+        use std::io::Write as _;
+        let Self {
+            system,
+            users,
+            stream_event_counts,
+            historical_hash: _,
+        } = self;
+        let mut hasher = Self::Hasher::default();
+        hasher.write_all(system.hash_mut().await?.as_ref())?;
+        hasher.write_all(users.hash_mut().await?.as_ref())?;
+        hasher.write_all(stream_event_counts.hash_mut().await?.as_ref())?;
+        Ok(hasher.finalize())
+    }
+
+    async fn hash(&self) -> Result<HasherOutput, ViewError> {
+        use std::io::Write as _;
+        let Self {
+            system,
+            users,
+            stream_event_counts,
+            historical_hash: _,
+        } = self;
+        let mut hasher = Self::Hasher::default();
+        hasher.write_all(system.hash().await?.as_ref())?;
+        hasher.write_all(users.hash().await?.as_ref())?;
+        hasher.write_all(stream_event_counts.hash().await?.as_ref())?;
+        Ok(hasher.finalize())
+    }
 }
 
 impl<C> ExecutionStateView<C>
@@ -56,28 +122,125 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Computes the cryptographic hash of the execution state.
     pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
-        if self
-            .system
-            .current_committee()
-            .await?
-            .is_some_and(|(_epoch, committee)| {
-                committee
-                    .policy()
-                    .http_request_allow_list
-                    .contains(FLAG_ZERO_HASH)
-            })
-        {
-            Ok(CryptoHash::from([0; 32]))
-        } else {
-            #[derive(Serialize, Deserialize)]
-            struct ExecutionStateViewHash([u8; 32]);
-            impl BcsHashable<'_> for ExecutionStateViewHash {}
-            self.hash_mut()
-                .await
-                .map(|hash| CryptoHash::new(&ExecutionStateViewHash(hash.into())))
+        match self.hashing_mode().await? {
+            HashingMode::Zero => {
+                self.reset_historical_hash();
+                Ok(CryptoHash::from([0; 32]))
+            }
+            HashingMode::Legacy => {
+                self.reset_historical_hash();
+                let hash = self.hash_mut().await?;
+                Ok(Self::wrap_state_hash(hash))
+            }
+            HashingMode::Historical { enforce } => {
+                let hash = self.advance_historical_hash().await?;
+                let wrapped = Self::wrap_state_hash(hash);
+                if enforce {
+                    Ok(wrapped)
+                } else {
+                    // Shadow mode: populate and surface the rolling hash so it can be compared
+                    // across validators, but keep reporting an all-zeros hash so that it is not
+                    // yet enforced in consensus.
+                    tracing::info!(
+                        chain_id = %self.context().extra().chain_id(),
+                        historical_state_hash = %wrapped,
+                        "computed historical execution-state hash in shadow mode",
+                    );
+                    Ok(CryptoHash::from([0; 32]))
+                }
+            }
         }
     }
+
+    /// Decides which hashing scheme applies, based on the feature flags in the current
+    /// committee's content policy. With no active committee, falls back to legacy hashing
+    /// (matching the previous behavior).
+    async fn hashing_mode(&self) -> Result<HashingMode, ViewError> {
+        let Some((_epoch, committee)) = self.system.current_committee().await? else {
+            return Ok(HashingMode::Legacy);
+        };
+        let flags = &committee.policy().http_request_allow_list;
+        let mode = if flags.contains(FLAG_ZERO_HASH) {
+            HashingMode::Zero
+        } else if flags.contains(FLAG_HISTORICAL_HASH) {
+            HashingMode::Historical { enforce: true }
+        } else if flags.contains(FLAG_HISTORICAL_HASH_SHADOW) {
+            HashingMode::Historical { enforce: false }
+        } else {
+            HashingMode::Legacy
+        };
+        Ok(mode)
+    }
+
+    /// Computes the next rolling historical hash and stores it in `historical_hash`.
+    ///
+    /// On the first block after activation (`historical_hash` is `None`) the hash is seeded from
+    /// a full content hash of the state, which — because [`HashableView::hash_mut`] reflects the
+    /// in-memory state — already includes this block's changes. Every subsequent block extends
+    /// the stored hash with the batch it is about to persist, so the cost is proportional to the
+    /// block's writes rather than the whole state.
+    async fn advance_historical_hash(&mut self) -> Result<HasherOutput, ViewError> {
+        let hash = match *self.historical_hash.get() {
+            None => self.hash_mut().await?,
+            Some(stored) => {
+                // Hash only the content fields' pending writes. `historical_hash` is intentionally
+                // excluded so the rolling hash never depends on its own (possibly still pending)
+                // value. This mirrors `main`, where the wrapper's hash key sits outside the hashed
+                // inner view.
+                let Self {
+                    system,
+                    users,
+                    stream_event_counts,
+                    historical_hash: _,
+                } = self;
+                let mut batch = Batch::new();
+                system.pre_save(&mut batch)?;
+                users.pre_save(&mut batch)?;
+                stream_event_counts.pre_save(&mut batch)?;
+                make_historical_hash(Some(stored), &batch)?
+            }
+        };
+        self.historical_hash.set(Some(hash));
+        Ok(hash)
+    }
+
+    /// Drops any stored rolling hash while historical hashing is inactive. This keeps inactive
+    /// chains free of stale state and, crucially, forces a fresh full-content re-seed if historical
+    /// hashing is ever re-activated: otherwise the chain would be extended from a hash that predates
+    /// the blocks executed while it was inactive, which no longer reflects the state.
+    fn reset_historical_hash(&mut self) {
+        if self.historical_hash.get().is_some() {
+            self.historical_hash.set(None);
+        }
+    }
+
+    /// Wraps a raw 32-byte hash into a domain-separated [`CryptoHash`], matching the convention
+    /// used on `main` for the execution-state hash.
+    fn wrap_state_hash(hash: HasherOutput) -> CryptoHash {
+        #[derive(Serialize, Deserialize)]
+        struct ExecutionStateViewHash([u8; 32]);
+        impl BcsHashable<'_> for ExecutionStateViewHash {}
+        CryptoHash::new(&ExecutionStateViewHash(hash.into()))
+    }
+}
+
+/// Extends a stored hash with a batch: `SHA3-256(stored || bcs(batch))`. An empty batch leaves the
+/// hash unchanged. Mirrors `HistoricallyHashableView::make_hash`. Changing this function changes
+/// consensus-visible execution-state hashes — see `make_historical_hash_matches_recorded_value`.
+fn make_historical_hash(
+    stored: Option<HasherOutput>,
+    batch: &Batch,
+) -> Result<HasherOutput, ViewError> {
+    let stored = stored.unwrap_or_default();
+    if batch.is_empty() {
+        return Ok(stored);
+    }
+    let mut hasher = linera_views::sha3::Sha3_256::default();
+    hasher.update_with_bytes(stored.as_ref())?;
+    hasher.update_with_bcs_bytes(&batch)?;
+    Ok(hasher.finalize())
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
@@ -91,6 +254,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for ExecutionStateView<C> {
             system: self.system.with_context(ctx.clone()).await,
             users: self.users.with_context(ctx.clone()).await,
             stream_event_counts: self.stream_event_counts.with_context(ctx.clone()).await,
+            historical_hash: self.historical_hash.with_context(ctx.clone()).await,
         }
     }
 }
@@ -226,6 +390,7 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Runs a query against the given application and returns its response.
     pub async fn query_application(
         &mut self,
         context: QueryContext,
@@ -359,6 +524,7 @@ where
         }
     }
 
+    /// Returns the descriptions of all applications registered on this chain.
     pub async fn list_applications(
         &self,
     ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {
@@ -370,5 +536,44 @@ where
             applications.push((app_id, application_description));
         }
         Ok(applications)
+    }
+}
+
+#[cfg(test)]
+mod historical_hash_tests {
+    use linera_views::{batch::Batch, common::HasherOutput};
+
+    use super::make_historical_hash;
+
+    const RECORDED_CHAIN_HASH: [u8; 32] = [
+        148, 130, 122, 191, 71, 219, 62, 147, 185, 157, 252, 71, 40, 90, 125, 182, 36, 55, 7, 233,
+        90, 114, 77, 56, 106, 151, 21, 246, 183, 174, 65, 74,
+    ];
+
+    /// Golden test pinning the historical-hash chaining primitive. The recorded value is the
+    /// SHA3-256 of `stored || bcs(batch)`; a change to either the algorithm or the `Batch`
+    /// serialization would alter consensus-visible execution-state hashes and break this test
+    /// deliberately.
+    #[test]
+    fn make_historical_hash_matches_recorded_value() {
+        let stored: HasherOutput = [7u8; 32].into();
+        let mut batch = Batch::new();
+        batch.put_key_value_bytes(vec![0, 1, 2], vec![3, 4, 5]);
+        batch.put_key_value_bytes(vec![6, 7], vec![8]);
+
+        let hash = make_historical_hash(Some(stored), &batch).unwrap();
+        assert_eq!(<[u8; 32]>::from(hash), RECORDED_CHAIN_HASH);
+
+        // An empty batch is a no-op: the stored hash is returned unchanged.
+        assert_eq!(
+            make_historical_hash(Some(stored), &Batch::new()).unwrap(),
+            stored,
+        );
+        // A `None` stored hash behaves like all-zeros, so the same batch over `None` differs from
+        // the same batch over a non-zero stored hash.
+        assert_ne!(
+            make_historical_hash(None, &batch).unwrap(),
+            make_historical_hash(Some(stored), &batch).unwrap(),
+        );
     }
 }

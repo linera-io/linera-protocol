@@ -10,9 +10,10 @@ contract DeployFungibleBridge is Script {
         bytes32 chainId = vm.envBytes32("BRIDGE_CHAIN_ID");
         address token = vm.envAddress("TOKEN_ADDRESS");
         bytes32 fungibleAppId = vm.envBytes32("FUNGIBLE_APP_ID");
+        bytes32 bridgeAppId = vm.envBytes32("BRIDGE_APP_ID");
 
         vm.broadcast();
-        bridge = new FungibleBridge(lightClient, chainId, token, fungibleAppId);
+        bridge = new FungibleBridge(lightClient, chainId, token, fungibleAppId, bridgeAppId);
 
         require(address(bridge.lightClient()) == lightClient, "post-deploy lightClient mismatch");
     }

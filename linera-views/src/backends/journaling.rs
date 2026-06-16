@@ -145,7 +145,11 @@ impl<E: KeyValueStoreError + 'static> KeyValueStoreError for JournalingError<E> 
     const BACKEND: &'static str = "journaling";
 
     fn must_reload_view(&self) -> bool {
-        matches!(self, JournalingError::JournalResolutionFailed(_))
+        match self {
+            JournalingError::Inner(error) => error.must_reload_view(),
+            JournalingError::JournalResolutionFailed(_) => true,
+            JournalingError::BcsError(_) | JournalingError::JournalRequiresExclusiveAccess => false,
+        }
     }
 }
 
@@ -571,5 +575,39 @@ impl<S> JournalingKeyValueStore<S> {
             store,
             has_exclusive_access: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Error)]
+    enum MockError {
+        #[error("requires reload")]
+        MustReload,
+        #[error("benign")]
+        Benign,
+        #[error(transparent)]
+        Bcs(#[from] bcs::Error),
+    }
+
+    impl KeyValueStoreError for MockError {
+        const BACKEND: &'static str = "mock";
+
+        fn must_reload_view(&self) -> bool {
+            matches!(self, MockError::MustReload)
+        }
+    }
+
+    #[test]
+    fn journaling_error_inner_delegates_must_reload_view() {
+        assert!(JournalingError::Inner(MockError::MustReload).must_reload_view());
+        assert!(!JournalingError::Inner(MockError::Benign).must_reload_view());
+        assert!(JournalingError::<MockError>::JournalResolutionFailed(
+            JournalingResolutionError::FailureToRetrieveJournalBlock
+        )
+        .must_reload_view());
+        assert!(!JournalingError::<MockError>::JournalRequiresExclusiveAccess.must_reload_view());
     }
 }

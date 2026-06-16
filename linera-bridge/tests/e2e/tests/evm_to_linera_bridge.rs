@@ -33,7 +33,7 @@ use linera_client::{chain_listener::ClientContext as _, client_context::ClientCo
 use linera_core::environment::wallet::Memory;
 use linera_execution::{Operation, Query, QueryResponse, WasmRuntime};
 use linera_faucet_client::Faucet;
-use linera_storage::{DbStorage, StorageCacheConfig};
+use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use serde::Serialize;
 use wrapped_fungible::{InitialState, WrappedParameters};
@@ -82,14 +82,7 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         &config,
         "e2l-bridge-e2e-test",
         Some(WasmRuntime::default()),
-        StorageCacheConfig {
-            blob_cache_size: 1000,
-            confirmed_block_cache_size: 1000,
-            certificate_cache_size: 1000,
-            certificate_raw_cache_size: 1000,
-            event_cache_size: 1000,
-            cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
-        },
+        linera_bridge_e2e::test_storage_cache_config(),
     )
     .await?;
 
@@ -149,7 +142,8 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     cc.synchronize_from_validators().await?;
     cc.process_inbox().await?;
 
-    // 4b. Publish and create evm-bridge app first (so wrapped-fungible can reference it)
+    // 4b. Publish evm-bridge module (created after wrapped-fungible so it can
+    // take the wrapped applicationId as a creation parameter).
     tracing::info!("Publishing evm-bridge module...");
     let eb_contract =
         Bytecode::load_from_file(evm_bridge_wasm_dir.join("evm_bridge_contract.wasm"))?;
@@ -163,34 +157,14 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
     cc.synchronize_from_validators().await?;
     cc.process_inbox().await?;
 
-    tracing::info!("Creating evm-bridge application...");
-    let bridge_params = BridgeParameters {
-        source_chain_id: 31337,
-        token_address: erc20_addr.0 .0,
-    };
-    let (bridge_app_id, _) = cc
-        .create_application_untyped(
-            eb_module_id,
-            serde_json::to_vec(&bridge_params)?,
-            serde_json::to_vec(&BridgeInstantiationArgument {
-                rpc_endpoint: String::new(),
-            })?,
-            vec![],
-        )
-        .await?
-        .expect("create evm-bridge app committed");
-    tracing::info!(%bridge_app_id, "evm-bridge app created");
-
-    // 4c. Create wrapped-fungible app with bridge_app_id
+    // 4c. Create wrapped-fungible app first (its id is a parameter of the bridge)
     tracing::info!("Creating wrapped-fungible application...");
     let wrapped_params = WrappedParameters {
         ticker_symbol: "wTEST".to_string(),
         decimals: 18,
-        minter: Some(owner),
-        mint_chain_id: Some(chain_id),
+        mint_chain_id: chain_id,
         evm_token_address: erc20_addr.0 .0,
         evm_source_chain_id: 31337,
-        bridge_app_id: Some(bridge_app_id),
     };
     let wrapped_init = InitialState {
         accounts: BTreeMap::new(),
@@ -206,22 +180,44 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         .expect("create wrapped-fungible app committed");
     tracing::info!(%fungible_app_id, "wrapped-fungible app created");
 
-    // 4d. Register fungible app in the bridge
-    tracing::info!("Registering fungible app in bridge...");
-    let register_op = BridgeOperation::RegisterFungibleApp {
-        app_id: fungible_app_id,
+    // 4d. Create evm-bridge app with the wrapped-fungible app id as a parameter
+    tracing::info!("Creating evm-bridge application...");
+    let bridge_params = BridgeParameters {
+        source_chain_id: 31337,
+        token_address: erc20_addr.0 .0,
+        bridge_chain_id: chain_id,
+        fungible_app_id,
+    };
+    let (bridge_app_id, _) = cc
+        .create_application_untyped(
+            eb_module_id,
+            serde_json::to_vec(&bridge_params)?,
+            serde_json::to_vec(&BridgeInstantiationArgument {
+                rpc_endpoint: String::new(),
+            })?,
+            vec![],
+        )
+        .await?
+        .expect("create evm-bridge app committed");
+    tracing::info!(%bridge_app_id, "evm-bridge app created");
+
+    // 4e. Register the bridge app on the wrapped-fungible app
+    tracing::info!("Registering bridge app in wrapped-fungible...");
+    let register_op = wrapped_fungible::WrappedFungibleOperation::RegisterAuthorizedCaller {
+        app_id: bridge_app_id,
     };
     let register_bytes = bcs::to_bytes(&register_op)?;
     let register_operation = Operation::User {
-        application_id: bridge_app_id,
+        application_id: fungible_app_id,
         bytes: register_bytes,
     };
     cc.execute_operations(vec![register_operation], vec![])
         .await?
-        .expect("register fungible app committed");
+        .expect("register bridge app committed");
 
-    // 4e. Deploy FungibleBridge with the wrapped-fungible applicationId baked in
+    // 4f. Deploy FungibleBridge with the wrapped-fungible applicationId baked in
     let app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
+    let bridge_app_id_bytes32 = format!("0x{}", bridge_app_id.application_description_hash);
     let light_client = light_client_address();
     tracing::info!("Deploying FungibleBridge via forge script...");
     let bridge_addr = deploy_fungible_bridge(
@@ -232,11 +228,12 @@ async fn test_evm_to_linera_bridge() -> anyhow::Result<()> {
         &chain_id_bytes32,
         erc20_addr,
         &app_id_bytes32,
+        &bridge_app_id_bytes32,
     )
     .await?;
     tracing::info!(%bridge_addr, "FungibleBridge deployed");
 
-    // 4f. Register the FungibleBridge contract address in the evm-bridge app
+    // 4g. Register the FungibleBridge contract address in the evm-bridge app
     tracing::info!("Registering FungibleBridge address in evm-bridge...");
     let register_bridge_op = BridgeOperation::RegisterFungibleBridge {
         address: bridge_addr.0 .0,

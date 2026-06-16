@@ -141,6 +141,7 @@ pub fn deploy_fungible_bridge(
     chain_id: CryptoHash,
     token: Address,
     application_id: CryptoHash,
+    bridge_application_id: CryptoHash,
 ) -> Address {
     let bytecode = compile_contract(
         evm::FUNGIBLE_BRIDGE_SOURCE,
@@ -152,6 +153,7 @@ pub fn deploy_fungible_bridge(
         *chain_id.as_bytes(),
         token,
         *application_id.as_bytes(),
+        *bridge_application_id.as_bytes(),
     )
         .abi_encode_params();
     let mut deploy_data = bytecode;

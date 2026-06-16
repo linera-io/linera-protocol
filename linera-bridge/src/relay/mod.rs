@@ -13,6 +13,7 @@
 
 use linera_base::crypto::Signer as _;
 
+mod admin;
 mod committee;
 pub mod evm;
 pub mod linera;
@@ -31,7 +32,7 @@ use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
 use linera_core::{client::ChainClient, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
-use linera_storage::{DbStorage, Storage as _};
+use linera_storage::DbStorage;
 use linera_storage_runtime::{CommonStorageOptions, StorageConfig, StoreConfig};
 use linera_views::backends::rocks_db::RocksDbDatabase;
 use linera_wallet_json::PersistentWallet;
@@ -90,6 +91,7 @@ pub async fn run(
     evm_private_key: &str,
     evm_light_client_address: Option<&str>,
     port: u16,
+    admin_port: u16,
     common_storage_options: &CommonStorageOptions,
     monitor_scan_interval: Duration,
     monitor_start_block: u64,
@@ -210,6 +212,7 @@ pub async fn run(
         evm_private_key,
         evm_light_client_address,
         port,
+        admin_port,
         monitor_scan_interval,
         monitor_start_block,
         max_retries,
@@ -231,6 +234,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     evm_private_key: &str,
     evm_light_client_address: Option<&str>,
     port: u16,
+    admin_port: u16,
     monitor_scan_interval: Duration,
     monitor_start_block: u64,
     max_retries: u32,
@@ -269,6 +273,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         &evm_client,
         admin_chain_id,
         admin_chain_height,
+        max_retries,
     )
     .await
     .context("committee catch-up failed")?;
@@ -378,8 +383,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             proof_client,
             evm_client,
             linera_client,
-            deposit_notify,
-            burn_notify,
+            Arc::clone(&deposit_notify),
+            Arc::clone(&burn_notify),
             monitor_scan_interval,
             max_retries,
         ))
@@ -396,6 +401,20 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             .await
             .context("HTTP server error")
     });
+
+    let admin_app = admin::build_admin_router(admin::AdminState {
+        monitor: Arc::clone(&monitor),
+        deposit_notify: Arc::clone(&deposit_notify),
+        burn_notify: Arc::clone(&burn_notify),
+    });
+    let admin_bind_addr = format!("127.0.0.1:{admin_port}");
+    let admin_listener = tokio::net::TcpListener::bind(&admin_bind_addr).await?;
+    let mut admin_server_handle = tokio::spawn(async move {
+        axum::serve(admin_listener, admin_app)
+            .await
+            .context("Admin HTTP server error")
+    });
+    tracing::info!(?admin_bind_addr, "Admin HTTP server listening");
 
     update_balance_metrics(&evm_client, &linera_client).await;
 
@@ -425,6 +444,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             result = &mut http_server_handle => {
                 anyhow::bail!("HTTP server exited unexpectedly: {result:?}");
             }
+            result = &mut admin_server_handle => {
+                anyhow::bail!("Admin HTTP server exited unexpectedly: {result:?}");
+            }
             notification = notifications.next() => {
                 let notification = match notification {
                     Some(n) => n,
@@ -434,34 +456,24 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     }
                 };
 
-                // Handle admin chain committee updates.
+                // Handle admin chain committee updates. Reconcile against the
+                // LightClient's current epoch (gap-filling, with bounded retry per
+                // relay) so a transient relay failure self-heals on a later admin
+                // block instead of stranding the LightClient at a stale epoch.
                 if notification.chain_id == admin_chain_id {
                     if let Reason::NewBlock { height, .. } = &notification.reason {
-                        tracing::debug!(%height, "New admin chain block, checking for committee update");
-                        let heights = vec![*height];
-                        if let Ok(certs) = chain_client
-                            .storage_client()
-                            .read_certificates_by_heights(admin_chain_id, &heights)
-                            .await
+                        tracing::debug!(%height, "New admin chain block, reconciling committees");
+                        let scan_upto = linera_base::data_types::BlockHeight(height.0 + 1);
+                        if let Err(e) = committee::catch_up(
+                            chain_client.storage_client(),
+                            &evm_client,
+                            admin_chain_id,
+                            scan_upto,
+                            max_retries,
+                        )
+                        .await
                         {
-                            for cert in certs.into_iter().flatten() {
-                                if let Some((epoch, blob_hash)) = committee::find_create_committee(&cert) {
-                                    let blob_id = linera_base::identifiers::BlobId::new(
-                                        blob_hash,
-                                        linera_base::identifiers::BlobType::Committee,
-                                    );
-                                    match chain_client.storage_client().read_blob(blob_id).await {
-                                        Ok(Some(blob)) => {
-                                            match committee::relay_committee(&evm_client, &cert, blob.bytes()).await {
-                                                Ok(()) => tracing::info!(?epoch, "Committee update relayed"),
-                                                Err(e) => tracing::error!(?epoch, error = %e, "Failed to relay committee"),
-                                            }
-                                        }
-                                        Ok(None) => tracing::error!(?blob_id, "Committee blob not found"),
-                                        Err(e) => tracing::error!(error = %e, "Failed to read committee blob"),
-                                    }
-                                }
-                            }
+                            tracing::error!(error = %e, "Committee reconcile failed; will retry on the next admin block");
                         }
                     }
                     continue;

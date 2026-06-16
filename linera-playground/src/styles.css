@@ -1,0 +1,102 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.playground {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.playground__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #d0d7de;
+  background: #f6f8fa;
+}
+
+.playground__editor {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.config,
+.signer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #57606a;
+}
+
+.field input {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.875rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  min-width: 14rem;
+}
+
+.field--wide input {
+  min-width: 22rem;
+}
+
+.signer__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.signer__owner {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  color: #1a7f37;
+}
+
+.signer__readonly {
+  color: #9a6700;
+}
+
+.signer__error {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  color: #cf222e;
+}
+
+button {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.config__apply {
+  background: #1f883d;
+  border-color: #1a7f37;
+  color: #ffffff;
+}
