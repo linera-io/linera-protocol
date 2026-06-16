@@ -1109,10 +1109,10 @@ where
         application_id: application_id.forget_abi().into(),
         stream_name: StreamName(b"posts".to_vec()),
     };
-    let [summary_event] = &checkpoint_cert.block().body.events[..] else {
+    let [checkpoint_events] = &checkpoint_cert.block().body.events[..] else {
         panic!("checkpoint should emit a single transaction's events");
     };
-    let [summary_event] = &summary_event[..] else {
+    let [summary_event] = &checkpoint_events[..] else {
         panic!("checkpoint should emit a single summary event");
     };
     assert_eq!(summary_event.stream_id, posts_stream);

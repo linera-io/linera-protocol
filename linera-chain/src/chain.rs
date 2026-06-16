@@ -1566,17 +1566,10 @@ where
     /// Validates the chain-state-level preconditions for a `SystemOperation::Checkpoint`:
     /// no *system* event stream tracker is set.
     ///
-    /// The structural invariant that Checkpoint must be the *first* transaction in its
+    /// The structural invariant that `Checkpoint` must be the *first* transaction in its
     /// block is enforced unconditionally in `execute_block`, independently of these
     /// preconditions. Sender-side event conditions are validated inside
-    /// `ExecutionStateView::prepare_checkpoint`. Outgoing messages and consumed incoming
-    /// bundles are no longer preconditions: the on-chain `unfinalized_message_blocks` map
-    /// and the per-inbox `restored_cursor` (seeded from the checkpoint's oracle response)
-    /// together carry everything a bootstrapping node needs.
-    ///
-    /// User event streams are summarized by the checkpoint, so a tracker for one no longer
-    /// blocks checkpointing. System event streams (the admin chain's epoch streams) are not
-    /// yet summarized, so a tracker for one still does.
+    /// `ExecutionStateView::prepare_checkpoint`.
     async fn check_checkpoint_preconditions(&self) -> Result<(), ChainError> {
         let mut had_system_event_tracker = false;
         self.next_expected_events

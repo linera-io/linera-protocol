@@ -128,8 +128,8 @@ where
         maximum_blob_size: u64,
     ) -> Result<Vec<Blob>, ExecutionError> {
         // User event streams are summarized and pruned by the checkpoint itself (see
-        // `ExecutionStateActor`'s checkpoint handler), so they no longer block checkpointing.
-        // System event streams (e.g. the epoch streams on the admin chain) are not yet
+        // `ExecutionStateActor`'s checkpoint handler), so they do not block checkpointing.
+        // System event streams (e.g. the epoch streams on the admin chain) are not
         // summarized, so a chain that published any is still not allowed to checkpoint.
         let mut had_system_event_block = false;
         self.previous_event_blocks
