@@ -712,7 +712,11 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--wasm-fuel-unit-price <WASM_FUEL_UNIT_PRICE>` — Set the price per unit of Wasm fuel. (This will overwrite value from `--policy-config`)
 * `--evm-fuel-unit-price <EVM_FUEL_UNIT_PRICE>` — Set the price per unit of EVM fuel. (This will overwrite value from `--policy-config`)
@@ -1301,7 +1305,11 @@ Start a Local Linera Network
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--cross-chain-queue-size <QUEUE_SIZE>` — Number of cross-chain messages allowed before dropping them
 
