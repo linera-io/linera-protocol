@@ -32,6 +32,7 @@ use tracing::{debug, error, info, instrument, warn, Instrument as _};
 
 use crate::error::{self, Error};
 
+/// The configuration for the chain listener.
 #[derive(Default, Debug, Clone, clap::Args, serde::Serialize, serde::Deserialize, tsify::Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct ChainListenerConfig {
@@ -65,17 +66,23 @@ pub struct ChainListenerConfig {
 
 type ContextChainClient<C> = ChainClient<<C as ClientContext>::Environment>;
 
+/// The context in which a chain listener operates, providing access to the wallet, storage and client.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 #[allow(async_fn_in_trait)]
 pub trait ClientContext {
+    /// The execution environment used by the client.
     type Environment: linera_core::Environment;
 
+    /// Returns a reference to the wallet.
     fn wallet(&self) -> &<Self::Environment as linera_core::Environment>::Wallet;
 
+    /// Returns a reference to the storage.
     fn storage(&self) -> &<Self::Environment as linera_core::Environment>::Storage;
 
+    /// Returns a reference to the client.
     fn client(&self) -> &Arc<linera_core::client::Client<Self::Environment>>;
 
+    /// Returns the ID of the admin chain.
     fn admin_chain_id(&self) -> ChainId {
         self.client().admin_chain_id()
     }
@@ -86,6 +93,7 @@ pub trait ClientContext {
         &self,
     ) -> Option<tokio::sync::mpsc::UnboundedSender<(u64, linera_core::client::TimingType)>>;
 
+    /// Gets the timing sender for benchmarking, if available.
     #[cfg(web)]
     fn timing_sender(
         &self,
@@ -93,6 +101,7 @@ pub trait ClientContext {
         None
     }
 
+    /// Creates a chain client for the chain with the given ID, using the wallet's state.
     fn make_chain_client(
         &self,
         chain_id: ChainId,
@@ -118,6 +127,7 @@ pub trait ClientContext {
         }
     }
 
+    /// Adds a newly created chain to the wallet.
     async fn update_wallet_for_new_chain(
         &mut self,
         chain_id: ChainId,
@@ -126,11 +136,14 @@ pub trait ClientContext {
         epoch: Epoch,
     ) -> Result<(), Error>;
 
+    /// Updates the wallet with the latest state of the given chain client.
     async fn update_wallet(&mut self, client: &ContextChainClient<Self>) -> Result<(), Error>;
 }
 
+/// Extension methods for [`ClientContext`].
 #[allow(async_fn_in_trait)]
 pub trait ClientContextExt: ClientContext {
+    /// Returns a chain client for every chain in the wallet.
     async fn clients(&self) -> Result<Vec<ContextChainClient<Self>>, Error> {
         use futures::stream::TryStreamExt as _;
         self.wallet()
