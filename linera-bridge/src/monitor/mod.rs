@@ -77,12 +77,16 @@ pub async fn query_wrapped_fungible_decimals<E: Environment>(
 
 /// A pending deposit detected by the EVM scanner, sent to the retry loop.
 #[derive(Debug, Clone, serde::Serialize)]
-#[allow(missing_docs)]
 pub struct PendingDeposit {
+    /// Replay-protection key identifying this deposit `(source_chain_id, block_hash, tx_index, log_index)`.
     pub key: DepositKey,
+    /// Hash of the EVM transaction that emitted the `DepositInitiated` event.
     pub tx_hash: B256,
+    /// EVM address that initiated the deposit.
     pub depositor: Address,
+    /// Amount of tokens deposited, in the source ERC-20's base units.
     pub amount: U256,
+    /// Per-depositor nonce assigned by the bridge contract.
     pub nonce: U256,
 }
 
@@ -120,14 +124,18 @@ pub struct PendingBurn {
 
 /// Wraps a pending bridging request with tracking metadata.
 #[derive(Debug, Clone, serde::Serialize)]
-#[allow(missing_docs)]
 pub struct Tracked<T: Clone> {
+    /// The underlying pending bridging request being tracked.
     #[serde(flatten)]
     pub value: T,
+    /// Whether this request has been successfully forwarded to the other chain.
     pub forwarded: bool,
+    /// Whether this request exhausted its retry budget and was marked failed.
     pub failed: bool,
+    /// Number of retry attempts made so far.
     #[serde(skip)]
     pub retry_count: u32,
+    /// Instant of the most recent retry attempt, used to gate exponential backoff.
     #[serde(skip)]
     pub last_retry_at: Option<Instant>,
 }
@@ -686,13 +694,18 @@ impl MonitorState {
 
 /// A snapshot of the monitor's pending/completed counts and scan cursors.
 #[derive(Debug, Clone, serde::Serialize)]
-#[allow(missing_docs)]
 pub struct StatusSummary {
+    /// Number of tracked deposits not yet forwarded to Linera.
     pub deposits_pending: usize,
+    /// Number of tracked deposits already forwarded to Linera.
     pub deposits_completed: usize,
+    /// Number of tracked burns not yet forwarded to the EVM chain.
     pub burns_pending: usize,
+    /// Number of tracked burns already forwarded to the EVM chain.
     pub burns_forwarded: usize,
+    /// Highest EVM block number the deposit scanner has processed.
     pub last_scanned_evm_block: u64,
+    /// Highest Linera block height the burn scanner has processed.
     pub last_scanned_linera_height: BlockHeight,
 }
 
