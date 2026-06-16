@@ -81,6 +81,7 @@ pub struct ClientWrapper {
     wallet: String,
     keystore: String,
     network: Network,
+    /// Provides the working directory for the client and its files.
     pub path_provider: PathProvider,
     on_drop: OnClientDrop,
     extra_args: Vec<String>,
@@ -96,6 +97,7 @@ pub enum OnClientDrop {
 }
 
 impl ClientWrapper {
+    /// Creates a new [`ClientWrapper`], waiting for outgoing messages by default.
     pub fn new(
         path_provider: PathProvider,
         network: Network,
@@ -113,6 +115,7 @@ impl ClientWrapper {
         )
     }
 
+    /// Creates a new [`ClientWrapper`] with the given extra arguments passed to every command.
     pub fn new_with_extra_args(
         path_provider: PathProvider,
         network: Network,
@@ -985,6 +988,7 @@ impl ClientWrapper {
         Ok(new_chain)
     }
 
+    /// Runs `linera open-multi-owner-chain` and returns the new chain's ID.
     pub async fn open_multi_owner_chain(
         &self,
         from: ChainId,
@@ -1011,6 +1015,7 @@ impl ClientWrapper {
         Ok(chain_id)
     }
 
+    /// Runs `linera change-ownership`.
     pub async fn change_ownership(
         &self,
         chain_id: ChainId,
@@ -1067,6 +1072,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera retry-pending-block` and returns the hash of the produced block, if any.
     pub async fn retry_pending_block(
         &self,
         chain_id: Option<ChainId>,
@@ -1112,26 +1118,32 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Loads the wallet from this client's wallet file.
     pub fn load_wallet(&self) -> Result<Wallet> {
         Ok(Wallet::read(&self.wallet_path())?)
     }
 
+    /// Loads the in-memory signer from this client's keystore file.
     pub fn load_keystore(&self) -> Result<InMemorySigner> {
         util::read_json(self.keystore_path())
     }
 
+    /// Returns the path to this client's wallet file.
     pub fn wallet_path(&self) -> PathBuf {
         self.path_provider.path().join(&self.wallet)
     }
 
+    /// Returns the path to this client's keystore file.
     pub fn keystore_path(&self) -> PathBuf {
         self.path_provider.path().join(&self.keystore)
     }
 
+    /// Returns the storage specification string used by this client.
     pub fn storage_path(&self) -> &str {
         &self.storage
     }
 
+    /// Returns the owner of the wallet's default chain, if any.
     pub fn get_owner(&self) -> Option<AccountOwner> {
         let wallet = self.load_wallet().ok()?;
         wallet
@@ -1140,12 +1152,14 @@ impl ClientWrapper {
             .owner
     }
 
+    /// Returns whether the given chain is present in the wallet.
     pub fn is_chain_present_in_wallet(&self, chain: ChainId) -> bool {
         self.load_wallet()
             .ok()
             .is_some_and(|wallet| wallet.get(chain).is_some())
     }
 
+    /// Runs `linera validator add`.
     pub async fn set_validator(
         &self,
         validator_key: &(String, String),
@@ -1166,6 +1180,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera validator remove`.
     pub async fn remove_validator(&self, validator_key: &str) -> Result<()> {
         self.command()
             .await?
@@ -1177,6 +1192,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera validator update` to add, modify, and remove validators in one call.
     pub async fn change_validators(
         &self,
         add_validators: &[(String, String, usize, usize)], // (public_key, account_key, port, votes)
@@ -1243,6 +1259,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera revoke-epochs`.
     pub async fn revoke_epochs(&self, epoch: Epoch) -> Result<()> {
         self.command()
             .await?
@@ -1253,6 +1270,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Runs `linera resource-control-policy --http-request-allow-list`.
     pub async fn change_http_whitelist(&self, list: &[&str]) -> Result<()> {
         self.command()
             .await?
@@ -1313,6 +1331,7 @@ impl ClientWrapper {
         Ok(())
     }
 
+    /// Builds the application at `path` with `cargo` and returns its contract and service paths.
     pub async fn build_application(
         &self,
         path: &Path,
@@ -1420,11 +1439,13 @@ impl Drop for ClientWrapper {
 
 #[cfg(with_testing)]
 impl ClientWrapper {
+    /// Builds the example application with the given name and returns its contract and service paths.
     pub async fn build_example(&self, name: &str) -> Result<(PathBuf, PathBuf)> {
         self.build_application(Self::example_path(name)?.as_path(), name, true)
             .await
     }
 
+    /// Returns the path to the example application with the given name.
     pub fn example_path(name: &str) -> Result<PathBuf> {
         Ok(env::current_dir()?.join("../examples/").join(name))
     }
@@ -1460,30 +1481,36 @@ impl NodeService {
         Self { port, child }
     }
 
+    /// Terminates the node service by killing its child process.
     pub async fn terminate(mut self) -> Result<()> {
         self.child.kill().await.context("terminating node service")
     }
 
+    /// Returns the port the node service is listening on.
     pub fn port(&self) -> u16 {
         self.port
     }
 
+    /// Checks that the node service child process is still running.
     pub fn ensure_is_running(&mut self) -> Result<()> {
         self.child.ensure_is_running()
     }
 
+    /// Issues a `processInbox` GraphQL mutation and returns the hashes of the created blocks.
     pub async fn process_inbox(&self, chain_id: &ChainId) -> Result<Vec<CryptoHash>> {
         let query = format!("mutation {{ processInbox(chainId: \"{chain_id}\") }}");
         let mut data = self.query_node(query).await?;
         Ok(serde_json::from_value(data["processInbox"].take())?)
     }
 
+    /// Issues a `sync` GraphQL mutation for the given chain and returns the new block height.
     pub async fn sync(&self, chain_id: &ChainId) -> Result<u64> {
         let query = format!("mutation {{ sync(chainId: \"{chain_id}\") }}");
         let mut data = self.query_node(query).await?;
         Ok(serde_json::from_value(data["sync"].take())?)
     }
 
+    /// Issues a `transfer` GraphQL mutation and returns the resulting block hash.
     pub async fn transfer(
         &self,
         chain_id: ChainId,
@@ -1506,6 +1533,7 @@ impl NodeService {
             .context("missing transfer field in response")
     }
 
+    /// Queries the balance of the given account via GraphQL.
     pub async fn balance(&self, account: &Account) -> Result<Amount> {
         let chain = account.chain_id;
         let owner = account.owner;
@@ -1537,6 +1565,7 @@ impl NodeService {
         }
     }
 
+    /// Returns an [`ApplicationWrapper`] for querying the given application on this node service.
     pub fn make_application<A: ContractAbi>(
         &self,
         chain_id: &ChainId,
@@ -1550,6 +1579,7 @@ impl NodeService {
         Ok(ApplicationWrapper::from(link))
     }
 
+    /// Issues a `publishDataBlob` GraphQL mutation and returns the blob's hash.
     pub async fn publish_data_blob(
         &self,
         chain_id: &ChainId,
@@ -1565,6 +1595,7 @@ impl NodeService {
             .context("missing publishDataBlob field in response")
     }
 
+    /// Issues a `publishModule` GraphQL mutation and returns the new module ID.
     pub async fn publish_module<Abi, Parameters, InstantiationArgument>(
         &self,
         chain_id: &ChainId,
@@ -1589,6 +1620,7 @@ impl NodeService {
         Ok(module_id.with_abi())
     }
 
+    /// Queries the committees of the given chain via GraphQL.
     pub async fn query_committees(&self, chain_id: &ChainId) -> Result<BTreeMap<Epoch, Committee>> {
         let query = format!(
             "query {{ chain(chainId:\"{chain_id}\") {{
@@ -1600,6 +1632,7 @@ impl NodeService {
         Ok(serde_json::from_value(committees)?)
     }
 
+    /// Issues an `eventsFromIndex` GraphQL query for events on the given chain and stream.
     pub async fn events_from_index(
         &self,
         chain_id: &ChainId,
@@ -1618,6 +1651,7 @@ impl NodeService {
         Ok(serde_json::from_value(response)?)
     }
 
+    /// Posts the given GraphQL query to the node service, retrying on timeouts and errors.
     pub async fn query_node(&self, query: impl AsRef<str>) -> Result<Value> {
         let n_try = 5;
         let query = query.as_ref();
@@ -1670,6 +1704,7 @@ impl NodeService {
         );
     }
 
+    /// Issues a `createApplication` GraphQL mutation and returns the new application ID.
     pub async fn create_application<
         Abi: ContractAbi,
         Parameters: Serialize,
@@ -1860,6 +1895,7 @@ impl FaucetService {
         }
     }
 
+    /// Terminates the faucet service by killing its child process.
     pub async fn terminate(mut self) -> Result<()> {
         self.child
             .kill()
@@ -1867,10 +1903,12 @@ impl FaucetService {
             .context("terminating faucet service")
     }
 
+    /// Checks that the faucet service child process is still running.
     pub fn ensure_is_running(&mut self) -> Result<()> {
         self.child.ensure_is_running()
     }
 
+    /// Returns a [`Faucet`] client connected to this running faucet service.
     pub fn instance(&self) -> Faucet {
         Faucet::new(format!("http://localhost:{}/", self.port))
     }
@@ -1883,12 +1921,14 @@ pub struct ApplicationWrapper<A> {
 }
 
 impl<A> ApplicationWrapper<A> {
+    /// Runs the given GraphQL query against the application and returns the response data.
     pub async fn run_graphql_query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
         let value = self.run_json_query(json!({ "query": query })).await?;
         Ok(value["data"].clone())
     }
 
+    /// Posts the given serializable JSON query to the application endpoint, retrying on failure.
     pub async fn run_json_query<T: Serialize>(&self, query: T) -> Result<Value> {
         const MAX_RETRIES: usize = 5;
 
@@ -1932,12 +1972,14 @@ impl<A> ApplicationWrapper<A> {
         unreachable!()
     }
 
+    /// Runs the given string as a GraphQL `query` and returns the response data.
     pub async fn query(&self, query: impl AsRef<str>) -> Result<Value> {
         let query = query.as_ref();
         self.run_graphql_query(&format!("query {{ {query} }}"))
             .await
     }
 
+    /// Runs the given string as a GraphQL `query` and deserializes the named field's value.
     pub async fn query_json<T: DeserializeOwned>(&self, query: impl AsRef<str>) -> Result<T> {
         let query = query.as_ref().trim();
         let name = query
@@ -1948,12 +1990,14 @@ impl<A> ApplicationWrapper<A> {
             .with_context(|| format!("{name} field missing in response"))
     }
 
+    /// Runs the given string as a GraphQL `mutation` and returns the response data.
     pub async fn mutate(&self, mutation: impl AsRef<str>) -> Result<Value> {
         let mutation = mutation.as_ref();
         self.run_graphql_query(&format!("mutation {{ {mutation} }}"))
             .await
     }
 
+    /// Runs several GraphQL mutations in a single aliased `mutation` request.
     pub async fn multiple_mutate(&self, mutations: &[String]) -> Result<Value> {
         let mut out = String::from("mutation {\n");
         for (index, mutation) in mutations.iter().enumerate() {
@@ -1992,6 +2036,7 @@ fn notification_timeout() -> Duration {
 }
 
 #[cfg(with_testing)]
+/// Extension trait for streams of [`Notification`]s, providing helpers to wait for events.
 pub trait NotificationsExt {
     /// Waits for a notification for which `f` returns `Some(t)`, and returns `t`.
     fn wait_for<T>(

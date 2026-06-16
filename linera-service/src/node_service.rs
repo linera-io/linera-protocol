@@ -112,6 +112,7 @@ impl OutputType for RawJson {
 }
 
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
+#[allow(missing_docs)]
 pub struct Chains {
     pub list: Vec<ChainId>,
     pub default: Option<ChainId>,
@@ -914,6 +915,7 @@ where
 }
 
 #[derive(SimpleObject)]
+#[allow(missing_docs)]
 pub struct ApplicationOverview {
     id: ApplicationId,
     description: ApplicationDescription,
@@ -1280,11 +1282,13 @@ where
         }
     }
 
+    /// Returns the socket address on which the metrics endpoint is served.
     #[cfg(with_metrics)]
     pub fn metrics_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
     }
 
+    /// Builds the GraphQL schema served by the node service.
     pub fn schema(&self) -> NodeServiceSchema<C> {
         let query = QueryRoot {
             context: Arc::clone(&self.context),

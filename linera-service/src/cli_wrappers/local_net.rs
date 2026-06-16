@@ -49,6 +49,8 @@ use crate::{
 /// Maximum allowed number of shards over all validators.
 const MAX_NUMBER_SHARDS: usize = 1000;
 
+/// Whether to process the inbox automatically before an operation.
+#[allow(missing_docs)]
 pub enum ProcessInbox {
     Skip,
     Automatic,
@@ -118,6 +120,8 @@ async fn make_testing_config(database: Database) -> Result<InnerStorageConfig> {
     }
 }
 
+/// A way to obtain the storage configuration for a local network.
+#[allow(missing_docs)]
 pub enum InnerStorageConfigBuilder {
     #[cfg(with_testing)]
     TestConfig,
@@ -127,6 +131,7 @@ pub enum InnerStorageConfigBuilder {
 }
 
 impl InnerStorageConfigBuilder {
+    /// Builds the storage configuration for the given database engine.
     #[cfg_attr(not(with_testing), expect(unused_variables))]
     pub async fn build(self, database: Database) -> Result<InnerStorageConfig> {
         match self {
@@ -140,12 +145,14 @@ impl InnerStorageConfigBuilder {
 /// Path used for the run can come from a path whose lifetime is controlled
 /// by an external user or as a temporary directory
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub enum PathProvider {
     ExternalPath { path_buf: PathBuf },
     TemporaryDirectory { tmp_dir: Arc<TempDir> },
 }
 
 impl PathProvider {
+    /// Returns the path managed by this provider.
     pub fn path(&self) -> &Path {
         match self {
             PathProvider::ExternalPath { path_buf } => path_buf.as_path(),
@@ -153,11 +160,13 @@ impl PathProvider {
         }
     }
 
+    /// Creates a provider backed by a freshly created temporary directory.
     pub fn create_temporary_directory() -> Result<Self> {
         let tmp_dir = Arc::new(tempdir()?);
         Ok(PathProvider::TemporaryDirectory { tmp_dir })
     }
 
+    /// Creates a provider from the given path, or a temporary directory if `None`.
     pub fn from_path_option(path: &Option<String>) -> anyhow::Result<Self> {
         Ok(match path {
             None => {
@@ -174,6 +183,7 @@ impl PathProvider {
 }
 
 /// The information needed to start a [`LocalNet`].
+#[allow(missing_docs)]
 pub struct LocalNetConfig {
     pub database: Database,
     pub network: NetworkConfig,
@@ -194,6 +204,7 @@ pub struct LocalNetConfig {
 
 /// The setup for the block exporters.
 #[derive(Clone, PartialEq)]
+#[allow(missing_docs)]
 pub enum ExportersSetup {
     // Block exporters are meant to be started and managed by the testing framework.
     Local(Vec<BlockExporterConfig>),
@@ -202,6 +213,7 @@ pub enum ExportersSetup {
 }
 
 impl ExportersSetup {
+    /// Creates an exporter setup, connecting to a remote exporter if requested.
     pub fn new(
         with_block_exporter: bool,
         block_exporter_address: String,
@@ -241,6 +253,7 @@ const SERVER_ENV: &str = "LINERA_SERVER_PARAMS";
 
 /// Description of the database engine to use inside a local Linera network.
 #[derive(Copy, Clone, Eq, PartialEq)]
+#[allow(missing_docs)]
 pub enum Database {
     Service,
     ScyllaDb,
@@ -314,6 +327,7 @@ impl Validator {
 
 #[cfg(with_testing)]
 impl LocalNetConfig {
+    /// Creates a configuration for a local test network with default test parameters.
     pub fn new_test(database: Database, network: Network) -> Self {
         let num_shards = 4;
         let num_proxies = 1;
@@ -461,6 +475,7 @@ impl LocalNet {
     }
 
     #[cfg(with_testing)]
+    /// Reads the genesis configuration of the local network.
     pub fn genesis_config(&self) -> Result<linera_client::config::GenesisConfig> {
         let path = self.path_provider.path();
         crate::util::read_json(path.join("genesis.json"))
@@ -486,10 +501,12 @@ impl LocalNet {
         test_offset_port() + 5000 + validator * self.num_shards + exporter_id + 1
     }
 
+    /// Returns the public port of the given proxy of the given validator.
     pub fn proxy_public_port(&self, validator: usize, proxy_id: usize) -> usize {
         test_offset_port() + 4000 + validator * self.num_proxies + proxy_id + 1
     }
 
+    /// Returns the public port of the first proxy of the first validator.
     pub fn first_public_port() -> usize {
         test_offset_port() + 4000 + 1
     }
@@ -795,6 +812,7 @@ impl LocalNet {
         Ok(child)
     }
 
+    /// Waits until the gRPC server at the given port responds as healthy.
     pub async fn ensure_grpc_server_has_started(
         nickname: &str,
         port: usize,
@@ -1004,6 +1022,7 @@ impl LocalNet {
         self.validator_keys.get(&validator)
     }
 
+    /// Generates the configuration and keys for the given validator.
     pub async fn generate_validator_config(&mut self, validator: usize) -> Result<()> {
         let stdout = self
             .command_for_binary("linera-server")
@@ -1023,6 +1042,7 @@ impl LocalNet {
         Ok(())
     }
 
+    /// Terminates the server for the given shard of the given validator.
     pub async fn terminate_server(&mut self, validator: usize, shard: usize) -> Result<()> {
         self.running_validators
             .get_mut(&validator)
@@ -1032,6 +1052,7 @@ impl LocalNet {
         Ok(())
     }
 
+    /// Removes the given validator from the set of running validators.
     pub fn remove_validator(&mut self, validator: usize) -> Result<()> {
         self.running_validators
             .remove(&validator)
@@ -1039,6 +1060,7 @@ impl LocalNet {
         Ok(())
     }
 
+    /// Starts the server for the given shard of the given validator.
     pub async fn start_server(&mut self, validator: usize, shard: usize) -> Result<()> {
         let server = self.run_server(validator, shard).await?;
         self.running_validators

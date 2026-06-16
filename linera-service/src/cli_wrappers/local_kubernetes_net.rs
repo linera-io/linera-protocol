@@ -34,7 +34,9 @@ static SHARED_LOCAL_KUBERNETES_TESTING_NET: OnceCell<(
     ClientWrapper,
 )> = OnceCell::const_new();
 
+/// Whether to build the binaries in debug or release mode.
 #[derive(Clone, clap::Parser, clap::ValueEnum, Debug, Default)]
+#[allow(missing_docs)]
 pub enum BuildMode {
     Debug,
     #[default]
@@ -56,6 +58,7 @@ impl std::fmt::Display for BuildMode {
 }
 
 /// The information needed to start a [`LocalKubernetesNet`].
+#[allow(missing_docs)]
 pub struct LocalKubernetesNetConfig {
     pub network: Network,
     pub testing_prng_seed: Option<u64>,
@@ -102,6 +105,7 @@ pub struct LocalKubernetesNet {
 
 #[cfg(with_testing)]
 impl SharedLocalKubernetesNetTestingConfig {
+    /// Creates a new configuration for a shared local Kubernetes testing network.
     // The second argument is sometimes used locally to use specific binaries for tests.
     pub fn new(network: Network, mut binaries: BuildArg) -> Self {
         if std::env::var("LINERA_TRY_RELEASE_BINARIES").unwrap_or_default() == "true"

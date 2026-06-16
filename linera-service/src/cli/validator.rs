@@ -45,6 +45,7 @@ impl FromStr for Votes {
 /// Specification for a validator to add or modify.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(missing_docs)]
 pub struct Spec {
     pub public_key: ValidatorPublicKey,
     pub account_key: AccountPublicKey,
@@ -56,6 +57,7 @@ pub struct Spec {
 /// Represents an update to a validator's configuration in batch operations.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(missing_docs)]
 pub struct Change {
     pub account_key: AccountPublicKey,
     pub address: url::Url,
@@ -72,12 +74,14 @@ pub type BatchFile = HashMap<ValidatorPublicKey, Option<Change>>;
 
 /// Structure for batch validator queries from JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct QueryBatch {
     pub validators: Vec<Spec>,
 }
 
 /// Validator subcommands.
 #[derive(Debug, Clone, clap::Subcommand)]
+#[allow(missing_docs)]
 pub enum Command {
     Add(Add),
     BatchQuery(BatchQuery),
