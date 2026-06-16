@@ -8,6 +8,8 @@ troubleshooting information and version compatibility checks.
 
 */
 
+#![deny(missing_docs)]
+
 mod serde_pretty;
 pub use serde_pretty::*;
 
