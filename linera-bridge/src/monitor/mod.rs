@@ -5,7 +5,7 @@
 //!
 //! Two background scan loops actively poll both chains:
 //! - **EVM scan** ([`evm`]): queries `DepositInitiated` events, checks Linera for completion.
-//! - **Linera scan** ([`linera`]): walks block history for Credit-to-Address20 messages,
+//! - **Linera scan** (`linera`): walks block history for Credit-to-Address20 messages,
 //!   checks EVM for completion via ERC-20 `Transfer` events.
 
 pub mod db;
@@ -73,6 +73,7 @@ pub async fn query_wrapped_fungible_decimals<E: linera_core::environment::Enviro
 
 /// A pending deposit detected by the EVM scanner, sent to the retry loop.
 #[derive(Debug, Clone, serde::Serialize)]
+#[allow(missing_docs)]
 pub struct PendingDeposit {
     pub key: DepositKey,
     pub tx_hash: B256,
@@ -89,6 +90,7 @@ pub struct PendingDeposit {
 /// the `FungibleBridge.isBurnProcessed(height, eventIndex)` view consumes.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingBurn {
+    /// Height of the Linera block that produced this burn.
     pub height: BlockHeight,
     /// Hash of the Linera block that produced this burn. Lets the relayer
     /// fetch the certificate via a direct `linera_client.read_certificate`
@@ -106,12 +108,15 @@ pub struct PendingBurn {
     /// across all heights within the relayer's scope. Off-chain and on-chain
     /// dedup key.
     pub event_index: u32,
+    /// EVM address that receives the bridged tokens.
     pub evm_recipient: Address,
+    /// Amount of tokens to release on the EVM side.
     pub amount: U128,
 }
 
 /// Wraps a pending bridging request with tracking metadata.
 #[derive(Debug, Clone, serde::Serialize)]
+#[allow(missing_docs)]
 pub struct Tracked<T: Clone> {
     #[serde(flatten)]
     pub value: T,
@@ -135,7 +140,9 @@ impl<T: Clone> Tracked<T> {
     }
 }
 
+/// A [`PendingDeposit`] wrapped with retry-tracking metadata.
 pub type TrackedDeposit = Tracked<PendingDeposit>;
+/// A [`PendingBurn`] wrapped with retry-tracking metadata.
 pub type TrackedBurn = Tracked<PendingBurn>;
 
 /// One height's slice of `pending_burns_by_height_and_tx`. The two views
@@ -148,6 +155,7 @@ pub type TrackedBurn = Tracked<PendingBurn>;
 /// entry per height).
 #[derive(Debug, Clone)]
 pub struct PendingBurnsAtHeight {
+    /// Linera block height these pending burns belong to.
     pub height: BlockHeight,
     /// Hash of the Linera block at `height` — lets `process_pending_burns`
     /// pull the certificate via a direct `read_certificate` call.
@@ -192,6 +200,7 @@ pub struct MonitorState {
 }
 
 impl MonitorState {
+    /// Creates an empty monitoring state that begins scanning EVM at `start_evm_block`.
     pub fn new(start_evm_block: u64) -> Self {
         Self {
             deposits: HashMap::new(),
@@ -231,6 +240,7 @@ impl MonitorState {
         }
     }
 
+    /// Marks the tracked deposit as forwarded and records its completion in SQLite.
     pub async fn complete_deposit(&mut self, key: &DepositKey) {
         if let Some(d) = self.deposits.get_mut(key) {
             d.forwarded = true;
@@ -265,6 +275,7 @@ impl MonitorState {
         }
     }
 
+    /// Marks the tracked burn as forwarded and records its completion in SQLite.
     pub async fn complete_burn(&mut self, height: BlockHeight, event_index: u32) {
         if let Some(b) = self.burns.get_mut(&(height, event_index)) {
             b.forwarded = true;
@@ -287,26 +298,32 @@ impl MonitorState {
         }
     }
 
+    /// Returns every tracked deposit, regardless of status.
     pub fn all_deposits(&self) -> Vec<&TrackedDeposit> {
         self.deposits.values().collect()
     }
 
+    /// Returns the deposits that have not yet been forwarded.
     pub fn pending_deposits(&self) -> Vec<&TrackedDeposit> {
         self.deposits.values().filter(|d| !d.forwarded).collect()
     }
 
+    /// Returns the deposits that have been forwarded.
     pub fn completed_deposits(&self) -> Vec<&TrackedDeposit> {
         self.deposits.values().filter(|d| d.forwarded).collect()
     }
 
+    /// Returns every tracked burn, regardless of status.
     pub fn all_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().collect()
     }
 
+    /// Returns the burns that have not yet been forwarded.
     pub fn pending_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().filter(|b| !b.forwarded).collect()
     }
 
+    /// Returns the burns that have been forwarded.
     pub fn completed_burns(&self) -> Vec<&TrackedBurn> {
         self.burns.values().filter(|b| b.forwarded).collect()
     }
@@ -360,6 +377,7 @@ impl MonitorState {
             .collect()
     }
 
+    /// Returns the pending deposits whose retry backoff has elapsed and that are within `max_retries`.
     pub fn deposits_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedDeposit> {
         self.deposits
             .values()
@@ -371,6 +389,7 @@ impl MonitorState {
             .collect()
     }
 
+    /// Returns the pending burns whose retry backoff has elapsed and that are within `max_retries`.
     pub fn burns_ready_for_retry(&self, max_retries: u32) -> Vec<&TrackedBurn> {
         self.burns
             .values()
@@ -592,6 +611,7 @@ impl MonitorState {
         reset.into_iter().collect()
     }
 
+    /// Returns a snapshot of pending/completed counts and scan cursors for status reporting.
     pub fn status_summary(&self) -> StatusSummary {
         StatusSummary {
             deposits_pending: self.deposits.values().filter(|d| !d.forwarded).count(),
@@ -604,7 +624,9 @@ impl MonitorState {
     }
 }
 
+/// A snapshot of the monitor's pending/completed counts and scan cursors.
 #[derive(Debug, Clone, serde::Serialize)]
+#[allow(missing_docs)]
 pub struct StatusSummary {
     pub deposits_pending: usize,
     pub deposits_completed: usize,
