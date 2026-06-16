@@ -3,7 +3,12 @@ pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
 library WrappedFungibleTypes {
-    function bcs_serialize_uleb128(uint256 x) internal pure returns (bytes memory) {
+
+    function bcs_serialize_uleb128(uint256 x)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result;
         bytes1 entry;
         while (true) {
@@ -23,13 +28,17 @@ library WrappedFungibleTypes {
         return result;
     }
 
-    function bcs_deserialize_offset_uleb128(uint256 pos, bytes memory input) internal pure returns (uint256, uint256) {
+    function bcs_deserialize_offset_uleb128(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, uint256)
+    {
         uint256 idx = 0;
         while (true) {
             if (uint8(input[pos + idx]) < 128) {
                 uint256 result = 0;
                 uint256 power = 1;
-                for (uint256 u = 0; u < idx; u++) {
+                for (uint256 u=0; u<idx; u++) {
                     uint8 val = uint8(input[pos + u]) - 128;
                     result += power * uint256(val);
                     power *= 128;
@@ -40,7 +49,7 @@ library WrappedFungibleTypes {
             idx += 1;
         }
         require(false, "This line is unreachable");
-        return (0, 0);
+        return (0,0);
     }
 
     struct Account {
@@ -48,7 +57,11 @@ library WrappedFungibleTypes {
         BridgeTypes.AccountOwner owner;
     }
 
-    function bcs_serialize_Account(Account memory input) internal pure returns (bytes memory) {
+    function bcs_serialize_Account(Account memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = BridgeTypes.bcs_serialize_ChainId(input.chain_id);
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.owner));
     }
@@ -66,7 +79,11 @@ library WrappedFungibleTypes {
         return (new_pos, Account(chain_id, owner));
     }
 
-    function bcs_deserialize_Account(bytes memory input) internal pure returns (Account memory) {
+    function bcs_deserialize_Account(bytes memory input)
+        internal
+        pure
+        returns (Account memory)
+    {
         uint256 new_pos;
         Account memory value;
         (new_pos, value) = bcs_deserialize_offset_Account(0, input);
@@ -78,7 +95,11 @@ library WrappedFungibleTypes {
         BridgeTypes.CryptoHash application_description_hash;
     }
 
-    function bcs_serialize_ApplicationId(ApplicationId memory input) internal pure returns (bytes memory) {
+    function bcs_serialize_ApplicationId(ApplicationId memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         return BridgeTypes.bcs_serialize_CryptoHash(input.application_description_hash);
     }
 
@@ -93,7 +114,11 @@ library WrappedFungibleTypes {
         return (new_pos, ApplicationId(application_description_hash));
     }
 
-    function bcs_deserialize_ApplicationId(bytes memory input) internal pure returns (ApplicationId memory) {
+    function bcs_deserialize_ApplicationId(bytes memory input)
+        internal
+        pure
+        returns (ApplicationId memory)
+    {
         uint256 new_pos;
         ApplicationId memory value;
         (new_pos, value) = bcs_deserialize_offset_ApplicationId(0, input);
@@ -106,7 +131,11 @@ library WrappedFungibleTypes {
         uint128 amount;
     }
 
-    function bcs_serialize_BurnEvent(BurnEvent memory input) internal pure returns (bytes memory) {
+    function bcs_serialize_BurnEvent(BurnEvent memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = bcs_serialize_bytes20(input.target);
         return abi.encodePacked(result, bcs_serialize_uint128(input.amount));
     }
@@ -124,7 +153,11 @@ library WrappedFungibleTypes {
         return (new_pos, BurnEvent(target, amount));
     }
 
-    function bcs_deserialize_BurnEvent(bytes memory input) internal pure returns (BurnEvent memory) {
+    function bcs_deserialize_BurnEvent(bytes memory input)
+        internal
+        pure
+        returns (BurnEvent memory)
+    {
         uint256 new_pos;
         BurnEvent memory value;
         (new_pos, value) = bcs_deserialize_offset_BurnEvent(0, input);
@@ -140,17 +173,29 @@ library WrappedFungibleTypes {
         Message_Withdraw withdraw;
     }
 
-    function Message_case_credit(Message_Credit memory credit) internal pure returns (Message memory) {
+    function Message_case_credit(Message_Credit memory credit)
+        internal
+        pure
+        returns (Message memory)
+    {
         Message_Withdraw memory withdraw;
         return Message(uint64(0), credit, withdraw);
     }
 
-    function Message_case_withdraw(Message_Withdraw memory withdraw) internal pure returns (Message memory) {
+    function Message_case_withdraw(Message_Withdraw memory withdraw)
+        internal
+        pure
+        returns (Message memory)
+    {
         Message_Credit memory credit;
         return Message(uint64(1), credit, withdraw);
     }
 
-    function bcs_serialize_Message(Message memory input) internal pure returns (bytes memory) {
+    function bcs_serialize_Message(Message memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         if (input.choice == 0) {
             return abi.encodePacked(hex"00", bcs_serialize_Message_Credit(input.credit));
         }
@@ -182,7 +227,11 @@ library WrappedFungibleTypes {
         return (new_pos, Message(choice, credit, withdraw));
     }
 
-    function bcs_deserialize_Message(bytes memory input) internal pure returns (Message memory) {
+    function bcs_deserialize_Message(bytes memory input)
+        internal
+        pure
+        returns (Message memory)
+    {
         uint256 new_pos;
         Message memory value;
         (new_pos, value) = bcs_deserialize_offset_Message(0, input);
@@ -196,7 +245,11 @@ library WrappedFungibleTypes {
         BridgeTypes.AccountOwner source;
     }
 
-    function bcs_serialize_Message_Credit(Message_Credit memory input) internal pure returns (bytes memory) {
+    function bcs_serialize_Message_Credit(Message_Credit memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.target);
         result = abi.encodePacked(result, bcs_serialize_uint128(input.amount));
         return abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.source));
@@ -217,7 +270,11 @@ library WrappedFungibleTypes {
         return (new_pos, Message_Credit(target, amount, source));
     }
 
-    function bcs_deserialize_Message_Credit(bytes memory input) internal pure returns (Message_Credit memory) {
+    function bcs_deserialize_Message_Credit(bytes memory input)
+        internal
+        pure
+        returns (Message_Credit memory)
+    {
         uint256 new_pos;
         Message_Credit memory value;
         (new_pos, value) = bcs_deserialize_offset_Message_Credit(0, input);
@@ -231,7 +288,11 @@ library WrappedFungibleTypes {
         Account target_account;
     }
 
-    function bcs_serialize_Message_Withdraw(Message_Withdraw memory input) internal pure returns (bytes memory) {
+    function bcs_serialize_Message_Withdraw(Message_Withdraw memory input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
         result = abi.encodePacked(result, bcs_serialize_uint128(input.amount));
         return abi.encodePacked(result, bcs_serialize_Account(input.target_account));
@@ -252,7 +313,11 @@ library WrappedFungibleTypes {
         return (new_pos, Message_Withdraw(owner, amount, target_account));
     }
 
-    function bcs_deserialize_Message_Withdraw(bytes memory input) internal pure returns (Message_Withdraw memory) {
+    function bcs_deserialize_Message_Withdraw(bytes memory input)
+        internal
+        pure
+        returns (Message_Withdraw memory)
+    {
         uint256 new_pos;
         Message_Withdraw memory value;
         (new_pos, value) = bcs_deserialize_offset_Message_Withdraw(0, input);
@@ -281,7 +346,11 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Burn burn;
     }
 
-    function WrappedFungibleOperation_case_ticker_symbol() internal pure returns (WrappedFungibleOperation memory) {
+    function WrappedFungibleOperation_case_ticker_symbol()
+        internal
+        pure
+        returns (WrappedFungibleOperation memory)
+    {
         WrappedFungibleOperation_Transfer memory transfer_;
         WrappedFungibleOperation_Approve memory approve;
         WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
@@ -290,17 +359,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(142627141),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(142627141), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_transfer(WrappedFungibleOperation_Transfer memory transfer_)
@@ -315,17 +374,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(144297355),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(144297355), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_approve(WrappedFungibleOperation_Approve memory approve)
@@ -340,17 +389,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(158617459),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(158617459), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_register_authorized_caller(WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller)
@@ -365,17 +404,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(170732950),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(170732950), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_mint_and_transfer(WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer)
@@ -390,17 +419,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(198295567),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(198295567), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_claim(WrappedFungibleOperation_Claim memory claim)
@@ -415,17 +434,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(204322437),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(204322437), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_balance(WrappedFungibleOperation_Balance memory balance_)
@@ -440,17 +449,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(206964944),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(206964944), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_transfer_from(WrappedFungibleOperation_TransferFrom memory transfer_from)
@@ -465,17 +464,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_Burn memory burn;
-        return WrappedFungibleOperation(
-            uint64(214048906),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(214048906), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function WrappedFungibleOperation_case_burn(WrappedFungibleOperation_Burn memory burn)
@@ -490,17 +479,7 @@ library WrappedFungibleTypes {
         WrappedFungibleOperation_Claim memory claim;
         WrappedFungibleOperation_Balance memory balance_;
         WrappedFungibleOperation_TransferFrom memory transfer_from;
-        return WrappedFungibleOperation(
-            uint64(239329758),
-            transfer_,
-            approve,
-            register_authorized_caller,
-            mint_and_transfer,
-            claim,
-            balance_,
-            transfer_from,
-            burn
-        );
+        return WrappedFungibleOperation(uint64(239329758), transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn);
     }
 
     function bcs_serialize_WrappedFungibleOperation(WrappedFungibleOperation memory input)
@@ -518,15 +497,10 @@ library WrappedFungibleTypes {
             return abi.encodePacked(hex"f39ed14b", bcs_serialize_WrappedFungibleOperation_Approve(input.approve));
         }
         if (input.choice == 170732950) {
-            return abi.encodePacked(
-                hex"96dbb451",
-                bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(input.register_authorized_caller)
-            );
+            return abi.encodePacked(hex"96dbb451", bcs_serialize_WrappedFungibleOperation_RegisterAuthorizedCaller(input.register_authorized_caller));
         }
         if (input.choice == 198295567) {
-            return abi.encodePacked(
-                hex"8f80c75e", bcs_serialize_WrappedFungibleOperation_MintAndTransfer(input.mint_and_transfer)
-            );
+            return abi.encodePacked(hex"8f80c75e", bcs_serialize_WrappedFungibleOperation_MintAndTransfer(input.mint_and_transfer));
         }
         if (input.choice == 204322437) {
             return abi.encodePacked(hex"85edb661", bcs_serialize_WrappedFungibleOperation_Claim(input.claim));
@@ -535,10 +509,7 @@ library WrappedFungibleTypes {
             return abi.encodePacked(hex"d091d862", bcs_serialize_WrappedFungibleOperation_Balance(input.balance_));
         }
         if (input.choice == 214048906) {
-            return
-                abi.encodePacked(
-                    hex"8ac18866", bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from)
-                );
+            return abi.encodePacked(hex"8ac18866", bcs_serialize_WrappedFungibleOperation_TransferFrom(input.transfer_from));
         }
         if (input.choice == 239329758) {
             return abi.encodePacked(hex"dec38f72", bcs_serialize_WrappedFungibleOperation_Burn(input.burn));
@@ -556,12 +527,7 @@ library WrappedFungibleTypes {
         (new_pos, choice_raw) = bcs_deserialize_offset_uleb128(pos, input);
         require(choice_raw <= type(uint64).max, "variant index does not fit in uint64");
         uint64 choice = uint64(choice_raw);
-        require(
-            choice == 142627141 || choice == 144297355 || choice == 158617459 || choice == 170732950
-                || choice == 198295567 || choice == 204322437 || choice == 206964944 || choice == 214048906
-                || choice == 239329758,
-            "invalid variant index"
-        );
+        require(choice == 142627141 || choice == 144297355 || choice == 158617459 || choice == 170732950 || choice == 198295567 || choice == 204322437 || choice == 206964944 || choice == 214048906 || choice == 239329758, "invalid variant index");
         WrappedFungibleOperation_Transfer memory transfer_;
         if (choice == 144297355) {
             (new_pos, transfer_) = bcs_deserialize_offset_WrappedFungibleOperation_Transfer(new_pos, input);
@@ -572,13 +538,11 @@ library WrappedFungibleTypes {
         }
         WrappedFungibleOperation_RegisterAuthorizedCaller memory register_authorized_caller;
         if (choice == 170732950) {
-            (new_pos, register_authorized_caller) =
-                bcs_deserialize_offset_WrappedFungibleOperation_RegisterAuthorizedCaller(new_pos, input);
+            (new_pos, register_authorized_caller) = bcs_deserialize_offset_WrappedFungibleOperation_RegisterAuthorizedCaller(new_pos, input);
         }
         WrappedFungibleOperation_MintAndTransfer memory mint_and_transfer;
         if (choice == 198295567) {
-            (new_pos, mint_and_transfer) =
-                bcs_deserialize_offset_WrappedFungibleOperation_MintAndTransfer(new_pos, input);
+            (new_pos, mint_and_transfer) = bcs_deserialize_offset_WrappedFungibleOperation_MintAndTransfer(new_pos, input);
         }
         WrappedFungibleOperation_Claim memory claim;
         if (choice == 204322437) {
@@ -596,20 +560,7 @@ library WrappedFungibleTypes {
         if (choice == 239329758) {
             (new_pos, burn) = bcs_deserialize_offset_WrappedFungibleOperation_Burn(new_pos, input);
         }
-        return (
-            new_pos,
-            WrappedFungibleOperation(
-                choice,
-                transfer_,
-                approve,
-                register_authorized_caller,
-                mint_and_transfer,
-                claim,
-                balance_,
-                transfer_from,
-                burn
-            )
-        );
+        return (new_pos, WrappedFungibleOperation(choice, transfer_, approve, register_authorized_caller, mint_and_transfer, claim, balance_, transfer_from, burn));
     }
 
     function bcs_deserialize_WrappedFungibleOperation(bytes memory input)
@@ -948,11 +899,19 @@ library WrappedFungibleTypes {
         return value;
     }
 
-    function bcs_serialize_bytes20(bytes20 input) internal pure returns (bytes memory) {
+    function bcs_serialize_bytes20(bytes20 input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         return abi.encodePacked(input);
     }
 
-    function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input) internal pure returns (uint256, bytes20) {
+    function bcs_deserialize_offset_bytes20(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, bytes20)
+    {
         bytes20 dest;
         assembly ("memory-safe") {
             dest := mload(add(add(input, 0x20), pos))
@@ -960,31 +919,44 @@ library WrappedFungibleTypes {
         return (pos + 20, dest);
     }
 
-    function bcs_serialize_uint128(uint128 input) internal pure returns (bytes memory) {
+    function bcs_serialize_uint128(uint128 input)
+        internal
+        pure
+        returns (bytes memory)
+    {
         bytes memory result = new bytes(16);
         uint128 value = input;
         result[0] = bytes1(uint8(value));
-        for (uint256 i = 1; i < 16; i++) {
+        for (uint i=1; i<16; i++) {
             value = value >> 8;
             result[i] = bytes1(uint8(value));
         }
         return result;
     }
 
-    function bcs_deserialize_offset_uint128(uint256 pos, bytes memory input) internal pure returns (uint256, uint128) {
+    function bcs_deserialize_offset_uint128(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, uint128)
+    {
         uint128 value = uint8(input[pos + 15]);
-        for (uint256 i = 0; i < 15; i++) {
+        for (uint256 i=0; i<15; i++) {
             value = value << 8;
             value += uint8(input[pos + 14 - i]);
         }
         return (pos + 16, value);
     }
 
-    function bcs_deserialize_uint128(bytes memory input) internal pure returns (uint128) {
+    function bcs_deserialize_uint128(bytes memory input)
+        internal
+        pure
+        returns (uint128)
+    {
         uint256 new_pos;
         uint128 value;
         (new_pos, value) = bcs_deserialize_offset_uint128(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
+
 } // end of library WrappedFungibleTypes

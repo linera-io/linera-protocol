@@ -31,6 +31,7 @@ pub struct EvmClient<P> {
 }
 
 impl<P: Provider> EvmClient<P> {
+    /// Creates a new EVM client, optionally pinning the LightClient address.
     pub fn new(
         provider: P,
         bridge_addr: Address,
@@ -50,10 +51,12 @@ impl<P: Provider> EvmClient<P> {
         }
     }
 
+    /// Returns the FungibleBridge contract address.
     pub fn bridge_addr(&self) -> Address {
         self.bridge_addr
     }
 
+    /// Returns the EVM chain's latest block number.
     pub async fn get_block_number(&self) -> Result<u64> {
         Ok(self.provider.get_block_number().await?)
     }

@@ -82,6 +82,7 @@ pub(crate) async fn update_linera_balance_metric<E: Environment>(
     }
 }
 
+/// Runs the bridge relay server until it errors or is shut down.
 #[expect(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,

@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! On-chain proof verification and off-chain relaying for the EVM ↔ Linera bridge.
+
 #![recursion_limit = "256"]
+#![deny(missing_docs)]
 
 // -- On-chain (Wasm-compatible, always available) --
 
