@@ -36,6 +36,7 @@ use crate::{
 };
 
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum GrpcProtoConversionError {
     #[error(transparent)]
     BincodeError(#[from] bincode::Error),
@@ -1167,7 +1168,11 @@ impl TryFrom<api::PreviousEventBlocksResponse> for BTreeMap<StreamId, (BlockHeig
 }
 
 #[cfg(test)]
+/// Tests for the gRPC protobuf conversions.
 pub mod tests {
+    // Test helpers in this module don't need individual documentation.
+    #![allow(missing_docs)]
+
     use std::{borrow::Cow, fmt::Debug};
 
     use linera_base::{
