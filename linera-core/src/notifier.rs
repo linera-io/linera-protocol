@@ -105,7 +105,9 @@ where
     }
 }
 
+/// A type that can dispatch notifications produced by the worker.
 pub trait Notifier: Clone + Send + 'static {
+    /// Dispatches the given notifications to the interested clients.
     fn notify(&self, notifications: &[worker::Notification]);
 }
 

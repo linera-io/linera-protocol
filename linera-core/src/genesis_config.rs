@@ -15,7 +15,9 @@ use linera_execution::committee::Committee;
 use linera_storage::Storage;
 use serde::{Deserialize, Serialize};
 
+/// An error that can occur while building or applying a [`GenesisConfig`].
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
@@ -45,11 +47,16 @@ fn make_chain(
     ChainDescription::new(origin, config, timestamp)
 }
 
+/// The initial configuration of a Linera network, defining its genesis state.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GenesisConfig {
+    /// The initial committee of validators.
     pub committee: Committee,
+    /// The timestamp of the genesis block.
     pub timestamp: Timestamp,
+    /// The descriptions of the chains created at genesis, the first of which is the admin chain.
     pub chains: Vec<ChainDescription>,
+    /// The name of the network.
     pub network_name: String,
 }
 
@@ -73,6 +80,7 @@ impl GenesisConfig {
         }
     }
 
+    /// Adds a new root chain with the given public key and balance, and returns its description.
     pub fn add_root_chain(
         &mut self,
         public_key: AccountPublicKey,
@@ -88,14 +96,17 @@ impl GenesisConfig {
         description
     }
 
+    /// Returns the description of the admin chain.
     pub fn admin_chain_description(&self) -> &ChainDescription {
         &self.chains[0]
     }
 
+    /// Returns the ID of the admin chain.
     pub fn admin_chain_id(&self) -> ChainId {
         self.admin_chain_description().id()
     }
 
+    /// Writes the committee, network description and genesis chains to storage.
     pub async fn initialize_storage<S>(&self, storage: &mut S) -> Result<(), Error>
     where
         S: Storage + Clone + 'static,
@@ -131,16 +142,19 @@ impl GenesisConfig {
         Ok(())
     }
 
+    /// Returns the cryptographic hash of this genesis configuration.
     pub fn hash(&self) -> CryptoHash {
         CryptoHash::new(self)
     }
 
+    /// Returns the committee serialized as a blob.
     pub fn committee_blob(&self) -> Blob {
         Blob::new_committee(
             bcs::to_bytes(&self.committee).expect("serializing a committee should succeed"),
         )
     }
 
+    /// Returns the network description derived from this genesis configuration.
     pub fn network_description(&self) -> NetworkDescription {
         NetworkDescription {
             name: self.network_name.clone(),
