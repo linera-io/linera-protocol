@@ -47,20 +47,10 @@ else
 fi
 
 # Start from a clean dist so stale artifacts from a previous build can never be
-# published. dist/ is gitignored and rebuilt fresh on `prepare`/publish.
+# published (dist/ is gitignored and rebuilt fresh on `prepare`/publish).
 rm -rf dist
 mkdir -p dist
 cp -r src/wasm dist/
 
 pnpm exec tsc
 pnpm exec tsc-alias
-
-# tsc only compiles src/**/*.{ts,js,mjs} and never re-emits hand-written .d.ts
-# inputs, so copy them into dist explicitly (preserving their path under src/),
-# excluding src/wasm which is already copied above. Without this a clean build
-# omits dist/signer/Signer.d.ts and the `export type { Signer }` re-export dangles.
-while IFS= read -r decl; do
-    rel=${decl#src/}
-    mkdir -p "dist/$(dirname "$rel")"
-    cp "$decl" "dist/$rel"
-done < <(find src -path src/wasm -prune -o -name '*.d.ts' -print)
