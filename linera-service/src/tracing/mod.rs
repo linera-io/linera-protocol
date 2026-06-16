@@ -3,6 +3,7 @@
 
 //! This module provides unified handling for tracing subscribers within Linera binaries.
 
+/// Support for emitting traces in the Chrome tracing format.
 pub mod chrome;
 pub mod opentelemetry;
 

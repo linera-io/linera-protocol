@@ -98,6 +98,7 @@ impl StorageConfigProvider {
     }
 }
 
+/// Starts a local test network and, optionally, a faucet and block exporter.
 #[expect(clippy::too_many_arguments)]
 pub async fn handle_net_up_service(
     num_other_initial_chains: u32,
