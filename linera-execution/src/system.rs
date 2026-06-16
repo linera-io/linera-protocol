@@ -133,10 +133,6 @@ pub struct SystemExecutionStateView<C> {
     /// `CheckpointAck` messages here is what breaks the otherwise-perpetual
     /// notification ping-pong between two chains that ever exchanged a real message.
     pub pending_checkpoint_ack_targets: SetView<C, ChainId>,
-    /// For each stream this chain writes to, the number of events it contained as of the
-    /// most recent checkpoint. This is the first index that the next checkpoint's
-    /// `summarize_events` call considers un-summarized for that stream.
-    pub event_stream_checkpoint_index: MapView<C, StreamId, u32>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -168,10 +164,6 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
                 .await,
             pending_checkpoint_ack_targets: self
                 .pending_checkpoint_ack_targets
-                .with_context(ctx.clone())
-                .await,
-            event_stream_checkpoint_index: self
-                .event_stream_checkpoint_index
                 .with_context(ctx.clone())
                 .await,
         }
