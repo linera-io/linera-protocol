@@ -1072,7 +1072,7 @@ Change the wallet default chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to set as the default
 
 
 
@@ -1147,7 +1147,7 @@ Forgets the specified chain's keys. The chain will still be followed by the wall
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain whose keys will be forgotten
 
 
 
@@ -1159,7 +1159,7 @@ Forgets the specified chain, including the associated key pair. The default chai
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to forget
 
 
 
@@ -1242,7 +1242,7 @@ Equivalent to running `cargo test` with the appropriate test runner.
 
 ###### **Arguments:**
 
-* `<PATH>`
+* `<PATH>` — The path of the root of the Linera project to test
 
 
 
@@ -1651,7 +1651,7 @@ Initialize a namespace in the database
 
 ###### **Options:**
 
-* `--genesis <GENESIS_CONFIG_PATH>`
+* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration file
 
 
 
