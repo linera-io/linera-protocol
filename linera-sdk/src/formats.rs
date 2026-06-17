@@ -37,7 +37,7 @@ pub trait BcsApplication {
 
 /// Decode BCS-serialized `bytes` into a [`serde_json::Value`], guided by `format`
 /// and the container `registry`.
-pub fn bcs_to_json(
+fn bcs_to_json(
     bytes: &[u8],
     format: &Format,
     registry: &Registry,

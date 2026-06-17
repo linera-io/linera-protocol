@@ -1,0 +1,98 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/*! ABI of the Formats Registry Example Application */
+
+use async_graphql::{Request, Response};
+use linera_sdk::linera_base_types::{AccountOwner, ContractAbi, ModuleId, ServiceAbi};
+use serde::{Deserialize, Serialize};
+
+/// The ABI of the formats-registry example application.
+pub struct FormatsRegistryAbi;
+
+impl ContractAbi for FormatsRegistryAbi {
+    type Operation = Operation;
+    type Response = ();
+}
+
+impl ServiceAbi for FormatsRegistryAbi {
+    type Query = Request;
+    type QueryResponse = Response;
+}
+
+/// Operations accepted by the contract.
+///
+/// `Write` is kept as the first variant with exactly the fields of
+/// [`linera_sdk::abis::formats_registry::Operation::Write`], so the operation
+/// produced by `linera publish-module-with-formats` decodes correctly here. Extra,
+/// implementation-specific admin commands are appended after it.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Operation {
+    /// Register `value` for `module_id`, on behalf of `owner`. A given `module_id`
+    /// may only be written once.
+    Write {
+        owner: AccountOwner,
+        module_id: ModuleId,
+        value: Vec<u8>,
+    },
+    /// Set the admin accounts authorized to run admin commands (including remote
+    /// `Write`s). Passing `None` clears the set, restoring creation-chain-only
+    /// access.
+    SetAdmins {
+        owner: AccountOwner,
+        admins: Option<Vec<AccountOwner>>,
+    },
+}
+
+/// Messages exchanged between chains of the same application instance. Each variant
+/// mirrors the corresponding [`Operation`] and is sent to the application's creation
+/// chain to be executed there.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Message {
+    /// Remote counterpart of [`Operation::Write`].
+    Write {
+        owner: AccountOwner,
+        module_id: ModuleId,
+        value: Vec<u8>,
+    },
+    /// Remote counterpart of [`Operation::SetAdmins`].
+    SetAdmins {
+        owner: AccountOwner,
+        admins: Option<Vec<AccountOwner>>,
+    },
+}
+
+impl Operation {
+    /// The account on whose behalf the operation is executed.
+    pub fn owner(&self) -> AccountOwner {
+        match self {
+            Operation::Write { owner, .. } | Operation::SetAdmins { owner, .. } => *owner,
+        }
+    }
+
+    /// Converts the operation into the cross-chain message that performs it on the
+    /// creation chain.
+    pub fn into_message(self) -> Message {
+        match self {
+            Operation::Write {
+                owner,
+                module_id,
+                value,
+            } => Message::Write {
+                owner,
+                module_id,
+                value,
+            },
+            Operation::SetAdmins { owner, admins } => Message::SetAdmins { owner, admins },
+        }
+    }
+}
+
+impl Message {
+    /// The account on whose behalf the message is executed.
+    pub fn owner(&self) -> AccountOwner {
+        match self {
+            Message::Write { owner, .. } | Message::SetAdmins { owner, .. } => *owner,
+        }
+    }
+}

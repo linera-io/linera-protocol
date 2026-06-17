@@ -956,8 +956,11 @@ impl<Env: Environment> ClientContext<Env> {
         formats: PathBuf,
         registry_application_id: ApplicationId,
     ) -> Result<ModuleId, Error> {
+        let owner = chain_client
+            .preferred_owner()
+            .ok_or(error::Inner::ChainOwnership)?;
         let (blobs, module_id, registry_op_bytes) = self
-            .prepare_bcs_publication(&contract, &service, vm_runtime, &formats)
+            .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
             .await?;
 
         info!("Publishing module and registering its formats");
@@ -1008,8 +1011,11 @@ impl<Env: Environment> ClientContext<Env> {
         instantiation_argument: Vec<u8>,
         required_application_ids: Vec<ApplicationId>,
     ) -> Result<(ApplicationId, ModuleId), Error> {
+        let owner = chain_client
+            .preferred_owner()
+            .ok_or(error::Inner::ChainOwnership)?;
         let (blobs, module_id, registry_op_bytes) = self
-            .prepare_bcs_publication(&contract, &service, vm_runtime, &formats)
+            .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
             .await?;
 
         info!("Publishing module, registering its formats and creating the application");
@@ -1069,9 +1075,10 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     /// Loads the bytecode files and the SNAP file, builds the bytecode blobs and
-    /// the BCS-encoded formats-registry write operation.
+    /// the BCS-encoded formats-registry write operation authorized by `owner`.
     async fn prepare_bcs_publication(
         &self,
+        owner: AccountOwner,
         contract: &Path,
         service: &Path,
         vm_runtime: VmRuntime,
@@ -1087,7 +1094,11 @@ impl<Env: Environment> ClientContext<Env> {
                 format!("failed to serialize Formats as JSON: {e}"),
             )
         })?;
-        let registry_op = linera_sdk::abis::formats_registry::Operation::Write { module_id, value };
+        let registry_op = linera_sdk::abis::formats_registry::Operation::Write {
+            owner,
+            module_id,
+            value,
+        };
         let registry_op_bytes = bcs::to_bytes(&registry_op)?;
         Ok((blobs, module_id, registry_op_bytes))
     }

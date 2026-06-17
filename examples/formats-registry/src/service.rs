@@ -8,9 +8,9 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
-    abis::formats_registry::{FormatsRegistryAbi, Operation},
-    linera_base_types::{ModuleId, WithServiceAbi},
+    linera_base_types::{AccountOwner, ModuleId, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
 };
@@ -64,8 +64,18 @@ struct QueryRoot {
 impl QueryRoot {
     /// Returns the bytes registered for the given module, or `None` if the
     /// module has no entry yet.
-    async fn get(&self, module_id: ModuleId) -> Option<Vec<u8>> {
+    async fn read(&self, module_id: ModuleId) -> Option<Vec<u8>> {
         self.state.formats.get(&module_id).await.unwrap()
+    }
+
+    /// Returns the configured admin accounts, or `None` if no admin set has been
+    /// configured yet.
+    async fn admins(&self) -> Option<Vec<AccountOwner>> {
+        self.state
+            .admins
+            .get()
+            .as_ref()
+            .map(|admins| admins.iter().copied().collect())
     }
 }
 
@@ -75,9 +85,18 @@ struct MutationRoot {
 
 #[Object]
 impl MutationRoot {
-    async fn write(&self, module_id: ModuleId, value: Vec<u8>) -> [u8; 0] {
+    async fn write(&self, owner: AccountOwner, module_id: ModuleId, value: Vec<u8>) -> [u8; 0] {
+        self.runtime.schedule_operation(&Operation::Write {
+            owner,
+            module_id,
+            value,
+        });
+        []
+    }
+
+    async fn set_admins(&self, owner: AccountOwner, admins: Option<Vec<AccountOwner>>) -> [u8; 0] {
         self.runtime
-            .schedule_operation(&Operation::Write { module_id, value });
+            .schedule_operation(&Operation::SetAdmins { owner, admins });
         []
     }
 }
