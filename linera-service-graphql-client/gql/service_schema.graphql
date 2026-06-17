@@ -385,11 +385,12 @@ type ChainStateExtendedView {
 	"""
 	nonemptyInboxes: [ChainId!]!
 	"""
-	The local wall-clock time when block 0 was last executed. Used to prevent
-	reset-on-incorrect-outcome from looping: if not enough time has elapsed since
-	the last reset, the error is returned instead.
+	The local wall-clock time when this chain's state was last established — by
+	executing block 0, or by installing a checkpoint snapshot (on bootstrap or reset).
+	Used to prevent reset-on-incorrect-outcome from looping: if not enough time has
+	elapsed since the last reset, the error is returned instead.
 	"""
-	blockZeroExecutedAt: Timestamp!
+	chainInitializedAt: Timestamp!
 	"""
 	The height at which the next block can be preprocessed: one past the highest
 	height in `block_hashes` (executed or preprocessed), or `next_block_height` if

@@ -1060,140 +1060,217 @@ where
     Ok(())
 }
 
-/// A chain that has published user events (here: `social` posts) and also sent a cross-chain
-/// message can still checkpoint. The checkpoint calls `summarize_events`, which emits a
-/// summary event, and a fresh follower bootstraps from the checkpoint to the same state hash
-/// — downloading the recertified message block but skipping the pre-checkpoint event block.
-async fn run_test_checkpoint_with_events<B>(storage_builder: B) -> anyhow::Result<()>
+/// End-to-end pull-side checkpoint coverage on a single chain that does everything: it deploys
+/// a Wasm app and publishes events (`social` posts), sends cross-chain messages, consumes an
+/// incoming message, and checkpoints twice. A fresh follower bootstraps from the *latest*
+/// checkpoint and must reach the same state hash while downloading only the recertified sender
+/// blocks and the checkpoint itself — skipping the intermediate checkpoint, the event blocks,
+/// and the message-free consume block. It then recovers the event summary and the seeded event
+/// tracker, and — via the seeded inbox cursors — accepts a post-bootstrap cross-chain delivery.
+async fn run_test_checkpoint<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
     let signer = InMemorySigner::new(None);
     let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
-    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
-    let chain_id = producer.chain_id();
+    let main = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let partner = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let main_id = main.chain_id();
+    let partner_id = partner.chain_id();
 
-    // Deploy the social app and publish one event (a post) on its `posts` stream.
-    let module_id = producer.publish_wasm_example("social").await?;
+    // --- Phase 1: build the chain up to the second checkpoint. ---
+
+    // Deploy the social app and publish a first post (event at `posts` stream index 0).
+    let module_id = main.publish_wasm_example("social").await?;
     let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
-    let (application_id, _) = producer
+    let (app_id, _) = main
         .create_application(module_id, &(), &(), vec![])
         .await
         .unwrap_ok_committed();
-    let post = social::Operation::Post {
-        text: "hello".to_string(),
+    let post_one = social::Operation::Post {
+        text: "one".to_string(),
         image_url: None,
     };
-    let post_cert = producer
-        .execute_operation(Operation::user(application_id, &post)?)
+    let post_one_cert = main
+        .execute_operation(Operation::user(app_id, &post_one)?)
         .await
         .unwrap_ok_committed();
 
-    // Also send a cross-chain message, so the chain has both events and an unfinalized
-    // outgoing-message block at checkpoint time.
-    let transfer_cert = producer
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(recipient.chain_id()),
-        )
+    // Send a cross-chain transfer to the partner: an unfinalized outgoing-message block.
+    let transfer_one_cert = main
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(partner_id))
         .await
         .unwrap_ok_committed();
 
-    // The checkpoint is allowed despite the published user events, and `summarize_events`
-    // emits a summary of the `posts` stream as the checkpoint block's only event. The post
-    // sits at index 0, so the summary (carrying the recent posts) lands at index 1.
-    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
+    // Checkpoint #1 — intermediate; the follower should skip it.
+    let checkpoint_one_cert = main.checkpoint().await.unwrap().unwrap();
+
+    // The partner transfers back and `main` consumes it, seeding `main`'s inbox cursors.
+    partner
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(main_id))
+        .await
+        .unwrap_ok_committed();
+    main.synchronize_from_validators().await?;
+    let consume_cert = main
+        .process_inbox()
+        .await?
+        .0
+        .into_iter()
+        .next()
+        .expect("main should produce a block consuming the partner's transfer");
+
+    // A second post (event) and a second, still-unfinalized outgoing transfer.
+    let post_two = social::Operation::Post {
+        text: "two".to_string(),
+        image_url: None,
+    };
+    let post_two_cert = main
+        .execute_operation(Operation::user(app_id, &post_two)?)
+        .await
+        .unwrap_ok_committed();
+    let transfer_two_cert = main
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(partner_id))
+        .await
+        .unwrap_ok_committed();
+
+    // Checkpoint #2 — the one the follower bootstraps from.
+    let checkpoint_two_cert = main.checkpoint().await.unwrap().unwrap();
+    let block = checkpoint_two_cert.block();
     let posts_stream = StreamId {
-        application_id: application_id.forget_abi().into(),
+        application_id: app_id.forget_abi().into(),
         stream_name: StreamName(b"posts".to_vec()),
     };
-    let [checkpoint_events] = &checkpoint_cert.block().body.events[..] else {
+
+    // The checkpoint certifies both unacked outgoing transfers and records inbox cursors.
+    let (outbox_block_hashes, inbox_cursors) =
+        match block.body.oracle_responses.first().and_then(|t| t.first()) {
+            Some(OracleResponse::Checkpoint {
+                outbox_block_hashes,
+                inbox_cursors,
+                ..
+            }) => (outbox_block_hashes.clone(), inbox_cursors.clone()),
+            other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
+        };
+    assert_eq!(
+        outbox_block_hashes,
+        vec![transfer_one_cert.hash(), transfer_two_cert.hash()],
+        "both unacked transfers must be recertified, in height order",
+    );
+    assert!(
+        !inbox_cursors.is_empty(),
+        "main consumed an incoming message, so inbox cursors must be recorded",
+    );
+
+    // The checkpoint emits a single summary event carrying both posts.
+    let [checkpoint_events] = &block.body.events[..] else {
         panic!("checkpoint should emit a single transaction's events");
     };
     let [summary_event] = &checkpoint_events[..] else {
         panic!("checkpoint should emit a single summary event");
     };
     assert_eq!(summary_event.stream_id, posts_stream);
-    assert_eq!(summary_event.index, 1);
     let social::Event::Summary { recent_posts } = bcs::from_bytes(&summary_event.value)? else {
         panic!("the checkpoint event should be a summary");
     };
-    assert_eq!(recent_posts.len(), 1);
-    assert_eq!(recent_posts[0].0, 0);
-    assert_eq!(recent_posts[0].1.text, "hello");
+    let texts = recent_posts
+        .iter()
+        .map(|(_, p)| p.text.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(texts, vec!["one", "two"]);
 
-    let producer_state_hash = producer
+    let main_state_hash = main
         .chain_info()
         .await?
         .state_hash
-        .expect("producer should expose a state hash after the checkpoint");
+        .expect("main should expose a state hash after checkpoint #2");
 
-    // A fresh follower bootstraps from the checkpoint and must reach the same state hash —
-    // re-executing the checkpoint re-runs `summarize_events`, re-emitting the summary.
+    // --- Phase 2: bootstrap a fresh follower from checkpoint #2. ---
+    // Non-follow-only so it goes through `find_received_certificates` for the post-bootstrap
+    // cross-chain delivery below.
     let follower = builder
         .make_client_with_options(
-            chain_id,
+            main_id,
             None,
             BlockHeight::ZERO,
             chain_client::Options::test_default(),
-            true,
+            false,
         )
         .await?;
     follower.synchronize_from_validators().await?;
     assert_eq!(
         follower.chain_info().await?.state_hash,
-        Some(producer_state_hash),
+        Some(main_state_hash)
     );
 
-    // The follower downloaded the recertified message block but skipped the pre-checkpoint
-    // event block: old events are no longer guaranteed, only the summary in the checkpoint.
-    let follower_storage = follower.storage_client();
+    let storage = follower.storage_client();
+    // Downloaded: the latest checkpoint plus the two recertified sender blocks.
     assert!(
-        follower_storage
-            .contains_certificate(transfer_cert.hash())
-            .await?,
-        "follower should download the recertified message block",
+        storage
+            .contains_certificate(checkpoint_two_cert.hash())
+            .await?
     );
     assert!(
-        !follower_storage
-            .contains_certificate(post_cert.hash())
-            .await?,
-        "follower should skip the pre-checkpoint event block",
+        storage
+            .contains_certificate(transfer_one_cert.hash())
+            .await?
     );
     assert!(
-        follower_storage
-            .contains_certificate(checkpoint_cert.hash())
-            .await?,
+        storage
+            .contains_certificate(transfer_two_cert.hash())
+            .await?
     );
+    // Skipped: the intermediate checkpoint, the event blocks, and the message-free consume.
+    assert!(
+        !storage
+            .contains_certificate(checkpoint_one_cert.hash())
+            .await?
+    );
+    assert!(!storage.contains_certificate(post_one_cert.hash()).await?);
+    assert!(!storage.contains_certificate(post_two_cert.hash()).await?);
+    assert!(!storage.contains_certificate(consume_cert.hash()).await?);
 
-    // The summary event is available on the follower, re-emitted by re-executing the
-    // checkpoint, even though the original post event's block was never downloaded. It still
-    // carries the post, so a subscriber that joins after the checkpoint recovers it.
-    let summary = follower_storage
+    // The summary is available and still carries both posts, even though the original post
+    // events were never downloaded — so a subscriber joining after the checkpoint recovers them.
+    let summary = storage
         .read_event(EventId {
-            chain_id,
+            chain_id: main_id,
             stream_id: posts_stream.clone(),
-            index: 1,
+            index: summary_event.index,
         })
         .await?
         .expect("the summary event should be available after bootstrap");
     let social::Event::Summary { recent_posts } = bcs::from_bytes(&summary)? else {
         panic!("the checkpoint event should be a summary");
     };
-    assert_eq!(recent_posts.len(), 1);
-    assert_eq!(recent_posts[0].1.text, "hello");
+    assert_eq!(recent_posts.len(), 2);
 
-    // The follower's per-stream event tracker was seeded from the restored counts during
-    // bootstrap and advanced past the re-emitted summary (post at index 0, summary at index
-    // 1), so it sits at 2 — matching the producer and ready to deliver future events.
-    let follower_expected = follower
+    // The per-stream event tracker was seeded from the restored counts and advanced past the
+    // re-emitted summary, so it sits one past the summary's index.
+    let expected = follower
         .client
         .local_node
-        .next_expected_events(chain_id, vec![posts_stream.clone()])
+        .next_expected_events(main_id, vec![posts_stream.clone()])
         .await?;
-    assert_eq!(follower_expected.get(&posts_stream), Some(&2));
+    assert_eq!(
+        expected.get(&posts_stream),
+        Some(&(summary_event.index + 1))
+    );
+
+    // --- Phase 3: a post-bootstrap cross-chain delivery is accepted via the seeded inbox. ---
+    // The follow-up's `sender_previous_height` points at the pre-checkpoint transfer's height,
+    // which the follower's inbox-gap check must accept rather than reject as a gap.
+    partner
+        .transfer_to_account(AccountOwner::CHAIN, Amount::ONE, Account::chain(main_id))
+        .await
+        .unwrap_ok_committed();
+    let pre_balance = follower.local_balance().await?;
+    follower.synchronize_from_validators().await?;
+    follower.process_inbox().await?;
+    assert_eq!(
+        follower.local_balance().await?,
+        pre_balance + Amount::ONE,
+        "follower should accept and consume the post-bootstrap follow-up transfer",
+    );
 
     Ok(())
 }
@@ -1201,8 +1278,17 @@ where
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
-async fn test_memory_checkpoint_with_events(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_checkpoint_with_events(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+async fn test_memory_checkpoint_comprehensive(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_checkpoint(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+}
+
+#[ignore]
+#[cfg(feature = "rocksdb")]
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_rocks_db_checkpoint_comprehensive(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_checkpoint(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]

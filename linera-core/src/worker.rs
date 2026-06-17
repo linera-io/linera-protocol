@@ -1503,6 +1503,18 @@ where
             .await
     }
 
+    /// Test helper that runs `ChainWorkerState::reset_and_reexecute_chain` for the given
+    /// chain (the same routine the corruption-recovery path invokes).
+    #[cfg(with_testing)]
+    pub async fn reset_and_reexecute_chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Vec<CrossChainRequest>, WorkerError> {
+        let state = self.get_or_create_chain_worker(chain_id).await?;
+        let mut guard = handle::write_lock(&state).await?;
+        guard.reset_and_reexecute_chain().await
+    }
+
     /// Returns a read-only view of the [`ChainStateView`] of a chain referenced by its
     /// [`ChainId`].
     ///
