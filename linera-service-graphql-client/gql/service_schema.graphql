@@ -253,7 +253,13 @@ scalar Bytecode
 A chain ID with a block height.
 """
 type ChainAndHeight {
+	"""
+	The chain that the block belongs to.
+	"""
 	chainId: ChainId!
+	"""
+	The height of the block within that chain.
+	"""
 	height: BlockHeight!
 }
 
