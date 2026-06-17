@@ -18,21 +18,25 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alloy::primitives::{Address, B256, U256};
+use alloy::{
+    primitives::{Address, B256, U256},
+    providers::Provider,
+};
 use anyhow::Context as _;
 use linera_base::{
     crypto::CryptoHash,
     data_types::{BlockHeight, U128},
     identifiers::ApplicationId,
 };
+use linera_core::{client::ChainClient, environment::Environment};
 use linera_execution::{Query, QueryResponse};
 use tokio::sync::RwLock;
 
 use crate::proof::DepositKey;
 
 /// Queries the evm-bridge app to check whether a deposit has been processed on Linera.
-pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
-    chain_client: &linera_core::client::ChainClient<E>,
+pub async fn query_deposit_processed<E: Environment>(
+    chain_client: &ChainClient<E>,
     bridge_app_id: ApplicationId,
     deposit_key: &DepositKey,
 ) -> anyhow::Result<bool> {
@@ -49,8 +53,8 @@ pub async fn query_deposit_processed<E: linera_core::environment::Environment>(
 }
 
 /// Queries the wrapped-fungible app for its declared source-ERC-20 decimals.
-pub async fn query_wrapped_fungible_decimals<E: linera_core::environment::Environment>(
-    chain_client: &linera_core::client::ChainClient<E>,
+pub async fn query_wrapped_fungible_decimals<E: Environment>(
+    chain_client: &ChainClient<E>,
     fungible_app_id: ApplicationId,
 ) -> anyhow::Result<u8> {
     let query = Query::user_without_abi(
@@ -619,10 +623,10 @@ pub struct StatusSummary {
 /// and is woken either by a `Notify` signal from the corresponding scanner or
 /// by a periodic poll for items whose retry backoff has just elapsed.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn retry_loop<E: linera_core::environment::Environment + 'static>(
+pub(crate) async fn retry_loop<E: Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     proof_client: crate::proof::gen::HttpDepositProofClient,
-    evm_client: Arc<crate::relay::evm::EvmClient<impl alloy::providers::Provider + 'static>>,
+    evm_client: Arc<crate::relay::evm::EvmClient<impl Provider + 'static>>,
     linera_client: Arc<crate::relay::linera::LineraClient<E>>,
     deposit_notify: Arc<tokio::sync::Notify>,
     burn_notify: Arc<tokio::sync::Notify>,

@@ -9,11 +9,12 @@ use std::time::Duration;
 use alloy::providers::Provider;
 use anyhow::{Context as _, Result};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{BlockHeight, Epoch},
-    identifiers::{BlobId, BlobType, ChainId},
+    identifiers::{BlobId, BlobType, ChainId, StreamId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_execution::{system::AdminOperation, Operation, SystemOperation};
+use linera_execution::system::{EpochEventData, EPOCH_STREAM_NAME};
 use linera_storage::Storage;
 use tokio::time::sleep;
 
@@ -23,6 +24,38 @@ use super::evm::EvmClient;
 /// (capped) so worst-case inline blocking stays bounded regardless of the
 /// configured retry count.
 const COMMITTEE_RELAY_BACKOFF: Duration = Duration::from_secs(2);
+/// The epoch event Linera emits when a new committee is created, located within a block.
+pub struct CommitteeEvent {
+    /// Index of the transaction whose events contain the epoch event.
+    pub tx_index: usize,
+    /// Position of the epoch event within that transaction's events.
+    pub position: usize,
+    /// The new epoch — the event's index.
+    pub epoch: Epoch,
+    /// The committee blob hash, from the event's `EpochEventData` payload.
+    pub blob_hash: CryptoHash,
+}
+
+/// Locates the epoch event Linera emits when a new committee is created. Returns its position in the
+/// block (so callers can build an inclusion proof) plus the new epoch and committee blob hash.
+pub fn find_committee_event(cert: &ConfirmedBlockCertificate) -> Option<CommitteeEvent> {
+    let epoch_stream = StreamId::system(EPOCH_STREAM_NAME);
+    for (tx_index, tx_events) in cert.inner().block().body.events.iter().enumerate() {
+        for (position, event) in tx_events.iter().enumerate() {
+            if event.stream_id != epoch_stream {
+                continue;
+            }
+            let data: EpochEventData = bcs::from_bytes(&event.value).ok()?;
+            return Some(CommitteeEvent {
+                tx_index,
+                position,
+                epoch: Epoch(event.index),
+                blob_hash: data.blob_hash,
+            });
+        }
+    }
+    None
+}
 
 /// Relays every committee the LightClient is missing, scanning admin-chain
 /// blocks up to `admin_chain_height` (exclusive). Run once at startup (must
@@ -112,11 +145,12 @@ where
 
     let mut relayed = 0u32;
     for cert in certs.into_iter().flatten() {
-        if let Some((epoch, blob_hash)) = find_create_committee(&cert) {
+        if let Some(committee_event) = find_committee_event(&cert) {
+            let epoch = committee_event.epoch;
             if epoch <= current_epoch {
                 continue;
             }
-            let blob_id = BlobId::new(blob_hash, BlobType::Committee);
+            let blob_id = BlobId::new(committee_event.blob_hash, BlobType::Committee);
             let blob = storage
                 .read_blob(blob_id)
                 .await?
@@ -132,46 +166,6 @@ where
         tracing::info!(relayed, "Committee reconcile complete");
     }
     Ok(())
-}
-
-/// Scans a certificate for a `CreateCommittee` operation, returning the first
-/// one's epoch and blob hash if found.
-///
-/// Linera emits at most one `CreateCommittee` per admin-chain block, and both
-/// this relayer and the on-chain `addCommittee` (which requires the block's
-/// epoch to equal the LightClient's current epoch) rely on that — only the
-/// first is ever relayed. If that invariant is ever violated, only the first
-/// committee would be installed and the LightClient would stall one epoch
-/// behind the newer ones, so log loudly rather than fail silently.
-fn find_create_committee(
-    cert: &ConfirmedBlockCertificate,
-) -> Option<(Epoch, linera_base::crypto::CryptoHash)> {
-    let mut first = None;
-    let mut count = 0u32;
-    for op in cert.inner().block().body.operations() {
-        if let Operation::System(boxed) = op {
-            if let SystemOperation::Admin(AdminOperation::CreateCommittee {
-                epoch,
-                blob_hash,
-                ..
-            }) = boxed.as_ref()
-            {
-                count += 1;
-                if first.is_none() {
-                    first = Some((*epoch, *blob_hash));
-                }
-            }
-        }
-    }
-    if count > 1 {
-        tracing::error!(
-            count,
-            "admin block contains multiple CreateCommittee operations; only the first \
-             will be relayed, so the LightClient will stall behind the newer epochs. This \
-             violates the assumed at-most-one-CreateCommittee-per-admin-block invariant."
-        );
-    }
-    first
 }
 
 /// Relays a committee with bounded backoff, retrying transient failures (RPC
@@ -213,11 +207,7 @@ async fn relay_committee<P: Provider>(
     cert: &ConfirmedBlockCertificate,
     committee_blob_bytes: &[u8],
 ) -> Result<()> {
-    let cert_bytes = bcs::to_bytes(cert).context("failed to BCS-serialize certificate")?;
-
-    let tx_hash = evm_client
-        .add_committee(&cert_bytes, committee_blob_bytes)
-        .await?;
+    let tx_hash = evm_client.add_committee(cert, committee_blob_bytes).await?;
 
     tracing::info!(%tx_hash, "Relayed committee to LightClient");
     Ok(())

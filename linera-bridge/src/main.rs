@@ -7,6 +7,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::Parser;
+#[cfg(feature = "relay")]
+use linera_base::identifiers::{AccountOwner, ChainId};
+#[cfg(feature = "relay")]
+use linera_storage::StorageCacheConfig;
 
 /// Linera Bridge CLI
 #[derive(Parser, Debug)]
@@ -68,11 +72,11 @@ struct ServeOptions {
 
     /// Linera bridge chain ID
     #[arg(long)]
-    linera_bridge_chain_id: linera_base::identifiers::ChainId,
+    linera_bridge_chain_id: ChainId,
 
     /// Owner of the bridge chain
     #[arg(long)]
-    linera_bridge_chain_owner: linera_base::identifiers::AccountOwner,
+    linera_bridge_chain_owner: AccountOwner,
 
     /// Address of the FungibleBridge contract on EVM.
     #[arg(long)]
@@ -186,7 +190,7 @@ impl ServeOptions {
             self.evm_light_client_address.as_deref(),
             self.port,
             self.admin_port,
-            linera_storage::StorageCacheConfig {
+            StorageCacheConfig {
                 blob_cache_size: self.blob_cache_size,
                 confirmed_block_cache_size: self.confirmed_block_cache_size,
                 certificate_cache_size: self.certificate_cache_size,
