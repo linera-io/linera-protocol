@@ -47,9 +47,7 @@ impl Service for HexService {
 }
 
 impl HexService {
-    /// Builds the GraphQL schema served by [`Self::handle_query`]. Extracted so that the
-    /// SDL can be snapshotted (see the `schema_sdl` test) without drifting from what the
-    /// service actually serves.
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
     fn schema(
         &self,
     ) -> Schema<
