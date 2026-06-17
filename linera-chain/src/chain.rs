@@ -264,10 +264,11 @@ where
     /// Inboxes with at least one pending added bundle. This allows us to avoid loading all inboxes.
     pub nonempty_inboxes: RegisterView<C, NonCanonicalBTreeSet<ChainId>>,
 
-    /// The local wall-clock time when block 0 was last executed. Used to prevent
-    /// reset-on-incorrect-outcome from looping: if not enough time has elapsed since
-    /// the last reset, the error is returned instead.
-    pub block_zero_executed_at: RegisterView<C, Timestamp>,
+    /// The local wall-clock time when this chain's state was last established — by
+    /// executing block 0, or by installing a checkpoint snapshot (on bootstrap or reset).
+    /// Used to prevent reset-on-incorrect-outcome from looping: if not enough time has
+    /// elapsed since the last reset, the error is returned instead.
+    pub chain_initialized_at: RegisterView<C, Timestamp>,
 
     /// The height at which the next block can be preprocessed: one past the highest
     /// height in `block_hashes` (executed or preprocessed), or `next_block_height` if
@@ -1468,7 +1469,7 @@ where
         let hash = block.inner().hash();
         let block = block.inner().inner();
         if block.header.height == BlockHeight::ZERO {
-            self.block_zero_executed_at.set(local_time);
+            self.chain_initialized_at.set(local_time);
         }
         let updated_streams = self.process_emitted_events(block).await?;
         self.process_outgoing_messages(block, tracked).await?;

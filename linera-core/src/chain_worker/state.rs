@@ -1206,6 +1206,11 @@ where
             ..Default::default()
         };
         self.chain.tip_state.set(new_tip.clone());
+        // Installing a snapshot establishes the chain's state from scratch (block 0 is never
+        // executed here), so record it as the initialization time for the reset cooldown.
+        self.chain
+            .chain_initialized_at
+            .set(self.storage.clock().current_time());
         self.save().await?;
         self.execute_contiguous_block(
             certificate,
@@ -1714,13 +1719,13 @@ where
             return Ok(None);
         }
         let local_time = self.storage.clock().current_time();
-        let block_zero_time = *self.chain.block_zero_executed_at.get();
-        let elapsed = local_time.duration_since(block_zero_time);
+        let initialized_time = *self.chain.chain_initialized_at.get();
+        let elapsed = local_time.duration_since(initialized_time);
         if elapsed < min_duration {
             warn!(
                 %chain_id, ?elapsed, ?min_duration,
                 "Not resetting corrupted chain state; not enough time elapsed \
-                since last block 0 execution"
+                since the chain was last initialized"
             );
             return Ok(None);
         }
@@ -1743,6 +1748,12 @@ where
         // 1. Collect all sender chain IDs and block hashes before clearing.
         let sender_ids = self.chain.inboxes.indices().await?;
         let block_hashes = self.chain.block_hashes.index_values().await?;
+        // Re-execution starts from the latest checkpoint, if any: replaying the checkpoint
+        // block onto the wiped (height-0) chain installs its snapshot, so the blocks below it
+        // never need to be replayed. Without a checkpoint, this is `0` and the whole chain is
+        // replayed.
+        let restore_from =
+            (*self.chain.latest_checkpoint_height.get()).unwrap_or(BlockHeight::ZERO);
 
         // 2. Snapshot safety-critical manager state so that we cannot be tricked
         //    into double-signing if the reset wipes votes we already cast.
@@ -1761,11 +1772,17 @@ where
         warn!(
             %chain_id,
             "Cleared chain state up to height {tip_height}; \
-            re-executing all blocks"
+            re-executing blocks from height {restore_from}"
         );
 
-        // 4. Re-load certificates one at a time by hash and re-process them.
+        // 4. Re-load and re-process the certificates from the latest checkpoint onward. The
+        //    first one lands on the wiped, height-0 chain with a tip gap: if it is a checkpoint
+        //    `process_confirmed_block` installs its snapshot before executing, and otherwise
+        //    (height 0) it executes directly. The remaining blocks are contiguous.
         for (height, hash) in block_hashes {
+            if height < restore_from {
+                continue;
+            }
             let cert = self
                 .storage
                 .read_certificate(hash)
