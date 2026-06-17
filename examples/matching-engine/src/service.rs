@@ -49,12 +49,59 @@ impl Service for MatchingEngineService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl MatchingEngineService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(
+        &self,
+    ) -> Schema<
+        Arc<MatchingEngineState>,
+        <Operation as GraphQLMutationRoot<MatchingEngineService>>::MutationRoot,
+        EmptySubscription,
+    > {
+        Schema::build(
             self.state.clone(),
             Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_sdk::{
+        linera_base_types::ApplicationId, util::BlockingWait, views::View, ServiceRuntime,
+    };
+    use matching_engine::Parameters;
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<MatchingEngineService>::new();
+        let token = ApplicationId::default().with_abi();
+        let parameters = Parameters {
+            tokens: [token; 2],
+            price_decimals: 0,
+        };
+        let context = linera_views::context::ViewContext::new_unchecked(
+            runtime.key_value_store(),
+            Vec::new(),
+            parameters,
+        );
+        let state = MatchingEngineState::load(context)
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = MatchingEngineService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }

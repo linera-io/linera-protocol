@@ -52,8 +52,14 @@ impl Service for GenNftService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let runtime = self.runtime.clone();
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl GenNftService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(&self) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+        Schema::build(
             QueryRoot {
                 non_fungible_token: self.state.clone(),
             },
@@ -62,9 +68,8 @@ impl Service for GenNftService {
             },
             EmptySubscription,
         )
-        .data(runtime)
-        .finish();
-        schema.execute(request).await
+        .data(self.runtime.clone())
+        .finish()
     }
 }
 
@@ -224,5 +229,27 @@ impl MutationRoot {
         };
         self.runtime.schedule_operation(&operation);
         []
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<GenNftService>::new();
+        let state = GenNftState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = GenNftService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }

@@ -243,3 +243,20 @@ impl ModelContext {
         Ok(output)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use async_graphql::{EmptyMutation, EmptySubscription, Schema};
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        // The schema is built without a service instance: constructing `LlmService`
+        // requires a `model_context` loaded from downloaded model weights, which is
+        // infeasible in a unit test. The `.data(model_context)` from `handle_query`
+        // does not affect the generated SDL, so it is omitted here.
+        let schema = Schema::build(QueryRoot {}, EmptyMutation, EmptySubscription).finish();
+        insta::assert_snapshot!(schema.sdl());
+    }
+}

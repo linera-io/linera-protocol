@@ -1,0 +1,111 @@
+---
+source: fungible/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+An account.
+"""
+input Account {
+	"""
+	The chain of the account.
+	"""
+	chainId: ChainId!
+	"""
+	The owner of the account.
+	"""
+	owner: AccountOwner!
+}
+
+"""
+A unique identifier for a user or an application.
+"""
+scalar AccountOwner
+
+"""
+A non-negative amount of tokens.
+"""
+scalar Amount
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_AccountOwner_Amount_aaf96548 {
+	key: AccountOwner!
+	value: Amount
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_OwnerSpender_Amount_9f866202 {
+	key: OwnerSpender!
+	value: Amount
+}
+
+type FungibleOperationMutationRoot {
+	balance(owner: AccountOwner!): [Int!]!
+	tickerSymbol: [Int!]!
+	approve(owner: AccountOwner!, spender: AccountOwner!, allowance: Amount!): [Int!]!
+	transfer(owner: AccountOwner!, amount: Amount!, targetAccount: Account!): [Int!]!
+	transferFrom(owner: AccountOwner!, spender: AccountOwner!, amount: Amount!, targetAccount: Account!): [Int!]!
+	claim(sourceAccount: Account!, amount: Amount!, targetAccount: Account!): [Int!]!
+}
+
+type FungibleTokenService {
+	accounts: MapView_AccountOwner_Amount_11ef1379!
+	allowances: MapView_OwnerSpender_Amount_4c9e3936!
+	tickerSymbol: String!
+}
+
+input MapFilters_AccountOwner_d6668c53 {
+	keys: [AccountOwner!]
+}
+
+input MapFilters_OwnerSpender_6e975ca8 {
+	keys: [OwnerSpender!]
+}
+
+input MapInput_AccountOwner_d6668c53 {
+	filters: MapFilters_AccountOwner_d6668c53
+}
+
+input MapInput_OwnerSpender_6e975ca8 {
+	filters: MapFilters_OwnerSpender_6e975ca8
+}
+
+type MapView_AccountOwner_Amount_11ef1379 {
+	keys(count: Int): [AccountOwner!]!
+	count: Int!
+	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
+}
+
+type MapView_OwnerSpender_Amount_4c9e3936 {
+	keys(count: Int): [OwnerSpender!]!
+	count: Int!
+	entry(key: OwnerSpender!): Entry_OwnerSpender_Amount_9f866202!
+	entries(input: MapInput_OwnerSpender_6e975ca8): [Entry_OwnerSpender_Amount_9f866202!]!
+}
+
+"""
+A pair of owner and spender accounts for managing allowances
+"""
+scalar OwnerSpender
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: FungibleTokenService
+	mutation: FungibleOperationMutationRoot
+}
