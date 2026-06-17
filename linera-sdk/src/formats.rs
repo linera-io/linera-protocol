@@ -5,9 +5,11 @@
 
 use serde::{Deserialize, Serialize};
 use serde_reflection::{
-    json_converter::{DeserializationContext, EmptyEnvironment},
+    json_converter::{DeserializationContext, DeserializationEnvironment, SymbolTableEnvironment},
     Format, Registry,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use serde_reflection::{Samples, Tracer, TracerConfig};
 
 /// The serde formats used by an application. The exact serde encoding in use must be
 /// known separately.
@@ -37,6 +39,10 @@ pub trait BcsApplication {
 
 /// Decode BCS-serialized `bytes` into a [`serde_json::Value`], guided by `format`
 /// and the container `registry`.
+///
+/// Well-known linera-base primitives that are absent from `registry` (because they
+/// were removed by [`Formats::prune_known_primitives`]) are decoded into their
+/// human-readable representation by [`LineraEnvironment`].
 pub fn bcs_to_json(
     bytes: &[u8],
     format: &Format,
@@ -45,9 +51,119 @@ pub fn bcs_to_json(
     let context = DeserializationContext {
         format: format.clone(),
         registry,
-        environment: &EmptyEnvironment,
+        environment: &LineraEnvironment,
     };
     bcs::from_bytes_seed(context, bytes)
+}
+
+/// Decodes the BCS form of a value as the concrete type `T`, then re-encodes it as
+/// JSON using `T`'s human-readable serialization.
+fn primitive_to_json<'de, T, D>(deserializer: D) -> Result<serde_json::Value, String>
+where
+    T: serde::Deserialize<'de> + serde::Serialize,
+    D: serde::Deserializer<'de>,
+{
+    let value = T::deserialize(deserializer).map_err(|error| error.to_string())?;
+    serde_json::to_value(&value).map_err(|error| error.to_string())
+}
+
+/// Declares the linera-base primitives whose human-readable serde representation
+/// differs from their BCS one. This single list drives both [`LineraEnvironment`]
+/// (decoding) and the canonical-format check used by
+/// [`Formats::prune_known_primitives`], so the two can never drift apart.
+macro_rules! known_human_readable_primitives {
+    ($($name:literal => $ty:ty),* $(,)?) => {
+        /// The registry names of the linera-base primitives handled by
+        /// [`LineraEnvironment`]. These are exactly the types whose human-readable
+        /// serde representation differs from their BCS form *and* whose BCS form is a
+        /// named container (so it can be matched by name in a traced registry).
+        pub const KNOWN_PRIMITIVE_NAMES: &[&str] = &[$($name),*];
+
+        /// A [`json_converter`](serde_reflection::json_converter) environment that
+        /// decodes the BCS form of well-known linera-base primitives into their
+        /// human-readable JSON representation (e.g. a `CryptoHash` as a hex string, an
+        /// `Amount` as a decimal string, an `AccountOwner` as its canonical address).
+        ///
+        /// It only takes effect for names that are *absent* from the registry being
+        /// decoded; see [`Formats::prune_known_primitives`].
+        #[derive(Clone, Copy, Debug, Default)]
+        pub struct LineraEnvironment;
+
+        impl SymbolTableEnvironment for LineraEnvironment {}
+
+        impl<'de> DeserializationEnvironment<'de> for LineraEnvironment {
+            fn deserialize<D>(
+                &self,
+                name: String,
+                deserializer: D,
+            ) -> Result<serde_json::Value, String>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                match name.as_str() {
+                    $( $name => primitive_to_json::<$ty, D>(deserializer), )*
+                    _ => Err(format!("No external definition available for {name}")),
+                }
+            }
+        }
+
+        /// Traces the canonical BCS format of every known primitive, used to verify
+        /// the correspondence before pruning.
+        #[cfg(not(target_arch = "wasm32"))]
+        fn expected_primitive_registry() -> serde_reflection::Result<Registry> {
+            let mut tracer = Tracer::new(
+                TracerConfig::default()
+                    .record_samples_for_newtype_structs(true)
+                    .record_samples_for_tuple_structs(true),
+            );
+            let samples = Samples::new();
+            $( tracer.trace_type::<$ty>(&samples)?; )*
+            // Supporting enums reached only through the primitives above; they must be
+            // traced explicitly so all of their variants are recorded.
+            tracer.trace_type::<crate::linera_base_types::VmRuntime>(&samples)?;
+            tracer.trace_type::<crate::linera_base_types::BlobType>(&samples)?;
+            tracer.trace_type::<crate::linera_base_types::GenericApplicationId>(&samples)?;
+            tracer.registry()
+        }
+    };
+}
+
+// NOTE: The cryptographic key and signature types (`Ed25519PublicKey`,
+// `Secp256k1PublicKey`, `EvmPublicKey`, and their `*Signature` counterparts) also have
+// a customized human-readable serde representation, but their `Deserialize` validates
+// the bytes (e.g. that a compressed point is on the curve), so `serde_reflection`
+// cannot trace them from dummy bytes and we cannot verify their format before pruning.
+// Supporting them would require feeding valid samples to the tracer; deferred for now.
+// They also do not currently appear in any application's operation/message ABI.
+known_human_readable_primitives! {
+    "CryptoHash" => crate::linera_base_types::CryptoHash,
+    "AccountOwner" => crate::linera_base_types::AccountOwner,
+    "Amount" => crate::linera_base_types::Amount,
+    "Epoch" => crate::linera_base_types::Epoch,
+    "BlobId" => crate::linera_base_types::BlobId,
+    "StreamId" => crate::linera_base_types::StreamId,
+    "ModuleId" => crate::linera_base_types::ModuleId,
+    "ApplicationId" => crate::linera_base_types::ApplicationId,
+}
+
+/// An error raised while pruning known primitives from a [`Formats`] registry.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, thiserror::Error)]
+pub enum PruneError {
+    /// The canonical formats of the known primitives could not be computed.
+    #[error("failed to compute the canonical primitive formats: {0}")]
+    Reflection(#[from] serde_reflection::Error),
+    /// A known primitive name is present in the registry but with a format that does
+    /// not match the canonical linera-base one (e.g. a name collision or a layout
+    /// change). Nothing is pruned in that case.
+    #[error(
+        "registry entry for `{name}` does not match the canonical linera-base format; \
+         refusing to prune"
+    )]
+    Mismatch {
+        /// The name of the offending registry entry.
+        name: String,
+    },
 }
 
 impl Formats {
@@ -69,6 +185,41 @@ impl Formats {
     /// Decode BCS-encoded event value bytes into a JSON value.
     pub fn decode_event_value(&self, bytes: &[u8]) -> bcs::Result<serde_json::Value> {
         bcs_to_json(bytes, &self.event_value, &self.registry)
+    }
+
+    /// Removes the registry entries for the well-known linera-base primitives (see
+    /// [`KNOWN_PRIMITIVE_NAMES`]) so that decoding falls back to [`LineraEnvironment`],
+    /// which renders them in their human-readable form.
+    ///
+    /// Before removing anything, this verifies that each such entry actually matches
+    /// the canonical BCS format of the corresponding linera-base type. If any entry is
+    /// present with a different format — for instance because an application defined a
+    /// distinct type with a colliding name — this returns [`PruneError::Mismatch`] and
+    /// leaves the registry untouched.
+    ///
+    /// This is meant to be called from snapshot tests (and any other code that
+    /// generates the stored [`Formats`]) so that the human-readable rendering is baked
+    /// into the published formats.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn prune_known_primitives(&mut self) -> Result<(), PruneError> {
+        let expected = expected_primitive_registry()?;
+        // Verify everything first so a mismatch never leaves the registry half-pruned.
+        for name in KNOWN_PRIMITIVE_NAMES {
+            let (Some(actual), Some(expected_format)) =
+                (self.registry.get(*name), expected.get(*name))
+            else {
+                continue;
+            };
+            if actual != expected_format {
+                return Err(PruneError::Mismatch {
+                    name: (*name).to_string(),
+                });
+            }
+        }
+        for name in KNOWN_PRIMITIVE_NAMES {
+            self.registry.remove(*name);
+        }
+        Ok(())
     }
 }
 
@@ -220,5 +371,101 @@ mod tests {
         let (format, registry) = trace_format::<u64>();
         // u64 needs 8 bytes; only provide 3.
         assert!(bcs_to_json(&[1, 2, 3], &format, &registry).is_err());
+    }
+
+    #[test]
+    fn expected_registry_builds() {
+        let registry = expected_primitive_registry().unwrap();
+        for name in KNOWN_PRIMITIVE_NAMES {
+            assert!(registry.contains_key(*name), "missing {name}");
+        }
+    }
+
+    #[test]
+    fn known_primitives_decode_as_human_readable() {
+        use std::str::FromStr as _;
+
+        use crate::linera_base_types::{AccountOwner, Amount, CryptoHash, ModuleId, VmRuntime};
+
+        #[derive(Serialize, Deserialize)]
+        struct Sample {
+            owner: AccountOwner,
+            amount: Amount,
+            hash: CryptoHash,
+            module: Option<ModuleId>,
+        }
+
+        let hash = CryptoHash::from_str(&"ab".repeat(32)).unwrap();
+        let value = Sample {
+            owner: AccountOwner::Address32(hash),
+            amount: Amount::from_tokens(5),
+            hash,
+            module: Some(ModuleId::new(hash, hash, VmRuntime::Wasm)),
+        };
+
+        // Trace `Sample` plus the nested multi-variant enums, so every variant of
+        // `AccountOwner` and `VmRuntime` is recorded (a single `trace_type` pass over a
+        // struct only samples one variant per nested enum).
+        let mut tracer = Tracer::new(
+            TracerConfig::default()
+                .record_samples_for_newtype_structs(true)
+                .record_samples_for_tuple_structs(true),
+        );
+        let samples = Samples::new();
+        let (operation, _) = tracer.trace_type::<Sample>(&samples).unwrap();
+        tracer.trace_type::<AccountOwner>(&samples).unwrap();
+        tracer.trace_type::<VmRuntime>(&samples).unwrap();
+        let registry = tracer.registry().unwrap();
+
+        let unit = Format::Unit;
+        let mut formats = Formats {
+            registry,
+            operation,
+            response: unit.clone(),
+            message: unit.clone(),
+            event_value: unit,
+        };
+
+        // Tracing this value embeds CryptoHash/AccountOwner/Amount/ModuleId structurally.
+        let bytes = bcs::to_bytes(&value).unwrap();
+        assert!(formats.registry.contains_key("CryptoHash"));
+
+        // After pruning, those primitives are decoded by `LineraEnvironment` into the
+        // exact human-readable JSON their own `Serialize` would produce.
+        formats.prune_known_primitives().unwrap();
+        assert!(!formats.registry.contains_key("CryptoHash"));
+        assert!(!formats.registry.contains_key("AccountOwner"));
+
+        let decoded = formats.decode_operation(&bytes).unwrap();
+        let expected = serde_json::to_value(&value).unwrap();
+        assert_eq!(decoded, expected);
+        // Sanity-check the human-readable shape: a hex hash and a decimal amount string.
+        assert_eq!(decoded["hash"], json!("ab".repeat(32)));
+        assert_eq!(decoded["amount"], json!(value.amount.to_string()));
+    }
+
+    #[test]
+    fn prune_rejects_colliding_format() {
+        use serde_reflection::ContainerFormat;
+
+        // A registry where `CryptoHash` is (wrongly) bound to a different format.
+        let mut registry = Registry::new();
+        registry.insert(
+            "CryptoHash".to_string(),
+            ContainerFormat::NewTypeStruct(Box::new(Format::U64)),
+        );
+        let unit = Format::Unit;
+        let mut formats = Formats {
+            registry,
+            operation: Format::TypeName("CryptoHash".to_string()),
+            response: unit.clone(),
+            message: unit.clone(),
+            event_value: unit,
+        };
+
+        let error = formats.prune_known_primitives().unwrap_err();
+        assert!(matches!(error, PruneError::Mismatch { name } if name == "CryptoHash"));
+        // The registry is left untouched on mismatch.
+        assert!(formats.registry.contains_key("CryptoHash"));
     }
 }
