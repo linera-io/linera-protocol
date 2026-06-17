@@ -5,7 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 use serde_reflection::{
-    json_converter::{DeserializationContext, DeserializationEnvironment, SymbolTableEnvironment},
+    json_converter::{
+        DeserializationContext, DeserializationEnvironment, SerializationContext,
+        SerializationEnvironment, SymbolTableEnvironment,
+    },
     Format, Registry,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -56,7 +59,7 @@ pub trait BcsApplication {
 /// Well-known linera-base primitives that are absent from `registry` (because they
 /// were removed by [`Formats::prune_known_primitives`]) are decoded into their
 /// human-readable representation by [`LineraEnvironment`].
-pub fn bcs_to_json(
+fn bcs_to_json(
     bytes: &[u8],
     format: &Format,
     registry: &Registry,
@@ -69,6 +72,25 @@ pub fn bcs_to_json(
     bcs::from_bytes_seed(context, bytes)
 }
 
+/// Encode a [`serde_json::Value`] into BCS `bytes`, guided by `format` and the
+/// container `registry`. This is the inverse of [`bcs_to_json`].
+///
+/// Well-known linera-base primitives that are absent from `registry` are read from
+/// their human-readable representation by [`LineraEnvironment`].
+fn json_to_bcs(
+    value: &serde_json::Value,
+    format: &Format,
+    registry: &Registry,
+) -> bcs::Result<Vec<u8>> {
+    let context = SerializationContext {
+        value,
+        format,
+        registry,
+        environment: &LineraEnvironment,
+    };
+    bcs::to_bytes(&context)
+}
+
 /// Decodes the BCS form of a value as the concrete type `T`, then re-encodes it as
 /// JSON using `T`'s human-readable serialization.
 fn primitive_to_json<'de, T, D>(deserializer: D) -> Result<serde_json::Value, String>
@@ -78,6 +100,17 @@ where
 {
     let value = T::deserialize(deserializer).map_err(|error| error.to_string())?;
     serde_json::to_value(&value).map_err(|error| error.to_string())
+}
+
+/// Reads a value's human-readable JSON representation into the concrete type `T`, then
+/// serializes it with `serializer` (its BCS form). Inverse of [`primitive_to_json`].
+fn primitive_from_json<T, S>(value: &serde_json::Value, serializer: S) -> Result<S::Ok, S::Error>
+where
+    T: serde::Serialize + serde::de::DeserializeOwned,
+    S: serde::Serializer,
+{
+    let value: T = serde_json::from_value(value.clone()).map_err(serde::ser::Error::custom)?;
+    value.serialize(serializer)
 }
 
 /// Declares the linera-base primitives whose human-readable serde representation
@@ -116,6 +149,25 @@ macro_rules! known_human_readable_primitives {
                 match name.as_str() {
                     $( $name => primitive_to_json::<$ty, D>(deserializer), )*
                     _ => Err(format!("No external definition available for {name}")),
+                }
+            }
+        }
+
+        impl SerializationEnvironment for LineraEnvironment {
+            fn serialize<S>(
+                &self,
+                name: &str,
+                value: &serde_json::Value,
+                serializer: S,
+            ) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                match name {
+                    $( $name => primitive_from_json::<$ty, S>(value, serializer), )*
+                    _ => Err(serde::ser::Error::custom(format!(
+                        "No external serializer available for {name}"
+                    ))),
                 }
             }
         }
@@ -198,6 +250,30 @@ impl Formats {
     /// Decode BCS-encoded event value bytes into a JSON value.
     pub fn decode_event_value(&self, bytes: &[u8]) -> bcs::Result<serde_json::Value> {
         bcs_to_json(bytes, &self.event_value, &self.registry)
+    }
+
+    /// Encode a JSON operation value into its BCS bytes. Inverse of
+    /// [`decode_operation`](Self::decode_operation).
+    pub fn encode_operation(&self, value: &serde_json::Value) -> bcs::Result<Vec<u8>> {
+        json_to_bcs(value, &self.operation, &self.registry)
+    }
+
+    /// Encode a JSON operation response value into its BCS bytes. Inverse of
+    /// [`decode_response`](Self::decode_response).
+    pub fn encode_response(&self, value: &serde_json::Value) -> bcs::Result<Vec<u8>> {
+        json_to_bcs(value, &self.response, &self.registry)
+    }
+
+    /// Encode a JSON message value into its BCS bytes. Inverse of
+    /// [`decode_message`](Self::decode_message).
+    pub fn encode_message(&self, value: &serde_json::Value) -> bcs::Result<Vec<u8>> {
+        json_to_bcs(value, &self.message, &self.registry)
+    }
+
+    /// Encode a JSON event value into its BCS bytes. Inverse of
+    /// [`decode_event_value`](Self::decode_event_value).
+    pub fn encode_event_value(&self, value: &serde_json::Value) -> bcs::Result<Vec<u8>> {
+        json_to_bcs(value, &self.event_value, &self.registry)
     }
 
     /// Removes the registry entries for the well-known linera-base primitives (see
@@ -377,6 +453,21 @@ mod tests {
             formats.decode_event_value(&unit_bytes).unwrap(),
             json!(null)
         );
+
+        // The encode helpers are the inverse of the decode helpers.
+        assert_eq!(
+            formats.encode_operation(&json!({ "Echo": "hi" })).unwrap(),
+            op_bytes
+        );
+        assert_eq!(
+            formats.encode_response(&json!({ "ok": true })).unwrap(),
+            resp_bytes
+        );
+        assert_eq!(formats.encode_message(&json!(null)).unwrap(), unit_bytes);
+        assert_eq!(
+            formats.encode_event_value(&json!(null)).unwrap(),
+            unit_bytes
+        );
     }
 
     #[test]
@@ -455,6 +546,11 @@ mod tests {
         // Sanity-check the human-readable shape: a hex hash and a decimal amount string.
         assert_eq!(decoded["hash"], json!("ab".repeat(32)));
         assert_eq!(decoded["amount"], json!(value.amount.to_string()));
+
+        // Encoding is the inverse of decoding: the human-readable JSON re-encodes to
+        // exactly the original BCS bytes.
+        let reencoded = formats.encode_operation(&decoded).unwrap();
+        assert_eq!(reencoded, bytes);
     }
 
     #[test]
