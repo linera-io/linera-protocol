@@ -317,7 +317,7 @@ pub enum Error {
     },
 
     #[error("No validator provided a usable certificate registering blob {0}")]
-    BlobRecoveryFailed(BlobId),
+    CannotDownloadBlob(BlobId),
 
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
