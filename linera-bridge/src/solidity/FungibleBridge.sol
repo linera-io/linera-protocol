@@ -139,7 +139,7 @@ contract FungibleBridge is Microchain {
 
         // The block must have been registered (its signatures were checked once, then); fetch its
         // committed events hash and metadata, then prove these events are part of it.
-        (bytes32 eventsHash, uint64 height, bytes32 blockChainId) = lightClient.registeredBlocks(blockHash);
+        (bytes32 eventsHash, uint64 height, bytes32 blockChainId,) = lightClient.registeredBlocks(blockHash);
         require(eventsHash != 0, "block not registered");
         require(blockChainId == chainId, "chain id mismatch");
         lightClient.proveEventsCommitted(eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);

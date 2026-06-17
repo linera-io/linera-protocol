@@ -61,8 +61,12 @@ contract MockLightClient {
 
     // Mirrors the public getter of LightClient's `registeredBlocks` mapping. A nonzero
     // `eventsHash` marks the block as registered.
-    function registeredBlocks(bytes32) external view returns (bytes32 eventsHash, uint64 height, bytes32 chainId) {
-        return (bytes32(uint256(1)), heightRet, chainIdRet);
+    function registeredBlocks(bytes32)
+        external
+        view
+        returns (bytes32 eventsHash, uint64 height, bytes32 chainId, uint32 epoch)
+    {
+        return (bytes32(uint256(1)), heightRet, chainIdRet, 0);
     }
 }
 

@@ -11,7 +11,7 @@ mod tests {
     };
     use revm::{database::CacheDB, primitives::Address};
 
-    use crate::test_helpers::*;
+    use crate::{contracts::ILightClient::registerBlockCall, test_helpers::*};
 
     #[test]
     fn test_gas_light_client_add_committee() {
@@ -28,7 +28,7 @@ mod tests {
             deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
-        let args = committee_block_args(
+        let (proven, block_proof) = committee_block_args(
             &secret,
             &public,
             Epoch(1),
@@ -37,7 +37,17 @@ mod tests {
             BlockHeight(1),
             test_admin_chain_id(),
         );
-        let call = build_add_committee_call(args, committee_bytes);
+        // Register the admin block first, then prove the committee event against it (the
+        // register-then-prove flow `addCommittee` now shares with `processBurns`).
+        call_contract(
+            &mut db,
+            deployer,
+            contract,
+            &registerBlockCall {
+                blockProof: block_proof,
+            },
+        );
+        let call = build_add_committee_call(proven, committee_bytes);
 
         let (_, _, gas_used) = call_contract(&mut db, deployer, contract, &call);
 

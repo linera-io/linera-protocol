@@ -39,7 +39,7 @@ sol! {
     #[sol(rpc)]
     interface ILightClient {
         function addCommittee(
-            bytes calldata blockProof,
+            bytes32 blockHash,
             bytes[] calldata eventBcs,
             uint32 txIndex,
             uint32 numTxs,
@@ -52,7 +52,7 @@ sol! {
         function registeredBlocks(bytes32 blockHash)
             external
             view
-            returns (bytes32 eventsHash, uint64 height, bytes32 chainId);
+            returns (bytes32 eventsHash, uint64 height, bytes32 chainId, uint32 epoch);
         function proveEventsCommitted(
             bytes32 eventsHash,
             bytes[] calldata eventBcs,

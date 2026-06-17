@@ -5,7 +5,6 @@
 
 use std::collections::BTreeMap;
 
-use alloy_primitives::B256;
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
@@ -34,7 +33,11 @@ use revm::{
 use revm_context::result::{ExecutionResult, Output};
 
 pub use crate::evm::client::validator_evm_address;
-use crate::{block_proof::BlockProof, contracts::ILightClient::addCommitteeCall, evm};
+use crate::{
+    block_proof::{BlockProof, ProvenEvents},
+    contracts::ILightClient::addCommitteeCall,
+    evm,
+};
 
 pub const GAS_LIMIT: u64 = 500_000_000;
 
@@ -123,23 +126,10 @@ pub fn sign_and_serialize(
     .expect("BCS serialization failed")
 }
 
-/// The block-proof and inclusion-proof arguments for an `addCommittee` call: the lean block proof,
-/// the single committee event's BCS encoding, and the inclusion proof binding it to the block.
-pub struct CommitteeCallArgs {
-    pub block_proof: Bytes,
-    pub event_bcs: Vec<Bytes>,
-    pub tx_index: u32,
-    pub num_txs: u32,
-    pub num_events_in_tx: u32,
-    pub positions: Vec<u32>,
-    // Inner siblings followed by outer siblings; the contract splits this single array (see
-    // `EventInclusionProof::siblings`).
-    pub siblings: Vec<B256>,
-}
-
-/// Builds the `addCommittee` proof arguments for a block whose sole event (transaction 0, position
-/// 0) is `event`, signed by the given validator on `chain_id` at `block_epoch`/`height`. The
-/// inclusion proof binds `event` to the block's `events_hash`.
+/// Builds the register-then-`addCommittee` inputs for a block whose sole event (transaction 0,
+/// position 0) is `event`, signed by the given validator on `chain_id` at `block_epoch`/`height`:
+/// the [`ProvenEvents`] witness `addCommittee` consumes, and the BCS block proof to `registerBlock`
+/// first.
 pub fn committee_call_args_for_event(
     signer_secret: &ValidatorSecretKey,
     signer_public: &ValidatorPublicKey,
@@ -147,25 +137,13 @@ pub fn committee_call_args_for_event(
     block_epoch: Epoch,
     height: BlockHeight,
     chain_id: CryptoHash,
-) -> CommitteeCallArgs {
-    let events = vec![vec![event]];
-    let block = build_block(chain_id, block_epoch, height, vec![], events.clone());
+) -> (ProvenEvents, Bytes) {
+    let block = build_block(chain_id, block_epoch, height, vec![], vec![vec![event]]);
     let cert = sign_certificate(signer_secret, signer_public, block);
-    let proof = crate::block_proof::EventInclusionProof::new(&events, 0, &[0]);
-    let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
-    CommitteeCallArgs {
-        block_proof: Bytes::from(
-            bcs::to_bytes(&BlockProof::from_certificate(&cert)).expect("BCS serialization failed"),
-        ),
-        event_bcs: vec![Bytes::from(
-            bcs::to_bytes(&events[0][0]).expect("BCS serialization failed"),
-        )],
-        tx_index: proof.tx_index,
-        num_txs: proof.num_txs,
-        num_events_in_tx: proof.num_events_in_tx,
-        positions: vec![0],
-        siblings: proof.siblings().iter().map(to_b256).collect(),
-    }
+    let block_proof = Bytes::from(
+        bcs::to_bytes(&BlockProof::from_certificate(&cert)).expect("BCS serialization failed"),
+    );
+    (ProvenEvents::new(&cert, 0, &[0]), block_proof)
 }
 
 /// Like `committee_call_args_for_event`, but the event is the system epoch event for
@@ -178,7 +156,7 @@ pub fn committee_block_args(
     block_epoch: Epoch,
     height: BlockHeight,
     chain_id: CryptoHash,
-) -> CommitteeCallArgs {
+) -> (ProvenEvents, Bytes) {
     committee_call_args_for_event(
         signer_secret,
         signer_public,
@@ -189,20 +167,16 @@ pub fn committee_block_args(
     )
 }
 
-/// Assembles an `addCommitteeCall` from the inclusion-proof args, the committee blob, and the
-/// caller's uncompressed validator keys.
-pub fn build_add_committee_call(
-    args: CommitteeCallArgs,
-    committee_blob: Vec<u8>,
-) -> addCommitteeCall {
+/// Assembles an `addCommitteeCall` from the proven-events witness and the committee blob.
+pub fn build_add_committee_call(proven: ProvenEvents, committee_blob: Vec<u8>) -> addCommitteeCall {
     addCommitteeCall {
-        blockProof: args.block_proof,
-        eventBcs: args.event_bcs,
-        txIndex: args.tx_index,
-        numTxs: args.num_txs,
-        numEventsInTx: args.num_events_in_tx,
-        positions: args.positions,
-        siblings: args.siblings,
+        blockHash: proven.block_hash,
+        eventBcs: proven.event_bcs,
+        txIndex: proven.tx_index,
+        numTxs: proven.num_txs,
+        numEventsInTx: proven.num_events_in_tx,
+        positions: proven.positions,
+        siblings: proven.siblings,
         committeeBlob: committee_blob.into(),
     }
 }

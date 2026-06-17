@@ -13,10 +13,11 @@ mod tests {
     use linera_chain::{block::ConfirmedBlock, data_types::Vote, types::ConfirmedBlockCertificate};
     use revm::{
         database::{CacheDB, EmptyDB},
-        primitives::Address,
+        primitives::{Address, Bytes},
     };
 
     use crate::{
+        block_proof::ProvenEvents,
         contracts::ILightClient::{
             addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
             expireEpochsBelowCall, minAcceptedEpochCall, proveEventsCommittedCall,
@@ -174,7 +175,7 @@ mod tests {
         committee_bytes[1] = 0x02;
         let blob_hash = CryptoHash::new(&BlobContent::new_committee(committee_bytes.clone()));
 
-        let args = committee_block_args(
+        let (proven, block_proof) = committee_block_args(
             &light_client.secret,
             &light_client.public,
             Epoch(1),
@@ -183,7 +184,8 @@ mod tests {
             BlockHeight(1),
             test_admin_chain_id(),
         );
-        let call = build_add_committee_call(args, committee_bytes);
+        let call =
+            light_client.register_and_add_committee_call(proven, block_proof, committee_bytes);
 
         assert!(
             try_call_contract(
@@ -259,7 +261,7 @@ mod tests {
             Epoch(1),
             blob_hash,
         );
-        let args = committee_call_args_for_event(
+        let (proven, block_proof) = committee_call_args_for_event(
             &light_client.secret,
             &light_client.public,
             forged,
@@ -267,7 +269,8 @@ mod tests {
             BlockHeight(1),
             test_admin_chain_id(),
         );
-        let call = build_add_committee_call(args, committee_bytes);
+        let call =
+            light_client.register_and_add_committee_call(proven, block_proof, committee_bytes);
 
         let Err(err) = try_call_contract(
             &mut light_client.db,
@@ -810,22 +813,36 @@ mod tests {
         }
 
         fn add_committee_call(
-            &self,
+            &mut self,
             new_public: &ValidatorPublicKey,
             new_epoch: Epoch,
             block_epoch: Epoch,
             height: BlockHeight,
             chain_id: CryptoHash,
         ) -> addCommitteeCall {
-            create_add_committee_call(
+            let (committee_bytes, blob_hash) = create_committee_blob(new_public);
+            let (proven, block_proof) = committee_block_args(
                 &self.secret,
                 &self.public,
-                new_public,
                 new_epoch,
+                blob_hash,
                 block_epoch,
                 height,
                 chain_id,
-            )
+            );
+            self.register_and_add_committee_call(proven, block_proof, committee_bytes)
+        }
+
+        /// Registers the admin block (the on-chain quorum check), then builds the `addCommittee`
+        /// call referencing it by hash — the register-then-prove flow `processBurns` also uses.
+        fn register_and_add_committee_call(
+            &mut self,
+            proven: ProvenEvents,
+            block_proof: Bytes,
+            committee_blob: Vec<u8>,
+        ) -> addCommitteeCall {
+            self.verify_block(block_proof.to_vec());
+            build_add_committee_call(proven, committee_blob)
         }
 
         fn query_current_epoch(&mut self) -> Epoch {
@@ -873,31 +890,6 @@ mod tests {
         }
     }
 
-    /// Creates a signed `addCommitteeCall` for transitioning to a new epoch with a single
-    /// new validator. The block is signed by `signer_secret`/`signer_public` (the current
-    /// epoch's validator) and placed on the admin chain at the given block epoch and height.
-    fn create_add_committee_call(
-        signer_secret: &ValidatorSecretKey,
-        signer_public: &ValidatorPublicKey,
-        new_public: &ValidatorPublicKey,
-        new_epoch: Epoch,
-        block_epoch: Epoch,
-        height: BlockHeight,
-        chain_id: CryptoHash,
-    ) -> addCommitteeCall {
-        let (committee_bytes, blob_hash) = create_committee_blob(new_public);
-        let args = committee_block_args(
-            signer_secret,
-            signer_public,
-            new_epoch,
-            blob_hash,
-            block_epoch,
-            height,
-            chain_id,
-        );
-        build_add_committee_call(args, committee_bytes)
-    }
-
     #[test]
     fn test_light_client_add_committee_two_validators() {
         let mut light_client = TestLightClient::new();
@@ -906,7 +898,7 @@ mod tests {
         let new_secret2 = ValidatorSecretKey::generate();
         let new_public2 = new_secret2.public();
 
-        let call = create_add_committee_call_multi(
+        let (proven, block_proof, committee_bytes) = create_add_committee_call_multi(
             &light_client.secret,
             &light_client.public,
             &[new_public1, new_public2],
@@ -915,6 +907,8 @@ mod tests {
             BlockHeight(1),
             test_admin_chain_id(),
         );
+        let call =
+            light_client.register_and_add_committee_call(proven, block_proof, committee_bytes);
         call_contract(
             &mut light_client.db,
             light_client.deployer,
@@ -969,7 +963,7 @@ mod tests {
         let blob_content = BlobContent::new_committee(committee_bytes.clone());
         let blob_hash = CryptoHash::new(&blob_content);
 
-        let args = committee_block_args(
+        let (proven, block_proof) = committee_block_args(
             &light_client.secret,
             &light_client.public,
             Epoch(1),
@@ -978,7 +972,8 @@ mod tests {
             BlockHeight(1),
             test_admin_chain_id(),
         );
-        let call = build_add_committee_call(args, committee_bytes);
+        let call =
+            light_client.register_and_add_committee_call(proven, block_proof, committee_bytes);
         call_contract(
             &mut light_client.db,
             light_client.deployer,
@@ -1019,8 +1014,9 @@ mod tests {
         (bytes, blob_hash)
     }
 
-    /// Creates a signed `addCommitteeCall` for transitioning to a new epoch with multiple
-    /// validators. The block is signed by `signer_secret`/`signer_public`.
+    /// Builds the register-then-`addCommittee` inputs for a multi-validator transition. The block
+    /// is signed by `signer_secret`/`signer_public`. Returns the proven-events witness, the BCS
+    /// block proof (to `registerBlock` first), and the committee blob.
     fn create_add_committee_call_multi(
         signer_secret: &ValidatorSecretKey,
         signer_public: &ValidatorPublicKey,
@@ -1029,9 +1025,9 @@ mod tests {
         block_epoch: Epoch,
         height: BlockHeight,
         chain_id: CryptoHash,
-    ) -> addCommitteeCall {
+    ) -> (ProvenEvents, Bytes, Vec<u8>) {
         let (committee_bytes, blob_hash) = create_multi_committee_blob(new_publics);
-        let args = committee_block_args(
+        let (proven, block_proof) = committee_block_args(
             signer_secret,
             signer_public,
             new_epoch,
@@ -1041,7 +1037,7 @@ mod tests {
             chain_id,
         );
 
-        build_add_committee_call(args, committee_bytes)
+        (proven, block_proof, committee_bytes)
     }
 
     /// Proptest: generates random secp256k1 keys and tests two-validator addCommittee.
@@ -1086,8 +1082,8 @@ mod tests {
                     test_admin_chain_id(), 0,
                 );
 
-                // Create two-validator committee and call addCommittee
-                let call = create_add_committee_call_multi(
+                // Create two-validator committee, register the admin block, then call addCommittee.
+                let (proven, block_proof, committee_bytes) = create_add_committee_call_multi(
                     &signer_secret,
                     &signer_public,
                     &[public1, public2],
@@ -1096,6 +1092,13 @@ mod tests {
                     BlockHeight(1),
                     test_admin_chain_id(),
                 );
+                call_contract(
+                    &mut db,
+                    deployer,
+                    contract,
+                    &registerBlockCall { blockProof: block_proof },
+                );
+                let call = build_add_committee_call(proven, committee_bytes);
 
                 let result = try_call_contract(&mut db, deployer, contract, &call);
                 prop_assert!(result.is_ok(), "addCommittee failed: {:?}", result.err());

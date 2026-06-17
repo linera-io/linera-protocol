@@ -26,12 +26,15 @@ contract LightClient {
 
     /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
     /// individual events can later be proven against it (`proveEventsCommitted`) and settled
-    /// (`processBurns`) without re-checking the certificate or re-parsing the header per chunk.
-    /// `eventsHash` is never zero for a valid header, so a zero `eventsHash` means "unregistered".
+    /// (`processBurns`) or used to rotate the committee (`addCommittee`) without re-checking the
+    /// certificate or re-parsing the header per chunk. `eventsHash` is never zero for a valid
+    /// header, so a zero `eventsHash` means "unregistered". `epoch` is the block's own epoch (which
+    /// committee signed it); `addCommittee` requires it to equal `currentEpoch`.
     struct RegisteredBlock {
         bytes32 eventsHash;
         uint64 height;
         bytes32 chainId;
+        uint32 epoch;
     }
 
     /// Maps a registered block's hash (`keccak256("BlockHeader::" ++ BCS(header))`) to its metadata.
@@ -44,14 +47,16 @@ contract LightClient {
         adminChainId = _adminChainId;
     }
 
-    /// Installs a new validator committee, proven from the admin-chain block that created it. That
-    /// block emits an epoch event (system stream `[0]`) holding the new committee's blob hash; the
-    /// caller supplies that single event in `eventBcs` and an inclusion proof
-    /// (`txIndex`/`numTxs`/`numEventsInTx`/`positions`/`siblings`, exactly as `processBurns`)
-    /// proving it belongs to the signed block — the same `proveEventsCommitted` check the burn path
-    /// uses. The new epoch and blob hash are read from that event.
+    /// Installs a new validator committee, proven from the admin-chain block that created it. The
+    /// block must first be registered (`registerBlock`, which verifies its quorum); `addCommittee`
+    /// then references it by `blockHash`, exactly as `processBurns` does for burns. That block emits
+    /// an epoch event (system stream `[0]`) holding the new committee's blob hash; the caller
+    /// supplies that single event in `eventBcs` and an inclusion proof
+    /// (`txIndex`/`numTxs`/`numEventsInTx`/`positions`/`siblings`) proving it belongs to the block —
+    /// the same `proveEventsCommitted` check the burn path uses. The new epoch and blob hash are
+    /// read from that event.
     function addCommittee(
-        bytes calldata blockProof,
+        bytes32 blockHash,
         bytes[] calldata eventBcs,
         uint32 txIndex,
         uint32 numTxs,
@@ -60,14 +65,17 @@ contract LightClient {
         bytes32[] calldata siblings,
         bytes calldata committeeBlob
     ) external {
-        (BridgeTypes.BlockHeader memory header,) = _verifyBlockProof(blockProof);
-        require(header.chain_id.value.value == adminChainId, "block must be from admin chain");
-        require(header.epoch.value == currentEpoch, "block epoch must match current epoch");
+        // The admin block must have been registered (its quorum was checked then); fetch its
+        // committed events hash and metadata, then prove the committee event is part of it.
+        RegisteredBlock memory block_ = registeredBlocks[blockHash];
+        require(block_.eventsHash != 0, "block not registered");
+        require(block_.chainId == adminChainId, "block must be from admin chain");
+        require(block_.epoch == currentEpoch, "block epoch must match current epoch");
         require(eventBcs.length == 1, "expected exactly one committee event");
 
         // Prove the supplied event belongs to the block — the same inclusion check `processBurns`
         // runs for burns.
-        proveEventsCommitted(header.events_hash.value, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
+        proveEventsCommitted(block_.eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
 
         (uint32 newEpoch, bytes32 expectedBlobHash) = _readCommitteeEvent(eventBcs[0]);
 
@@ -83,7 +91,7 @@ contract LightClient {
 
         // Store the new committee, recording the admin-chain height of the
         // block that created it so the relayer can resume scanning from here.
-        _setCommittee(newEpoch, addrs, weights, header.height.value);
+        _setCommittee(newEpoch, addrs, weights, block_.height);
     }
 
     /// Raises `minAcceptedEpoch`, permanently retiring every committee with an
@@ -173,8 +181,9 @@ contract LightClient {
     /// (`keccak256("BlockHeader::" ++ BCS(header))`).
     function registerBlock(bytes calldata blockProof) external returns (bytes32) {
         (BridgeTypes.BlockHeader memory header, bytes32 blockHash) = _verifyBlockProof(blockProof);
-        registeredBlocks[blockHash] =
-            RegisteredBlock(header.events_hash.value, header.height.value, header.chain_id.value.value);
+        registeredBlocks[blockHash] = RegisteredBlock(
+            header.events_hash.value, header.height.value, header.chain_id.value.value, header.epoch.value
+        );
         return blockHash;
     }
 

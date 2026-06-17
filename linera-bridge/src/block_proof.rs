@@ -9,6 +9,7 @@
 //! (the events for burns, the transactions for committee transitions) is shipped alongside the
 //! proof and checked against the matching hash in the header — never inside the proof itself.
 
+use alloy_primitives::{Bytes, B256};
 use linera_base::{
     crypto::{CryptoHash, CryptoHashVec, ValidatorPublicKey, ValidatorSignature},
     data_types::{Event, Round},
@@ -155,6 +156,52 @@ impl EventInclusionProof {
             }
         }
         CryptoHash::new(&CryptoHashVec(outer))
+    }
+}
+
+/// A set of events proven to belong to a registered block — the complete argument set both
+/// `processBurns` and `addCommittee` pass (`block_hash` plus the Merkle inclusion witness): the
+/// block's hash, the proven events' BCS encodings, and the proof binding them to its `events_hash`.
+/// Both EVM entrypoints prove the same thing — that these events belong to a block the validators
+/// signed; only the action taken on success (release burns vs. install a committee, which also
+/// takes a committee blob) differs. The relay and the contract tests build calls from this.
+pub struct ProvenEvents {
+    pub block_hash: B256,
+    pub event_bcs: Vec<Bytes>,
+    pub tx_index: u32,
+    pub num_txs: u32,
+    pub num_events_in_tx: u32,
+    pub positions: Vec<u32>,
+    /// Inner siblings followed by outer siblings; the contract splits this single array at
+    /// `num_events_in_tx - positions.len()` (see [`EventInclusionProof::siblings`]).
+    pub siblings: Vec<B256>,
+}
+
+impl ProvenEvents {
+    /// Builds the proof for the events at `positions` (ascending) within transaction `tx_index` of
+    /// `cert`'s (registered) block.
+    pub fn new(cert: &ConfirmedBlockCertificate, tx_index: u32, positions: &[u32]) -> Self {
+        let events = &cert.block().body.events;
+        let proof = EventInclusionProof::new(events, tx_index as usize, positions);
+        let event_bcs = positions
+            .iter()
+            .map(|p| {
+                Bytes::from(
+                    bcs::to_bytes(&events[tx_index as usize][*p as usize])
+                        .expect("BCS-serialize event"),
+                )
+            })
+            .collect();
+        let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
+        ProvenEvents {
+            block_hash: to_b256(&cert.hash()),
+            event_bcs,
+            tx_index,
+            num_txs: proof.num_txs,
+            num_events_in_tx: proof.num_events_in_tx,
+            positions: positions.to_vec(),
+            siblings: proof.siblings().iter().map(to_b256).collect(),
+        }
     }
 }
 
