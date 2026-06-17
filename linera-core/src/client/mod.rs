@@ -2234,7 +2234,7 @@ impl<Env: Environment> Client<Env> {
                         "failed to download certificate-for-blob from validator",
                     );
                 }
-                chain_client::Error::BlobRecoveryFailed(blob_id)
+                chain_client::Error::CannotDownloadBlob(blob_id)
             })
         }))
         .buffer_unordered(self.options.max_joined_tasks)
