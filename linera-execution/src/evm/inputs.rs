@@ -46,6 +46,8 @@ alloy_sol_types::sol! {
     }
 
     function process_streams(InternalStreamUpdate[] internal_streams);
+
+    function summarize_events(InternalStreamUpdate[] internal_streams);
 }
 
 fn crypto_hash_to_internal_crypto_hash(hash: CryptoHash) -> B256 {
@@ -151,6 +153,11 @@ pub(crate) const EXECUTE_MESSAGE_SELECTOR: &[u8] = &[173, 125, 234, 205];
 /// only from a submitted message
 pub(crate) const PROCESS_STREAMS_SELECTOR: &[u8] = &[254, 72, 102, 28];
 
+/// This is the selector of `summarize_events`, which is called by the system on a
+/// checkpoint and never from a submitted operation.
+pub(crate) const SUMMARIZE_EVENTS_SELECTOR: &[u8] =
+    &<summarize_eventsCall as alloy_sol_types::SolCall>::SELECTOR;
+
 /// This is the selector of `instantiate` that should be called
 /// only when creating a new instance of a shared contract
 pub(crate) const INSTANTIATE_SELECTOR: &[u8] = &[156, 163, 60, 158];
@@ -163,6 +170,10 @@ pub(crate) fn forbid_execute_operation_origin(vec: &[u8]) -> Result<(), EvmExecu
     ensure!(
         vec != PROCESS_STREAMS_SELECTOR,
         EvmExecutionError::IllegalOperationCall("function process_streams".to_string(),)
+    );
+    ensure!(
+        vec != SUMMARIZE_EVENTS_SELECTOR,
+        EvmExecutionError::IllegalOperationCall("function summarize_events".to_string(),)
     );
     ensure!(
         vec != INSTANTIATE_SELECTOR,
@@ -229,6 +240,15 @@ pub(crate) fn get_revm_process_streams_bytes(streams: Vec<StreamUpdate>) -> Vec<
     let internal_streams = streams.into_iter().map(StreamUpdate::into).collect();
 
     let fct_call = process_streamsCall { internal_streams };
+    fct_call.abi_encode()
+}
+
+pub(crate) fn get_revm_summarize_events_bytes(streams: Vec<StreamUpdate>) -> Vec<u8> {
+    use alloy_sol_types::SolCall;
+
+    let internal_streams = streams.into_iter().map(StreamUpdate::into).collect();
+
+    let fct_call = summarize_eventsCall { internal_streams };
     fct_call.abi_encode()
 }
 

@@ -35,6 +35,14 @@ REGISTRY:
             - key:
                 TYPENAME: Key
             - comment: STR
+      3:
+        Summary:
+          STRUCT:
+            - recent_posts:
+                SEQ:
+                  TUPLE:
+                    - U32
+                    - TYPENAME: OwnPost
   Key:
     STRUCT:
       - timestamp:

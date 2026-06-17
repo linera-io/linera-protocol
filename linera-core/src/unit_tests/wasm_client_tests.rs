@@ -28,8 +28,8 @@ use linera_base::{
         OracleResponse, Round, TimeDelta, Timestamp,
     },
     identifiers::{
-        Account, AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, ModuleId, StreamId,
-        StreamName,
+        Account, AccountOwner, ApplicationId, BlobId, BlobType, DataBlobHash, EventId, ModuleId,
+        StreamId, StreamName,
     },
     ownership::{ChainOwnership, TimeoutConfig},
     vm::VmRuntime,
@@ -1058,6 +1058,151 @@ where
     );
 
     Ok(())
+}
+
+/// A chain that has published user events (here: `social` posts) and also sent a cross-chain
+/// message can still checkpoint. The checkpoint calls `summarize_events`, which emits a
+/// summary event, and a fresh follower bootstraps from the checkpoint to the same state hash
+/// — downloading the recertified message block but skipping the pre-checkpoint event block.
+async fn run_test_checkpoint_with_events<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = producer.chain_id();
+
+    // Deploy the social app and publish one event (a post) on its `posts` stream.
+    let module_id = producer.publish_wasm_example("social").await?;
+    let module_id = module_id.with_abi::<social::SocialAbi, (), ()>();
+    let (application_id, _) = producer
+        .create_application(module_id, &(), &(), vec![])
+        .await
+        .unwrap_ok_committed();
+    let post = social::Operation::Post {
+        text: "hello".to_string(),
+        image_url: None,
+    };
+    let post_cert = producer
+        .execute_operation(Operation::user(application_id, &post)?)
+        .await
+        .unwrap_ok_committed();
+
+    // Also send a cross-chain message, so the chain has both events and an unfinalized
+    // outgoing-message block at checkpoint time.
+    let transfer_cert = producer
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(recipient.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    // The checkpoint is allowed despite the published user events, and `summarize_events`
+    // emits a summary of the `posts` stream as the checkpoint block's only event. The post
+    // sits at index 0, so the summary (carrying the recent posts) lands at index 1.
+    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
+    let posts_stream = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: StreamName(b"posts".to_vec()),
+    };
+    let [checkpoint_events] = &checkpoint_cert.block().body.events[..] else {
+        panic!("checkpoint should emit a single transaction's events");
+    };
+    let [summary_event] = &checkpoint_events[..] else {
+        panic!("checkpoint should emit a single summary event");
+    };
+    assert_eq!(summary_event.stream_id, posts_stream);
+    assert_eq!(summary_event.index, 1);
+    let social::Event::Summary { recent_posts } = bcs::from_bytes(&summary_event.value)? else {
+        panic!("the checkpoint event should be a summary");
+    };
+    assert_eq!(recent_posts.len(), 1);
+    assert_eq!(recent_posts[0].0, 0);
+    assert_eq!(recent_posts[0].1.text, "hello");
+
+    let producer_state_hash = producer
+        .chain_info()
+        .await?
+        .state_hash
+        .expect("producer should expose a state hash after the checkpoint");
+
+    // A fresh follower bootstraps from the checkpoint and must reach the same state hash —
+    // re-executing the checkpoint re-runs `summarize_events`, re-emitting the summary.
+    let follower = builder
+        .make_client_with_options(
+            chain_id,
+            None,
+            BlockHeight::ZERO,
+            chain_client::Options::test_default(),
+            true,
+        )
+        .await?;
+    follower.synchronize_from_validators().await?;
+    assert_eq!(
+        follower.chain_info().await?.state_hash,
+        Some(producer_state_hash),
+    );
+
+    // The follower downloaded the recertified message block but skipped the pre-checkpoint
+    // event block: old events are no longer guaranteed, only the summary in the checkpoint.
+    let follower_storage = follower.storage_client();
+    assert!(
+        follower_storage
+            .contains_certificate(transfer_cert.hash())
+            .await?,
+        "follower should download the recertified message block",
+    );
+    assert!(
+        !follower_storage
+            .contains_certificate(post_cert.hash())
+            .await?,
+        "follower should skip the pre-checkpoint event block",
+    );
+    assert!(
+        follower_storage
+            .contains_certificate(checkpoint_cert.hash())
+            .await?,
+    );
+
+    // The summary event is available on the follower, re-emitted by re-executing the
+    // checkpoint, even though the original post event's block was never downloaded. It still
+    // carries the post, so a subscriber that joins after the checkpoint recovers it.
+    let summary = follower_storage
+        .read_event(EventId {
+            chain_id,
+            stream_id: posts_stream.clone(),
+            index: 1,
+        })
+        .await?
+        .expect("the summary event should be available after bootstrap");
+    let social::Event::Summary { recent_posts } = bcs::from_bytes(&summary)? else {
+        panic!("the checkpoint event should be a summary");
+    };
+    assert_eq!(recent_posts.len(), 1);
+    assert_eq!(recent_posts[0].1.text, "hello");
+
+    // The follower's per-stream event tracker was seeded from the restored counts during
+    // bootstrap and advanced past the re-emitted summary (post at index 0, summary at index
+    // 1), so it sits at 2 — matching the producer and ready to deliver future events.
+    let follower_expected = follower
+        .client
+        .local_node
+        .next_expected_events(chain_id, vec![posts_stream.clone()])
+        .await?;
+    assert_eq!(follower_expected.get(&posts_stream), Some(&2));
+
+    Ok(())
+}
+
+#[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
+#[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
+#[test_log::test(tokio::test)]
+async fn test_memory_checkpoint_with_events(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
+    run_test_checkpoint_with_events(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]

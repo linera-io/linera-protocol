@@ -97,8 +97,57 @@ impl Contract for SocialContract {
                         self.execute_comment_event(key, update.chain_id, comment)
                             .await;
                     }
+                    // Apply each post from the summary that we don't already have, so a
+                    // subscriber that joined after the checkpoint catches up. The guard
+                    // avoids clobbering likes and comments a subscriber already tracked.
+                    Event::Summary { recent_posts } => {
+                        for (index, post) in recent_posts {
+                            let key = Key {
+                                timestamp: post.timestamp,
+                                author: update.chain_id,
+                                index,
+                            };
+                            if self
+                                .state
+                                .received_posts
+                                .get(&key)
+                                .await
+                                .expect("Failed to read post")
+                                .is_none()
+                            {
+                                self.execute_post_event(update.chain_id, index, post);
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    async fn summarize_events(&mut self, updates: Vec<StreamUpdate>) {
+        /// The number of recent posts to retain in a checkpoint summary.
+        const SUMMARY_POST_COUNT: usize = 10;
+        for update in updates {
+            assert_eq!(update.stream_id.stream_name, STREAM_NAME.into());
+            assert_eq!(
+                update.stream_id.application_id,
+                self.runtime.application_id().forget_abi().into()
+            );
+            let count = self.state.own_posts.count();
+            let start = count.saturating_sub(SUMMARY_POST_COUNT);
+            let posts = self
+                .state
+                .own_posts
+                .read(start..count)
+                .await
+                .expect("Failed to read own posts");
+            let recent_posts = posts
+                .into_iter()
+                .enumerate()
+                .map(|(offset, post)| ((start + offset) as u32, post))
+                .collect();
+            self.runtime
+                .emit(STREAM_NAME.into(), &Event::Summary { recent_posts });
         }
     }
 
