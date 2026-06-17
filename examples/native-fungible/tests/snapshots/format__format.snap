@@ -1,6 +1,6 @@
 ---
 source: native-fungible/tests/format.rs
-expression: formats
+expression: "NativeFungibleApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Account:

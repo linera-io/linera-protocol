@@ -1,6 +1,6 @@
 ---
 source: controller/tests/format.rs
-expression: formats
+expression: "ControllerApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   ChainId:

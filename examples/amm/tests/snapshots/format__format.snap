@@ -1,6 +1,6 @@
 ---
 source: amm/tests/format.rs
-expression: formats
+expression: "AmmApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Message:

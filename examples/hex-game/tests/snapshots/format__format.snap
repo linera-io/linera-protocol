@@ -1,6 +1,6 @@
 ---
 source: hex-game/tests/format.rs
-expression: formats
+expression: "HexApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Board:

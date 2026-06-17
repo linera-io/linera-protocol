@@ -1,6 +1,6 @@
 ---
 source: game-of-life-challenge/tests/format.rs
-expression: formats
+expression: "GameOfLifeApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Board:

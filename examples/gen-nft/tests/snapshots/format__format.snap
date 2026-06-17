@@ -1,6 +1,6 @@
 ---
 source: gen-nft/tests/format.rs
-expression: formats
+expression: "GenNftApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Account:

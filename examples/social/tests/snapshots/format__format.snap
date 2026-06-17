@@ -1,6 +1,6 @@
 ---
 source: social/tests/format.rs
-expression: formats
+expression: "SocialApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   ChainId:

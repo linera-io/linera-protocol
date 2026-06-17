@@ -1,6 +1,6 @@
 ---
 source: matching-engine/tests/format.rs
-expression: formats
+expression: "MatchingEngineApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Message:

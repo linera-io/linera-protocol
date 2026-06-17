@@ -1,6 +1,6 @@
 ---
 source: crowd-funding/tests/format.rs
-expression: formats
+expression: "CrowdFundingApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   InstantiationArgument:

@@ -1,6 +1,6 @@
 ---
 source: rfq/tests/format.rs
-expression: formats
+expression: "RfqApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Account:

@@ -1,6 +1,6 @@
 ---
 source: non-fungible/tests/format.rs
-expression: formats
+expression: "NonFungibleApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   Account:
