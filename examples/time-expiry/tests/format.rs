@@ -10,5 +10,7 @@ use time_expiry::formats::TimeExpiryApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", TimeExpiryApplication::formats().unwrap());
+    let mut formats = TimeExpiryApplication::formats().unwrap();
+    formats.prune_known_primitives().unwrap();
+    insta::assert_yaml_snapshot!("format", formats);
 }

@@ -10,5 +10,7 @@ use llm::formats::LlmApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", LlmApplication::formats().unwrap());
+    let mut formats = LlmApplication::formats().unwrap();
+    formats.prune_known_primitives().unwrap();
+    insta::assert_yaml_snapshot!("format", formats);
 }

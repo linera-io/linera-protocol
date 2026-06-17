@@ -9,5 +9,7 @@ use linera_sdk::{abis::controller::formats::ControllerApplication, formats::BcsA
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", ControllerApplication::formats().unwrap());
+    let mut formats = ControllerApplication::formats().unwrap();
+    formats.prune_known_primitives().unwrap();
+    insta::assert_yaml_snapshot!("format", formats);
 }

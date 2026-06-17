@@ -10,5 +10,7 @@ use linera_sdk::formats::BcsApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", EthereumTrackerApplication::formats().unwrap());
+    let mut formats = EthereumTrackerApplication::formats().unwrap();
+    formats.prune_known_primitives().unwrap();
+    insta::assert_yaml_snapshot!("format", formats);
 }

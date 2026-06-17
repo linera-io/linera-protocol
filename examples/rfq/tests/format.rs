@@ -10,5 +10,7 @@ use rfq::formats::RfqApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", RfqApplication::formats().unwrap());
+    let mut formats = RfqApplication::formats().unwrap();
+    formats.prune_known_primitives().unwrap();
+    insta::assert_yaml_snapshot!("format", formats);
 }
