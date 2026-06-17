@@ -1372,12 +1372,14 @@ where
                 send_result(result_sender, Err(WorkerError::BatchRolledBack));
             }
             // Surface an error that left the worker poisoned or the chain state
-            // corrupted so `chain_write` can evict or reset it. This covers both a
-            // failed `save` and a processing step that hit inconsistent state in
-            // storage (e.g. a journal-resolution failure while lazily loading a
-            // view). Ordinary processing errors (bad height, validation failures)
-            // leave the worker healthy after rollback, so they return `Ok` and were
-            // already reported to their individual senders.
+            // corrupted so `chain_write` can evict or reset it. A `must_reload_view`
+            // error only reaches us from a failed `save`, since resolving the journal
+            // (the operation that raises it) happens only in `write_batch`. A
+            // processing step instead can raise `CorruptedChainState` while reconciling
+            // outboxes or message counters (see `confirm_updated_recipient`), which
+            // calls for a reset rather than eviction. Ordinary processing errors (bad
+            // height, validation failures) leave the worker healthy after rollback, so
+            // they return `Ok` and were already reported to their individual senders.
             return match save_error.or(recovery_error) {
                 Some(error) => Err(error),
                 None => Ok(()),
