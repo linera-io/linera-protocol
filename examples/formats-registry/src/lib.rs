@@ -4,7 +4,10 @@
 /*! ABI of the Formats Registry Example Application */
 
 use async_graphql::{Request, Response};
-use linera_sdk::linera_base_types::{AccountOwner, ContractAbi, ModuleId, ServiceAbi};
+use linera_sdk::{
+    graphql::GraphQLMutationRoot,
+    linera_base_types::{AccountOwner, ContractAbi, ModuleId, ServiceAbi},
+};
 use serde::{Deserialize, Serialize};
 
 /// The ABI of the formats-registry example application.
@@ -26,7 +29,7 @@ impl ServiceAbi for FormatsRegistryAbi {
 /// [`linera_sdk::abis::formats_registry::Operation::Write`], so the operation
 /// produced by `linera publish-module-with-formats` decodes correctly here. Extra,
 /// implementation-specific admin commands are appended after it.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
     /// Register `value` for `module_id`, on behalf of `owner`. A given `module_id`
     /// may only be written once.

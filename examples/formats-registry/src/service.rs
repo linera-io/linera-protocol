@@ -10,6 +10,7 @@ use std::sync::Arc;
 use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
 use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
+    graphql::GraphQLMutationRoot,
     linera_base_types::{AccountOwner, ModuleId, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
@@ -46,9 +47,7 @@ impl Service for FormatsRegistryService {
             QueryRoot {
                 state: self.state.clone(),
             },
-            MutationRoot {
-                runtime: self.runtime.clone(),
-            },
+            Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
         .finish();
@@ -76,27 +75,5 @@ impl QueryRoot {
             .get()
             .as_ref()
             .map(|admins| admins.iter().copied().collect())
-    }
-}
-
-struct MutationRoot {
-    runtime: Arc<ServiceRuntime<FormatsRegistryService>>,
-}
-
-#[Object]
-impl MutationRoot {
-    async fn write(&self, owner: AccountOwner, module_id: ModuleId, value: Vec<u8>) -> [u8; 0] {
-        self.runtime.schedule_operation(&Operation::Write {
-            owner,
-            module_id,
-            value,
-        });
-        []
-    }
-
-    async fn set_admins(&self, owner: AccountOwner, admins: Option<Vec<AccountOwner>>) -> [u8; 0] {
-        self.runtime
-            .schedule_operation(&Operation::SetAdmins { owner, admins });
-        []
     }
 }
