@@ -109,7 +109,7 @@ where
     T: serde::Serialize + serde::de::DeserializeOwned,
     S: serde::Serializer,
 {
-    let value: T = serde_json::from_value(value.clone()).map_err(serde::ser::Error::custom)?;
+    let value: T = T::deserialize(value).map_err(serde::ser::Error::custom)?;
     value.serialize(serializer)
 }
 
