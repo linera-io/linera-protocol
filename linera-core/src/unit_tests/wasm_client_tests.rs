@@ -1067,7 +1067,7 @@ where
 /// blocks and the checkpoint itself — skipping the intermediate checkpoint, the event blocks,
 /// and the message-free consume block. It then recovers the event summary and the seeded event
 /// tracker, and — via the seeded inbox cursors — accepts a post-bootstrap cross-chain delivery.
-async fn run_test_checkpoint_comprehensive<B>(storage_builder: B) -> anyhow::Result<()>
+async fn run_test_checkpoint<B>(storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
 {
@@ -1172,7 +1172,10 @@ where
     let social::Event::Summary { recent_posts } = bcs::from_bytes(&summary_event.value)? else {
         panic!("the checkpoint event should be a summary");
     };
-    let texts: Vec<_> = recent_posts.iter().map(|(_, p)| p.text.as_str()).collect();
+    let texts = recent_posts
+        .iter()
+        .map(|(_, p)| p.text.as_str())
+        .collect::<Vec<_>>();
     assert_eq!(texts, vec!["one", "two"]);
 
     let main_state_hash = main
@@ -1276,7 +1279,7 @@ where
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_memory_checkpoint_comprehensive(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_checkpoint_comprehensive(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
+    run_test_checkpoint(MemoryStorageBuilder::with_wasm_runtime(wasm_runtime)).await
 }
 
 #[ignore]
@@ -1285,8 +1288,7 @@ async fn test_memory_checkpoint_comprehensive(wasm_runtime: WasmRuntime) -> anyh
 #[cfg_attr(feature = "wasmtime", test_case(WasmRuntime::Wasmtime; "wasmtime"))]
 #[test_log::test(tokio::test)]
 async fn test_rocks_db_checkpoint_comprehensive(wasm_runtime: WasmRuntime) -> anyhow::Result<()> {
-    run_test_checkpoint_comprehensive(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await)
-        .await
+    run_test_checkpoint(RocksDbStorageBuilder::with_wasm_runtime(wasm_runtime).await).await
 }
 
 #[cfg_attr(feature = "wasmer", test_case(WasmRuntime::Wasmer; "wasmer"))]
