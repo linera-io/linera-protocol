@@ -1,0 +1,213 @@
+---
+source: hex-game/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+A unique identifier for a user or an application.
+"""
+scalar AccountOwner
+
+"""
+A non-negative amount of tokens.
+"""
+scalar Amount
+
+"""
+The state of a Hex game.
+"""
+type Board {
+	"""
+	The cells, row-by-row.
+	
+	Cell `(x, y)` has index `(x + y * size)`.
+	"""
+	cells: [Cell!]!
+	"""
+	The width and height of the board, in cells.
+	"""
+	size: Int!
+	"""
+	The player whose turn it is. If the game has ended, this player loses.
+	"""
+	active: Player!
+}
+
+"""
+The state of a cell on the board.
+"""
+type Cell {
+	"""
+	`None` if the cell is empty; otherwise the player who placed a stone here.
+	"""
+	stone: Player
+	"""
+	This is `true` if the cell belongs to player `One` and is connected to the left edge
+	of the board via other cells containing a stone placed by player `One`, or if it
+	belongs to player `Two` and is connected to the top edge of the board via other cells
+	containing stones placed by player `Two`.
+	
+	So the game ends if this is `true` for any cell at the right or bottom edge.
+	"""
+	connected: Boolean!
+}
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+"""
+A clock to track both players' time.
+"""
+type Clock {
+	timeLeft: [TimeDelta!]!
+	increment: TimeDelta!
+	currentTurnStart: Timestamp!
+	blockDelay: TimeDelta!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_AccountOwner_GameChain_Array_5bcd324f {
+	key: AccountOwner!
+	value: [GameChain!]
+}
+
+"""
+The IDs of a temporary chain for a single game of Hex.
+"""
+type GameChain {
+	"""
+	The ID of the temporary game chain itself.
+	"""
+	chainId: ChainId!
+}
+
+"""
+The application state.
+"""
+type HexState {
+	"""
+	The `AccountOwner`s controlling players `One` and `Two`.
+	"""
+	owners: [AccountOwner!]
+	"""
+	The current game state.
+	"""
+	board: Board!
+	"""
+	The game clock.
+	"""
+	clock: Clock!
+	"""
+	The timeouts.
+	"""
+	timeouts: Timeouts!
+	"""
+	Temporary chains for individual games, by player.
+	"""
+	gameChains: MapView_AccountOwner_GameChain_Array_9536f240!
+	winner: Player
+}
+
+input MapFilters_AccountOwner_d6668c53 {
+	keys: [AccountOwner!]
+}
+
+input MapInput_AccountOwner_d6668c53 {
+	filters: MapFilters_AccountOwner_d6668c53
+}
+
+type MapView_AccountOwner_GameChain_Array_9536f240 {
+	keys(count: Int): [AccountOwner!]!
+	count: Int!
+	entry(key: AccountOwner!): Entry_AccountOwner_GameChain_Array_5bcd324f!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_GameChain_Array_5bcd324f!]!
+}
+
+type OperationMutationRoot {
+	makeMove(x: Int!, y: Int!): [Int!]!
+	claimVictory: [Int!]!
+	start(players: [AccountOwner!]!, boardSize: Int!, feeBudget: Amount!, timeouts: TimeoutsInput): [Int!]!
+}
+
+"""
+A player: `One` or `Two`
+
+It's player `One`'s turn whenever the number of stones on the board is even, so they make
+the first move. Otherwise it's `Two`'s turn.
+"""
+enum Player {
+	"""
+	Player one
+	"""
+	ONE
+	"""
+	Player two
+	"""
+	TWO
+}
+
+"""
+A duration in microseconds
+"""
+scalar TimeDelta
+
+"""
+Settings that determine how much time the players have to think about their turns.
+"""
+type Timeouts {
+	"""
+	The initial time each player has to think about their turns.
+	"""
+	startTime: TimeDelta!
+	"""
+	The duration that is added to the clock after each turn.
+	"""
+	increment: TimeDelta!
+	"""
+	The maximum time that is allowed to pass between a block proposal and validation.
+	This should be long enough to confirm a block, but short enough for the block timestamp
+	to accurately reflect the current time.
+	"""
+	blockDelay: TimeDelta!
+}
+
+"""
+Settings that determine how much time the players have to think about their turns.
+"""
+input TimeoutsInput {
+	"""
+	The initial time each player has to think about their turns.
+	"""
+	startTime: TimeDelta!
+	"""
+	The duration that is added to the clock after each turn.
+	"""
+	increment: TimeDelta!
+	"""
+	The maximum time that is allowed to pass between a block proposal and validation.
+	This should be long enough to confirm a block, but short enough for the block timestamp
+	to accurately reflect the current time.
+	"""
+	blockDelay: TimeDelta!
+}
+
+"""
+A timestamp, in microseconds since the Unix epoch
+"""
+scalar Timestamp
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: HexState
+	mutation: OperationMutationRoot
+}
