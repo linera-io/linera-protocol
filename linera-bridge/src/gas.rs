@@ -6,15 +6,12 @@
 #[cfg(test)]
 mod tests {
     use linera_base::{
-        crypto::{CryptoHash, TestString, ValidatorSecretKey},
+        crypto::ValidatorSecretKey,
         data_types::{BlockHeight, Epoch},
     };
     use revm::{database::CacheDB, primitives::Address};
 
-    use crate::{
-        contracts::{ILightClient::addCommitteeCall, IMicrochain::addBlockCall},
-        test_helpers::*,
-    };
+    use crate::{contracts::ILightClient::addCommitteeCall, test_helpers::*};
 
     #[test]
     fn test_gas_light_client_add_committee() {
@@ -53,35 +50,5 @@ mod tests {
         );
 
         println!("LightClient.addCommittee gas used: {gas_used}");
-    }
-
-    #[test]
-    fn test_gas_microchain_add_block() {
-        let secret = ValidatorSecretKey::generate();
-        let public = secret.public();
-        let addr = validator_evm_address(&public);
-
-        let chain_id = CryptoHash::new(&TestString::new("test_chain"));
-
-        let deployer = Address::ZERO;
-        let mut db = CacheDB::default();
-        let light_client =
-            deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
-        let microchain = deploy_microchain(&mut db, deployer, light_client, chain_id);
-
-        let cert = create_signed_certificate_for_chain(&secret, &public, chain_id, BlockHeight(1));
-        let (block_proof, event_bcs, events_per_tx) = add_block_args(&cert);
-        let (_, _, gas_used) = call_contract(
-            &mut db,
-            deployer,
-            microchain,
-            &addBlockCall {
-                blockProof: block_proof,
-                eventBcs: event_bcs,
-                eventsPerTx: events_per_tx,
-            },
-        );
-
-        println!("Microchain.addBlock gas used: {gas_used}");
     }
 }

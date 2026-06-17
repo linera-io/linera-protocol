@@ -715,32 +715,24 @@ pub fn test_storage_cache_config() -> linera_storage::StorageCacheConfig {
     }
 }
 
-/// Builds the three `addBlock` arguments from a certificate: the BCS-serialized
-/// `BlockProof`, the flattened per-event BCS encodings, and the per-transaction
-/// event counts that the header's `events_hash` is folded from.
-pub fn add_block_args(
+/// Returns the positions of `bridge_app_id`'s "burns"-stream events in `certificate`, grouped by
+/// transaction index. Mirrors `FungibleBridge`'s burn matching (the bridge application id plus the
+/// "burns" stream) so a test can settle exactly those events via `registerBlock` + `processBurns`,
+/// the same path the relayer uses in production.
+pub fn burn_positions_by_tx(
     certificate: &linera_chain::types::ConfirmedBlockCertificate,
-) -> (
-    alloy::primitives::Bytes,
-    Vec<alloy::primitives::Bytes>,
-    Vec<u32>,
-) {
-    use alloy::primitives::Bytes;
-    let proof = Bytes::from(
-        bcs::to_bytes(&linera_bridge::block_proof::BlockProof::from_certificate(
-            certificate,
-        ))
-        .expect("BCS serialization failed"),
-    );
-    let events = &certificate.block().body.events;
-    let event_bcs = events
-        .iter()
-        .flatten()
-        .map(|event| Bytes::from(bcs::to_bytes(event).expect("BCS serialization failed")))
-        .collect();
-    let events_per_tx = events
-        .iter()
-        .map(|tx_events| u32::try_from(tx_events.len()).expect("event count exceeds u32"))
-        .collect();
-    (proof, event_bcs, events_per_tx)
+    bridge_app_id: linera_base::identifiers::ApplicationId,
+) -> Vec<(u32, Vec<u32>)> {
+    use linera_base::identifiers::GenericApplicationId;
+    let mut by_tx: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
+    for (tx_index, tx_events) in (0u32..).zip(&certificate.block().body.events) {
+        for (pos, event) in (0u32..).zip(tx_events) {
+            if event.stream_id.application_id == GenericApplicationId::User(bridge_app_id)
+                && event.stream_id.stream_name.0 == b"burns"
+            {
+                by_tx.entry(tx_index).or_default().push(pos);
+            }
+        }
+    }
+    by_tx.into_iter().collect()
 }

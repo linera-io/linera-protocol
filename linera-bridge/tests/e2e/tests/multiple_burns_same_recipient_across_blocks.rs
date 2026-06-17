@@ -17,7 +17,7 @@
 //! batching multiple events into one block). When the relayer
 //! starts, its first scan iteration finds all 5 pending burns at once.
 //!
-//! The relayer must forward every burn via `addBlock` and the
+//! The relayer must settle every burn via `registerBlock` + `processBurns` and the
 //! per-burn `isBurnProcessed(height, eventIndex)` query must return
 //! true for every entry; the recipient's ERC-20 balance must equal
 //! `5 * amount`.
@@ -228,7 +228,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     // all NUM_BURNS appear in burns_completed. Pre-fix gets there via
     // mark-by-existence flipping every pending burn complete after the
     // first transfer lands; post-fix gets there via per-burn
-    // `isBurnProcessed` flipping each entry only as its own `addBlock`
+    // `isBurnProcessed` flipping each entry only as its own `processBurns`
     // confirms.
     let settle_result = wait_for_relay_metrics(
         &http,

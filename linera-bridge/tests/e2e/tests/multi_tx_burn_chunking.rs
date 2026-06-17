@@ -1,15 +1,16 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Verifies that when a Linera block's `addBlock(cert)` would exceed the
-//! EVM block gas limit, the relayer falls back to chunked
+//! Verifies that when settling a Linera block's burns in a single
+//! `processBurns` call would exceed the EVM block gas limit, the relayer
+//! splits them across multiple chunked
 //! `processBurns(cert, txIndex, positionsInTx)` calls and every burn
 //! still settles correctly.
 //!
 //! Setup: anvil's block gas limit is dialled down (via
-//! `evm_setBlockGasLimit`) before the bridge is deployed, so `addBlock`
-//! at `NUM_BURNS = 8` does not fit and the relayer must take the
-//! `processBurns` chunk path. Chain B submits one block with N
+//! `evm_setBlockGasLimit`) before the bridge is deployed, so settling all
+//! `NUM_BURNS = 8` burns in one `processBurns` does not fit and the relayer
+//! must split into multiple chunks. Chain B submits one block with N
 //! `BridgeOperation::Burn` operations toward N distinct EVM recipients;
 //! each routes a funding transfer + tracked `BridgeMessage::Burn` to the
 //! bridge chain (chain A), which processes its inbox in a single block
@@ -46,11 +47,11 @@ use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 const NUM_BURNS: usize = 8;
 const BURN_AMOUNT_TOKENS: u128 = 1;
-/// Per-block gas ceiling for the chunked-fallback test, set below `addBlock`'s cost for `NUM_BURNS`
-/// burns (~750-850K with the header-proof scheme) so the relayer is forced off the fast path. The
-/// chunked path stays under it: a one-time `registerBlock` (verify the quorum once) plus
-/// `processBurns` chunks that `split_to_fit` shrinks until each fits — so every burn still settles,
-/// across at least two EVM transactions. Re-tune if `addBlock`/`processBurns` gas shifts.
+/// Per-block gas ceiling for the chunking test, set below the cost of settling all `NUM_BURNS`
+/// burns in one `processBurns` so the relayer is forced to split. The chunked path stays under it:
+/// a one-time `registerBlock` (verify the quorum once) plus `processBurns` chunks that
+/// `split_to_fit` shrinks until each fits — so every burn still settles, across at least two EVM
+/// transactions. Re-tune if `registerBlock`/`processBurns` gas shifts.
 const ANVIL_BLOCK_GAS_LIMIT: u64 = 500_000;
 
 #[tokio::test]
@@ -159,9 +160,9 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
     )
     .await;
 
-    // Now tighten the block gas limit so `addBlock(cert)` for `NUM_BURNS`
-    // doesn't fit and the relayer is forced through the chunked
-    // `processBurns` path. Deploy + funding txs already landed.
+    // Now tighten the block gas limit so settling all `NUM_BURNS` burns in one
+    // `processBurns` doesn't fit and the relayer is forced to split into multiple
+    // chunked `processBurns` txs. Deploy + funding txs already landed.
     set_anvil_block_gas_limit(&provider, ANVIL_BLOCK_GAS_LIMIT).await?;
 
     // Distinct recipients so each burn produces a distinct ERC-20 balance.
@@ -274,7 +275,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
         return Err(error);
     }
     // Wait for the chunked-processBurns path to settle every burn.
-    // Allow more wall time than the single-addBlock test because each
+    // Allow more wall time than the single-chunk tests because each
     // chunk is its own EVM tx + receipt round-trip.
     if let Err(error) = wait_for_relay_metrics(
         &http,
@@ -333,8 +334,8 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
     // The whole point of this test is the chunked-processBurns path, which
     // splits the cert across multiple EVM transactions. Each chunk lands in
     // its own EVM block. Verify by counting distinct block hashes among
-    // ERC-20 `Transfer` events emitted by the bridge contract: if `addBlock`
-    // had fit, all 8 transfers would share one EVM block.
+    // ERC-20 `Transfer` events emitted by the bridge contract: if a single
+    // `processBurns` had fit, all 8 transfers would share one EVM block.
     //
     // `Transfer(address,address,uint256)` topic0.
     let transfer_sig = B256::from(alloy::primitives::keccak256(

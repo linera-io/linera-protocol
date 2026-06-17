@@ -116,77 +116,12 @@ impl<P: Provider> EvmClient<P> {
 
     /// Returns whether the FungibleBridge has already released the burn
     /// at `(height, event_index)` — i.e. whether the corresponding
-    /// `_onBlock` loop iteration ran to completion in some prior `addBlock`
-    /// transaction. `event_index` is the underlying Linera `Event.index`.
+    /// release ran to completion in some prior `processBurns` transaction.
+    /// `event_index` is the underlying Linera `Event.index`.
     /// Per-burn (not per-block, not per-recipient).
     pub async fn is_burn_processed(&self, height: BlockHeight, event_index: u32) -> Result<bool> {
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         Ok(bridge.isBurnProcessed(height.0, event_index).call().await?)
-    }
-
-    /// BCS-serialize and forward a certified block to FungibleBridge on EVM.
-    /// The arguments for an `addBlock` call from a certificate: the lean block proof, the per-event
-    /// BCS encodings (flattened across transactions), and the number of events in each transaction.
-    fn add_block_args(cert: &ConfirmedBlockCertificate) -> (Bytes, Vec<Bytes>, Vec<u32>) {
-        let proof = Bytes::from(
-            bcs::to_bytes(&BlockProof::from_certificate(cert)).expect("BCS-serialize block proof"),
-        );
-        let events = &cert.block().body.events;
-        let event_bcs = events
-            .iter()
-            .flatten()
-            .map(|event| Bytes::from(bcs::to_bytes(event).expect("BCS-serialize event")))
-            .collect();
-        let events_per_tx = events
-            .iter()
-            .map(|tx_events| u32::try_from(tx_events.len()).expect("event count exceeds u32"))
-            .collect();
-        (proof, event_bcs, events_per_tx)
-    }
-
-    pub async fn forward_cert(&self, cert: &ConfirmedBlockCertificate) -> Result<()> {
-        let (proof, event_bcs, events_per_tx) = Self::add_block_args(cert);
-
-        tracing::info!(
-            size = proof.len(),
-            events = event_bcs.len(),
-            "Calling addBlock on FungibleBridge..."
-        );
-
-        let bridge_contract = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        let pending_tx = bridge_contract
-            .addBlock(proof, event_bcs, events_per_tx)
-            .send()
-            .await
-            .context("addBlock send failed")?;
-        let receipt = pending_tx
-            .get_receipt()
-            .await
-            .context("addBlock receipt failed")?;
-
-        tracing::info!(
-            tx = ?receipt.transaction_hash,
-            "addBlock transaction confirmed"
-        );
-        Ok(())
-    }
-
-    /// Dry-runs `addBlock(cert)` against the EVM. `Ok(_)` means the call
-    /// fits under the node's current block gas limit; any error covers
-    /// both a real contract revert and the over-block-gas-limit case
-    /// (some nodes return identical empty-data reverts for both). The
-    /// caller treats any error as "route to chunked `processBurns`".
-    pub async fn estimate_add_block_gas(
-        &self,
-        cert: &ConfirmedBlockCertificate,
-    ) -> alloy::contract::Result<u64> {
-        let (proof, event_bcs, events_per_tx) = Self::add_block_args(cert);
-        tracing::trace!(events = event_bcs.len(), "Estimating gas for addBlock");
-        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        bridge
-            .addBlock(proof, event_bcs, events_per_tx)
-            .estimate_gas()
-            .await
     }
 
     /// Registers a block on the LightClient from its header and signatures alone, so its events can
@@ -241,8 +176,9 @@ impl<P: Provider> EvmClient<P> {
         }
     }
 
-    /// Same as `estimate_add_block_gas` but for the chunked `processBurns(cert, tx_index,
-    /// positions_in_tx)` path.
+    /// Dry-runs the chunked `processBurns(cert, tx_index, positions_in_tx)` call and returns its
+    /// gas estimate. `Ok(_)` means the chunk fits under the node's block gas limit; any error
+    /// covers both a real revert and the over-block-gas-limit case.
     pub async fn estimate_process_burns_gas(
         &self,
         cert: &ConfirmedBlockCertificate,

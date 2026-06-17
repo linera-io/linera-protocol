@@ -48,7 +48,7 @@ contract FungibleBridge is Microchain {
     /// `keccak256(abi.encode(bridgeApplicationId, height, eventIndex))`
     /// where `eventIndex` is the underlying Linera `Event.index` — the
     /// position of the burn event within its stream. Set inside
-    /// `_onBlock` after the burn's `token.transfer` succeeds.
+    /// `processBurns` after the burn's `token.transfer` succeeds.
     mapping(bytes32 => bool) internal processedBurns;
 
     constructor(
@@ -66,7 +66,7 @@ contract FungibleBridge is Microchain {
     }
 
     /// Returns whether the burn at `(height, eventIndex)` has already been
-    /// released by a prior `addBlock` call. `eventIndex` matches
+    /// released by a prior `processBurns` call. `eventIndex` matches
     /// `Event.index` from the Linera block body — the same value the
     /// off-chain relayer pulls from the certificate.
     function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool) {
@@ -109,35 +109,14 @@ contract FungibleBridge is Microchain {
         );
     }
 
-    /// Processes a Linera block and releases ERC-20 tokens for any BurnEvent
-    /// events on the "burns" stream from the bridge application.
-    /// Idempotent: each burn's release is gated on
-    /// `processedBurns[keccak256(abi.encode(bridgeApplicationId, height, evt.index))]`, so
-    /// re-submitting the same cert is a no-op for burns already released
-    /// by a prior call.
-    function _onBlock(BridgeTypes.BlockHeader memory header, bytes[] calldata eventBcs) internal override {
-        bytes32 burnsHash = keccak256("burns");
-        uint64 height = header.height.value;
-        for (uint256 i = 0; i < eventBcs.length; i++) {
-            BridgeTypes.Event memory evt = BridgeTypes.bcs_deserialize_Event(eventBcs[i]);
-            if (!_isMatchingBurn(evt, burnsHash)) continue;
-
-            bytes32 key = _burnKey(height, evt.index);
-            if (processedBurns[key]) continue;
-
-            _releaseBurn(evt, key, height);
-        }
-    }
-
     /// Releases the burns whose canonical BCS encodings are `eventBcs`, after proving they sit at
     /// `positions` within transaction `txIndex` of the block registered under `blockHash` (see
-    /// `LightClient.verifyEventInclusion`). The off-chain relayer uses this when `addBlock` would
-    /// not fit in a single EVM tx: it registers the block once, then settles burns in chunks, each
-    /// proving only its own events instead of re-verifying the whole certificate.
+    /// `LightClient.verifyEventInclusion`). The off-chain relayer registers the block once, then
+    /// settles burns in chunks, each proving only its own events instead of re-verifying the whole
+    /// certificate.
     ///
-    /// Idempotent like `_onBlock`: burns already in `processedBurns` are skipped silently rather
-    /// than reverted, so the relayer can recover from overlap with a prior `addBlock` or a
-    /// racing/retrying `processBurns`.
+    /// Idempotent: burns already in `processedBurns` are skipped silently rather than reverted, so
+    /// the relayer can recover from overlap with a racing/retrying `processBurns`.
     ///
     /// Reverts (atomically — no `processedBurns` flag is set if the call reverts) on:
     /// - empty `positions` (`"empty positions"`)
@@ -210,7 +189,7 @@ contract FungibleBridge is Microchain {
     /// Releases the ERC-20 tokens for the burn described by `evt`. Sets
     /// the dedup flag BEFORE the external `token.transfer` call
     /// (checks-effects-interactions) so a malicious token that re-enters
-    /// `addBlock` / `processBurns` cannot trigger a second release.
+    /// `processBurns` cannot trigger a second release.
     function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key, uint64 height) private {
         WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
         processedBurns[key] = true;

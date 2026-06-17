@@ -3,16 +3,15 @@
 
 //! Verifies that the relayer marks a `PendingBurn` complete only when
 //! the EVM side has provably released the underlying tokens, not merely
-//! because `addBlock` returned Ok.
+//! because it attempted settlement.
 //!
 //! The setup deploys `FungibleBridge` with a `bridgeApplicationId`
 //! that does not match the real evm-bridge app whose "burns" stream the
-//! scanner watches, so `_onBlock`'s `_isMatchingBurn` app-id check
-//! rejects every burn event the relayer forwards. `addBlock` still
-//! succeeds (the cert is valid) but no `token.transfer` runs. Completion
-//! is gated on the per-burn `isBurnProcessed(height, eventIndex)` query,
-//! which stays false, so `linera_bridge_burns_completed` must remain at 0
-//! for every detected burn.
+//! scanner watches, so `processBurns`'s `_isMatchingBurn` app-id check
+//! rejects every burn event the relayer submits — the `processBurns` call
+//! reverts and no `token.transfer` runs. Completion is gated on the
+//! per-burn `isBurnProcessed(height, eventIndex)` query, which stays false,
+//! so `linera_bridge_burns_completed` must remain at 0 for every detected burn.
 
 #![recursion_limit = "512"]
 
@@ -40,7 +39,7 @@ use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 
 /// `bytes32` value with no relation to any real evm-bridge application
 /// description hash. Used as the `_bridgeApplicationId` in the deployed
-/// `FungibleBridge` so that `_onBlock`'s `_isMatchingBurn` app-id check
+/// `FungibleBridge` so that `processBurns`'s `_isMatchingBurn` app-id check
 /// rejects every burn event the scanner forwards (the BurnEvents are
 /// emitted on the evm-bridge app's "burns" stream, matched against
 /// `bridgeApplicationId`). Non-zero to satisfy the constructor guard.
@@ -113,7 +112,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     // Its `application_description_hash` is the *real* bridge app id the
     // scanner will see as the burn event's stream application. The deployed
     // `FungibleBridge` is given a *different* `bridgeApplicationId`
-    // (`SYNTHETIC_APP_ID_BYTES32`) below so `_onBlock`'s `_isMatchingBurn`
+    // (`SYNTHETIC_APP_ID_BYTES32`) below so `processBurns`'s `_isMatchingBurn`
     // rejects every burn event the relayer forwards.
     let fungible_app_id = publish_and_create_wrapped_fungible(
         &cc_b,
@@ -139,7 +138,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     // `fungibleApplicationId` is set to the real wrapped-fungible app (used
     // only by the deposit path, which never runs here). The match that
-    // `_onBlock` actually uses for burn events is `bridgeApplicationId`,
+    // `processBurns` actually uses for burn events is `bridgeApplicationId`,
     // which we deliberately set to the non-matching synthetic value so every
     // forwarded burn event is rejected.
     let fungible_app_id_bytes32 = format!("0x{}", fungible_app_id.application_description_hash);
@@ -156,7 +155,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     )
     .await?;
 
-    // Fund the bridge so that a `token.transfer` inside `_onBlock` would
+    // Fund the bridge so that a `token.transfer` inside `processBurns` would
     // succeed if it ever ran. Eliminates "insufficient balance" as an
     // alternative explanation for the missing on-chain Transfer.
     fund_bridge_erc20(
@@ -184,7 +183,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     // Snapshot the deployer's EVM nonce BEFORE spawning the relayer so the
     // forward-attempt wait below can distinguish a relayer-submitted
-    // `addBlock` tx from the deploy/fund txs already on chain. The relayer
+    // `registerBlock`/`processBurns` tx from the deploy/fund txs already on chain. The relayer
     // signs with the same `ANVIL_PRIVATE_KEY`, so a global nonce count
     // alone would already be `>= 1` from setup.
     let rpc_url = "http://localhost:8545".parse()?;
@@ -266,7 +265,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     // Wait until the relayer has had a chance to detect the burn AND to
     // attempt forwarding it. `bridge_burns_detected` increments when the
-    // scanner sees the BurnEvent; the subsequent `forward_cert` happens
+    // scanner sees the BurnEvent; the subsequent settlement attempt happens
     // on the next retry-loop tick. We poll for "detected ≥ 1" first, then
     // wait an extra `attempt_window` for the forwarding attempt to land.
     let mut detected = false;
@@ -294,7 +293,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
 
     // Wait for the relayer to attempt forwarding by polling the relayer
     // account's EVM nonce until it goes past the pre-spawn snapshot.
-    // `forward_cert` sends `addBlock` to anvil, which bumps the nonce.
+    // Settlement sends `registerBlock`/`processBurns` to anvil, which bumps the nonce.
     let deadline = Instant::now() + Duration::from_secs(15);
     let mut forwarded = false;
     while Instant::now() < deadline {
@@ -309,7 +308,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     }
     if !forwarded {
         relay_handle.abort();
-        anyhow::bail!("Relayer never submitted an EVM tx (no `addBlock` attempt observed)");
+        anyhow::bail!("Relayer never submitted an EVM tx (no `processBurns` attempt observed)");
     }
 
     let metrics_body = http
@@ -340,13 +339,13 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
     );
 
     // Sanity: the misconfiguration scenario is reproduced. The contract's
-    // `_onBlock` rejected every burn event (app ID mismatch), so no
+    // `processBurns` rejected every burn event (app ID mismatch), so no
     // `token.transfer` ran.
     assert_eq!(
         token_balance,
         U256::ZERO,
         "no on-chain Transfer should have happened — \
-         _onBlock skips every event because bridgeApplicationId is mismatched"
+         processBurns rejects every event because bridgeApplicationId is mismatched"
     );
 
     // Bug demonstration: the relayer must not mark a burn as completed
