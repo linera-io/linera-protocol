@@ -2593,4 +2593,244 @@ mod communicate_concurrently_tests {
         assert_eq!(result.unwrap(), 42);
         assert_eq!(clock.current_time(), Timestamp::from(0));
     }
+
+    // The tests below exercise the `hedged_fan_out` engine directly — peers are modelled as
+    // `usize`, the operation outcome is chosen per peer, and "slowness" is made controllable with
+    // notify gates. Driving the (virtual) clock by hand lets us assert the hedging behaviour that
+    // was impossible to test deterministically on the wall clock.
+
+    /// Hands out peers `1..n`; `hedged_fan_out` already holds `first_peer = 0`.
+    fn peer_source(n: usize) -> impl FnMut() -> std::future::Ready<Option<usize>> {
+        let mut next = 1usize;
+        move || {
+            let peer = (next < n).then_some(next);
+            next += 1;
+            std::future::ready(peer)
+        }
+    }
+
+    /// A slow first peer is hedged by starting the next one, but is **not** cancelled: when it
+    /// finally answers `Ok`, that answer still wins the race.
+    #[tokio::test]
+    async fn slow_first_peer_is_hedged_but_not_cancelled() {
+        let clock = TestClock::new();
+        let delay = Duration::from_secs(1);
+        let order = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release0 = Arc::new(tokio::sync::Notify::new());
+        let gates = [release0.clone(), Arc::new(tokio::sync::Notify::new())];
+
+        let operation = {
+            let order = order.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let order = order.clone();
+                let gate = gates[peer].clone();
+                async move {
+                    order.lock().unwrap().push(peer);
+                    started_tx.send(peer).unwrap();
+                    gate.notified().await;
+                    if peer == 0 {
+                        Ok::<u32, &str>(42)
+                    } else {
+                        Err("slow loser")
+                    }
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(2),
+                    operation,
+                    move |k| delay * u32::try_from(k).unwrap_or(u32::MAX),
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        // Peer 0 starts immediately; the hedge for peer 1 is armed at `delay`.
+        assert_eq!(started_rx.recv().await, Some(0));
+        // Firing the hedge starts peer 1 while peer 0 is still in flight.
+        clock.add(TimeDelta::from_duration(delay));
+        assert_eq!(started_rx.recv().await, Some(1));
+        // Peer 0 was not cancelled when the hedge fired: releasing it now still wins the race.
+        release0.notify_one();
+        assert_eq!(fan.await.unwrap(), Ok(42));
+        assert_eq!(*order.lock().unwrap(), vec![0, 1]);
+    }
+
+    /// With every peer hanging, only the (virtual) clock advances the fan-out, and it starts each
+    /// peer on the cumulative hedge schedule — here the quadratic one `communicate_concurrently`
+    /// uses.
+    #[tokio::test]
+    async fn hedge_schedule_determines_start_times() {
+        let clock = TestClock::new();
+        let unit = Duration::from_secs(1);
+        let starts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let operation = {
+            let starts = starts.clone();
+            let clock = clock.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let starts = starts.clone();
+                let clock = clock.clone();
+                async move {
+                    starts.lock().unwrap().push((peer, clock.current_time()));
+                    started_tx.send(peer).unwrap();
+                    std::future::pending::<()>().await;
+                    Ok::<u32, &str>(0)
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(4),
+                    operation,
+                    move |k| {
+                        let k = u32::try_from(k).unwrap_or(u32::MAX);
+                        unit * k * k
+                    },
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        // peer 0 at t=0; hedge(1)=1·unit, hedge(2)=4·unit, hedge(3)=9·unit, applied cumulatively.
+        assert_eq!(started_rx.recv().await, Some(0));
+        clock.add(TimeDelta::from_duration(unit));
+        assert_eq!(started_rx.recv().await, Some(1));
+        clock.add(TimeDelta::from_duration(unit * 4));
+        assert_eq!(started_rx.recv().await, Some(2));
+        clock.add(TimeDelta::from_duration(unit * 9));
+        assert_eq!(started_rx.recv().await, Some(3));
+
+        // Cumulative virtual start times: 0, 1s, 1+4=5s, 5+9=14s (Timestamp is in microseconds).
+        assert_eq!(
+            *starts.lock().unwrap(),
+            vec![
+                (0, Timestamp::from(0)),
+                (1, Timestamp::from(1_000_000)),
+                (2, Timestamp::from(5_000_000)),
+                (3, Timestamp::from(14_000_000)),
+            ]
+        );
+        fan.abort();
+    }
+
+    /// Freezing the clock disables the slow-peer hedge entirely: a slow first peer never causes a
+    /// second one to start, yet the fan-out still completes when that peer eventually answers.
+    #[tokio::test]
+    async fn frozen_clock_disables_the_hedge() {
+        let clock = TestClock::new();
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release0 = Arc::new(tokio::sync::Notify::new());
+
+        let operation = {
+            let release0 = release0.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let release0 = release0.clone();
+                async move {
+                    started_tx.send(peer).unwrap();
+                    if peer == 0 {
+                        release0.notified().await;
+                        Ok::<u32, &str>(7)
+                    } else {
+                        // If a hedge ever wrongly fired, this peer would win instead.
+                        Ok(99)
+                    }
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(2),
+                    operation,
+                    move |k| Duration::from_secs(1) * u32::try_from(k).unwrap_or(u32::MAX),
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        assert_eq!(started_rx.recv().await, Some(0));
+        // The clock is frozen, so the hedge can never fire: peer 1 must not start.
+        tokio::task::yield_now().await;
+        assert!(
+            started_rx.try_recv().is_err(),
+            "the hedge must not fire while the clock is frozen"
+        );
+        // Peer 0 still wins, without the clock ever advancing.
+        release0.notify_one();
+        assert_eq!(fan.await.unwrap(), Ok(7));
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
+
+    /// On failure the next peer starts immediately rather than waiting out the (here, huge) hedge
+    /// delay — failover stays responsive even with a hedge already armed.
+    #[tokio::test]
+    async fn failure_fails_over_without_waiting_out_the_hedge() {
+        let clock = TestClock::new();
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release0 = Arc::new(tokio::sync::Notify::new());
+
+        let operation = {
+            let release0 = release0.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let release0 = release0.clone();
+                async move {
+                    started_tx.send(peer).unwrap();
+                    match peer {
+                        0 => {
+                            release0.notified().await;
+                            Err::<u32, &str>("dead")
+                        }
+                        1 => Err("dead"),
+                        _ => Ok(55),
+                    }
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(3),
+                    operation,
+                    // A hedge so large that any waiting would be obvious in virtual time.
+                    move |k| Duration::from_secs(100) * u32::try_from(k).unwrap_or(u32::MAX),
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        assert_eq!(started_rx.recv().await, Some(0));
+        // Peer 0 fails: peer 1 starts at once, then peer 1 fails and peer 2 starts and succeeds.
+        release0.notify_one();
+        assert_eq!(started_rx.recv().await, Some(1));
+        assert_eq!(started_rx.recv().await, Some(2));
+        assert_eq!(fan.await.unwrap(), Ok(55));
+        // None of the 100s hedge delays were ever waited out.
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
 }
