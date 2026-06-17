@@ -317,6 +317,9 @@ pub enum Error {
         target_next_block_height: BlockHeight,
     },
 
+    #[error("No validator provided a usable certificate registering blob {0}")]
+    CannotDownloadBlob(BlobId),
+
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 

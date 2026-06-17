@@ -1398,7 +1398,41 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         // Verify the certificate before doing any expensive networking.
         if let ReceiveCertificateMode::NeedsCheck = mode {
-            self.check_certificate(&certificate).await?.into_result()?;
+            let mut check_result = self.check_certificate(&certificate).await?;
+            if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                // The certificate is from an epoch our local view of the admin chain
+                // hasn't caught up to yet. Catch up and check again instead of failing.
+                // Prefer the nodes that gave us the certificate: they evidently know
+                // the newer epoch even if our own committee view is stale or its
+                // members are unreachable. A sync only counts if it actually made the
+                // epoch known; otherwise fall back to the known committee.
+                let admin_chain_id = self.admin_chain_id;
+                let epoch = certificate.block().header.epoch;
+                info!(
+                    %epoch,
+                    "certificate is from an unknown epoch; synchronizing the admin chain"
+                );
+                for node in nodes.iter().flatten() {
+                    match Box::pin(self.synchronize_chain_state_from(node, admin_chain_id)).await {
+                        Ok(()) => {
+                            check_result = self.check_certificate(&certificate).await?;
+                            if !matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                                break;
+                            }
+                        }
+                        Err(error) => debug!(
+                            %error,
+                            validator = %node.public_key,
+                            "failed to synchronize the admin chain from validator",
+                        ),
+                    }
+                }
+                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                    Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
+                    check_result = self.check_certificate(&certificate).await?;
+                }
+            }
+            check_result.into_result()?;
         }
         // Recover history from the network.
         let nodes = if let Some(nodes) = nodes {
@@ -2200,7 +2234,7 @@ impl<Env: Environment> Client<Env> {
                         "failed to download certificate-for-blob from validator",
                     );
                 }
-                chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+                chain_client::Error::CannotDownloadBlob(blob_id)
             })
         }))
         .buffer_unordered(self.options.max_joined_tasks)

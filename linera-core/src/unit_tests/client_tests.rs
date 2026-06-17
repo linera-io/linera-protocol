@@ -1399,6 +1399,56 @@ where
     Ok(())
 }
 
+/// Tests that a client whose local view of the admin chain is stale can still use a blob
+/// whose publishing certificate was signed by a committee from an epoch the client has
+/// not heard of yet.
+///
+/// The blob-recovery path downloads the publishing certificate from a validator, but
+/// validating it locally yields `CheckCertificateResult::FutureEpoch`. The client must
+/// react by catching up on the admin chain and retrying, so the blob read succeeds.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_blob_published_in_future_epoch<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1. The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default())?;
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // The stale client needs the blob: it is missing locally, so the client downloads
+    // the publishing certificate from a validator and must accept it after catching up
+    // on the admin chain, rather than choking on the unknown epoch.
+    stale.read_data_blob(blob_id.hash).await.unwrap().unwrap();
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1606,8 +1656,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
-            if not_found_blob_ids == [blob0_id]
+        Err(chain_client::Error::CannotDownloadBlob(blob_id)) if blob_id == blob0_id
     );
 
     // Take one validator down
