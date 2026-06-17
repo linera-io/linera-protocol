@@ -2179,7 +2179,7 @@ impl<Env: Environment> Client<Env> {
                             "failed to download certificate-for-blob from validator",
                         );
                     }
-                    chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+                    chain_client::Error::CannotDownloadBlob(blob_id)
                 },
                 timeout,
             )
