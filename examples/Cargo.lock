@@ -2716,8 +2716,10 @@ name = "formats-registry"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "insta",
  "linera-sdk",
  "serde",
+ "serde-reflection",
  "serde_json",
  "tokio",
 ]
