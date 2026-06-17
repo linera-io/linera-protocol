@@ -492,7 +492,7 @@ impl WorkerError {
 
     /// Returns `true` if this error indicates that the chain worker's in-memory
     /// state may be inconsistent and must be evicted from the cache.
-    fn must_reload_view(&self) -> bool {
+    pub(crate) fn must_reload_view(&self) -> bool {
         matches!(
             self,
             WorkerError::PoisonedWorker
@@ -506,7 +506,7 @@ impl WorkerError {
     /// Returns `true` if this error indicates that the chain's persisted state is
     /// internally inconsistent, so the worker should consider resetting and
     /// re-executing it from storage.
-    fn indicates_corrupted_chain_state(&self) -> bool {
+    pub(crate) fn indicates_corrupted_chain_state(&self) -> bool {
         matches!(
             self,
             WorkerError::ChainError(chain_error)
