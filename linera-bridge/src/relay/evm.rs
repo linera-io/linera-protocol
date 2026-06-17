@@ -12,9 +12,17 @@ use alloy::{
 use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
+<<<<<<< HEAD
 
 use crate::{
     evm::light_client::{addCommitteeCall, committeeHeightCall, currentEpochCall},
+=======
+use linera_chain::types::ConfirmedBlockCertificate;
+
+use crate::{
+    block_proof::{BlockProof, ProvenEvents},
+    contracts::{IFungibleBridge, ILightClient, IERC20},
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     proof::deposit_event_signature,
 };
 
@@ -157,6 +165,7 @@ impl<P: Provider> EvmClient<P> {
         Ok(())
     }
 
+<<<<<<< HEAD
     /// Dry-runs `addBlock(cert)` against the EVM to estimate the gas it
     /// would consume. `Ok(g)` means the call would fit under the node's
     /// current block gas limit (the value is the estimate); a gas-exceeded
@@ -176,18 +185,43 @@ impl<P: Provider> EvmClient<P> {
 
     /// Same as `estimate_add_block_gas` but for
     /// `processBurns(cert, tx_index, positions_in_tx)`.
+=======
+    /// Dry-runs the chunked `processBurns(cert, tx_index, positions_in_tx)` call and returns its
+    /// gas estimate. `Ok(_)` means the chunk fits under the node's block gas limit; any error
+    /// covers both a real revert and the over-block-gas-limit case.
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     pub async fn estimate_process_burns_gas(
         &self,
         cert: &linera_chain::types::ConfirmedBlockCertificate,
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
+<<<<<<< HEAD
         let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
         let cert_size = cert_bytes.len();
         let count = positions_in_tx.len();
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         let estimate = bridge
             .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
+=======
+        let args = ProvenEvents::new(cert, tx_index, positions_in_tx);
+        tracing::trace!(
+            tx_index,
+            count = positions_in_tx.len(),
+            "Estimating gas for processBurns"
+        );
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        bridge
+            .processBurns(
+                args.block_hash,
+                args.event_bcs,
+                args.tx_index,
+                args.num_txs,
+                args.num_events_in_tx,
+                args.positions,
+                args.siblings,
+            )
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
             .estimate_gas()
             .await;
         tracing::debug!(
@@ -208,7 +242,11 @@ impl<P: Provider> EvmClient<P> {
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> Result<()> {
+<<<<<<< HEAD
         let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+=======
+        let args = ProvenEvents::new(cert, tx_index, positions_in_tx);
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         tracing::debug!(
             tx_index,
@@ -217,7 +255,19 @@ impl<P: Provider> EvmClient<P> {
             "Calling processBurns on FungibleBridge..."
         );
         let pending_tx = bridge
+<<<<<<< HEAD
             .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
+=======
+            .processBurns(
+                args.block_hash,
+                args.event_bcs,
+                args.tx_index,
+                args.num_txs,
+                args.num_events_in_tx,
+                args.positions,
+                args.siblings,
+            )
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
             .send()
             .await
             .context("processBurns send failed")?;
@@ -281,7 +331,9 @@ impl<P: Provider> EvmClient<P> {
         Ok(BlockHeight(height))
     }
 
-    /// Relays a committee update to the LightClient contract.
+    /// Relays a committee update to the LightClient contract. Registers the admin block (verifying
+    /// its quorum on-chain), then proves the single epoch event's inclusion against it by hash and
+    /// submits `addCommittee` — the same register-then-prove path `processBurns` uses for burns.
     pub async fn add_committee(
         &self,
         certificate_bytes: &[u8],
@@ -289,6 +341,7 @@ impl<P: Provider> EvmClient<P> {
         validator_keys: Vec<Vec<u8>>,
     ) -> Result<alloy::primitives::TxHash> {
         let lc_addr = self.get_light_client_address().await?;
+<<<<<<< HEAD
         let call = addCommitteeCall {
             data: Bytes::copy_from_slice(certificate_bytes),
             committeeBlob: Bytes::copy_from_slice(committee_blob),
@@ -300,6 +353,30 @@ impl<P: Provider> EvmClient<P> {
         let receipt = self
             .provider
             .send_transaction(tx)
+=======
+        // Register the admin block so `addCommittee` can reference it by hash, exactly like burns.
+        self.register_block(cert).await?;
+        // Prove the single committee epoch event against the registered block — the same
+        // `ProvenEvents` witness burns use; `committee_blob` is the only extra argument.
+        let committee_event = super::committee::find_committee_event(cert)
+            .context("block has no committee epoch event")?;
+        let tx_index = u32::try_from(committee_event.tx_index).expect("tx index exceeds u32");
+        let position = u32::try_from(committee_event.position).expect("event position exceeds u32");
+        let proven = ProvenEvents::new(cert, tx_index, &[position]);
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let receipt = light_client
+            .addCommittee(
+                proven.block_hash,
+                proven.event_bcs,
+                proven.tx_index,
+                proven.num_txs,
+                proven.num_events_in_tx,
+                proven.positions,
+                proven.siblings,
+                Bytes::copy_from_slice(committee_blob),
+            )
+            .send()
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
             .await
             .context("addCommittee send failed")?
             .get_receipt()

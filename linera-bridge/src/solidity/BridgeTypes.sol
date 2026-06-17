@@ -42,37 +42,6 @@ library BridgeTypes {
         return (0, 0);
     }
 
-    struct Account {
-        ChainId chain_id;
-        AccountOwner owner;
-    }
-
-    function bcs_serialize_Account(Account memory input) internal pure returns (bytes memory) {
-        bytes memory result = bcs_serialize_ChainId(input.chain_id);
-        return abi.encodePacked(result, bcs_serialize_AccountOwner(input.owner));
-    }
-
-    function bcs_deserialize_offset_Account(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Account memory)
-    {
-        uint256 new_pos;
-        ChainId memory chain_id;
-        (new_pos, chain_id) = bcs_deserialize_offset_ChainId(pos, input);
-        AccountOwner memory owner;
-        (new_pos, owner) = bcs_deserialize_offset_AccountOwner(new_pos, input);
-        return (new_pos, Account(chain_id, owner));
-    }
-
-    function bcs_deserialize_Account(bytes memory input) internal pure returns (Account memory) {
-        uint256 new_pos;
-        Account memory value;
-        (new_pos, value) = bcs_deserialize_offset_Account(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct AccountOwner {
         uint8 choice;
         // choice=0 corresponds to Reserved
@@ -146,6 +115,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct AdminOperation {
         uint8 choice;
         // choice=0 corresponds to PublishCommitteeBlob
@@ -370,6 +340,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     struct ApplicationId {
         CryptoHash application_description_hash;
     }
@@ -397,6 +369,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct ApplicationPermissions {
         opt_seq_ApplicationId execute_operations;
         ApplicationId[] mandatory_applications;
@@ -462,6 +435,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     struct BlobContent {
         BlobType blob_type;
         bytes bytes_;
@@ -836,6 +811,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct ChainOwnership {
         AccountOwner[] super_owners;
         key_values_AccountOwner_uint64[] owners;
@@ -926,6 +902,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     struct CryptoHash {
         bytes32 value;
     }
@@ -976,6 +954,37 @@ library BridgeTypes {
         uint256 new_pos;
         Epoch memory value;
         (new_pos, value) = bcs_deserialize_offset_Epoch(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct EpochEventData {
+        CryptoHash blob_hash;
+        Timestamp timestamp;
+    }
+
+    function bcs_serialize_EpochEventData(EpochEventData memory input) internal pure returns (bytes memory) {
+        bytes memory result = bcs_serialize_CryptoHash(input.blob_hash);
+        return abi.encodePacked(result, bcs_serialize_Timestamp(input.timestamp));
+    }
+
+    function bcs_deserialize_offset_EpochEventData(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, EpochEventData memory)
+    {
+        uint256 new_pos;
+        CryptoHash memory blob_hash;
+        (new_pos, blob_hash) = bcs_deserialize_offset_CryptoHash(pos, input);
+        Timestamp memory timestamp;
+        (new_pos, timestamp) = bcs_deserialize_offset_Timestamp(new_pos, input);
+        return (new_pos, EpochEventData(blob_hash, timestamp));
+    }
+
+    function bcs_deserialize_EpochEventData(bytes memory input) internal pure returns (EpochEventData memory) {
+        uint256 new_pos;
+        EpochEventData memory value;
+        (new_pos, value) = bcs_deserialize_offset_EpochEventData(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1194,6 +1203,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct IncomingBundle {
         ChainId origin;
         MessageBundle bundle;
@@ -1623,6 +1633,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     struct OracleResponse {
         uint8 choice;
         // choice=0 corresponds to Service
@@ -1817,6 +1829,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct OutgoingMessage {
         ChainId destination;
         opt_AccountOwner authenticated_signer;
@@ -1911,6 +1924,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     struct Response {
         uint16 status;
         Header[] headers;
@@ -2139,6 +2154,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct SystemMessage {
         uint8 choice;
         // choice=0 corresponds to Credit
@@ -3310,6 +3326,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     struct Timestamp {
         uint64 value;
     }
@@ -3337,6 +3355,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct Transaction {
         uint8 choice;
         // choice=0 corresponds to ReceiveMessages
@@ -3401,6 +3420,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     enum VmRuntime {
         Wasm,
         Evm
@@ -3547,6 +3568,7 @@ library BridgeTypes {
         return (pos + 32, dest);
     }
 
+<<<<<<< HEAD
     struct key_values_AccountOwner_uint64 {
         AccountOwner key;
         uint64 value;
@@ -3700,6 +3722,8 @@ library BridgeTypes {
         return value;
     }
 
+=======
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     struct opt_AccountOwner {
         bool has_value;
         AccountOwner value;
@@ -3772,86 +3796,6 @@ library BridgeTypes {
         return value;
     }
 
-    struct opt_TimeDelta {
-        bool has_value;
-        TimeDelta value;
-    }
-
-    function bcs_serialize_opt_TimeDelta(opt_TimeDelta memory input) internal pure returns (bytes memory) {
-        if (input.has_value) {
-            return abi.encodePacked(uint8(1), bcs_serialize_TimeDelta(input.value));
-        } else {
-            return abi.encodePacked(uint8(0));
-        }
-    }
-
-    function bcs_deserialize_offset_opt_TimeDelta(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, opt_TimeDelta memory)
-    {
-        uint256 new_pos;
-        bool has_value;
-        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
-        TimeDelta memory value;
-        if (has_value) {
-            (new_pos, value) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        }
-        return (new_pos, opt_TimeDelta(has_value, value));
-    }
-
-    function bcs_deserialize_opt_TimeDelta(bytes memory input) internal pure returns (opt_TimeDelta memory) {
-        uint256 new_pos;
-        opt_TimeDelta memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_TimeDelta(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct opt_seq_ApplicationId {
-        bool has_value;
-        ApplicationId[] value;
-    }
-
-    function bcs_serialize_opt_seq_ApplicationId(opt_seq_ApplicationId memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        if (input.has_value) {
-            return abi.encodePacked(uint8(1), bcs_serialize_seq_ApplicationId(input.value));
-        } else {
-            return abi.encodePacked(uint8(0));
-        }
-    }
-
-    function bcs_deserialize_offset_opt_seq_ApplicationId(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, opt_seq_ApplicationId memory)
-    {
-        uint256 new_pos;
-        bool has_value;
-        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
-        ApplicationId[] memory value;
-        if (has_value) {
-            (new_pos, value) = bcs_deserialize_offset_seq_ApplicationId(new_pos, input);
-        }
-        return (new_pos, opt_seq_ApplicationId(has_value, value));
-    }
-
-    function bcs_deserialize_opt_seq_ApplicationId(bytes memory input)
-        internal
-        pure
-        returns (opt_seq_ApplicationId memory)
-    {
-        uint256 new_pos;
-        opt_seq_ApplicationId memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_seq_ApplicationId(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct opt_uint32 {
         bool has_value;
         uint32 value;
@@ -3888,6 +3832,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     function bcs_serialize_seq_AccountOwner(AccountOwner[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_len(len);
@@ -3959,6 +3904,9 @@ library BridgeTypes {
     }
 
     function bcs_serialize_seq_BlobContent(BlobContent[] memory input) internal pure returns (bytes memory) {
+=======
+    function bcs_serialize_seq_BlobId(BlobId[] memory input) internal pure returns (bytes memory) {
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
         uint256 len = input.length;
         bytes memory result = bcs_serialize_len(len);
         for (uint256 i = 0; i < len; i++) {
@@ -4063,6 +4011,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     function bcs_serialize_seq_OperationResult(OperationResult[] memory input) internal pure returns (bytes memory) {
         uint256 len = input.length;
         bytes memory result = bcs_serialize_len(len);
@@ -4566,6 +4515,9 @@ library BridgeTypes {
     }
 
     function bcs_serialize_seq_tuple_ChainId_StreamId_uint32(tuple_ChainId_StreamId_uint32[] memory input)
+=======
+    function bcs_serialize_seq_tuple_ChainId_Cursor(tuple_ChainId_Cursor[] memory input)
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
         internal
         pure
         returns (bytes memory)
@@ -4703,6 +4655,7 @@ library BridgeTypes {
         return value;
     }
 
+<<<<<<< HEAD
     struct tuple_AccountOwner_uint64 {
         AccountOwner entry0;
         uint64 entry1;
@@ -4743,6 +4696,9 @@ library BridgeTypes {
     }
 
     struct tuple_ChainId_StreamId_uint32 {
+=======
+    struct tuple_ChainId_Cursor {
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
         ChainId entry0;
         StreamId entry1;
         uint32 entry2;
@@ -4967,34 +4923,6 @@ library BridgeTypes {
         uint256 new_pos;
         tuplearray65_uint8 memory value;
         (new_pos, value) = bcs_deserialize_offset_tuplearray65_uint8(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_uint128(uint128 input) internal pure returns (bytes memory) {
-        bytes memory result = new bytes(16);
-        uint128 value = input;
-        result[0] = bytes1(uint8(value));
-        for (uint256 i = 1; i < 16; i++) {
-            value = value >> 8;
-            result[i] = bytes1(uint8(value));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_uint128(uint256 pos, bytes memory input) internal pure returns (uint256, uint128) {
-        uint128 value = uint8(input[pos + 15]);
-        for (uint256 i = 0; i < 15; i++) {
-            value = value << 8;
-            value += uint8(input[pos + 14 - i]);
-        }
-        return (pos + 16, value);
-    }
-
-    function bcs_deserialize_uint128(bytes memory input) internal pure returns (uint128) {
-        uint256 new_pos;
-        uint128 value;
-        (new_pos, value) = bcs_deserialize_offset_uint128(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

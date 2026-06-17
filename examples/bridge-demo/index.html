@@ -576,7 +576,7 @@
             await new Promise(r => setTimeout(r, 3000));
             await updateLineraBalance();
             const bal = parseFloat($('#linera-balance').textContent);
-            console.log('[bridge-demo] polling wrapped balance:', bal);
+            console.debug('[bridge-demo] polling wrapped balance:', bal);
             if (bal > 0) {
               setStatus('Deposit complete! Wrapped tokens received.');
               break;
@@ -677,7 +677,7 @@
         if (typeof tokenDecimals !== 'number') {
           throw new Error(`wrapped-fungible decimals query returned ${JSON.stringify(decimalsResp)}`);
         }
-        console.log('[bridge-demo] Linera initialized', { lineraChain, lineraOwner, APP_ID, BRIDGE_APP_ID, tokenDecimals });
+        console.debug('[bridge-demo] Linera initialized', { lineraChain, lineraOwner, APP_ID, BRIDGE_APP_ID, tokenDecimals });
 
         $('#linera-account').textContent = lineraOwner;
         $('#linera-chain').textContent = lineraChain;
@@ -687,9 +687,9 @@
 
         // Listen for chain notifications
         chain.onNotification(notification => {
-          console.log('[bridge-demo] notification:', JSON.stringify(notification));
+          console.debug('[bridge-demo] notification:', JSON.stringify(notification));
           if (notification.reason.NewIncomingBundle) {
-            console.log('[bridge-demo] NewIncomingBundle detected, updating balances...');
+            console.debug('[bridge-demo] NewIncomingBundle detected, updating balances...');
             updateLineraBalance();
             updateEvmBalance();
           } else if (notification.reason.BlockExecuted) {

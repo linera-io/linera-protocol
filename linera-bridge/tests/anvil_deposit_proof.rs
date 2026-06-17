@@ -36,6 +36,10 @@ use linera_bridge::{
         parse_deposit_event, verify_receipt_inclusion,
     },
 };
+<<<<<<< HEAD
+=======
+use linera_execution::test_utils::solidity::compile_solidity_contract_with_options;
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 
 const LINERA_TOKEN_SOL: &str = include_str!("../src/solidity/LineraToken.sol");
 
@@ -58,8 +62,12 @@ alloy_sol_types::sol! {
     }
 }
 
-/// Compiles a Solidity contract via `solc`, returning deployment bytecode.
+/// Compiles a Solidity contract via `solc`, returning deployment bytecode. Compiles with the
+/// optimizer (runs = 1), matching how the contracts are deployed (forge) and the other Rust tests:
+/// `LightClient.addCommittee` takes enough calldata arguments that the via-IR Yul stack scheduler
+/// only fits them when the optimizer runs.
 fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
+<<<<<<< HEAD
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
@@ -158,6 +166,22 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         .as_str()
         .expect("failed to extract bytecode from solc output");
     hex::decode(bytecode_hex).unwrap()
+=======
+    compile_solidity_contract_with_options(
+        source_code,
+        file_name,
+        contract_name,
+        &[
+            ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
+            ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
+            ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
+            ("LightClient.sol", linera_bridge::evm::LIGHTCLIENT_SOURCE),
+            ("Microchain.sol", linera_bridge::evm::MICROCHAIN_SOURCE),
+        ],
+        Some(1),
+    )
+    .expect("solc compilation failed")
+>>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 }
 
 // Fixed gas budgets sized well above measured cost. Pinning these skips
