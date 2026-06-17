@@ -64,10 +64,8 @@ impl<S: Storage> std::ops::Deref for ChainStateViewReadGuard<S> {
 pub(crate) use crate::chain_worker::EventSubscriptionsResult;
 use crate::{
     chain_worker::{
-        handle,
-        state::{send_result, ChainWorkerState},
-        BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult, DeliveryNotifier,
-        ProcessConfirmedBlockMode,
+        handle, state::ChainWorkerState, BlockOutcome, ChainWorkerConfig, CrossChainUpdateResult,
+        DeliveryNotifier, ProcessConfirmedBlockMode,
     },
     client::{ChainModes, ListeningMode},
     data_types::{ChainInfoQuery, ChainInfoResponse, CrossChainRequest},
@@ -494,7 +492,7 @@ impl WorkerError {
 
     /// Returns `true` if this error indicates that the chain worker's in-memory
     /// state may be inconsistent and must be evicted from the cache.
-    fn must_reload_view(&self) -> bool {
+    pub(crate) fn must_reload_view(&self) -> bool {
         matches!(
             self,
             WorkerError::PoisonedWorker
@@ -508,7 +506,7 @@ impl WorkerError {
     /// Returns `true` if this error indicates that the chain's persisted state is
     /// internally inconsistent, so the worker should consider resetting and
     /// re-executing it from storage.
-    fn indicates_corrupted_chain_state(&self) -> bool {
+    pub(crate) fn indicates_corrupted_chain_state(&self) -> bool {
         matches!(
             self,
             WorkerError::ChainError(chain_error)
@@ -588,8 +586,9 @@ pub(crate) enum BatchRequest {
 ///
 /// Wrapped in `Shared<BatchFuture>` so that all tasks waiting for
 /// cross-chain operations on the same chain can cooperatively poll a
-/// single driver. The driver loops: wait for an item from the request channel, acquire the
-/// write lock, drain the channel, process all requests in one batch, repeat.
+/// single driver. The driver loops: wait for an item from the request channel,
+/// drain the channel, then process all requests in one batch through
+/// [`WorkerState::chain_write`] (one write lock, one save), repeat.
 #[cfg(not(web))]
 type BatchFuture = pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 #[cfg(web)]
@@ -606,7 +605,8 @@ struct ChainBatchRequestProcessor {
 
 impl ChainBatchRequestProcessor {
     fn create<StorageClient>(
-        state: ChainWorkerArc<StorageClient>,
+        worker: WorkerState<StorageClient>,
+        chain_id: ChainId,
         batch_size_limit: usize,
     ) -> (ChainBatchRequestProcessor, Shared<BatchFuture>)
     where
@@ -616,31 +616,31 @@ impl ChainBatchRequestProcessor {
         let future: BatchFuture = Box::pin(async move {
             while let Some(first) = receiver.recv().await {
                 let mut requests = vec![first];
-                match handle::write_lock(&state).await {
-                    Ok(mut guard) => {
-                        while requests.len() < batch_size_limit {
-                            match receiver.try_recv() {
-                                Ok(request) => requests.push(request),
-                                Err(_) => break,
-                            }
-                        }
-                        #[cfg(with_metrics)]
-                        metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
+                while requests.len() < batch_size_limit {
+                    match receiver.try_recv() {
+                        Ok(request) => requests.push(request),
+                        Err(_) => break,
+                    }
+                }
+                #[cfg(with_metrics)]
+                metrics::CROSS_CHAIN_BATCH_SIZE.observe(requests.len() as f64);
+                // Process the batch through `chain_write` so it inherits the same
+                // cancellation safety (the write and `save` run on a detached task)
+                // and recovery (poisoned-worker eviction / corrupted-state reset) as
+                // every other write path, rather than duplicating that logic here.
+                // `process_batch` reports a result to each request's sender on every
+                // internal path; an `Err` here means `chain_write` failed *before*
+                // running the closure — a worker load error, or an already-poisoned
+                // worker that it has now evicted. In that case the request senders are
+                // dropped, which `enqueue_and_drive` surfaces to callers as
+                // `PoisonedWorker`.
+                if let Err(error) = worker
+                    .chain_write(chain_id, move |mut guard| async move {
                         guard.process_batch(requests).await
-                    }
-                    Err(error) => {
-                        tracing::error!(%error, "failed to obtain write lock");
-                        for request in requests {
-                            match request {
-                                BatchRequest::Update { result_sender, .. } => {
-                                    send_result(result_sender, Err(WorkerError::PoisonedWorker));
-                                }
-                                BatchRequest::Confirm { result_sender, .. } => {
-                                    send_result(result_sender, Err(WorkerError::PoisonedWorker));
-                                }
-                            }
-                        }
-                    }
+                    })
+                    .await
+                {
+                    tracing::warn!(%chain_id, %error, "cross-chain batch could not be processed");
                 }
             }
         });
@@ -1112,9 +1112,9 @@ where
                 return Ok((batch_processor.sender.clone(), future));
             }
         }
-        let state = self.get_or_create_chain_worker(chain_id).await?;
         let (new_request_processor, new_future) = ChainBatchRequestProcessor::create(
-            state,
+            self.clone(),
+            chain_id,
             self.chain_worker_config.cross_chain_batch_size_limit,
         );
         match self
@@ -1449,7 +1449,12 @@ where
             // return it immediately without driving the batch future further.
             match future::select(pin::pin!(&mut receiver), future).await {
                 Either::Left((result, _)) => {
-                    return result.expect("batch result sender dropped");
+                    // `Ok(inner)` is the normal reply. `Err(Canceled)` means the
+                    // sender was dropped without one — `chain_write` failed before
+                    // `process_batch` ran (e.g. an already-poisoned worker, which it
+                    // has now evicted). Surface it as `PoisonedWorker`; the next
+                    // attempt loads a fresh worker.
+                    return result.unwrap_or(Err(WorkerError::PoisonedWorker));
                 }
                 Either::Right(((), _)) => match receiver.try_recv() {
                     Ok(result) => return result,
