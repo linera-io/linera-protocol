@@ -1992,11 +1992,11 @@ async fn test_publish_module_with_formats_registers_formats(
         .expect("ModuleId serializes to a JSON string")
         .to_owned();
     let response = registry_application
-        .query(format!(r#"get(moduleId: "{module_id_hex}")"#))
+        .query(format!(r#"read(moduleId: "{module_id_hex}")"#))
         .await?;
-    let stored_bytes: Vec<u8> = response["get"]
+    let stored_bytes: Vec<u8> = response["read"]
         .as_array()
-        .expect("get must return a JSON array of bytes")
+        .expect("read must return a JSON array of bytes")
         .iter()
         .map(|byte| byte.as_u64().expect("byte") as u8)
         .collect();

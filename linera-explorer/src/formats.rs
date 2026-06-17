@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::{js_utils::log_str, reqwest_client};
 
-/// Issues `query { get(moduleId: "<hex>") }` against the formats-registry
+/// Issues `query { read(moduleId: "<hex>") }` against the formats-registry
 /// application service and parses the returned bytes as a JSON-encoded
 /// [`Formats`]. Returns `Ok(None)` if the registry has no entry for that
 /// module.
@@ -22,7 +22,7 @@ pub async fn fetch_formats(
     module_id_hex: &str,
 ) -> Result<Option<Formats>> {
     let url = format!("{node}/chains/{chain_id_hex}/applications/{registry_app_id}");
-    let query = format!(r#"{{"query":"query {{ get(moduleId: \"{module_id_hex}\") }}"}}"#);
+    let query = format!(r#"{{"query":"query {{ read(moduleId: \"{module_id_hex}\") }}"}}"#);
     log_str(&format!("fetch_formats: POST {url}"));
     log_str(&format!("fetch_formats: body {query}"));
     let response = reqwest_client()
@@ -39,12 +39,12 @@ pub async fn fetch_formats(
     if let Some(errors) = response.get("errors") {
         return Err(anyhow!("formats registry query failed: {errors}"));
     }
-    let get = &response["data"]["get"];
-    if get.is_null() {
+    let read = &response["data"]["read"];
+    if read.is_null() {
         log_str("fetch_formats: registry returned null (no entry for this module)");
         return Ok(None);
     }
-    let bytes: Vec<u8> = get
+    let bytes: Vec<u8> = read
         .as_array()
         .ok_or_else(|| anyhow!("formats registry returned non-array bytes"))?
         .iter()
