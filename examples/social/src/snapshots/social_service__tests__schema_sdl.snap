@@ -1,0 +1,169 @@
+---
+source: social/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+"""
+A comment on a post
+"""
+type Comment {
+	"""
+	The comment text
+	"""
+	text: String!
+	"""
+	The ChainId of the commenter
+	"""
+	chainId: ChainId!
+}
+
+type CustomMapView_Key_Post_057e51d5 {
+	keys(count: Int): [Key!]!
+	entry(key: KeyInput!): Entry_Key_Post_6913b126!
+	entries(input: MapInput_KeyInput_b8ccb225): [Entry_Key_Post_6913b126!]!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_Key_Post_6913b126 {
+	key: Key!
+	value: Post
+}
+
+"""
+A key by which a post is indexed.
+"""
+type Key {
+	"""
+	The timestamp of the block in which the post was included on the author's chain.
+	"""
+	timestamp: Timestamp!
+	"""
+	The owner of the chain on which the `Post` operation was included.
+	"""
+	author: ChainId!
+	"""
+	The number of posts by that author before this one.
+	"""
+	index: Int!
+}
+
+"""
+A key by which a post is indexed.
+"""
+input KeyInput {
+	"""
+	The timestamp of the block in which the post was included on the author's chain.
+	"""
+	timestamp: Timestamp!
+	"""
+	The owner of the chain on which the `Post` operation was included.
+	"""
+	author: ChainId!
+	"""
+	The number of posts by that author before this one.
+	"""
+	index: Int!
+}
+
+type LogView_OwnPost_22dbfca0 {
+	count: Int!
+	entries(start: Int, end: Int): [OwnPost!]!
+}
+
+input MapFilters_KeyInput_b8ccb225 {
+	keys: [KeyInput!]
+}
+
+input MapInput_KeyInput_b8ccb225 {
+	filters: MapFilters_KeyInput_b8ccb225
+}
+
+type OperationMutationRoot {
+	subscribe(chainId: ChainId!): [Int!]!
+	unsubscribe(chainId: ChainId!): [Int!]!
+	post(text: String!, imageUrl: String): [Int!]!
+	like(key: KeyInput!): [Int!]!
+	comment(key: KeyInput!, comment: String!): [Int!]!
+}
+
+"""
+A post's text and timestamp, to use in contexts where author and index are known.
+"""
+type OwnPost {
+	"""
+	The timestamp of the block in which the post operation was included.
+	"""
+	timestamp: Timestamp!
+	"""
+	The posted text.
+	"""
+	text: String!
+	"""
+	The posted Image_url(optional).
+	"""
+	imageUrl: String
+}
+
+"""
+A post on the social app.
+"""
+type Post {
+	"""
+	The key identifying the post, including the timestamp, author and index.
+	"""
+	key: Key!
+	"""
+	The post's text content.
+	"""
+	text: String!
+	"""
+	The post's image_url(optional).
+	"""
+	imageUrl: String
+	"""
+	The total number of likes
+	"""
+	likes: Int!
+	"""
+	Comments with their ChainId
+	"""
+	comments: [Comment!]!
+}
+
+"""
+The application state.
+"""
+type SocialState {
+	"""
+	Our posts.
+	"""
+	ownPosts: LogView_OwnPost_22dbfca0!
+	"""
+	Posts we received from authors we subscribed to.
+	"""
+	receivedPosts: CustomMapView_Key_Post_057e51d5!
+}
+
+"""
+A timestamp, in microseconds since the Unix epoch
+"""
+scalar Timestamp
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: SocialState
+	mutation: OperationMutationRoot
+}

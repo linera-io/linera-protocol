@@ -1,0 +1,95 @@
+---
+source: amm/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+An account.
+"""
+type Account {
+	"""
+	Chain ID of the account
+	"""
+	chainId: ChainId!
+	"""
+	Owner of the account
+	"""
+	owner: AccountOwner!
+}
+
+"""
+A unique identifier for a user or an application.
+"""
+scalar AccountOwner
+
+type AmmState {
+	shares: MapView_Account_Amount_b4234be3!
+	totalSharesSupply: Amount!
+}
+
+"""
+A non-negative amount of tokens.
+"""
+scalar Amount
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_Account_Amount_467b007b {
+	key: Account!
+	value: Amount
+}
+
+"""
+An account.
+"""
+input FungibleAccount {
+	"""
+	Chain ID of the account
+	"""
+	chainId: ChainId!
+	"""
+	Owner of the account
+	"""
+	owner: AccountOwner!
+}
+
+input MapFilters_FungibleAccount_e3a21ab1 {
+	keys: [FungibleAccount!]
+}
+
+input MapInput_FungibleAccount_e3a21ab1 {
+	filters: MapFilters_FungibleAccount_e3a21ab1
+}
+
+type MapView_Account_Amount_b4234be3 {
+	keys(count: Int): [Account!]!
+	count: Int!
+	entry(key: FungibleAccount!): Entry_Account_Amount_467b007b!
+	entries(input: MapInput_FungibleAccount_e3a21ab1): [Entry_Account_Amount_467b007b!]!
+}
+
+type OperationMutationRoot {
+	swap(owner: AccountOwner!, inputTokenIdx: Int!, inputAmount: Amount!): [Int!]!
+	addLiquidity(owner: AccountOwner!, maxToken0Amount: Amount!, maxToken1Amount: Amount!): [Int!]!
+	removeLiquidity(owner: AccountOwner!, tokenToRemoveIdx: Int!, tokenToRemoveAmount: Amount!): [Int!]!
+	removeAllAddedLiquidity(owner: AccountOwner!): [Int!]!
+	closeChain: [Int!]!
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: AmmState
+	mutation: OperationMutationRoot
+}

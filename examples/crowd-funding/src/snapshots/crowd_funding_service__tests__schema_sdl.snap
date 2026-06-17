@@ -1,0 +1,98 @@
+---
+source: crowd-funding/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+A unique identifier for a user or an application.
+"""
+scalar AccountOwner
+
+"""
+A non-negative amount of tokens.
+"""
+scalar Amount
+
+"""
+The crowd-funding campaign's state.
+"""
+type CrowdFundingState {
+	"""
+	The status of the campaign.
+	"""
+	status: Status!
+	"""
+	The map of pledges that will be collected if the campaign succeeds.
+	"""
+	pledges: MapView_AccountOwner_Amount_11ef1379!
+	"""
+	The instantiation data that determines the details of the campaign.
+	"""
+	instantiationArgument: InstantiationArgument
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_AccountOwner_Amount_aaf96548 {
+	key: AccountOwner!
+	value: Amount
+}
+
+"""
+The instantiation data required to create a crowd-funding campaign.
+"""
+type InstantiationArgument {
+	"""
+	The receiver of the pledges of a successful campaign.
+	"""
+	owner: AccountOwner!
+	"""
+	The deadline of the campaign, after which it can be cancelled if it hasn't met its target.
+	"""
+	deadline: Timestamp!
+	"""
+	The funding target of the campaign.
+	"""
+	target: Amount!
+}
+
+input MapFilters_AccountOwner_d6668c53 {
+	keys: [AccountOwner!]
+}
+
+input MapInput_AccountOwner_d6668c53 {
+	filters: MapFilters_AccountOwner_d6668c53
+}
+
+type MapView_AccountOwner_Amount_11ef1379 {
+	keys(count: Int): [AccountOwner!]!
+	count: Int!
+	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
+}
+
+type OperationMutationRoot {
+	pledge(owner: AccountOwner!, amount: Amount!): [Int!]!
+	collect: [Int!]!
+	cancel: [Int!]!
+}
+
+scalar Status
+
+"""
+A timestamp, in microseconds since the Unix epoch
+"""
+scalar Timestamp
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: CrowdFundingState
+	mutation: OperationMutationRoot
+}

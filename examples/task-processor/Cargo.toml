@@ -17,6 +17,7 @@ linera-sdk = { workspace = true, features = ["test"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 insta.workspace = true
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 serde-reflection.workspace = true
 
 [[bin]]

@@ -47,7 +47,14 @@ impl Service for NonFungibleTokenService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl NonFungibleTokenService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(&self) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+        Schema::build(
             QueryRoot {
                 non_fungible_token: self.state.clone(),
                 runtime: self.runtime.clone(),
@@ -57,8 +64,7 @@ impl Service for NonFungibleTokenService {
             },
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
     }
 }
 
@@ -210,5 +216,27 @@ impl MutationRoot {
         };
         self.runtime.schedule_operation(&operation);
         []
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<NonFungibleTokenService>::new();
+        let state = NonFungibleTokenState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = NonFungibleTokenService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }

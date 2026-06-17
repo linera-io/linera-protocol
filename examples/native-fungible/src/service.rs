@@ -36,13 +36,25 @@ impl Service for NativeFungibleTokenService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl NativeFungibleTokenService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(
+        &self,
+    ) -> Schema<
+        Self,
+        <NativeFungibleOperation as GraphQLMutationRoot<NativeFungibleTokenService>>::MutationRoot,
+        EmptySubscription,
+    > {
+        Schema::build(
             self.clone(),
             NativeFungibleOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
     }
 }
 
@@ -86,5 +98,22 @@ impl NativeFungibleTokenService {
         Ok(Accounts {
             runtime: self.runtime.clone(),
         })
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use linera_sdk::ServiceRuntime;
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<NativeFungibleTokenService>::new();
+        let service = NativeFungibleTokenService {
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }

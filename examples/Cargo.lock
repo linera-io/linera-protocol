@@ -8021,6 +8021,7 @@ dependencies = [
  "async-graphql",
  "fungible",
  "hex",
+ "insta",
  "linera-sdk",
  "tokio",
 ]
