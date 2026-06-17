@@ -5,6 +5,7 @@
 
 mod state;
 
+use async_graphql::ComplexObject;
 use formats_registry::{FormatsRegistryAbi, Message, Operation};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
@@ -121,3 +122,7 @@ impl FormatsRegistryContract {
         }
     }
 }
+
+/// This implementation is only nonempty in the service.
+#[ComplexObject]
+impl FormatsRegistryState {}

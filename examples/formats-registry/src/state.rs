@@ -8,7 +8,8 @@ use linera_sdk::{
     views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext},
 };
 
-#[derive(RootView)]
+#[derive(RootView, async_graphql::SimpleObject)]
+#[graphql(complex)]
 #[view(context = ViewStorageContext)]
 pub struct FormatsRegistryState {
     /// Maps a `ModuleId` to the bytes of its registered formats description.

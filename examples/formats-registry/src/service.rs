@@ -7,11 +7,11 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{EmptySubscription, Object, Request, Response, Schema};
+use async_graphql::{ComplexObject, EmptySubscription, Schema};
 use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, ModuleId, WithServiceAbi},
+    linera_base_types::{ModuleId, WithServiceAbi},
     views::View,
     Service, ServiceRuntime,
 };
@@ -42,38 +42,23 @@ impl Service for FormatsRegistryService {
         }
     }
 
-    async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
-            QueryRoot {
-                state: self.state.clone(),
-            },
+    async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {
+        Schema::build(
+            self.state.clone(),
             Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
+        .execute(query)
+        .await
     }
 }
 
-struct QueryRoot {
-    state: Arc<FormatsRegistryState>,
-}
-
-#[Object]
-impl QueryRoot {
-    /// Returns the bytes registered for the given module, or `None` if the
-    /// module has no entry yet.
+#[ComplexObject]
+impl FormatsRegistryState {
+    /// Returns the bytes registered for the given module, or `None` if the module
+    /// has no entry yet.
     async fn read(&self, module_id: ModuleId) -> Option<Vec<u8>> {
-        self.state.formats.get(&module_id).await.unwrap()
-    }
-
-    /// Returns the configured admin accounts, or `None` if no admin set has been
-    /// configured yet.
-    async fn admins(&self) -> Option<Vec<AccountOwner>> {
-        self.state
-            .admins
-            .get()
-            .as_ref()
-            .map(|admins| admins.iter().copied().collect())
+        self.formats.get(&module_id).await.expect("storage")
     }
 }
