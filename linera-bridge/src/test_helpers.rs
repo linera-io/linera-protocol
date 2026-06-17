@@ -260,7 +260,7 @@ pub fn deploy_light_client(
     admin_chain_id: CryptoHash,
     epoch: u32,
 ) -> Address {
-    let bytecode = compile_contract(evm::light_client::SOURCE, "LightClient.sol", "LightClient");
+    let bytecode = compile_contract(evm::LIGHTCLIENT_SOURCE, "LightClient.sol", "LightClient");
     let chain_id_bytes = *admin_chain_id.as_bytes();
     let constructor_args =
         (validators.to_vec(), weights.to_vec(), chain_id_bytes, epoch).abi_encode_params();
@@ -419,8 +419,8 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
                 "WrappedFungibleTypes.sol",
                 evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
             ),
-            ("LightClient.sol", evm::light_client::SOURCE),
-            ("Microchain.sol", evm::microchain::SOURCE),
+            ("LightClient.sol", evm::LIGHTCLIENT_SOURCE),
+            ("Microchain.sol", evm::MICROCHAIN_SOURCE),
             ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
         ],
         Some(1),

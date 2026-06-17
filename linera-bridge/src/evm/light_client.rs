@@ -1,9 +1,6 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Solidity source for the LightClient contract.
-pub const SOURCE: &str = include_str!("../solidity/LightClient.sol");
-
 #[cfg(test)]
 mod tests {
     use alloy_primitives::U256;

@@ -64,8 +64,8 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
             ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
             ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
             ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
-            ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
-            ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),
+            ("LightClient.sol", linera_bridge::evm::LIGHTCLIENT_SOURCE),
+            ("Microchain.sol", linera_bridge::evm::MICROCHAIN_SOURCE),
         ],
     )
     .expect("solc compilation failed")
