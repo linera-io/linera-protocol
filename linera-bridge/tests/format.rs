@@ -5,7 +5,6 @@ use linera_base::{
     crypto::{CryptoHash, TestString},
     data_types::{BlobContent, Event, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
-    ownership::ChainOwnership,
     vm::VmRuntime,
 };
 use linera_bridge::block_proof::BlockProof;
@@ -52,11 +51,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<BlockProof>(&samples)?;
     tracer.trace_type::<Event>(&samples)?;
     tracer.trace_type::<EpochEventData>(&samples)?;
-    // `bool` only enters the registry through a named field, and without it serde-generate omits
-    // the `bcs_*_bool` primitive helpers that the generated `opt_*` wrappers (e.g. the block
-    // header's optional fields) call. `ChainOwnership` is the smallest carrier of a `bool` field;
-    // it is not otherwise part of the proof, only here to keep those helpers generated.
-    tracer.trace_type::<ChainOwnership>(&samples)?;
     tracer.registry()
 }
 

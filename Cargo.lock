@@ -9070,7 +9070,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9134,9 +9134,9 @@ dependencies = [
 
 [[package]]
 name = "serde-generate"
-version = "0.34.0"
+version = "0.34.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a32f50ca0e77cb88f4aaa778a3562f0d2644cc0ceefa980a829a09f074d53b5"
+checksum = "3d8da3b5dc712ccd84b75d863f6a984f840153d1b08a2c6b98503185bf4fdde2"
 dependencies = [
  "anyhow",
  "heck 0.3.3",

@@ -463,58 +463,6 @@ library BridgeTypes {
         return value;
     }
 
-    struct ChainOwnership {
-        AccountOwner[] super_owners;
-        key_values_AccountOwner_uint64[] owners;
-        opt_AccountOwner first_leader;
-        uint32 multi_leader_rounds;
-        bool open_multi_leader_rounds;
-        TimeoutConfig timeout_config;
-    }
-
-    function bcs_serialize_ChainOwnership(ChainOwnership memory input) internal pure returns (bytes memory) {
-        bytes memory result = bcs_serialize_seq_AccountOwner(input.super_owners);
-        result = abi.encodePacked(result, bcs_serialize_seq_key_values_AccountOwner_uint64(input.owners));
-        result = abi.encodePacked(result, bcs_serialize_opt_AccountOwner(input.first_leader));
-        result = abi.encodePacked(result, bcs_serialize_uint32(input.multi_leader_rounds));
-        result = abi.encodePacked(result, bcs_serialize_bool(input.open_multi_leader_rounds));
-        return abi.encodePacked(result, bcs_serialize_TimeoutConfig(input.timeout_config));
-    }
-
-    function bcs_deserialize_offset_ChainOwnership(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, ChainOwnership memory)
-    {
-        uint256 new_pos;
-        AccountOwner[] memory super_owners;
-        (new_pos, super_owners) = bcs_deserialize_offset_seq_AccountOwner(pos, input);
-        key_values_AccountOwner_uint64[] memory owners;
-        (new_pos, owners) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(new_pos, input);
-        opt_AccountOwner memory first_leader;
-        (new_pos, first_leader) = bcs_deserialize_offset_opt_AccountOwner(new_pos, input);
-        uint32 multi_leader_rounds;
-        (new_pos, multi_leader_rounds) = bcs_deserialize_offset_uint32(new_pos, input);
-        bool open_multi_leader_rounds;
-        (new_pos, open_multi_leader_rounds) = bcs_deserialize_offset_bool(new_pos, input);
-        TimeoutConfig memory timeout_config;
-        (new_pos, timeout_config) = bcs_deserialize_offset_TimeoutConfig(new_pos, input);
-        return (
-            new_pos,
-            ChainOwnership(
-                super_owners, owners, first_leader, multi_leader_rounds, open_multi_leader_rounds, timeout_config
-            )
-        );
-    }
-
-    function bcs_deserialize_ChainOwnership(bytes memory input) internal pure returns (ChainOwnership memory) {
-        uint256 new_pos;
-        ChainOwnership memory value;
-        (new_pos, value) = bcs_deserialize_offset_ChainOwnership(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct CryptoHash {
         bytes32 value;
     }
@@ -1360,72 +1308,6 @@ library BridgeTypes {
         return value;
     }
 
-    struct TimeDelta {
-        uint64 value;
-    }
-
-    function bcs_serialize_TimeDelta(TimeDelta memory input) internal pure returns (bytes memory) {
-        return bcs_serialize_uint64(input.value);
-    }
-
-    function bcs_deserialize_offset_TimeDelta(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, TimeDelta memory)
-    {
-        uint256 new_pos;
-        uint64 value;
-        (new_pos, value) = bcs_deserialize_offset_uint64(pos, input);
-        return (new_pos, TimeDelta(value));
-    }
-
-    function bcs_deserialize_TimeDelta(bytes memory input) internal pure returns (TimeDelta memory) {
-        uint256 new_pos;
-        TimeDelta memory value;
-        (new_pos, value) = bcs_deserialize_offset_TimeDelta(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    struct TimeoutConfig {
-        opt_TimeDelta fast_round_duration;
-        TimeDelta base_timeout;
-        TimeDelta timeout_increment;
-        TimeDelta fallback_duration;
-    }
-
-    function bcs_serialize_TimeoutConfig(TimeoutConfig memory input) internal pure returns (bytes memory) {
-        bytes memory result = bcs_serialize_opt_TimeDelta(input.fast_round_duration);
-        result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.base_timeout));
-        result = abi.encodePacked(result, bcs_serialize_TimeDelta(input.timeout_increment));
-        return abi.encodePacked(result, bcs_serialize_TimeDelta(input.fallback_duration));
-    }
-
-    function bcs_deserialize_offset_TimeoutConfig(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, TimeoutConfig memory)
-    {
-        uint256 new_pos;
-        opt_TimeDelta memory fast_round_duration;
-        (new_pos, fast_round_duration) = bcs_deserialize_offset_opt_TimeDelta(pos, input);
-        TimeDelta memory base_timeout;
-        (new_pos, base_timeout) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        TimeDelta memory timeout_increment;
-        (new_pos, timeout_increment) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        TimeDelta memory fallback_duration;
-        (new_pos, fallback_duration) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        return (new_pos, TimeoutConfig(fast_round_duration, base_timeout, timeout_increment, fallback_duration));
-    }
-
-    function bcs_deserialize_TimeoutConfig(bytes memory input) internal pure returns (TimeoutConfig memory) {
-        uint256 new_pos;
-        TimeoutConfig memory value;
-        (new_pos, value) = bcs_deserialize_offset_TimeoutConfig(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct Timestamp {
         uint64 value;
     }
@@ -1593,45 +1475,6 @@ library BridgeTypes {
         return (pos + 32, dest);
     }
 
-    struct key_values_AccountOwner_uint64 {
-        AccountOwner key;
-        uint64 value;
-    }
-
-    function bcs_serialize_key_values_AccountOwner_uint64(key_values_AccountOwner_uint64 memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes memory result = bcs_serialize_AccountOwner(input.key);
-        return abi.encodePacked(result, bcs_serialize_uint64(input.value));
-    }
-
-    function bcs_deserialize_offset_key_values_AccountOwner_uint64(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, key_values_AccountOwner_uint64 memory)
-    {
-        uint256 new_pos;
-        AccountOwner memory key;
-        (new_pos, key) = bcs_deserialize_offset_AccountOwner(pos, input);
-        uint64 value;
-        (new_pos, value) = bcs_deserialize_offset_uint64(new_pos, input);
-        return (new_pos, key_values_AccountOwner_uint64(key, value));
-    }
-
-    function bcs_deserialize_key_values_AccountOwner_uint64(bytes memory input)
-        internal
-        pure
-        returns (key_values_AccountOwner_uint64 memory)
-    {
-        uint256 new_pos;
-        key_values_AccountOwner_uint64 memory value;
-        (new_pos, value) = bcs_deserialize_offset_key_values_AccountOwner_uint64(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct opt_AccountOwner {
         bool has_value;
         AccountOwner value;
@@ -1704,42 +1547,6 @@ library BridgeTypes {
         return value;
     }
 
-    struct opt_TimeDelta {
-        bool has_value;
-        TimeDelta value;
-    }
-
-    function bcs_serialize_opt_TimeDelta(opt_TimeDelta memory input) internal pure returns (bytes memory) {
-        if (input.has_value) {
-            return abi.encodePacked(uint8(1), bcs_serialize_TimeDelta(input.value));
-        } else {
-            return abi.encodePacked(uint8(0));
-        }
-    }
-
-    function bcs_deserialize_offset_opt_TimeDelta(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, opt_TimeDelta memory)
-    {
-        uint256 new_pos;
-        bool has_value;
-        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
-        TimeDelta memory value;
-        if (has_value) {
-            (new_pos, value) = bcs_deserialize_offset_TimeDelta(new_pos, input);
-        }
-        return (new_pos, opt_TimeDelta(has_value, value));
-    }
-
-    function bcs_deserialize_opt_TimeDelta(bytes memory input) internal pure returns (opt_TimeDelta memory) {
-        uint256 new_pos;
-        opt_TimeDelta memory value;
-        (new_pos, value) = bcs_deserialize_offset_opt_TimeDelta(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct opt_uint32 {
         bool has_value;
         uint32 value;
@@ -1772,41 +1579,6 @@ library BridgeTypes {
         uint256 new_pos;
         opt_uint32 memory value;
         (new_pos, value) = bcs_deserialize_offset_opt_uint32(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_AccountOwner(AccountOwner[] memory input) internal pure returns (bytes memory) {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_AccountOwner(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_AccountOwner(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, AccountOwner[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        AccountOwner[] memory result;
-        result = new AccountOwner[](len);
-        AccountOwner memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_AccountOwner(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_AccountOwner(bytes memory input) internal pure returns (AccountOwner[] memory) {
-        uint256 new_pos;
-        AccountOwner[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_AccountOwner(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
@@ -1912,49 +1684,6 @@ library BridgeTypes {
         uint256 new_pos;
         Header[] memory value;
         (new_pos, value) = bcs_deserialize_offset_seq_Header(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
-    function bcs_serialize_seq_key_values_AccountOwner_uint64(key_values_AccountOwner_uint64[] memory input)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        uint256 len = input.length;
-        bytes memory result = bcs_serialize_uleb128(len);
-        for (uint256 i = 0; i < len; i++) {
-            result = abi.encodePacked(result, bcs_serialize_key_values_AccountOwner_uint64(input[i]));
-        }
-        return result;
-    }
-
-    function bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, key_values_AccountOwner_uint64[] memory)
-    {
-        uint256 len;
-        uint256 new_pos;
-        (new_pos, len) = bcs_deserialize_offset_uleb128(pos, input);
-        key_values_AccountOwner_uint64[] memory result;
-        result = new key_values_AccountOwner_uint64[](len);
-        key_values_AccountOwner_uint64 memory value;
-        for (uint256 i = 0; i < len; i++) {
-            (new_pos, value) = bcs_deserialize_offset_key_values_AccountOwner_uint64(new_pos, input);
-            result[i] = value;
-        }
-        return (new_pos, result);
-    }
-
-    function bcs_deserialize_seq_key_values_AccountOwner_uint64(bytes memory input)
-        internal
-        pure
-        returns (key_values_AccountOwner_uint64[] memory)
-    {
-        uint256 new_pos;
-        key_values_AccountOwner_uint64[] memory value;
-        (new_pos, value) = bcs_deserialize_offset_seq_key_values_AccountOwner_uint64(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

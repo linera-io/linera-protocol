@@ -119,7 +119,7 @@ name = "linera-bridge"
 required-features = ["cli"]
 
 [build-dependencies]
-serde-generate = { version = "0.34.0", features = [
+serde-generate = { version = "0.34.1", features = [
     "solidity",
 ], optional = true }
 serde-reflection = { workspace = true, optional = true }
