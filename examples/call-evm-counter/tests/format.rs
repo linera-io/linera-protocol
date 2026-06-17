@@ -10,7 +10,8 @@ use linera_sdk::formats::BcsApplication;
 
 #[test]
 fn test_format() {
-    let mut formats = CallEvmCounterApplication::formats().unwrap();
-    formats.prune_known_primitives().unwrap();
-    insta::assert_yaml_snapshot!("format", formats);
+    insta::assert_yaml_snapshot!(
+        "format",
+        CallEvmCounterApplication::pruned_formats().unwrap()
+    );
 }

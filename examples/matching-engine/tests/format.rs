@@ -10,7 +10,8 @@ use matching_engine::formats::MatchingEngineApplication;
 
 #[test]
 fn test_format() {
-    let mut formats = MatchingEngineApplication::formats().unwrap();
-    formats.prune_known_primitives().unwrap();
-    insta::assert_yaml_snapshot!("format", formats);
+    insta::assert_yaml_snapshot!(
+        "format",
+        MatchingEngineApplication::pruned_formats().unwrap()
+    );
 }

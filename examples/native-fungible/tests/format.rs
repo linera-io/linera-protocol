@@ -10,7 +10,8 @@ use native_fungible::formats::NativeFungibleApplication;
 
 #[test]
 fn test_format() {
-    let mut formats = NativeFungibleApplication::formats().unwrap();
-    formats.prune_known_primitives().unwrap();
-    insta::assert_yaml_snapshot!("format", formats);
+    insta::assert_yaml_snapshot!(
+        "format",
+        NativeFungibleApplication::pruned_formats().unwrap()
+    );
 }

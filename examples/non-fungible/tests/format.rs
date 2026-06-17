@@ -10,7 +10,5 @@ use non_fungible::formats::NonFungibleApplication;
 
 #[test]
 fn test_format() {
-    let mut formats = NonFungibleApplication::formats().unwrap();
-    formats.prune_known_primitives().unwrap();
-    insta::assert_yaml_snapshot!("format", formats);
+    insta::assert_yaml_snapshot!("format", NonFungibleApplication::pruned_formats().unwrap());
 }

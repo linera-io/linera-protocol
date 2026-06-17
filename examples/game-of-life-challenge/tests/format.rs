@@ -10,7 +10,5 @@ use linera_sdk::formats::BcsApplication;
 
 #[test]
 fn test_format() {
-    let mut formats = GameOfLifeApplication::formats().unwrap();
-    formats.prune_known_primitives().unwrap();
-    insta::assert_yaml_snapshot!("format", formats);
+    insta::assert_yaml_snapshot!("format", GameOfLifeApplication::pruned_formats().unwrap());
 }

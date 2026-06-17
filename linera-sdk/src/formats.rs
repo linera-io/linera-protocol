@@ -33,8 +33,21 @@ pub trait BcsApplication {
     /// Link the public Abi of application for good measure.
     type Abi;
 
-    /// Returns the serde formats for this application's ABI types.
+    /// Returns the serde formats for this application's ABI types. The returned
+    /// registry is self-contained: it describes every type structurally, including
+    /// the well-known linera-base primitives.
     fn formats() -> serde_reflection::Result<Formats>;
+
+    /// Like [`formats`](Self::formats), but with the well-known linera-base primitives
+    /// pruned from the registry (see [`Formats::prune_known_primitives`]) so that they
+    /// decode to their human-readable form via [`LineraEnvironment`]. This is the form
+    /// meant to be published to a formats registry.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn pruned_formats() -> Result<Formats, PruneError> {
+        let mut formats = Self::formats()?;
+        formats.prune_known_primitives()?;
+        Ok(formats)
+    }
 }
 
 /// Decode BCS-serialized `bytes` into a [`serde_json::Value`], guided by `format`
