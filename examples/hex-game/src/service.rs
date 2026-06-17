@@ -112,6 +112,7 @@ mod tests {
         assert_eq!(response, json!({"clock" : {"increment": 0}}))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn schema_sdl() {
         let runtime = ServiceRuntime::<HexService>::new();

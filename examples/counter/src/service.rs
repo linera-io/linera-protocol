@@ -105,6 +105,7 @@ mod tests {
         assert_eq!(response, expected)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn schema_sdl() {
         let runtime = Arc::new(ServiceRuntime::<CounterService>::new());

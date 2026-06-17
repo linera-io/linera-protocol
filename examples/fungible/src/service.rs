@@ -78,7 +78,7 @@ impl FungibleTokenService {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
 

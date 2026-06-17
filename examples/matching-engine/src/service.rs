@@ -71,7 +71,7 @@ impl MatchingEngineService {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use linera_sdk::{
         linera_base_types::ApplicationId, util::BlockingWait, views::View, ServiceRuntime,
