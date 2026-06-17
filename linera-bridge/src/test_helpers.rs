@@ -146,27 +146,6 @@ pub fn committee_call_args_for_event(
     (ProvenEvents::new(&cert, 0, &[0]), block_proof)
 }
 
-/// Like `committee_call_args_for_event`, but the event is the system epoch event for
-/// `new_epoch`/`blob_hash` — the real `CreateCommittee` event.
-pub fn committee_block_args(
-    signer_secret: &ValidatorSecretKey,
-    signer_public: &ValidatorPublicKey,
-    new_epoch: Epoch,
-    blob_hash: CryptoHash,
-    block_epoch: Epoch,
-    height: BlockHeight,
-    chain_id: CryptoHash,
-) -> (ProvenEvents, Bytes) {
-    committee_call_args_for_event(
-        signer_secret,
-        signer_public,
-        epoch_event(new_epoch, blob_hash),
-        block_epoch,
-        height,
-        chain_id,
-    )
-}
-
 /// Assembles an `addCommitteeCall` from the proven-events witness and the committee blob.
 pub fn build_add_committee_call(proven: ProvenEvents, committee_blob: Vec<u8>) -> addCommitteeCall {
     addCommitteeCall {

@@ -28,11 +28,10 @@ mod tests {
             deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
-        let (proven, block_proof) = committee_block_args(
+        let (proven, block_proof) = committee_call_args_for_event(
             &secret,
             &public,
-            Epoch(1),
-            blob_hash,
+            epoch_event(Epoch(1), blob_hash),
             Epoch::ZERO,
             BlockHeight(1),
             test_admin_chain_id(),

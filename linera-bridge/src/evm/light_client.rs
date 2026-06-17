@@ -175,11 +175,10 @@ mod tests {
         committee_bytes[1] = 0x02;
         let blob_hash = CryptoHash::new(&BlobContent::new_committee(committee_bytes.clone()));
 
-        let (proven, block_proof) = committee_block_args(
+        let (proven, block_proof) = committee_call_args_for_event(
             &light_client.secret,
             &light_client.public,
-            Epoch(1),
-            blob_hash,
+            epoch_event(Epoch(1), blob_hash),
             Epoch::ZERO,
             BlockHeight(1),
             test_admin_chain_id(),
@@ -821,11 +820,10 @@ mod tests {
             chain_id: CryptoHash,
         ) -> addCommitteeCall {
             let (committee_bytes, blob_hash) = create_committee_blob(new_public);
-            let (proven, block_proof) = committee_block_args(
+            let (proven, block_proof) = committee_call_args_for_event(
                 &self.secret,
                 &self.public,
-                new_epoch,
-                blob_hash,
+                epoch_event(new_epoch, blob_hash),
                 block_epoch,
                 height,
                 chain_id,
@@ -963,11 +961,10 @@ mod tests {
         let blob_content = BlobContent::new_committee(committee_bytes.clone());
         let blob_hash = CryptoHash::new(&blob_content);
 
-        let (proven, block_proof) = committee_block_args(
+        let (proven, block_proof) = committee_call_args_for_event(
             &light_client.secret,
             &light_client.public,
-            Epoch(1),
-            blob_hash,
+            epoch_event(Epoch(1), blob_hash),
             Epoch::ZERO,
             BlockHeight(1),
             test_admin_chain_id(),
@@ -1027,11 +1024,10 @@ mod tests {
         chain_id: CryptoHash,
     ) -> (ProvenEvents, Bytes, Vec<u8>) {
         let (committee_bytes, blob_hash) = create_multi_committee_blob(new_publics);
-        let (proven, block_proof) = committee_block_args(
+        let (proven, block_proof) = committee_call_args_for_event(
             signer_secret,
             signer_public,
-            new_epoch,
-            blob_hash,
+            epoch_event(new_epoch, blob_hash),
             block_epoch,
             height,
             chain_id,
