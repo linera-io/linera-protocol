@@ -466,6 +466,15 @@ where
             .await?)
     }
 
+    /// Test helper: resets a chain and re-executes it from its latest checkpoint.
+    #[cfg(with_testing)]
+    pub async fn reset_and_reexecute_chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Vec<crate::data_types::CrossChainRequest>, LocalNodeError> {
+        Ok(self.node.state.reset_and_reexecute_chain(chain_id).await?)
+    }
+
     /// Gets received certificate trackers.
     pub async fn get_received_certificate_trackers(
         &self,

@@ -4370,6 +4370,84 @@ where
     Ok(())
 }
 
+/// Verifies that corruption-recovery reset re-executes from the latest checkpoint, not from
+/// block 0. After the reset the chain reaches the same tip and state hash, but the
+/// pre-checkpoint, message-free block is no longer in `block_hashes`: it sits below the
+/// checkpoint and isn't recertified, so a from-checkpoint reset never replays it — which a
+/// from-block-0 reset would have.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_reset_from_latest_checkpoint<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let target = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = chain.chain_id();
+
+    // Height 0: a message-free burn — below the checkpoint and not recertified, so it is the
+    // block a from-checkpoint reset must drop. Height 1: the checkpoint. Height 2: a transfer,
+    // so there is post-checkpoint state to replay.
+    let burn_cert = chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_cert.block().header.height, BlockHeight::ZERO);
+    let checkpoint_cert = chain.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint_cert.block().header.height, BlockHeight::from(1));
+    chain
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(target.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    let info_before = chain.chain_info().await?;
+    assert_eq!(info_before.next_block_height, BlockHeight::from(3));
+    let state_hash_before = info_before.state_hash;
+
+    // Reset the chain on the producer's own worker and re-execute it.
+    chain
+        .client
+        .local_node
+        .reset_and_reexecute_chain(chain_id)
+        .await?;
+
+    // It re-executed to the same tip and state hash...
+    let info_after = chain.chain_info().await?;
+    assert_eq!(info_after.next_block_height, BlockHeight::from(3));
+    assert_eq!(info_after.state_hash, state_hash_before);
+
+    // ...but started from the checkpoint: the checkpoint (height 1) and the post-checkpoint
+    // transfer (height 2) are present in `block_hashes`, while the pre-checkpoint burn is gone.
+    let chain_state = chain.client.local_node.chain_state_view(chain_id).await?;
+    assert!(chain_state
+        .block_hashes
+        .get(&BlockHeight::from(1))
+        .await?
+        .is_some());
+    assert!(chain_state
+        .block_hashes
+        .get(&BlockHeight::from(2))
+        .await?
+        .is_some());
+    assert!(
+        chain_state
+            .block_hashes
+            .get(&BlockHeight::ZERO)
+            .await?
+            .is_none(),
+        "a from-checkpoint reset must not replay the pre-checkpoint burn",
+    );
+
+    Ok(())
+}
+
 /// Regression test for #5664: when the chain advances (e.g. a notification or background
 /// sync commits another owner's block at our height) while a client is in the middle of
 /// `execute_block`, the staged pending proposal is cleared without committing ours. This
