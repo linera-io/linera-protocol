@@ -8,13 +8,8 @@ use linera_base::{
     vm::VmRuntime,
 };
 use linera_bridge::block_proof::BlockProof;
-use linera_chain::{
-    data_types::{MessageAction, Transaction, VoteValue},
-    types::CertificateKind,
-};
-use linera_execution::{
-    system::AdminOperation, Message, MessageKind, Operation, SystemMessage, SystemOperation,
-};
+use linera_chain::{data_types::VoteValue, types::CertificateKind};
+use linera_execution::system::EpochEventData;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 
 fn get_registry() -> Result<Registry> {
@@ -48,21 +43,14 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<BlobType>(&samples)?;
     tracer.trace_type::<BlobContent>(&samples)?;
     tracer.trace_type::<GenericApplicationId>(&samples)?;
-    tracer.trace_type::<Message>(&samples)?;
-    tracer.trace_type::<MessageAction>(&samples)?;
-    tracer.trace_type::<MessageKind>(&samples)?;
-    tracer.trace_type::<Operation>(&samples)?;
     tracer.trace_type::<OracleResponse>(&samples)?;
     tracer.trace_type::<Round>(&samples)?;
-    tracer.trace_type::<SystemMessage>(&samples)?;
-    tracer.trace_type::<SystemOperation>(&samples)?;
-    tracer.trace_type::<AdminOperation>(&samples)?;
     tracer.trace_type::<VmRuntime>(&samples)?;
     tracer.trace_type::<CertificateKind>(&samples)?;
-    tracer.trace_type::<Transaction>(&samples)?;
     tracer.trace_type::<VoteValue>(&samples)?;
     tracer.trace_type::<BlockProof>(&samples)?;
     tracer.trace_type::<Event>(&samples)?;
+    tracer.trace_type::<EpochEventData>(&samples)?;
     tracer.registry()
 }
 

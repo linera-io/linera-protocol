@@ -9,33 +9,17 @@ use alloy::{
     rpc::types::{Filter, Log},
 };
 use anyhow::{Context as _, Result};
-use linera_base::{
-    crypto::CryptoHash,
-    data_types::{BlockHeight, Epoch},
-};
+use linera_base::data_types::{BlockHeight, Epoch};
 use linera_chain::types::ConfirmedBlockCertificate;
 
 use crate::{
-    block_proof::{BlockProof, EventInclusionProof},
+    block_proof::{BlockProof, ProvenEvents},
     contracts::{IFungibleBridge, ILightClient, IERC20},
     proof::deposit_event_signature,
 };
 
 /// Maximum block range per `eth_getLogs` query.
 const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
-
-/// Arguments for a `processBurns` call: a chunk of events within one transaction plus the
-/// inclusion proof binding them to a registered block's `events_hash`.
-struct ProcessBurnsArgs {
-    block_hash: B256,
-    event_bcs: Vec<Bytes>,
-    tx_index: u32,
-    num_txs: u32,
-    num_events_in_tx: u32,
-    positions: Vec<u32>,
-    inner_siblings: Vec<B256>,
-    outer_siblings: Vec<B256>,
-}
 
 /// Centralized client for all EVM interactions. Safe to share via `Arc`.
 pub struct EvmClient<P> {
@@ -144,38 +128,6 @@ impl<P: Provider> EvmClient<P> {
         Ok(())
     }
 
-    /// Builds the `processBurns` arguments for the events at `positions` within transaction
-    /// `tx_index` of `cert`: the chunk's BCS-encoded events plus the inclusion proof binding them to
-    /// the block's registered `events_hash`. The block must already be registered.
-    fn process_burns_args(
-        cert: &ConfirmedBlockCertificate,
-        tx_index: u32,
-        positions: &[u32],
-    ) -> ProcessBurnsArgs {
-        let events = &cert.block().body.events;
-        let proof = EventInclusionProof::new(events, tx_index as usize, positions);
-        let event_bcs = positions
-            .iter()
-            .map(|p| {
-                Bytes::from(
-                    bcs::to_bytes(&events[tx_index as usize][*p as usize])
-                        .expect("BCS-serialize event"),
-                )
-            })
-            .collect();
-        let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
-        ProcessBurnsArgs {
-            block_hash: B256::from(*cert.hash().as_bytes()),
-            event_bcs,
-            tx_index,
-            num_txs: proof.num_txs,
-            num_events_in_tx: proof.num_events_in_tx,
-            positions: positions.to_vec(),
-            inner_siblings: proof.inner_siblings.iter().map(to_b256).collect(),
-            outer_siblings: proof.outer_siblings.iter().map(to_b256).collect(),
-        }
-    }
-
     /// Dry-runs the chunked `processBurns(cert, tx_index, positions_in_tx)` call and returns its
     /// gas estimate. `Ok(_)` means the chunk fits under the node's block gas limit; any error
     /// covers both a real revert and the over-block-gas-limit case.
@@ -185,7 +137,7 @@ impl<P: Provider> EvmClient<P> {
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
-        let args = Self::process_burns_args(cert, tx_index, positions_in_tx);
+        let args = ProvenEvents::new(cert, tx_index, positions_in_tx);
         tracing::trace!(
             tx_index,
             count = positions_in_tx.len(),
@@ -200,8 +152,7 @@ impl<P: Provider> EvmClient<P> {
                 args.num_txs,
                 args.num_events_in_tx,
                 args.positions,
-                args.inner_siblings,
-                args.outer_siblings,
+                args.siblings,
             )
             .estimate_gas()
             .await
@@ -215,7 +166,7 @@ impl<P: Provider> EvmClient<P> {
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> Result<()> {
-        let args = Self::process_burns_args(cert, tx_index, positions_in_tx);
+        let args = ProvenEvents::new(cert, tx_index, positions_in_tx);
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         tracing::info!(
             tx_index,
@@ -230,8 +181,7 @@ impl<P: Provider> EvmClient<P> {
                 args.num_txs,
                 args.num_events_in_tx,
                 args.positions,
-                args.inner_siblings,
-                args.outer_siblings,
+                args.siblings,
             )
             .send()
             .await
@@ -286,27 +236,34 @@ impl<P: Provider> EvmClient<P> {
         Ok(BlockHeight(height))
     }
 
-    /// Relays a committee update to the LightClient contract.
+    /// Relays a committee update to the LightClient contract. Registers the admin block (verifying
+    /// its quorum on-chain), then proves the single epoch event's inclusion against it by hash and
+    /// submits `addCommittee` — the same register-then-prove path `processBurns` uses for burns.
     pub async fn add_committee(
         &self,
         cert: &ConfirmedBlockCertificate,
         committee_blob: &[u8],
     ) -> Result<alloy::primitives::TxHash> {
         let lc_addr = self.get_light_client_address().await?;
-        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
-            .context("failed to BCS-serialize block proof")?;
-        let transaction_bcs = cert
-            .block()
-            .body
-            .transactions
-            .iter()
-            .map(|txn| Bytes::from(bcs::to_bytes(txn).expect("BCS-serialize transaction")))
-            .collect();
+        // Register the admin block so `addCommittee` can reference it by hash, exactly like burns.
+        self.register_block(cert).await?;
+        // Prove the single committee epoch event against the registered block — the same
+        // `ProvenEvents` witness burns use; `committee_blob` is the only extra argument.
+        let committee_event = super::committee::find_committee_event(cert)
+            .context("block has no committee epoch event")?;
+        let tx_index = u32::try_from(committee_event.tx_index).expect("tx index exceeds u32");
+        let position = u32::try_from(committee_event.position).expect("event position exceeds u32");
+        let proven = ProvenEvents::new(cert, tx_index, &[position]);
         let light_client = ILightClient::new(lc_addr, &self.provider);
         let receipt = light_client
             .addCommittee(
-                Bytes::copy_from_slice(&proof_bytes),
-                transaction_bcs,
+                proven.block_hash,
+                proven.event_bcs,
+                proven.tx_index,
+                proven.num_txs,
+                proven.num_events_in_tx,
+                proven.positions,
+                proven.siblings,
                 Bytes::copy_from_slice(committee_blob),
             )
             .send()
