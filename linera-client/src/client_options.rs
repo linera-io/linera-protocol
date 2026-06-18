@@ -151,14 +151,6 @@ pub struct Options {
     #[arg(long)]
     pub allow_fast_blocks: bool,
 
-    /// Disable the multi-leader jitter delay. By default, when proposing in a multi-leader
-    /// round with index `>= 1`, the client waits a deterministic delay derived from the
-    /// owner and round before re-proposing. This spreads out concurrent proposals from
-    /// honest clients; the owner with the lowest `hash(owner, round)` still proposes
-    /// immediately.
-    #[arg(long)]
-    pub disable_multi_leader_jitter: bool,
-
     /// (EXPERIMENTAL) Whether application services can persist in some cases between queries.
     #[arg(long)]
     pub long_lived_services: bool,
@@ -377,7 +369,6 @@ impl Options {
             max_concurrent_batch_downloads: self.max_concurrent_batch_downloads,
             max_joined_tasks: self.max_joined_tasks,
             allow_fast_blocks: self.allow_fast_blocks,
-            multi_leader_jitter: !self.disable_multi_leader_jitter,
             notification_circuit_breaker_initial_probe_interval: self
                 .notification_circuit_breaker_initial_probe_interval,
             notification_circuit_breaker_max_probe_interval: self
