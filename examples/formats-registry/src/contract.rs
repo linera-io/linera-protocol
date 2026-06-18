@@ -102,16 +102,26 @@ impl FormatsRegistryContract {
 
         match message {
             Message::Write {
-                module_id, value, ..
+                module_id,
+                blob_hash,
+                ..
             } => {
                 let existing = self.state.formats.get(&module_id).await.expect("storage");
                 assert!(
                     existing.is_none(),
                     "formats are already registered for this module"
                 );
+                // For a remote write the blob was published in an earlier block on the
+                // submitting chain; require it here so it is available on (and retained
+                // by) the creation chain. For a local write the blob is published in
+                // this same block and cannot be asserted yet, but it is persisted by
+                // the caller's `PublishDataBlob`.
+                if self.runtime.message_origin_chain_id().is_some() {
+                    self.runtime.assert_data_blob_exists(blob_hash);
+                }
                 self.state
                     .formats
-                    .insert(&module_id, value)
+                    .insert(&module_id, blob_hash)
                     .expect("storage");
             }
             Message::SetAdmins { admins, .. } => {

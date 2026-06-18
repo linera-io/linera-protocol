@@ -6,7 +6,7 @@
 use async_graphql::{Request, Response};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
-    linera_base_types::{AccountOwner, ContractAbi, ModuleId, ServiceAbi},
+    linera_base_types::{AccountOwner, ContractAbi, DataBlobHash, ModuleId, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,12 +31,13 @@ impl ServiceAbi for FormatsRegistryAbi {
 /// implementation-specific admin commands are appended after it.
 #[derive(Clone, Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum Operation {
-    /// Register `value` for `module_id`, on behalf of `owner`. A given `module_id`
-    /// may only be written once.
+    /// Register the data blob `blob_hash` (holding the formats description) for
+    /// `module_id`, on behalf of `owner`. The caller must publish that data blob in
+    /// the same block. A given `module_id` may only be written once.
     Write {
         owner: AccountOwner,
         module_id: ModuleId,
-        value: Vec<u8>,
+        blob_hash: DataBlobHash,
     },
     /// Set the admin accounts authorized to run admin commands (including remote
     /// `Write`s). Passing `None` clears the set, restoring creation-chain-only
@@ -52,11 +53,12 @@ pub enum Operation {
 /// chain to be executed there.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Message {
-    /// Remote counterpart of [`Operation::Write`].
+    /// Remote counterpart of [`Operation::Write`]. The payload is published as a data
+    /// blob on the submitting chain, so only its `blob_hash` travels across chains.
     Write {
         owner: AccountOwner,
         module_id: ModuleId,
-        value: Vec<u8>,
+        blob_hash: DataBlobHash,
     },
     /// Remote counterpart of [`Operation::SetAdmins`].
     SetAdmins {
@@ -80,11 +82,11 @@ impl Operation {
             Operation::Write {
                 owner,
                 module_id,
-                value,
+                blob_hash,
             } => Message::Write {
                 owner,
                 module_id,
-                value,
+                blob_hash,
             },
             Operation::SetAdmins { owner, admins } => Message::SetAdmins { owner, admins },
         }

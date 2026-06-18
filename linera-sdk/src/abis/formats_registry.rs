@@ -8,7 +8,7 @@
 use async_graphql::{Request, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::linera_base_types::{AccountOwner, ContractAbi, ModuleId, ServiceAbi};
+use crate::linera_base_types::{AccountOwner, ContractAbi, DataBlobHash, ModuleId, ServiceAbi};
 
 /// The ABI of the formats-registry application.
 pub struct FormatsRegistryAbi;
@@ -33,11 +33,12 @@ impl ServiceAbi for FormatsRegistryAbi {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[allow(missing_docs)]
 pub enum Operation {
-    /// Publish `value` as a data blob and bind it to `module_id`, on behalf of
-    /// `owner`. A given `module_id` may only be written once.
+    /// Bind the data blob `blob_hash` (holding the BCS formats description) to
+    /// `module_id`, on behalf of `owner`. The caller is expected to publish that data
+    /// blob in the same block. A given `module_id` may only be written once.
     Write {
         owner: AccountOwner,
         module_id: ModuleId,
-        value: Vec<u8>,
+        blob_hash: DataBlobHash,
     },
 }

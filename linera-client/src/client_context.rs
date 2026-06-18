@@ -959,7 +959,7 @@ impl<Env: Environment> ClientContext<Env> {
         let owner = chain_client
             .preferred_owner()
             .ok_or(error::Inner::ChainOwnership)?;
-        let (blobs, module_id, registry_op_bytes) = self
+        let (blobs, module_id, formats_blob_hash, registry_op_bytes) = self
             .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
             .await?;
 
@@ -973,6 +973,9 @@ impl<Env: Environment> ClientContext<Env> {
                     .execute_operations(
                         vec![
                             Operation::system(SystemOperation::PublishModule { module_id }),
+                            Operation::system(SystemOperation::PublishDataBlob {
+                                blob_hash: formats_blob_hash,
+                            }),
                             Operation::User {
                                 application_id: registry_application_id,
                                 bytes: registry_op_bytes,
@@ -1014,7 +1017,7 @@ impl<Env: Environment> ClientContext<Env> {
         let owner = chain_client
             .preferred_owner()
             .ok_or(error::Inner::ChainOwnership)?;
-        let (blobs, module_id, registry_op_bytes) = self
+        let (blobs, module_id, formats_blob_hash, registry_op_bytes) = self
             .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
             .await?;
 
@@ -1032,6 +1035,9 @@ impl<Env: Environment> ClientContext<Env> {
                         .execute_operations(
                             vec![
                                 Operation::system(SystemOperation::PublishModule { module_id }),
+                                Operation::system(SystemOperation::PublishDataBlob {
+                                    blob_hash: formats_blob_hash,
+                                }),
                                 Operation::User {
                                     application_id: registry_application_id,
                                     bytes: registry_op_bytes,
@@ -1083,8 +1089,16 @@ impl<Env: Environment> ClientContext<Env> {
         service: &Path,
         vm_runtime: VmRuntime,
         formats: &Path,
-    ) -> Result<(Vec<linera_base::data_types::Blob>, ModuleId, Vec<u8>), Error> {
-        let (blobs, module_id) = load_bytecode_blobs(contract, service, vm_runtime).await?;
+    ) -> Result<
+        (
+            Vec<linera_base::data_types::Blob>,
+            ModuleId,
+            CryptoHash,
+            Vec<u8>,
+        ),
+        Error,
+    > {
+        let (mut blobs, module_id) = load_bytecode_blobs(contract, service, vm_runtime).await?;
 
         info!("Loading formats from {formats:?}");
         let parsed = read_formats_from_snap(formats)?;
@@ -1094,13 +1108,18 @@ impl<Env: Environment> ClientContext<Env> {
                 format!("failed to serialize Formats as JSON: {e}"),
             )
         })?;
+        // Publish the formats description as a data blob and bind its hash in the
+        // registry write; the caller adds the matching `PublishDataBlob` operation.
+        let formats_blob = linera_base::data_types::Blob::new_data(value);
+        let formats_blob_hash = formats_blob.id().hash;
+        blobs.push(formats_blob);
         let registry_op = linera_sdk::abis::formats_registry::Operation::Write {
             owner,
             module_id,
-            value,
+            blob_hash: linera_base::identifiers::DataBlobHash(formats_blob_hash),
         };
         let registry_op_bytes = bcs::to_bytes(&registry_op)?;
-        Ok((blobs, module_id, registry_op_bytes))
+        Ok((blobs, module_id, formats_blob_hash, registry_op_bytes))
     }
 }
 

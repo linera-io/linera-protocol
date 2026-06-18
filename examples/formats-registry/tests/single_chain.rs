@@ -7,7 +7,7 @@
 
 use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
-    linera_base_types::{AccountOwner, AccountSecretKey, ModuleId},
+    linera_base_types::{AccountOwner, AccountSecretKey, Blob, DataBlobHash, ModuleId},
     test::{QueryOutcome, TestValidator},
 };
 
@@ -32,17 +32,22 @@ async fn write_then_read() {
     let module_id = module_id.forget_abi();
 
     let value = vec![1u8, 2, 3, 4, 5, 6, 7, 8];
+    let blob = Blob::new_data(value.clone());
+    let blob_hash = DataBlobHash(blob.id().hash);
     chain
-        .add_block(|block| {
-            block.with_operation(
-                application_id,
-                Operation::Write {
-                    owner,
-                    module_id,
-                    value: value.clone(),
-                },
-            );
-        })
+        .add_block_with_blobs(
+            |block| {
+                block.with_data_blob(&blob).with_operation(
+                    application_id,
+                    Operation::Write {
+                        owner,
+                        module_id,
+                        blob_hash,
+                    },
+                );
+            },
+            vec![blob.clone()],
+        )
         .await;
 
     let module_id_hex = module_id_to_hex(&module_id);
@@ -84,19 +89,26 @@ async fn second_write_is_rejected() {
     let application_id = chain.create_application(module_id, (), (), vec![]).await;
     let module_id = module_id.forget_abi();
 
+    let blob = Blob::new_data(vec![0xAA]);
+    let blob_hash = DataBlobHash(blob.id().hash);
     chain
-        .add_block(|block| {
-            block.with_operation(
-                application_id,
-                Operation::Write {
-                    owner,
-                    module_id,
-                    value: vec![0xAA],
-                },
-            );
-        })
+        .add_block_with_blobs(
+            |block| {
+                block.with_data_blob(&blob).with_operation(
+                    application_id,
+                    Operation::Write {
+                        owner,
+                        module_id,
+                        blob_hash,
+                    },
+                );
+            },
+            vec![blob.clone()],
+        )
         .await;
 
+    // The data blob is already in storage, so the second write needs no new blob; it
+    // must still be rejected because the module is already registered.
     let result = chain
         .try_add_block(|block| {
             block.with_operation(
@@ -104,7 +116,7 @@ async fn second_write_is_rejected() {
                 Operation::Write {
                     owner,
                     module_id,
-                    value: vec![0xBB],
+                    blob_hash,
                 },
             );
         })
@@ -148,7 +160,9 @@ async fn admin_policy_gates_local_writes() {
         .expect("admins must be an array");
     assert_eq!(admins.len(), 1);
 
-    // The chain's signer is no longer an admin, so its write is rejected.
+    // The chain's signer is no longer an admin, so its write is rejected at the admin
+    // check (before the blob is ever looked at).
+    let blob_hash = DataBlobHash(Blob::new_data(vec![0xAA]).id().hash);
     let result = chain
         .try_add_block(|block| {
             block.with_operation(
@@ -156,7 +170,7 @@ async fn admin_policy_gates_local_writes() {
                 Operation::Write {
                     owner,
                     module_id,
-                    value: vec![0xAA],
+                    blob_hash,
                 },
             );
         })

@@ -2022,6 +2022,133 @@ async fn test_publish_module_with_formats_registers_formats(
     Ok(())
 }
 
+/// A remote admin registers a module's formats from its own chain. The `Write` is
+/// forwarded to the registry's creation chain as a cross-chain message; the payload is
+/// published as a data blob on the remote chain, so this exercises that the creation
+/// chain can assert and read that blob across chains.
+#[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
+#[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
+#[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]
+#[cfg_attr(feature = "remote-net", test_case(RemoteNetTestingConfig::new(CloseChains) ; "remote_net_grpc"))]
+#[test_log::test(tokio::test)]
+async fn test_publish_module_with_formats_remote_registration(
+    config: impl LineraNetConfig,
+) -> Result<()> {
+    use counter::{formats::CounterApplication, CounterAbi};
+    use linera_sdk::{
+        abis::formats_registry::FormatsRegistryAbi,
+        formats::{BcsApplication, Formats},
+    };
+
+    let _guard = INTEGRATION_TEST_GUARD.lock().await;
+    tracing::info!("Starting test {}", test_name!());
+
+    let (mut net, admin_client) = config.instantiate().await?;
+    let admin_chain = admin_client.load_wallet()?.default_chain().unwrap();
+    let admin_owner = admin_client.get_owner().unwrap();
+
+    // The registry application lives on the admin client's chain (its creation chain).
+    let (registry_contract, registry_service) =
+        admin_client.build_example("formats-registry").await?;
+    let registry_app_id = admin_client
+        .publish_and_create::<FormatsRegistryAbi, (), ()>(
+            registry_contract,
+            registry_service,
+            VmRuntime::Wasm,
+            &(),
+            &(),
+            &[],
+            None,
+        )
+        .await?;
+
+    // A remote operator on its own chain.
+    let remote_client = net.make_client().await;
+    remote_client.wallet_init(None).await?;
+    let remote_chain = admin_client
+        .open_and_assign(&remote_client, Amount::from_tokens(10))
+        .await?;
+    let remote_owner = remote_client.get_owner().unwrap();
+    remote_client
+        .set_preferred_owner(remote_chain, Some(remote_owner))
+        .await?;
+    remote_client.sync(remote_chain).await?;
+
+    // Run the creation chain's node service. We process its inbox explicitly so we can
+    // observe the forwarded write being applied.
+    let admin_port = get_node_port().await;
+    let mut admin_node_service = admin_client
+        .run_node_service(admin_port, ProcessInbox::Skip)
+        .await?;
+    let mut admin_notifications = admin_node_service.notifications(admin_chain).await?;
+    let registry = admin_node_service.make_application(&admin_chain, &registry_app_id)?;
+
+    // Authorize the remote owner as an admin. This runs locally on the creation chain,
+    // which is allowed because no admin set has been configured yet.
+    registry
+        .mutate(format!(
+            "setAdmins(owner: {}, admins: [{}])",
+            admin_owner.to_value(),
+            remote_owner.to_value(),
+        ))
+        .await?;
+
+    // The remote admin publishes a module and registers its formats from its own chain;
+    // the registry `Write` is forwarded to the creation chain as a cross-chain message.
+    let (contract, service) = remote_client.build_example("counter").await?;
+    let formats =
+        ClientWrapper::example_path("counter")?.join("tests/snapshots/format__format.snap");
+    let module_id = remote_client
+        .publish_module_with_formats::<CounterAbi, (), u64>(
+            contract,
+            service,
+            formats,
+            registry_app_id.forget_abi(),
+            VmRuntime::Wasm,
+            None,
+        )
+        .await?;
+
+    // Wait for the forwarded write to reach the creation chain, then apply it.
+    admin_notifications
+        .wait_for_bundle(remote_chain, None)
+        .await?;
+    assert!(
+        !admin_node_service
+            .process_inbox(&admin_chain)
+            .await?
+            .is_empty(),
+        "the creation chain should process the forwarded write"
+    );
+
+    // Read the formats back: the creation chain must be able to fetch the data blob the
+    // remote chain published.
+    let module_id_hex = serde_json::to_value(module_id.forget_abi())?
+        .as_str()
+        .expect("ModuleId serializes to a JSON string")
+        .to_owned();
+    let response = registry
+        .query(format!(r#"read(moduleId: "{module_id_hex}")"#))
+        .await?;
+    let stored_bytes: Vec<u8> = response["read"]
+        .as_array()
+        .expect("read must return a JSON array of bytes")
+        .iter()
+        .map(|byte| byte.as_u64().expect("byte") as u8)
+        .collect();
+
+    let stored_formats: Formats = serde_json::from_slice(&stored_bytes)?;
+    let expected_formats = CounterApplication::formats().unwrap();
+    assert_eq!(stored_formats, expected_formats);
+
+    admin_node_service.ensure_is_running()?;
+
+    net.ensure_is_running().await?;
+    net.terminate().await?;
+
+    Ok(())
+}
+
 #[cfg_attr(feature = "storage-service", test_case(LocalNetConfig::new_test(Database::Service, Network::Grpc) ; "storage_test_service_grpc"))]
 #[cfg_attr(feature = "scylladb", test_case(LocalNetConfig::new_test(Database::ScyllaDb, Network::Grpc) ; "scylladb_grpc"))]
 #[cfg_attr(feature = "kubernetes", test_case(SharedLocalKubernetesNetTestingConfig::new(Network::Grpc, BuildArg::Build) ; "kubernetes_grpc"))]

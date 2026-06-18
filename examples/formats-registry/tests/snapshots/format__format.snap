@@ -23,6 +23,9 @@ REGISTRY:
       TUPLEARRAY:
         CONTENT: U8
         SIZE: 32
+  DataBlobHash:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
   Message:
     ENUM:
       0:
@@ -32,8 +35,8 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - module_id:
                 TYPENAME: ModuleId
-            - value:
-                SEQ: U8
+            - blob_hash:
+                TYPENAME: DataBlobHash
       1:
         SetAdmins:
           STRUCT:
@@ -60,8 +63,8 @@ REGISTRY:
                 TYPENAME: AccountOwner
             - module_id:
                 TYPENAME: ModuleId
-            - value:
-                SEQ: U8
+            - blob_hash:
+                TYPENAME: DataBlobHash
       1:
         SetAdmins:
           STRUCT:

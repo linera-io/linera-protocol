@@ -18,7 +18,7 @@ The application's operations all carry the `owner` on whose behalf they run:
 
 ```rust
 enum Operation {
-    Write { owner: AccountOwner, module_id: ModuleId, value: Vec<u8> },
+    Write { owner: AccountOwner, module_id: ModuleId, blob_hash: DataBlobHash },
     SetAdmins { owner: AccountOwner, admins: Option<Vec<AccountOwner>> },
 }
 ```
@@ -48,17 +48,24 @@ This mirrors the policy used by `examples/controller`. To bootstrap, an admin fi
 runs `SetAdmins` locally on the creation chain; afterwards, the listed admins can
 register modules remotely from their own chains.
 
-`Write` stores `value` in a `MapView<ModuleId, Vec<u8>>` keyed by `module_id`,
-asserting first that no entry exists yet — entries are **immutable** (first-write-wins;
-a `ModuleId` cannot be overwritten).
+`Write` carries the [`DataBlobHash`](../../linera-base/src/identifiers.rs) of an
+immutable [`DataBlob`](../../linera-base/src/data_types.rs) holding the formats
+description. The caller publishes that data blob (e.g. `linera
+publish-module-with-formats` emits a `PublishDataBlob` operation in the same block);
+the contract `assert`s the blob exists and records its hash in a
+`MapView<ModuleId, DataBlobHash>` keyed by `module_id`, after checking that no entry
+exists yet — entries are **immutable** (first-write-wins; a `ModuleId` cannot be
+overwritten). Only the 32-byte hash travels to the creation chain inside the `Message`,
+so state stays compact (one hash per `ModuleId`) and identical values are
+content-addressed and deduplicated by the blob layer.
 
 The service exposes:
 
 - `query { read(moduleId: "...") }` — returns the bytes registered for `moduleId`, or
-  `null` if none.
+  `null` if none. Internally it reads the stored hash and fetches the data blob.
 - `query { admins }` — returns the configured admin accounts, or `null` if none.
-- `mutation { write(owner: "...", moduleId: "...", value: [u8]) }` — schedules a
-  `Write` operation.
+- `mutation { write(owner: "...", moduleId: "...", blobHash: "...") }` — schedules a
+  `Write` operation (the data blob must be published separately).
 - `mutation { setAdmins(owner: "...", admins: ["..."]) }` — schedules a `SetAdmins`
   operation (pass `null` to clear the set).
 
@@ -119,17 +126,18 @@ echo "http://localhost:$PORT/chains/$CHAIN/applications/$LINERA_APPLICATION_ID"
 
 Open the printed URL to land in a GraphiQL session connected to the registry.
 
-To register the bytes for a module (replace `<MODULE_ID_HEX>` and `<OWNER>` accordingly;
-`ModuleId` and `AccountOwner` are encoded as strings and `value` is a JSON array of byte
-values). `<OWNER>` must be the chain's signer; once an admin set is configured it must
-also be one of the admins:
+To register a module's formats, first publish the formats description as a data blob
+(e.g. `linera publish-data-blob <FILE>`, which prints the `<BLOB_HASH>`), then bind it
+(replace `<MODULE_ID_HEX>`, `<OWNER>` and `<BLOB_HASH>` accordingly; `ModuleId`,
+`AccountOwner` and `DataBlobHash` are encoded as strings). `<OWNER>` must be the chain's
+signer; once an admin set is configured it must also be one of the admins:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
 mutation {
   write(
     owner: "<OWNER>",
     moduleId: "<MODULE_ID_HEX>",
-    value: [1, 2, 3, 4]
+    blobHash: "<BLOB_HASH>"
   )
 }
 ```

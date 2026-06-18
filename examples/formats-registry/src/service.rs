@@ -7,7 +7,7 @@ mod state;
 
 use std::sync::Arc;
 
-use async_graphql::{ComplexObject, EmptySubscription, Schema};
+use async_graphql::{ComplexObject, Context, EmptySubscription, Schema};
 use formats_registry::{FormatsRegistryAbi, Operation};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
@@ -48,6 +48,7 @@ impl Service for FormatsRegistryService {
             Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
+        .data(self.runtime.clone())
         .finish()
         .execute(query)
         .await
@@ -57,8 +58,13 @@ impl Service for FormatsRegistryService {
 #[ComplexObject]
 impl FormatsRegistryState {
     /// Returns the bytes registered for the given module, or `None` if the module
-    /// has no entry yet.
-    async fn read(&self, module_id: ModuleId) -> Option<Vec<u8>> {
-        self.formats.get(&module_id).await.expect("storage")
+    /// has no entry yet. Reads the registered hash from state and fetches the
+    /// corresponding data blob.
+    async fn read(&self, ctx: &Context<'_>, module_id: ModuleId) -> Option<Vec<u8>> {
+        let blob_hash = self.formats.get(&module_id).await.expect("storage")?;
+        let runtime = ctx
+            .data::<Arc<ServiceRuntime<FormatsRegistryService>>>()
+            .expect("the runtime is available in the GraphQL context");
+        Some(runtime.read_data_blob(blob_hash))
     }
 }
