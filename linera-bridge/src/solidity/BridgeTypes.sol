@@ -1335,35 +1335,6 @@ library BridgeTypes {
         return value;
     }
 
-    enum VmRuntime {
-        Wasm,
-        Evm
-    }
-
-    function bcs_serialize_VmRuntime(VmRuntime input) internal pure returns (bytes memory) {
-        return bcs_serialize_uleb128(uint256(input));
-    }
-
-    function bcs_deserialize_offset_VmRuntime(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, VmRuntime)
-    {
-        uint256 new_pos;
-        uint256 choice;
-        (new_pos, choice) = bcs_deserialize_offset_uleb128(pos, input);
-        require(choice < 2, "invalid variant index");
-        return (new_pos, VmRuntime(uint8(choice)));
-    }
-
-    function bcs_deserialize_VmRuntime(bytes memory input) internal pure returns (VmRuntime) {
-        uint256 new_pos;
-        VmRuntime value;
-        (new_pos, value) = bcs_deserialize_offset_VmRuntime(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
     struct VoteValue {
         CryptoHash entry0;
         Round entry1;

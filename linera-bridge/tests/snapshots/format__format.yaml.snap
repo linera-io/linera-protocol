@@ -248,12 +248,6 @@ StreamName:
   NEWTYPESTRUCT: BYTES
 Timestamp:
   NEWTYPESTRUCT: U64
-VmRuntime:
-  ENUM:
-    0:
-      Wasm: UNIT
-    1:
-      Evm: UNIT
 VoteValue:
   TUPLESTRUCT:
     - TYPENAME: CryptoHash

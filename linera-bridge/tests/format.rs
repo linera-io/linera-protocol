@@ -9,7 +9,6 @@ use linera_base::{
     crypto::{CryptoHash, TestString},
     data_types::{BlobContent, Event, OracleResponse, Round},
     identifiers::{AccountOwner, BlobType, GenericApplicationId},
-    vm::VmRuntime,
 };
 use linera_bridge::block_proof::BlockProof;
 use linera_chain::{data_types::VoteValue, types::CertificateKind};
@@ -49,7 +48,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<GenericApplicationId>(&samples)?;
     tracer.trace_type::<OracleResponse>(&samples)?;
     tracer.trace_type::<Round>(&samples)?;
-    tracer.trace_type::<VmRuntime>(&samples)?;
     tracer.trace_type::<CertificateKind>(&samples)?;
     tracer.trace_type::<VoteValue>(&samples)?;
     tracer.trace_type::<BlockProof>(&samples)?;
