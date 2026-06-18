@@ -1950,28 +1950,29 @@ where
             .await?)
     }
 
-    /// Gets the next expected event index for a stream.
-    pub(crate) async fn get_next_expected_event(
+    /// Gets a stream's `(next_index, first_index)`: the next event index expected for the
+    /// stream, and the lowest readable index (the first event published since the most recent
+    /// checkpoint). Both default to 0 for a stream with no events yet, and are read from the
+    /// same chain state view, so they are guaranteed to be mutually consistent.
+    pub(crate) async fn get_stream_indices(
         &self,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, WorkerError> {
-        Ok(self.chain.next_expected_events.get(&stream_id).await?)
-    }
-
-    /// Gets the lowest readable event index for a stream this chain is writing to, i.e. the
-    /// index of the first event published since the most recent checkpoint.
-    pub(crate) async fn get_stream_first_index(
-        &self,
-        stream_id: StreamId,
-    ) -> Result<u32, WorkerError> {
-        Ok(self
+    ) -> Result<(u32, u32), WorkerError> {
+        let next_index = self
+            .chain
+            .next_expected_events
+            .get(&stream_id)
+            .await?
+            .unwrap_or(0);
+        let first_index = self
             .chain
             .execution_state
             .system
             .stream_event_counts
             .get(&stream_id)
             .await?
-            .map_or(0, |counts| counts.first_index))
+            .map_or(0, |counts| counts.first_index);
+        Ok((next_index, first_index))
     }
 
     /// Gets the `next_expected_events` indices for the given streams.

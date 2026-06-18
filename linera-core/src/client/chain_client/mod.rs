@@ -657,19 +657,13 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 async move {
-                    let next_expected_index = client
+                    let (next_index, first_index) = client
                         .local_node
-                        .get_next_expected_event(chain_id, stream_id.clone())
+                        .get_stream_indices(chain_id, stream_id.clone())
                         .await?;
-                    let Some(next_index) = next_expected_index
-                        .filter(|next_index| *next_index > subscriptions.min_next_index)
-                    else {
+                    if next_index <= subscriptions.min_next_index {
                         return Ok::<_, Error>(Vec::new());
-                    };
-                    let first_index = client
-                        .local_node
-                        .get_stream_first_index(chain_id, stream_id.clone())
-                        .await?;
+                    }
                     Ok(subscriptions
                         .applications
                         .into_iter()

@@ -440,29 +440,17 @@ where
         Ok(self.node.state.get_event_subscriptions(chain_id).await?)
     }
 
-    /// Gets the next expected event index for a stream.
-    pub async fn get_next_expected_event(
+    /// Gets a stream's next expected event index and its lowest readable index, read from a
+    /// single chain state view so they are mutually consistent.
+    pub async fn get_stream_indices(
         &self,
         chain_id: ChainId,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, LocalNodeError> {
+    ) -> Result<(u32, u32), LocalNodeError> {
         Ok(self
             .node
             .state
-            .get_next_expected_event(chain_id, stream_id)
-            .await?)
-    }
-
-    /// Gets the lowest readable event index for a stream a chain is writing to.
-    pub async fn get_stream_first_index(
-        &self,
-        chain_id: ChainId,
-        stream_id: StreamId,
-    ) -> Result<u32, LocalNodeError> {
-        Ok(self
-            .node
-            .state
-            .get_stream_first_index(chain_id, stream_id)
+            .get_stream_indices(chain_id, stream_id)
             .await?)
     }
 

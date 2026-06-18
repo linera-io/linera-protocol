@@ -1939,26 +1939,15 @@ where
         .await
     }
 
-    /// Gets the next expected event index for a stream.
-    pub async fn get_next_expected_event(
+    /// Gets a stream's next expected event index and its lowest readable index, read from a
+    /// single chain state view so they are mutually consistent.
+    pub async fn get_stream_indices(
         &self,
         chain_id: ChainId,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, WorkerError> {
+    ) -> Result<(u32, u32), WorkerError> {
         self.chain_read(chain_id, |guard| async move {
-            guard.get_next_expected_event(stream_id).await
-        })
-        .await
-    }
-
-    /// Gets the lowest readable event index for a stream a chain is writing to.
-    pub async fn get_stream_first_index(
-        &self,
-        chain_id: ChainId,
-        stream_id: StreamId,
-    ) -> Result<u32, WorkerError> {
-        self.chain_read(chain_id, |guard| async move {
-            guard.get_stream_first_index(stream_id).await
+            guard.get_stream_indices(stream_id).await
         })
         .await
     }
