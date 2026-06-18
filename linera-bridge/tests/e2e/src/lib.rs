@@ -714,3 +714,25 @@ pub fn test_storage_cache_config() -> linera_storage::StorageCacheConfig {
         cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
     }
 }
+
+/// Returns the positions of `bridge_app_id`'s "burns"-stream events in `certificate`, grouped by
+/// transaction index. Mirrors `FungibleBridge`'s burn matching (the bridge application id plus the
+/// "burns" stream) so a test can settle exactly those events via `registerBlock` + `processBurns`,
+/// the same path the relayer uses in production.
+pub fn burn_positions_by_tx(
+    certificate: &linera_chain::types::ConfirmedBlockCertificate,
+    bridge_app_id: linera_base::identifiers::ApplicationId,
+) -> Vec<(u32, Vec<u32>)> {
+    use linera_base::identifiers::GenericApplicationId;
+    let mut by_tx: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
+    for (tx_index, tx_events) in (0u32..).zip(&certificate.block().body.events) {
+        for (pos, event) in (0u32..).zip(tx_events) {
+            if event.stream_id.application_id == GenericApplicationId::User(bridge_app_id)
+                && event.stream_id.stream_name.0 == b"burns"
+            {
+                by_tx.entry(tx_index).or_default().push(pos);
+            }
+        }
+    }
+    by_tx.into_iter().collect()
+}

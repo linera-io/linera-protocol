@@ -2285,7 +2285,7 @@ impl<Env: Environment> Client<Env> {
                 // All reported events were already downloaded; don't loop forever.
             }
             if let Ok((_, executed_block, _, _, _)) = &result {
-                let hash = CryptoHash::new(executed_block);
+                let hash = executed_block.hash();
                 let notification = Notification {
                     chain_id: executed_block.header.chain_id,
                     reason: Reason::BlockExecuted {

@@ -9,12 +9,104 @@ use linera_base::{
 
 use super::*;
 use crate::{
-    block::{ConfirmedBlock, ValidatedBlock},
+    block::{Block, BlockBodyField, ConfirmedBlock, ValidatedBlock},
     test::{make_first_block, BlockTestExt},
 };
 
 fn dummy_chain_id(index: u32) -> ChainId {
     ChainId(CryptoHash::test_hash(format!("chain{index}")))
+}
+
+fn sample_block() -> Block {
+    BlockExecutionOutcome {
+        messages: vec![Vec::new()],
+        previous_message_blocks: BTreeMap::new(),
+        previous_event_blocks: BTreeMap::new(),
+        state_hash: CryptoHash::test_hash("state"),
+        oracle_responses: vec![Vec::new()],
+        events: vec![Vec::new()],
+        blobs: vec![Vec::new()],
+        operation_results: vec![OperationResult::default()],
+    }
+    .with(make_first_block(dummy_chain_id(1)).with_simple_transfer(dummy_chain_id(2), Amount::ONE))
+}
+
+#[test]
+fn block_hash_is_header_hash() {
+    let block = sample_block();
+    assert_eq!(block.hash(), CryptoHash::new(&block.header));
+}
+
+#[test]
+fn confirmed_block_hash_is_header_hash() {
+    let block = sample_block();
+    let header_hash = CryptoHash::new(&block.header);
+    assert_eq!(ConfirmedBlock::new(block.clone()).hash(), header_hash);
+    assert_eq!(ValidatedBlock::new(block).hash(), header_hash);
+}
+
+#[test]
+fn block_serde_round_trip_preserves_hash() {
+    let block = sample_block();
+    let hash = block.hash();
+    let bytes = bcs::to_bytes(&block).unwrap();
+    let restored: Block = bcs::from_bytes(&bytes).unwrap();
+    assert_eq!(restored, block);
+    assert_eq!(restored.hash(), hash);
+}
+
+#[test]
+fn header_verifies_each_body_field() {
+    let block = sample_block();
+    let h = &block.header;
+    let b = &block.body;
+    assert!(h.verifies(b.transactions.clone()));
+    assert!(h.verifies(b.messages.clone()));
+    assert!(h.verifies(b.previous_message_blocks.clone()));
+    assert!(h.verifies(b.previous_event_blocks.clone()));
+    assert!(h.verifies(b.oracle_responses.clone()));
+    assert!(h.verifies(b.events.clone()));
+    assert!(h.verifies(b.blobs.clone()));
+    assert!(h.verifies(b.operation_results.clone()));
+}
+
+#[test]
+fn header_rejects_wrong_field() {
+    let block = sample_block();
+    // sample_block contains one transfer, so an empty transactions list must not verify.
+    assert!(!block
+        .header
+        .verifies(BlockBodyField::Transactions(Vec::new())));
+}
+
+#[test]
+fn light_client_verifies_header_and_one_field() {
+    let validator_key_pair = ValidatorKeypair::generate();
+    let account_secret = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
+    let committee = Committee::make_simple(vec![(
+        validator_key_pair.public_key,
+        account_secret.public(),
+    )]);
+
+    let value = ConfirmedBlock::new(sample_block());
+    let vote = LiteVote::new(
+        LiteValue::new(&value),
+        Round::Fast,
+        &validator_key_pair.secret_key,
+    );
+    let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
+    let certificate = builder
+        .append(validator_key_pair.public_key, vote.signature)
+        .unwrap()
+        .unwrap();
+
+    // The signed commitment is reproducible from the header alone.
+    let header = certificate.block().header.clone();
+    assert_eq!(CryptoHash::new(&header), certificate.hash());
+
+    // One body field can be proven against that header without the rest of the body.
+    let events = certificate.block().body.events.clone();
+    assert!(header.verifies(events));
 }
 
 #[test]

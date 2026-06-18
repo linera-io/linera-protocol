@@ -29,14 +29,26 @@ use crate::{
 };
 
 /// Wrapper around a `Block` that has been validated.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
-#[serde(transparent)]
+#[derive(Debug, PartialEq, Eq, Clone, Allocative)]
 pub struct ValidatedBlock(Hashed<Block>);
+
+impl Serialize for ValidatedBlock {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ValidatedBlock {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::new(Block::deserialize(deserializer)?))
+    }
+}
 
 impl ValidatedBlock {
     /// Creates a new `ValidatedBlock` from a `Block`.
     pub fn new(block: Block) -> Self {
-        Self(Hashed::new(block))
+        let hash = block.hash();
+        Self(Hashed::with_hash(block, hash))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -75,9 +87,20 @@ impl ValidatedBlock {
 }
 
 /// Wrapper around a `Block` that has been confirmed.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Allocative)]
-#[serde(transparent)]
+#[derive(Debug, PartialEq, Eq, Clone, Allocative)]
 pub struct ConfirmedBlock(Hashed<Block>);
+
+impl Serialize for ConfirmedBlock {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ConfirmedBlock {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::new(Block::deserialize(deserializer)?))
+    }
+}
 
 #[async_graphql::Object(cache_control(no_cache))]
 impl ConfirmedBlock {
@@ -97,7 +120,8 @@ impl ConfirmedBlock {
 
 impl ConfirmedBlock {
     pub fn new(block: Block) -> Self {
-        Self(Hashed::new(block))
+        let hash = block.hash();
+        Self(Hashed::with_hash(block, hash))
     }
 
     pub fn from_hashed(block: Hashed<Block>) -> Self {
@@ -463,6 +487,11 @@ impl Block {
         Self { header, body }
     }
 
+    /// Returns the hash of this block, which commits to the entire block via its header.
+    pub fn hash(&self) -> CryptoHash {
+        CryptoHash::new(&self.header)
+    }
+
     /// Returns the bundles of messages sent via the given medium to the specified
     /// recipient. Messages originating from different transactions of the original block
     /// are kept in separate bundles. If the medium is a channel, does not verify that the
@@ -671,7 +700,50 @@ impl Block {
     }
 }
 
-impl BcsHashable<'_> for Block {}
+/// A single field of a [`BlockBody`], paired with enough data to recompute its hash and
+/// check it against the matching hash in a [`BlockHeader`]. This lets a holder of a header
+/// prove that one body field belongs to the block without the rest of the body.
+#[derive(derive_more::From)]
+pub enum BlockBodyField {
+    Transactions(Vec<Transaction>),
+    Messages(Vec<Vec<OutgoingMessage>>),
+    PreviousMessageBlocks(BTreeMap<ChainId, (CryptoHash, BlockHeight)>),
+    PreviousEventBlocks(BTreeMap<StreamId, (CryptoHash, BlockHeight)>),
+    OracleResponses(Vec<Vec<OracleResponse>>),
+    Events(Vec<Vec<Event>>),
+    Blobs(Vec<Vec<Blob>>),
+    OperationResults(Vec<OperationResult>),
+}
+
+impl BlockHeader {
+    /// Returns whether `field` is the body field this header commits to.
+    pub fn verifies(&self, field: impl Into<BlockBodyField>) -> bool {
+        match field.into() {
+            BlockBodyField::Transactions(v) => hashing::hash_vec(v) == self.transactions_hash,
+            BlockBodyField::Messages(v) => hashing::hash_vec_vec(v) == self.messages_hash,
+            BlockBodyField::PreviousMessageBlocks(m) => {
+                CryptoHash::new(&PreviousMessageBlocksMap {
+                    inner: Cow::Owned(m),
+                }) == self.previous_message_blocks_hash
+            }
+            BlockBodyField::PreviousEventBlocks(m) => {
+                CryptoHash::new(&PreviousEventBlocksMap {
+                    inner: Cow::Owned(m),
+                }) == self.previous_event_blocks_hash
+            }
+            BlockBodyField::OracleResponses(v) => {
+                hashing::hash_vec_vec(v) == self.oracle_responses_hash
+            }
+            BlockBodyField::Events(v) => hashing::hash_vec_vec(v) == self.events_hash,
+            BlockBodyField::Blobs(v) => hashing::hash_vec_vec(v) == self.blobs_hash,
+            BlockBodyField::OperationResults(v) => {
+                hashing::hash_vec(v) == self.operation_results_hash
+            }
+        }
+    }
+}
+
+impl BcsHashable<'_> for BlockHeader {}
 
 #[derive(Serialize, Deserialize)]
 pub struct PreviousMessageBlocksMap<'a> {
