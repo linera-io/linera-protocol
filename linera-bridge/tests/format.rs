@@ -1,6 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Builds the BCS registry from offchain-only bridge types (`block_proof`, etc.), so it only
+// compiles when the `offchain` feature is on — never in the wasm32/`chain` contract build.
+#![cfg(all(not(target_arch = "wasm32"), feature = "offchain"))]
+
 use linera_base::{
     crypto::{CryptoHash, TestString},
     data_types::{BlobContent, Event, OracleResponse, Round},
