@@ -1180,7 +1180,7 @@ where
         // tracker would never advance and future events on that stream would never be
         // delivered to subscribers. The counts are contiguous, so this matches the producer's
         // tracker as of just before the checkpoint block.
-        for (stream_id, count) in self
+        for (stream_id, counts) in self
             .chain
             .execution_state
             .system
@@ -1188,7 +1188,9 @@ where
             .index_values()
             .await?
         {
-            self.chain.next_expected_events.insert(&stream_id, count)?;
+            self.chain
+                .next_expected_events
+                .insert(&stream_id, counts.next_index)?;
         }
         // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
         // (for outbox-referenced pre-checkpoint heights), and the outbox views.
@@ -1954,6 +1956,22 @@ where
         stream_id: StreamId,
     ) -> Result<Option<u32>, WorkerError> {
         Ok(self.chain.next_expected_events.get(&stream_id).await?)
+    }
+
+    /// Gets the lowest readable event index for a stream this chain is writing to, i.e. the
+    /// index of the first event published since the most recent checkpoint.
+    pub(crate) async fn get_stream_first_index(
+        &self,
+        stream_id: StreamId,
+    ) -> Result<u32, WorkerError> {
+        Ok(self
+            .chain
+            .execution_state
+            .system
+            .stream_event_counts
+            .get(&stream_id)
+            .await?
+            .map_or(0, |counts| counts.first_index))
     }
 
     /// Gets the `next_expected_events` indices for the given streams.

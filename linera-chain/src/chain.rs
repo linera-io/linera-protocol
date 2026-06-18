@@ -288,7 +288,7 @@ where
     /// Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
     /// vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
     /// in storage. The worker errors a checkpoint push with
-    /// `MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+    /// `BlocksNotFound` when this set is non-empty, then accepts each
     /// referenced cert (regardless of its own — possibly revoked — epoch) and
     /// removes the entry. Once the set is empty, the checkpoint restoration can run
     /// end-to-end.

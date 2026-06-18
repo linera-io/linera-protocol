@@ -223,6 +223,7 @@ pub struct UpdateStreamMetadata {
     pub application_id: String,
     pub chain_id: ChainId,
     pub stream_id: String,
+    pub first_index: i32,
     pub next_index: i32,
 }
 
@@ -388,12 +389,14 @@ impl From<&SystemOperation> for SystemOperationMetadata {
                 application_id,
                 chain_id,
                 stream_id,
+                first_index,
                 next_index,
             } => SystemOperationMetadata {
                 update_stream: Some(UpdateStreamMetadata {
                     application_id: application_id.to_string(),
                     chain_id: *chain_id,
                     stream_id: stream_id.to_string(),
+                    first_index: *first_index as i32,
                     next_index: *next_index as i32,
                 }),
                 ..SystemOperationMetadata::new("UpdateStream")

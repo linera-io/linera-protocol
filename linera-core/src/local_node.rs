@@ -453,6 +453,19 @@ where
             .await?)
     }
 
+    /// Gets the lowest readable event index for a stream a chain is writing to.
+    pub async fn get_stream_first_index(
+        &self,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) -> Result<u32, LocalNodeError> {
+        Ok(self
+            .node
+            .state
+            .get_stream_first_index(chain_id, stream_id)
+            .await?)
+    }
+
     /// Gets the `next_expected_events` indices for the given streams.
     pub async fn next_expected_events(
         &self,

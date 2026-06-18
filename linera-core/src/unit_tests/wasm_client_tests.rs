@@ -742,6 +742,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 1,
         }
     );
@@ -822,6 +823,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 2,
         }
     );
@@ -847,6 +849,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender2.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 1,
         }
     );
@@ -902,6 +905,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 3,
         }
     );
@@ -2132,6 +2136,7 @@ where
                 application_id: application_id.forget_abi(),
                 chain_id: sender.chain_id(),
                 stream_id,
+                first_index: 0,
                 next_index: 1,
             }
             .into()],

@@ -666,6 +666,10 @@ impl<Env: Environment> ChainClient<Env> {
                     else {
                         return Ok::<_, Error>(Vec::new());
                     };
+                    let first_index = client
+                        .local_node
+                        .get_stream_first_index(chain_id, stream_id.clone())
+                        .await?;
                     Ok(subscriptions
                         .applications
                         .into_iter()
@@ -675,6 +679,7 @@ impl<Env: Environment> ChainClient<Env> {
                                 application_id,
                                 chain_id,
                                 stream_id: stream_id.clone(),
+                                first_index,
                                 next_index,
                             }
                             .into()

@@ -1951,6 +1951,18 @@ where
         .await
     }
 
+    /// Gets the lowest readable event index for a stream a chain is writing to.
+    pub async fn get_stream_first_index(
+        &self,
+        chain_id: ChainId,
+        stream_id: StreamId,
+    ) -> Result<u32, WorkerError> {
+        self.chain_read(chain_id, |guard| async move {
+            guard.get_stream_first_index(stream_id).await
+        })
+        .await
+    }
+
     /// Gets the `next_expected_events` indices for the given streams.
     pub async fn next_expected_events(
         &self,

@@ -617,14 +617,14 @@ where
                 value,
                 callback,
             } => {
-                let count = self
+                let counts = self
                     .state
                     .system
                     .stream_event_counts
                     .get_mut_or_default(&stream_id)
                     .await?;
-                let index = *count;
-                *count = count.checked_add(1).ok_or(ArithmeticError::Overflow)?;
+                let index = counts.next_index;
+                counts.next_index = index.checked_add(1).ok_or(ArithmeticError::Overflow)?;
                 self.resource_controller
                     .with_state(&mut self.state.system)
                     .await?
@@ -677,10 +677,13 @@ where
                     }
                     std::collections::btree_map::Entry::Occupied(entry) => *entry.get(),
                 };
+                // The publisher's floor isn't available on the subscriber at subscribe time;
+                // later `UpdateStream` operations carry the real one.
                 self.txn_tracker.add_stream_to_process(
                     subscriber_app_id,
                     chain_id,
                     stream_id,
+                    0,
                     0,
                     next_index,
                 );
@@ -924,13 +927,18 @@ where
             let GenericApplicationId::User(application_id) = stream_id.application_id else {
                 continue;
             };
-            let next_index = self
+            // Advance the stream's readable floor to its current count: every earlier event
+            // predates this checkpoint and is no longer guaranteed available. The first event
+            // published after the checkpoint — including the summary the application may emit
+            // below — lands exactly at this index.
+            let counts = self
                 .state
                 .system
                 .stream_event_counts
-                .get(&stream_id)
-                .await?
-                .unwrap_or(0);
+                .get_mut_or_default(&stream_id)
+                .await?;
+            counts.first_index = counts.next_index;
+            let next_index = counts.next_index;
             // A summary is an absolute-state snapshot, so the application is not handed an
             // incremental range to fold in; `previous_index` is left at 0.
             updates_by_app
@@ -940,6 +948,7 @@ where
                     chain_id: context.chain_id,
                     stream_id,
                     previous_index: 0,
+                    first_index: next_index,
                     next_index,
                 });
         }
