@@ -507,7 +507,7 @@ async fn serve_loop<E: Environment + 'static>(
                     continue;
                 }
 
-                tracing::info!("Received NewIncomingBundle, processing inbox...");
+                tracing::debug!("Received NewIncomingBundle, processing inbox...");
 
                 if let Err(e) = chain_client.synchronize_from_validators().await {
                     tracing::error!("Failed to synchronize: {e}");
@@ -527,7 +527,7 @@ async fn serve_loop<E: Environment + 'static>(
                     continue;
                 }
 
-                tracing::info!(count = certs.len(), "Processed inbox certificates");
+                tracing::debug!(count = certs.len(), "Processed inbox certificates");
             }
 
             Some(op) = op_rx.recv() => {

@@ -168,7 +168,7 @@ impl<P: Provider> EvmClient<P> {
     ) -> Result<()> {
         let args = ProvenEvents::new(cert, tx_index, positions_in_tx);
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        tracing::info!(
+        tracing::debug!(
             tx_index,
             count = positions_in_tx.len(),
             "Calling processBurns on FungibleBridge..."
