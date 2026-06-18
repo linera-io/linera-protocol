@@ -150,6 +150,19 @@ fi
 mkdir -p "$SHARED_DIR"
 echo "  Shared dir: $SHARED_DIR"
 
+# ── Invalidate this run's prior outputs ──
+# Clearing setup-complete here means a fresh setup
+# run re-gates the relay until this run finishes, while a standalone relay
+# restart keeps the existing marker and starts immediately. Also drop the stale
+# IDs/addresses this script produces so nothing reads last run's values mid-run.
+# Files written by the init containers (light-client-address, bridge-chain-id,
+# relay-owner, relay-wallet) are intentionally left untouched.
+echo "Clearing stale setup outputs..."
+dc_exec --user root foundry-tools sh -c \
+    "rm -f /shared/setup-complete /shared/wrapped-app-id /shared/bridge-app-id /shared/bridge-address"
+rm -f "$SHARED_DIR"/wrapped-app-id "$SHARED_DIR"/bridge-app-id "$SHARED_DIR"/bridge-address
+rm -f "$OUTPUT_FILE"
+
 echo "=== Bridge Demo Setup ==="
 echo ""
 echo "Configuration:"
