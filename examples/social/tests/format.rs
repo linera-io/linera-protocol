@@ -10,5 +10,5 @@ use social::formats::SocialApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", SocialApplication::formats().unwrap());
+    insta::assert_yaml_snapshot!("format", SocialApplication::pruned_formats().unwrap());
 }

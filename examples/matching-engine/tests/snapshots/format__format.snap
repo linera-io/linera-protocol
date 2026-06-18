@@ -1,34 +1,8 @@
 ---
 source: matching-engine/tests/format.rs
-expression: "MatchingEngineApplication::formats().unwrap()"
+expression: "MatchingEngineApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
-  AccountOwner:
-    ENUM:
-      0:
-        Reserved:
-          NEWTYPE: U8
-      1:
-        Address32:
-          NEWTYPE:
-            TYPENAME: CryptoHash
-      2:
-        Address20:
-          NEWTYPE:
-            TUPLEARRAY:
-              CONTENT: U8
-              SIZE: 20
-  Amount:
-    NEWTYPESTRUCT: U128
-  ApplicationId:
-    STRUCT:
-      - application_description_hash:
-          TYPENAME: CryptoHash
-  CryptoHash:
-    NEWTYPESTRUCT:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
   Message:
     ENUM:
       0:
