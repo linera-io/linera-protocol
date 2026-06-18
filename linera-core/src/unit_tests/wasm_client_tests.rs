@@ -1061,6 +1061,50 @@ where
         "should have UpdateStreams operations"
     );
 
+    // Regression guard for the readable floor on a preprocess-only subscriber. The sender
+    // checkpoints (summarizing its posts), then a fresh subscriber synchronizes the sender's
+    // event blocks without ever executing the sender's chain. Its `first_index` must reflect
+    // the checkpoint floor, which it can only get from `next_expected_events` (maintained while
+    // preprocessing); the sender's execution state, where the floor used to be read from, is
+    // never populated on a pure subscriber and would yield 0.
+    let posts_stream = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    let checkpoint_cert = sender.checkpoint().await.unwrap().unwrap();
+    let summary_index = checkpoint_cert
+        .block()
+        .body
+        .events
+        .iter()
+        .flatten()
+        .find(|event| event.stream_id == posts_stream)
+        .expect("the checkpoint should summarize the posts stream")
+        .index;
+    assert!(summary_index > 0, "there were posts before the checkpoint");
+
+    let receiver3 = builder.add_root_chain(5, Amount::ONE).await?;
+    receiver3
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Subscribe {
+                chain_id: sender.chain_id(),
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    receiver3.synchronize_from_validators().await.unwrap();
+
+    let counts = receiver3
+        .client
+        .local_node
+        .get_stream_indices(sender.chain_id(), posts_stream)
+        .await?;
+    assert_eq!(
+        counts.first_index, summary_index,
+        "a preprocess-only subscriber must see the post-checkpoint floor, not 0",
+    );
+
     Ok(())
 }
 
