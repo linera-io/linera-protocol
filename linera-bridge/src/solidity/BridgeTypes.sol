@@ -3311,6 +3311,7 @@ library BridgeTypes {
         ApplicationId application_id;
         ChainId chain_id;
         StreamId stream_id;
+        uint32 first_index;
         uint32 next_index;
     }
 
@@ -3322,6 +3323,7 @@ library BridgeTypes {
         bytes memory result = bcs_serialize_ApplicationId(input.application_id);
         result = abi.encodePacked(result, bcs_serialize_ChainId(input.chain_id));
         result = abi.encodePacked(result, bcs_serialize_StreamId(input.stream_id));
+        result = abi.encodePacked(result, bcs_serialize_uint32(input.first_index));
         return abi.encodePacked(result, bcs_serialize_uint32(input.next_index));
     }
 
@@ -3337,9 +3339,11 @@ library BridgeTypes {
         (new_pos, chain_id) = bcs_deserialize_offset_ChainId(new_pos, input);
         StreamId memory stream_id;
         (new_pos, stream_id) = bcs_deserialize_offset_StreamId(new_pos, input);
+        uint32 first_index;
+        (new_pos, first_index) = bcs_deserialize_offset_uint32(new_pos, input);
         uint32 next_index;
         (new_pos, next_index) = bcs_deserialize_offset_uint32(new_pos, input);
-        return (new_pos, SystemOperation_UpdateStream(application_id, chain_id, stream_id, next_index));
+        return (new_pos, SystemOperation_UpdateStream(application_id, chain_id, stream_id, first_index, next_index));
     }
 
     function bcs_deserialize_SystemOperation_UpdateStream(bytes memory input)

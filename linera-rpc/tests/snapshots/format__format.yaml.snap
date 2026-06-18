@@ -1349,6 +1349,7 @@ SystemOperation:
               TYPENAME: ChainId
           - stream_id:
               TYPENAME: StreamId
+          - first_index: U32
           - next_index: U32
     13:
       Checkpoint: UNIT
