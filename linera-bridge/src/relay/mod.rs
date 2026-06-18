@@ -195,6 +195,24 @@ pub async fn run(
     chain_client.synchronize_from_validators().await?;
     tracing::info!(%chain_id, %chain_owner, "Bridge chain registered and synced");
 
+    // Drain any inbox messages that arrived while the relay was down. The serve
+    // loop only processes the inbox on live `NewIncomingBundle` notifications,
+    // so messages delivered during downtime (notably user burns, which arrive
+    // as `BridgeMessage::Burn` and only emit their `BurnEvent` once the bridge
+    // chain processes them) would otherwise sit unprocessed until the next
+    // incoming bundle. The periodic drain in `serve_loop` is the steady-state
+    // safety net; this handles the gap at startup.
+    match Box::pin(chain_client.process_inbox()).await {
+        Ok((certs, _)) if !certs.is_empty() => {
+            tracing::info!(
+                count = certs.len(),
+                "Drained inbox messages accumulated before startup"
+            );
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!("Startup inbox drain failed: {e}"),
+    }
+
     Box::pin(serve_loop(
         chain_client,
         rpc_url,
@@ -462,6 +480,14 @@ async fn serve_loop<E: Environment + 'static>(
         "Relay is ready"
     );
 
+    // Safety-net inbox drain. Notification delivery can be missed (relay down,
+    // stream hiccup), and a missed `NewIncomingBundle` would otherwise strand
+    // its messages until the next one. Reuse the monitor's scan interval as the
+    // drain cadence; an empty inbox makes `process_inbox` a cheap no-op.
+    let mut inbox_drain_interval = tokio::time::interval(monitor_scan_interval);
+    // Consume the immediate first tick — the startup drain above already ran.
+    inbox_drain_interval.tick().await;
+
     // ── Main loop: process chain operations + notifications ──
     tracing::info!("Listening for chain operations and notifications...");
     loop {
@@ -483,6 +509,22 @@ async fn serve_loop<E: Environment + 'static>(
             }
             result = &mut admin_server_handle => {
                 anyhow::bail!("Admin HTTP server exited unexpectedly: {result:?}");
+            }
+            _ = inbox_drain_interval.tick() => {
+                // Periodic safety net for a missed `NewIncomingBundle`: sync and
+                // drain the inbox so stranded messages (e.g. user burns) are
+                // eventually processed even without a fresh notification.
+                if let Err(e) = chain_client.synchronize_from_validators().await {
+                    tracing::warn!("Periodic sync before inbox drain failed: {e}");
+                } else {
+                    match chain_client.process_inbox().await {
+                        Ok((certs, _)) if !certs.is_empty() => {
+                            tracing::info!(count = certs.len(), "Periodic inbox drain processed messages");
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!("Periodic inbox drain failed: {e}"),
+                    }
+                }
             }
             notification = notifications.next() => {
                 let notification = match notification {
