@@ -1249,16 +1249,18 @@ where
     assert_eq!(recent_posts.len(), 2);
 
     // The per-stream event tracker was seeded from the restored counts and advanced past the
-    // re-emitted summary, so it sits one past the summary's index.
-    let expected = follower
+    // re-emitted summary, so `next_index` sits one past the summary's index and the readable
+    // floor points exactly at the summary. A subscriber reading this stream is thus told that
+    // the pruned pre-checkpoint post events below the summary are not available, and to start
+    // at the summary. Both indices live in `next_expected_events`, so they stay correct even on
+    // a node that only preprocesses (never executes) this chain's later blocks.
+    let counts = follower
         .client
         .local_node
-        .next_expected_events(main_id, vec![posts_stream.clone()])
+        .get_stream_indices(main_id, posts_stream.clone())
         .await?;
-    assert_eq!(
-        expected.get(&posts_stream),
-        Some(&(summary_event.index + 1))
-    );
+    assert_eq!(counts.next_index, summary_event.index + 1);
+    assert_eq!(counts.first_index, summary_event.index);
 
     // --- Phase 3: a post-bootstrap cross-chain delivery is accepted via the seeded inbox. ---
     // The follow-up's `sender_previous_height` points at the pre-checkpoint transfer's height,

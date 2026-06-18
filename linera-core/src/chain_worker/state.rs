@@ -34,7 +34,7 @@ use linera_chain::{
         ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
-    ExecutionResultExt as _,
+    ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -1180,7 +1180,7 @@ where
         // tracker would never advance and future events on that stream would never be
         // delivered to subscribers. The counts are contiguous, so this matches the producer's
         // tracker as of just before the checkpoint block.
-        for (stream_id, counts) in self
+        for (stream_id, count) in self
             .chain
             .execution_state
             .system
@@ -1188,9 +1188,15 @@ where
             .index_values()
             .await?
         {
-            self.chain
-                .next_expected_events
-                .insert(&stream_id, counts.next_index)?;
+            // Just after restoring, every event predates the checkpoint, so the readable floor
+            // is the count itself.
+            self.chain.next_expected_events.insert(
+                &stream_id,
+                StreamCounts {
+                    first_index: count,
+                    next_index: count,
+                },
+            )?;
         }
         // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
         // (for outbox-referenced pre-checkpoint heights), and the outbox views.
@@ -1950,29 +1956,21 @@ where
             .await?)
     }
 
-    /// Gets a stream's `(next_index, first_index)`: the next event index expected for the
-    /// stream, and the lowest readable index (the first event published since the most recent
-    /// checkpoint). Both default to 0 for a stream with no events yet, and are read from the
-    /// same chain state view, so they are guaranteed to be mutually consistent.
+    /// Gets a stream's [`StreamCounts`]: the next expected event index and the lowest readable
+    /// index (the first event published since the most recent checkpoint). Both default to 0 for
+    /// a stream with no events yet. They come from the same `next_expected_events` entry, so they
+    /// are mutually consistent and both reflect every block this node has processed — including
+    /// ones it only preprocessed.
     pub(crate) async fn get_stream_indices(
         &self,
         stream_id: StreamId,
-    ) -> Result<(u32, u32), WorkerError> {
-        let next_index = self
+    ) -> Result<StreamCounts, WorkerError> {
+        Ok(self
             .chain
             .next_expected_events
             .get(&stream_id)
             .await?
-            .unwrap_or(0);
-        let first_index = self
-            .chain
-            .execution_state
-            .system
-            .stream_event_counts
-            .get(&stream_id)
-            .await?
-            .map_or(0, |counts| counts.first_index);
-        Ok((next_index, first_index))
+            .unwrap_or_default())
     }
 
     /// Gets the `next_expected_events` indices for the given streams.
@@ -1988,7 +1986,7 @@ where
         Ok(stream_ids
             .into_iter()
             .zip(values)
-            .filter_map(|(id, val)| Some((id, val?)))
+            .filter_map(|(id, val)| Some((id, val?.next_index)))
             .collect())
     }
 

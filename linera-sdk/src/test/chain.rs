@@ -341,12 +341,10 @@ impl ActiveChain {
                     let counts = Box::pin(worker.chain_state_view(chain_id))
                         .await
                         .expect("Failed to query chain state view")
-                        .execution_state
-                        .system
-                        .stream_event_counts
+                        .next_expected_events
                         .get(&stream_id)
                         .await
-                        .expect("Failed to query chain's event counts");
+                        .expect("Failed to query chain's event indices");
                     let Some(counts) =
                         counts.filter(|counts| counts.next_index > subscriptions.min_next_index)
                     else {

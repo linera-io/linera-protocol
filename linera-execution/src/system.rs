@@ -107,8 +107,8 @@ pub struct SystemExecutionStateView<C> {
     pub used_blobs: SetView<C, BlobId>,
     /// The event stream subscriptions of applications on this chain.
     pub event_subscriptions: MapView<C, (ChainId, StreamId), EventSubscriptions>,
-    /// The event indices of the streams that this chain is writing to.
-    pub stream_event_counts: MapView<C, StreamId, StreamCounts>,
+    /// The number of events in the streams that this chain is writing to.
+    pub stream_event_counts: MapView<C, StreamId, u32>,
     /// For each chain that previously received messages from this one and has since
     /// notified us via [`SystemMessage::CheckpointAck`], records the cursor past the last
     /// message we sent that the recipient finalized, together with the hash of the
@@ -200,17 +200,6 @@ impl EventSubscriptions {
             .min()
             .unwrap_or(u32::MAX);
     }
-}
-
-/// The event indices of a stream that a chain is writing to.
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, Allocative)]
-pub struct StreamCounts {
-    /// The lowest event index still guaranteed to be readable: the index of the first event
-    /// published to this stream since the most recent checkpoint. Earlier events may have
-    /// been pruned by a checkpoint and are not available to nodes that bootstrapped from it.
-    pub first_index: u32,
-    /// The number of events in the stream, i.e. the next index to be assigned.
-    pub next_index: u32,
 }
 
 /// The initial configuration for a new chain.
@@ -521,23 +510,12 @@ where
                         };
                         let stream_id = StreamId::system(EPOCH_STREAM_NAME);
                         let next_index = epoch.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-                        // System streams are never pruned by checkpoints, so `first_index` stays 0.
-                        self.stream_event_counts.insert(
-                            &stream_id,
-                            StreamCounts {
-                                first_index: 0,
-                                next_index,
-                            },
-                        )?;
+                        self.stream_event_counts.insert(&stream_id, next_index)?;
                         txn_tracker.add_event(stream_id, epoch.0, bcs::to_bytes(&event_data)?);
                     }
                     AdminOperation::RemoveCommittee { epoch } => {
                         let stream_id = StreamId::system(REMOVED_EPOCH_STREAM_NAME);
-                        let count = self
-                            .stream_event_counts
-                            .get(&stream_id)
-                            .await?
-                            .map_or(0, |counts| counts.next_index);
+                        let count = self.stream_event_counts.get(&stream_id).await?.unwrap_or(0);
                         // Revocations must happen in increasing epoch order, so the stream's
                         // indices stay sequential.
                         ensure!(
@@ -545,14 +523,7 @@ where
                             ExecutionError::InvalidCommitteeRemoval
                         );
                         let next_index = epoch.0.checked_add(1).ok_or(ArithmeticError::Overflow)?;
-                        // System streams are never pruned by checkpoints, so `first_index` stays 0.
-                        self.stream_event_counts.insert(
-                            &stream_id,
-                            StreamCounts {
-                                first_index: 0,
-                                next_index,
-                            },
-                        )?;
+                        self.stream_event_counts.insert(&stream_id, next_index)?;
                         txn_tracker.add_event(stream_id, epoch.0, vec![]);
                     }
                 }

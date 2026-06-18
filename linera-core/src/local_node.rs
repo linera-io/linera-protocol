@@ -16,7 +16,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, ConfirmedBlockCertificate, GenericCertificate},
-    ChainError, ChainExecutionContext,
+    ChainError, ChainExecutionContext, StreamCounts,
 };
 use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Arc as CacheArc, Storage};
@@ -440,13 +440,13 @@ where
         Ok(self.node.state.get_event_subscriptions(chain_id).await?)
     }
 
-    /// Gets a stream's next expected event index and its lowest readable index, read from a
-    /// single chain state view so they are mutually consistent.
+    /// Gets a stream's [`StreamCounts`]: its next expected event index and its lowest readable
+    /// index, read from a single chain state view so they are mutually consistent.
     pub async fn get_stream_indices(
         &self,
         chain_id: ChainId,
         stream_id: StreamId,
-    ) -> Result<(u32, u32), LocalNodeError> {
+    ) -> Result<StreamCounts, LocalNodeError> {
         Ok(self
             .node
             .state
