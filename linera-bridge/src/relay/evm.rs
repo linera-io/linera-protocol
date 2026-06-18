@@ -7,32 +7,16 @@ use alloy::{
     primitives::{Address, Bytes, B256, U256},
     providers::Provider,
     rpc::types::{Filter, Log},
-    sol,
 };
-use alloy_sol_types::SolCall;
 use anyhow::{Context as _, Result};
 use linera_base::data_types::{BlockHeight, Epoch};
+use linera_chain::types::ConfirmedBlockCertificate;
 
 use crate::{
-    evm::light_client::{addCommitteeCall, committeeHeightCall, currentEpochCall},
+    block_proof::{BlockProof, ProvenEvents},
+    contracts::{IFungibleBridge, ILightClient, IERC20},
     proof::deposit_event_signature,
 };
-
-sol! {
-    #[sol(rpc)]
-    interface IFungibleBridge {
-        function addBlock(bytes calldata data) external;
-        function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external;
-        function lightClient() external view returns (address);
-        function token() external view returns (address);
-        function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool);
-    }
-
-    #[sol(rpc)]
-    interface IERC20Decimals {
-        function decimals() external view returns (uint8);
-    }
-}
 
 /// Maximum block range per `eth_getLogs` query.
 const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
@@ -87,7 +71,7 @@ impl<P: Provider> EvmClient<P> {
             .call()
             .await
             .context("failed to query FungibleBridge.token()")?;
-        let token = IERC20Decimals::new(token_addr, &self.provider);
+        let token = IERC20::new(token_addr, &self.provider);
         let decimals = token
             .decimals()
             .call()
@@ -116,105 +100,89 @@ impl<P: Provider> EvmClient<P> {
 
     /// Returns whether the FungibleBridge has already released the burn
     /// at `(height, event_index)` — i.e. whether the corresponding
-    /// `_onBlock` loop iteration ran to completion in some prior `addBlock`
-    /// transaction. `event_index` is the underlying Linera `Event.index`.
+    /// release ran to completion in some prior `processBurns` transaction.
+    /// `event_index` is the underlying Linera `Event.index`.
     /// Per-burn (not per-block, not per-recipient).
     pub async fn is_burn_processed(&self, height: BlockHeight, event_index: u32) -> Result<bool> {
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         Ok(bridge.isBurnProcessed(height.0, event_index).call().await?)
     }
 
-    /// BCS-serialize and forward a certified block to FungibleBridge on EVM.
-    pub async fn forward_cert(
-        &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
-    ) -> Result<()> {
-        let cert_bytes = bcs::to_bytes(cert).context("failed to BCS-serialize certificate")?;
-
-        tracing::info!(
-            size = cert_bytes.len(),
-            "Calling addBlock on FungibleBridge..."
-        );
-
-        let bridge_contract = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        let pending_tx = bridge_contract
-            .addBlock(cert_bytes.into())
+    /// Registers a block on the LightClient from its header and signatures alone, so its events can
+    /// later be settled in chunks. Must succeed before `estimate_process_burns_gas` or
+    /// `process_burns`, both of which prove events against the registered block.
+    pub async fn register_block(&self, cert: &ConfirmedBlockCertificate) -> Result<()> {
+        let lc_addr = self.get_light_client_address().await?;
+        let proof_bytes = bcs::to_bytes(&BlockProof::from_certificate(cert))
+            .context("failed to BCS-serialize block proof")?;
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let receipt = light_client
+            .registerBlock(proof_bytes.into())
             .send()
             .await
-            .context("addBlock send failed")?;
-        let receipt = pending_tx
+            .context("registerBlock send failed")?
             .get_receipt()
             .await
-            .context("addBlock receipt failed")?;
-
-        tracing::info!(
-            tx = ?receipt.transaction_hash,
-            "addBlock transaction confirmed"
-        );
+            .context("registerBlock receipt failed")?;
+        tracing::info!(tx = ?receipt.transaction_hash, "registerBlock transaction confirmed");
         Ok(())
     }
 
-    /// Dry-runs `addBlock(cert)` against the EVM. `Ok(_)` means the call
-    /// fits under the node's current block gas limit; any error covers
-    /// both a real contract revert and the over-block-gas-limit case
-    /// (some nodes return identical empty-data reverts for both). The
-    /// caller treats any error as "route to chunked `processBurns`".
-    pub async fn estimate_add_block_gas(
-        &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
-    ) -> alloy::contract::Result<u64> {
-        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
-        let cert_size = cert_bytes.len();
-        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        let estimate = bridge.addBlock(cert_bytes.into()).estimate_gas().await;
-        tracing::debug!(?estimate, cert_size, "addBlock gas estimate");
-        estimate
-    }
-
-    /// Same as `estimate_add_block_gas` but for
-    /// `processBurns(cert, tx_index, positions_in_tx)`.
+    /// Dry-runs the chunked `processBurns(cert, tx_index, positions_in_tx)` call and returns its
+    /// gas estimate. `Ok(_)` means the chunk fits under the node's block gas limit; any error
+    /// covers both a real revert and the over-block-gas-limit case.
     pub async fn estimate_process_burns_gas(
         &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        cert: &ConfirmedBlockCertificate,
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> alloy::contract::Result<u64> {
-        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
-        let cert_size = cert_bytes.len();
-        let count = positions_in_tx.len();
-        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        let estimate = bridge
-            .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
-            .estimate_gas()
-            .await;
-        tracing::debug!(
+        let args = ProvenEvents::new(cert, tx_index, positions_in_tx);
+        tracing::trace!(
             tx_index,
-            count,
-            ?estimate,
-            cert_size,
-            "processBurns gas estimate"
+            count = positions_in_tx.len(),
+            "Estimating gas for processBurns"
         );
-        estimate
+        let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
+        bridge
+            .processBurns(
+                args.block_hash,
+                args.event_bcs,
+                args.tx_index,
+                args.num_txs,
+                args.num_events_in_tx,
+                args.positions,
+                args.siblings,
+            )
+            .estimate_gas()
+            .await
     }
 
-    /// Submits `processBurns(cert, tx_index, positions_in_tx)` and waits
-    /// for the receipt. Used after `split_to_fit` returns a chunk.
+    /// Submits `processBurns(cert, tx_index, positions_in_tx)` and waits for the receipt. Used after
+    /// `split_to_fit` returns a chunk.
     pub async fn process_burns(
         &self,
-        cert: &linera_chain::types::ConfirmedBlockCertificate,
+        cert: &ConfirmedBlockCertificate,
         tx_index: u32,
         positions_in_tx: &[u32],
     ) -> Result<()> {
-        let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+        let args = ProvenEvents::new(cert, tx_index, positions_in_tx);
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
         tracing::info!(
             tx_index,
             count = positions_in_tx.len(),
-            size = cert_bytes.len(),
             "Calling processBurns on FungibleBridge..."
         );
         let pending_tx = bridge
-            .processBurns(cert_bytes.into(), tx_index, positions_in_tx.to_vec())
+            .processBurns(
+                args.block_hash,
+                args.event_bcs,
+                args.tx_index,
+                args.num_txs,
+                args.num_events_in_tx,
+                args.positions,
+                args.siblings,
+            )
             .send()
             .await
             .context("processBurns send failed")?;
@@ -245,56 +213,60 @@ impl<P: Provider> EvmClient<P> {
     /// Queries the LightClient's current epoch.
     pub async fn get_current_epoch(&self) -> Result<Epoch> {
         let lc_addr = self.get_light_client_address().await?;
-        let call = currentEpochCall {};
-        let tx = alloy::rpc::types::TransactionRequest::default()
-            .to(lc_addr)
-            .input(call.abi_encode().into());
-        let result = self
-            .provider
-            .call(tx)
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let epoch = light_client
+            .currentEpoch()
+            .call()
             .await
             .context("failed to query LightClient.currentEpoch()")?;
-        let epoch = currentEpochCall::abi_decode_returns(&result)
-            .context("failed to decode currentEpoch response")?;
         Ok(Epoch(epoch))
     }
 
-    /// Queries the admin-chain height of the block that created the committee at
-    /// `epoch`. Returns 0 for the genesis committee or an unknown epoch, which is
-    /// a safe scan origin (the relayer then reconciles from height 0).
+    /// Queries the admin-chain height that installed `epoch`'s committee, as
+    /// recorded by the LightClient. Returns height 0 for the genesis committee
+    /// or an unknown epoch, so callers degrade to a full scan.
     pub async fn committee_height(&self, epoch: Epoch) -> Result<BlockHeight> {
         let lc_addr = self.get_light_client_address().await?;
-        let call = committeeHeightCall { epoch: epoch.0 };
-        let tx = alloy::rpc::types::TransactionRequest::default()
-            .to(lc_addr)
-            .input(call.abi_encode().into());
-        let result = self
-            .provider
-            .call(tx)
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let height = light_client
+            .committeeHeight(epoch.0)
+            .call()
             .await
             .context("failed to query LightClient.committeeHeight()")?;
-        let height = committeeHeightCall::abi_decode_returns(&result)
-            .context("failed to decode committeeHeight response")?;
         Ok(BlockHeight(height))
     }
 
-    /// Relays a committee update to the LightClient contract.
+    /// Relays a committee update to the LightClient contract. Registers the admin block (verifying
+    /// its quorum on-chain), then proves the single epoch event's inclusion against it by hash and
+    /// submits `addCommittee` — the same register-then-prove path `processBurns` uses for burns.
     pub async fn add_committee(
         &self,
-        certificate_bytes: &[u8],
+        cert: &ConfirmedBlockCertificate,
         committee_blob: &[u8],
     ) -> Result<alloy::primitives::TxHash> {
         let lc_addr = self.get_light_client_address().await?;
-        let call = addCommitteeCall {
-            data: Bytes::copy_from_slice(certificate_bytes),
-            committeeBlob: Bytes::copy_from_slice(committee_blob),
-        };
-        let tx = alloy::rpc::types::TransactionRequest::default()
-            .to(lc_addr)
-            .input(call.abi_encode().into());
-        let receipt = self
-            .provider
-            .send_transaction(tx)
+        // Register the admin block so `addCommittee` can reference it by hash, exactly like burns.
+        self.register_block(cert).await?;
+        // Prove the single committee epoch event against the registered block — the same
+        // `ProvenEvents` witness burns use; `committee_blob` is the only extra argument.
+        let committee_event = super::committee::find_committee_event(cert)
+            .context("block has no committee epoch event")?;
+        let tx_index = u32::try_from(committee_event.tx_index).expect("tx index exceeds u32");
+        let position = u32::try_from(committee_event.position).expect("event position exceeds u32");
+        let proven = ProvenEvents::new(cert, tx_index, &[position]);
+        let light_client = ILightClient::new(lc_addr, &self.provider);
+        let receipt = light_client
+            .addCommittee(
+                proven.block_hash,
+                proven.event_bcs,
+                proven.tx_index,
+                proven.num_txs,
+                proven.num_events_in_tx,
+                proven.positions,
+                proven.siblings,
+                Bytes::copy_from_slice(committee_blob),
+            )
+            .send()
             .await
             .context("addCommittee send failed")?
             .get_receipt()

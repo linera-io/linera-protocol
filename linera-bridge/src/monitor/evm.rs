@@ -7,6 +7,7 @@
 use std::{sync::Arc, time::Duration};
 
 use alloy::providers::Provider;
+use linera_core::environment::Environment;
 use tokio::sync::{Notify, RwLock};
 
 use super::{MonitorState, PendingDeposit};
@@ -18,7 +19,7 @@ use crate::{
 /// Background task that polls EVM for `DepositInitiated` events and checks
 /// Linera for completion. Newly-discovered deposits are written to
 /// `MonitorState` (and SQLite) and the consumer is woken via `notify`.
-pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
+pub async fn evm_scan_loop<E: Environment + 'static>(
     monitor: Arc<RwLock<MonitorState>>,
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
@@ -53,7 +54,7 @@ pub async fn evm_scan_loop<E: linera_core::environment::Environment + 'static>(
 /// Drains `MonitorState.deposits` for items ready for retry, processing one at
 /// a time. Sleeps on `notify` (woken by the scanner) or on `poll_interval`
 /// (whichever comes first) when nothing is ready.
-pub(crate) async fn process_pending_deposits<E: linera_core::environment::Environment>(
+pub(crate) async fn process_pending_deposits<E: Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
     proof_client: &crate::proof::gen::HttpDepositProofClient,
@@ -238,7 +239,7 @@ async fn evm_scan_iteration(
     Ok(())
 }
 
-async fn check_deposit_completion<E: linera_core::environment::Environment>(
+async fn check_deposit_completion<E: Environment>(
     monitor: &RwLock<MonitorState>,
     linera_client: &LineraClient<E>,
 ) -> anyhow::Result<()> {

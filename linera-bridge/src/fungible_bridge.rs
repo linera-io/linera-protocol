@@ -6,16 +6,13 @@
 #[cfg(test)]
 mod tests {
     use alloy_sol_types::SolEvent;
-    use linera_base::{
-        crypto::{CryptoHash, TestString, ValidatorSecretKey},
-        data_types::{BlockHeight, U128},
-    };
+    use linera_base::crypto::{CryptoHash, TestString, ValidatorSecretKey};
     use revm::{
         database::{CacheDB, EmptyDB},
         primitives::Address,
     };
 
-    use crate::{evm::microchain::addBlockCall, test_helpers::*};
+    use crate::test_helpers::*;
 
     mod erc20 {
         use alloy_sol_types::sol;
@@ -55,113 +52,16 @@ mod tests {
     struct TestBridge {
         db: CacheDB<EmptyDB>,
         deployer: Address,
-        secret: ValidatorSecretKey,
-        public: linera_base::crypto::ValidatorPublicKey,
         chain_id: CryptoHash,
         app_id: CryptoHash,
         bridge: Address,
         token: Address,
-        next_height: u64,
     }
 
     /// Initial token supply for tests (1 million tokens with 18 decimals).
     const INITIAL_SUPPLY: u128 = 1_000_000_000_000_000_000_000_000;
 
     impl TestBridge {
-        fn new() -> Self {
-            let mut db = CacheDB::new(EmptyDB::default());
-            let deployer = Address::from([0x01; 20]);
-
-            let secret = ValidatorSecretKey::generate();
-            let public = secret.public();
-            let validator_addr = validator_evm_address(&public);
-            let admin_chain_id = test_admin_chain_id();
-            let light_client = deploy_light_client(
-                &mut db,
-                deployer,
-                &[validator_addr],
-                &[1],
-                admin_chain_id,
-                0,
-            );
-
-            let token = deploy_linera_token(
-                &mut db,
-                deployer,
-                alloy_primitives::U256::from(INITIAL_SUPPLY),
-            );
-
-            let chain_id = CryptoHash::new(&TestString::new("test_chain"));
-            let app_id = CryptoHash::new(&TestString::new("fungible_app"));
-            let bridge = deploy_fungible_bridge(
-                &mut db,
-                deployer,
-                light_client,
-                chain_id,
-                token,
-                app_id,
-                app_id,
-            );
-
-            // Fund the bridge with the full token supply
-            call_contract(
-                &mut db,
-                deployer,
-                token,
-                &erc20::transferCall {
-                    to: bridge,
-                    amount: alloy_primitives::U256::from(INITIAL_SUPPLY),
-                },
-            );
-
-            Self {
-                db,
-                deployer,
-                secret,
-                public,
-                chain_id,
-                app_id,
-                bridge,
-                token,
-                next_height: 1,
-            }
-        }
-
-        /// Submits a block containing a BurnEvent, returns logs and gas used.
-        fn submit_burn(
-            &mut self,
-            target: [u8; 20],
-            amount: U128,
-        ) -> (Vec<revm::primitives::Log>, u64) {
-            let evt = burn_event(self.app_id, target, amount, 0);
-            self.submit_block_with_events(vec![vec![evt]])
-        }
-
-        /// Submits a block with the given events.
-        fn submit_block_with_events(
-            &mut self,
-            events: Vec<Vec<linera_base::data_types::Event>>,
-        ) -> (Vec<revm::primitives::Log>, u64) {
-            let height = BlockHeight(self.next_height);
-            self.next_height += 1;
-            let cert = create_certificate_with_events(
-                &self.secret,
-                &self.public,
-                self.chain_id,
-                height,
-                events,
-            );
-            let (_, logs, gas) = call_contract(
-                &mut self.db,
-                self.deployer,
-                self.bridge,
-                &addBlockCall {
-                    data: bcs::to_bytes(&cert).unwrap().into(),
-                },
-            );
-            (logs, gas)
-        }
-
         /// Queries the token balance of an address on the mock ERC20.
         fn query_token_balance(&mut self, account: Address) -> alloy_primitives::U256 {
             let (balance, _, _) = call_contract(
@@ -172,87 +72,6 @@ mod tests {
             );
             balance
         }
-    }
-
-    const TEST_TARGET: [u8; 20] = [0xAB; 20];
-
-    fn test_target_evm_address() -> Address {
-        Address::from_slice(&TEST_TARGET)
-    }
-
-    #[test]
-    fn test_fungible_bridge_releases_on_burn() {
-        let mut t = TestBridge::new();
-
-        assert_eq!(
-            t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::ZERO,
-            "target should start with zero balance"
-        );
-
-        let transfer_amount = 100_000_000_000_000_000_000u128;
-
-        t.submit_burn(TEST_TARGET, U128(transfer_amount));
-
-        assert_eq!(
-            t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(transfer_amount),
-            "target should have 100 tokens"
-        );
-    }
-
-    #[test]
-    fn test_fungible_bridge_accumulates_burns() {
-        let mut t = TestBridge::new();
-
-        let transfer_amount = 100_000_000_000_000_000_000u128;
-
-        t.submit_burn(TEST_TARGET, U128(transfer_amount));
-        assert_eq!(
-            t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(transfer_amount),
-            "balance should be 100 tokens after first burn"
-        );
-
-        let second_transfer = 50_000_000_000_000_000_000u128;
-
-        t.submit_burn(TEST_TARGET, U128(second_transfer));
-        assert_eq!(
-            t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::from(transfer_amount + second_transfer),
-            "balance should be 150 tokens after two burns"
-        );
-
-        // Bridge balance should have decreased accordingly
-        assert_eq!(
-            t.query_token_balance(t.bridge),
-            alloy_primitives::U256::from(INITIAL_SUPPLY - (transfer_amount + second_transfer)),
-            "bridge balance should decrease"
-        );
-    }
-
-    #[test]
-    fn test_fungible_bridge_ignores_other_applications() {
-        let mut t = TestBridge::new();
-        let other_app_id = CryptoHash::new(&TestString::new("other_app"));
-
-        let evt = burn_event(other_app_id, TEST_TARGET, U128(50u128 * 10u128.pow(18)), 0);
-        t.submit_block_with_events(vec![vec![evt]]);
-
-        assert_eq!(
-            t.query_token_balance(test_target_evm_address()),
-            alloy_primitives::U256::ZERO,
-            "should not transfer for other applications"
-        );
-    }
-
-    #[test]
-    fn test_fungible_bridge_gas_measurement() {
-        let mut t = TestBridge::new();
-
-        let (_, gas_used) = t.submit_burn(TEST_TARGET, U128(100u128 * 10u128.pow(18)));
-
-        println!("Gas used for fungible bridge addBlock with BurnEvent: {gas_used}");
     }
 
     // --- EVM→Linera deposit tests ---
@@ -316,13 +135,10 @@ mod tests {
         TestBridge {
             db,
             deployer,
-            secret,
-            public,
             chain_id,
             app_id,
             bridge,
             token,
-            next_height: 1,
         }
     }
 

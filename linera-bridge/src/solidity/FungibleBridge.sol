@@ -48,7 +48,7 @@ contract FungibleBridge is Microchain {
     /// `keccak256(abi.encode(bridgeApplicationId, height, eventIndex))`
     /// where `eventIndex` is the underlying Linera `Event.index` — the
     /// position of the burn event within its stream. Set inside
-    /// `_onBlock` after the burn's `token.transfer` succeeds.
+    /// `processBurns` after the burn's `token.transfer` succeeds.
     mapping(bytes32 => bool) internal processedBurns;
 
     constructor(
@@ -66,7 +66,7 @@ contract FungibleBridge is Microchain {
     }
 
     /// Returns whether the burn at `(height, eventIndex)` has already been
-    /// released by a prior `addBlock` call. `eventIndex` matches
+    /// released by a prior `processBurns` call. `eventIndex` matches
     /// `Event.index` from the Linera block body — the same value the
     /// off-chain relayer pulls from the certificate.
     function isBurnProcessed(uint64 height, uint32 eventIndex) external view returns (bool) {
@@ -109,63 +109,50 @@ contract FungibleBridge is Microchain {
         );
     }
 
-    /// Processes a Linera block and releases ERC-20 tokens for any BurnEvent
-    /// events on the "burns" stream from the bridge application.
-    /// Idempotent: each burn's release is gated on
-    /// `processedBurns[keccak256(abi.encode(bridgeApplicationId, height, evt.index))]`, so
-    /// re-submitting the same cert is a no-op for burns already released
-    /// by a prior call.
-    function _onBlock(BridgeTypes.Block memory blockValue) internal override {
-        bytes32 burnsHash = keccak256("burns");
-        uint64 height = blockValue.header.height.value;
-        for (uint256 i = 0; i < blockValue.body.events.length; i++) {
-            BridgeTypes.Event[] memory txEvents = blockValue.body.events[i];
-            for (uint256 j = 0; j < txEvents.length; j++) {
-                BridgeTypes.Event memory evt = txEvents[j];
-                if (!_isMatchingBurn(evt, burnsHash)) continue;
+    /// Releases the burns whose canonical BCS encodings are `eventBcs`, after proving they sit at
+    /// `positions` within transaction `txIndex` of the block registered under `blockHash` (see
+    /// `LightClient.proveEventsCommitted`). The off-chain relayer registers the block once, then
+    /// settles burns in chunks, each proving only its own events instead of re-verifying the whole
+    /// certificate.
+    ///
+    /// Idempotent: burns already in `processedBurns` are skipped silently rather than reverted, so
+    /// the relayer can recover from overlap with a racing/retrying `processBurns`.
+    ///
+    /// Reverts (atomically — no `processedBurns` flag is set if the call reverts) on:
+    /// - empty `positions` (`"empty positions"`)
+    /// - a block that was never registered (`"block not registered"`)
+    /// - a block registered for a different chain (`"chain id mismatch"`)
+    /// - a failed inclusion proof: events/siblings do not fold to the block's `events_hash`
+    ///   (`"event inclusion proof failed"`)
+    /// - any event that is not a matching burn for this app (`"not a matching burn"`)
+    /// - any failed `token.transfer` (`"safeTransfer failed"`)
+    function processBurns(
+        bytes32 blockHash,
+        bytes[] calldata eventBcs,
+        uint32 txIndex,
+        uint32 numTxs,
+        uint32 numEventsInTx,
+        uint32[] calldata positions,
+        bytes32[] calldata siblings
+    ) external {
+        require(positions.length > 0, "empty positions");
 
-                bytes32 key = _burnKey(height, evt.index);
-                if (processedBurns[key]) continue;
+        // The block must have been registered (its signatures were checked once, then); fetch its
+        // committed events hash and metadata, then prove these events are part of it.
+        (bytes32 eventsHash, uint64 height, bytes32 blockChainId,) = lightClient.registeredBlocks(blockHash);
+        require(eventsHash != 0, "block not registered");
+        require(blockChainId == chainId, "chain id mismatch");
+        lightClient.proveEventsCommitted(eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
 
-                _releaseBurn(evt, key, height);
-            }
-        }
+        _releaseBurns(eventBcs, height);
     }
 
-    /// Processes burns at the requested `eventPositionsInTx` positions
-    /// within transaction `txIndex` of `cert`. Verifies the cert once
-    /// and uses direct array access (`body.events[txIndex][pos]`) for
-    /// every burn — no nested-loop scan. The off-chain relayer uses
-    /// this when `addBlock(cert)` would not fit in a single EVM tx,
-    /// chunking burns per-tx-then-by-gas.
-    ///
-    /// Idempotent like `_onBlock`: positions already in `processedBurns` are
-    /// skipped silently rather than reverted. Lets the relayer recover from
-    /// overlap with a prior `addBlock` (or a racing/retrying `processBurns`)
-    /// instead of losing the whole chunk to a single duplicate.
-    ///
-    /// Reverts (atomically — no `processedBurns` flag is set if the call
-    /// reverts) on:
-    /// - empty `eventPositionsInTx` (`"empty positions"`)
-    /// - `txIndex` out of range (`"txIndex out of range"`)
-    /// - any position out of range (`"eventPos out of range"`)
-    /// - any position whose event is not a matching burn for this app
-    ///   (`"not a matching burn"`)
-    /// - any failed `token.transfer` (`"safeTransfer failed"`)
-    function processBurns(bytes calldata data, uint32 txIndex, uint32[] calldata eventPositionsInTx) external {
-        require(eventPositionsInTx.length > 0, "empty positions");
-        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
-        require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
-        require(txIndex < blockValue.body.events.length, "txIndex out of range");
-
-        uint64 height = blockValue.header.height.value;
+    /// Releases each burn in `eventBcs` (already proven included in a block at `height`), skipping
+    /// any already in `processedBurns`.
+    function _releaseBurns(bytes[] calldata eventBcs, uint64 height) private {
         bytes32 burnsHash = keccak256("burns");
-        BridgeTypes.Event[] memory txEvents = blockValue.body.events[txIndex];
-
-        for (uint256 k = 0; k < eventPositionsInTx.length; k++) {
-            uint32 pos = eventPositionsInTx[k];
-            require(pos < txEvents.length, "eventPos out of range");
-            BridgeTypes.Event memory evt = txEvents[pos];
+        for (uint256 k = 0; k < eventBcs.length; k++) {
+            BridgeTypes.Event memory evt = BridgeTypes.bcs_deserialize_Event(eventBcs[k]);
             require(_isMatchingBurn(evt, burnsHash), "not a matching burn");
 
             bytes32 key = _burnKey(height, evt.index);
@@ -200,7 +187,7 @@ contract FungibleBridge is Microchain {
     /// Releases the ERC-20 tokens for the burn described by `evt`. Sets
     /// the dedup flag BEFORE the external `token.transfer` call
     /// (checks-effects-interactions) so a malicious token that re-enters
-    /// `addBlock` / `processBurns` cannot trigger a second release.
+    /// `processBurns` cannot trigger a second release.
     function _releaseBurn(BridgeTypes.Event memory evt, bytes32 key, uint64 height) private {
         WrappedFungibleTypes.BurnEvent memory burnEvt = WrappedFungibleTypes.bcs_deserialize_BurnEvent(evt.value);
         processedBurns[key] = true;

@@ -9,9 +9,6 @@ pub mod client;
 /// LightClient Solidity ABI (committee/epoch management on EVM).
 pub mod light_client;
 
-/// Microchain Solidity ABI (block relay on EVM).
-pub mod microchain;
-
 /// Solidity source for the BridgeTypes library (generated).
 pub const BRIDGE_TYPES_SOURCE: &str = include_str!("../solidity/BridgeTypes.sol");
 
@@ -21,3 +18,9 @@ pub const WRAPPED_FUNGIBLE_TYPES_SOURCE: &str =
 
 /// Solidity source for the FungibleBridge contract.
 pub const FUNGIBLE_BRIDGE_SOURCE: &str = include_str!("../solidity/FungibleBridge.sol");
+
+/// Solidity source for the Microchain abstract contract.
+pub const MICROCHAIN_SOURCE: &str = include_str!("../solidity/Microchain.sol");
+
+/// Solidity source for the LightClient contract.
+pub const LIGHTCLIENT_SOURCE: &str = include_str!("../solidity/LightClient.sol");

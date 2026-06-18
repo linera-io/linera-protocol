@@ -14,7 +14,6 @@ use alloy::{
     primitives::{FixedBytes, U256},
     providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
-    sol,
 };
 use anyhow::Context as _;
 use linera_base::{
@@ -25,6 +24,7 @@ use linera_base::{
 };
 use linera_bridge::{
     abi::{BridgeInstantiationArgument, BridgeOperation, BridgeParameters},
+    contracts::{IFungibleBridge, IERC20},
     proof::gen::{DepositProofClient as _, HttpDepositProofClient},
 };
 use linera_bridge_e2e::{
@@ -39,25 +39,6 @@ use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use serde::Serialize;
 use wrapped_fungible::{InitialState, WrappedParameters};
-
-// ── Solidity interfaces for EVM calls ───────────────────────────────────────
-
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function approve(address spender, uint256 amount) external returns (bool);
-    }
-
-    #[sol(rpc)]
-    interface IFungibleBridge {
-        function deposit(
-            bytes32 target_chain_id,
-            bytes32 target_application_id,
-            bytes32 target_account_owner,
-            uint256 amount
-        ) external;
-    }
-}
 
 #[tokio::test]
 #[ignore] // Requires pre-built docker images and Wasm: `make -C linera-bridge build-all`
