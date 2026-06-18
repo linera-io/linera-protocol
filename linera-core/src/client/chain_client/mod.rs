@@ -1055,7 +1055,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .await;
         }
 
-        info!("find_received_certificates finished");
+        trace!("find_received_certificates finished");
 
         Ok(())
     }

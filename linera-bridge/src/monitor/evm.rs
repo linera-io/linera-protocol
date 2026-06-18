@@ -230,7 +230,7 @@ async fn evm_scan_iteration(
     }
 
     let mut state = monitor.write().await;
-    state.last_scanned_evm_block = current_block;
+    state.advance_evm_cursor(current_block).await;
     crate::relay::metrics::set_last_scanned_evm_block(current_block);
 
     if tracked_any {

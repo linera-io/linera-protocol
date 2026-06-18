@@ -177,6 +177,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             0,                                 // monitor_start_block
             5,                                 // max_retries
             None,
+            None,
         ))
         .await
     });

@@ -35,6 +35,11 @@ use sqlx::{
 use super::{PendingBurn, PendingDeposit};
 use crate::proof::DepositKey;
 
+/// `scan_cursors.name` for the highest fully-scanned Linera block height.
+pub(crate) const CURSOR_LINERA_HEIGHT: &str = "last_scanned_linera_height";
+/// `scan_cursors.name` for the highest fully-scanned EVM block number.
+pub(crate) const CURSOR_EVM_BLOCK: &str = "last_scanned_evm_block";
+
 /// Persistent SQLite store for bridging requests.
 pub struct BridgeDb {
     pool: SqlitePool,
@@ -142,6 +147,15 @@ impl BridgeDb {
         .execute(&self.pool)
         .await?;
 
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS scan_cursors (
+                name   TEXT PRIMARY KEY,
+                value  INTEGER NOT NULL
+            )",
+        )
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 
@@ -227,6 +241,55 @@ impl BridgeDb {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    /// Persists a scan cursor (a monotonic high-water mark) by name.
+    pub async fn save_cursor(&self, name: &str, value: u64) -> Result<()> {
+        sqlx::query("INSERT OR REPLACE INTO scan_cursors (name, value) VALUES (?, ?)")
+            .bind(name)
+            .bind(value as i64)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Loads a scan cursor by name, or `None` if it has never been persisted.
+    pub async fn load_cursor(&self, name: &str) -> Result<Option<u64>> {
+        let row: Option<(i64,)> = sqlx::query_as("SELECT value FROM scan_cursors WHERE name = ?")
+            .bind(name)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|(v,)| v as u64))
+    }
+
+    /// Whether the burn at `(height, event_index)` is already recorded as
+    /// completed. `failed` burns return `false` so the retry path can requeue
+    /// them.
+    pub async fn is_burn_completed(&self, height: BlockHeight, event_index: u32) -> Result<bool> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT status FROM finished_burns WHERE linera_height = ? AND event_index = ?",
+        )
+        .bind(height.0 as i64)
+        .bind(event_index as i64)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(matches!(row, Some((status,)) if status == "completed"))
+    }
+
+    /// Whether the given deposit is already recorded as completed. `failed`
+    /// deposits return `false` so the retry path can requeue them.
+    pub async fn is_deposit_completed(&self, key: &DepositKey) -> Result<bool> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT status FROM finished_deposits
+             WHERE source_chain_id = ? AND block_hash = ? AND tx_index = ? AND log_index = ?",
+        )
+        .bind(key.source_chain_id as i64)
+        .bind(key.block_hash.as_slice())
+        .bind(key.tx_index as i64)
+        .bind(key.log_index as i64)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(matches!(row, Some((status,)) if status == "completed"))
     }
 
     /// Inserts a new pending burn. Ignores duplicates (idempotent).
@@ -971,5 +1034,84 @@ mod tests {
 
         std::fs::remove_file(&path).ok(); // Best-effort post-test cleanup.
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn scan_cursor_roundtrips_and_defaults_to_none() {
+        let db = BridgeDb::open_in_memory().await.unwrap();
+        assert_eq!(db.load_cursor(CURSOR_LINERA_HEIGHT).await.unwrap(), None);
+
+        db.save_cursor(CURSOR_LINERA_HEIGHT, 17).await.unwrap();
+        assert_eq!(
+            db.load_cursor(CURSOR_LINERA_HEIGHT).await.unwrap(),
+            Some(17)
+        );
+
+        // Saving again overwrites (INSERT OR REPLACE), and cursors are independent.
+        db.save_cursor(CURSOR_LINERA_HEIGHT, 42).await.unwrap();
+        db.save_cursor(CURSOR_EVM_BLOCK, 9).await.unwrap();
+        assert_eq!(
+            db.load_cursor(CURSOR_LINERA_HEIGHT).await.unwrap(),
+            Some(42)
+        );
+        assert_eq!(db.load_cursor(CURSOR_EVM_BLOCK).await.unwrap(), Some(9));
+    }
+
+    #[tokio::test]
+    async fn is_burn_completed_only_true_for_completed_status() {
+        let db = BridgeDb::open_in_memory().await.unwrap();
+        let burn = test_burn(); // height 100, event_index 0
+
+        // Absent → false.
+        assert!(!db
+            .is_burn_completed(burn.height, burn.event_index)
+            .await
+            .unwrap());
+
+        // Pending (not yet finished) → false.
+        db.insert_burn(&burn).await.unwrap();
+        assert!(!db
+            .is_burn_completed(burn.height, burn.event_index)
+            .await
+            .unwrap());
+
+        // Completed → true.
+        db.update_burn_status(burn.height, burn.event_index, "completed")
+            .await
+            .unwrap();
+        assert!(db
+            .is_burn_completed(burn.height, burn.event_index)
+            .await
+            .unwrap());
+
+        // Failed → false (so the retry path can requeue it).
+        let failed = PendingBurn {
+            event_index: 1,
+            ..test_burn()
+        };
+        db.insert_burn(&failed).await.unwrap();
+        db.update_burn_status(failed.height, failed.event_index, "failed")
+            .await
+            .unwrap();
+        assert!(!db
+            .is_burn_completed(failed.height, failed.event_index)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn is_deposit_completed_only_true_for_completed_status() {
+        let db = BridgeDb::open_in_memory().await.unwrap();
+        let deposit = test_deposit();
+
+        assert!(!db.is_deposit_completed(&deposit.key).await.unwrap());
+
+        db.insert_deposit(&deposit).await.unwrap();
+        assert!(!db.is_deposit_completed(&deposit.key).await.unwrap());
+
+        db.update_deposit_status(&deposit.key, "completed")
+            .await
+            .unwrap();
+        assert!(db.is_deposit_completed(&deposit.key).await.unwrap());
     }
 }
