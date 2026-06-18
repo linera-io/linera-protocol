@@ -49,7 +49,7 @@ use linera_views::{
     views::{ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::oneshot;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
@@ -1779,10 +1779,22 @@ where
         //    first one lands on the wiped, height-0 chain with a tip gap: if it is a checkpoint
         //    `process_confirmed_block` installs its snapshot before executing, and otherwise
         //    (height 0) it executes directly. The remaining blocks are contiguous.
+        let total = block_hashes
+            .iter()
+            .filter(|(height, _)| *height >= restore_from)
+            .count();
+        let mut replayed = 0;
         for (height, hash) in block_hashes {
             if height < restore_from {
                 continue;
             }
+            if replayed % 1000 == 0 {
+                info!(
+                    %chain_id, replayed, total,
+                    "Re-executing confirmed blocks after reset"
+                );
+            }
+            replayed += 1;
             let cert = self
                 .storage
                 .read_certificate(hash)
