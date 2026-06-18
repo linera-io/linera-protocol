@@ -45,7 +45,7 @@ use linera_views::{
     views::{ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::oneshot;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
@@ -1558,8 +1558,16 @@ where
         );
 
         // 4. Re-load certificates one at a time by hash and re-process them.
+        let num_confirmed = hashes.len();
+        let num_preprocessed = preprocessed.len();
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
+            if index % 1000 == 0 {
+                info!(
+                    %chain_id, confirmed = index, total = num_confirmed,
+                    "Re-executing confirmed blocks after reset"
+                );
+            }
             let cert = self
                 .storage
                 .read_certificate(hash)
@@ -1569,7 +1577,13 @@ where
             Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Execute, None))
                 .await?;
         }
-        for (height, hash) in preprocessed {
+        for (index, (height, hash)) in preprocessed.into_iter().enumerate() {
+            if index % 1000 == 0 {
+                info!(
+                    %chain_id, preprocessed = index, total = num_preprocessed,
+                    "Re-preprocessing blocks after reset"
+                );
+            }
             let cert = self
                 .storage
                 .read_certificate(hash)
