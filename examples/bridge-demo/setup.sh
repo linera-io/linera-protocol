@@ -363,10 +363,14 @@ echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 8. Register the bridge ↔ wrapped relationship on both sides ──
 echo "Registering the bridge as the wrapped-fungible authorized caller..."
-# BCS: WrappedFungibleOperation::RegisterAuthorizedCaller (variant 8) + 32-byte
-# bridge app ID. Submitted on the WRAPPED app, on the mint (bridge) chain — the
-# relay wallet owns that chain.
-REGISTER_CALLER_HEX="08${BRIDGE_APP_ID}"
+# WrappedFungibleOperation::RegisterAuthorizedCaller + 32-byte bridge app ID,
+# submitted on the WRAPPED app, on the mint (bridge) chain — the relay wallet
+# owns that chain. The operation enum derives `StableEnum`, so the wire tag is
+# not the BCS variant index but a 4-byte ULEB128 of the variant's stable tag:
+# keccak256(name)[0..4] as big-endian u32, masked (v & 0x07FFFFFF) | 0x08000000.
+# RegisterAuthorizedCaller → tag 170732950 → ULEB128 0x96dbb451. Regenerate with
+# `cast keccak RegisterAuthorizedCaller` if the variant is ever renamed.
+REGISTER_CALLER_HEX="96dbb451${BRIDGE_APP_ID}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
@@ -377,8 +381,10 @@ dc_exec linera-network env \
     --chain-id "$BRIDGE_CHAIN_ID" 2>&1
 
 echo "Registering FungibleBridge address in evm-bridge..."
-# BCS: BridgeOperation::RegisterFungibleBridge (variant 2) + 20-byte EVM address.
-REGISTER_BRIDGE_HEX="02${BRIDGE_ADDR_HEX}"
+# BridgeOperation::RegisterFungibleBridge + 20-byte EVM address. Same StableEnum
+# encoding as above: RegisterFungibleBridge → tag 230758129 → ULEB128 0xf1ad846e.
+# Regenerate with `cast keccak RegisterFungibleBridge` if the variant is renamed.
+REGISTER_BRIDGE_HEX="f1ad846e${BRIDGE_ADDR_HEX}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
