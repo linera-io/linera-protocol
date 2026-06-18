@@ -263,6 +263,10 @@ services:
       - MONITOR_SCAN_INTERVAL=${MONITOR_SCAN_INTERVAL:-5}
       - MONITOR_START_BLOCK=${MONITOR_START_BLOCK:-0}
       - MAX_RETRIES=${MAX_RETRIES:-10}
+      # Anvil is reached via the non-loopback host `anvil`, which alloy treats as
+      # remote (7s receipt poll). Match anvil's ~1s block time so settlement is
+      # fast locally.
+      - EVM_POLL_INTERVAL_MS=${EVM_POLL_INTERVAL_MS:-200}
     volumes:
       - bridge-shared:/shared
     depends_on:

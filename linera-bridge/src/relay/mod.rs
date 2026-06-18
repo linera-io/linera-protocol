@@ -102,6 +102,7 @@ pub async fn run(
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path: Option<&Path>,
+    evm_poll_interval: Option<Duration>,
 ) -> Result<()> {
     tracing::info!("Starting bridge relay server...");
 
@@ -208,6 +209,7 @@ pub async fn run(
         monitor_start_block,
         max_retries,
         sqlite_path,
+        evm_poll_interval,
         Path::new(db_path),
         admin_chain_id,
         admin_chain_height,
@@ -263,6 +265,7 @@ async fn serve_loop<E: Environment + 'static>(
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
+    evm_poll_interval: Option<Duration>,
     storage_dir: &Path,
     admin_chain_id: ChainId,
     admin_chain_height: BlockHeight,
@@ -279,6 +282,16 @@ async fn serve_loop<E: Environment + 'static>(
         .wallet(evm_wallet)
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
+
+    // Alloy derives the receipt poll interval from the RPC host: ~250ms for a
+    // loopback address, 7s otherwise. A local node reached via a non-loopback
+    // host (e.g. the Docker service name `anvil`) is treated as remote, so each
+    // settlement tx would wait ~7s despite sub-second block times. Override when
+    // configured so local settlement keeps pace with the node.
+    if let Some(interval) = evm_poll_interval {
+        provider.client().set_poll_interval(interval);
+        tracing::info!(?interval, "Overrode EVM provider poll interval");
+    }
 
     let light_client_addr: Option<Address> = evm_light_client_address
         .map(|s| s.parse())
