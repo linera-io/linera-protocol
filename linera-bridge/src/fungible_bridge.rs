@@ -397,6 +397,10 @@ mod tests {
                 token,
                 zero_app_id,
                 valid_app_id,
+                test_pause_guardian(),
+                test_proposer(),
+                test_canceller(),
+                test_timelock_delay(),
             )
                 .abi_encode_params();
             deploy_data.extend_from_slice(&constructor_args);
@@ -418,6 +422,10 @@ mod tests {
                 token,
                 valid_app_id,
                 zero_app_id,
+                test_pause_guardian(),
+                test_proposer(),
+                test_canceller(),
+                test_timelock_delay(),
             )
                 .abi_encode_params();
             deploy_data.extend_from_slice(&constructor_args);

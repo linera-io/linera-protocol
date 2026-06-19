@@ -56,8 +56,12 @@ contract FungibleBridge is Microchain {
         bytes32 _chainId,
         address _token,
         bytes32 _fungibleApplicationId,
-        bytes32 _bridgeApplicationId
-    ) Microchain(_lightClient, _chainId) {
+        bytes32 _bridgeApplicationId,
+        address _pauseGuardian,
+        address _proposer,
+        address _canceller,
+        uint256 _timelockDelay
+    ) Microchain(_lightClient, _chainId, _pauseGuardian, _proposer, _canceller, _timelockDelay) {
         require(_fungibleApplicationId != bytes32(0), "fungibleApplicationId must be non-zero");
         require(_bridgeApplicationId != bytes32(0), "bridgeApplicationId must be non-zero");
         token = IERC20(_token);
@@ -82,7 +86,7 @@ contract FungibleBridge is Microchain {
         bytes32 target_application_id,
         bytes32 target_account_owner,
         uint256 amount
-    ) external {
+    ) external whenNotEmergencyPaused {
         require(amount > 0, "amount=0");
         require(target_application_id == fungibleApplicationId, "target application mismatch");
         // The Linera side holds amounts as U128 and mints exactly `amount`, so a
@@ -134,7 +138,7 @@ contract FungibleBridge is Microchain {
         uint32 numEventsInTx,
         uint32[] calldata positions,
         bytes32[] calldata siblings
-    ) external {
+    ) external whenNotEmergencyPaused {
         require(positions.length > 0, "empty positions");
 
         // The block must have been registered (its signatures were checked once, then); fetch its

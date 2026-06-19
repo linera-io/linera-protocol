@@ -232,6 +232,10 @@ pub fn deploy_fungible_bridge(
         token,
         *application_id.as_bytes(),
         *bridge_application_id.as_bytes(),
+        test_pause_guardian(),
+        test_proposer(),
+        test_canceller(),
+        test_timelock_delay(),
     )
         .abi_encode_params();
     let mut deploy_data = bytecode;
@@ -333,6 +337,16 @@ pub fn test_pause_guardian() -> Address {
 
 pub fn test_proposer() -> Address {
     Address::from([0xBE; 20])
+}
+
+pub fn test_canceller() -> Address {
+    Address::from([0xCA; 20])
+}
+
+/// Default bridge timelock delay (1 day) — the minimum the Microchain
+/// constructor accepts.
+pub fn test_timelock_delay() -> U256 {
+    U256::from(86_400u64)
 }
 
 pub fn deploy_light_client(

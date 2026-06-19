@@ -296,6 +296,10 @@ pub async fn deploy_fungible_bridge(
                  TOKEN_ADDRESS={token} \
                  FUNGIBLE_APP_ID={fungible_app_id_bytes32} \
                  BRIDGE_APP_ID={bridge_app_id_bytes32} \
+                 PAUSE_GUARDIAN=0x000000000000000000000000000000000000dead \
+                 PROPOSER=0x000000000000000000000000000000000000beef \
+                 CANCELLER=0x000000000000000000000000000000000000ca11 \
+                 TIMELOCK_DELAY=86400 \
              forge script /contracts/script/DeployFungibleBridge.s.sol \
              --root /contracts \
              --rpc-url http://anvil:8545 \

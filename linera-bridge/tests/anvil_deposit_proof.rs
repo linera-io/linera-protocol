@@ -17,7 +17,7 @@ use alloy::{
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
 };
-use alloy_primitives::{Bytes, B256, U256};
+use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::CryptoHash,
@@ -141,6 +141,10 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         token_address,                           // token
         <[u8; 32]>::from(target_application_id), // fungibleApplicationId
         <[u8; 32]>::from(bridge_application_id), // bridgeApplicationId
+        Address::from([0xDA; 20]),               // pauseGuardian
+        Address::from([0xBB; 20]),               // proposer
+        Address::from([0xCC; 20]),               // canceller
+        U256::from(86_400u64),                   // timelockDelay (1 day)
     )
         .abi_encode_params();
 

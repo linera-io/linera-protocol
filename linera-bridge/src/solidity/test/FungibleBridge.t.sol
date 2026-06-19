@@ -23,6 +23,12 @@ bytes32 constant BRIDGE_APP_ID = bytes32(uint256(0xF00D));
 // A distinct wrapped-fungible (deposit/mint target) application ID, used to
 // confirm that burn-matching keys on the bridge id and not on this one.
 bytes32 constant FUNGIBLE_APP_ID = bytes32(uint256(0xBEEF));
+// Governance addresses for the bridge under test. Most tests do not exercise
+// governance; the pause-integration tests act as PAUSE_GUARDIAN.
+address constant PAUSE_GUARDIAN = address(0xDA);
+address constant PROPOSER = address(0xBB);
+address constant CANCELLER = address(0xCC);
+uint256 constant TIMELOCK_DELAY = 1 days;
 
 // ------------------------------------------------------------------
 // MockLightClient
@@ -120,7 +126,9 @@ contract FungibleBridgeProcessBurnsTest is Test {
     // the bridge.
     function _deployBridge(address lc, uint256 supply) internal returns (FungibleBridge bridge, LineraToken tok) {
         tok = new LineraToken("Test", "TST", 18, supply);
-        bridge = new FungibleBridge(lc, CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID);
+        bridge = new FungibleBridge(
+            lc, CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID, PAUSE_GUARDIAN, PROPOSER, CANCELLER, TIMELOCK_DELAY
+        );
         // Send all tokens to the bridge so transfer() calls succeed.
         tok.transfer(address(bridge), supply);
     }
@@ -274,10 +282,85 @@ contract FungibleBridgeDepositTest is Test {
     function test_deposit_reverts_amount_exceeds_u128() public {
         uint256 oversized = uint256(type(uint128).max) + 1;
         LineraToken tok = new LineraToken("Test", "TST", 18, 1);
-        FungibleBridge bridge =
-            new FungibleBridge(address(0xdead), CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID);
+        FungibleBridge bridge = new FungibleBridge(
+            address(0xdead),
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            PAUSE_GUARDIAN,
+            PROPOSER,
+            CANCELLER,
+            TIMELOCK_DELAY
+        );
 
         vm.expectRevert(bytes("amount exceeds u128"));
         bridge.deposit(CHAIN_ID, FUNGIBLE_APP_ID, bytes32(uint256(0xBEEF)), oversized);
+    }
+}
+
+// Integration: the emergency pause (inherited from Microchain) gates both
+// value-flow entry points on the bridge.
+contract FungibleBridgePauseTest is Test {
+    bytes32[] internal noSiblings;
+
+    function _deploy() internal returns (FungibleBridge bridge, LineraToken tok, MockLightClient lc) {
+        lc = new MockLightClient(CHAIN_ID, HEIGHT);
+        tok = new LineraToken("Test", "TST", 18, AMOUNT * 10);
+        bridge = new FungibleBridge(
+            address(lc),
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            PAUSE_GUARDIAN,
+            PROPOSER,
+            CANCELLER,
+            TIMELOCK_DELAY
+        );
+        tok.transfer(address(bridge), AMOUNT * 10);
+    }
+
+    function test_deposit_reverts_when_paused() public {
+        // The pause modifier fires before any token movement, so no funding or
+        // approval is needed to observe it.
+        (FungibleBridge bridge,,) = _deploy();
+
+        vm.prank(PAUSE_GUARDIAN);
+        bridge.emergencyPause(1 days);
+
+        vm.expectRevert(bytes("emergency paused"));
+        bridge.deposit(CHAIN_ID, FUNGIBLE_APP_ID, bytes32(uint256(0xBEEF)), AMOUNT);
+    }
+
+    function test_processBurns_reverts_when_paused() public {
+        (FungibleBridge bridge,,) = _deploy();
+
+        vm.prank(PAUSE_GUARDIAN);
+        bridge.emergencyPause(1 days);
+
+        bytes[] memory chunk = _bytesArray(_burnBcs(5, RECIP_0, AMOUNT));
+        uint32[] memory positions = _u32s_single(0);
+        vm.expectRevert(bytes("emergency paused"));
+        bridge.processBurns(BLOCK_HASH, chunk, TX, 1, 1, positions, noSiblings);
+    }
+
+    function test_processBurns_works_after_pause_expiry() public {
+        (FungibleBridge bridge, LineraToken tok,) = _deploy();
+
+        vm.prank(PAUSE_GUARDIAN);
+        bridge.emergencyPause(1 days);
+        vm.warp(block.timestamp + 1 days);
+
+        bytes[] memory chunk = _bytesArray(_burnBcs(5, RECIP_0, AMOUNT));
+        uint32[] memory positions = _u32s_single(0);
+        bridge.processBurns(BLOCK_HASH, chunk, TX, 1, 1, positions, noSiblings);
+        assertEq(tok.balanceOf(RECIP_0), AMOUNT, "burn released after pause expiry");
+    }
+
+    function _bytesArray(bytes memory a) internal pure returns (bytes[] memory) {
+        bytes[] memory arr = new bytes[](1);
+        arr[0] = a;
+        return arr;
     }
 }
