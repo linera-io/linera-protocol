@@ -571,14 +571,14 @@ type Cursor {
 
 type CustomMapView_BlockHeight_CryptoHash_1bae6d76 {
 	keys(count: Int): [BlockHeight!]!
-	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_74e16b71!
-	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_74e16b71!]!
+	entry(key: BlockHeight!): Entry_BlockHeight_CryptoHash_1bae6d76!
+	entries(input: MapInput_BlockHeight_e824a938): [Entry_BlockHeight_CryptoHash_1bae6d76!]!
 }
 
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_AccountOwner_Amount_aaf96548 {
+type Entry_AccountOwner_Amount_11ef1379 {
 	key: AccountOwner!
 	value: Amount
 }
@@ -588,13 +588,13 @@ A GraphQL-visible map item, complete with key.
 """
 type Entry_AccountOwner_PendingBlobsView_5d91edcf {
 	key: AccountOwner!
-	value: PendingBlobsView!
+	value: PendingBlobsView
 }
 
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_BlobId_Blob_50b95aa1 {
+type Entry_BlobId_Blob_3711e760 {
 	key: BlobId!
 	value: Blob
 }
@@ -610,7 +610,7 @@ type Entry_BlobId_Blob_9f0b41f3 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_BlockHeight_CryptoHash_74e16b71 {
+type Entry_BlockHeight_CryptoHash_1bae6d76 {
 	key: BlockHeight!
 	value: CryptoHash
 }
@@ -620,7 +620,7 @@ A GraphQL-visible map item, complete with key.
 """
 type Entry_ChainId_InboxStateView_a9e4d828 {
 	key: ChainId!
-	value: InboxStateView!
+	value: InboxStateView
 }
 
 """
@@ -628,13 +628,13 @@ A GraphQL-visible map item, complete with key.
 """
 type Entry_ChainId_OutboxStateView_855dcf53 {
 	key: ChainId!
-	value: OutboxStateView!
+	value: OutboxStateView
 }
 
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_StreamId_Int_459c4ec3 {
+type Entry_StreamId_Int_3d7f5335 {
 	key: StreamId!
 	value: Int
 }
@@ -804,29 +804,29 @@ input MapInput_StreamIdInput_b7c3909d {
 type MapView_AccountOwner_Amount_11ef1379 {
 	keys(count: Int): [AccountOwner!]!
 	count: Int!
-	entry(key: AccountOwner!): Entry_AccountOwner_Amount_aaf96548!
-	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_aaf96548!]!
+	entry(key: AccountOwner!): Entry_AccountOwner_Amount_11ef1379!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_Amount_11ef1379!]!
 }
 
 type MapView_BlobId_Blob_3711e760 {
+	keys(count: Int): [BlobId!]!
+	count: Int!
+	entry(key: BlobId!): Entry_BlobId_Blob_3711e760!
+	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_3711e760!]!
+}
+
+type MapView_BlobId_Blob_9f0b41f3 {
 	keys(count: Int): [BlobId!]!
 	count: Int!
 	entry(key: BlobId!): Entry_BlobId_Blob_9f0b41f3!
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_9f0b41f3!]!
 }
 
-type MapView_BlobId_Blob_9f0b41f3 {
-	keys(count: Int): [BlobId!]!
-	count: Int!
-	entry(key: BlobId!): Entry_BlobId_Blob_50b95aa1!
-	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
-}
-
 type MapView_StreamId_Int_3d7f5335 {
 	keys(count: Int): [StreamId!]!
 	count: Int!
-	entry(key: StreamIdInput!): Entry_StreamId_Int_459c4ec3!
-	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_Int_459c4ec3!]!
+	entry(key: StreamIdInput!): Entry_StreamId_Int_3d7f5335!
+	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_Int_3d7f5335!]!
 }
 
 """
