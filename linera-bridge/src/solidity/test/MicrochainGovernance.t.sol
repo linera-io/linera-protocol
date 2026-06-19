@@ -19,12 +19,7 @@ contract MockLC is ILightClient {
         return admin;
     }
 
-    function registeredBlocks(bytes32)
-        external
-        pure
-        override
-        returns (bytes32, uint64, bytes32, uint32)
-    {
+    function registeredBlocks(bytes32) external pure override returns (bytes32, uint64, bytes32, uint32) {
         return (bytes32(0), 0, bytes32(0), 0);
     }
 

@@ -413,7 +413,16 @@ contract FungibleBridgeDecoderTest is Test {
         tok = new LineraToken("Test", "TST", 18, AMOUNT * 10);
         v1 = _deployDecoderV1();
         bridge = new FungibleBridge(
-            address(lc), CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID, v1, guardian, proposer, canceller, TIMELOCK
+            address(lc),
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            v1,
+            guardian,
+            proposer,
+            canceller,
+            TIMELOCK
         );
         tok.transfer(address(bridge), AMOUNT * 10);
     }

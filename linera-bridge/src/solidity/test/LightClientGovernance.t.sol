@@ -58,7 +58,9 @@ contract LightClientGovernanceTest is Test {
         LightClient lc = _deploy();
         vm.prank(guardian);
         lc.emergencyPause(1 days);
-        assertEq(_registerBlockReason(lc, hex""), "emergency paused", "paused registerBlock must revert with pause reason");
+        assertEq(
+            _registerBlockReason(lc, hex""), "emergency paused", "paused registerBlock must revert with pause reason"
+        );
     }
 
     function test_pause_auto_expires() public {
