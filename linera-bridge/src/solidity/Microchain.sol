@@ -64,6 +64,11 @@ abstract contract Microchain {
         _;
     }
 
+    modifier onlyPauseGuardian() {
+        require(msg.sender == pauseGuardian, "only pause guardian");
+        _;
+    }
+
     modifier whenNotEmergencyPaused() {
         require(block.timestamp >= pausedUntil, "emergency paused");
         _;
@@ -112,16 +117,14 @@ abstract contract Microchain {
 
     /// Pauses pause-gated entry points for `duration` (auto-expiring, capped at
     /// `PAUSE_MAX_DURATION`). Guardian-only. Re-pausing restarts the clock.
-    function emergencyPause(uint256 duration) external {
-        require(msg.sender == pauseGuardian, "only pause guardian");
+    function emergencyPause(uint256 duration) external onlyPauseGuardian {
         require(duration > 0 && duration <= PAUSE_MAX_DURATION, "invalid duration");
         pausedUntil = block.timestamp + duration;
         emit EmergencyPaused(pausedUntil);
     }
 
     /// Lifts an active pause early. Guardian-only.
-    function emergencyUnpause() external {
-        require(msg.sender == pauseGuardian, "only pause guardian");
+    function emergencyUnpause() external onlyPauseGuardian {
         require(pausedUntil > block.timestamp, "not paused");
         pausedUntil = 0;
         emit EmergencyUnpaused();
