@@ -72,7 +72,9 @@ use crate::{
     notifier::Notifier,
 };
 
+/// The default maximum number of confirmed blocks kept in the worker's block cache.
 pub const DEFAULT_BLOCK_CACHE_SIZE: usize = 5_000;
+/// The default maximum number of execution state views kept in the worker's cache.
 pub const DEFAULT_EXECUTION_STATE_CACHE_SIZE: usize = 10_000;
 
 #[cfg(test)]
@@ -282,6 +284,7 @@ pub struct NetworkActions {
 }
 
 impl NetworkActions {
+    /// Merges the cross-chain requests and notifications from `other` into these actions.
     pub fn extend(&mut self, other: NetworkActions) {
         self.cross_chain_requests.extend(other.cross_chain_requests);
         self.notifications.extend(other.notifications);
@@ -290,6 +293,7 @@ impl NetworkActions {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 /// Notification that a chain has a new certified block or a new message.
+#[allow(missing_docs)]
 pub struct Notification {
     pub chain_id: ChainId,
     pub reason: Reason,
@@ -302,6 +306,7 @@ doc_scalar!(
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 /// Reason for the notification.
+#[allow(missing_docs)]
 pub enum Reason {
     NewBlock {
         height: BlockHeight,
@@ -328,6 +333,7 @@ pub enum Reason {
 
 /// Error type for worker operations.
 #[derive(Debug, Error, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum WorkerError {
     #[error(transparent)]
     CryptoError(#[from] CryptoError),
@@ -750,6 +756,7 @@ where
         self.chain_worker_config.cross_chain_message_chunk_limit = limit;
     }
 
+    /// Returns an instance configured to allow reverting confirmed blocks.
     #[cfg(with_testing)]
     #[instrument(level = "trace", skip(self, value))]
     pub fn with_allow_revert_confirm(mut self, value: bool) -> Self {
@@ -757,6 +764,7 @@ where
         self
     }
 
+    /// Returns the worker's nickname.
     #[instrument(level = "trace", skip(self))]
     pub fn nickname(&self) -> &str {
         &self.chain_worker_config.nickname
@@ -809,7 +817,9 @@ where
 
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
+/// A certificate value that the worker knows how to process.
 pub trait ProcessableCertificate: CertificateValue + Sized + 'static {
+    /// Processes a certificate carrying this value on the given worker.
     async fn process_certificate<S: Storage + Clone + 'static>(
         worker: &WorkerState<S>,
         certificate: GenericCertificate<Self>,
@@ -899,6 +909,8 @@ where
 
     #[instrument(level = "trace", skip(self, certificate, notifier))]
     #[inline]
+    /// Processes a certificate fully, dispatching any resulting cross-chain requests
+    /// and emitting notifications through the given notifier.
     pub async fn fully_handle_certificate_with_notifications<T>(
         &self,
         certificate: GenericCertificate<T>,
@@ -1316,6 +1328,7 @@ where
         chain_id = %chain_id,
         application_id = %application_id
     ))]
+    /// Returns the description of the given application on the given chain.
     pub async fn describe_application(
         &self,
         chain_id: ChainId,
@@ -1546,6 +1559,7 @@ where
         chain_id = format!("{:.8}", proposal.content.block.chain_id),
         height = %proposal.content.block.height,
     ))]
+    /// Handles a block proposal, validating it and preparing the chain to vote on it.
     pub async fn handle_block_proposal(
         &self,
         proposal: BlockProposal,
@@ -1696,6 +1710,7 @@ where
         nick = self.nickname(),
         chain_id = format!("{:.8}", query.chain_id)
     ))]
+    /// Handles a query about a chain's state and returns the requested information.
     pub async fn handle_chain_info_query(
         &self,
         query: ChainInfoQuery,
@@ -1717,6 +1732,7 @@ where
         nick = self.nickname(),
         chain_id = format!("{:.8}", chain_id)
     ))]
+    /// Downloads a blob that a pending block on the given chain depends on.
     pub async fn download_pending_blob(
         &self,
         chain_id: ChainId,
@@ -1740,6 +1756,7 @@ where
         nick = self.nickname(),
         chain_id = format!("{:.8}", chain_id)
     ))]
+    /// Handles a blob that a pending block depends on, adding it to the chain worker.
     pub async fn handle_pending_blob(
         &self,
         chain_id: ChainId,
@@ -1764,6 +1781,7 @@ where
         nick = self.nickname(),
         chain_id = format!("{:.8}", request.target_chain_id())
     ))]
+    /// Handles a cross-chain request received from another chain or shard.
     pub async fn handle_cross_chain_request(
         &self,
         request: CrossChainRequest,

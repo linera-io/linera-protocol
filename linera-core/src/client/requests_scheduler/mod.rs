@@ -15,12 +15,19 @@ pub use scheduler::RequestsScheduler;
 pub use scoring::ScoringWeights;
 
 // Module constants - default values for RequestsSchedulerConfig
+/// Default maximum number of requests allowed to be in flight at once.
 pub const MAX_IN_FLIGHT_REQUESTS: usize = 100;
+/// Default maximum expected latency in milliseconds, used for score normalization.
 pub const MAX_ACCEPTED_LATENCY_MS: f64 = 5000.0;
+/// Default time-to-live for cached responses, in milliseconds.
 pub const CACHE_TTL_MS: u64 = 2000;
+/// Default maximum number of entries in the cache.
 pub const CACHE_MAX_SIZE: usize = 1000;
+/// Default maximum latency for an in-flight request before we stop deduplicating it, in milliseconds.
 pub const MAX_REQUEST_TTL_MS: u64 = 200;
+/// Default smoothing factor for the Exponential Moving Averages of latency.
 pub const ALPHA_SMOOTHING_FACTOR: f64 = 0.1;
+/// Default delay in milliseconds between starting requests to different peers.
 pub const STAGGERED_DELAY_MS: u64 = 150;
 
 /// Configuration for the `RequestsScheduler`.
