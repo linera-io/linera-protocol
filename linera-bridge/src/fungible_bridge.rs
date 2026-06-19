@@ -397,6 +397,7 @@ mod tests {
                 token,
                 zero_app_id,
                 valid_app_id,
+                light_client, // decoder placeholder (revert fires on the zero app id first)
                 test_pause_guardian(),
                 test_proposer(),
                 test_canceller(),
@@ -422,6 +423,7 @@ mod tests {
                 token,
                 valid_app_id,
                 zero_app_id,
+                light_client, // decoder placeholder (revert fires on the zero app id first)
                 test_pause_guardian(),
                 test_proposer(),
                 test_canceller(),

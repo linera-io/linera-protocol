@@ -24,3 +24,13 @@ pub const MICROCHAIN_SOURCE: &str = include_str!("../solidity/Microchain.sol");
 
 /// Solidity source for the LightClient contract.
 pub const LIGHTCLIENT_SOURCE: &str = include_str!("../solidity/LightClient.sol");
+
+/// Solidity source for the ILightClient consumer interface.
+pub const ILIGHTCLIENT_SOURCE: &str = include_str!("../solidity/ILightClient.sol");
+
+/// Solidity source for the IBurnEventDecoder interface.
+pub const IBURN_EVENT_DECODER_SOURCE: &str = include_str!("../solidity/IBurnEventDecoder.sol");
+
+/// Solidity source for the FungibleBurnEventDecoderV1 contract.
+pub const FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE: &str =
+    include_str!("../solidity/FungibleBurnEventDecoderV1.sol");

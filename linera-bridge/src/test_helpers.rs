@@ -212,6 +212,17 @@ pub fn create_signed_certificate(
     create_signed_certificate_for_chain(secret, public, chain_id, BlockHeight(1))
 }
 
+/// Deploys the V1 burn-event decoder (no constructor args) and returns its
+/// address.
+pub fn deploy_burn_event_decoder_v1(db: &mut CacheDB<EmptyDB>, deployer: Address) -> Address {
+    let bytecode = compile_contract(
+        evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+        "FungibleBurnEventDecoderV1.sol",
+        "FungibleBurnEventDecoderV1",
+    );
+    deploy_contract(db, deployer, bytecode)
+}
+
 pub fn deploy_fungible_bridge(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
@@ -221,6 +232,7 @@ pub fn deploy_fungible_bridge(
     application_id: CryptoHash,
     bridge_application_id: CryptoHash,
 ) -> Address {
+    let decoder = deploy_burn_event_decoder_v1(db, deployer);
     let bytecode = compile_contract(
         evm::FUNGIBLE_BRIDGE_SOURCE,
         "FungibleBridge.sol",
@@ -232,6 +244,7 @@ pub fn deploy_fungible_bridge(
         token,
         *application_id.as_bytes(),
         *bridge_application_id.as_bytes(),
+        decoder,
         test_pause_guardian(),
         test_proposer(),
         test_canceller(),
@@ -524,7 +537,13 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
                 evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
             ),
             ("LightClient.sol", evm::LIGHTCLIENT_SOURCE),
+            ("ILightClient.sol", evm::ILIGHTCLIENT_SOURCE),
             ("Microchain.sol", evm::MICROCHAIN_SOURCE),
+            ("IBurnEventDecoder.sol", evm::IBURN_EVENT_DECODER_SOURCE),
+            (
+                "FungibleBurnEventDecoderV1.sol",
+                evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+            ),
             ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
         ],
         Some(1),

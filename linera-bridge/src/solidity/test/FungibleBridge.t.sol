@@ -6,6 +6,8 @@ import {FungibleBridge} from "../FungibleBridge.sol";
 import {BridgeTypes} from "../BridgeTypes.sol";
 import {WrappedFungibleTypes} from "../WrappedFungibleTypes.sol";
 import {LineraToken} from "../LineraToken.sol";
+import {IBurnEventDecoder} from "../IBurnEventDecoder.sol";
+import {FungibleBurnEventDecoderV1} from "../FungibleBurnEventDecoderV1.sol";
 
 // ------------------------------------------------------------------
 // Constants
@@ -113,6 +115,23 @@ function _u32s_single(uint32 a) pure returns (uint32[] memory) {
     return arr;
 }
 
+function _deployDecoderV1() returns (address) {
+    return address(new FungibleBurnEventDecoderV1());
+}
+
+// A decoder that ignores its input and always returns a fixed (recipient,
+// amount). Lets a test prove that `setDecoder` actually reroutes payload
+// decoding through the new contract. `pure` per the interface, so the fixed
+// values are compile-time constants.
+address constant MOCK_DECODER_RECIPIENT = address(0x0FEE);
+uint256 constant MOCK_DECODER_AMOUNT = 12_345;
+
+contract MockDecoder is IBurnEventDecoder {
+    function decode(bytes calldata) external pure override returns (address, uint256) {
+        return (MOCK_DECODER_RECIPIENT, MOCK_DECODER_AMOUNT);
+    }
+}
+
 // ------------------------------------------------------------------
 // Test contract
 // ------------------------------------------------------------------
@@ -127,7 +146,16 @@ contract FungibleBridgeProcessBurnsTest is Test {
     function _deployBridge(address lc, uint256 supply) internal returns (FungibleBridge bridge, LineraToken tok) {
         tok = new LineraToken("Test", "TST", 18, supply);
         bridge = new FungibleBridge(
-            lc, CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID, PAUSE_GUARDIAN, PROPOSER, CANCELLER, TIMELOCK_DELAY
+            lc,
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            _deployDecoderV1(),
+            PAUSE_GUARDIAN,
+            PROPOSER,
+            CANCELLER,
+            TIMELOCK_DELAY
         );
         // Send all tokens to the bridge so transfer() calls succeed.
         tok.transfer(address(bridge), supply);
@@ -288,6 +316,7 @@ contract FungibleBridgeDepositTest is Test {
             address(tok),
             FUNGIBLE_APP_ID,
             BRIDGE_APP_ID,
+            _deployDecoderV1(),
             PAUSE_GUARDIAN,
             PROPOSER,
             CANCELLER,
@@ -313,6 +342,7 @@ contract FungibleBridgePauseTest is Test {
             address(tok),
             FUNGIBLE_APP_ID,
             BRIDGE_APP_ID,
+            _deployDecoderV1(),
             PAUSE_GUARDIAN,
             PROPOSER,
             CANCELLER,
@@ -362,5 +392,140 @@ contract FungibleBridgePauseTest is Test {
         bytes[] memory arr = new bytes[](1);
         arr[0] = a;
         return arr;
+    }
+}
+
+// The swappable decoder: setDecoder governance flow (mirrors setLightClient on
+// Microchain) plus proof that a swapped decoder actually reroutes payload
+// decoding.
+contract FungibleBridgeDecoderTest is Test {
+    event BurnReleased(uint64 indexed height, uint32 indexed eventIndex, address indexed target, uint256 amount);
+
+    bytes32[] internal noSiblings;
+    address internal proposer = makeAddr("proposer");
+    address internal canceller = makeAddr("canceller");
+    address internal guardian = makeAddr("guardian");
+    address internal stranger = makeAddr("stranger");
+    uint256 constant TIMELOCK = 1 days;
+
+    function _deploy() internal returns (FungibleBridge bridge, LineraToken tok, address v1) {
+        MockLightClient lc = new MockLightClient(CHAIN_ID, HEIGHT);
+        tok = new LineraToken("Test", "TST", 18, AMOUNT * 10);
+        v1 = _deployDecoderV1();
+        bridge = new FungibleBridge(
+            address(lc), CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID, v1, guardian, proposer, canceller, TIMELOCK
+        );
+        tok.transfer(address(bridge), AMOUNT * 10);
+    }
+
+    function _settle(FungibleBridge bridge, uint32 index, address target, uint128 amount) internal {
+        bytes[] memory chunk = new bytes[](1);
+        chunk[0] = _burnBcs(index, target, amount);
+        uint32[] memory positions = _u32s_single(0);
+        bridge.processBurns(BLOCK_HASH, chunk, TX, 1, 1, positions, noSiblings);
+    }
+
+    // --- constructor ---
+
+    function test_constructor_rejects_zero_decoder() public {
+        MockLightClient lc = new MockLightClient(CHAIN_ID, HEIGHT);
+        LineraToken tok = new LineraToken("Test", "TST", 18, 1);
+        vm.expectRevert(bytes("zero decoder"));
+        new FungibleBridge(
+            address(lc),
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            address(0),
+            guardian,
+            proposer,
+            canceller,
+            TIMELOCK
+        );
+    }
+
+    // --- setDecoder flow ---
+
+    function test_propose_execute_updates_decoder() public {
+        (FungibleBridge bridge,,) = _deploy();
+        MockDecoder next = new MockDecoder();
+
+        vm.prank(proposer);
+        bridge.proposeDecoderUpdate(address(next));
+        assertEq(address(bridge.pendingDecoder()), address(next), "pending set");
+
+        vm.warp(block.timestamp + TIMELOCK);
+        vm.prank(stranger);
+        bridge.executeDecoderUpdate();
+        assertEq(address(bridge.decoder()), address(next), "decoder updated");
+    }
+
+    function test_non_proposer_cannot_propose() public {
+        (FungibleBridge bridge,,) = _deploy();
+        MockDecoder next = new MockDecoder();
+        vm.prank(stranger);
+        vm.expectRevert(bytes("only proposer"));
+        bridge.proposeDecoderUpdate(address(next));
+    }
+
+    function test_propose_zero_reverts() public {
+        (FungibleBridge bridge,,) = _deploy();
+        vm.prank(proposer);
+        vm.expectRevert(bytes("zero address"));
+        bridge.proposeDecoderUpdate(address(0));
+    }
+
+    function test_propose_noop_reverts() public {
+        (FungibleBridge bridge,, address v1) = _deploy();
+        vm.prank(proposer);
+        vm.expectRevert(bytes("no-op update"));
+        bridge.proposeDecoderUpdate(v1);
+    }
+
+    function test_execute_before_delay_reverts() public {
+        (FungibleBridge bridge,,) = _deploy();
+        MockDecoder next = new MockDecoder();
+        vm.prank(proposer);
+        bridge.proposeDecoderUpdate(address(next));
+        vm.expectRevert(bytes("delay not elapsed"));
+        bridge.executeDecoderUpdate();
+    }
+
+    function test_canceller_can_cancel() public {
+        (FungibleBridge bridge,,) = _deploy();
+        MockDecoder next = new MockDecoder();
+        vm.prank(proposer);
+        bridge.proposeDecoderUpdate(address(next));
+        vm.prank(canceller);
+        bridge.cancelDecoderUpdate();
+        assertEq(address(bridge.pendingDecoder()), address(0), "pending cleared");
+    }
+
+    // --- behavior ---
+
+    function test_v1_decoder_releases_to_event_target() public {
+        (FungibleBridge bridge, LineraToken tok,) = _deploy();
+        _settle(bridge, 5, RECIP_0, AMOUNT);
+        assertEq(tok.balanceOf(RECIP_0), AMOUNT, "V1 decodes recipient/amount from the event payload");
+    }
+
+    function test_swapped_decoder_is_used() public {
+        (FungibleBridge bridge, LineraToken tok,) = _deploy();
+        MockDecoder mock = new MockDecoder();
+
+        vm.prank(proposer);
+        bridge.proposeDecoderUpdate(address(mock));
+        vm.warp(block.timestamp + TIMELOCK);
+        bridge.executeDecoderUpdate();
+
+        // The event still encodes (RECIP_0, AMOUNT), but the mock decoder
+        // overrides the payout to its fixed (recipient, amount).
+        vm.expectEmit(true, true, true, true, address(bridge));
+        emit BurnReleased(HEIGHT, 7, MOCK_DECODER_RECIPIENT, MOCK_DECODER_AMOUNT);
+        _settle(bridge, 7, RECIP_0, AMOUNT);
+
+        assertEq(tok.balanceOf(MOCK_DECODER_RECIPIENT), MOCK_DECODER_AMOUNT, "new decoder routed the payout");
+        assertEq(tok.balanceOf(RECIP_0), 0, "old decoder path no longer used");
     }
 }

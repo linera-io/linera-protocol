@@ -141,6 +141,7 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         token_address,                           // token
         <[u8; 32]>::from(target_application_id), // fungibleApplicationId
         <[u8; 32]>::from(bridge_application_id), // bridgeApplicationId
+        deployer,                                // decoder placeholder (unused by deposit)
         Address::from([0xDA; 20]),               // pauseGuardian
         Address::from([0xBB; 20]),               // proposer
         Address::from([0xCC; 20]),               // canceller

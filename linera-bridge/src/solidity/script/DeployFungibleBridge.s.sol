@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {Script} from "forge-std/Script.sol";
 import {FungibleBridge} from "../FungibleBridge.sol";
+import {FungibleBurnEventDecoderV1} from "../FungibleBurnEventDecoderV1.sol";
 
 contract DeployFungibleBridge is Script {
     function run() external returns (FungibleBridge bridge) {
@@ -16,11 +17,26 @@ contract DeployFungibleBridge is Script {
         address canceller = vm.envAddress("CANCELLER");
         uint256 timelockDelay = vm.envUint("TIMELOCK_DELAY");
 
-        vm.broadcast();
+        // Deploy the initial decoder for the current BurnEvent schema alongside
+        // the bridge. Subsequent schema changes go through setDecoder with a
+        // separately-deployed decoder.
+        vm.startBroadcast();
+        FungibleBurnEventDecoderV1 decoder = new FungibleBurnEventDecoderV1();
         bridge = new FungibleBridge(
-            lightClient, chainId, token, fungibleAppId, bridgeAppId, pauseGuardian, proposer, canceller, timelockDelay
+            lightClient,
+            chainId,
+            token,
+            fungibleAppId,
+            bridgeAppId,
+            address(decoder),
+            pauseGuardian,
+            proposer,
+            canceller,
+            timelockDelay
         );
+        vm.stopBroadcast();
 
         require(address(bridge.lightClient()) == lightClient, "post-deploy lightClient mismatch");
+        require(address(bridge.decoder()) == address(decoder), "post-deploy decoder mismatch");
     }
 }
