@@ -83,6 +83,49 @@ pub struct CommonStorageOptions {
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
+
+    /// Enable RocksDB's internal statistics collection and export them as Prometheus
+    /// metrics. Off by default; enable it on nodes whose metrics are scraped.
+    #[arg(long, global = true)]
+    pub rocksdb_enable_statistics: bool,
+
+    /// The level of detail collected when `--rocksdb-enable-statistics` is set. Higher
+    /// levels collect more, and more expensive, data.
+    #[arg(long, default_value = "except-histogram-or-timers", global = true)]
+    pub rocksdb_statistics_level: RocksDbStatisticsLevelArg,
+}
+
+/// The RocksDB statistics collection level, selectable on the command line.
+#[derive(Clone, Copy, Debug, Default, clap::ValueEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum RocksDbStatisticsLevelArg {
+    /// Collect nothing.
+    DisableAll,
+    /// Collect tickers (counters) only; skip all histograms and timers.
+    #[default]
+    ExceptHistogramOrTimers,
+    /// Collect tickers and histograms, but skip timer statistics.
+    ExceptTimers,
+    /// Collect everything except mutex-lock and compression timing.
+    ExceptDetailedTimers,
+    /// Collect everything except the counters requiring time inside the mutex lock.
+    ExceptTimeForMutex,
+    /// Collect everything, including mutex operation timing.
+    All,
+}
+
+#[cfg(feature = "rocksdb")]
+impl From<RocksDbStatisticsLevelArg> for linera_views::rocks_db::RocksDbStatisticsLevel {
+    fn from(level: RocksDbStatisticsLevelArg) -> Self {
+        match level {
+            RocksDbStatisticsLevelArg::DisableAll => Self::DisableAll,
+            RocksDbStatisticsLevelArg::ExceptHistogramOrTimers => Self::ExceptHistogramOrTimers,
+            RocksDbStatisticsLevelArg::ExceptTimers => Self::ExceptTimers,
+            RocksDbStatisticsLevelArg::ExceptDetailedTimers => Self::ExceptDetailedTimers,
+            RocksDbStatisticsLevelArg::ExceptTimeForMutex => Self::ExceptTimeForMutex,
+            RocksDbStatisticsLevelArg::All => Self::All,
+        }
+    }
 }
 
 impl CommonStorageOptions {
@@ -117,6 +160,69 @@ impl CommonStorageOptions {
             max_cache_value_size: self.storage_max_cache_value_size,
             max_cache_find_keys_size: self.storage_max_cache_find_keys_size,
             max_cache_find_key_values_size: self.storage_max_cache_find_key_values_size,
+        }
+    }
+}
+
+#[cfg(all(test, feature = "rocksdb"))]
+mod tests {
+    use clap::Parser as _;
+    use linera_views::rocks_db::RocksDbStatisticsLevel;
+
+    use super::{CommonStorageOptions, RocksDbStatisticsLevelArg};
+
+    #[test]
+    fn statistics_disabled_by_default() {
+        let options = CommonStorageOptions::with_defaults();
+        assert!(!options.rocksdb_enable_statistics);
+        assert_eq!(
+            RocksDbStatisticsLevel::from(options.rocksdb_statistics_level),
+            RocksDbStatisticsLevel::ExceptHistogramOrTimers,
+        );
+    }
+
+    #[test]
+    fn parses_enable_flag_and_level() {
+        let options = CommonStorageOptions::parse_from([
+            "test",
+            "--rocksdb-enable-statistics",
+            "--rocksdb-statistics-level",
+            "all",
+        ]);
+        assert!(options.rocksdb_enable_statistics);
+        assert_eq!(
+            RocksDbStatisticsLevel::from(options.rocksdb_statistics_level),
+            RocksDbStatisticsLevel::All,
+        );
+    }
+
+    #[test]
+    fn level_arg_maps_one_to_one() {
+        let cases = [
+            (
+                RocksDbStatisticsLevelArg::DisableAll,
+                RocksDbStatisticsLevel::DisableAll,
+            ),
+            (
+                RocksDbStatisticsLevelArg::ExceptHistogramOrTimers,
+                RocksDbStatisticsLevel::ExceptHistogramOrTimers,
+            ),
+            (
+                RocksDbStatisticsLevelArg::ExceptTimers,
+                RocksDbStatisticsLevel::ExceptTimers,
+            ),
+            (
+                RocksDbStatisticsLevelArg::ExceptDetailedTimers,
+                RocksDbStatisticsLevel::ExceptDetailedTimers,
+            ),
+            (
+                RocksDbStatisticsLevelArg::ExceptTimeForMutex,
+                RocksDbStatisticsLevel::ExceptTimeForMutex,
+            ),
+            (RocksDbStatisticsLevelArg::All, RocksDbStatisticsLevel::All),
+        ];
+        for (arg, expected) in cases {
+            assert_eq!(RocksDbStatisticsLevel::from(arg), expected);
         }
     }
 }

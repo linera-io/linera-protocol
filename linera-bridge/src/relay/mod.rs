@@ -226,6 +226,8 @@ async fn create_rocksdb_storage(
             path_with_guard: PathWithGuard::new(path.to_path_buf()),
             spawn_mode: RocksDbSpawnMode::get_spawn_mode_from_runtime(),
             max_stream_queries: 10,
+            enable_statistics: false,
+            statistics_level: Default::default(),
         },
         storage_cache_config: StorageCacheConfig {
             max_cache_size: 10_000_000,
