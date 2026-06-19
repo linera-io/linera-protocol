@@ -346,8 +346,8 @@ pub enum NodeError {
     },
 
     #[error(
-        "Validator is missing prerequisites to validate the block for chain {chain_id}: \
-         {} cross-chain bundle(s), {} event(s), {} blob(s)",
+        "Validator is missing prerequisites to validate or apply the block for chain \
+         {chain_id}: {} cross-chain bundle(s), {} event(s), {} blob(s)",
         bundles.len(), events.len(), blobs.len()
     )]
     MissingDependencies {

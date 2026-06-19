@@ -177,14 +177,15 @@ pub enum ChainError {
     #[error("Not signing timeout certificate; current round times out at time {0}")]
     NotTimedOutYet(Timestamp),
     #[error(
-        "Cannot vote for block proposal of chain {chain_id}: missing prerequisites \
+        "Cannot process the block for chain {chain_id}: missing prerequisites \
          ({} cross-chain bundle(s), {} event(s), {} blob(s)) that have not been received yet",
         bundles.len(), events.len(), blobs.len()
     )]
     MissingDependencies {
         chain_id: ChainId,
-        /// Missing incoming message bundles, as `(origin chain, height)` pairs that must
-        /// be received before this block can be validated.
+        /// Missing incoming message bundles, as `(origin chain, height)` pairs that must be
+        /// received before this block can be validated (as a proposal) or applied (when
+        /// already confirmed).
         bundles: Vec<(ChainId, BlockHeight)>,
         /// Missing events required to execute this block.
         events: Vec<EventId>,
