@@ -272,8 +272,84 @@ where
 
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
+        let mut handled_dependencies = false;
         loop {
             match result {
+                // A validator that understands aggregated dependency errors declares
+                // everything it needs to apply this confirmed certificate at once. Supply it
+                // all in one batch. (Confirmed blocks tolerate not-yet-received bundles, so
+                // `bundles` is usually empty here, but we sync any the validator reports for
+                // uniformity with the proposal path.)
+                Err(NodeError::MissingDependencies {
+                    chain_id: _,
+                    bundles,
+                    events,
+                    blobs,
+                }) if !handled_dependencies => {
+                    handled_dependencies = true;
+                    // Missing blobs: the certificate is confirmed, so the blobs are in our
+                    // storage and we upload them directly.
+                    if !blobs.is_empty() {
+                        self.remote_node
+                            .check_blobs_not_found(certificate, &blobs)?;
+                        let maybe_blobs = self
+                            .client
+                            .local_node
+                            .read_blobs_from_storage(&blobs)
+                            .await?;
+                        let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blobs))?;
+                        self.remote_node
+                            .node
+                            .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
+                            .await?;
+                    }
+                    // Missing events: the admin chain's epoch stream carries the committee
+                    // that signed the certificate, so it gets the dedicated update; any other
+                    // publisher chains are synced up to the height we would next preprocess.
+                    if !events.is_empty() {
+                        if events.iter().any(|event_id| {
+                            event_id.chain_id == self.admin_chain_id
+                                && event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
+                        }) {
+                            self.update_admin_chain().await?;
+                        }
+                        let mut publisher_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                        for event_id in &events {
+                            if event_id.chain_id == self.admin_chain_id
+                                || publisher_heights.contains_key(&event_id.chain_id)
+                            {
+                                continue;
+                            }
+                            let height = self
+                                .client
+                                .local_node
+                                .get_next_height_to_preprocess(event_id.chain_id)
+                                .await?;
+                            publisher_heights.insert(event_id.chain_id, height);
+                        }
+                        if !publisher_heights.is_empty() {
+                            self.send_chain_info_up_to_heights(
+                                publisher_heights,
+                                CrossChainMessageDelivery::NonBlocking,
+                            )
+                            .await?;
+                        }
+                    }
+                    // Missing bundles: sync each origin chain up to the needed height.
+                    if !bundles.is_empty() {
+                        let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                        for (origin, height) in bundles {
+                            let target = height.try_add_one()?;
+                            let entry = origin_heights.entry(origin).or_insert(target);
+                            *entry = (*entry).max(target);
+                        }
+                        self.send_chain_info_up_to_heights(
+                            origin_heights,
+                            CrossChainMessageDelivery::Blocking,
+                        )
+                        .await?;
+                    }
+                }
                 Err(NodeError::EventsNotFound(event_ids))
                     if !sent_admin_chain
                         && certificate.inner().chain_id() != self.admin_chain_id
