@@ -122,6 +122,7 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Computes the cryptographic hash of the execution state.
     pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
         match self.hashing_mode().await? {
             HashingMode::Zero => {
@@ -389,6 +390,7 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Runs a query against the given application and returns its response.
     pub async fn query_application(
         &mut self,
         context: QueryContext,
@@ -522,6 +524,7 @@ where
         }
     }
 
+    /// Returns the descriptions of all applications registered on this chain.
     pub async fn list_applications(
         &self,
     ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {

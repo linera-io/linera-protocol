@@ -162,6 +162,7 @@ impl<'a> From<&'a Committee> for CommitteeMinimal<'a> {
 }
 
 impl Committee {
+    /// Creates a new committee from the given validators and resource control policy.
     pub fn new(
         validators: BTreeMap<ValidatorPublicKey, ValidatorState>,
         policy: ResourceControlPolicy,
@@ -183,6 +184,7 @@ impl Committee {
         }
     }
 
+    /// Creates a simple committee for testing, giving each validator equal voting weight.
     #[cfg(with_testing)]
     pub fn make_simple(keys: Vec<(ValidatorPublicKey, AccountPublicKey)>) -> Self {
         let map = keys
@@ -201,6 +203,7 @@ impl Committee {
         Committee::new(map, ResourceControlPolicy::default())
     }
 
+    /// Returns the number of votes held by the given validator, or zero if it is not a member.
     pub fn weight(&self, author: &ValidatorPublicKey) -> u64 {
         match self.validators.get(author) {
             Some(state) => state.votes,
@@ -208,34 +211,41 @@ impl Committee {
         }
     }
 
+    /// Returns an iterator over each validator's account public key and its number of votes.
     pub fn account_keys_and_weights(&self) -> impl Iterator<Item = (AccountPublicKey, u64)> + '_ {
         self.validators
             .values()
             .map(|validator| (validator.account_public_key, validator.votes))
     }
 
+    /// Returns the number of votes required to reach a quorum.
     pub fn quorum_threshold(&self) -> u64 {
         self.quorum_threshold
     }
 
+    /// Returns the number of votes required to reach the validity threshold.
     pub fn validity_threshold(&self) -> u64 {
         self.validity_threshold
     }
 
+    /// Returns the validators in this committee, keyed by their public key.
     pub fn validators(&self) -> &BTreeMap<ValidatorPublicKey, ValidatorState> {
         &self.validators
     }
 
+    /// Returns an iterator over each validator's public key and network address.
     pub fn validator_addresses(&self) -> impl Iterator<Item = (ValidatorPublicKey, &str)> {
         self.validators
             .iter()
             .map(|(name, validator)| (*name, &*validator.network_address))
     }
 
+    /// Returns the total number of votes across all validators.
     pub fn total_votes(&self) -> u64 {
         self.total_votes
     }
 
+    /// Returns the resource control policy of this committee.
     pub fn policy(&self) -> &ResourceControlPolicy {
         &self.policy
     }
@@ -259,6 +269,7 @@ pub struct SharedCommittees {
 }
 
 impl SharedCommittees {
+    /// Creates a new, empty committee cache.
     pub fn new() -> Self {
         Self::default()
     }
