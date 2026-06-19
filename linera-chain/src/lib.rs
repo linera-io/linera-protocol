@@ -53,15 +53,6 @@ pub enum ChainError {
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error(
-        "Cannot vote for block proposal of chain {chain_id} because a message \
-         from chain {origin} at height {height} has not been received yet"
-    )]
-    MissingCrossChainUpdate {
-        chain_id: ChainId,
-        origin: ChainId,
-        height: BlockHeight,
-    },
-    #[error(
         "Message in block proposed to {chain_id} does not match the previously received messages from \
         origin {origin:?}: was {bundle:?} instead of {previous_bundle:?}"
     )]
@@ -229,7 +220,6 @@ impl ChainError {
             | ChainError::MissingOracleResponseList
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
-            | ChainError::MissingCrossChainUpdate { .. }
             | ChainError::MissingDependencies { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }

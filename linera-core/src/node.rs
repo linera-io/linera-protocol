@@ -495,15 +495,6 @@ impl From<CryptoError> for NodeError {
 impl From<ChainError> for NodeError {
     fn from(error: ChainError) -> Self {
         match error {
-            ChainError::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            } => Self::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            },
             ChainError::MissingDependencies {
                 chain_id,
                 bundles,
