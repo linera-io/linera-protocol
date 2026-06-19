@@ -479,6 +479,7 @@ where
         let chain_id = proposal.content.block.chain_id;
         let mut sent_cross_chain_updates = BTreeMap::new();
         let mut publisher_chain_ids_sent = BTreeSet::new();
+        let mut sent_blob_ids = BTreeSet::new();
         let storage = self.client.local_node.storage_client();
         loop {
             let local_time = storage.clock().current_time();
@@ -551,6 +552,124 @@ where
                         None,
                     )
                     .await?;
+                }
+                // A validator that understands aggregated dependency errors declares
+                // everything it is missing to validate this proposal in one error. Sync it
+                // all in a single batch (origins concurrently) instead of discovering each
+                // missing item through a separate rejection and round-trip.
+                Err(NodeError::MissingDependencies {
+                    chain_id: dependencies_chain_id,
+                    bundles,
+                    events,
+                    blobs,
+                }) if dependencies_chain_id == proposal.content.block.chain_id => {
+                    tracing::debug!(
+                        remote_node = %self.remote_node.address(),
+                        %chain_id,
+                        bundles = bundles.len(),
+                        events = events.len(),
+                        blobs = blobs.len(),
+                        "validator reported missing dependencies; syncing them in one batch",
+                    );
+                    // 1. Missing incoming bundles: sync each origin chain up to the needed
+                    //    height. The `sent_cross_chain_updates` guard prevents re-sync loops.
+                    let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                    for (origin, height) in bundles {
+                        if sent_cross_chain_updates
+                            .get(&origin)
+                            .is_some_and(|sent| *sent >= height)
+                        {
+                            continue;
+                        }
+                        sent_cross_chain_updates.insert(origin, height);
+                        let target = height.try_add_one()?;
+                        let entry = origin_heights.entry(origin).or_insert(target);
+                        *entry = (*entry).max(target);
+                    }
+                    // 2. Missing events: sync each publisher chain up to the height our local
+                    //    node would next preprocess.
+                    let mut publisher_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                    for event_id in events {
+                        if !publisher_chain_ids_sent.insert(event_id.chain_id) {
+                            continue;
+                        }
+                        let height = self
+                            .client
+                            .local_node
+                            .get_next_height_to_preprocess(event_id.chain_id)
+                            .await?;
+                        publisher_heights.insert(event_id.chain_id, height);
+                    }
+                    // 3. Missing blobs: send the ones this proposal publishes, then sync the
+                    //    chains that last used any remaining ones. `sent_blob_ids` dedups both
+                    //    across loop iterations so the guard below can detect lack of progress.
+                    let published_blob_ids =
+                        BTreeSet::from_iter(proposal.content.block.published_blob_ids());
+                    let blobs_to_publish = published_blob_ids
+                        .iter()
+                        .copied()
+                        .filter(|blob_id| sent_blob_ids.insert(*blob_id))
+                        .collect::<Vec<_>>();
+                    let missing_blob_ids = blobs
+                        .into_iter()
+                        .filter(|blob_id| {
+                            !published_blob_ids.contains(blob_id) && sent_blob_ids.insert(*blob_id)
+                        })
+                        .collect::<Vec<_>>();
+
+                    // Guard against an infinite loop if the validator keeps reporting
+                    // dependencies we have already synced.
+                    ensure!(
+                        !origin_heights.is_empty()
+                            || !publisher_heights.is_empty()
+                            || !blobs_to_publish.is_empty()
+                            || !missing_blob_ids.is_empty(),
+                        NodeError::ResponseHandlingError {
+                            error: format!(
+                                "validator repeatedly reported already-synced dependencies \
+                                 for chain {dependencies_chain_id}"
+                            ),
+                        }
+                    );
+
+                    if !blobs_to_publish.is_empty() {
+                        let published_blobs = self
+                            .client
+                            .local_node
+                            .get_proposed_blobs(chain_id, blobs_to_publish)
+                            .await?;
+                        if !published_blobs.is_empty() {
+                            self.remote_node
+                                .send_pending_blobs(chain_id, published_blobs)
+                                .await?;
+                        }
+                    }
+                    if !origin_heights.is_empty() {
+                        self.send_chain_info_up_to_heights(
+                            origin_heights,
+                            CrossChainMessageDelivery::Blocking,
+                        )
+                        .await?;
+                    }
+                    if !publisher_heights.is_empty() {
+                        self.send_chain_info_up_to_heights(
+                            publisher_heights,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
+                    }
+                    if !missing_blob_ids.is_empty() {
+                        let missing_blob_ids = self
+                            .remote_node
+                            .node
+                            .missing_blob_ids(missing_blob_ids)
+                            .await?;
+                        self.send_chain_info_for_blobs(
+                            &missing_blob_ids,
+                            CrossChainMessageDelivery::NonBlocking,
+                        )
+                        .await?;
+                    }
                 }
                 Err(NodeError::MissingCrossChainUpdate {
                     chain_id,

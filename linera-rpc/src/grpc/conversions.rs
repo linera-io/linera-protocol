@@ -1256,6 +1256,61 @@ pub mod tests {
         round_trip_check::<_, api::ChainId>(&chain_id);
     }
 
+    /// `NodeError` is bincode-encoded into the gRPC error field (see `TryFrom<NodeError> for
+    /// api::ChainInfoResult`), so an upgraded peer must be able to decode the aggregated
+    /// `MissingDependencies` variant. This also guards against accidentally reordering the
+    /// enum (the variant must stay appended for wire compatibility with older peers).
+    #[test]
+    fn test_node_error_missing_dependencies_round_trip() {
+        use linera_base::identifiers::{BlobType, EventId};
+        let error = NodeError::MissingDependencies {
+            chain_id: dummy_chain_id(0),
+            bundles: vec![
+                (dummy_chain_id(1), BlockHeight::from(7)),
+                (dummy_chain_id(2), BlockHeight::from(0)),
+            ],
+            events: vec![EventId {
+                chain_id: dummy_chain_id(3),
+                stream_id: StreamId::system(b"test".to_vec()),
+                index: 5,
+            }],
+            blobs: vec![BlobId::new(CryptoHash::test_hash("blob"), BlobType::Data)],
+        };
+        let encoded = bincode::serialize(&error).unwrap();
+        let decoded: NodeError = bincode::deserialize(&encoded).unwrap();
+        assert_eq!(error, decoded);
+    }
+
+    /// The chain-level error must map to the node-level error preserving every field, so the
+    /// client receives the full missing set.
+    #[test]
+    fn test_chain_error_missing_dependencies_maps_to_node_error() {
+        use linera_base::identifiers::{BlobType, EventId};
+        let chain_id = dummy_chain_id(0);
+        let bundles = vec![(dummy_chain_id(1), BlockHeight::from(3))];
+        let events = vec![EventId {
+            chain_id: dummy_chain_id(2),
+            stream_id: StreamId::system(b"s".to_vec()),
+            index: 1,
+        }];
+        let blobs = vec![BlobId::new(CryptoHash::test_hash("b"), BlobType::Data)];
+        let node_error = NodeError::from(linera_chain::ChainError::MissingDependencies {
+            chain_id,
+            bundles: bundles.clone(),
+            events: events.clone(),
+            blobs: blobs.clone(),
+        });
+        assert_eq!(
+            node_error,
+            NodeError::MissingDependencies {
+                chain_id,
+                bundles,
+                events,
+                blobs,
+            }
+        );
+    }
+
     #[test]
     pub fn test_chain_info_response() {
         let chain_info = Box::new(ChainInfo {

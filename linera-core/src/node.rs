@@ -344,6 +344,18 @@ pub enum NodeError {
         chain_id: ChainId,
         remote_node: Box<ValidatorPublicKey>,
     },
+
+    #[error(
+        "Validator is missing prerequisites to validate the block for chain {chain_id}: \
+         {} cross-chain bundle(s), {} event(s), {} blob(s)",
+        bundles.len(), events.len(), blobs.len()
+    )]
+    MissingDependencies {
+        chain_id: ChainId,
+        bundles: Vec<(ChainId, BlockHeight)>,
+        events: Vec<EventId>,
+        blobs: Vec<BlobId>,
+    },
 }
 
 /// Parsed data from an `InvalidTimestamp` error.
@@ -394,6 +406,7 @@ impl NodeError {
             NodeError::BlobsNotFound(_)
             | NodeError::EventsNotFound(_)
             | NodeError::MissingCrossChainUpdate { .. }
+            | NodeError::MissingDependencies { .. }
             | NodeError::WrongRound(_)
             | NodeError::UnexpectedBlockHeight { .. }
             | NodeError::InactiveChain(_)
@@ -490,6 +503,17 @@ impl From<ChainError> for NodeError {
                 chain_id,
                 origin,
                 height,
+            },
+            ChainError::MissingDependencies {
+                chain_id,
+                bundles,
+                events,
+                blobs,
+            } => Self::MissingDependencies {
+                chain_id,
+                bundles,
+                events,
+                blobs,
             },
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
