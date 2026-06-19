@@ -68,6 +68,7 @@ pub struct SyncRuntime<UserInstance: WithContext>(Option<SyncRuntimeHandle<UserI
 
 pub type ContractSyncRuntime = SyncRuntime<UserContractInstance>;
 
+/// The synchronous runtime used to execute service queries.
 pub struct ServiceSyncRuntime {
     runtime: SyncRuntime<UserServiceInstance>,
     current_context: QueryContext,
@@ -78,7 +79,9 @@ pub struct SyncRuntimeHandle<UserInstance: WithContext>(
     Arc<Mutex<SyncRuntimeInternal<UserInstance>>>,
 );
 
+/// A handle to the synchronous runtime used when executing contracts.
 pub type ContractSyncRuntimeHandle = SyncRuntimeHandle<UserContractInstance>;
+/// A handle to the synchronous runtime used when executing services.
 pub type ServiceSyncRuntimeHandle = SyncRuntimeHandle<UserServiceInstance>;
 
 /// Runtime data tracked during the execution of a transaction on the synchronous thread.
@@ -1919,6 +1922,7 @@ impl ServiceRuntime for ServiceSyncRuntimeHandle {
 }
 
 /// A request to the service runtime actor.
+#[allow(missing_docs)]
 pub enum ServiceRuntimeRequest {
     Query {
         application_id: ApplicationId,
