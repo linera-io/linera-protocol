@@ -13,7 +13,7 @@ contract ILightClientConformanceTest is Test {
         validators[0] = vm.addr(1);
         uint64[] memory weights = new uint64[](1);
         weights[0] = 1;
-        return new LightClient(validators, weights, ADMIN_CHAIN, 0);
+        return new LightClient(validators, weights, ADMIN_CHAIN, 0, makeAddr("guardian"), makeAddr("proposer"));
     }
 
     /// LightClient is usable through the narrow ILightClient surface the consumer

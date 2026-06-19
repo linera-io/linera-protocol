@@ -16,12 +16,14 @@ contract DeployLightClient is Script {
         uint64[] memory weights = _readUint64Array(json, ".weights");
         bytes32 adminChainId = json.readBytes32(".admin_chain_id");
         uint32 epoch = uint32(vm.parseUint(json.readString(".epoch")));
+        address pauseGuardian = json.readAddress(".pause_guardian");
+        address proposer = json.readAddress(".proposer");
 
         require(validators.length > 0, "validators empty");
         require(validators.length == weights.length, "validators/weights length mismatch");
 
         vm.broadcast();
-        lc = new LightClient(validators, weights, adminChainId, epoch);
+        lc = new LightClient(validators, weights, adminChainId, epoch, pauseGuardian, proposer);
 
         require(lc.adminChainId() == adminChainId, "post-deploy admin chain mismatch");
     }

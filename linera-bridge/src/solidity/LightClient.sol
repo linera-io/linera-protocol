@@ -25,6 +25,30 @@ contract LightClient is ILightClient {
     uint32 public minAcceptedEpoch;
     bytes32 public override adminChainId;
 
+    // Governance. Both immutable — rotation is a redeployment, never an on-chain
+    // setter (avoids a recursive "who controls the rotation?" trust problem).
+    // `pauseGuardian` can pause `registerBlock`; `proposer` gates the
+    // `expireEpochsBelow` weak-subjectivity floor.
+    address public immutable pauseGuardian;
+    address public immutable proposer;
+
+    // Emergency pause. `registerBlock` is rejected while `block.timestamp <
+    // pausedUntil`. Auto-expires so the guardian can never freeze the client
+    // indefinitely. NOTE: this client is shared by every consumer bridge on the
+    // network, so a pause here halts inbound block registration for all of them.
+    uint256 public constant PAUSE_MAX_DURATION = 14 days;
+    uint256 public pausedUntil;
+
+    modifier onlyProposer() {
+        require(msg.sender == proposer, "only proposer");
+        _;
+    }
+
+    modifier whenNotEmergencyPaused() {
+        require(block.timestamp >= pausedUntil, "emergency paused");
+        _;
+    }
+
     /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
     /// individual events can later be proven against it (`proveEventsCommitted`) and settled
     /// (`processBurns`) or used to rotate the committee (`addCommittee`) without re-checking the
@@ -41,11 +65,43 @@ contract LightClient is ILightClient {
     /// Maps a registered block's hash (`keccak256("BlockHeader::" ++ BCS(header))`) to its metadata.
     mapping(bytes32 => RegisteredBlock) public override registeredBlocks;
 
-    constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
+    constructor(
+        address[] memory validators,
+        uint64[] memory weights,
+        bytes32 _adminChainId,
+        uint32 _epoch,
+        address _pauseGuardian,
+        address _proposer
+    ) {
         require(validators.length == weights.length, "length mismatch");
+        require(_pauseGuardian != address(0), "zero pauseGuardian");
+        require(_proposer != address(0), "zero proposer");
         // Genesis committee has no backing admin block, so its height is 0.
         _setCommittee(_epoch, validators, weights, 0);
         adminChainId = _adminChainId;
+        pauseGuardian = _pauseGuardian;
+        proposer = _proposer;
+    }
+
+    event EmergencyPaused(uint256 until);
+    event EmergencyUnpaused();
+
+    /// Pauses `registerBlock` for `duration` (auto-expiring, capped at
+    /// `PAUSE_MAX_DURATION`). Guardian-only. Re-pausing before expiry restarts
+    /// the clock.
+    function emergencyPause(uint256 duration) external {
+        require(msg.sender == pauseGuardian, "only pause guardian");
+        require(duration > 0 && duration <= PAUSE_MAX_DURATION, "invalid duration");
+        pausedUntil = block.timestamp + duration;
+        emit EmergencyPaused(pausedUntil);
+    }
+
+    /// Lifts an active pause early. Guardian-only.
+    function emergencyUnpause() external {
+        require(msg.sender == pauseGuardian, "only pause guardian");
+        require(pausedUntil > block.timestamp, "not paused");
+        pausedUntil = 0;
+        emit EmergencyUnpaused();
     }
 
     /// Installs a new validator committee, proven from the admin-chain block that created it. The
@@ -113,12 +169,13 @@ contract LightClient is ILightClient {
     /// `newMinEpoch`. Retiring a wide range in one call costs O(range) gas;
     /// expire incrementally if the gap is large.
     ///
-    /// TODO(security): access control is intentionally deferred. This function
-    /// is currently UNAUTHENTICATED and MUST be gated (owner / governance)
-    /// before any production deployment — an unauthenticated caller can
-    /// otherwise raise the floor up to `currentEpoch` and reject legitimate
-    /// lagging certificates (a liveness DoS).
-    function expireEpochsBelow(uint32 newMinEpoch) external {
+    /// Gated to `proposer`: an unauthenticated caller could otherwise raise the
+    /// floor up to `currentEpoch` and reject legitimate lagging certificates (a
+    /// liveness DoS). Immediate-effect (no timelock): it cannot move funds, is
+    /// monotonic, and is capped at `currentEpoch` so it can never retire the live
+    /// committee — and an operator may need to retire a compromised retired
+    /// committee promptly during an incident.
+    function expireEpochsBelow(uint32 newMinEpoch) external onlyProposer {
         require(newMinEpoch > minAcceptedEpoch, "minAcceptedEpoch must increase");
         require(newMinEpoch <= currentEpoch, "cannot expire current epoch");
         for (uint32 epoch = minAcceptedEpoch; epoch < newMinEpoch; epoch++) {
@@ -180,7 +237,7 @@ contract LightClient is ILightClient {
     /// individual events can later be proven against it (via `proveEventsCommitted`) without
     /// re-checking the whole certificate. Returns the block hash
     /// (`keccak256("BlockHeader::" ++ BCS(header))`).
-    function registerBlock(bytes calldata blockProof) external returns (bytes32) {
+    function registerBlock(bytes calldata blockProof) external whenNotEmergencyPaused returns (bytes32) {
         (BridgeTypes.BlockHeader memory header, bytes32 blockHash) = _verifyBlockProof(blockProof);
         registeredBlocks[blockHash] = RegisteredBlock(
             header.events_hash.value, header.height.value, header.chain_id.value.value, header.epoch.value

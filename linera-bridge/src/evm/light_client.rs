@@ -663,7 +663,7 @@ mod tests {
         // Retire epoch 0.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             &expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -714,7 +714,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -744,7 +744,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 2 },
             )
@@ -755,7 +755,7 @@ mod tests {
         // Retire epoch 0 (floor -> 1) while still at epoch 1.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             &expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -764,7 +764,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -774,7 +774,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 0 },
             )

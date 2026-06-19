@@ -323,6 +323,18 @@ pub fn create_certificate_with_events(
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
 }
 
+/// Default governance addresses used when deploying a LightClient/FungibleBridge
+/// in tests that do not exercise governance. Non-zero so the constructors'
+/// zero-address guards pass; tests that exercise governance act as these
+/// addresses (e.g. `expireEpochsBelow` must be called by `test_proposer()`).
+pub fn test_pause_guardian() -> Address {
+    Address::from([0xDA; 20])
+}
+
+pub fn test_proposer() -> Address {
+    Address::from([0xBE; 20])
+}
+
 pub fn deploy_light_client(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
@@ -333,8 +345,15 @@ pub fn deploy_light_client(
 ) -> Address {
     let bytecode = compile_contract(evm::LIGHTCLIENT_SOURCE, "LightClient.sol", "LightClient");
     let chain_id_bytes = *admin_chain_id.as_bytes();
-    let constructor_args =
-        (validators.to_vec(), weights.to_vec(), chain_id_bytes, epoch).abi_encode_params();
+    let constructor_args = (
+        validators.to_vec(),
+        weights.to_vec(),
+        chain_id_bytes,
+        epoch,
+        test_pause_guardian(),
+        test_proposer(),
+    )
+        .abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
