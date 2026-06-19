@@ -49,6 +49,64 @@ use crate::{
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 
+/// Adapts a "missing prerequisite" error to the capabilities the requesting client
+/// advertised, keeping the wire protocol backward compatible.
+///
+/// Clients that understand the aggregated [`NodeError::MissingDependencies`] receive every
+/// missing-prerequisite condition in that single shape (so they can fetch everything in one
+/// batch). Older clients that predate it only understand the legacy per-item errors, so the
+/// aggregated error is downgraded back to one of them. Errors unrelated to missing
+/// prerequisites pass through unchanged.
+fn adapt_dependency_error(
+    error: NodeError,
+    chain_id: ChainId,
+    supports_aggregated: bool,
+) -> NodeError {
+    if supports_aggregated {
+        match error {
+            NodeError::EventsNotFound(events) => NodeError::MissingDependencies {
+                chain_id,
+                bundles: Vec::new(),
+                events,
+                blobs: Vec::new(),
+            },
+            NodeError::BlobsNotFound(blobs) => NodeError::MissingDependencies {
+                chain_id,
+                bundles: Vec::new(),
+                events: Vec::new(),
+                blobs,
+            },
+            other => other,
+        }
+    } else {
+        match error {
+            NodeError::MissingDependencies {
+                chain_id,
+                bundles,
+                events,
+                blobs,
+            } => {
+                if let Some((origin, height)) = bundles.into_iter().next() {
+                    NodeError::MissingCrossChainUpdate {
+                        chain_id,
+                        origin,
+                        height,
+                    }
+                } else if !events.is_empty() {
+                    NodeError::EventsNotFound(events)
+                } else if !blobs.is_empty() {
+                    NodeError::BlobsNotFound(blobs)
+                } else {
+                    NodeError::ChainError {
+                        error: "missing dependencies".to_string(),
+                    }
+                }
+            }
+            other => other,
+        }
+    }
+}
+
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
@@ -742,7 +800,10 @@ where
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let traffic_type = Self::get_traffic_type(&request);
-        let proposal = request.into_inner().try_into()?;
+        let proto = request.into_inner();
+        let supports_aggregated = proto.supports_aggregated_missing;
+        let proposal: linera_chain::data_types::BlockProposal = proto.try_into()?;
+        let chain_id = proposal.content.block.chain_id;
         trace!(?proposal, "Handling block proposal");
         let (result, actions) = self.state.clone().handle_block_proposal(proposal).await;
         // Dispatch actions whether or not the proposal was accepted: a rejected
@@ -758,7 +819,8 @@ where
             Err(error) => {
                 Self::log_request_error("handle_block_proposal", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to handle block proposal");
-                NodeError::from(error).try_into()?
+                adapt_dependency_error(NodeError::from(error), chain_id, supports_aggregated)
+                    .try_into()?
             }
         }))
     }
@@ -826,10 +888,13 @@ where
         request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let traffic_type = Self::get_traffic_type(&request);
+        let proto = request.into_inner();
+        let supports_aggregated = proto.supports_aggregated_missing;
         let HandleConfirmedCertificateRequest {
             certificate,
             wait_for_outgoing_messages,
-        } = request.into_inner().try_into()?;
+        } = proto.try_into()?;
+        let chain_id = certificate.inner().chain_id();
         trace!(?certificate, "Handling certificate");
         let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
@@ -855,7 +920,10 @@ where
                     &error.error_type(),
                 );
                 self.log_error(&error, "Failed to handle confirmed certificate");
-                Ok(Response::new(NodeError::from(error).try_into()?))
+                Ok(Response::new(
+                    adapt_dependency_error(NodeError::from(error), chain_id, supports_aggregated)
+                        .try_into()?,
+                ))
             }
         }
     }
@@ -1180,5 +1248,98 @@ impl GrpcProxyable for CrossChainRequest {
                 recipient.clone()?.try_into().ok()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod dependency_error_tests {
+    use linera_base::{
+        crypto::CryptoHash,
+        data_types::BlockHeight,
+        identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
+    };
+    use linera_core::node::NodeError;
+
+    use super::adapt_dependency_error;
+
+    fn chain(name: &str) -> ChainId {
+        ChainId(CryptoHash::test_hash(name))
+    }
+
+    fn event() -> EventId {
+        EventId {
+            chain_id: chain("publisher"),
+            stream_id: StreamId::system(b"s".to_vec()),
+            index: 0,
+        }
+    }
+
+    fn blob() -> BlobId {
+        BlobId::new(CryptoHash::test_hash("blob"), BlobType::Data)
+    }
+
+    #[test]
+    fn capable_client_gets_aggregated_errors() {
+        let cid = chain("target");
+        // Legacy per-item errors are lifted into the aggregated shape.
+        assert!(matches!(
+            adapt_dependency_error(NodeError::EventsNotFound(vec![event()]), cid, true),
+            NodeError::MissingDependencies { events, .. } if events == vec![event()]
+        ));
+        assert!(matches!(
+            adapt_dependency_error(NodeError::BlobsNotFound(vec![blob()]), cid, true),
+            NodeError::MissingDependencies { blobs, .. } if blobs == vec![blob()]
+        ));
+        // An already-aggregated error passes through unchanged.
+        let aggregated = NodeError::MissingDependencies {
+            chain_id: cid,
+            bundles: vec![],
+            events: vec![event()],
+            blobs: vec![],
+        };
+        assert_eq!(
+            adapt_dependency_error(aggregated.clone(), cid, true),
+            aggregated
+        );
+    }
+
+    #[test]
+    fn legacy_client_gets_downgraded_errors() {
+        let cid = chain("target");
+        let origin = chain("origin");
+        let height = BlockHeight::from(7);
+        // Bundles take priority and downgrade to the per-origin legacy error.
+        let with_bundles = NodeError::MissingDependencies {
+            chain_id: cid,
+            bundles: vec![(origin, height)],
+            events: vec![event()],
+            blobs: vec![blob()],
+        };
+        assert!(matches!(
+            adapt_dependency_error(with_bundles, cid, false),
+            NodeError::MissingCrossChainUpdate { origin: o, height: h, .. }
+                if o == origin && h == height
+        ));
+        // Events-only and blobs-only downgrade to their respective legacy errors.
+        let events_only = NodeError::MissingDependencies {
+            chain_id: cid,
+            bundles: vec![],
+            events: vec![event()],
+            blobs: vec![],
+        };
+        assert!(matches!(
+            adapt_dependency_error(events_only, cid, false),
+            NodeError::EventsNotFound(events) if events == vec![event()]
+        ));
+        let blobs_only = NodeError::MissingDependencies {
+            chain_id: cid,
+            bundles: vec![],
+            events: vec![],
+            blobs: vec![blob()],
+        };
+        assert!(matches!(
+            adapt_dependency_error(blobs_only, cid, false),
+            NodeError::BlobsNotFound(blobs) if blobs == vec![blob()]
+        ));
     }
 }

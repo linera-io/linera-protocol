@@ -255,6 +255,8 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
                 .original_proposal
                 .map(|cert| bincode::serialize(&cert))
                 .transpose()?,
+            // This binary understands the aggregated `MissingDependencies` error.
+            supports_aggregated_missing: true,
         })
     }
 }
@@ -488,6 +490,8 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+            // This binary understands the aggregated `MissingDependencies` error.
+            supports_aggregated_missing: true,
         })
     }
 }
