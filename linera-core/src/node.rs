@@ -45,6 +45,7 @@ pub type BlobStream = BoxStream<'static, Result<BlobContent, NodeError>>;
 
 /// Whether to wait for the delivery of outgoing cross-chain messages.
 #[derive(Debug, Default, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum CrossChainMessageDelivery {
     #[default]
     NonBlocking,
@@ -55,8 +56,10 @@ pub enum CrossChainMessageDelivery {
 #[allow(async_fn_in_trait)]
 #[cfg_attr(not(web), trait_variant::make(Send))]
 pub trait ValidatorNode {
+    /// The type of stream of notifications returned when subscribing.
     type NotificationStream: Stream<Item = Notification> + Unpin + MaybeSend;
 
+    /// Returns the address of this validator node.
     fn address(&self) -> String;
 
     /// Proposes a new block.
@@ -106,8 +109,8 @@ pub trait ValidatorNode {
     /// Subscribes to receiving notifications for a collection of chains.
     async fn subscribe(&self, chains: Vec<ChainId>) -> Result<Self::NotificationStream, NodeError>;
 
-    // Uploads a blob. Returns an error if the validator has not seen a
-    // certificate using this blob.
+    /// Uploads a blob. Returns an error if the validator has not seen a
+    /// certificate using this blob.
     async fn upload_blob(&self, content: BlobContent) -> Result<BlobId, NodeError>;
 
     /// Uploads the blobs to the validator.
@@ -147,6 +150,7 @@ pub trait ValidatorNode {
         blob: BlobContent,
     ) -> Result<ChainInfoResponse, NodeError>;
 
+    /// Downloads the confirmed block certificate with the given hash.
     async fn download_certificate(
         &self,
         hash: CryptoHash,
@@ -192,10 +196,13 @@ pub trait ValidatorNode {
 /// Turn an address into a validator node.
 #[cfg_attr(not(web), trait_variant::make(Send + Sync))]
 pub trait ValidatorNodeProvider: 'static {
+    /// The type of validator node produced by this provider.
     type Node: ValidatorNode + MaybeSend + MaybeSync + Clone + 'static;
 
+    /// Creates a node from a validator's address.
     fn make_node(&self, address: &str) -> Result<Self::Node, NodeError>;
 
+    /// Creates a node for each validator in the committee.
     fn make_nodes(
         &self,
         committee: &Committee,
@@ -207,6 +214,7 @@ pub trait ValidatorNodeProvider: 'static {
         self.make_nodes_from_list(validator_addresses)
     }
 
+    /// Creates a node for each validator in the given list of public keys and addresses.
     fn make_nodes_from_list<A>(
         &self,
         validators: impl IntoIterator<Item = (ValidatorPublicKey, A)>,
@@ -227,6 +235,7 @@ pub trait ValidatorNodeProvider: 'static {
 /// This error is meant to be serialized over the network and aggregated by clients (i.e.
 /// clients will track validator votes on each error value).
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
+#[allow(missing_docs)]
 pub enum NodeError {
     #[error("Cryptographic error: {error}")]
     CryptoError { error: String },
@@ -428,6 +437,7 @@ impl From<tonic::Status> for NodeError {
 }
 
 impl CrossChainMessageDelivery {
+    /// Creates a new value, blocking on outgoing message delivery if requested.
     pub fn new(wait_for_outgoing_messages: bool) -> Self {
         if wait_for_outgoing_messages {
             CrossChainMessageDelivery::Blocking
@@ -436,6 +446,7 @@ impl CrossChainMessageDelivery {
         }
     }
 
+    /// Returns whether to wait for the delivery of outgoing cross-chain messages.
     pub fn wait_for_outgoing_messages(self) -> bool {
         match self {
             CrossChainMessageDelivery::NonBlocking => false,

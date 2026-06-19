@@ -17,6 +17,7 @@ mod implementation {
 
     use super::*;
 
+    /// The set of tasks spawned on the current thread in a Web environment.
     #[derive(Default)]
     pub struct JoinSet(Vec<oneshot::Receiver<()>>);
 
@@ -76,6 +77,7 @@ mod implementation {
 
     use super::*;
 
+    /// The set of tasks spawned on the Tokio runtime.
     pub type JoinSet = tokio::task::JoinSet<()>;
 
     /// An extension trait for the [`JoinSet`] type.

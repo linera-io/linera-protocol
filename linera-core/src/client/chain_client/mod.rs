@@ -81,6 +81,7 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 
+/// Options that configure the behavior of a [`ChainClient`].
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Maximum number of pending message bundles processed at a time in a block.
@@ -153,6 +154,7 @@ struct ConsensusStateSnapshot {
 
 #[cfg(with_testing)]
 impl Options {
+    /// Returns a default set of options for use in tests.
     pub fn test_default() -> Self {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
@@ -246,6 +248,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
 
 /// Error type for [`ChainClient`].
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("Local node operation failed: {0}")]
     LocalNodeError(#[from] LocalNodeError),
@@ -362,6 +365,7 @@ impl From<Infallible> for Error {
 }
 
 impl Error {
+    /// Wraps a signer error into a [`Error::Signer`] variant.
     pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
     }
@@ -1895,6 +1899,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.transfer(owner, amount, recipient).await
     }
 
+    /// Fetches the latest chain info for this chain from the validators.
     #[instrument(level = "trace")]
     pub async fn fetch_chain_info(&self) -> Result<Box<ChainInfo>, Error> {
         let validators = self.client.validator_nodes().await?;
@@ -1951,6 +1956,7 @@ impl<Env: Environment> ChainClient<Env> {
             .map_err(Into::into)
     }
 
+    /// Synchronizes this chain's state from the validators, including received messages.
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
         if self.preferred_owner.is_none() {
             return self.client.synchronize_chain_state(self.chain_id).await;
@@ -2928,6 +2934,7 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
+    /// Reads the confirmed block with the given hash from storage.
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_confirmed_block(
         &self,
@@ -2941,6 +2948,7 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|b| b.into_std())
     }
 
+    /// Reads the confirmed block certificate with the given hash from storage.
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_certificate(
         &self,
@@ -3495,6 +3503,7 @@ impl<Env: Environment> ChainClient<Env> {
 
 #[cfg(with_testing)]
 impl<Env: Environment> ChainClient<Env> {
+    /// Processes a notification received from the given validator.
     pub async fn process_notification_from(
         &self,
         notification: Notification,

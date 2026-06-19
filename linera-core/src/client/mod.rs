@@ -57,6 +57,7 @@ use crate::{
     ChainWorkerConfig, ProcessConfirmedBlockMode, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
+/// The client for interacting with a single chain.
 pub mod chain_client;
 pub use chain_client::ChainClient;
 
@@ -125,13 +126,20 @@ mod metrics {
     });
 }
 
+/// Default number of certificates to download in a single batch.
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+/// Default number of certificates to upload in a single batch.
 pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
+/// Default number of sender-chain certificates to download in a single batch.
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
+/// Default maximum number of concurrent event stream queries.
 pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
+/// Default maximum number of certificate batch downloads to run concurrently.
 pub static DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS: usize = 1;
 
+/// Identifies which operation a timing measurement refers to.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum TimingType {
     ExecuteOperations,
     ExecuteBlock,
@@ -205,6 +213,7 @@ impl ListeningMode {
         }
     }
 
+    /// Widens this mode to also cover the given mode, keeping the more inclusive of the two.
     pub fn extend(&mut self, other: Option<ListeningMode>) {
         match (self, other) {
             (_, None) => (),
@@ -439,6 +448,7 @@ impl<Env: Environment> Client<Env> {
         Ok(results.into_iter().next().flatten())
     }
 
+    /// Returns the provider used to connect to validator nodes.
     pub fn validator_node_provider(&self) -> &Env::Network {
         self.environment.network()
     }
@@ -2353,7 +2363,9 @@ impl Drop for AbortOnDrop {
 /// A pending proposed block, together with its published blobs.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PendingProposal {
+    /// The proposed block.
     pub block: ProposedBlock,
+    /// The blobs published by the proposed block.
     pub blobs: Vec<Blob>,
     /// The round in which this proposal was first submitted, if any.
     #[serde(default)]

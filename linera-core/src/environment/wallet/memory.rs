@@ -30,14 +30,17 @@ impl Serialize for Memory {
 }
 
 impl Memory {
+    /// Returns the state of the chain with the given ID, if it is tracked.
     pub fn get(&self, id: ChainId) -> Option<Chain> {
         self.0.pin().get(&id).cloned()
     }
 
+    /// Inserts or replaces the state of the given chain, returning the previous state if any.
     pub fn insert(&self, id: ChainId, chain: Chain) -> Option<Chain> {
         self.0.pin().insert(id, chain).cloned()
     }
 
+    /// Inserts the given chain only if it is not already tracked, returning the existing state otherwise.
     pub fn try_insert(&self, id: ChainId, chain: Chain) -> Option<Chain> {
         match self.0.pin().try_insert(id, chain) {
             Ok(_inserted) => None,
@@ -45,10 +48,12 @@ impl Memory {
         }
     }
 
+    /// Removes the chain with the given ID, returning its previous state if any.
     pub fn remove(&self, id: ChainId) -> Option<Chain> {
         self.0.pin().remove(&id).cloned()
     }
 
+    /// Returns all tracked chains and their states.
     pub fn items(&self) -> Vec<(ChainId, Chain)> {
         self.0
             .pin()
@@ -57,10 +62,12 @@ impl Memory {
             .collect::<Vec<_>>()
     }
 
+    /// Returns the IDs of all tracked chains.
     pub fn chain_ids(&self) -> Vec<ChainId> {
         self.0.pin().keys().copied().collect::<Vec<_>>()
     }
 
+    /// Returns the IDs of the tracked chains that have an owner configured.
     pub fn owned_chain_ids(&self) -> Vec<ChainId> {
         self.0
             .pin()
@@ -69,6 +76,7 @@ impl Memory {
             .collect::<Vec<_>>()
     }
 
+    /// Applies a closure to the given chain if it is tracked, returning the closure's result.
     pub fn mutate<R>(&self, chain_id: ChainId, mutate: impl Fn(&mut Chain) -> R) -> Option<R> {
         use papaya::Operation::*;
 
