@@ -162,13 +162,18 @@ pub async fn parse_broadcast_address(
     project_name: &str,
     compose_file: &std::path::Path,
     script_name: &str,
+    contract_name: &str,
 ) -> anyhow::Result<Address> {
+    // Select by contract name rather than `.transactions[0]`: a script may
+    // deploy more than one contract (e.g. DeployFungibleBridge also deploys the
+    // initial decoder), and the target is not necessarily the first CREATE.
     let output = exec_output(
         compose,
         "foundry-tools",
         &format!(
             "CHAIN_ID=$(cast chain-id --rpc-url http://anvil:8545); \
-             jq -r '.transactions[0].contractAddress' \
+             jq -r --arg name '{contract_name}' \
+             '[.transactions[] | select(.contractName==$name)] | last | .contractAddress' \
              /contracts/broadcast/{script_name}/$CHAIN_ID/run-latest.json"
         ),
         project_name,
@@ -204,6 +209,7 @@ pub async fn deploy_linera_token(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -238,6 +244,7 @@ pub async fn deploy_linera_token_with_supply(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -271,6 +278,7 @@ pub async fn deploy_linera_token_with_decimals(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -315,6 +323,7 @@ pub async fn deploy_fungible_bridge(
         project_name,
         compose_file,
         "DeployFungibleBridge.s.sol",
+        "FungibleBridge",
     )
     .await
 }
