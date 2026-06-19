@@ -17,6 +17,7 @@ use linera_base::{
     http,
     identifiers::{Account, AccountOwner, ApplicationId, DataBlobHash, ModuleId},
     ownership::ChainOwnership,
+    time::Duration,
     vm::VmRuntime,
 };
 use linera_execution::{
@@ -839,6 +840,85 @@ async fn test_query_service(authorized_apps: Option<Vec<()>>) -> Result<(), Exec
     ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
         .execute_operation(context, operation)
         .await?;
+
+    Ok(())
+}
+
+/// Replaying a service-oracle response must not accumulate any execution time.
+///
+/// When the response is replayed from the certificate the service is not actually run, so
+/// timing it would record wall-clock time that differs between validators. If that time were
+/// tracked it could cross `maximum_service_oracle_execution_ms` on a slow host but not a fast
+/// one, making the two validators compute a different block outcome (`CorruptedChainState`).
+/// Regression test: after a replayed `query_service`, the tracked service-oracle execution
+/// time must be exactly zero.
+#[test_log::test(tokio::test)]
+async fn test_query_service_does_not_track_execution_time_on_replay() -> Result<(), ExecutionError>
+{
+    let description = dummy_chain_description(0);
+    let chain_id = description.id();
+    let mut view = SystemExecutionState {
+        ownership: ChainOwnership::default(),
+        balance: Amount::ONE,
+        balances: BTreeMap::new(),
+        ..SystemExecutionState::new(description)
+    }
+    .into_view()
+    .await;
+
+    let contract_blob = TransferTestEndpoint::sender_application_contract_blob();
+    let service_blob = TransferTestEndpoint::sender_application_service_blob();
+    let contract_blob_id = contract_blob.id();
+    let service_blob_id = service_blob.id();
+
+    let application_description = TransferTestEndpoint::sender_application_description();
+    let application_description_blob = Blob::new_application_description(&application_description);
+    let app_desc_blob_id = application_description_blob.id();
+
+    let (application_id, application) = view
+        .register_mock_application_with(application_description, contract_blob, service_blob)
+        .await
+        .expect("should register mock application");
+
+    view.system
+        .application_permissions
+        .set(ApplicationPermissions {
+            call_service_as_oracle: None,
+            ..ApplicationPermissions::new_single(application_id)
+        });
+
+    application.expect_call(ExpectedCall::execute_operation(
+        move |runtime, _operation| {
+            runtime.query_service(application_id, vec![])?;
+            Ok(vec![])
+        },
+    ));
+    application.expect_call(ExpectedCall::default_finalize());
+
+    let context = create_dummy_operation_context(chain_id);
+    let mut controller = ResourceController::default();
+    let operation = Operation::User {
+        application_id,
+        bytes: vec![],
+    };
+
+    // Replay mode: the `OracleResponse::Service` is taken from the recorded responses, so the
+    // service itself is never executed.
+    let mut txn_tracker = TransactionTracker::new_replaying(vec![
+        OracleResponse::Blob(app_desc_blob_id),
+        OracleResponse::Blob(contract_blob_id),
+        OracleResponse::Blob(service_blob_id),
+        OracleResponse::Service(vec![]),
+    ]);
+    ExecutionStateActor::new(&mut view, &mut txn_tracker, &mut controller)
+        .execute_operation(context, operation)
+        .await?;
+
+    assert_eq!(
+        controller.tracker.service_oracle_execution,
+        Duration::ZERO,
+        "a replayed service-oracle call must not accumulate wall-clock execution time"
+    );
 
     Ok(())
 }

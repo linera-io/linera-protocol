@@ -23,7 +23,7 @@ use linera_base::{
         OwnerSpender, StreamId,
     },
     ownership::ChainOwnership,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use linera_views::{batch::Batch, context::Context, views::View};
 use oneshot::Sender;
@@ -728,6 +728,13 @@ where
                 let state = &mut self.state;
                 let local_time = self.txn_tracker.local_time();
                 let created_blobs = self.txn_tracker.created_blobs().clone();
+                // Measured only when the service actually runs (validation mode). When the
+                // oracle response is replayed from the certificate the closure is skipped, so
+                // this stays zero. Reporting it back to the runtime — rather than letting the
+                // runtime time the whole round-trip — keeps the tracked execution time off the
+                // wall clock during replay, which is what makes block re-execution deterministic
+                // across validators (see `run_service_oracle_query`).
+                let mut execution_time = Duration::ZERO;
                 let bytes = self
                     .txn_tracker
                     .oracle(|| async {
@@ -736,6 +743,7 @@ where
                             next_block_height,
                             local_time,
                         };
+                        let execution_start = Instant::now();
                         let QueryOutcome {
                             response,
                             operations,
@@ -747,6 +755,7 @@ where
                             created_blobs,
                         ))
                         .await?;
+                        execution_time = execution_start.elapsed();
                         ensure!(
                             operations.is_empty(),
                             ExecutionError::ServiceOracleQueryOperations(operations)
@@ -755,7 +764,7 @@ where
                     })
                     .await?
                     .to_service_response()?;
-                callback.respond(bytes);
+                callback.respond((bytes, execution_time));
             }
 
             AddOutgoingMessage { message, callback } => {
@@ -1587,7 +1596,7 @@ pub enum ExecutionRequest {
         next_block_height: BlockHeight,
         query: Vec<u8>,
         #[debug(skip)]
-        callback: Sender<Vec<u8>>,
+        callback: Sender<(Vec<u8>, Duration)>,
     },
 
     AddOutgoingMessage {
