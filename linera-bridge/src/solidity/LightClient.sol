@@ -2,8 +2,9 @@
 pragma solidity ^0.8.0;
 
 import "BridgeTypes.sol";
+import "ILightClient.sol";
 
-contract LightClient {
+contract LightClient is ILightClient {
     // Per-epoch committee storage
     struct EpochCommittee {
         mapping(address => uint64) weights;
@@ -22,7 +23,7 @@ contract LightClient {
     // weak-subjectivity floor: a quorum of a long-retired committee's keys can
     // no longer forge a certificate once its epoch is expired.
     uint32 public minAcceptedEpoch;
-    bytes32 public adminChainId;
+    bytes32 public override adminChainId;
 
     /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
     /// individual events can later be proven against it (`proveEventsCommitted`) and settled
@@ -38,7 +39,7 @@ contract LightClient {
     }
 
     /// Maps a registered block's hash (`keccak256("BlockHeader::" ++ BCS(header))`) to its metadata.
-    mapping(bytes32 => RegisteredBlock) public registeredBlocks;
+    mapping(bytes32 => RegisteredBlock) public override registeredBlocks;
 
     constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
         require(validators.length == weights.length, "length mismatch");
@@ -208,7 +209,7 @@ contract LightClient {
         uint32 numEventsInTx,
         uint32[] calldata positions,
         bytes32[] calldata siblings
-    ) public pure {
+    ) public pure override {
         require(txIndex < numTxs, "txIndex out of range");
         require(eventBcs.length == positions.length, "events/positions length mismatch");
         require(positions.length <= numEventsInTx, "more positions than events");
