@@ -309,24 +309,9 @@ Client implementation and command-line tool for the Linera blockchain
 
   Default value: `1`
 * `--rocksdb-enable-statistics` — Enable RocksDB's internal statistics collection and export them as Prometheus metrics. Off by default; enable it on nodes whose metrics are scraped
-* `--rocksdb-statistics-level <ROCKSDB_STATISTICS_LEVEL>` — The level of detail collected when `--rocksdb-enable-statistics` is set. Higher levels collect more, and more expensive, data
+* `--rocksdb-statistics-level <ROCKSDB_STATISTICS_LEVEL>` — The level of detail collected when `--rocksdb-enable-statistics` is set. Higher levels collect more, and more expensive, data. One of: `disable-all`, `except-histogram-or-timers`, `except-timers`, `except-detailed-timers`, `except-time-for-mutex`, `all`
 
   Default value: `except-histogram-or-timers`
-
-  Possible values:
-  - `disable-all`:
-    Collect nothing
-  - `except-histogram-or-timers`:
-    Collect tickers (counters) only; skip all histograms and timers
-  - `except-timers`:
-    Collect tickers and histograms, but skip timer statistics
-  - `except-detailed-timers`:
-    Collect everything except mutex-lock and compression timing
-  - `except-time-for-mutex`:
-    Collect everything except the counters requiring time inside the mutex lock
-  - `all`:
-    Collect everything, including mutex operation timing
-
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--with-application-logs` — Output log messages from contract execution
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use

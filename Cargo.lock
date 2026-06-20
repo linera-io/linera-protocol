@@ -6049,6 +6049,7 @@ dependencies = [
  "serde",
  "sha3",
  "static_assertions",
+ "strum 0.26.3",
  "sysinfo",
  "tempfile",
  "test-case",

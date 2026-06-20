@@ -314,8 +314,9 @@ impl WithError for RocksDbDatabaseInternal {
 ///
 /// This mirrors [`rocksdb::statistics::StatsLevel`]. The levels are nested: each one
 /// collects a superset of the data collected by the previous one, at increasing cost.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, strum::EnumString)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum RocksDbStatisticsLevel {
     /// Collect nothing.
     DisableAll,
@@ -343,6 +344,38 @@ impl RocksDbStatisticsLevel {
             Self::ExceptTimeForMutex => StatsLevel::ExceptTimeForMutex,
             Self::All => StatsLevel::All,
         }
+    }
+}
+
+#[cfg(test)]
+mod statistics_level_tests {
+    use std::str::FromStr as _;
+
+    use super::RocksDbStatisticsLevel;
+
+    #[test]
+    fn parses_kebab_case_names() {
+        let cases = [
+            ("disable-all", RocksDbStatisticsLevel::DisableAll),
+            (
+                "except-histogram-or-timers",
+                RocksDbStatisticsLevel::ExceptHistogramOrTimers,
+            ),
+            ("except-timers", RocksDbStatisticsLevel::ExceptTimers),
+            (
+                "except-detailed-timers",
+                RocksDbStatisticsLevel::ExceptDetailedTimers,
+            ),
+            (
+                "except-time-for-mutex",
+                RocksDbStatisticsLevel::ExceptTimeForMutex,
+            ),
+            ("all", RocksDbStatisticsLevel::All),
+        ];
+        for (name, expected) in cases {
+            assert_eq!(RocksDbStatisticsLevel::from_str(name), Ok(expected));
+        }
+        assert!(RocksDbStatisticsLevel::from_str("not-a-level").is_err());
     }
 }
 
