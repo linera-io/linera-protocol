@@ -50,6 +50,8 @@ impl<C> BlockExporterStateView<C>
 where
     C: Context + Clone + Send + Sync + 'static,
 {
+    /// Loads the exporter state, registering any new destinations, and returns it along with the
+    /// canonical state and destination states.
     pub async fn initiate(
         context: C,
         destinations: Vec<DestinationId>,
@@ -85,10 +87,12 @@ where
         Ok((view, canonical_state, states))
     }
 
+    /// Records a blob as seen and indexed by the exporter.
     pub fn index_blob(&mut self, blob: BlobId) -> Result<(), ExporterError> {
         Ok(self.blob_state.insert(&blob)?)
     }
 
+    /// Advances the chain's processed height to the given block, returning whether it was indexed.
     pub async fn index_block(&mut self, block: BlockId) -> Result<bool, ExporterError> {
         if let Some(last_processed) = self.chain_states.get_mut(&block.chain_id).await? {
             let expected_block_height = last_processed
@@ -110,6 +114,7 @@ where
         }
     }
 
+    /// Registers a chain from its initial block at height zero.
     pub async fn initialize_chain(&mut self, block: BlockId) -> Result<(), ExporterError> {
         ensure!(
             block.height == BlockHeight::ZERO,
@@ -125,6 +130,7 @@ where
         Ok(())
     }
 
+    /// Returns the highest block already processed for the given chain, if any.
     pub async fn get_chain_status(
         &self,
         chain_id: &ChainId,
@@ -132,27 +138,33 @@ where
         Ok(self.chain_states.get(chain_id).await?)
     }
 
+    /// Returns whether the given blob has already been indexed.
     pub async fn is_blob_indexed(&self, blob: BlobId) -> Result<bool, ExporterError> {
         Ok(self.blob_state.contains(&blob).await?)
     }
 
+    /// Sets the exporter state for all destinations.
     pub fn set_destination_states(&mut self, destination_states: DestinationStates) {
         self.destination_states.set(destination_states);
     }
 
+    /// Returns the exporter state for all destinations.
     pub fn get_destination_states(&self) -> &DestinationStates {
         self.destination_states.get()
     }
 
+    /// Records the latest committee blob ID processed by the exporter.
     pub fn set_latest_committee_blob(&mut self, blob_id: BlobId) {
         self.latest_committee_blob.set(Some(blob_id));
     }
 
+    /// Returns the latest committee blob ID processed by the exporter, if any.
     pub fn get_latest_committee_blob(&self) -> Option<BlobId> {
         *self.latest_committee_blob.get()
     }
 }
 
+/// The per-destination export progress, tracking the number of blocks exported to each destination.
 #[derive(Debug, Clone)]
 pub struct DestinationStates {
     states: Arc<papaya::HashMap<DestinationId, Arc<AtomicU64>>>,
@@ -213,6 +225,7 @@ impl<'de> Deserialize<'de> for DestinationStates {
 }
 
 impl DestinationStates {
+    /// Returns the state counter for the given destination, panicking if it is absent.
     pub fn load_state(&self, id: &DestinationId) -> Arc<AtomicU64> {
         let pinned = self.states.pin();
         pinned
@@ -221,14 +234,17 @@ impl DestinationStates {
             .clone()
     }
 
+    /// Returns the state counter for the given destination, if present.
     pub fn get(&self, id: &DestinationId) -> Option<Arc<AtomicU64>> {
         self.states.pin().get(id).cloned()
     }
 
+    /// Inserts the state counter for the given destination.
     pub fn insert(&mut self, id: DestinationId, state: Arc<AtomicU64>) {
         self.states.pin().insert(id, state);
     }
 
+    /// Returns an iterator over each destination and its current state value.
     pub fn iter(&self) -> impl Iterator<Item = (DestinationId, u64)> + '_ {
         let pinned = self.states.pin();
         pinned
@@ -238,6 +254,7 @@ impl DestinationStates {
             .into_iter()
     }
 
+    /// Sets the state value for the given destination, returning the previous value if present.
     pub fn set(&self, id: &DestinationId, value: u64) -> Option<u64> {
         self.states
             .pin()
