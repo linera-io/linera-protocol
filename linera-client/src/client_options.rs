@@ -586,13 +586,17 @@ impl ApplicationPermissionsConfig {
     }
 }
 
+/// A named preset selecting which resource control policy the chain should use.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(missing_docs)]
 pub enum ResourceControlPolicyConfig {
+    /// Charges nothing for any resource, with no usage limits.
     NoFees,
+    /// Uses the fees and limits that match the public Testnet.
     Testnet,
+    /// Charges only for fuel, leaving all other resources free (for testing).
     #[cfg(with_testing)]
     OnlyFuel,
+    /// Charges a small non-zero amount in every fee category (for testing).
     #[cfg(with_testing)]
     AllCategories,
 }

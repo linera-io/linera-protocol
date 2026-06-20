@@ -81,10 +81,12 @@ use linera_base::{
 
 /// A decoded log from an EVM transaction receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(missing_docs)]
 pub struct ReceiptLog {
+    /// Address of the contract that emitted the log.
     pub address: Address,
+    /// Indexed log topics; `topics[0]` is the event signature hash.
     pub topics: Vec<B256>,
+    /// Non-indexed log data (the ABI-encoded event payload).
     pub data: Vec<u8>,
 }
 
@@ -94,15 +96,22 @@ pub struct ReceiptLog {
 /// canonical `linera-base` types, while Ethereum-side values use `alloy`
 /// primitive types (`Address`, `B256`, `U256`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(missing_docs)]
 pub struct DepositEvent {
+    /// EVM chain ID the deposit originated on.
     pub source_chain_id: U256,
+    /// Linera chain the wrapped tokens should be minted on.
     pub target_chain_id: ChainId,
+    /// Linera application (the wrapped-fungible app) that should receive the deposit.
     pub target_application_id: ApplicationId,
+    /// Linera account owner credited with the minted tokens.
     pub target_account_owner: AccountOwner,
+    /// EVM address that initiated the deposit (indexed event parameter).
     pub depositor: Address,
+    /// Address of the deposited ERC-20 token contract.
     pub token: Address,
+    /// Amount deposited, in the token's base units.
     pub amount: U256,
+    /// Per-depositor nonce assigned by the bridge contract.
     pub nonce: U256,
 }
 
@@ -113,11 +122,14 @@ pub struct DepositEvent {
 #[derive(
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
-#[allow(missing_docs)]
 pub struct DepositKey {
+    /// EVM chain ID the deposit originated on.
     pub source_chain_id: u64,
+    /// Hash of the EVM block containing the deposit transaction.
     pub block_hash: B256,
+    /// Index of the deposit transaction within its block.
     pub tx_index: u64,
+    /// Index of the `DepositInitiated` log within the transaction's receipt.
     pub log_index: u64,
 }
 

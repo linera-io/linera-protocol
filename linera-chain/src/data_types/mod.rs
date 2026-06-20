@@ -270,9 +270,10 @@ impl TransactionMetadata {
     SimpleObject,
     Allocative,
 )]
-#[allow(missing_docs)]
 pub struct ChainAndHeight {
+    /// The chain that the block belongs to.
     pub chain_id: ChainId,
+    /// The height of the block within that chain.
     pub height: BlockHeight,
 }
 
@@ -437,10 +438,13 @@ pub enum OriginalProposal {
 // to have it for auditing purposes.
 #[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[allow(missing_docs)]
 pub struct BlockProposal {
+    /// The signed content of the proposal: the proposed block, the round, and any
+    /// execution outcome from a previous round.
     pub content: ProposalContent,
+    /// The proposer's signature over `content`.
     pub signature: AccountSignature,
+    /// The earlier proposal being retried, if this proposal is a retry in a later round.
     #[debug(skip_if = Option::is_none)]
     pub original_proposal: Option<OriginalProposal>,
 }
@@ -538,10 +542,12 @@ pub struct BlockExecutionOutcome {
 
 /// The hash and chain ID of a `CertificateValue`.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
-#[allow(missing_docs)]
 pub struct LiteValue {
+    /// The hash of the `CertificateValue`.
     pub value_hash: CryptoHash,
+    /// The chain that the value belongs to.
     pub chain_id: ChainId,
+    /// The kind of certificate this value is for.
     pub kind: CertificateKind,
 }
 
@@ -564,10 +570,12 @@ pub struct VoteValue(CryptoHash, Round, CertificateKind);
 /// A vote on a statement from a validator.
 #[derive(Allocative, Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "T: Deserialize<'de>"))]
-#[allow(missing_docs)]
 pub struct Vote<T> {
+    /// The value being voted for.
     pub value: T,
+    /// The consensus round in which the vote was cast.
     pub round: Round,
+    /// The validator's signature over the value hash, round and certificate kind.
     pub signature: ValidatorSignature,
 }
 
@@ -607,10 +615,12 @@ impl<T> Vote<T> {
 /// A vote on a statement from a validator, represented as a `LiteValue`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
-#[allow(missing_docs)]
 pub struct LiteVote {
+    /// The value being voted for, as a `LiteValue`.
     pub value: LiteValue,
+    /// The consensus round in which the vote was cast.
     pub round: Round,
+    /// The validator's signature over the value hash, round and certificate kind.
     pub signature: ValidatorSignature,
 }
 

@@ -144,9 +144,10 @@ pub enum NetworkProtocol {
 
 /// The TLS configuration for the gRPC protocol.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[allow(missing_docs)]
 pub enum TlsConfig {
+    /// Communicate over plaintext, without TLS encryption.
     ClearText,
+    /// Communicate over TLS-encrypted connections.
     Tls,
 }
 
