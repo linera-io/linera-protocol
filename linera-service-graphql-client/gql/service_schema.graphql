@@ -1248,7 +1248,7 @@ type MutationRoot {
 		"""
 		vmRuntime: VmRuntime!,
 		"""
-		Optional JSON-encoded `Formats` description bytes
+		Optional BCS-encoded `Formats` description bytes
 		"""
 		formats: [Int!]
 	): ModuleId!
@@ -1496,7 +1496,7 @@ type QueryRoot {
 	"""
 	version: VersionInfo!
 	"""
-	Returns the bytes of an application formats blob (JSON-encoded `Formats`)
+	Returns the bytes of an application formats blob (BCS-encoded `Formats`)
 	stored in the local node, given the formats blob hash carried by a
 	`ModuleId`. Returns `None` if the blob is not present locally.
 	"""
