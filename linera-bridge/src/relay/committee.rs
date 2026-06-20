@@ -1,19 +1,20 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Detects committee rotation operations on the admin chain and relays
-//! them to the EVM LightClient contract.
+//! Detects committee rotations on the admin chain (from the system epoch event
+//! Linera emits on each rotation) and relays them to the EVM LightClient contract.
 
 use std::time::Duration;
 
 use alloy::providers::Provider;
 use anyhow::{Context as _, Result};
 use linera_base::{
+    crypto::CryptoHash,
     data_types::{BlockHeight, Epoch},
-    identifiers::{BlobId, BlobType, ChainId},
+    identifiers::{BlobId, BlobType, ChainId, StreamId},
 };
 use linera_chain::types::ConfirmedBlockCertificate;
-use linera_execution::{system::AdminOperation, Operation, SystemOperation};
+use linera_execution::system::EPOCH_STREAM_NAME;
 use linera_storage::Storage;
 use tokio::time::sleep;
 
@@ -113,7 +114,7 @@ where
 
     let mut relayed = 0u32;
     for cert in certs.into_iter().flatten() {
-        if let Some((epoch, blob_hash)) = find_create_committee(&cert) {
+        if let Some((epoch, blob_hash)) = find_committee_event(&cert) {
             if epoch <= current_epoch {
                 continue;
             }
@@ -135,41 +136,47 @@ where
     Ok(())
 }
 
-/// Scans a certificate for a `CreateCommittee` operation, returning the first
-/// one's epoch and blob hash if found.
+/// Scans a certificate's events for the system epoch event Linera emits when a
+/// new committee is created, returning the first one's epoch and committee blob
+/// hash if found.
 ///
-/// Linera emits at most one `CreateCommittee` per admin-chain block, and both
-/// this relayer and the on-chain `addCommittee` (which requires the block's
-/// epoch to equal the LightClient's current epoch) rely on that — only the
-/// first is ever relayed. If that invariant is ever violated, only the first
-/// committee would be installed and the LightClient would stall one epoch
-/// behind the newer ones, so log loudly rather than fail silently.
-fn find_create_committee(
-    cert: &ConfirmedBlockCertificate,
-) -> Option<(Epoch, linera_base::crypto::CryptoHash)> {
+/// Linera emits the epoch event on the [`EPOCH_STREAM_NAME`] system stream with
+/// the new epoch as the event index and the committee blob hash (BCS-encoded) as
+/// the value. At most one is emitted per admin-chain block, and both this relayer
+/// and the on-chain `addCommittee` (which requires the block's epoch to equal the
+/// LightClient's current epoch) rely on that — only the first is ever relayed. If
+/// that invariant is ever violated, only the first committee would be installed
+/// and the LightClient would stall one epoch behind the newer ones, so log loudly
+/// rather than fail silently.
+fn find_committee_event(cert: &ConfirmedBlockCertificate) -> Option<(Epoch, CryptoHash)> {
+    let epoch_stream = StreamId::system(EPOCH_STREAM_NAME);
     let mut first = None;
     let mut count = 0u32;
-    for op in cert.inner().block().body.operations() {
-        if let Operation::System(boxed) = op {
-            if let SystemOperation::Admin(AdminOperation::CreateCommittee {
-                epoch,
-                blob_hash,
-                ..
-            }) = boxed.as_ref()
-            {
-                count += 1;
-                if first.is_none() {
-                    first = Some((*epoch, *blob_hash));
-                }
+    for tx_events in cert.inner().block().body.events.iter() {
+        for event in tx_events.iter() {
+            if event.stream_id != epoch_stream {
+                continue;
+            }
+            count += 1;
+            if first.is_none() {
+                // Conway emits the epoch event with `value = bcs(blob_hash)`.
+                let blob_hash: CryptoHash = match bcs::from_bytes(&event.value) {
+                    Ok(hash) => hash,
+                    Err(error) => {
+                        tracing::error!(%error, "failed to decode epoch event blob hash");
+                        return None;
+                    }
+                };
+                first = Some((Epoch(event.index), blob_hash));
             }
         }
     }
     if count > 1 {
         tracing::error!(
             count,
-            "admin block contains multiple CreateCommittee operations; only the first \
-             will be relayed, so the LightClient will stall behind the newer epochs. This \
-             violates the assumed at-most-one-CreateCommittee-per-admin-block invariant."
+            "admin block contains multiple epoch events; only the first will be \
+             relayed, so the LightClient will stall behind the newer epochs. This \
+             violates the assumed at-most-one-epoch-event-per-admin-block invariant."
         );
     }
     first

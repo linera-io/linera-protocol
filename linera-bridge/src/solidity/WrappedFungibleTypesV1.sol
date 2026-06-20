@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
-library WrappedFungibleTypes {
+library WrappedFungibleTypesV1 {
     struct ApplicationId {
         BridgeTypes.CryptoHash application_description_hash;
     }
@@ -836,4 +836,4 @@ library WrappedFungibleTypes {
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
-} // end of library WrappedFungibleTypes
+} // end of library WrappedFungibleTypesV1

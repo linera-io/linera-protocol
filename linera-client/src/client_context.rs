@@ -959,9 +959,24 @@ impl<Env: Environment> ClientContext<Env> {
         let owner = chain_client
             .preferred_owner()
             .ok_or(error::Inner::ChainOwnership)?;
-        let (blobs, module_id, formats_blob_hash, registry_op_bytes) = self
+        let (blobs, formats_blob_bytes, module_id, registry_op_bytes) = self
             .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
             .await?;
+
+        // Publish the formats data blob in its own block first, so it is committed
+        // before the registry `Write` operation asserts its existence.
+        info!("Publishing the formats data blob");
+        self.apply_client_command(chain_client, |chain_client| {
+            let formats_blob_bytes = formats_blob_bytes.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .publish_data_blob(formats_blob_bytes)
+                    .await
+                    .context("Failed to publish the formats data blob")
+            }
+        })
+        .await?;
 
         info!("Publishing module and registering its formats");
         self.apply_client_command(chain_client, |chain_client| {
@@ -973,9 +988,6 @@ impl<Env: Environment> ClientContext<Env> {
                     .execute_operations(
                         vec![
                             Operation::system(SystemOperation::PublishModule { module_id }),
-                            Operation::system(SystemOperation::PublishDataBlob {
-                                blob_hash: formats_blob_hash,
-                            }),
                             Operation::User {
                                 application_id: registry_application_id,
                                 bytes: registry_op_bytes,
@@ -1017,9 +1029,24 @@ impl<Env: Environment> ClientContext<Env> {
         let owner = chain_client
             .preferred_owner()
             .ok_or(error::Inner::ChainOwnership)?;
-        let (blobs, module_id, formats_blob_hash, registry_op_bytes) = self
+        let (blobs, formats_blob_bytes, module_id, registry_op_bytes) = self
             .prepare_bcs_publication(owner, &contract, &service, vm_runtime, &formats)
             .await?;
+
+        // Publish the formats data blob in its own block first, so it is committed
+        // before the registry `Write` operation asserts its existence.
+        info!("Publishing the formats data blob");
+        self.apply_client_command(chain_client, |chain_client| {
+            let formats_blob_bytes = formats_blob_bytes.clone();
+            let chain_client = chain_client.clone();
+            async move {
+                chain_client
+                    .publish_data_blob(formats_blob_bytes)
+                    .await
+                    .context("Failed to publish the formats data blob")
+            }
+        })
+        .await?;
 
         info!("Publishing module, registering its formats and creating the application");
         let application_id = self
@@ -1035,9 +1062,6 @@ impl<Env: Environment> ClientContext<Env> {
                         .execute_operations(
                             vec![
                                 Operation::system(SystemOperation::PublishModule { module_id }),
-                                Operation::system(SystemOperation::PublishDataBlob {
-                                    blob_hash: formats_blob_hash,
-                                }),
                                 Operation::User {
                                     application_id: registry_application_id,
                                     bytes: registry_op_bytes,
@@ -1080,8 +1104,11 @@ impl<Env: Environment> ClientContext<Env> {
         Ok((application_id, module_id))
     }
 
-    /// Loads the bytecode files and the SNAP file, builds the bytecode blobs and
-    /// the BCS-encoded formats-registry write operation authorized by `owner`.
+    /// Loads the bytecode files and the SNAP file, building the bytecode blobs, the
+    /// BCS-encoded formats data blob, and the formats-registry write operation
+    /// authorized by `owner`. The formats blob is returned separately from the
+    /// bytecode blobs because the caller publishes it in its own block first (so it
+    /// is committed before the registry `Write` operation asserts its existence).
     async fn prepare_bcs_publication(
         &self,
         owner: AccountOwner,
@@ -1092,34 +1119,25 @@ impl<Env: Environment> ClientContext<Env> {
     ) -> Result<
         (
             Vec<linera_base::data_types::Blob>,
+            Vec<u8>,
             ModuleId,
-            CryptoHash,
             Vec<u8>,
         ),
         Error,
     > {
-        let (mut blobs, module_id) = load_bytecode_blobs(contract, service, vm_runtime).await?;
+        let (blobs, module_id) = load_bytecode_blobs(contract, service, vm_runtime).await?;
 
         info!("Loading formats from {formats:?}");
         let parsed = read_formats_from_snap(formats)?;
-        let value = serde_json::to_vec(&parsed).map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("failed to serialize Formats as JSON: {e}"),
-            )
-        })?;
-        // Publish the formats description as a data blob and bind its hash in the
-        // registry write; the caller adds the matching `PublishDataBlob` operation.
-        let formats_blob = linera_base::data_types::Blob::new_data(value);
-        let formats_blob_hash = formats_blob.id().hash;
-        blobs.push(formats_blob);
+        let formats_blob_bytes = bcs::to_bytes(&parsed)?;
+        let formats_blob_hash = CryptoHash::new(&BlobContent::new_data(formats_blob_bytes.clone()));
         let registry_op = linera_sdk::abis::formats_registry::Operation::Write {
             owner,
             module_id,
             blob_hash: linera_base::identifiers::DataBlobHash(formats_blob_hash),
         };
         let registry_op_bytes = bcs::to_bytes(&registry_op)?;
-        Ok((blobs, module_id, formats_blob_hash, registry_op_bytes))
+        Ok((blobs, formats_blob_bytes, module_id, registry_op_bytes))
     }
 }
 
@@ -1149,8 +1167,15 @@ async fn load_bytecode_blobs(
     Ok(create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await)
 }
 
+/// Parses the `Formats` description of an application from a SNAP file (the YAML
+/// snapshot produced by the `format` test of the example applications). The body
+/// between the `---` frontmatter delimiters is deserialized as
+/// [`linera_sdk::formats::Formats`]. BCS-serializing the result yields the data-blob
+/// payload the formats registry expects, so external tooling can produce a blob file
+/// ready for `linera publish-data-blob` (see the `extract-formats` binary in the
+/// `formats-registry` example).
 #[cfg(all(feature = "fs", not(web)))]
-fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, Error> {
+pub fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, Error> {
     let content = fs::read_to_string(path).map_err(|e| {
         std::io::Error::new(e.kind(), format!("failed to read SNAP file {path:?}: {e}"))
     })?;

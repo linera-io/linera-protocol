@@ -12,7 +12,7 @@ use serde_json::Value;
 use crate::{js_utils::log_str, reqwest_client};
 
 /// Issues `query { read(moduleId: "<hex>") }` against the formats-registry
-/// application service and parses the returned bytes as a JSON-encoded
+/// application service and parses the returned bytes as a BCS-encoded
 /// [`Formats`]. Returns `Ok(None)` if the registry has no entry for that
 /// module.
 pub async fn fetch_formats(
@@ -54,7 +54,7 @@ pub async fn fetch_formats(
                 .ok_or_else(|| anyhow!("formats registry returned non-u8 byte"))
         })
         .collect::<Result<_>>()?;
-    let formats: Formats = serde_json::from_slice(&bytes)
-        .context("registry bytes did not deserialize as Formats JSON")?;
+    let formats: Formats = linera_sdk::bcs::from_bytes(&bytes)
+        .context("registry bytes did not deserialize as Formats BCS")?;
     Ok(Some(formats))
 }

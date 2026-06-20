@@ -230,6 +230,7 @@ async fn relayer_does_not_mark_burn_complete_when_token_was_not_transferred() ->
             0,
             5,
             Some(sqlite_path_for_relay.as_path()),
+            None,
         ))
         .await
     });

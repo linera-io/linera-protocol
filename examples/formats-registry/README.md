@@ -127,10 +127,19 @@ echo "http://localhost:$PORT/chains/$CHAIN/applications/$LINERA_APPLICATION_ID"
 Open the printed URL to land in a GraphiQL session connected to the registry.
 
 To register a module's formats, first publish the formats description as a data blob
-(e.g. `linera publish-data-blob <FILE>`, which prints the `<BLOB_HASH>`), then bind it
-(replace `<MODULE_ID_HEX>`, `<OWNER>` and `<BLOB_HASH>` accordingly; `ModuleId`,
-`AccountOwner` and `DataBlobHash` are encoded as strings). `<OWNER>` must be the chain's
-signer; once an admin set is configured it must also be one of the admins:
+(e.g. `linera publish-data-blob <FILE>`, which prints the `<BLOB_HASH>`). The blob file
+is the BCS serialization of the application's `Formats`; the `extract-formats` binary in
+this example turns an app's SNAP snapshot into such a file ready for
+`linera publish-data-blob`:
+
+```bash
+cargo run --bin extract-formats -- ../counter/tests/snapshots/format__format.snap counter-formats.bcs
+```
+
+Then bind the published blob to the module with the mutation below (replace
+`<MODULE_ID_HEX>`, `<OWNER>` and `<BLOB_HASH>` accordingly; `ModuleId`, `AccountOwner`
+and `DataBlobHash` are encoded as strings). `<OWNER>` must be the chain's signer; once
+an admin set is configured it must also be one of the admins:
 
 ```gql,uri=http://localhost:8080/chains/$CHAIN/applications/$LINERA_APPLICATION_ID
 mutation {

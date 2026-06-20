@@ -73,6 +73,12 @@ Production EVM contracts (`LightClient`, `FungibleBridge`,
 the team's deployment tooling. The output artifacts populate the env file
 above.
 
+For the EVM contract deployment itself — the `forge script` invocations,
+their inputs, the governance (pause-guardian / proposer / canceller Safes
+and timelock) wiring, post-deploy verification, and the upgrade / pause /
+migration runbooks — see
+[`linera-bridge/DEPLOYMENT.md`](../linera-bridge/DEPLOYMENT.md).
+
 The `linera-bridge` container will read `/etc/linera-bridge/.env` and
 `/etc/linera-bridge/.env.secret` at startup.
 

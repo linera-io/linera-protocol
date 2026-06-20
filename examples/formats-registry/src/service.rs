@@ -43,6 +43,7 @@ impl Service for FormatsRegistryService {
     }
 
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {
+        log::info!("Handling query on chain {}", self.runtime.chain_id());
         Schema::build(
             self.state.clone(),
             Operation::mutation_root(self.runtime.clone()),

@@ -210,7 +210,7 @@ impl<P: Provider> EvmClient<P> {
     ) -> Result<()> {
         let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        tracing::info!(
+        tracing::debug!(
             tx_index,
             count = positions_in_tx.len(),
             size = cert_bytes.len(),
