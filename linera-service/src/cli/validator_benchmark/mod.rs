@@ -34,6 +34,7 @@ use self::{
 };
 
 impl Benchmark {
+    /// Runs the pre-onboarding benchmark against the candidate validator.
     pub async fn run(
         &self,
         context: &mut ClientContext<

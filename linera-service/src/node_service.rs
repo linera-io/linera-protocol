@@ -111,9 +111,12 @@ impl OutputType for RawJson {
     }
 }
 
+/// The set of chains tracked by the wallet.
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
+    /// The IDs of the tracked chains.
     pub list: Vec<ChainId>,
+    /// The default chain of the wallet, if one is set.
     pub default: Option<ChainId>,
 }
 
@@ -1002,6 +1005,7 @@ impl<S: Storage> ChainStateExtendedView<S> {
     }
 }
 
+/// A summary of an application registered on a chain.
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
     id: ApplicationId,
@@ -1379,11 +1383,13 @@ where
         }
     }
 
+    /// Returns the socket address on which the metrics endpoint is served.
     #[cfg(with_metrics)]
     pub fn metrics_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
     }
 
+    /// Builds the GraphQL schema served by the node service.
     pub fn schema(&self) -> NodeServiceSchema<C> {
         let query = QueryRoot {
             context: Arc::clone(&self.context),
