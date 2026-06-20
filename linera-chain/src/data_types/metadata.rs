@@ -135,106 +135,127 @@ impl SystemOperationMetadata {
 
 /// Transfer operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct TransferOperationMetadata {
+    /// The account owner whose balance is debited.
     pub owner: AccountOwner,
+    /// The account that receives the transferred tokens.
     pub recipient: Account,
+    /// The amount of tokens to transfer.
     pub amount: Amount,
 }
 
 /// Claim operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct ClaimOperationMetadata {
+    /// The account owner whose balance is being claimed.
     pub owner: AccountOwner,
+    /// The chain on which the claimed balance is held.
     pub target_id: ChainId,
+    /// The account that receives the claimed tokens.
     pub recipient: Account,
+    /// The amount of tokens to claim.
     pub amount: Amount,
 }
 
 /// Open chain operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct OpenChainOperationMetadata {
+    /// The initial balance credited to the new chain.
     pub balance: Amount,
+    /// The ownership configuration of the new chain.
     pub ownership: ChainOwnershipMetadata,
+    /// The application permissions of the new chain.
     pub application_permissions: ApplicationPermissionsMetadata,
 }
 
 /// Change ownership operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct ChangeOwnershipOperationMetadata {
+    /// The super owners, who can propose fast blocks in the first round and regular blocks in any round.
     pub super_owners: Vec<AccountOwner>,
+    /// The regular owners, each with the weight that determines how often they are round leader.
     pub owners: Vec<OwnerWithWeight>,
+    /// The leader of the first single-leader round; if unset, that leader is random like other rounds.
     pub first_leader: Option<AccountOwner>,
+    /// The number of rounds in which all owners are allowed to propose blocks.
     pub multi_leader_rounds: i32,
+    /// Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
     pub open_multi_leader_rounds: bool,
+    /// The timeout configuration governing round durations.
     pub timeout_config: TimeoutConfigMetadata,
 }
 
 /// Owner with weight metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct OwnerWithWeight {
+    /// The account owner.
     pub owner: AccountOwner,
+    /// The owner's weight, determining how often they are round leader (a `u64` as a string).
     pub weight: String, // Using String to represent u64 safely in GraphQL
 }
 
 /// Change application permissions operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct ChangeApplicationPermissionsMetadata {
+    /// The new application permissions to set on the chain.
     pub permissions: ApplicationPermissionsMetadata,
 }
 
 /// Admin operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct AdminOperationMetadata {
+    /// The kind of admin operation: "PublishCommitteeBlob", "CreateCommittee" or "RemoveCommittee".
     pub admin_operation_type: String,
+    /// The committee epoch this operation refers to, if applicable.
     pub epoch: Option<i32>,
+    /// The hash of the committee blob, if applicable.
     pub blob_hash: Option<CryptoHash>,
 }
 
 /// Create application operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct CreateApplicationOperationMetadata {
+    /// The ID of the module the application is instantiated from.
     pub module_id: String,
+    /// The application's static parameters, encoded as a hex string.
     pub parameters_hex: String,
+    /// The argument passed to the application's instantiation, encoded as a hex string.
     pub instantiation_argument_hex: String,
+    /// The applications this application depends on and requires to be present.
     pub required_application_ids: Vec<ApplicationId>,
 }
 
 /// Publish data blob operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct PublishDataBlobMetadata {
+    /// The hash of the data blob being published.
     pub blob_hash: CryptoHash,
 }
 
 /// Verify blob operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct VerifyBlobMetadata {
+    /// The ID of the blob whose existence is being verified.
     pub blob_id: String,
 }
 
 /// Publish module operation metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct PublishModuleMetadata {
+    /// The ID of the module being published.
     pub module_id: String,
 }
 
 /// Update stream metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct UpdateStreamMetadata {
+    /// The application that owns the event stream.
     pub application_id: String,
+    /// The chain on which the events are published.
     pub chain_id: ChainId,
+    /// The identifier of the event stream being updated.
     pub stream_id: String,
+    /// The index of the next event to read from the stream.
     pub next_index: i32,
 }
 
@@ -253,26 +274,30 @@ pub struct SystemMessageMetadata {
 
 /// Credit message metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct CreditMessageMetadata {
+    /// The account owner whose balance is credited on the receiving chain.
     pub target: AccountOwner,
+    /// The amount of tokens being credited.
     pub amount: Amount,
+    /// The account owner the transfer originated from.
     pub source: AccountOwner,
 }
 
 /// Withdraw message metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct WithdrawMessageMetadata {
+    /// The account owner whose balance is debited on the source chain.
     pub owner: AccountOwner,
+    /// The amount of tokens being withdrawn.
     pub amount: Amount,
+    /// The account that receives the withdrawn tokens.
     pub recipient: Account,
 }
 
 /// CheckpointAck message metadata.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, SimpleObject)]
-#[allow(missing_docs)]
 pub struct CheckpointAckMessageMetadata {
+    /// The cursor past the last bundle from the recipient that the sender has consumed.
     pub latest_received_cursor: Cursor,
 }
 
