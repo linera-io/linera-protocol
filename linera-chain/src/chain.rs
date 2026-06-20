@@ -424,6 +424,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
+    /// Executes the given query against an application on this chain.
     pub async fn query_application(
         &mut self,
         local_time: Timestamp,
@@ -445,6 +446,7 @@ where
         chain_id = %self.chain_id(),
         application_id = %application_id
     ))]
+    /// Returns the description of the application with the given ID.
     pub async fn describe_application(
         &mut self,
         application_id: ApplicationId,
@@ -461,6 +463,8 @@ where
         target = %target,
         height = %height
     ))]
+    /// Marks all messages sent to `target` up to the given height as received, returning whether
+    /// the outbox changed.
     pub async fn mark_messages_as_received(
         &mut self,
         target: &ChainId,
@@ -651,6 +655,7 @@ where
         }
     }
 
+    /// Returns the current epoch and committee of this chain.
     pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
         self.execution_state
             .system
@@ -659,6 +664,7 @@ where
             .ok_or_else(|| ChainError::InactiveChain(self.chain_id()))
     }
 
+    /// Returns the ownership configuration of this chain.
     pub async fn ownership(&self) -> Result<&ChainOwnership, ChainError> {
         Ok(self.execution_state.system.ownership.get().await?)
     }
