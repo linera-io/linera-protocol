@@ -15,6 +15,7 @@ pub struct GrpcConnectionPool {
 }
 
 impl GrpcConnectionPool {
+    /// Creates a new connection pool with the given transport options.
     pub fn new(options: transport::Options) -> Self {
         Self {
             options,
@@ -22,11 +23,13 @@ impl GrpcConnectionPool {
         }
     }
 
+    /// Sets the connection timeout for channels created by this pool.
     pub fn with_connect_timeout(mut self, connect_timeout: impl Into<Option<Duration>>) -> Self {
         self.options.connect_timeout = connect_timeout.into();
         self
     }
 
+    /// Sets the request timeout for channels created by this pool.
     pub fn with_timeout(mut self, timeout: impl Into<Option<Duration>>) -> Self {
         self.options.timeout = timeout.into();
         self
