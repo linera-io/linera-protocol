@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::linera_base_types::{ContractAbi, ModuleId, ServiceAbi};
 
+/// The ABI of the formats-registry application.
 pub struct FormatsRegistryAbi;
 
 impl ContractAbi for FormatsRegistryAbi {
@@ -24,6 +25,7 @@ impl ServiceAbi for FormatsRegistryAbi {
 
 /// Operations accepted by the formats-registry contract.
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum Operation {
     /// Publish `value` as a data blob and bind it to `module_id`. A given
     /// `module_id` may only be written once.
