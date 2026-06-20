@@ -25,8 +25,10 @@ use crate::{
     HandleValidatedCertificateRequest,
 };
 
+/// An RPC message exchanged between clients, proxies and validators.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[allow(missing_docs)]
 pub enum RpcMessage {
     // Inbound
     BlockProposal(Box<BlockProposal>),

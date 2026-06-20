@@ -269,6 +269,7 @@ impl BatchForwarder {
     }
 }
 
+/// A gRPC server exposing a validator's worker as a network service.
 #[derive(Clone)]
 pub struct GrpcServer<S>
 where
@@ -281,11 +282,13 @@ where
     notification_sender: NotificationSender,
 }
 
+/// A handle to a running [`GrpcServer`] task.
 pub struct GrpcServerHandle {
     handle: TaskHandle<Result<(), GrpcError>>,
 }
 
 impl GrpcServerHandle {
+    /// Waits for the server task to complete.
     pub async fn join(self) -> Result<(), GrpcError> {
         self.handle.await?
     }
@@ -309,9 +312,11 @@ impl Drop for ServerRequestCancellationGuard {
     }
 }
 
+/// A Tower layer that records Prometheus metrics for gRPC requests.
 #[derive(Clone)]
 pub struct GrpcPrometheusMetricsMiddlewareLayer;
 
+/// The Tower service produced by [`GrpcPrometheusMetricsMiddlewareLayer`].
 #[derive(Clone)]
 pub struct GrpcPrometheusMetricsMiddlewareService<T> {
     service: T,
@@ -383,6 +388,7 @@ impl<S> GrpcServer<S>
 where
     S: Storage + Clone + Send + Sync + 'static,
 {
+    /// Spawns the gRPC server on the given host and port, returning a handle to the task.
     #[expect(clippy::too_many_arguments)]
     pub fn spawn(
         host: String,
@@ -1105,6 +1111,7 @@ where
 /// Types which are proxyable and expose the appropriate methods to be handled
 /// by the `GrpcProxy`
 pub trait GrpcProxyable {
+    /// Returns the chain ID this message is destined for, if any.
     fn chain_id(&self) -> Option<ChainId>;
 }
 
