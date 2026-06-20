@@ -820,6 +820,22 @@ NodeError:
               TYPENAME: ChainId
           - remote_node:
               TYPENAME: Secp256k1PublicKey
+    31:
+      MissingDependencies:
+        STRUCT:
+          - chain_id:
+              TYPENAME: ChainId
+          - bundles:
+              SEQ:
+                TUPLE:
+                  - TYPENAME: ChainId
+                  - TYPENAME: BlockHeight
+          - events:
+              SEQ:
+                TYPENAME: EventId
+          - blobs:
+              SEQ:
+                TYPENAME: BlobId
 OpenChainConfig:
   STRUCT:
     - ownership:
