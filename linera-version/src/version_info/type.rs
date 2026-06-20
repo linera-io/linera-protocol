@@ -6,11 +6,15 @@ use std::{io::Read as _, path::PathBuf};
 #[cfg(linera_version_building)]
 use crate::serde_pretty::Pretty;
 
+/// A semantic version number of a crate.
 #[cfg_attr(linera_version_building, derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CrateVersion {
+    /// The major version number.
     pub major: u32,
+    /// The minor version number.
     pub minor: u32,
+    /// The patch version number.
     pub patch: u32,
 }
 
@@ -43,6 +47,7 @@ impl From<CrateVersion> for semver::Version {
     }
 }
 
+/// A hash of an API surface, stored as a hexadecimal string.
 pub type Hash = std::borrow::Cow<'static, str>;
 
 #[cfg_attr(linera_version_building, derive(serde::Deserialize, serde::Serialize))]
@@ -66,7 +71,9 @@ pub struct VersionInfo {
 #[cfg(linera_version_building)]
 async_graphql::scalar!(VersionInfo);
 
+/// An error that can occur while extracting version information.
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("failed to interpret cargo-metadata: {0}")]
     CargoMetadata(#[from] cargo_metadata::Error),
@@ -170,14 +177,19 @@ struct CargoVcsInfoGit {
     sha1: String,
 }
 
+/// The hashes of the protocol's external APIs.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ApiHashes {
+    /// A hash of the RPC API.
     pub rpc: String,
+    /// A hash of the GraphQL API.
     pub graphql: String,
+    /// A hash of the WIT API.
     pub wit: String,
 }
 
 impl VersionInfo {
+    /// Extracts the version info for the current build.
     pub fn get() -> Result<Self, Error> {
         Self::trace_get(
             std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
@@ -255,6 +267,7 @@ impl VersionInfo {
         })
     }
 
+    /// Returns the hashes of the RPC, GraphQL, and WIT APIs.
     pub fn api_hashes(&self) -> ApiHashes {
         ApiHashes {
             rpc: self.rpc_hash.clone().into_owned(),
