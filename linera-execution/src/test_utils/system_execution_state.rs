@@ -23,23 +23,35 @@ use crate::{
 
 /// A system execution state, not represented as a view but as a simple struct.
 #[derive(Default, Debug, PartialEq, Eq, Clone)]
-#[allow(missing_docs)]
 pub struct SystemExecutionState {
+    /// The description of the chain, if it has been created.
     pub description: Option<ChainDescription>,
+    /// The current epoch the chain is operating in.
     pub epoch: Epoch,
+    /// The ID of the admin chain, if known.
     pub admin_chain_id: Option<ChainId>,
+    /// The committees of validators, indexed by the epoch in which they are active.
     pub committees: BTreeMap<Epoch, Committee>,
+    /// The ownership configuration of the chain.
     pub ownership: ChainOwnership,
+    /// The chain's main balance.
     pub balance: Amount,
+    /// The per-owner balances held on the chain.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub balances: BTreeMap<AccountOwner, Amount>,
+    /// The latest timestamp recorded for the chain.
     pub timestamp: Timestamp,
+    /// The set of blobs that have been used by the chain.
     pub used_blobs: BTreeSet<BlobId>,
+    /// Whether the chain has been closed.
     #[debug(skip_if = Not::not)]
     pub closed: bool,
+    /// The application permissions configured on the chain.
     pub application_permissions: ApplicationPermissions,
+    /// Additional blobs to make available to the chain's execution context.
     #[debug(skip_if = Vec::is_empty)]
     pub extra_blobs: Vec<Blob>,
+    /// The mock applications registered on the chain, indexed by their application ID.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub mock_applications: BTreeMap<ApplicationId, MockApplication>,
 }
