@@ -6,7 +6,6 @@ use linera_base::{
 };
 use linera_core::node::NodeError;
 use linera_version::VersionInfo;
-use thiserror_context::Context;
 
 #[cfg(not(web))]
 use crate::benchmark::BenchmarkError;
@@ -76,7 +75,20 @@ impl Inner {
     }
 }
 
-thiserror_context::impl_context!(Error(Inner));
+mod context {
+    // `impl_context!` generates a public `Error` newtype (with accessors) that cannot carry
+    // doc comments, so this wrapper module is exempted from the crate's `missing_docs` policy.
+    // `expect` (rather than `allow`) flags this if the macro ever stops generating such items.
+    #![expect(missing_docs)]
+
+    use thiserror_context::Context;
+
+    use super::Inner;
+
+    thiserror_context::impl_context!(Error(Inner));
+}
+
+pub use context::Error;
 
 impl Error {
     pub(crate) fn wallet(error: impl std::error::Error + Send + Sync + 'static) -> Self {
