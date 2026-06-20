@@ -1133,7 +1133,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError>;
 
     /// Publishes a module with contract and service bytecode and an optional
-    /// JSON-encoded `Formats` description, returning the module ID.
+    /// BCS-encoded `Formats` description, returning the module ID.
     fn publish_module(
         &mut self,
         contract: Bytecode,

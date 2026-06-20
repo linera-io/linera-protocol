@@ -716,7 +716,7 @@ and no system operations."
         service: Bytecode,
         #[graphql(desc = "The virtual machine being used (either Wasm or Evm)")]
         vm_runtime: VmRuntime,
-        #[graphql(desc = "Optional JSON-encoded `Formats` description bytes")] formats: Option<
+        #[graphql(desc = "Optional BCS-encoded `Formats` description bytes")] formats: Option<
             Vec<u8>,
         >,
     ) -> Result<ModuleId, Error> {
@@ -921,7 +921,7 @@ where
         linera_version::VersionInfo::default()
     }
 
-    /// Returns the bytes of an application formats blob (JSON-encoded `Formats`)
+    /// Returns the bytes of an application formats blob (BCS-encoded `Formats`)
     /// stored in the local node, given the formats blob hash carried by a
     /// `ModuleId`. Returns `None` if the blob is not present locally.
     async fn application_formats(

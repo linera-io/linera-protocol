@@ -901,7 +901,7 @@ pub enum ClientCommand {
 
         /// Optional path to an insta SNAP file containing the YAML serialization
         /// of the application's `Formats`. When provided, the formats are
-        /// JSON-encoded and published as a third blob alongside the contract
+        /// BCS-encoded and published as a third blob alongside the contract
         /// and service blobs; the resulting `ModuleId` carries the formats blob
         /// hash.
         #[arg(long)]

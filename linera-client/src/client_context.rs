@@ -961,8 +961,10 @@ impl<Env: Environment> ClientContext<Env> {
 }
 
 /// Reads an insta SNAP file containing a YAML-encoded `Formats` value, parses
-/// it, and returns the canonical JSON encoding to publish as the application
-/// formats blob.
+/// it, and returns the canonical BCS encoding to publish as the application
+/// formats blob. BCS matches the documented intent (the blob is "the BCS
+/// serialization of an application's `Formats`") and the encoding the explorer
+/// decodes with.
 #[cfg(feature = "fs")]
 fn load_formats_from_snap(path: &std::path::Path) -> Result<Vec<u8>, Error> {
     let content = fs::read_to_string(path).map_err(|e| {
@@ -980,13 +982,7 @@ fn load_formats_from_snap(path: &std::path::Path) -> Result<Vec<u8>, Error> {
             format!("failed to parse SNAP body in {path:?} as Formats: {e}"),
         )
     })?;
-    serde_json::to_vec(&formats).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("failed to serialize Formats as JSON: {e}"),
-        )
-        .into()
-    })
+    Ok(bcs::to_bytes(&formats)?)
 }
 
 #[cfg(feature = "fs")]

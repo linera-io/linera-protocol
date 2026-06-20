@@ -2563,7 +2563,7 @@ impl CheckCertificateResult {
 }
 
 /// Creates a compressed Contract, Service and bytecode, plus an optional
-/// `ApplicationFormats` blob built from the JSON-encoded `Formats` description
+/// `ApplicationFormats` blob built from the BCS-encoded `Formats` description
 /// bytes.
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn create_bytecode_blobs(
