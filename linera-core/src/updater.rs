@@ -272,51 +272,60 @@ where
 
         let mut sent_admin_chain = false;
         let mut sent_blobs = false;
-        let mut handled_dependencies = false;
+        let mut sent_event_publishers = BTreeSet::new();
+        let mut sent_bundle_origins = BTreeSet::new();
         loop {
             match result {
-                // A validator that understands aggregated dependency errors declares
-                // everything it needs to apply this confirmed certificate at once. Supply it
-                // all in one batch. (Confirmed blocks tolerate not-yet-received bundles, so
-                // `bundles` is usually empty here, but we sync any the validator reports for
-                // uniformity with the proposal path.)
+                // A validator that understands aggregated dependency errors declares what it
+                // is missing to apply this confirmed certificate as `MissingDependencies`.
+                // Supply each category, tracking what we have already sent so that catch-ups
+                // that take several rounds (e.g. the committee first, then blobs) make
+                // progress on every iteration and terminate once we have nothing new to send.
+                // (Confirmed blocks tolerate not-yet-received bundles, so `bundles` is usually
+                // empty here, but we sync any the validator reports for uniformity.)
                 Err(NodeError::MissingDependencies {
-                    chain_id: _,
+                    chain_id: dependencies_chain_id,
                     bundles,
                     events,
                     blobs,
-                }) if !handled_dependencies => {
-                    handled_dependencies = true;
+                }) => {
+                    let mut made_progress = false;
                     // Missing blobs: the certificate is confirmed, so the blobs are in our
                     // storage and we upload them directly.
-                    if !blobs.is_empty() {
+                    if !blobs.is_empty() && !sent_blobs {
                         self.remote_node
                             .check_blobs_not_found(certificate, &blobs)?;
-                        let maybe_blobs = self
+                        let downloaded = self
                             .client
                             .local_node
                             .read_blobs_from_storage(&blobs)
-                            .await?;
-                        let blobs = maybe_blobs.ok_or(NodeError::BlobsNotFound(blobs))?;
+                            .await?
+                            .ok_or_else(|| NodeError::BlobsNotFound(blobs.clone()))?;
                         self.remote_node
                             .node
-                            .upload_blobs(blobs.into_iter().map(|b| b.into_std()).collect())
+                            .upload_blobs(downloaded.into_iter().map(|b| b.into_std()).collect())
                             .await?;
+                        sent_blobs = true;
+                        made_progress = true;
                     }
                     // Missing events: the admin chain's epoch stream carries the committee
                     // that signed the certificate, so it gets the dedicated update; any other
                     // publisher chains are synced up to the height we would next preprocess.
                     if !events.is_empty() {
-                        if events.iter().any(|event_id| {
-                            event_id.chain_id == self.admin_chain_id
-                                && event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
-                        }) {
+                        if !sent_admin_chain
+                            && events.iter().any(|event_id| {
+                                event_id.chain_id == self.admin_chain_id
+                                    && event_id.stream_id == StreamId::system(EPOCH_STREAM_NAME)
+                            })
+                        {
                             self.update_admin_chain().await?;
+                            sent_admin_chain = true;
+                            made_progress = true;
                         }
                         let mut publisher_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
                         for event_id in &events {
                             if event_id.chain_id == self.admin_chain_id
-                                || publisher_heights.contains_key(&event_id.chain_id)
+                                || !sent_event_publishers.insert(event_id.chain_id)
                             {
                                 continue;
                             }
@@ -333,21 +342,37 @@ where
                                 CrossChainMessageDelivery::NonBlocking,
                             )
                             .await?;
+                            made_progress = true;
                         }
                     }
                     // Missing bundles: sync each origin chain up to the needed height.
                     if !bundles.is_empty() {
                         let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
-                        for (origin, height) in bundles {
-                            let target = height.try_add_one()?;
-                            let entry = origin_heights.entry(origin).or_insert(target);
-                            *entry = (*entry).max(target);
+                        for &(origin, height) in &bundles {
+                            if !sent_bundle_origins.insert(origin) {
+                                continue;
+                            }
+                            origin_heights.insert(origin, height.try_add_one()?);
                         }
-                        self.send_chain_info_up_to_heights(
-                            origin_heights,
-                            CrossChainMessageDelivery::Blocking,
-                        )
-                        .await?;
+                        if !origin_heights.is_empty() {
+                            self.send_chain_info_up_to_heights(
+                                origin_heights,
+                                CrossChainMessageDelivery::Blocking,
+                            )
+                            .await?;
+                            made_progress = true;
+                        }
+                    }
+                    // Nothing left that we know how to supply: surface the error instead of
+                    // retrying forever.
+                    if !made_progress {
+                        return Err(NodeError::MissingDependencies {
+                            chain_id: dependencies_chain_id,
+                            bundles,
+                            events,
+                            blobs,
+                        }
+                        .into());
                     }
                 }
                 Err(NodeError::EventsNotFound(event_ids))
