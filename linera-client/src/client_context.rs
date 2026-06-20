@@ -873,7 +873,7 @@ impl<Env: Environment> ClientContext<Env> {
         })?;
 
         let formats_bytes = match formats {
-            Some(path) => Some(load_formats_from_snap(&path)?),
+            Some(path) => Some(bcs::to_bytes(&load_formats_from_snap(&path)?)?),
             None => None,
         };
 
@@ -960,13 +960,13 @@ impl<Env: Environment> ClientContext<Env> {
     }
 }
 
-/// Reads an insta SNAP file containing a YAML-encoded `Formats` value, parses
-/// it, and returns the canonical BCS encoding to publish as the application
-/// formats blob. BCS matches the documented intent (the blob is "the BCS
+/// Reads an insta SNAP file containing a YAML-encoded `Formats` value and parses
+/// it. The caller BCS-serializes the result to obtain the application formats
+/// blob payload: BCS matches the documented intent (the blob is "the BCS
 /// serialization of an application's `Formats`") and the encoding the explorer
 /// decodes with.
 #[cfg(feature = "fs")]
-fn load_formats_from_snap(path: &std::path::Path) -> Result<Vec<u8>, Error> {
+fn load_formats_from_snap(path: &std::path::Path) -> Result<linera_sdk::formats::Formats, Error> {
     let content = fs::read_to_string(path).map_err(|e| {
         std::io::Error::new(e.kind(), format!("failed to read SNAP file {path:?}: {e}"))
     })?;
@@ -976,13 +976,13 @@ fn load_formats_from_snap(path: &std::path::Path) -> Result<Vec<u8>, Error> {
             format!("SNAP file {path:?} is missing the `---` frontmatter delimiters"),
         )
     })?;
-    let formats: linera_sdk::formats::Formats = serde_yaml_08::from_str(body).map_err(|e| {
+    let formats = serde_yaml_08::from_str(body).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("failed to parse SNAP body in {path:?} as Formats: {e}"),
         )
     })?;
-    Ok(bcs::to_bytes(&formats)?)
+    Ok(formats)
 }
 
 #[cfg(feature = "fs")]
