@@ -14,6 +14,7 @@ use super::{
     OnClientDrop,
 };
 
+/// Configuration for connecting to an external (remote) Linera network in tests.
 pub struct RemoteNetTestingConfig {
     faucet: Faucet,
     close_chains: OnClientDrop,

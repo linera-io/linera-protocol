@@ -32,6 +32,9 @@ A unique identifier for a user application
 """
 scalar ApplicationId
 
+"""
+A summary of an application registered on a chain.
+"""
 type ApplicationOverview {
 	id: ApplicationId!
 	description: ApplicationDescription!
@@ -456,8 +459,17 @@ type ChainTipState {
 	numOutgoingMessages: Int!
 }
 
+"""
+The set of chains tracked by the wallet.
+"""
 type Chains {
+	"""
+	The IDs of the tracked chains.
+	"""
 	list: [ChainId!]!
+	"""
+	The default chain of the wallet, if one is set.
+	"""
 	default: ChainId
 }
 
