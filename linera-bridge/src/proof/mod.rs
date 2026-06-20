@@ -81,6 +81,7 @@ use linera_base::{
 
 /// A decoded log from an EVM transaction receipt.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(missing_docs)]
 pub struct ReceiptLog {
     pub address: Address,
     pub topics: Vec<B256>,
@@ -93,6 +94,7 @@ pub struct ReceiptLog {
 /// canonical `linera-base` types, while Ethereum-side values use `alloy`
 /// primitive types (`Address`, `B256`, `U256`).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(missing_docs)]
 pub struct DepositEvent {
     pub source_chain_id: U256,
     pub target_chain_id: ChainId,
@@ -111,6 +113,7 @@ pub struct DepositEvent {
 #[derive(
     Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
+#[allow(missing_docs)]
 pub struct DepositKey {
     pub source_chain_id: u64,
     pub block_hash: B256,
