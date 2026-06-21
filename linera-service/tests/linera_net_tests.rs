@@ -1941,7 +1941,7 @@ async fn test_wasm_end_to_end_counter_publish_create(config: impl LineraNetConfi
 async fn test_publish_module_with_formats_registers_formats(
     config: impl LineraNetConfig,
 ) -> Result<()> {
-    use counter::{formats::CounterApplication, CounterAbi};
+    use counter::{formats::CounterApplication, CounterAbi, CounterOperation};
     use linera_sdk::{
         abis::formats_registry::FormatsRegistryAbi,
         formats::{BcsApplication, Formats},
@@ -2009,10 +2009,10 @@ async fn test_publish_module_with_formats_registers_formats(
     // JSON using the formats fetched from the registry. This exercises the
     // exact path the explorer relies on: registry-stored Formats →
     // Formats::decode_operation on user-operation bytes.
-    let sample_operation: u64 = 42;
+    let sample_operation = CounterOperation::Increment { value: 42 };
     let operation_bytes = bcs::to_bytes(&sample_operation)?;
     let decoded = stored_formats.decode_operation(&operation_bytes)?;
-    assert_eq!(decoded, serde_json::json!(sample_operation));
+    assert_eq!(decoded, serde_json::to_value(&sample_operation)?);
 
     node_service.ensure_is_running()?;
 

@@ -4,13 +4,22 @@
 /*! ABI of the Counter Example Application */
 
 use async_graphql::{Request, Response};
-use linera_sdk::linera_base_types::{ContractAbi, ServiceAbi};
+use linera_sdk::{
+    formats::StableEnum,
+    linera_base_types::{ContractAbi, ServiceAbi},
+};
 
 // ANCHOR: contract_abi
 pub struct CounterAbi;
 
+#[derive(Debug, StableEnum)]
+pub enum CounterOperation {
+    /// Increment the counter by the given value
+    Increment { value: u64 },
+}
+
 impl ContractAbi for CounterAbi {
-    type Operation = u64;
+    type Operation = CounterOperation;
     type Response = u64;
 }
 // ANCHOR_END: contract_abi
@@ -24,10 +33,10 @@ impl ServiceAbi for CounterAbi {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
-    use linera_sdk::formats::{BcsApplication, Formats};
+    use linera_sdk::formats::{BcsApplication, Formats, TracerExt};
     use serde_reflection::{Samples, Tracer, TracerConfig};
 
-    use super::CounterAbi;
+    use super::{CounterAbi, CounterOperation};
 
     /// The Counter application.
     pub struct CounterApplication;
@@ -44,7 +53,7 @@ pub mod formats {
             let samples = Samples::new();
 
             // Trace the ABI types
-            let (operation, _) = tracer.trace_type::<u64>(&samples)?;
+            let operation = tracer.trace_stable_enum_type::<CounterOperation>(&samples)?;
             let (response, _) = tracer.trace_type::<u64>(&samples)?;
             let (message, _) = tracer.trace_type::<()>(&samples)?;
             let (event_value, _) = tracer.trace_type::<()>(&samples)?;

@@ -5,7 +5,7 @@
 
 mod state;
 
-use counter::CounterAbi;
+use counter::{CounterAbi, CounterOperation};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
@@ -54,8 +54,9 @@ impl Contract for CounterContract {
     // ANCHOR_END: instantiate
 
     // ANCHOR: execute_operation
-    async fn execute_operation(&mut self, operation: u64) -> u64 {
-        let new_value = self.state.value.get() + operation;
+    async fn execute_operation(&mut self, operation: CounterOperation) -> u64 {
+        let CounterOperation::Increment { value } = operation;
+        let new_value = self.state.value.get() + value;
         self.state.value.set(new_value);
         new_value
     }
@@ -77,6 +78,7 @@ impl Contract for CounterContract {
 
 #[cfg(test)]
 mod tests {
+    use counter::CounterOperation;
     use futures::FutureExt as _;
     use linera_sdk::{util::BlockingWait, views::View, Contract, ContractRuntime};
 
@@ -98,9 +100,10 @@ mod tests {
             .expect("Initialization of counter state should not await anything");
 
         let increment = 42_308_u64;
+        let operation = CounterOperation::Increment { value: increment };
 
         let response = counter
-            .execute_operation(increment)
+            .execute_operation(operation)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
@@ -129,9 +132,10 @@ mod tests {
         let mut counter = create_and_instantiate_counter(initial_value);
 
         let increment = 8_u64;
+        let operation = CounterOperation::Increment { value: increment };
 
         let response = counter
-            .execute_operation(increment)
+            .execute_operation(operation)
             .now_or_never()
             .expect("Execution of counter operation should not await anything");
 
