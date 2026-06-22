@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use linera_base::time::{Duration, Instant};
+use linera_base::{data_types::Timestamp, time::Duration};
 
 #[cfg(with_metrics)]
 use super::scheduler::metrics;
@@ -12,7 +12,7 @@ use super::scheduler::metrics;
 #[derive(Debug, Clone)]
 pub(super) struct CacheEntry<R> {
     result: Arc<R>,
-    cached_at: Instant,
+    cached_at: Timestamp,
 }
 
 /// Cache for request results with TTL-based expiration and LRU eviction.
@@ -103,15 +103,15 @@ where
     /// # Arguments
     /// - `key`: The request key to cache
     /// - `result`: The result to cache
-    pub(super) async fn store(&self, key: K, result: Arc<R>) {
-        self.evict_expired_entries().await; // Clean up expired entries first
+    pub(super) async fn store(&self, key: K, result: Arc<R>, now: Timestamp) {
+        self.evict_expired_entries(now).await; // Clean up expired entries first
         let mut cache = self.cache.write().await;
         // Insert new entry
         cache.insert(
             key.clone(),
             CacheEntry {
                 result,
-                cached_at: Instant::now(),
+                cached_at: now,
             },
         );
         tracing::trace!(
@@ -128,9 +128,8 @@ where
     ///
     /// # Returns
     /// The number of entries that were evicted
-    async fn evict_expired_entries(&self) -> usize {
+    async fn evict_expired_entries(&self, now: Timestamp) -> usize {
         let mut cache = self.cache.write().await;
-        let now = Instant::now();
         // Not strictly smaller b/c we want to add a new entry after eviction.
         if cache.len() < self.max_cache_size {
             return 0; // No need to evict if under max size
@@ -182,7 +181,7 @@ pub(super) trait SubsumingKey<R> {
 mod tests {
     use std::sync::Arc;
 
-    use linera_base::time::Duration;
+    use linera_base::{data_types::Timestamp, time::Duration};
 
     use super::*;
 
@@ -233,7 +232,9 @@ mod tests {
         let key = RangeKey { start: 0, end: 5 };
         let result = RangeResult(vec![0, 1, 2, 3, 4, 5]);
 
-        cache.store(key.clone(), Arc::new(result.clone())).await;
+        cache
+            .store(key.clone(), Arc::new(result.clone()), Timestamp::from(0))
+            .await;
         let retrieved: Option<RangeResult> = cache.get(&key).await;
 
         assert_eq!(retrieved, Some(result));
@@ -247,14 +248,22 @@ mod tests {
         let large_key = RangeKey { start: 0, end: 10 };
         let large_result = RangeResult(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         cache
-            .store(large_key.clone(), Arc::new(large_result.clone()))
+            .store(
+                large_key.clone(),
+                Arc::new(large_result.clone()),
+                Timestamp::from(0),
+            )
             .await;
 
         // Store an exact match
         let exact_key = RangeKey { start: 2, end: 5 };
         let exact_result = RangeResult(vec![2, 3, 4, 5]);
         cache
-            .store(exact_key.clone(), Arc::new(exact_result.clone()))
+            .store(
+                exact_key.clone(),
+                Arc::new(exact_result.clone()),
+                Timestamp::from(0),
+            )
             .await;
 
         // Should get exact match, not extracted from larger range
@@ -269,7 +278,13 @@ mod tests {
         // Store a larger range
         let large_key = RangeKey { start: 0, end: 10 };
         let large_result = RangeResult(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-        cache.store(large_key, Arc::new(large_result.clone())).await;
+        cache
+            .store(
+                large_key,
+                Arc::new(large_result.clone()),
+                Timestamp::from(0),
+            )
+            .await;
 
         // Request a subset
         let subset_key = RangeKey { start: 3, end: 7 };
@@ -284,7 +299,9 @@ mod tests {
 
         let key1 = RangeKey { start: 0, end: 5 };
         let result1 = RangeResult(vec![0, 1, 2, 3, 4, 5]);
-        cache.store(key1, Arc::new(result1)).await;
+        cache
+            .store(key1, Arc::new(result1), Timestamp::from(0))
+            .await;
 
         // Non-overlapping range
         let key2 = RangeKey { start: 10, end: 15 };
@@ -298,27 +315,33 @@ mod tests {
         let cache_size = 3u64;
         let cache = RequestsCache::new(Duration::from_millis(50), cache_size as usize);
 
-        // Fill cache to max size
+        // Fill cache to max size, each entry at a distinct (virtual) time.
         for i in 0..cache_size {
             let key = RangeKey {
                 start: i * 10,
                 end: i * 10,
             };
-            cache.store(key, Arc::new(RangeResult(vec![i * 10]))).await;
-            // Small delay to ensure different timestamps
-            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+            cache
+                .store(
+                    key,
+                    Arc::new(RangeResult(vec![i * 10])),
+                    Timestamp::from(i * 5_000),
+                )
+                .await;
         }
 
-        // Wait for first entry to expire
-        tokio::time::sleep(tokio::time::Duration::from_millis(60)).await;
-
-        // Cache is now at max size (3) with expired entries, so next store triggers eviction.
+        // Cache is now at max size (3). Store a fourth entry 60ms after the first ones,
+        // so the earlier entries are past the 50ms TTL and eviction kicks in.
         let key_4 = RangeKey {
             start: 100,
             end: 100,
         };
         cache
-            .store(key_4.clone(), Arc::new(RangeResult(vec![100])))
+            .store(
+                key_4.clone(),
+                Arc::new(RangeResult(vec![100])),
+                Timestamp::from(60_000),
+            )
             .await;
 
         let cache_guard = cache.cache.read().await;
@@ -366,14 +389,18 @@ mod tests {
             id: 10,
             always_fail_extraction: true,
         };
-        cache.store(failing_key, Arc::new(SimpleResult(10))).await;
+        cache
+            .store(failing_key, Arc::new(SimpleResult(10)), Timestamp::from(0))
+            .await;
 
         // Store entry that subsumes and succeeds extraction
         let working_key = FailingKey {
             id: 20,
             always_fail_extraction: false,
         };
-        cache.store(working_key, Arc::new(SimpleResult(20))).await;
+        cache
+            .store(working_key, Arc::new(SimpleResult(20)), Timestamp::from(0))
+            .await;
 
         // Request should find the working one
         let target_key = FailingKey {
