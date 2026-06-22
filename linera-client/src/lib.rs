@@ -3,7 +3,7 @@
 
 //! This module provides a convenient library for writing a Linera client application.
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 #![deny(missing_docs)]
 #![allow(async_fn_in_trait)]
 
