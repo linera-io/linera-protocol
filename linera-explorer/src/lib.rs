@@ -54,16 +54,18 @@ use ws_stream_wasm::*;
 static WEBSOCKET: OnceCell<WsMeta> = OnceCell::new();
 
 thread_local! {
-    /// Memoizes the `Formats` resolved for each `(chain_id, application_id)` so a
-    /// block with many operations from the same application only pays the two node
-    /// round-trips (blob-hash resolution + formats fetch) once per page session.
+    /// Memoizes the `Formats` resolved for each `application_id` so a block with many
+    /// operations from the same application only pays the two node round-trips
+    /// (blob-hash resolution + formats fetch) once per page session. An
+    /// `application_id` is globally unique and its formats are immutable, so the
+    /// chain it is observed on is irrelevant to the key.
     ///
     /// Both outcomes are cached: `Some(formats)` (positive) and `None` (negative —
     /// the app has no formats blob, or the node has none). Formats are immutable, so
     /// neither can change without a reload. Transient `Err` outcomes are *not*
     /// cached so they get retried. Wasm runs single-threaded, so a `thread_local`
     /// `RefCell` is the whole story and reloading the page clears the cache.
-    static FORMATS_CACHE: RefCell<HashMap<(String, String), Option<formats::Formats>>> =
+    static FORMATS_CACHE: RefCell<HashMap<String, Option<formats::Formats>>> =
         RefCell::new(HashMap::new());
 }
 
@@ -978,7 +980,7 @@ async fn fetch_user_app_formats(
             return None;
         }
     };
-    let cache_key = (data.chain.to_string(), application_id.to_string());
+    let cache_key = application_id.to_string();
     if let Some(cached) = FORMATS_CACHE.with(|c| c.borrow().get(&cache_key).cloned()) {
         log_str(&format!(
             "{op}: formats cache hit for app {application_id} ({})",
