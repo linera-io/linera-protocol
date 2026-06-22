@@ -54,6 +54,12 @@ pub struct SystemExecutionState {
     /// The mock applications registered on the chain, indexed by their application ID.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub mock_applications: BTreeMap<ApplicationId, MockApplication>,
+    /// Number of incoming message bundles executed so far.
+    pub num_incoming_bundles: u32,
+    /// Number of operations executed so far.
+    pub num_operations: u32,
+    /// Number of outgoing messages sent so far.
+    pub num_outgoing_messages: u32,
 }
 
 impl SystemExecutionState {
@@ -123,6 +129,9 @@ impl SystemExecutionState {
             application_permissions,
             extra_blobs,
             mock_applications,
+            num_incoming_bundles,
+            num_operations,
+            num_outgoing_messages,
         } = self;
 
         let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
@@ -181,6 +190,9 @@ impl SystemExecutionState {
         view.system
             .application_permissions
             .set(application_permissions);
+        view.system.num_incoming_bundles.set(num_incoming_bundles);
+        view.system.num_operations.set(num_operations);
+        view.system.num_outgoing_messages.set(num_outgoing_messages);
         view
     }
 }

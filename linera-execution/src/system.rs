@@ -133,6 +133,12 @@ pub struct SystemExecutionStateView<C> {
     /// `CheckpointAck` messages here is what breaks the otherwise-perpetual
     /// notification ping-pong between two chains that ever exchanged a real message.
     pub pending_checkpoint_ack_targets: SetView<C, ChainId>,
+    /// Number of incoming message bundles executed so far.
+    pub num_incoming_bundles: RegisterView<C, u32>,
+    /// Number of operations executed so far.
+    pub num_operations: RegisterView<C, u32>,
+    /// Number of outgoing messages sent so far.
+    pub num_outgoing_messages: RegisterView<C, u32>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -166,6 +172,9 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
                 .pending_checkpoint_ack_targets
                 .with_context(ctx.clone())
                 .await,
+            num_incoming_bundles: self.num_incoming_bundles.with_context(ctx.clone()).await,
+            num_operations: self.num_operations.with_context(ctx.clone()).await,
+            num_outgoing_messages: self.num_outgoing_messages.with_context(ctx.clone()).await,
         }
     }
 }

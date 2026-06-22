@@ -21,8 +21,8 @@ use linera_base::{
 };
 use linera_execution::{
     committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
-    OutgoingMessage, PreparedCheckpoint, Query, QueryContext, QueryOutcome, ResourceController,
-    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    PreparedCheckpoint, Query, QueryContext, QueryOutcome, ResourceController, ResourceTracker,
+    ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -327,12 +327,6 @@ pub struct ChainTipState {
     pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
-    /// Number of incoming message bundles.
-    pub num_incoming_bundles: u32,
-    /// Number of operations.
-    pub num_operations: u32,
-    /// Number of outgoing messages.
-    pub num_outgoing_messages: u32,
 }
 
 impl ChainTipState {
@@ -363,50 +357,6 @@ impl ChainTipState {
             }
         );
         Ok(self.next_block_height > height)
-    }
-
-    /// Checks if the measurement counters would be valid.
-    pub fn update_counters(
-        &mut self,
-        transactions: &[Transaction],
-        messages: &[Vec<OutgoingMessage>],
-    ) -> Result<(), ChainError> {
-        let mut num_incoming_bundles = 0u32;
-        let mut num_operations = 0u32;
-
-        for transaction in transactions {
-            match transaction {
-                Transaction::ReceiveMessages(_) => {
-                    num_incoming_bundles = num_incoming_bundles
-                        .checked_add(1)
-                        .ok_or(ArithmeticError::Overflow)?;
-                }
-                Transaction::ExecuteOperation(_) => {
-                    num_operations = num_operations
-                        .checked_add(1)
-                        .ok_or(ArithmeticError::Overflow)?;
-                }
-            }
-        }
-
-        self.num_incoming_bundles = self
-            .num_incoming_bundles
-            .checked_add(num_incoming_bundles)
-            .ok_or(ArithmeticError::Overflow)?;
-
-        self.num_operations = self
-            .num_operations
-            .checked_add(num_operations)
-            .ok_or(ArithmeticError::Overflow)?;
-
-        let num_outgoing_messages = u32::try_from(messages.iter().map(Vec::len).sum::<usize>())
-            .map_err(|_| ArithmeticError::Overflow)?;
-        self.num_outgoing_messages = self
-            .num_outgoing_messages
-            .checked_add(num_outgoing_messages)
-            .ok_or(ArithmeticError::Overflow)?;
-
-        Ok(())
     }
 }
 
@@ -1320,7 +1270,7 @@ where
             (Vec::new(), Vec::new(), Vec::new())
         };
 
-        Self::execute_block_inner(
+        let (outcome, tracker, never_reject_origins) = Self::execute_block_inner(
             &mut self.execution_state,
             &self.block_hashes,
             &mut block,
@@ -1333,10 +1283,9 @@ where
             inbox_cursors,
             outbox_block_hashes,
         )
-        .await
-        .map(|(outcome, tracker, never_reject_origins)| {
-            (block, outcome, tracker, never_reject_origins)
-        })
+        .await?;
+
+        Ok((block, outcome, tracker, never_reject_origins))
     }
 
     /// Snapshots `(origin, next_cursor_to_remove)` for each chain we've received a
@@ -1504,7 +1453,6 @@ where
         let tip = self.tip_state.get_mut();
         tip.block_hash = Some(hash);
         tip.next_block_height.try_add_assign_one()?;
-        tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.insert_block_hash(block.header.height, hash)?;
         if block.body.starts_with_checkpoint() {
             self.latest_checkpoint_height.set(Some(block.header.height));
