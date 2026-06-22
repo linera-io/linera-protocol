@@ -53,7 +53,7 @@ pub trait BcsApplication {
     }
 }
 
-/// Decode BCS-serialized `bytes` into a [`serde_json::Value`], guided by `format`
+/// Decodes BCS-serialized `bytes` into a [`serde_json::Value`], guided by `format`
 /// and the container `registry`.
 ///
 /// Well-known linera-base primitives that are absent from `registry` (because they
@@ -72,7 +72,7 @@ fn bcs_to_json(
     bcs::from_bytes_seed(context, bytes)
 }
 
-/// Encode a [`serde_json::Value`] into BCS `bytes`, guided by `format` and the
+/// Encodes a [`serde_json::Value`] into BCS `bytes`, guided by `format` and the
 /// container `registry`. This is the inverse of [`bcs_to_json`].
 ///
 /// Well-known linera-base primitives that are absent from `registry` are read from
@@ -252,7 +252,7 @@ impl Formats {
         bcs_to_json(bytes, &self.event_value, &self.registry)
     }
 
-    /// Encode a JSON operation value into its BCS bytes. Inverse of
+    /// Encodes a JSON operation value into its BCS bytes. Inverse of
     /// [`decode_operation`](Self::decode_operation).
     pub fn encode_operation(&self, value: &serde_json::Value) -> bcs::Result<Vec<u8>> {
         json_to_bcs(value, &self.operation, &self.registry)
