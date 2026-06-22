@@ -10,5 +10,5 @@ pragma solidity ^0.8.0;
 ///         knowledge; stream matching and the dedup index stay in the bridge
 ///         (they require `BridgeTypes.Event`).
 interface IBurnEventDecoder {
-    function decode(bytes calldata eventValue) external pure returns (address recipient, uint256 amount);
+    function decodeBurnEvent(bytes calldata eventValue) external pure returns (address recipient, uint256 amount);
 }

@@ -143,7 +143,7 @@ address constant MOCK_DECODER_RECIPIENT = address(0x0FEE);
 uint256 constant MOCK_DECODER_AMOUNT = 12_345;
 
 contract MockDecoder is IBurnEventDecoder {
-    function decode(bytes calldata) external pure override returns (address, uint256) {
+    function decodeBurnEvent(bytes calldata) external pure override returns (address, uint256) {
         return (MOCK_DECODER_RECIPIENT, MOCK_DECODER_AMOUNT);
     }
 }

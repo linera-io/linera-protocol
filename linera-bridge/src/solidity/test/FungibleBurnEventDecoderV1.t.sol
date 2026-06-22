@@ -25,7 +25,7 @@ contract FungibleBurnEventDecoderV1Test is Test {
         burnEvt.amount = amount;
         bytes memory value = WrappedFungibleTypesV1.bcs_serialize_BurnEvent(burnEvt);
 
-        (address recipient, uint256 decodedAmount) = decoder.decode(value);
+        (address recipient, uint256 decodedAmount) = decoder.decodeBurnEvent(value);
         assertEq(recipient, target, "recipient should match the burn target");
         assertEq(decodedAmount, uint256(amount), "amount should match the burn amount");
     }
@@ -41,7 +41,7 @@ contract FungibleBurnEventDecoderV1Test is Test {
         burnEvt.amount = amount;
         bytes memory value = WrappedFungibleTypesV1.bcs_serialize_BurnEvent(burnEvt);
 
-        (address recipient, uint256 decodedAmount) = iface.decode(value);
+        (address recipient, uint256 decodedAmount) = iface.decodeBurnEvent(value);
         assertEq(recipient, target, "interface decode recipient");
         assertEq(decodedAmount, uint256(amount), "interface decode amount");
     }
@@ -51,6 +51,6 @@ contract FungibleBurnEventDecoderV1Test is Test {
     function test_decode_malformed_reverts() public {
         bytes memory tooShort = hex"0102";
         vm.expectRevert();
-        decoder.decode(tooShort);
+        decoder.decodeBurnEvent(tooShort);
     }
 }

@@ -9,7 +9,12 @@ import "WrappedFungibleTypesV1.sol";
 ///         `WrappedFungibleTypesV1` BCS dependency so a future schema change is a
 ///         `setDecoder` swap rather than a `FungibleBridge` redeployment.
 contract FungibleBurnEventDecoderV1 is IBurnEventDecoder {
-    function decode(bytes calldata eventValue) external pure override returns (address recipient, uint256 amount) {
+    function decodeBurnEvent(bytes calldata eventValue)
+        external
+        pure
+        override
+        returns (address recipient, uint256 amount)
+    {
         WrappedFungibleTypesV1.BurnEvent memory burnEvt = WrappedFungibleTypesV1.bcs_deserialize_BurnEvent(eventValue);
         return (address(burnEvt.target), burnEvt.amount);
     }

@@ -210,7 +210,7 @@ contract FungibleBridge is Microchain {
     function _releaseBurn(IBurnEventDecoder _decoder, BridgeTypes.Event memory evt, bytes32 key, uint64 height)
         private
     {
-        (address target, uint256 amount) = _decoder.decode(evt.value);
+        (address target, uint256 amount) = _decoder.decodeBurnEvent(evt.value);
         processedBurns[key] = true;
         _safeTransfer(target, amount);
         emit BurnReleased(height, evt.index, target, amount);
