@@ -250,6 +250,7 @@ async fn relayer_falls_back_to_chunked_process_burns() -> anyhow::Result<()> {
             0,
             5,
             Some(sqlite_path_for_relay.as_path()),
+            None,
         ))
         .await
     });

@@ -1122,6 +1122,7 @@ where
         block_height = %context.height,
         operation_type = %operation.as_ref(),
     ))]
+    /// Executes an operation, dispatching to the system or to a user application.
     pub async fn execute_operation(
         &mut self,
         context: OperationContext,
@@ -1184,6 +1185,7 @@ where
         is_bouncing = %context.is_bouncing,
         message_type = %message.as_ref(),
     ))]
+    /// Executes an incoming message, dispatching to the system or to a user application.
     pub async fn execute_message(
         &mut self,
         context: MessageContext,
@@ -1213,6 +1215,7 @@ where
         Ok(())
     }
 
+    /// Bounces a message back to its sender, returning any attached grant.
     pub fn bounce_message(
         &mut self,
         context: MessageContext,
@@ -1231,6 +1234,7 @@ where
         Ok(())
     }
 
+    /// Sends a refund of the given amount to the account designated to receive grant refunds.
     pub fn send_refund(
         &mut self,
         context: MessageContext,
@@ -1319,6 +1323,7 @@ where
 
 /// Requests to the execution state.
 #[derive(Debug, strum::AsRefStr)]
+#[allow(missing_docs)]
 pub enum ExecutionRequest {
     #[cfg(not(web))]
     LoadContract {

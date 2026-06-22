@@ -4,7 +4,7 @@
 //! A light proof that a Linera block was confirmed.
 //!
 //! Instead of relaying an entire [`Block`](linera_chain::block::Block) to the EVM light client,
-//! the relayer sends only the [`BlockHeader`] and the validator signatures over it. The header
+//! the relayer sends only the `BlockHeader` and the validator signatures over it. The header
 //! commits to every body field through its per-field hashes, so any body field the bridge needs
 //! (the events for burns, the transactions for committee transitions) is shipped alongside the
 //! proof and checked against the matching hash in the header — never inside the proof itself.
@@ -166,11 +166,17 @@ impl EventInclusionProof {
 /// signed; only the action taken on success (release burns vs. install a committee, which also
 /// takes a committee blob) differs. The relay and the contract tests build calls from this.
 pub struct ProvenEvents {
+    /// Hash of the registered block these events belong to.
     pub block_hash: B256,
+    /// BCS encodings of the proven events, in `positions` order.
     pub event_bcs: Vec<Bytes>,
+    /// Index of the transaction whose events are being proven.
     pub tx_index: u32,
+    /// Number of transactions in the block (length of the outer `events` vector).
     pub num_txs: u32,
+    /// Number of events in transaction `tx_index` (length of its inner vector).
     pub num_events_in_tx: u32,
+    /// Positions (ascending) of the proven events within transaction `tx_index`.
     pub positions: Vec<u32>,
     /// Inner siblings followed by outer siblings; the contract splits this single array at
     /// `num_events_in_tx - positions.len()` (see [`EventInclusionProof::siblings`]).

@@ -174,7 +174,6 @@ Client implementation and command-line tool for the Linera blockchain
   Default value: `3600000`
 * `--wait-for-outgoing-messages` — Whether to wait until a quorum of validators has confirmed that all sent cross-chain messages have been delivered
 * `--allow-fast-blocks` — Whether to allow creating blocks in the fast round. Fast blocks have lower latency but must be used carefully so that there are never any conflicting fast block proposals
-* `--disable-multi-leader-jitter` — Disable the multi-leader jitter delay. By default, when proposing in a multi-leader round with index `>= 1`, the client waits a deterministic delay derived from the owner and round before re-proposing. This spreads out concurrent proposals from honest clients; the owner with the lowest `hash(owner, round)` still proposes immediately
 * `--long-lived-services` — (EXPERIMENTAL) Whether application services can persist in some cases between queries
 * `--blanket-message-policy <BLANKET_MESSAGE_POLICY>` — The policy for handling incoming messages
 
@@ -569,7 +568,7 @@ Deprecates all committees up to and including the specified one
 
 ###### **Arguments:**
 
-* `<EPOCH>`
+* `<EPOCH>` — The highest epoch to deprecate
 
 
 
@@ -729,7 +728,11 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--wasm-fuel-unit-price <WASM_FUEL_UNIT_PRICE>` — Set the price per unit of Wasm fuel. (This will overwrite value from `--policy-config`)
 * `--evm-fuel-unit-price <EVM_FUEL_UNIT_PRICE>` — Set the price per unit of EVM fuel. (This will overwrite value from `--policy-config`)
@@ -1073,7 +1076,7 @@ Change the wallet default chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to set as the default
 
 
 
@@ -1148,7 +1151,7 @@ Forgets the specified chain's keys. The chain will still be followed by the wall
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain whose keys will be forgotten
 
 
 
@@ -1160,7 +1163,7 @@ Forgets the specified chain, including the associated key pair. The default chai
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to forget
 
 
 
@@ -1243,7 +1246,7 @@ Equivalent to running `cargo test` with the appropriate test runner.
 
 ###### **Arguments:**
 
-* `<PATH>`
+* `<PATH>` — The path of the root of the Linera project to test
 
 
 
@@ -1314,7 +1317,11 @@ Start a Local Linera Network
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--cross-chain-queue-size <QUEUE_SIZE>` — Number of cross-chain messages allowed before dropping them
 
@@ -1652,7 +1659,7 @@ Initialize a namespace in the database
 
 ###### **Options:**
 
-* `--genesis <GENESIS_CONFIG_PATH>`
+* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration file
 
 
 

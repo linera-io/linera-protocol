@@ -82,6 +82,7 @@ pub(crate) async fn update_linera_balance_metric<E: Environment>(
     }
 }
 
+/// Runs the bridge relay server until it errors or is shut down.
 #[expect(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
@@ -102,6 +103,7 @@ pub async fn run(
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path: Option<&Path>,
+    evm_poll_interval: Option<Duration>,
 ) -> Result<()> {
     tracing::info!("Starting bridge relay server...");
 
@@ -194,6 +196,24 @@ pub async fn run(
     chain_client.synchronize_from_validators().await?;
     tracing::info!(%chain_id, %chain_owner, "Bridge chain registered and synced");
 
+    // Drain any inbox messages that arrived while the relay was down. The serve
+    // loop only processes the inbox on live `NewIncomingBundle` notifications,
+    // so messages delivered during downtime (notably user burns, which arrive
+    // as `BridgeMessage::Burn` and only emit their `BurnEvent` once the bridge
+    // chain processes them) would otherwise sit unprocessed until the next
+    // incoming bundle. The periodic drain in `serve_loop` is the steady-state
+    // safety net; this handles the gap at startup.
+    match Box::pin(chain_client.process_inbox()).await {
+        Ok((certs, _)) if !certs.is_empty() => {
+            tracing::info!(
+                count = certs.len(),
+                "Drained inbox messages accumulated before startup"
+            );
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!("Startup inbox drain failed: {e}"),
+    }
+
     Box::pin(serve_loop(
         chain_client,
         rpc_url,
@@ -208,6 +228,7 @@ pub async fn run(
         monitor_start_block,
         max_retries,
         sqlite_path,
+        evm_poll_interval,
         Path::new(db_path),
         admin_chain_id,
         admin_chain_height,
@@ -263,6 +284,7 @@ async fn serve_loop<E: Environment + 'static>(
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
+    evm_poll_interval: Option<Duration>,
     storage_dir: &Path,
     admin_chain_id: ChainId,
     admin_chain_height: BlockHeight,
@@ -279,6 +301,16 @@ async fn serve_loop<E: Environment + 'static>(
         .wallet(evm_wallet)
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
+
+    // Alloy derives the receipt poll interval from the RPC host: ~250ms for a
+    // loopback address, 7s otherwise. A local node reached via a non-loopback
+    // host (e.g. the Docker service name `anvil`) is treated as remote, so each
+    // settlement tx would wait ~7s despite sub-second block times. Override when
+    // configured so local settlement keeps pace with the node.
+    if let Some(interval) = evm_poll_interval {
+        provider.client().set_poll_interval(interval);
+        tracing::info!(?interval, "Overrode EVM provider poll interval");
+    }
 
     let light_client_addr: Option<Address> = evm_light_client_address
         .map(|s| s.parse())
@@ -449,6 +481,14 @@ async fn serve_loop<E: Environment + 'static>(
         "Relay is ready"
     );
 
+    // Safety-net inbox drain. Notification delivery can be missed (relay down,
+    // stream hiccup), and a missed `NewIncomingBundle` would otherwise strand
+    // its messages until the next one. Reuse the monitor's scan interval as the
+    // drain cadence; an empty inbox makes `process_inbox` a cheap no-op.
+    let mut inbox_drain_interval = tokio::time::interval(monitor_scan_interval);
+    // Consume the immediate first tick — the startup drain above already ran.
+    inbox_drain_interval.tick().await;
+
     // ── Main loop: process chain operations + notifications ──
     tracing::info!("Listening for chain operations and notifications...");
     loop {
@@ -470,6 +510,22 @@ async fn serve_loop<E: Environment + 'static>(
             }
             result = &mut admin_server_handle => {
                 anyhow::bail!("Admin HTTP server exited unexpectedly: {result:?}");
+            }
+            _ = inbox_drain_interval.tick() => {
+                // Periodic safety net for a missed `NewIncomingBundle`: sync and
+                // drain the inbox so stranded messages (e.g. user burns) are
+                // eventually processed even without a fresh notification.
+                if let Err(e) = chain_client.synchronize_from_validators().await {
+                    tracing::warn!("Periodic sync before inbox drain failed: {e}");
+                } else {
+                    match chain_client.process_inbox().await {
+                        Ok((certs, _)) if !certs.is_empty() => {
+                            tracing::info!(count = certs.len(), "Periodic inbox drain processed messages");
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!("Periodic inbox drain failed: {e}"),
+                    }
+                }
             }
             notification = notifications.next() => {
                 let notification = match notification {
@@ -507,7 +563,7 @@ async fn serve_loop<E: Environment + 'static>(
                     continue;
                 }
 
-                tracing::info!("Received NewIncomingBundle, processing inbox...");
+                tracing::debug!("Received NewIncomingBundle, processing inbox...");
 
                 if let Err(e) = chain_client.synchronize_from_validators().await {
                     tracing::error!("Failed to synchronize: {e}");
@@ -527,7 +583,7 @@ async fn serve_loop<E: Environment + 'static>(
                     continue;
                 }
 
-                tracing::info!(count = certs.len(), "Processed inbox certificates");
+                tracing::debug!(count = certs.len(), "Processed inbox certificates");
             }
 
             Some(op) = op_rx.recv() => {

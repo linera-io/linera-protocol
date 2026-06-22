@@ -309,6 +309,7 @@ async fn test_auto_deposit_scan() -> anyhow::Result<()> {
             0,                                 // monitor_start_block
             5,                                 // max_retries
             None,
+            None,
         ))
         .await
     });

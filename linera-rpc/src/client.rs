@@ -22,9 +22,12 @@ use crate::grpc::GrpcClient;
 #[cfg(with_simple_network)]
 use crate::simple::SimpleClient;
 
+/// A client for communicating with a validator over one of the supported networks.
 #[derive(Clone)]
 pub enum Client {
+    /// A client using the gRPC network.
     Grpc(Box<GrpcClient>),
+    /// A client using the simple (UDP or TCP) network.
     #[cfg(with_simple_network)]
     Simple(SimpleClient),
 }

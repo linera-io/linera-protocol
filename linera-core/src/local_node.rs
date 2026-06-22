@@ -50,6 +50,7 @@ where
 
 /// Error type for the operations on a local node.
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum LocalNodeError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
