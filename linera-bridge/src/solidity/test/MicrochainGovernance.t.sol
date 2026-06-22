@@ -23,7 +23,7 @@ contract MockLC is ILightClient {
         return (bytes32(0), 0, bytes32(0), 0);
     }
 
-    function proveEventsCommitted(
+    function assertEventsCommitted(
         bytes32,
         bytes[] calldata,
         uint32,

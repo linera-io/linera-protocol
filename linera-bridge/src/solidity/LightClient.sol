@@ -55,7 +55,7 @@ contract LightClient is ILightClient {
     }
 
     /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
-    /// individual events can later be proven against it (`proveEventsCommitted`) and settled
+    /// individual events can later be proven against it (`assertEventsCommitted`) and settled
     /// (`processBurns`) or used to rotate the committee (`addCommittee`) without re-checking the
     /// certificate or re-parsing the header per chunk. `eventsHash` is never zero for a valid
     /// header, so a zero `eventsHash` means "unregistered". `epoch` is the block's own epoch (which
@@ -113,7 +113,7 @@ contract LightClient is ILightClient {
     /// an epoch event (system stream `[0]`) holding the new committee's blob hash; the caller
     /// supplies that single event in `eventBcs` and an inclusion proof
     /// (`txIndex`/`numTxs`/`numEventsInTx`/`positions`/`siblings`) proving it belongs to the block —
-    /// the same `proveEventsCommitted` check the burn path uses. The new epoch and blob hash are
+    /// the same `assertEventsCommitted` check the burn path uses. The new epoch and blob hash are
     /// read from that event.
     function addCommittee(
         bytes32 blockHash,
@@ -135,7 +135,7 @@ contract LightClient is ILightClient {
 
         // Prove the supplied event belongs to the block — the same inclusion check `processBurns`
         // runs for burns.
-        proveEventsCommitted(block_.eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
+        assertEventsCommitted(block_.eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
 
         (uint32 newEpoch, bytes32 expectedBlobHash) = _readCommitteeEvent(eventBcs[0]);
 
@@ -237,7 +237,7 @@ contract LightClient is ILightClient {
     }
 
     /// Verifies a block's signatures from its header and records its `events_hash`, so that
-    /// individual events can later be proven against it (via `proveEventsCommitted`) without
+    /// individual events can later be proven against it (via `assertEventsCommitted`) without
     /// re-checking the whole certificate. Returns the block hash
     /// (`keccak256("BlockHeader::" ++ BCS(header))`).
     function registerBlock(bytes calldata blockProof) external whenNotEmergencyPaused returns (bytes32) {
@@ -261,7 +261,7 @@ contract LightClient is ILightClient {
     /// without re-hashing all of them — the caller supplies `eventsHash` from a source it trusts: a
     /// registered block (see `registerBlock`, as `FungibleBridge.processBurns` does) or a freshly
     /// verified header.
-    function proveEventsCommitted(
+    function assertEventsCommitted(
         bytes32 eventsHash,
         bytes[] calldata eventBcs,
         uint32 txIndex,

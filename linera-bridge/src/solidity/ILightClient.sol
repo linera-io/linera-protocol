@@ -15,7 +15,7 @@ interface ILightClient {
     /// Proves that `eventBcs` sit at `positions` within transaction `txIndex` of
     /// the events a block commits to via `eventsHash`. Reverts unless they fold
     /// to `eventsHash` with the supplied siblings.
-    function proveEventsCommitted(
+    function assertEventsCommitted(
         bytes32 eventsHash,
         bytes[] calldata eventBcs,
         uint32 txIndex,

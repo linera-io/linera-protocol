@@ -127,7 +127,7 @@ contract FungibleBridge is Microchain {
 
     /// Releases the burns whose canonical BCS encodings are `eventBcs`, after proving they sit at
     /// `positions` within transaction `txIndex` of the block registered under `blockHash` (see
-    /// `LightClient.proveEventsCommitted`). The off-chain relayer registers the block once, then
+    /// `LightClient.assertEventsCommitted`). The off-chain relayer registers the block once, then
     /// settles burns in chunks, each proving only its own events instead of re-verifying the whole
     /// certificate.
     ///
@@ -158,7 +158,7 @@ contract FungibleBridge is Microchain {
         (bytes32 eventsHash, uint64 height, bytes32 blockChainId,) = lightClient.registeredBlocks(blockHash);
         require(eventsHash != 0, "block not registered");
         require(blockChainId == chainId, "chain id mismatch");
-        lightClient.proveEventsCommitted(eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
+        lightClient.assertEventsCommitted(eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
 
         _releaseBurns(eventBcs, height);
     }
