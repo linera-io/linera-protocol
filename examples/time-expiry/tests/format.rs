@@ -10,5 +10,5 @@ use time_expiry::formats::TimeExpiryApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", TimeExpiryApplication::formats().unwrap());
+    insta::assert_yaml_snapshot!("format", TimeExpiryApplication::pruned_formats().unwrap());
 }

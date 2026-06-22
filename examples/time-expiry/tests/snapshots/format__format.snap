@@ -1,6 +1,6 @@
 ---
 source: time-expiry/tests/format.rs
-expression: "TimeExpiryApplication::formats().unwrap()"
+expression: "TimeExpiryApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   TimeDelta:
