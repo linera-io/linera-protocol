@@ -8,7 +8,7 @@
 use async_graphql::{Request, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::linera_base_types::{ContractAbi, ModuleId, ServiceAbi};
+use crate::linera_base_types::{AccountOwner, ContractAbi, DataBlobHash, ModuleId, ServiceAbi};
 
 /// The ABI of the formats-registry application.
 pub struct FormatsRegistryAbi;
@@ -24,10 +24,21 @@ impl ServiceAbi for FormatsRegistryAbi {
 }
 
 /// Operations accepted by the formats-registry contract.
+///
+/// This is the minimal interface relied upon by `linera
+/// publish-module-with-formats`. A concrete registry implementation (see
+/// `examples/formats-registry`) may define its own, richer `Operation` enum with
+/// extra admin commands; as long as `Write` stays the first variant with the same
+/// fields, its BCS encoding remains compatible with the operation produced here.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[allow(missing_docs)]
 pub enum Operation {
-    /// Publish `value` as a data blob and bind it to `module_id`. A given
-    /// `module_id` may only be written once.
-    Write { module_id: ModuleId, value: Vec<u8> },
+    /// Bind the data blob `blob_hash` (holding the BCS formats description) to
+    /// `module_id`, on behalf of `owner`. The caller is expected to publish that data
+    /// blob in the same block. A given `module_id` may only be written once.
+    Write {
+        owner: AccountOwner,
+        module_id: ModuleId,
+        blob_hash: DataBlobHash,
+    },
 }
