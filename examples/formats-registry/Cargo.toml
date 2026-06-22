@@ -7,9 +7,15 @@ edition = "2021"
 [dependencies]
 async-graphql.workspace = true
 linera-sdk.workspace = true
+serde.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde-reflection.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+insta.workspace = true
 linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+serde-reflection.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 

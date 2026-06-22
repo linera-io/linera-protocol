@@ -55,10 +55,6 @@ pub trait BcsApplication {
 
 /// Decodes BCS-serialized `bytes` into a [`serde_json::Value`], guided by `format`
 /// and the container `registry`.
-///
-/// Well-known linera-base primitives that are absent from `registry` (because they
-/// were removed by [`Formats::prune_known_primitives`]) are decoded into their
-/// human-readable representation by [`LineraEnvironment`].
 fn bcs_to_json(
     bytes: &[u8],
     format: &Format,
@@ -74,9 +70,6 @@ fn bcs_to_json(
 
 /// Encodes a [`serde_json::Value`] into BCS `bytes`, guided by `format` and the
 /// container `registry`. This is the inverse of [`bcs_to_json`].
-///
-/// Well-known linera-base primitives that are absent from `registry` are read from
-/// their human-readable representation by [`LineraEnvironment`].
 fn json_to_bcs(
     value: &serde_json::Value,
     format: &Format,
