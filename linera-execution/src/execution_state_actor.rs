@@ -677,10 +677,13 @@ where
                     }
                     std::collections::btree_map::Entry::Occupied(entry) => *entry.get(),
                 };
+                // The publisher's floor isn't available on the subscriber at subscribe time;
+                // later `UpdateStream` operations carry the real one.
                 self.txn_tracker.add_stream_to_process(
                     subscriber_app_id,
                     chain_id,
                     stream_id,
+                    0,
                     0,
                     next_index,
                 );
@@ -932,7 +935,8 @@ where
                 .await?
                 .unwrap_or(0);
             // A summary is an absolute-state snapshot, so the application is not handed an
-            // incremental range to fold in; `previous_index` is left at 0.
+            // incremental range to fold in; `previous_index` is left at 0. The summary the
+            // application emits lands at `next_index`, which becomes the stream's readable floor.
             updates_by_app
                 .entry(application_id)
                 .or_default()
@@ -940,6 +944,7 @@ where
                     chain_id: context.chain_id,
                     stream_id,
                     previous_index: 0,
+                    first_index: next_index,
                     next_index,
                 });
         }

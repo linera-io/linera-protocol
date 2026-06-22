@@ -32,7 +32,7 @@ use linera_chain::{
         Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
         LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
     },
-    ChainError, ChainStateView,
+    ChainError, ChainStateView, StreamCounts,
 };
 use linera_execution::{ExecutionError, ExecutionStateView, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Clock as _, Storage};
@@ -1974,14 +1974,15 @@ where
         .await
     }
 
-    /// Gets the next expected event index for a stream.
-    pub async fn get_next_expected_event(
+    /// Gets a stream's [`StreamCounts`]: its next expected event index and its lowest readable
+    /// index, read from a single chain state view so they are mutually consistent.
+    pub async fn get_stream_indices(
         &self,
         chain_id: ChainId,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, WorkerError> {
+    ) -> Result<StreamCounts, WorkerError> {
         self.chain_read(chain_id, |guard| async move {
-            guard.get_next_expected_event(stream_id).await
+            guard.get_stream_indices(stream_id).await
         })
         .await
     }

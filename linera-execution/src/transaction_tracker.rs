@@ -17,7 +17,8 @@ use linera_base::{
 
 use crate::{ExecutionError, OutgoingMessage};
 
-type AppStreamUpdates = BTreeMap<(ChainId, StreamId), (u32, u32)>;
+/// Maps a (publishing chain, stream) to its `(previous_index, first_index, next_index)`.
+type AppStreamUpdates = BTreeMap<(ChainId, StreamId), (u32, u32, u32)>;
 
 /// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
 /// as replayed oracle responses.
@@ -270,6 +271,7 @@ impl TransactionTracker {
         chain_id: ChainId,
         stream_id: StreamId,
         previous_index: u32,
+        first_index: u32,
         next_index: u32,
     ) {
         if next_index == previous_index {
@@ -279,11 +281,13 @@ impl TransactionTracker {
             .entry(application_id)
             .or_default()
             .entry((chain_id, stream_id))
-            .and_modify(|(pi, ni)| {
+            .and_modify(|(pi, fi, ni)| {
                 *pi = (*pi).min(previous_index);
+                // The strongest floor wins: a later checkpoint prunes more.
+                *fi = (*fi).max(first_index);
                 *ni = (*ni).max(next_index);
             })
-            .or_insert_with(|| (previous_index, next_index));
+            .or_insert_with(|| (previous_index, first_index, next_index));
     }
 
     /// Removes a stream from the set of streams to be processed by the application.
@@ -309,11 +313,14 @@ impl TransactionTracker {
                 let updates = streams
                     .into_iter()
                     .map(
-                        |((chain_id, stream_id), (previous_index, next_index))| StreamUpdate {
-                            chain_id,
-                            stream_id,
-                            previous_index,
-                            next_index,
+                        |((chain_id, stream_id), (previous_index, first_index, next_index))| {
+                            StreamUpdate {
+                                chain_id,
+                                stream_id,
+                                previous_index,
+                                first_index,
+                                next_index,
+                            }
                         },
                     )
                     .collect();

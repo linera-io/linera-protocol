@@ -300,6 +300,9 @@ pub enum SystemOperation {
         application_id: ApplicationId,
         chain_id: ChainId,
         stream_id: StreamId,
+        /// The lowest readable index in the publishing stream, i.e. the index of the first
+        /// event published since the publisher's most recent checkpoint.
+        first_index: u32,
         next_index: u32,
     },
     /// Publishes a canonical snapshot of the chain's execution state as a blob,
@@ -602,6 +605,7 @@ where
                 application_id,
                 chain_id,
                 stream_id,
+                first_index,
                 next_index,
             } => {
                 let subscriptions = self
@@ -621,6 +625,7 @@ where
                     chain_id,
                     stream_id.clone(),
                     app_next_index,
+                    first_index,
                     next_index,
                 );
                 subscriptions

@@ -502,6 +502,7 @@ mod from {
                     application_id,
                     chain_id: stream.chain_id,
                     stream_id,
+                    first_index: stream.first_index as u32,
                     next_index: stream.next_index as u32,
                 })
             }

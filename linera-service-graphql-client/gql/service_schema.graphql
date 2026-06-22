@@ -385,10 +385,11 @@ type ChainStateExtendedView {
 	"""
 	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_06c2376d!
 	"""
-	The indices of next events we expect to see per stream (could be ahead of the last
-	executed block in sparse chains).
+	The event indices we track per stream: the next expected index (could be ahead of the
+	last executed block in sparse chains) and the lowest readable index since the most
+	recent checkpoint.
 	"""
-	nextExpectedEvents: MapView_StreamId_Int_3d7f5335!
+	nextExpectedEvents: MapView_StreamId_StreamCounts_66ad99f6!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
@@ -430,7 +431,7 @@ type ChainStateExtendedView {
 	Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
 	vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
 	in storage. The worker errors a checkpoint push with
-	`MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+	`BlocksNotFound` when this set is non-empty, then accepts each
 	referenced cert (regardless of its own — possibly revoked — epoch) and
 	removes the entry. Once the set is empty, the checkpoint restoration can run
 	end-to-end.
@@ -718,9 +719,9 @@ type Entry_ChainId_OutboxStateView_855dcf53 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_StreamId_Int_459c4ec3 {
+type Entry_StreamId_StreamCounts_d5e24a40 {
 	key: StreamId!
-	value: Int
+	value: StreamCounts
 }
 
 """
@@ -906,11 +907,11 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
 }
 
-type MapView_StreamId_Int_3d7f5335 {
+type MapView_StreamId_StreamCounts_66ad99f6 {
 	keys(count: Int): [StreamId!]!
 	count: Int!
-	entry(key: StreamIdInput!): Entry_StreamId_Int_459c4ec3!
-	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_Int_459c4ec3!]!
+	entry(key: StreamIdInput!): Entry_StreamId_StreamCounts_d5e24a40!
+	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_StreamCounts_d5e24a40!]!
 }
 
 """
@@ -1561,6 +1562,25 @@ type SetView_CryptoHash_87fbb60c {
 }
 
 """
+The event indices we track for a stream, maintained whenever a block is processed
+(executed or merely preprocessed).
+"""
+type StreamCounts {
+	"""
+	The lowest event index still guaranteed to be readable (if it exists): the index of the
+	first event published to this stream since the most recent checkpoint. Earlier events may
+	have been pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+	When there are no events yet, this equals [`next_index`](Self::next_index).
+	"""
+	firstIndex: Int!
+	"""
+	The next event index we expect to see, i.e. the lowest for which no event is known yet.
+	May be ahead of the last executed block on sparse chains.
+	"""
+	nextIndex: Int!
+}
+
+"""
 An event stream ID.
 """
 type StreamId {
@@ -1789,6 +1809,10 @@ type UpdateStreamMetadata {
 	The identifier of the event stream being updated.
 	"""
 	streamId: String!
+	"""
+	The lowest event index still guaranteed to be readable (if it exists).
+	"""
+	firstIndex: Int!
 	"""
 	The index of the next event to read from the stream.
 	"""

@@ -20,9 +20,9 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_execution::{
-    committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
-    Message, Operation, OutgoingMessage, PreparedCheckpoint, Query, QueryContext, QueryOutcome,
-    ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
+    OutgoingMessage, PreparedCheckpoint, Query, QueryContext, QueryOutcome, ResourceController,
+    ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -213,6 +213,21 @@ impl std::ops::Deref for ChainIdSet {
     }
 }
 
+/// The event indices we track for a stream, maintained whenever a block is processed
+/// (executed or merely preprocessed).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Allocative)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+pub struct StreamCounts {
+    /// The lowest event index still guaranteed to be readable (if it exists): the index of the
+    /// first event published to this stream since the most recent checkpoint. Earlier events may
+    /// have been pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+    /// When there are no events yet, this equals [`next_index`](Self::next_index).
+    pub first_index: u32,
+    /// The next event index we expect to see, i.e. the lowest for which no event is known yet.
+    /// May be ahead of the last executed block on sparse chains.
+    pub next_index: u32,
+}
+
 /// A view accessing the state of a chain.
 #[cfg_attr(
     with_graphql,
@@ -252,9 +267,10 @@ where
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
-    /// The indices of next events we expect to see per stream (could be ahead of the last
-    /// executed block in sparse chains).
-    pub next_expected_events: MapView<C, StreamId, u32>,
+    /// The event indices we track per stream: the next expected index (could be ahead of the
+    /// last executed block in sparse chains) and the lowest readable index since the most
+    /// recent checkpoint.
+    pub next_expected_events: MapView<C, StreamId, StreamCounts>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, NonCanonicalBTreeMap<BlockHeight, u32>>,
@@ -288,7 +304,7 @@ where
     /// Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
     /// vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
     /// in storage. The worker errors a checkpoint push with
-    /// `MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+    /// `BlocksNotFound` when this set is non-empty, then accepts each
     /// referenced cert (regardless of its own — possibly revoked — epoch) and
     /// removes the entry. Once the set is empty, the checkpoint restoration can run
     /// end-to-end.
@@ -1754,9 +1770,10 @@ where
         Ok(targets)
     }
 
-    /// Updates the event streams with events emitted by the block if they form a contiguous
-    /// sequence (might not be the case when preprocessing a block).
-    /// Returns the set of updated event streams.
+    /// Updates the per-stream event trackers from the events emitted by the block: advances
+    /// `next_index` over contiguous new events (which might not be contiguous when preprocessing
+    /// a block), and advances each stream's readable floor (`first_index`) when the block is the
+    /// first to emit to it since a checkpoint. Returns the set of updated event streams.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.header.height
@@ -1765,45 +1782,56 @@ where
         &mut self,
         block: &Block,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
-        let mut emitted_streams = BTreeMap::<StreamId, BTreeSet<u32>>::new();
+        // A stream's events within a single block are a contiguous run (each event takes the
+        // next sequential index), so the lowest and highest index it emits here are all we need.
+        let mut emitted_ranges = BTreeMap::<StreamId, (u32, u32)>::new();
         for event in block.body.events.iter().flatten() {
-            emitted_streams
+            emitted_ranges
                 .entry(event.stream_id.clone())
-                .or_default()
-                .insert(event.index);
+                .and_modify(|(lo, hi)| {
+                    *lo = (*lo).min(event.index);
+                    *hi = (*hi).max(event.index);
+                })
+                .or_insert((event.index, event.index));
         }
         let mut stream_ids = Vec::new();
-        let mut list_indices = Vec::new();
-        for (stream_id, indices) in emitted_streams {
+        let mut ranges = Vec::new();
+        for (stream_id, range) in emitted_ranges {
             stream_ids.push(stream_id);
-            list_indices.push(indices);
+            ranges.push(range);
         }
 
         let mut updated_streams = BTreeSet::new();
-        for ((stream_id, next_index), indices) in self
+        for ((stream_id, counts), (lo, hi)) in self
             .next_expected_events
             .multi_get_pairs(stream_ids)
             .await?
             .into_iter()
-            .zip(list_indices)
+            .zip(ranges)
         {
-            let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
-                // we don't expect the epoch stream to contain event 0
-                1
-            } else {
-                0
-            };
-            let mut current_expected_index = next_index.unwrap_or(initial_index);
-            for index in indices {
-                if index == current_expected_index {
-                    updated_streams.insert(stream_id.clone());
-                    current_expected_index = index.saturating_add(1);
+            let mut counts = counts.unwrap_or_default();
+            let next = hi.saturating_add(1);
+            if block.body.previous_event_blocks.contains_key(&stream_id) {
+                // The stream already published since the most recent checkpoint, so we expect its
+                // events to continue contiguously. If they don't, we have a gap (missing events
+                // since the checkpoint) and leave the tracker untouched; the floor is preserved.
+                if lo != counts.next_index {
+                    continue;
                 }
+                counts.next_index = next;
+            } else if lo >= counts.first_index {
+                // First block to emit to this stream since the most recent checkpoint (which
+                // clears `previous_event_blocks`): `lo` is the new readable floor, everything
+                // earlier was pruned. The `>=` guard keeps a checkpoint seen out of order — an
+                // earlier one preprocessed after a later one — from lowering the floor.
+                counts.first_index = lo;
+                counts.next_index = counts.next_index.max(next);
+            } else {
+                // An earlier checkpoint era, already superseded by a later one we recorded.
+                continue;
             }
-            if current_expected_index != 0 {
-                self.next_expected_events
-                    .insert(&stream_id, current_expected_index)?;
-            }
+            updated_streams.insert(stream_id.clone());
+            self.next_expected_events.insert(&stream_id, counts)?;
         }
         Ok(updated_streams)
     }
