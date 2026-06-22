@@ -334,6 +334,16 @@ pub struct Client<Env: Environment> {
     options: chain_client::Options,
 }
 
+/// Boxed future returned by `receive_sender_certificate`. It is `Send` off the `web`
+/// target (where futures must be `Send`) and `?Send` on `web` (single-threaded, where
+/// the validator node is not `Sync`).
+#[cfg(not(web))]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + Send + 'a>>;
+#[cfg(web)]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + 'a>>;
+
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
@@ -1391,15 +1401,15 @@ impl<Env: Environment> Client<Env> {
     /// preprocessed.
     #[instrument(level = "trace", skip_all)]
     // Returns a boxed future rather than being an `async fn`: this function recurses
-    // (admin-chain sync -> sender-certificate processing -> here), and boxing it as a
-    // `Send` future at this boundary lets the concurrent admin-chain self-heal below
-    // satisfy its `Send` bound despite the recursion.
+    // (admin-chain sync -> sender-certificate processing -> here), and boxing it at this
+    // boundary lets the concurrent admin-chain self-heal below satisfy its future bound
+    // despite the recursion. The future is `Send` off `web` (see the type alias).
     fn receive_sender_certificate<'a>(
         &'a self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + Send + 'a>> {
+    ) -> ReceiveSenderCertificateFuture<'a> {
         Box::pin(async move {
             // Verify the certificate before doing any expensive networking.
             if let ReceiveCertificateMode::NeedsCheck = mode {
