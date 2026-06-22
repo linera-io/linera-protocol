@@ -75,6 +75,61 @@ the **canceller** (a disjoint signer set) revokes and the **guardian** can pause
   detect and cancel a malicious proposal.
 - **Testnet: 1 day**.
 
+### Operating the roles via a Safe multisig
+
+Each role is just an `address` the contracts check (`msg.sender == proposer`, …),
+so each role is held by **its own [Safe](https://app.safe.global) multisig** on
+Base. The Safe address is exactly what you pass to the deploy args (§4–5). A Safe
+executes a governance call once `threshold` owners have signed it off-chain
+(EIP-712), after which anyone can submit it on-chain.
+
+**Setup (once):**
+
+1. Create three Safes on Base (Safe{Wallet} app or `SafeProxyFactory`), with the
+   owners + threshold from the table above; hardware-wallet signers; spread the
+   proposer set across ≥3 orgs / ≥3 time zones.
+2. Record the three Safe addresses — they become `--pause-guardian` / `--proposer`
+   (LightClient args, §4) and `PAUSE_GUARDIAN` / `PROPOSER` / `CANCELLER`
+   (FungibleBridge env, §5). `proposer` and `canceller` must be **distinct** Safes.
+3. After deploy, confirm each on-chain field is the intended Safe (§6) **before**
+   funding the bridge — the addresses are immutable.
+
+**Exercising an action:** build the call with the Safe **Transaction Builder**
+(paste the verified contract address; the ABI auto-loads; pick e.g.
+`proposeLightClientUpdate` and fill the argument), collect the threshold of
+signatures, then execute. For scripted or air-gapped operations use `safe-cli`
+or the Safe{Core} SDK against the Safe Transaction Service. A Safe can **batch**
+calls atomically — e.g. pause `$BRIDGE` and `$LIGHT_CLIENT` in one guardian tx.
+
+**No blind-signing:** every signer independently recomputes the EIP-712 `SafeTx`
+hash before approving (e.g.
+[`pcaversaccio/safe-tx-hashes-util`](https://github.com/pcaversaccio/safe-tx-hashes-util)).
+
+**The propose/execute split is asymmetric.** `executeLightClientUpdate` /
+`executeDecoderUpdate` are **permissionless** — they check nothing about the
+caller. So the proposer Safe only runs its M-of-N ceremony for the **propose**
+leg; once the delay elapses, *anyone* (an EOA, a bot, a cron) can execute.
+Proposer-Safe liveness is never on the critical path for the second leg.
+Cancellation and pause/unpause are immediate Safe actions by the canceller /
+guardian.
+
+### Rotating signers vs. rotating the role address
+
+The contracts store each role **address** immutably, but a Safe's **signers are
+not** immutable — which splits "rotating governance" into two very different
+operations:
+
+- **Rotate who signs** — `addOwner` / `removeOwner` / `changeThreshold` on the
+  Safe. No bridge change; the role address is unchanged. **This** is how you
+  on/offboard signers, respond to a key compromise, or adjust a threshold.
+- **Rotate the role address** — point the bridge at a *different* Safe. Not
+  possible on-chain; requires a new bridge (migration, §8).
+
+In practice you almost always do the former: keep the role addresses (the Safe
+proxies) stable for the life of the bridge and manage trust by managing each
+Safe's owners. The immutable-address design is what guarantees a compromised
+signer set still can't move funds faster than the timelock.
+
 ---
 
 ## 3. Pre-deployment checklist
@@ -227,6 +282,12 @@ Confirm every governance field is a real Safe and the timelock matches intent
 All proposals are public on-chain; set up monitoring/alerting on the
 `*UpdateProposed`, `*UpdateExecuted`, `*UpdateCancelled`, and
 `EmergencyPaused`/`EmergencyUnpaused` events.
+
+> In production each `cast` call below is executed **as a Safe transaction by the
+> named role** (§2): the `propose*` / `cancel*` / `emergencyPause` /
+> `expireEpochsBelow` calls need the role Safe's threshold of signatures, while
+> the `execute*` calls are permissionless and can be sent by anyone (no Safe)
+> after the delay. The raw calls are shown for clarity.
 
 ### 7.1 Swap the light client (Linera protocol / format / signature upgrade)
 
