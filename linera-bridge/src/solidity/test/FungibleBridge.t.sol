@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {FungibleBridge} from "../FungibleBridge.sol";
 import {BridgeTypes} from "../BridgeTypes.sol";
-import {WrappedFungibleTypes} from "../WrappedFungibleTypes.sol";
+import {WrappedFungibleTypesV1} from "../WrappedFungibleTypesV1.sol";
 import {LineraToken} from "../LineraToken.sol";
 import {IBurnEventDecoder} from "../IBurnEventDecoder.sol";
 import {FungibleBurnEventDecoderV1} from "../FungibleBurnEventDecoderV1.sol";
@@ -107,10 +107,10 @@ function _eventBcs(uint32 index, address target, uint128 amount, bytes memory st
     evt.stream_id.application_id.user.application_description_hash.value = BRIDGE_APP_ID;
     evt.stream_id.stream_name.value = streamName;
     evt.index = index;
-    WrappedFungibleTypes.BurnEvent memory burnEvt;
+    WrappedFungibleTypesV1.BurnEvent memory burnEvt;
     burnEvt.target = bytes20(target);
     burnEvt.amount = amount;
-    evt.value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
+    evt.value = WrappedFungibleTypesV1.bcs_serialize_BurnEvent(burnEvt);
     return BridgeTypes.bcs_serialize_Event(evt);
 }
 

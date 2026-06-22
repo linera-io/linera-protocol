@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {FungibleBurnEventDecoderV1} from "../FungibleBurnEventDecoderV1.sol";
 import {IBurnEventDecoder} from "../IBurnEventDecoder.sol";
-import {WrappedFungibleTypes} from "../WrappedFungibleTypes.sol";
+import {WrappedFungibleTypesV1} from "../WrappedFungibleTypesV1.sol";
 
 contract FungibleBurnEventDecoderV1Test is Test {
     FungibleBurnEventDecoderV1 internal decoder;
@@ -20,10 +20,10 @@ contract FungibleBurnEventDecoderV1Test is Test {
         address target = address(0xA0);
         uint128 amount = 1_000_000_000_000_000_000;
 
-        WrappedFungibleTypes.BurnEvent memory burnEvt;
+        WrappedFungibleTypesV1.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(target);
         burnEvt.amount = amount;
-        bytes memory value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
+        bytes memory value = WrappedFungibleTypesV1.bcs_serialize_BurnEvent(burnEvt);
 
         (address recipient, uint256 decodedAmount) = decoder.decode(value);
         assertEq(recipient, target, "recipient should match the burn target");
@@ -36,10 +36,10 @@ contract FungibleBurnEventDecoderV1Test is Test {
         address target = address(0xBEEF);
         uint128 amount = 7;
 
-        WrappedFungibleTypes.BurnEvent memory burnEvt;
+        WrappedFungibleTypesV1.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(target);
         burnEvt.amount = amount;
-        bytes memory value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
+        bytes memory value = WrappedFungibleTypesV1.bcs_serialize_BurnEvent(burnEvt);
 
         (address recipient, uint256 decodedAmount) = iface.decode(value);
         assertEq(recipient, target, "interface decode recipient");

@@ -24,7 +24,7 @@ use linera_base::{
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use linera_bridge::{
-    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE},
+    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_V1_SOURCE},
     proof::{
         decode_block_header, decode_receipt_logs,
         gen::{DepositProofClient, HttpDepositProofClient},
@@ -65,7 +65,7 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         contract_name,
         &[
             ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
-            ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
+            ("WrappedFungibleTypesV1.sol", WRAPPED_FUNGIBLE_TYPES_V1_SOURCE),
             ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
             ("LightClient.sol", linera_bridge::evm::LIGHTCLIENT_SOURCE),
             ("Microchain.sol", linera_bridge::evm::MICROCHAIN_SOURCE),

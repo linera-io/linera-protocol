@@ -533,8 +533,8 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
         &[
             ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
             (
-                "WrappedFungibleTypes.sol",
-                evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
+                "WrappedFungibleTypesV1.sol",
+                evm::WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
             ),
             ("LightClient.sol", evm::LIGHTCLIENT_SOURCE),
             ("ILightClient.sol", evm::ILIGHTCLIENT_SOURCE),
