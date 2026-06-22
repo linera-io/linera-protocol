@@ -25,8 +25,13 @@ bytes32 constant BRIDGE_APP_ID = bytes32(uint256(0xF00D));
 // A distinct wrapped-fungible (deposit/mint target) application ID, used to
 // confirm that burn-matching keys on the bridge id and not on this one.
 bytes32 constant FUNGIBLE_APP_ID = bytes32(uint256(0xBEEF));
-// Governance addresses for the bridge under test. Most tests do not exercise
-// governance; the pause-integration tests act as PAUSE_GUARDIAN.
+// Governance constructor args for the bridges built in this file's
+// process-burns / deposit / pause tests. Those suites don't drive governance
+// (these are just valid non-zero construction args) except FungibleBridgePauseTest,
+// which pranks as PAUSE_GUARDIAN. The timelocked flows are covered by
+// FungibleBridgeDecoderTest (setDecoder) and FungibleBridgeLightClientUpdateTest
+// (setLightClient) — both use their own role addresses — and the full role/validation
+// matrix lives in MicrochainGovernance.t.sol and LightClientGovernance.t.sol.
 address constant PAUSE_GUARDIAN = address(0xDA);
 address constant PROPOSER = address(0xBB);
 address constant CANCELLER = address(0xCC);
@@ -45,6 +50,9 @@ contract MockLightClient {
     bytes32 public chainIdRet;
     uint64 public heightRet;
     bool public inclusionReverts;
+    // The Linera network this client tracks; only read by the setLightClient
+    // "same network" check, so it defaults to zero for tests that ignore it.
+    bytes32 public adminChainIdRet;
 
     constructor(bytes32 _chainId, uint64 _height) {
         chainIdRet = _chainId;
@@ -53,6 +61,14 @@ contract MockLightClient {
 
     function setInclusionReverts(bool value) external {
         inclusionReverts = value;
+    }
+
+    function setAdminChainId(bytes32 value) external {
+        adminChainIdRet = value;
+    }
+
+    function adminChainId() external view returns (bytes32) {
+        return adminChainIdRet;
     }
 
     function proveEventsCommitted(
@@ -536,5 +552,73 @@ contract FungibleBridgeDecoderTest is Test {
 
         assertEq(tok.balanceOf(MOCK_DECODER_RECIPIENT), MOCK_DECODER_AMOUNT, "new decoder routed the payout");
         assertEq(tok.balanceOf(RECIP_0), 0, "old decoder path no longer used");
+    }
+}
+
+// End-to-end setLightClient flow on a real FungibleBridge (not the abstract
+// Microchain harness): the timelocked swap repoints the bridge and settlement
+// keeps working through the new light client — i.e. TVL is preserved across the
+// swap.
+contract FungibleBridgeLightClientUpdateTest is Test {
+    bytes32 constant ADMIN = bytes32(uint256(0xAD));
+    uint256 constant TIMELOCK = 1 days;
+
+    address internal proposer = makeAddr("proposer");
+    address internal canceller = makeAddr("canceller");
+    address internal guardian = makeAddr("guardian");
+
+    bytes32[] internal noSiblings;
+
+    function _bridgeWith(MockLightClient lc) internal returns (FungibleBridge bridge, LineraToken tok) {
+        tok = new LineraToken("Test", "TST", 18, AMOUNT * 10);
+        bridge = new FungibleBridge(
+            address(lc),
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            _deployDecoderV1(),
+            guardian,
+            proposer,
+            canceller,
+            TIMELOCK
+        );
+        tok.transfer(address(bridge), AMOUNT * 10);
+    }
+
+    function test_setLightClient_swaps_and_keeps_settling() public {
+        MockLightClient lc1 = new MockLightClient(CHAIN_ID, HEIGHT);
+        lc1.setAdminChainId(ADMIN);
+        (FungibleBridge bridge, LineraToken tok) = _bridgeWith(lc1);
+
+        MockLightClient lc2 = new MockLightClient(CHAIN_ID, HEIGHT);
+        lc2.setAdminChainId(ADMIN);
+
+        vm.prank(proposer);
+        bridge.proposeLightClientUpdate(address(lc2));
+        vm.warp(block.timestamp + TIMELOCK);
+        // Permissionless execution.
+        bridge.executeLightClientUpdate();
+        assertEq(address(bridge.lightClient()), address(lc2), "bridge repointed to new light client");
+
+        // A burn settles through the swapped-in light client and releases tokens.
+        bytes[] memory chunk = new bytes[](1);
+        chunk[0] = _burnBcs(5, RECIP_0, AMOUNT);
+        uint32[] memory positions = _u32s_single(0);
+        bridge.processBurns(BLOCK_HASH, chunk, TX, 1, 1, positions, noSiblings);
+        assertEq(tok.balanceOf(RECIP_0), AMOUNT, "burn released via swapped light client");
+    }
+
+    function test_propose_different_network_reverts() public {
+        MockLightClient lc1 = new MockLightClient(CHAIN_ID, HEIGHT);
+        lc1.setAdminChainId(ADMIN);
+        (FungibleBridge bridge,) = _bridgeWith(lc1);
+
+        MockLightClient wrong = new MockLightClient(CHAIN_ID, HEIGHT);
+        wrong.setAdminChainId(bytes32(uint256(0xBAD)));
+
+        vm.prank(proposer);
+        vm.expectRevert(bytes("different network"));
+        bridge.proposeLightClientUpdate(address(wrong));
     }
 }
