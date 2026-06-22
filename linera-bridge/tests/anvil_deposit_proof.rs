@@ -65,10 +65,18 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         contract_name,
         &[
             ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
-            ("WrappedFungibleTypesV1.sol", WRAPPED_FUNGIBLE_TYPES_V1_SOURCE),
+            (
+                "WrappedFungibleTypesV1.sol",
+                WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
+            ),
             ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
             ("LightClient.sol", linera_bridge::evm::LIGHTCLIENT_SOURCE),
+            ("ILightClient.sol", linera_bridge::evm::ILIGHTCLIENT_SOURCE),
             ("Microchain.sol", linera_bridge::evm::MICROCHAIN_SOURCE),
+            (
+                "IBurnEventDecoder.sol",
+                linera_bridge::evm::IBURN_EVENT_DECODER_SOURCE,
+            ),
         ],
         Some(1),
     )
