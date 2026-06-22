@@ -255,7 +255,7 @@ pub struct UpdateStreamMetadata {
     pub chain_id: ChainId,
     /// The identifier of the event stream being updated.
     pub stream_id: String,
-    /// The lowest event index still guaranteed to be readable.
+    /// The lowest event index still guaranteed to be readable (if it exists).
     pub first_index: i32,
     /// The index of the next event to read from the stream.
     pub next_index: i32,

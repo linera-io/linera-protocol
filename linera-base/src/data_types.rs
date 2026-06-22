@@ -1945,9 +1945,9 @@ pub struct StreamUpdate {
     pub stream_id: StreamId,
     /// The lowest index of a new event. See [`StreamUpdate::new_indices`].
     pub previous_index: u32,
-    /// The lowest index whose event is still guaranteed to be readable: the index of the
-    /// first event published since the publisher's most recent checkpoint. Reading an event
-    /// below this index may fail, since checkpoints prune earlier events.
+    /// The lowest index whose event is still guaranteed to be readable (if it exists): the
+    /// index of the first event published since the publisher's most recent checkpoint. Reading
+    /// an event below this index may fail, since checkpoints prune earlier events.
     pub first_index: u32,
     /// The index of the next event, i.e. the lowest for which no event is known yet.
     pub next_index: u32,

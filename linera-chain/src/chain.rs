@@ -218,9 +218,10 @@ impl std::ops::Deref for ChainIdSet {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
 pub struct StreamCounts {
-    /// The lowest event index still guaranteed to be readable: the index of the first event
-    /// published to this stream since the most recent checkpoint. Earlier events may have been
-    /// pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+    /// The lowest event index still guaranteed to be readable (if it exists): the index of the
+    /// first event published to this stream since the most recent checkpoint. Earlier events may
+    /// have been pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+    /// When there are no events yet, this equals [`next_index`](Self::next_index).
     pub first_index: u32,
     /// The next event index we expect to see, i.e. the lowest for which no event is known yet.
     /// May be ahead of the last executed block on sparse chains.

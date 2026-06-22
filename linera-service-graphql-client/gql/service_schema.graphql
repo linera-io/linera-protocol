@@ -1567,9 +1567,10 @@ The event indices we track for a stream, maintained whenever a block is processe
 """
 type StreamCounts {
 	"""
-	The lowest event index still guaranteed to be readable: the index of the first event
-	published to this stream since the most recent checkpoint. Earlier events may have been
-	pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+	The lowest event index still guaranteed to be readable (if it exists): the index of the
+	first event published to this stream since the most recent checkpoint. Earlier events may
+	have been pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+	When there are no events yet, this equals [`next_index`](Self::next_index).
 	"""
 	firstIndex: Int!
 	"""
@@ -1809,7 +1810,7 @@ type UpdateStreamMetadata {
 	"""
 	streamId: String!
 	"""
-	The lowest event index still guaranteed to be readable.
+	The lowest event index still guaranteed to be readable (if it exists).
 	"""
 	firstIndex: Int!
 	"""
