@@ -444,6 +444,19 @@ ChainOwnership:
     - open_multi_leader_rounds: BOOL
     - timeout_config:
         TYPENAME: TimeoutConfig
+CheckpointSummary:
+  STRUCT:
+    - outbox_block_hashes:
+        SEQ:
+          TYPENAME: CryptoHash
+    - inbox_cursors:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ChainId
+            - TYPENAME: Cursor
+    - num_incoming_bundles: U32
+    - num_operations: U32
+    - num_outgoing_messages: U32
 ConfirmedBlockCertificate:
   STRUCT:
     - value:
@@ -899,14 +912,8 @@ OracleResponse:
           - used_blobs:
               SEQ:
                 TYPENAME: BlobId
-          - outbox_block_hashes:
-              SEQ:
-                TYPENAME: CryptoHash
-          - inbox_cursors:
-              SEQ:
-                TUPLE:
-                  - TYPENAME: ChainId
-                  - TYPENAME: Cursor
+          - summary:
+              TYPENAME: CheckpointSummary
 OriginalProposal:
   ENUM:
     0:

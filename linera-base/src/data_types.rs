@@ -1418,24 +1418,47 @@ pub enum OracleResponse {
         /// storage before applying the checkpoint, otherwise subsequent operations on
         /// the chain could try to read blob content the node doesn't actually have.
         used_blobs: Vec<BlobId>,
-        /// Hashes of every block on this chain that the chain's outboxes still reference
-        /// at the time of the checkpoint — i.e. the heights with cross-chain messages
-        /// that recipients haven't acknowledged yet. The current-epoch certificate over
-        /// the checkpoint block transitively certifies these older blocks: a node that
-        /// later receives one of these block's bytes can verify the bytes hash to a
-        /// hash in this set, without trusting the (possibly revoked) validator
-        /// signatures on the older block's own certificate.
-        outbox_block_hashes: Vec<CryptoHash>,
-        /// For each chain whose messages we've consumed, the `next_cursor_to_remove`
-        /// of the corresponding inbox. A bootstrapping node uses these to seed each
-        /// inbox's `restored_cursor`, so subsequent sender re-pushes below that cursor
-        /// are silently dropped (their effects are already baked into the restored
-        /// execution state).
-        inbox_cursors: Vec<(ChainId, Cursor)>,
+        /// The chain's non-execution-state bookkeeping at the time of the checkpoint, so
+        /// a bootstrapping node can restore the chain's outbox, inbox, and tip-counter
+        /// state without replaying the pre-checkpoint blocks.
+        summary: CheckpointSummary,
     },
 }
 
 impl BcsHashable<'_> for OracleResponse {}
+
+/// The chain's non-execution-state bookkeeping captured by a checkpoint. It is recorded
+/// in [`OracleResponse::Checkpoint`] and also collected pre-block by the checkpoint hook,
+/// so a bootstrapping node can restore the chain's outbox, inbox, and tip-counter state
+/// without replaying the pre-checkpoint blocks.
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+pub struct CheckpointSummary {
+    /// Hashes of every block on this chain that the chain's outboxes still reference
+    /// at the time of the checkpoint — i.e. the heights with cross-chain messages
+    /// that recipients haven't acknowledged yet. The current-epoch certificate over
+    /// the checkpoint block transitively certifies these older blocks: a node that
+    /// later receives one of these block's bytes can verify the bytes hash to a
+    /// hash in this set, without trusting the (possibly revoked) validator
+    /// signatures on the older block's own certificate.
+    pub outbox_block_hashes: Vec<CryptoHash>,
+    /// For each chain whose messages we've consumed, the `next_cursor_to_remove`
+    /// of the corresponding inbox. A bootstrapping node uses these to seed each
+    /// inbox's `restored_cursor`, so subsequent sender re-pushes below that cursor
+    /// are silently dropped (their effects are already baked into the restored
+    /// execution state).
+    pub inbox_cursors: Vec<(ChainId, Cursor)>,
+    /// The chain's cumulative `num_incoming_bundles` counter as of just before the
+    /// checkpoint block. A bootstrapping node seeds `ChainTipState` with this instead
+    /// of resetting it to zero; re-executing the checkpoint block then advances it
+    /// exactly as on a node that processed every block, so all nodes agree.
+    pub num_incoming_bundles: u32,
+    /// The chain's cumulative `num_operations` counter as of just before the
+    /// checkpoint block. Seeded like `num_incoming_bundles`.
+    pub num_operations: u32,
+    /// The chain's cumulative `num_outgoing_messages` counter as of just before the
+    /// checkpoint block. Seeded like `num_incoming_bundles`.
+    pub num_outgoing_messages: u32,
+}
 
 /// Description of a user application.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Hash, Serialize, WitType, WitLoad, WitStore)]

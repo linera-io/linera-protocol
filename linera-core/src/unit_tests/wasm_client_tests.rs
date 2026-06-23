@@ -1192,11 +1192,10 @@ where
     // The checkpoint certifies both unacked outgoing transfers and records inbox cursors.
     let (outbox_block_hashes, inbox_cursors) =
         match block.body.oracle_responses.first().and_then(|t| t.first()) {
-            Some(OracleResponse::Checkpoint {
-                outbox_block_hashes,
-                inbox_cursors,
-                ..
-            }) => (outbox_block_hashes.clone(), inbox_cursors.clone()),
+            Some(OracleResponse::Checkpoint { summary, .. }) => (
+                summary.outbox_block_hashes.clone(),
+                summary.inbox_cursors.clone(),
+            ),
             other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
         };
     assert_eq!(

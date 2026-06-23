@@ -22,7 +22,7 @@ use linera_chain::{
     data_types::{IncomingBundle, MessageAction, MessageBundle, PostedMessage, Transaction},
     manager::LockingBlock,
     types::Timeout,
-    ChainError, ChainExecutionContext,
+    ChainError, ChainExecutionContext, ChainTipState,
 };
 use linera_execution::{
     committee::Committee, system::SystemOperation, ExecutionError, Message, MessageKind, Operation,
@@ -4253,10 +4253,7 @@ where
     let checkpoint_2 = producer.checkpoint().await.unwrap().unwrap();
     let block = checkpoint_2.block();
     let outbox_block_hashes = match block.body.oracle_responses.first().and_then(|t| t.first()) {
-        Some(OracleResponse::Checkpoint {
-            outbox_block_hashes,
-            ..
-        }) => outbox_block_hashes.clone(),
+        Some(OracleResponse::Checkpoint { summary, .. }) => summary.outbox_block_hashes.clone(),
         other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
     };
     assert!(
@@ -4362,10 +4359,7 @@ where
         .first()
         .and_then(|t| t.first())
     {
-        Some(OracleResponse::Checkpoint {
-            outbox_block_hashes,
-            ..
-        }) => outbox_block_hashes.clone(),
+        Some(OracleResponse::Checkpoint { summary, .. }) => summary.outbox_block_hashes.clone(),
         other => panic!("Expected OracleResponse::Checkpoint, got {other:?}"),
     };
     assert_eq!(outbox_block_hashes, vec![transfer_0.hash()]);
@@ -4464,6 +4458,24 @@ where
             Epoch::from(1),
             "validator 0's chain should be at epoch 1 after the checkpoint restore",
         );
+
+        // Validator 0 bootstrapped from the checkpoint, skipping the normal execution
+        // of the pre-checkpoint blocks, whereas validators 2 and 3 executed every
+        // block. The checkpoint's oracle response carries the producer's pre-checkpoint
+        // `ChainTipState` counters, so after seeding them and re-executing the
+        // post-checkpoint blocks validator 0's tip — counters included — must match a
+        // validator that never skipped a block.
+        let validator_2_key = builder.node(2).name();
+        let validator_2_storage = builder
+            .validator_storages
+            .get(&validator_2_key)
+            .expect("validator 2 storage")
+            .clone();
+        let honest_view = validator_2_storage.load_chain(chain_id).await?;
+        assert_eq!(chain_view.tip_state.get(), honest_view.tip_state.get());
+        // The pre-checkpoint blocks really did move the counters, so this is a
+        // meaningful check rather than a comparison of two zeroed-out tips.
+        assert_ne!(*chain_view.tip_state.get(), ChainTipState::default());
     }
 
     Ok(())

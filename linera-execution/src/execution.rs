@@ -176,8 +176,7 @@ where
         let PreparedCheckpoint {
             blobs,
             origin_cursors,
-            inbox_cursors,
-            outbox_block_hashes,
+            summary,
         } = prepared;
         let execution_state_blobs = blobs.iter().map(|blob| blob.id().hash).collect();
         let used_blobs = self.system.used_blobs.indices().await?;
@@ -187,8 +186,7 @@ where
         txn_tracker.replay_oracle_response(OracleResponse::Checkpoint {
             execution_state_blobs,
             used_blobs,
-            outbox_block_hashes,
-            inbox_cursors,
+            summary,
         })?;
         for (origin, latest_received_cursor) in origin_cursors {
             txn_tracker.add_outgoing_message(OutgoingMessage::new(

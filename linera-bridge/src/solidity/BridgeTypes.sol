@@ -463,6 +463,54 @@ library BridgeTypes {
         return value;
     }
 
+    struct CheckpointSummary {
+        CryptoHash[] outbox_block_hashes;
+        tuple_ChainId_Cursor[] inbox_cursors;
+        uint32 num_incoming_bundles;
+        uint32 num_operations;
+        uint32 num_outgoing_messages;
+    }
+
+    function bcs_serialize_CheckpointSummary(CheckpointSummary memory input) internal pure returns (bytes memory) {
+        bytes memory result = bcs_serialize_seq_CryptoHash(input.outbox_block_hashes);
+        result = abi.encodePacked(result, bcs_serialize_seq_tuple_ChainId_Cursor(input.inbox_cursors));
+        result = abi.encodePacked(result, bcs_serialize_uint32(input.num_incoming_bundles));
+        result = abi.encodePacked(result, bcs_serialize_uint32(input.num_operations));
+        return abi.encodePacked(result, bcs_serialize_uint32(input.num_outgoing_messages));
+    }
+
+    function bcs_deserialize_offset_CheckpointSummary(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, CheckpointSummary memory)
+    {
+        uint256 new_pos;
+        CryptoHash[] memory outbox_block_hashes;
+        (new_pos, outbox_block_hashes) = bcs_deserialize_offset_seq_CryptoHash(pos, input);
+        tuple_ChainId_Cursor[] memory inbox_cursors;
+        (new_pos, inbox_cursors) = bcs_deserialize_offset_seq_tuple_ChainId_Cursor(new_pos, input);
+        uint32 num_incoming_bundles;
+        (new_pos, num_incoming_bundles) = bcs_deserialize_offset_uint32(new_pos, input);
+        uint32 num_operations;
+        (new_pos, num_operations) = bcs_deserialize_offset_uint32(new_pos, input);
+        uint32 num_outgoing_messages;
+        (new_pos, num_outgoing_messages) = bcs_deserialize_offset_uint32(new_pos, input);
+        return (
+            new_pos,
+            CheckpointSummary(
+                outbox_block_hashes, inbox_cursors, num_incoming_bundles, num_operations, num_outgoing_messages
+            )
+        );
+    }
+
+    function bcs_deserialize_CheckpointSummary(bytes memory input) internal pure returns (CheckpointSummary memory) {
+        uint256 new_pos;
+        CheckpointSummary memory value;
+        (new_pos, value) = bcs_deserialize_offset_CheckpointSummary(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
     struct CryptoHash {
         bytes32 value;
     }
@@ -991,8 +1039,7 @@ library BridgeTypes {
     struct OracleResponse_Checkpoint {
         CryptoHash[] execution_state_blobs;
         BlobId[] used_blobs;
-        CryptoHash[] outbox_block_hashes;
-        tuple_ChainId_Cursor[] inbox_cursors;
+        CheckpointSummary summary;
     }
 
     function bcs_serialize_OracleResponse_Checkpoint(OracleResponse_Checkpoint memory input)
@@ -1002,8 +1049,7 @@ library BridgeTypes {
     {
         bytes memory result = bcs_serialize_seq_CryptoHash(input.execution_state_blobs);
         result = abi.encodePacked(result, bcs_serialize_seq_BlobId(input.used_blobs));
-        result = abi.encodePacked(result, bcs_serialize_seq_CryptoHash(input.outbox_block_hashes));
-        return abi.encodePacked(result, bcs_serialize_seq_tuple_ChainId_Cursor(input.inbox_cursors));
+        return abi.encodePacked(result, bcs_serialize_CheckpointSummary(input.summary));
     }
 
     function bcs_deserialize_offset_OracleResponse_Checkpoint(uint256 pos, bytes memory input)
@@ -1016,12 +1062,9 @@ library BridgeTypes {
         (new_pos, execution_state_blobs) = bcs_deserialize_offset_seq_CryptoHash(pos, input);
         BlobId[] memory used_blobs;
         (new_pos, used_blobs) = bcs_deserialize_offset_seq_BlobId(new_pos, input);
-        CryptoHash[] memory outbox_block_hashes;
-        (new_pos, outbox_block_hashes) = bcs_deserialize_offset_seq_CryptoHash(new_pos, input);
-        tuple_ChainId_Cursor[] memory inbox_cursors;
-        (new_pos, inbox_cursors) = bcs_deserialize_offset_seq_tuple_ChainId_Cursor(new_pos, input);
-        return
-            (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs, outbox_block_hashes, inbox_cursors));
+        CheckpointSummary memory summary;
+        (new_pos, summary) = bcs_deserialize_offset_CheckpointSummary(new_pos, input);
+        return (new_pos, OracleResponse_Checkpoint(execution_state_blobs, used_blobs, summary));
     }
 
     function bcs_deserialize_OracleResponse_Checkpoint(bytes memory input)

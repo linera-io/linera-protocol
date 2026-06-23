@@ -10,8 +10,9 @@ use allocative::Allocative;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey},
     data_types::{
-        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight, Cursor,
-        Epoch, NonCanonicalBTreeMap, NonCanonicalBTreeSet, OracleResponse, Timestamp,
+        ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlockHeight,
+        CheckpointSummary, Cursor, Epoch, NonCanonicalBTreeMap, NonCanonicalBTreeSet,
+        OracleResponse, Timestamp,
     },
     ensure,
     hashed::Hashed,
@@ -838,8 +839,7 @@ where
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
         checkpoint_origin_cursors: Vec<(ChainId, Cursor)>,
-        checkpoint_inbox_cursors: Vec<(ChainId, Cursor)>,
-        checkpoint_outbox_block_hashes: Vec<CryptoHash>,
+        checkpoint_summary: CheckpointSummary,
     ) -> Result<(BlockExecutionOutcome, ResourceTracker, HashSet<ChainId>), ChainError> {
         // AutoRetry is incompatible with replaying oracle responses because discarding or
         // rejecting bundles would change which transactions execute.
@@ -883,8 +883,7 @@ where
             Some(PreparedCheckpoint {
                 blobs,
                 origin_cursors: checkpoint_origin_cursors,
-                inbox_cursors: checkpoint_inbox_cursors,
-                outbox_block_hashes: checkpoint_outbox_block_hashes,
+                summary: checkpoint_summary,
             })
         } else {
             None
@@ -1309,15 +1308,25 @@ where
                 "Checkpoint must be the first transaction in its block",
             )
         );
-        let (origin_cursors, inbox_cursors, outbox_block_hashes) = if block.starts_with_checkpoint()
-        {
+        let (origin_cursors, summary) = if block.starts_with_checkpoint() {
             self.check_checkpoint_preconditions().await?;
             let origin_cursors = self.collect_inbox_cursors().await?;
             let inbox_cursors = self.collect_all_inbox_cursors().await?;
-            let hashes = self.collect_unfinalized_block_hashes().await?;
-            (origin_cursors, inbox_cursors, hashes)
+            let outbox_block_hashes = self.collect_unfinalized_block_hashes().await?;
+            // Snapshot the tip counters as of just before this block, so the oracle
+            // response can carry them and a bootstrapping node can seed `ChainTipState`
+            // with the same values instead of resetting them to zero.
+            let tip = self.tip_state.get();
+            let summary = CheckpointSummary {
+                outbox_block_hashes,
+                inbox_cursors,
+                num_incoming_bundles: tip.num_incoming_bundles,
+                num_operations: tip.num_operations,
+                num_outgoing_messages: tip.num_outgoing_messages,
+            };
+            (origin_cursors, summary)
         } else {
-            (Vec::new(), Vec::new(), Vec::new())
+            (Vec::new(), CheckpointSummary::default())
         };
 
         Self::execute_block_inner(
@@ -1330,8 +1339,7 @@ where
             replaying_oracle_responses,
             policy,
             origin_cursors,
-            inbox_cursors,
-            outbox_block_hashes,
+            summary,
         )
         .await
         .map(|(outcome, tracker, never_reject_origins)| {

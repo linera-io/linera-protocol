@@ -1080,12 +1080,19 @@ where
         blobs: BTreeMap<BlobId, Blob>,
         notify_when_messages_are_delivered: Option<oneshot::Sender<()>>,
     ) -> Result<(ChainInfoResponse, NetworkActions, BlockOutcome), WorkerError> {
-        let (bytes, chain_id, height, previous_block_hash, outbox_block_hashes, inbox_cursors) = {
+        let (
+            bytes,
+            chain_id,
+            height,
+            previous_block_hash,
+            outbox_block_hashes,
+            inbox_cursors,
+            tip_counters,
+        ) = {
             let block = certificate.block();
             let Some(OracleResponse::Checkpoint {
                 execution_state_blobs,
-                outbox_block_hashes,
-                inbox_cursors,
+                summary,
                 ..
             }) = block.body.oracle_responses.first().and_then(|r| r.first())
             else {
@@ -1109,8 +1116,13 @@ where
                 block.header.chain_id,
                 block.header.height,
                 block.header.previous_block_hash,
-                outbox_block_hashes.clone(),
-                inbox_cursors.clone(),
+                summary.outbox_block_hashes.clone(),
+                summary.inbox_cursors.clone(),
+                (
+                    summary.num_incoming_bundles,
+                    summary.num_operations,
+                    summary.num_outgoing_messages,
+                ),
             )
         };
         // Every pre-checkpoint sender block the oracle response names must already
@@ -1206,12 +1218,16 @@ where
         // (`manager`, `block_hashes` for height `height`), or (c) outside the
         // protocol state hash so divergence from the producer is fine
         // (inboxes; subsequent blocks reconcile by anticipation if needed).
-        // The `num_*` counters on `ChainTipState` are write-only in current
-        // code, so leaving them at zero has no functional impact.
+        // The `num_*` counters are seeded from the oracle response (their values
+        // as of just before the checkpoint block); re-executing the checkpoint
+        // block then advances them exactly as on the producer, so all nodes agree.
+        let (num_incoming_bundles, num_operations, num_outgoing_messages) = tip_counters;
         let new_tip = ChainTipState {
             block_hash: previous_block_hash,
             next_block_height: height,
-            ..Default::default()
+            num_incoming_bundles,
+            num_operations,
+            num_outgoing_messages,
         };
         self.chain.tip_state.set(new_tip.clone());
         // Installing a snapshot establishes the chain's state from scratch (block 0 is never
