@@ -1206,12 +1206,9 @@ where
         // (`manager`, `block_hashes` for height `height`), or (c) outside the
         // protocol state hash so divergence from the producer is fine
         // (inboxes; subsequent blocks reconcile by anticipation if needed).
-        // The `num_*` counters on `ChainTipState` are write-only in current
-        // code, so leaving them at zero has no functional impact.
         let new_tip = ChainTipState {
             block_hash: previous_block_hash,
             next_block_height: height,
-            ..Default::default()
         };
         self.chain.tip_state.set(new_tip.clone());
         // Installing a snapshot establishes the chain's state from scratch (block 0 is never
@@ -2511,11 +2508,6 @@ where
             WorkerError::FastBlockUsingOracles
         );
         let chain = &mut self.chain;
-        // Check if the counters of tip_state would be valid.
-        chain
-            .tip_state
-            .get_mut()
-            .update_counters(&block.body.transactions, &block.body.messages)?;
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();
 

@@ -76,6 +76,21 @@ mod metrics {
     });
 }
 
+/// Per-block state of a chain: the timestamp of its most recent block together with
+/// cumulative counts of the transactions and messages processed so far. Stored as a
+/// single value so that each block updates only one key.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Allocative)]
+pub struct ChainProgress {
+    /// The timestamp of the most recent block.
+    pub timestamp: Timestamp,
+    /// Number of incoming message bundles executed so far.
+    pub num_incoming_bundles: u32,
+    /// Number of operations executed so far.
+    pub num_operations: u32,
+    /// Number of outgoing messages sent so far.
+    pub num_outgoing_messages: u32,
+}
+
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
@@ -97,8 +112,6 @@ pub struct SystemExecutionStateView<C> {
     pub balances: MapView<C, AccountOwner, Amount>,
     /// Allowances for spending from one account by another.
     pub allowances: MapView<C, OwnerSpender, Amount>,
-    /// The timestamp of the most recent block.
-    pub timestamp: RegisterView<C, Timestamp>,
     /// Whether this chain has been closed.
     pub closed: RegisterView<C, bool>,
     /// Permissions for applications on this chain.
@@ -133,6 +146,8 @@ pub struct SystemExecutionStateView<C> {
     /// `CheckpointAck` messages here is what breaks the otherwise-perpetual
     /// notification ping-pong between two chains that ever exchanged a real message.
     pub pending_checkpoint_ack_targets: SetView<C, ChainId>,
+    /// The most recent block's timestamp and cumulative transaction/message counts.
+    pub progress: RegisterView<C, ChainProgress>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -151,7 +166,6 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             balance: self.balance.with_context(ctx.clone()).await,
             balances: self.balances.with_context(ctx.clone()).await,
             allowances: self.allowances.with_context(ctx.clone()).await,
-            timestamp: self.timestamp.with_context(ctx.clone()).await,
             closed: self.closed.with_context(ctx.clone()).await,
             application_permissions: self.application_permissions.with_context(ctx.clone()).await,
             used_blobs: self.used_blobs.with_context(ctx.clone()).await,
@@ -166,6 +180,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
                 .pending_checkpoint_ack_targets
                 .with_context(ctx.clone())
                 .await,
+            progress: self.progress.with_context(ctx.clone()).await,
         }
     }
 }
@@ -955,7 +970,7 @@ where
             balance,
             application_permissions,
         } = description.config().clone();
-        self.timestamp.set(description.timestamp());
+        self.progress.get_mut().timestamp = description.timestamp();
         self.description.set(Some(description));
         self.epoch.set(epoch);
 

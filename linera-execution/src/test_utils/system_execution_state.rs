@@ -17,8 +17,8 @@ use linera_views::{context::MemoryContext, views::View};
 
 use super::{dummy_chain_description, dummy_committees, MockApplication, RegisterMockApplication};
 use crate::{
-    committee::Committee, ApplicationDescription, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    ExecutionStateView, TestExecutionRuntimeContext,
+    committee::Committee, ApplicationDescription, ChainProgress, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, ExecutionStateView, TestExecutionRuntimeContext,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.
@@ -54,6 +54,12 @@ pub struct SystemExecutionState {
     /// The mock applications registered on the chain, indexed by their application ID.
     #[debug(skip_if = BTreeMap::is_empty)]
     pub mock_applications: BTreeMap<ApplicationId, MockApplication>,
+    /// Number of incoming message bundles executed so far.
+    pub num_incoming_bundles: u32,
+    /// Number of operations executed so far.
+    pub num_operations: u32,
+    /// Number of outgoing messages sent so far.
+    pub num_outgoing_messages: u32,
 }
 
 impl SystemExecutionState {
@@ -123,6 +129,9 @@ impl SystemExecutionState {
             application_permissions,
             extra_blobs,
             mock_applications,
+            num_incoming_bundles,
+            num_operations,
+            num_outgoing_messages,
         } = self;
 
         let extra = TestExecutionRuntimeContext::new(chain_id, execution_runtime_config);
@@ -170,7 +179,6 @@ impl SystemExecutionState {
                 .insert(&account_owner, balance)
                 .expect("insertion of balances should not fail");
         }
-        view.system.timestamp.set(timestamp);
         for blob_id in used_blobs {
             view.system
                 .used_blobs
@@ -181,6 +189,12 @@ impl SystemExecutionState {
         view.system
             .application_permissions
             .set(application_permissions);
+        view.system.progress.set(ChainProgress {
+            timestamp,
+            num_incoming_bundles,
+            num_operations,
+            num_outgoing_messages,
+        });
         view
     }
 }

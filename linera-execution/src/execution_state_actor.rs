@@ -306,7 +306,7 @@ where
             }
 
             SystemTimestamp { callback } => {
-                let timestamp = *self.state.system.timestamp.get();
+                let timestamp = self.state.system.progress.get().timestamp;
                 callback.respond(timestamp);
             }
 
