@@ -38,8 +38,8 @@ fn main() -> anyhow::Result<()> {
 
     let formats = read_formats_from_snap(&input)
         .with_context(|| format!("failed to read formats from {input:?}"))?;
-    // Serialize exactly as `ClientContext::prepare_bcs_publication` does, so the data
-    // blob produced from this file matches the hash bound in the registry write.
+    // BCS-serialize the formats the same way the client does when publishing, so the
+    // data blob produced from this file matches the hash bound in the registry write.
     let blob = bcs::to_bytes(&formats).context("failed to serialize formats as BCS")?;
     std::fs::write(&output, &blob)
         .with_context(|| format!("failed to write blob file {output:?}"))?;

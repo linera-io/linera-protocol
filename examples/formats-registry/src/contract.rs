@@ -8,6 +8,7 @@ mod state;
 use async_graphql::ComplexObject;
 use formats_registry::{FormatsRegistryAbi, Message, Operation};
 use linera_sdk::{
+    formats::Formats,
     linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
@@ -44,12 +45,32 @@ impl Contract for FormatsRegistryContract {
     }
 
     async fn execute_operation(&mut self, operation: Operation) {
+        log::info!(
+            "Processing operation on chain {}: {operation:?}",
+            self.runtime.chain_id()
+        );
+
         // Authenticate that the declared owner really signed (or is the caller of)
         // this operation.
         let owner = operation.owner();
         self.runtime
             .check_account_permission(owner)
             .expect("Failed to authenticate the owner of the operation");
+
+        // Read the formats data blob on the chain submitting the operation and require
+        // it to deserialize as `Formats`. This both proves the blob is available on
+        // (and retained by) the submitting chain and validates that it actually holds
+        // a well-formed formats description. The client publishes the blob in an
+        // earlier block, so it is already committed here whether the write is applied
+        // locally or forwarded to the creation chain. Doing this on the operation side
+        // (rather than when a forwarded message is executed) also gives the submitter
+        // immediate feedback.
+        if let Operation::Write { blob_hash, .. } = &operation {
+            let bytes = self.runtime.read_data_blob(*blob_hash);
+            let formats = linera_sdk::bcs::from_bytes::<Formats>(&bytes)
+                .expect("the registered data blob must hold a BCS-encoded Formats");
+            log::debug!("Registering formats: {formats:?}");
+        }
 
         let message = operation.into_message();
         let creator_chain_id = self.runtime.application_creator_chain_id();
@@ -65,6 +86,11 @@ impl Contract for FormatsRegistryContract {
     }
 
     async fn execute_message(&mut self, message: Message) {
+        log::info!(
+            "Processing message on chain {}: {message:?}",
+            self.runtime.chain_id()
+        );
+
         assert_eq!(
             self.runtime.chain_id(),
             self.runtime.application_creator_chain_id(),
@@ -111,14 +137,9 @@ impl FormatsRegistryContract {
                     existing.is_none(),
                     "formats are already registered for this module"
                 );
-                // For a remote write the blob was published in an earlier block on the
-                // submitting chain; require it here so it is available on (and retained
-                // by) the creation chain. For a local write the blob is published in
-                // this same block and cannot be asserted yet, but it is persisted by
-                // the caller's `PublishDataBlob`.
-                if self.runtime.message_origin_chain_id().is_some() {
-                    self.runtime.assert_data_blob_exists(blob_hash);
-                }
+                // Blob existence is asserted on the operation side (see
+                // `execute_operation`), so by the time the write is applied here the
+                // blob has already been required on the submitting chain.
                 self.state
                     .formats
                     .insert(&module_id, blob_hash)

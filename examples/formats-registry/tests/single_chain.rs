@@ -5,8 +5,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use formats_registry::{FormatsRegistryAbi, Operation};
+use formats_registry::{formats::FormatsRegistryApplication, FormatsRegistryAbi, Operation};
 use linera_sdk::{
+    formats::BcsApplication,
     linera_base_types::{AccountOwner, AccountSecretKey, Blob, DataBlobHash, ModuleId},
     test::{QueryOutcome, TestValidator},
 };
@@ -21,6 +22,18 @@ fn module_id_to_hex(module_id: &ModuleId) -> String {
         .to_owned()
 }
 
+/// Builds a data blob holding the BCS-encoded `Formats` of this application, which is
+/// what the contract now requires every registered blob to deserialize to. Returns
+/// the blob and its raw bytes.
+fn formats_blob() -> (Blob, Vec<u8>) {
+    let value = linera_sdk::bcs::to_bytes(
+        &FormatsRegistryApplication::formats().expect("formats trace should succeed"),
+    )
+    .expect("Formats should serialize as BCS");
+    let blob = Blob::new_data(value.clone());
+    (blob, value)
+}
+
 /// Writes a value for a `ModuleId` and reads it back through the service.
 #[tokio::test(flavor = "multi_thread")]
 async fn write_then_read() {
@@ -31,23 +44,31 @@ async fn write_then_read() {
     let application_id = chain.create_application(module_id, (), (), vec![]).await;
     let module_id = module_id.forget_abi();
 
-    let value = vec![1u8, 2, 3, 4, 5, 6, 7, 8];
-    let blob = Blob::new_data(value.clone());
+    let (blob, value) = formats_blob();
     let blob_hash = DataBlobHash(blob.id().hash);
+
+    // Publish the formats blob in its own block first, so it is committed before the
+    // `Write` operation reads and validates it.
     chain
         .add_block_with_blobs(
             |block| {
-                block.with_data_blob(&blob).with_operation(
-                    application_id,
-                    Operation::Write {
-                        owner,
-                        module_id,
-                        blob_hash,
-                    },
-                );
+                block.with_data_blob(&blob);
             },
             vec![blob.clone()],
         )
+        .await;
+
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                Operation::Write {
+                    owner,
+                    module_id,
+                    blob_hash,
+                },
+            );
+        })
         .await;
 
     let module_id_hex = module_id_to_hex(&module_id);
@@ -89,22 +110,27 @@ async fn second_write_is_rejected() {
     let application_id = chain.create_application(module_id, (), (), vec![]).await;
     let module_id = module_id.forget_abi();
 
-    let blob = Blob::new_data(vec![0xAA]);
+    let (blob, _value) = formats_blob();
     let blob_hash = DataBlobHash(blob.id().hash);
     chain
         .add_block_with_blobs(
             |block| {
-                block.with_data_blob(&blob).with_operation(
-                    application_id,
-                    Operation::Write {
-                        owner,
-                        module_id,
-                        blob_hash,
-                    },
-                );
+                block.with_data_blob(&blob);
             },
             vec![blob.clone()],
         )
+        .await;
+    chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                Operation::Write {
+                    owner,
+                    module_id,
+                    blob_hash,
+                },
+            );
+        })
         .await;
 
     // The data blob is already in storage, so the second write needs no new blob; it
@@ -160,9 +186,21 @@ async fn admin_policy_gates_local_writes() {
         .expect("admins must be an array");
     assert_eq!(admins.len(), 1);
 
-    // The chain's signer is no longer an admin, so its write is rejected at the admin
-    // check (before the blob is ever looked at).
-    let blob_hash = DataBlobHash(Blob::new_data(vec![0xAA]).id().hash);
+    // Publish a valid formats blob so the write gets past the operation-side blob
+    // validation and is rejected specifically by the admin policy.
+    let (blob, _value) = formats_blob();
+    let blob_hash = DataBlobHash(blob.id().hash);
+    chain
+        .add_block_with_blobs(
+            |block| {
+                block.with_data_blob(&blob);
+            },
+            vec![blob.clone()],
+        )
+        .await;
+
+    // The chain's signer is no longer an admin, so its write is rejected by the admin
+    // policy applied on the creation chain.
     let result = chain
         .try_add_block(|block| {
             block.with_operation(

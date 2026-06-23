@@ -5,8 +5,9 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-use formats_registry::{FormatsRegistryAbi, Operation};
+use formats_registry::{formats::FormatsRegistryApplication, FormatsRegistryAbi, Operation};
 use linera_sdk::{
+    formats::BcsApplication,
     linera_base_types::{AccountOwner, Blob, DataBlobHash, ModuleId},
     test::{QueryOutcome, TestValidator},
 };
@@ -19,6 +20,18 @@ fn module_id_to_hex(module_id: &ModuleId) -> String {
         .as_str()
         .expect("ModuleId serializes to a JSON string")
         .to_owned()
+}
+
+/// Builds a data blob holding the BCS-encoded `Formats` of this application, which is
+/// what the contract now requires every registered blob to deserialize to. Returns
+/// the blob and its raw bytes.
+fn formats_blob() -> (Blob, Vec<u8>) {
+    let value = linera_sdk::bcs::to_bytes(
+        &FormatsRegistryApplication::formats().expect("formats trace should succeed"),
+    )
+    .expect("Formats should serialize as BCS");
+    let blob = Blob::new_data(value.clone());
+    (blob, value)
 }
 
 /// An admin operating from a remote chain can register a module: the write is
@@ -52,25 +65,30 @@ async fn remote_admin_can_register() {
         })
         .await;
 
-    // The remote admin submits a write on its own chain; it publishes the data blob
-    // there and the write is forwarded to the creation chain as a cross-chain message.
-    let value = vec![9u8, 8, 7];
-    let blob = Blob::new_data(value.clone());
+    // The remote admin publishes the data blob on its own chain in one block, then
+    // submits the write in the next block; the write is forwarded to the creation
+    // chain as a cross-chain message.
+    let (blob, value) = formats_blob();
     let blob_hash = DataBlobHash(blob.id().hash);
     remote_chain
         .add_block_with_blobs(
             |block| {
-                block.with_data_blob(&blob).with_operation(
-                    application_id,
-                    Operation::Write {
-                        owner: remote_owner,
-                        module_id,
-                        blob_hash,
-                    },
-                );
+                block.with_data_blob(&blob);
             },
             vec![blob.clone()],
         )
+        .await;
+    remote_chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                Operation::Write {
+                    owner: remote_owner,
+                    module_id,
+                    blob_hash,
+                },
+            );
+        })
         .await;
 
     // The creation chain processes the forwarded message and stores the value.
@@ -117,22 +135,27 @@ async fn remote_non_admin_is_rejected() {
         })
         .await;
 
-    let blob = Blob::new_data(vec![1u8, 2, 3]);
+    let (blob, _value) = formats_blob();
     let blob_hash = DataBlobHash(blob.id().hash);
-    let (write_certificate, _) = remote_chain
+    remote_chain
         .add_block_with_blobs(
             |block| {
-                block.with_data_blob(&blob).with_operation(
-                    application_id,
-                    Operation::Write {
-                        owner: remote_owner,
-                        module_id,
-                        blob_hash,
-                    },
-                );
+                block.with_data_blob(&blob);
             },
             vec![blob.clone()],
         )
+        .await;
+    let (write_certificate, _) = remote_chain
+        .add_block(|block| {
+            block.with_operation(
+                application_id,
+                Operation::Write {
+                    owner: remote_owner,
+                    module_id,
+                    blob_hash,
+                },
+            );
+        })
         .await;
 
     // The creation chain refuses to execute the forwarded write from a non-admin.
