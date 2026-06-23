@@ -13,8 +13,10 @@ use linera_sdk::{
 #[view(context = ViewStorageContext)]
 pub struct FormatsRegistryState {
     /// Maps a `ModuleId` to the hash of the data blob holding its registered formats
-    /// description. Exposed through the service's `read` query rather than directly.
-    #[graphql(skip)]
+    /// description. Exposed directly so callers can test membership or fetch the
+    /// stored `DataBlobHash` (e.g. `formats { entry(key: "<MODULE_ID>") { value } }`)
+    /// without downloading the blob; the service's `read` query additionally returns
+    /// the decoded blob contents.
     pub formats: MapView<ModuleId, DataBlobHash>,
     /// The admin accounts authorized to run admin commands and remote writes.
     /// `None` means no admin set has been configured yet, in which case only the
