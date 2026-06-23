@@ -38,5 +38,5 @@ ignore = [
     # Auto-generated BCS serializer; intentional bytes1(uint8(x)) truncation
     # is the encoding's defining behaviour.
     "BridgeTypes.sol",
-    "WrappedFungibleTypes.sol",
+    "WrappedFungibleTypesV1.sol",
 ]
