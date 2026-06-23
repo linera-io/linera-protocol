@@ -199,10 +199,10 @@ Client implementation and command-line tool for the Linera blockchain
 * `--quorum-grace-period <QUORUM_GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
 
   Default value: `0.2`
-* `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
+* `--blob-download-hedge-delay-ms <BLOB_DOWNLOAD_HEDGE_DELAY>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
 
   Default value: `1000`
-* `--cert-batch-download-timeout-ms <CERTIFICATE_BATCH_DOWNLOAD_TIMEOUT>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
+* `--cert-batch-download-hedge-delay-ms <CERTIFICATE_BATCH_DOWNLOAD_HEDGE_DELAY>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
 
   Default value: `1000`
 * `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
