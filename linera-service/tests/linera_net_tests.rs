@@ -2001,7 +2001,7 @@ async fn test_publish_module_with_formats_registers_formats(
         .map(|byte| byte.as_u64().expect("byte") as u8)
         .collect();
 
-    let stored_formats: Formats = serde_json::from_slice(&stored_bytes)?;
+    let stored_formats: Formats = bcs::from_bytes(&stored_bytes)?;
     let expected_formats = CounterApplication::formats().unwrap();
     assert_eq!(stored_formats, expected_formats);
 
@@ -2137,7 +2137,7 @@ async fn test_publish_module_with_formats_remote_registration(
         .map(|byte| byte.as_u64().expect("byte") as u8)
         .collect();
 
-    let stored_formats: Formats = serde_json::from_slice(&stored_bytes)?;
+    let stored_formats: Formats = bcs::from_bytes(&stored_bytes)?;
     let expected_formats = CounterApplication::formats().unwrap();
     assert_eq!(stored_formats, expected_formats);
 
