@@ -58,13 +58,7 @@ impl Contract for FormatsRegistryContract {
             .expect("Failed to authenticate the owner of the operation");
 
         // Read the formats data blob on the chain submitting the operation and require
-        // it to deserialize as `Formats`. This both proves the blob is available on
-        // (and retained by) the submitting chain and validates that it actually holds
-        // a well-formed formats description. The client publishes the blob in an
-        // earlier block, so it is already committed here whether the write is applied
-        // locally or forwarded to the creation chain. Doing this on the operation side
-        // (rather than when a forwarded message is executed) also gives the submitter
-        // immediate feedback.
+        // it to deserialize as `Formats`.
         if let Operation::Write { blob_hash, .. } = &operation {
             let bytes = self.runtime.read_data_blob(*blob_hash);
             let formats = linera_sdk::bcs::from_bytes::<Formats>(&bytes)

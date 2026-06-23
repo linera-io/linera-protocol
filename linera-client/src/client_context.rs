@@ -1130,8 +1130,7 @@ impl<Env: Environment> ClientContext<Env> {
         info!("Loading formats from {formats:?}");
         let parsed = read_formats_from_snap(formats)?;
         let formats_blob_bytes = bcs::to_bytes(&parsed)?;
-        let formats_blob_hash =
-            CryptoHash::new(&BlobContent::new_data(formats_blob_bytes.clone()));
+        let formats_blob_hash = CryptoHash::new(&BlobContent::new_data(formats_blob_bytes.clone()));
         let registry_op = linera_sdk::abis::formats_registry::Operation::Write {
             owner,
             module_id,
