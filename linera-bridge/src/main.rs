@@ -30,6 +30,16 @@ struct InitLightClientOptions {
     /// Path to write the constructor args JSON file
     #[arg(long, default_value = "light-client-args.json")]
     output: PathBuf,
+
+    /// Pause-guardian address (0x-prefixed) that can emergency-pause
+    /// `registerBlock`. Governance role; cannot move funds.
+    #[arg(long)]
+    pause_guardian: String,
+
+    /// Proposer address (0x-prefixed) that gates `expireEpochsBelow`.
+    /// Governance multisig.
+    #[arg(long)]
+    proposer: String,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -293,6 +303,8 @@ impl InitLightClientOptions {
             "weights": weights,
             "admin_chain_id": format!("0x{}", alloy_primitives::hex::encode(admin_chain_bytes)),
             "epoch": resp.data.current_epoch,
+            "pause_guardian": self.pause_guardian,
+            "proposer": self.proposer,
         });
 
         let json_str = serde_json::to_string_pretty(&result)?;

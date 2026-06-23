@@ -119,6 +119,7 @@ pub fn create_signed_certificate(
     create_signed_certificate_for_chain(secret, public, chain_id, BlockHeight(1))
 }
 
+<<<<<<< HEAD
 pub fn deploy_microchain(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
@@ -132,6 +133,17 @@ pub fn deploy_microchain(
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
+=======
+/// Deploys the V1 burn-event decoder (no constructor args) and returns its
+/// address.
+pub fn deploy_burn_event_decoder_v1(db: &mut CacheDB<EmptyDB>, deployer: Address) -> Address {
+    let bytecode = compile_contract(
+        evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+        "FungibleBurnEventDecoderV1.sol",
+        "FungibleBurnEventDecoderV1",
+    );
+    deploy_contract(db, deployer, bytecode)
+>>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 }
 
 pub fn deploy_fungible_bridge(
@@ -143,6 +155,7 @@ pub fn deploy_fungible_bridge(
     application_id: CryptoHash,
     bridge_application_id: CryptoHash,
 ) -> Address {
+    let decoder = deploy_burn_event_decoder_v1(db, deployer);
     let bytecode = compile_contract(
         evm::FUNGIBLE_BRIDGE_SOURCE,
         "FungibleBridge.sol",
@@ -154,6 +167,11 @@ pub fn deploy_fungible_bridge(
         token,
         *application_id.as_bytes(),
         *bridge_application_id.as_bytes(),
+        decoder,
+        test_pause_guardian(),
+        test_proposer(),
+        test_canceller(),
+        test_timelock_delay(),
     )
         .abi_encode_params();
     let mut deploy_data = bytecode;
@@ -279,6 +297,28 @@ pub fn create_certificate_with_events(
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
 }
 
+/// Default governance addresses used when deploying a LightClient/FungibleBridge
+/// in tests that do not exercise governance. Non-zero so the constructors'
+/// zero-address guards pass; tests that exercise governance act as these
+/// addresses (e.g. `expireEpochsBelow` must be called by `test_proposer()`).
+pub fn test_pause_guardian() -> Address {
+    Address::from([0xDA; 20])
+}
+
+pub fn test_proposer() -> Address {
+    Address::from([0xBE; 20])
+}
+
+pub fn test_canceller() -> Address {
+    Address::from([0xCA; 20])
+}
+
+/// Default bridge timelock delay (1 day) — the minimum the Microchain
+/// constructor accepts.
+pub fn test_timelock_delay() -> U256 {
+    U256::from(86_400u64)
+}
+
 pub fn deploy_light_client(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
@@ -289,8 +329,15 @@ pub fn deploy_light_client(
 ) -> Address {
     let bytecode = compile_contract(evm::light_client::SOURCE, "LightClient.sol", "LightClient");
     let chain_id_bytes = *admin_chain_id.as_bytes();
-    let constructor_args =
-        (validators.to_vec(), weights.to_vec(), chain_id_bytes, epoch).abi_encode_params();
+    let constructor_args = (
+        validators.to_vec(),
+        weights.to_vec(),
+        chain_id_bytes,
+        epoch,
+        test_pause_guardian(),
+        test_proposer(),
+    )
+        .abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -431,6 +478,7 @@ pub fn create_test_block(
 }
 
 pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
+<<<<<<< HEAD
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
@@ -531,4 +579,31 @@ fn write_compilation_json(path: &Path, file_name: &str, oz_root: &Path, oz_files
     });
 
     std::fs::write(path.join("config.json"), config.to_string()).unwrap();
+=======
+    // `runs = 1` optimizes for smaller deployed bytecode at the cost of per-call
+    // gas. Bridge contracts are large; tests compile faster with this setting.
+    compile_solidity_contract_with_options(
+        source_code,
+        file_name,
+        contract_name,
+        &[
+            ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
+            (
+                "WrappedFungibleTypesV1.sol",
+                evm::WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
+            ),
+            ("LightClient.sol", evm::LIGHTCLIENT_SOURCE),
+            ("ILightClient.sol", evm::ILIGHTCLIENT_SOURCE),
+            ("Microchain.sol", evm::MICROCHAIN_SOURCE),
+            ("IBurnEventDecoder.sol", evm::IBURN_EVENT_DECODER_SOURCE),
+            (
+                "FungibleBurnEventDecoderV1.sol",
+                evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+            ),
+            ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
+        ],
+        Some(1),
+    )
+    .expect("solc compilation failed")
+>>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 }
