@@ -10,6 +10,9 @@ linera-sdk.workspace = true
 serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
+bcs.workspace = true
+linera-client = { path = "../../linera-client", features = ["fs"] }
 serde-reflection.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
@@ -26,3 +29,7 @@ path = "src/contract.rs"
 [[bin]]
 name = "formats_registry_service"
 path = "src/service.rs"
+
+[[bin]]
+name = "extract-formats"
+path = "src/extract_formats.rs"

@@ -1102,12 +1102,7 @@ impl<Env: Environment> ClientContext<Env> {
 
         info!("Loading formats from {formats:?}");
         let parsed = read_formats_from_snap(formats)?;
-        let value = serde_json::to_vec(&parsed).map_err(|e| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("failed to serialize Formats as JSON: {e}"),
-            )
-        })?;
+        let value = bcs::to_bytes(&parsed)?;
         // Publish the formats description as a data blob and bind its hash in the
         // registry write; the caller adds the matching `PublishDataBlob` operation.
         let formats_blob = linera_base::data_types::Blob::new_data(value);
@@ -1149,8 +1144,16 @@ async fn load_bytecode_blobs(
     Ok(create_bytecode_blobs(contract_bytecode, service_bytecode, vm_runtime).await)
 }
 
+/// Parses the `Formats` description of an application from a SNAP file (the YAML
+/// snapshot produced by the `format` test of the example applications). The body
+/// between the `---` frontmatter delimiters is deserialized as
+/// [`linera_sdk::formats::Formats`]. BCS-serializing the result yields exactly the
+/// data-blob payload that [`ClientContext::prepare_bcs_publication`] binds in the
+/// formats registry, so external tooling can produce a blob file ready for
+/// `linera publish-data-blob` (see the `extract-formats` binary in the
+/// `formats-registry` example).
 #[cfg(all(feature = "fs", not(web)))]
-fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, Error> {
+pub fn read_formats_from_snap(path: &Path) -> Result<linera_sdk::formats::Formats, Error> {
     let content = fs::read_to_string(path).map_err(|e| {
         std::io::Error::new(e.kind(), format!("failed to read SNAP file {path:?}: {e}"))
     })?;
