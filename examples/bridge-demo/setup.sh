@@ -375,12 +375,13 @@ echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 echo "Registering the bridge as the wrapped-fungible authorized caller..."
 # WrappedFungibleOperation::RegisterAuthorizedCaller + 32-byte bridge app ID,
 # submitted on the WRAPPED app, on the mint (bridge) chain — the relay wallet
-# owns that chain. The operation enum derives `StableEnum`, so the wire tag is
-# not the BCS variant index but a 4-byte ULEB128 of the variant's stable tag:
-# keccak256(name)[0..4] as big-endian u32, masked (v & 0x07FFFFFF) | 0x08000000.
-# RegisterAuthorizedCaller → tag 170732950 → ULEB128 0x96dbb451. Regenerate with
-# `cast keccak RegisterAuthorizedCaller` if the variant is ever renamed.
-REGISTER_CALLER_HEX="96dbb451${BRIDGE_APP_ID}"
+# owns that chain. The operation enum is plain BCS-serialized, so the wire format
+# is the ULEB128 variant index followed by the BCS-encoded fields.
+# RegisterAuthorizedCaller is variant 8 (index from the enum order in
+# linera-sdk/src/abis/wrapped_fungible.rs) → 0x08, and `app_id: ApplicationId`
+# BCS-encodes as its 32-byte application_description_hash. Update the index if the
+# variant order ever changes.
+REGISTER_CALLER_HEX="08${BRIDGE_APP_ID}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
@@ -391,10 +392,11 @@ dc_exec linera-network env \
     --chain-id "$BRIDGE_CHAIN_ID" 2>&1
 
 echo "Registering FungibleBridge address in evm-bridge..."
-# BridgeOperation::RegisterFungibleBridge + 20-byte EVM address. Same StableEnum
-# encoding as above: RegisterFungibleBridge → tag 230758129 → ULEB128 0xf1ad846e.
-# Regenerate with `cast keccak RegisterFungibleBridge` if the variant is renamed.
-REGISTER_BRIDGE_HEX="f1ad846e${BRIDGE_ADDR_HEX}"
+# BridgeOperation::RegisterFungibleBridge + 20-byte EVM address. Same plain-BCS
+# encoding as above: RegisterFungibleBridge is variant 2 (see the enum order in
+# linera-bridge/src/abi.rs) → 0x02, and `address: [u8; 20]` BCS-encodes as the
+# raw 20 address bytes. Update the index if the variant order ever changes.
+REGISTER_BRIDGE_HEX="02${BRIDGE_ADDR_HEX}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
