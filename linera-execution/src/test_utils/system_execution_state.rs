@@ -17,8 +17,8 @@ use linera_views::{context::MemoryContext, views::View};
 
 use super::{dummy_chain_description, dummy_committees, MockApplication, RegisterMockApplication};
 use crate::{
-    committee::Committee, ApplicationDescription, ExecutionRuntimeConfig, ExecutionRuntimeContext,
-    ExecutionStateView, TestExecutionRuntimeContext,
+    committee::Committee, ApplicationDescription, ChainCounters, ExecutionRuntimeConfig,
+    ExecutionRuntimeContext, ExecutionStateView, TestExecutionRuntimeContext,
 };
 
 /// A system execution state, not represented as a view but as a simple struct.
@@ -190,9 +190,11 @@ impl SystemExecutionState {
         view.system
             .application_permissions
             .set(application_permissions);
-        view.system.num_incoming_bundles.set(num_incoming_bundles);
-        view.system.num_operations.set(num_operations);
-        view.system.num_outgoing_messages.set(num_outgoing_messages);
+        view.system.counters.set(ChainCounters {
+            num_incoming_bundles,
+            num_operations,
+            num_outgoing_messages,
+        });
         view
     }
 }

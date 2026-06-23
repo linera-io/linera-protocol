@@ -76,6 +76,18 @@ mod metrics {
     });
 }
 
+/// Cumulative counts of transactions and messages processed on a chain, maintained
+/// across blocks. Stored as a single value so that each block updates only one key.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Allocative)]
+pub struct ChainCounters {
+    /// Number of incoming message bundles executed so far.
+    pub num_incoming_bundles: u32,
+    /// Number of operations executed so far.
+    pub num_operations: u32,
+    /// Number of outgoing messages sent so far.
+    pub num_outgoing_messages: u32,
+}
+
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
@@ -133,12 +145,8 @@ pub struct SystemExecutionStateView<C> {
     /// `CheckpointAck` messages here is what breaks the otherwise-perpetual
     /// notification ping-pong between two chains that ever exchanged a real message.
     pub pending_checkpoint_ack_targets: SetView<C, ChainId>,
-    /// Number of incoming message bundles executed so far.
-    pub num_incoming_bundles: RegisterView<C, u32>,
-    /// Number of operations executed so far.
-    pub num_operations: RegisterView<C, u32>,
-    /// Number of outgoing messages sent so far.
-    pub num_outgoing_messages: RegisterView<C, u32>,
+    /// Cumulative counts of incoming bundles, operations and outgoing messages.
+    pub counters: RegisterView<C, ChainCounters>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -172,9 +180,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
                 .pending_checkpoint_ack_targets
                 .with_context(ctx.clone())
                 .await,
-            num_incoming_bundles: self.num_incoming_bundles.with_context(ctx.clone()).await,
-            num_operations: self.num_operations.with_context(ctx.clone()).await,
-            num_outgoing_messages: self.num_outgoing_messages.with_context(ctx.clone()).await,
+            counters: self.counters.with_context(ctx.clone()).await,
         }
     }
 }
