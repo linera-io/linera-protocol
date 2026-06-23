@@ -18,21 +18,6 @@ contract LightClientGovernanceTest is Test {
         return new LightClient(validators, weights, ADMIN_CHAIN, 0, guardian, proposer);
     }
 
-    /// Captures the revert reason of an `addCommittee` call (string requires only;
-    /// non-string panics return a sentinel). `addCommittee` is the pause-gated,
-    /// state-changing entry point on this network's LightClient (there is no
-    /// `registerBlock`); we use it to assert the pause gate fires before the
-    /// (heavy) certificate verification that the block-proof tests already cover.
-    function _addCommitteeReason(LightClient lc, bytes memory data) internal returns (string memory) {
-        try lc.addCommittee(data, hex"", new bytes[](0)) {
-            return "<no-revert>";
-        } catch Error(string memory reason) {
-            return reason;
-        } catch {
-            return "<non-string-revert>";
-        }
-    }
-
     // --- constructor validation ---
 
     function test_constructor_rejects_zero_pause_guardian() public {
@@ -53,64 +38,12 @@ contract LightClientGovernanceTest is Test {
         new LightClient(validators, weights, ADMIN_CHAIN, 0, guardian, address(0));
     }
 
-    // --- emergency pause on registerBlock ---
-
-    function test_registerBlock_reverts_when_paused() public {
-        LightClient lc = _deploy();
-        vm.prank(guardian);
-        lc.emergencyPause(1 days);
-        assertEq(
-            _addCommitteeReason(lc, hex""), "emergency paused", "paused registerBlock must revert with pause reason"
-        );
-    }
-
-    function test_pause_auto_expires() public {
-        LightClient lc = _deploy();
-        vm.prank(guardian);
-        lc.emergencyPause(1 days);
-        vm.warp(block.timestamp + 1 days);
-        // Gate lifted: registerBlock now fails on the garbage proof, not on the pause.
-        assertEq(_addCommitteeReason(lc, hex""), "<non-string-revert>", "after expiry the pause gate must be lifted");
-    }
-
-    function test_guardian_can_unpause_early() public {
-        LightClient lc = _deploy();
-        vm.prank(guardian);
-        lc.emergencyPause(7 days);
-        vm.prank(guardian);
-        lc.emergencyUnpause();
-        assertEq(_addCommitteeReason(lc, hex""), "<non-string-revert>", "after unpause the gate must be lifted");
-    }
-
-    function test_unpause_when_not_paused_reverts() public {
-        LightClient lc = _deploy();
-        vm.prank(guardian);
-        vm.expectRevert(bytes("not paused"));
-        lc.emergencyUnpause();
-    }
-
-    function test_non_guardian_cannot_pause() public {
-        LightClient lc = _deploy();
-        vm.prank(stranger);
-        vm.expectRevert(bytes("only pause guardian"));
-        lc.emergencyPause(1 days);
-    }
-
-    function test_pause_duration_zero_reverts() public {
-        LightClient lc = _deploy();
-        vm.prank(guardian);
-        vm.expectRevert(bytes("invalid duration"));
-        lc.emergencyPause(0);
-    }
-
-    function test_pause_duration_too_long_reverts() public {
-        LightClient lc = _deploy();
-        vm.prank(guardian);
-        vm.expectRevert(bytes("invalid duration"));
-        lc.emergencyPause(14 days + 1);
-    }
-
     // --- expireEpochsBelow access control ---
+    //
+    // The light client is NOT self-pausing (it is at the EVM bytecode-size
+    // limit; fund-moving paths are pause-gated at the bridge/Microchain level).
+    // The one governance surface here is the authenticated weak-subjectivity
+    // floor, which must be proposer-gated.
 
     function test_expireEpochsBelow_only_proposer() public {
         LightClient lc = _deploy();
