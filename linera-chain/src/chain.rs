@@ -840,7 +840,7 @@ where
             None
         };
 
-        chain.system.timestamp.set(block.timestamp);
+        chain.system.progress.get_mut().timestamp = block.timestamp;
 
         let mut resource_controller = ResourceController::new(
             Arc::new(committee_policy),
@@ -1217,7 +1217,7 @@ where
 
         self.initialize_if_needed(local_time).await?;
 
-        let chain_timestamp = *self.execution_state.system.timestamp.get();
+        let chain_timestamp = self.execution_state.system.progress.get().timestamp;
         ensure!(
             chain_timestamp <= block.timestamp,
             ChainError::InvalidBlockTimestamp {

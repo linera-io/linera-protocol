@@ -80,7 +80,7 @@ pub use crate::{
         ServiceSyncRuntimeHandle,
     },
     system::{
-        ChainCounters, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
+        ChainProgress, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
         SystemResponse,
     },
     transaction_tracker::{PreparedCheckpoint, TransactionOutcome, TransactionTracker},

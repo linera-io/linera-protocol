@@ -17,7 +17,7 @@ use linera_views::{context::MemoryContext, views::View};
 
 use super::{dummy_chain_description, dummy_committees, MockApplication, RegisterMockApplication};
 use crate::{
-    committee::Committee, ApplicationDescription, ChainCounters, ExecutionRuntimeConfig,
+    committee::Committee, ApplicationDescription, ChainProgress, ExecutionRuntimeConfig,
     ExecutionRuntimeContext, ExecutionStateView, TestExecutionRuntimeContext,
 };
 
@@ -179,7 +179,6 @@ impl SystemExecutionState {
                 .insert(&account_owner, balance)
                 .expect("insertion of balances should not fail");
         }
-        view.system.timestamp.set(timestamp);
         for blob_id in used_blobs {
             view.system
                 .used_blobs
@@ -190,7 +189,8 @@ impl SystemExecutionState {
         view.system
             .application_permissions
             .set(application_permissions);
-        view.system.counters.set(ChainCounters {
+        view.system.progress.set(ChainProgress {
+            timestamp,
             num_incoming_bundles,
             num_operations,
             num_outgoing_messages,

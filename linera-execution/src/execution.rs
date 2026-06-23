@@ -119,7 +119,7 @@ where
     /// them during transaction execution via [`Self::apply_checkpoint`].
     ///
     /// This is a *pre-block* operation: it must run before the block-level setup mutates
-    /// the chain state (e.g. setting `system.timestamp`), because `dump_content` reads
+    /// the chain state (e.g. setting `system.progress`), because `dump_content` reads
     /// from storage and refuses to run with pending in-memory changes. Splitting the
     /// dump out of the operation handler also guarantees the captured bytes represent
     /// the chain's pre-block state, which is exactly what a bootstrapping node will

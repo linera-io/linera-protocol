@@ -145,8 +145,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     ))
                     .await?;
                 }
-                let counters = chain.system.counters.get_mut();
-                counters.num_incoming_bundles = counters
+                let progress = chain.system.progress.get_mut();
+                progress.num_incoming_bundles = progress
                     .num_incoming_bundles
                     .checked_add(1)
                     .ok_or(ArithmeticError::Overflow)?;
@@ -176,8 +176,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .await?
                     .track_operation(operation)
                     .with_execution_context(chain_execution_context)?;
-                let counters = chain.system.counters.get_mut();
-                counters.num_operations = counters
+                let progress = chain.system.progress.get_mut();
+                progress.num_operations = progress
                     .num_operations
                     .checked_add(1)
                     .ok_or(ArithmeticError::Overflow)?;
@@ -187,8 +187,8 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
         let txn_outcome = txn_tracker
             .into_outcome()
             .with_execution_context(chain_execution_context)?;
-        let counters = chain.system.counters.get_mut();
-        counters.num_outgoing_messages = counters
+        let progress = chain.system.progress.get_mut();
+        progress.num_outgoing_messages = progress
             .num_outgoing_messages
             .checked_add(
                 u32::try_from(txn_outcome.outgoing_messages.len())

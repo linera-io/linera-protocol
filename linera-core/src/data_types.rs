@@ -293,7 +293,7 @@ impl ChainInfo {
             chain_balance: *system_state.balance.get(),
             block_hash: tip_state.block_hash,
             next_block_height: tip_state.next_block_height,
-            timestamp: *view.execution_state.system.timestamp.get(),
+            timestamp: view.execution_state.system.progress.get().timestamp,
             state_hash: Some(view.execution_state.crypto_hash_mut().await?),
             committee_hash: *view.execution_state.system.committee_hash.get(),
             requested_owner_balance: None,
