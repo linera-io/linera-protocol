@@ -60,16 +60,24 @@ alloy_sol_types::sol! {
 
 /// Compiles a Solidity contract via `solc`, returning deployment bytecode.
 fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
-<<<<<<< HEAD
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
     for (name, content) in [
         ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
-        ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
+        ("WrappedFungibleTypesV1.sol", WRAPPED_FUNGIBLE_TYPES_V1_SOURCE),
         ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
         ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
+        ("ILightClient.sol", linera_bridge::evm::ILIGHTCLIENT_SOURCE),
         ("Microchain.sol", linera_bridge::evm::microchain::SOURCE),
+        (
+            "IBurnEventDecoder.sol",
+            linera_bridge::evm::IBURN_EVENT_DECODER_SOURCE,
+        ),
+        (
+            "FungibleBurnEventDecoderV1.sol",
+            linera_bridge::evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+        ),
     ] {
         let mut f = File::create(path.join(name)).unwrap();
         writeln!(f, "{content}").unwrap();
@@ -147,30 +155,6 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         .as_str()
         .expect("failed to extract bytecode from solc output");
     hex::decode(bytecode_hex).unwrap()
-=======
-    compile_solidity_contract_with_options(
-        source_code,
-        file_name,
-        contract_name,
-        &[
-            ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
-            (
-                "WrappedFungibleTypesV1.sol",
-                WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
-            ),
-            ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
-            ("LightClient.sol", linera_bridge::evm::LIGHTCLIENT_SOURCE),
-            ("ILightClient.sol", linera_bridge::evm::ILIGHTCLIENT_SOURCE),
-            ("Microchain.sol", linera_bridge::evm::MICROCHAIN_SOURCE),
-            (
-                "IBurnEventDecoder.sol",
-                linera_bridge::evm::IBURN_EVENT_DECODER_SOURCE,
-            ),
-        ],
-        Some(1),
-    )
-    .expect("solc compilation failed")
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 }
 
 // Fixed gas budgets sized well above measured cost. Pinning these skips

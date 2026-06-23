@@ -54,25 +54,6 @@ contract LightClient is ILightClient {
         _;
     }
 
-<<<<<<< HEAD
-    constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
-=======
-    /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
-    /// individual events can later be proven against it (`assertEventsCommitted`) and settled
-    /// (`processBurns`) or used to rotate the committee (`addCommittee`) without re-checking the
-    /// certificate or re-parsing the header per chunk. `eventsHash` is never zero for a valid
-    /// header, so a zero `eventsHash` means "unregistered". `epoch` is the block's own epoch (which
-    /// committee signed it); `addCommittee` requires it to equal `currentEpoch`.
-    struct RegisteredBlock {
-        bytes32 eventsHash;
-        uint64 height;
-        bytes32 chainId;
-        uint32 epoch;
-    }
-
-    /// Maps a registered block's hash (`keccak256("BlockHeader::" ++ BCS(header))`) to its metadata.
-    mapping(bytes32 => RegisteredBlock) public override registeredBlocks;
-
     constructor(
         address[] memory validators,
         uint64[] memory weights,
@@ -81,7 +62,6 @@ contract LightClient is ILightClient {
         address _pauseGuardian,
         address _proposer
     ) {
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
         require(validators.length == weights.length, "length mismatch");
         require(_pauseGuardian != address(0), "zero pauseGuardian");
         require(_proposer != address(0), "zero proposer");
@@ -111,44 +91,15 @@ contract LightClient is ILightClient {
         emit EmergencyUnpaused();
     }
 
-<<<<<<< HEAD
-    function addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators) external {
+    function addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators)
+        external
+        whenNotEmergencyPaused
+    {
         (BridgeTypes.Block memory blockValue,) = verifyCertificate(data);
 
         // The block must be from the admin chain and the current epoch
         require(blockValue.header.chain_id.value.value == adminChainId, "block must be from admin chain");
         require(blockValue.header.epoch.value == currentEpoch, "block epoch must match current epoch");
-=======
-    /// Installs a new validator committee, proven from the admin-chain block that created it. The
-    /// block must first be registered (`registerBlock`, which verifies its quorum); `addCommittee`
-    /// then references it by `blockHash`, exactly as `processBurns` does for burns. That block emits
-    /// an epoch event (system stream `[0]`) holding the new committee's blob hash; the caller
-    /// supplies that single event in `eventBcs` and an inclusion proof
-    /// (`txIndex`/`numTxs`/`numEventsInTx`/`positions`/`siblings`) proving it belongs to the block —
-    /// the same `assertEventsCommitted` check the burn path uses. The new epoch and blob hash are
-    /// read from that event.
-    function addCommittee(
-        bytes32 blockHash,
-        bytes[] calldata eventBcs,
-        uint32 txIndex,
-        uint32 numTxs,
-        uint32 numEventsInTx,
-        uint32[] calldata positions,
-        bytes32[] calldata siblings,
-        bytes calldata committeeBlob
-    ) external {
-        // The admin block must have been registered (its quorum was checked then); fetch its
-        // committed events hash and metadata, then prove the committee event is part of it.
-        RegisteredBlock memory block_ = registeredBlocks[blockHash];
-        require(block_.eventsHash != 0, "block not registered");
-        require(block_.chainId == adminChainId, "block must be from admin chain");
-        require(block_.epoch == currentEpoch, "block epoch must match current epoch");
-        require(eventBcs.length == 1, "expected exactly one committee event");
-
-        // Prove the supplied event belongs to the block — the same inclusion check `processBurns`
-        // runs for burns.
-        assertEventsCommitted(block_.eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 
         // Find the CreateCommittee in the block operations. Linera emits at most
         // one CreateCommittee per admin block; together with the
@@ -240,7 +191,7 @@ contract LightClient is ILightClient {
         return committees[epoch].createdAtHeight;
     }
 
-    function verifyBlock(bytes calldata data) external view returns (BridgeTypes.Block memory, bytes32) {
+    function verifyBlock(bytes calldata data) external view override returns (BridgeTypes.Block memory, bytes32) {
         return verifyCertificate(data);
     }
 
@@ -248,7 +199,6 @@ contract LightClient is ILightClient {
         // Copy calldata to memory for the BCS deserializer
         bytes memory mdata = data;
 
-<<<<<<< HEAD
         // Step 1: Deserialize just the Block (value) to get its end offset
         uint256 valueEndPos;
         BridgeTypes.Block memory blockValue;
@@ -257,48 +207,6 @@ contract LightClient is ILightClient {
         // Step 2: Compute value_hash = keccak256("Block::" ++ BCS(block))
         // CryptoHash::new adds a type name prefix; ConfirmedBlock is transparent over Block
         bytes32 valueHash = keccak256(abi.encodePacked("Block::", _sliceMemory(mdata, 0, valueEndPos)));
-=======
-    /// Verifies a block's signatures from its header and records its `events_hash`, so that
-    /// individual events can later be proven against it (via `assertEventsCommitted`) without
-    /// re-checking the whole certificate. Returns the block hash
-    /// (`keccak256("BlockHeader::" ++ BCS(header))`).
-    function registerBlock(bytes calldata blockProof) external whenNotEmergencyPaused returns (bytes32) {
-        (BridgeTypes.BlockHeader memory header, bytes32 blockHash) = _verifyBlockProof(blockProof);
-        registeredBlocks[blockHash] = RegisteredBlock(
-            header.events_hash.value, header.height.value, header.chain_id.value.value, header.epoch.value
-        );
-        return blockHash;
-    }
-
-    /// Proves that the events whose canonical BCS encodings are `eventBcs` sit at `positions`
-    /// (ascending) within transaction `txIndex` of the events a block commits to via `eventsHash`
-    /// (the `hash_vec_vec` over its per-transaction event lists, i.e. `BlockHeader.events_hash`).
-    /// Reverts unless they fold — with the supplied sibling hashes — to `eventsHash`.
-    /// `numTxs`/`numEventsInTx` are the outer/inner vector lengths. `siblings` is the inner siblings
-    /// followed by the outer siblings (a single array rather than two so the call stays under the
-    /// EVM's 16-slot stack limit — two more calldata-array parameters would tip it over): the first
-    /// `numEventsInTx - positions.length` are the leaf hashes of the other events in `txIndex`
-    /// (position order), the remaining `numTxs - 1` are the per-transaction hashes of the other
-    /// transactions (transaction order). A successful call proves the events belong to that block
-    /// without re-hashing all of them — the caller supplies `eventsHash` from a source it trusts: a
-    /// registered block (see `registerBlock`, as `FungibleBridge.processBurns` does) or a freshly
-    /// verified header.
-    function assertEventsCommitted(
-        bytes32 eventsHash,
-        bytes[] calldata eventBcs,
-        uint32 txIndex,
-        uint32 numTxs,
-        uint32 numEventsInTx,
-        uint32[] calldata positions,
-        bytes32[] calldata siblings
-    ) public pure override {
-        require(txIndex < numTxs, "txIndex out of range");
-        require(eventBcs.length == positions.length, "events/positions length mismatch");
-        require(positions.length <= numEventsInTx, "more positions than events");
-        // `siblings` is `innerSiblings ++ outerSiblings`; split at the inner count.
-        uint256 innerCount = numEventsInTx - positions.length;
-        require(siblings.length == innerCount + (numTxs - 1), "sibling count mismatch");
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 
         // Step 3: Deserialize Round and signatures
         uint256 pos;

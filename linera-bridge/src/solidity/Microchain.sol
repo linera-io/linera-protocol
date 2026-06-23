@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.0;
 
-<<<<<<< HEAD
 import "BridgeTypes.sol";
-import "LightClient.sol";
-=======
 import "ILightClient.sol";
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 
 /// Base for consumer bridges. Holds the light client behind the narrow
 /// `ILightClient` interface (swappable via a governance timelock) and the
 /// emergency-pause / governance machinery shared by all bridges. Holds no funds.
+///
+/// On this network the light client verifies full Linera certificates (no merkle
+/// event-inclusion proofs) and the validator public-key scheme is fixed — but the
+/// client is still swappable: a future verification/format change becomes
+/// "repoint to a new light client" rather than a TVL migration, because the
+/// per-burn replay key is independent of which client verified the block.
 abstract contract Microchain {
-    // Swappable via the timelocked setLightClient flow below.
+    // Swappable via the timelocked light-client update flow below.
     ILightClient public lightClient;
     bytes32 public immutable chainId;
 
@@ -79,6 +81,21 @@ abstract contract Microchain {
         _;
     }
 
+    /// Verifies a certificate and dispatches to the subclass. Subclasses
+    /// MUST be idempotent under repeated calls for the same block: this
+    /// contract does not gate on `signedHash`. The off-chain relayer
+    /// relies on that idempotency to safely re-submit `addBlock(cert)`
+    /// after partial settlement.
+    function addBlock(bytes calldata data) external whenNotEmergencyPaused {
+        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
+        require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
+        _onBlock(blockValue);
+    }
+
+    /// Called after a block has been verified and accepted. Subcontracts
+    /// implement this to extract and store application-specific data.
+    function _onBlock(BridgeTypes.Block memory blockValue) internal virtual;
+
     // --- Light-client update (timelocked) ---
 
     /// Proposes repointing to `newLightClient`. The new client must track the
@@ -134,19 +151,4 @@ abstract contract Microchain {
         pausedUntil = 0;
         emit EmergencyUnpaused();
     }
-
-    /// Verifies a certificate and dispatches to the subclass. Subclasses
-    /// MUST be idempotent under repeated calls for the same block: this
-    /// contract does not gate on `signedHash`. The off-chain relayer
-    /// relies on that idempotency to safely re-submit `addBlock(cert)`
-    /// after partial settlement.
-    function addBlock(bytes calldata data) external {
-        (BridgeTypes.Block memory blockValue,) = lightClient.verifyBlock(data);
-        require(blockValue.header.chain_id.value.value == chainId, "chain id mismatch");
-        _onBlock(blockValue);
-    }
-
-    /// Called after a block has been verified and accepted. Subcontracts
-    /// implement this to extract and store application-specific data.
-    function _onBlock(BridgeTypes.Block memory blockValue) internal virtual;
 }

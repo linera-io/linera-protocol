@@ -2,82 +2,7 @@
 pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
-<<<<<<< HEAD:linera-bridge/src/solidity/WrappedFungibleTypes.sol
-library WrappedFungibleTypes {
-=======
 library WrappedFungibleTypesV1 {
-    function bcs_serialize_uleb128(uint256 x) internal pure returns (bytes memory) {
-        bytes memory result;
-        bytes1 entry;
-        while (true) {
-            if (x < 128) {
-                entry = bytes1(uint8(x));
-                return abi.encodePacked(result, entry);
-            } else {
-                uint256 xb = x >> 7;
-                uint256 remainder = x - (xb << 7);
-                require(remainder < 128);
-                entry = bytes1(uint8(remainder) + 128);
-                result = abi.encodePacked(result, entry);
-                x = xb;
-            }
-        }
-        require(false, "This line is unreachable");
-        return result;
-    }
-
-    function bcs_deserialize_offset_uleb128(uint256 pos, bytes memory input) internal pure returns (uint256, uint256) {
-        uint256 idx = 0;
-        while (true) {
-            if (uint8(input[pos + idx]) < 128) {
-                uint256 result = 0;
-                uint256 power = 1;
-                for (uint256 u = 0; u < idx; u++) {
-                    uint8 val = uint8(input[pos + u]) - 128;
-                    result += power * uint256(val);
-                    power *= 128;
-                }
-                result += power * uint8(input[pos + idx]);
-                return (pos + idx + 1, result);
-            }
-            idx += 1;
-        }
-        require(false, "This line is unreachable");
-        return (0, 0);
-    }
-
-    struct Account {
-        BridgeTypes.ChainId chain_id;
-        BridgeTypes.AccountOwner owner;
-    }
-
-    function bcs_serialize_Account(Account memory input) internal pure returns (bytes memory) {
-        bytes memory result = BridgeTypes.bcs_serialize_ChainId(input.chain_id);
-        return abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.owner));
-    }
-
-    function bcs_deserialize_offset_Account(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Account memory)
-    {
-        uint256 new_pos;
-        BridgeTypes.ChainId memory chain_id;
-        (new_pos, chain_id) = BridgeTypes.bcs_deserialize_offset_ChainId(pos, input);
-        BridgeTypes.AccountOwner memory owner;
-        (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(new_pos, input);
-        return (new_pos, Account(chain_id, owner));
-    }
-
-    function bcs_deserialize_Account(bytes memory input) internal pure returns (Account memory) {
-        uint256 new_pos;
-        Account memory value;
-        (new_pos, value) = bcs_deserialize_offset_Account(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548)):linera-bridge/src/solidity/WrappedFungibleTypesV1.sol
     struct ApplicationId {
         BridgeTypes.CryptoHash application_description_hash;
     }
@@ -894,7 +819,6 @@ library WrappedFungibleTypesV1 {
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
-<<<<<<< HEAD:linera-bridge/src/solidity/WrappedFungibleTypes.sol
 
     function bcs_serialize_uint8(uint8 input) internal pure returns (bytes memory) {
         return abi.encodePacked(input);
@@ -912,7 +836,4 @@ library WrappedFungibleTypesV1 {
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }
-} // end of library WrappedFungibleTypes
-=======
 } // end of library WrappedFungibleTypesV1
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548)):linera-bridge/src/solidity/WrappedFungibleTypesV1.sol
