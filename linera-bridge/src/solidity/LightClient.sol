@@ -2,8 +2,9 @@
 pragma solidity ^0.8.0;
 
 import "BridgeTypes.sol";
+import "ILightClient.sol";
 
-contract LightClient {
+contract LightClient is ILightClient {
     // Per-epoch committee storage
     struct EpochCommittee {
         mapping(address => uint64) weights;
@@ -22,10 +23,39 @@ contract LightClient {
     // weak-subjectivity floor: a quorum of a long-retired committee's keys can
     // no longer forge a certificate once its epoch is expired.
     uint32 public minAcceptedEpoch;
-    bytes32 public adminChainId;
+    bytes32 public override adminChainId;
+
+    // Governance. Both immutable — rotation is a redeployment, never an on-chain
+    // setter (avoids a recursive "who controls the rotation?" trust problem).
+    // `pauseGuardian` can pause `registerBlock`; `proposer` gates the
+    // `expireEpochsBelow` weak-subjectivity floor.
+    address public immutable pauseGuardian;
+    address public immutable proposer;
+
+    // Emergency pause. `registerBlock` is rejected while `block.timestamp <
+    // pausedUntil`. Auto-expires so the guardian can never freeze the client
+    // indefinitely. NOTE: this client is shared by every consumer bridge on the
+    // network, so a pause here halts inbound block registration for all of them.
+    uint256 public constant PAUSE_MAX_DURATION = 14 days;
+    uint256 public pausedUntil;
+
+    modifier onlyProposer() {
+        require(msg.sender == proposer, "only proposer");
+        _;
+    }
+
+    modifier onlyPauseGuardian() {
+        require(msg.sender == pauseGuardian, "only pause guardian");
+        _;
+    }
+
+    modifier whenNotEmergencyPaused() {
+        require(block.timestamp >= pausedUntil, "emergency paused");
+        _;
+    }
 
     /// Metadata recorded for a block whose quorum has been verified via `registerBlock`. Stored so
-    /// individual events can later be proven against it (`proveEventsCommitted`) and settled
+    /// individual events can later be proven against it (`assertEventsCommitted`) and settled
     /// (`processBurns`) or used to rotate the committee (`addCommittee`) without re-checking the
     /// certificate or re-parsing the header per chunk. `eventsHash` is never zero for a valid
     /// header, so a zero `eventsHash` means "unregistered". `epoch` is the block's own epoch (which
@@ -38,13 +68,43 @@ contract LightClient {
     }
 
     /// Maps a registered block's hash (`keccak256("BlockHeader::" ++ BCS(header))`) to its metadata.
-    mapping(bytes32 => RegisteredBlock) public registeredBlocks;
+    mapping(bytes32 => RegisteredBlock) public override registeredBlocks;
 
-    constructor(address[] memory validators, uint64[] memory weights, bytes32 _adminChainId, uint32 _epoch) {
+    constructor(
+        address[] memory validators,
+        uint64[] memory weights,
+        bytes32 _adminChainId,
+        uint32 _epoch,
+        address _pauseGuardian,
+        address _proposer
+    ) {
         require(validators.length == weights.length, "length mismatch");
+        require(_pauseGuardian != address(0), "zero pauseGuardian");
+        require(_proposer != address(0), "zero proposer");
         // Genesis committee has no backing admin block, so its height is 0.
         _setCommittee(_epoch, validators, weights, 0);
         adminChainId = _adminChainId;
+        pauseGuardian = _pauseGuardian;
+        proposer = _proposer;
+    }
+
+    event EmergencyPaused(uint256 until);
+    event EmergencyUnpaused();
+
+    /// Pauses `registerBlock` for `duration` (auto-expiring, capped at
+    /// `PAUSE_MAX_DURATION`). Guardian-only. Re-pausing before expiry restarts
+    /// the clock.
+    function emergencyPause(uint256 duration) external onlyPauseGuardian {
+        require(duration > 0 && duration <= PAUSE_MAX_DURATION, "invalid duration");
+        pausedUntil = block.timestamp + duration;
+        emit EmergencyPaused(pausedUntil);
+    }
+
+    /// Lifts an active pause early. Guardian-only.
+    function emergencyUnpause() external onlyPauseGuardian {
+        require(pausedUntil > block.timestamp, "not paused");
+        pausedUntil = 0;
+        emit EmergencyUnpaused();
     }
 
     /// Installs a new validator committee, proven from the admin-chain block that created it. The
@@ -53,7 +113,7 @@ contract LightClient {
     /// an epoch event (system stream `[0]`) holding the new committee's blob hash; the caller
     /// supplies that single event in `eventBcs` and an inclusion proof
     /// (`txIndex`/`numTxs`/`numEventsInTx`/`positions`/`siblings`) proving it belongs to the block —
-    /// the same `proveEventsCommitted` check the burn path uses. The new epoch and blob hash are
+    /// the same `assertEventsCommitted` check the burn path uses. The new epoch and blob hash are
     /// read from that event.
     function addCommittee(
         bytes32 blockHash,
@@ -75,7 +135,7 @@ contract LightClient {
 
         // Prove the supplied event belongs to the block — the same inclusion check `processBurns`
         // runs for burns.
-        proveEventsCommitted(block_.eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
+        assertEventsCommitted(block_.eventsHash, eventBcs, txIndex, numTxs, numEventsInTx, positions, siblings);
 
         (uint32 newEpoch, bytes32 expectedBlobHash) = _readCommitteeEvent(eventBcs[0]);
 
@@ -112,12 +172,13 @@ contract LightClient {
     /// `newMinEpoch`. Retiring a wide range in one call costs O(range) gas;
     /// expire incrementally if the gap is large.
     ///
-    /// TODO(security): access control is intentionally deferred. This function
-    /// is currently UNAUTHENTICATED and MUST be gated (owner / governance)
-    /// before any production deployment — an unauthenticated caller can
-    /// otherwise raise the floor up to `currentEpoch` and reject legitimate
-    /// lagging certificates (a liveness DoS).
-    function expireEpochsBelow(uint32 newMinEpoch) external {
+    /// Gated to `proposer`: an unauthenticated caller could otherwise raise the
+    /// floor up to `currentEpoch` and reject legitimate lagging certificates (a
+    /// liveness DoS). Immediate-effect (no timelock): it cannot move funds, is
+    /// monotonic, and is capped at `currentEpoch` so it can never retire the live
+    /// committee — and an operator may need to retire a compromised retired
+    /// committee promptly during an incident.
+    function expireEpochsBelow(uint32 newMinEpoch) external onlyProposer {
         require(newMinEpoch > minAcceptedEpoch, "minAcceptedEpoch must increase");
         require(newMinEpoch <= currentEpoch, "cannot expire current epoch");
         for (uint32 epoch = minAcceptedEpoch; epoch < newMinEpoch; epoch++) {
@@ -176,10 +237,10 @@ contract LightClient {
     }
 
     /// Verifies a block's signatures from its header and records its `events_hash`, so that
-    /// individual events can later be proven against it (via `proveEventsCommitted`) without
+    /// individual events can later be proven against it (via `assertEventsCommitted`) without
     /// re-checking the whole certificate. Returns the block hash
     /// (`keccak256("BlockHeader::" ++ BCS(header))`).
-    function registerBlock(bytes calldata blockProof) external returns (bytes32) {
+    function registerBlock(bytes calldata blockProof) external whenNotEmergencyPaused returns (bytes32) {
         (BridgeTypes.BlockHeader memory header, bytes32 blockHash) = _verifyBlockProof(blockProof);
         registeredBlocks[blockHash] = RegisteredBlock(
             header.events_hash.value, header.height.value, header.chain_id.value.value, header.epoch.value
@@ -200,7 +261,7 @@ contract LightClient {
     /// without re-hashing all of them — the caller supplies `eventsHash` from a source it trusts: a
     /// registered block (see `registerBlock`, as `FungibleBridge.processBurns` does) or a freshly
     /// verified header.
-    function proveEventsCommitted(
+    function assertEventsCommitted(
         bytes32 eventsHash,
         bytes[] calldata eventBcs,
         uint32 txIndex,
@@ -208,7 +269,7 @@ contract LightClient {
         uint32 numEventsInTx,
         uint32[] calldata positions,
         bytes32[] calldata siblings
-    ) public pure {
+    ) public pure override {
         require(txIndex < numTxs, "txIndex out of range");
         require(eventBcs.length == positions.length, "events/positions length mismatch");
         require(positions.length <= numEventsInTx, "more positions than events");

@@ -17,14 +17,14 @@ use alloy::{
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
 };
-use alloy_primitives::{Bytes, B256, U256};
+use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::CryptoHash,
     identifiers::{AccountOwner, ApplicationId, ChainId},
 };
 use linera_bridge::{
-    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_SOURCE},
+    evm::{BRIDGE_TYPES_SOURCE, FUNGIBLE_BRIDGE_SOURCE, WRAPPED_FUNGIBLE_TYPES_V1_SOURCE},
     proof::{
         decode_block_header, decode_receipt_logs,
         gen::{DepositProofClient, HttpDepositProofClient},
@@ -65,10 +65,18 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         contract_name,
         &[
             ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
-            ("WrappedFungibleTypes.sol", WRAPPED_FUNGIBLE_TYPES_SOURCE),
+            (
+                "WrappedFungibleTypesV1.sol",
+                WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
+            ),
             ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
             ("LightClient.sol", linera_bridge::evm::LIGHTCLIENT_SOURCE),
+            ("ILightClient.sol", linera_bridge::evm::ILIGHTCLIENT_SOURCE),
             ("Microchain.sol", linera_bridge::evm::MICROCHAIN_SOURCE),
+            (
+                "IBurnEventDecoder.sol",
+                linera_bridge::evm::IBURN_EVENT_DECODER_SOURCE,
+            ),
         ],
         Some(1),
     )
@@ -141,6 +149,11 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         token_address,                           // token
         <[u8; 32]>::from(target_application_id), // fungibleApplicationId
         <[u8; 32]>::from(bridge_application_id), // bridgeApplicationId
+        deployer,                                // decoder placeholder (unused by deposit)
+        Address::from([0xDA; 20]),               // pauseGuardian
+        Address::from([0xBB; 20]),               // proposer
+        Address::from([0xCC; 20]),               // canceller
+        U256::from(86_400u64),                   // timelockDelay (1 day)
     )
         .abi_encode_params();
 

@@ -19,9 +19,9 @@ mod tests {
     use crate::{
         block_proof::ProvenEvents,
         contracts::ILightClient::{
-            addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
-            expireEpochsBelowCall, minAcceptedEpochCall, proveEventsCommittedCall,
-            registerBlockCall, registeredBlocksCall,
+            addCommitteeCall, assertEventsCommittedCall, committeeHeightCall,
+            committeeTotalWeightCall, currentEpochCall, expireEpochsBelowCall,
+            minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
         },
         test_helpers::*,
     };
@@ -379,7 +379,7 @@ mod tests {
         let positions = [1u32];
         let proof = EventInclusionProof::new(&events, tx_index, &positions);
         let siblings: Vec<B256> = proof.siblings().iter().map(to_b256).collect();
-        let make_call = |event_bcs: Vec<Bytes>| proveEventsCommittedCall {
+        let make_call = |event_bcs: Vec<Bytes>| assertEventsCommittedCall {
             eventsHash: events_hash,
             eventBcs: event_bcs,
             txIndex: proof.tx_index,
@@ -663,7 +663,7 @@ mod tests {
         // Retire epoch 0.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             &expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -714,7 +714,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -744,7 +744,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 2 },
             )
@@ -755,7 +755,7 @@ mod tests {
         // Retire epoch 0 (floor -> 1) while still at epoch 1.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             &expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -764,7 +764,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -774,7 +774,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 &expireEpochsBelowCall { newMinEpoch: 0 },
             )
