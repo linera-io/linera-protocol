@@ -31,7 +31,7 @@ use linera_base::{
     bcs,
     crypto::CryptoError,
     data_types::{ArithmeticError, BlockHeight, Round, Timestamp},
-    identifiers::{ApplicationId, BlobId, ChainId, EventId},
+    identifiers::{ApplicationId, ChainId},
 };
 use linera_execution::ExecutionError;
 use linera_views::ViewError;
@@ -168,20 +168,17 @@ pub enum ChainError {
     #[error("Not signing timeout certificate; current round times out at time {0}")]
     NotTimedOutYet(Timestamp),
     #[error(
-        "Cannot process the block for chain {chain_id}: missing prerequisites \
-         ({} cross-chain bundle(s), {} event(s), {} blob(s)) that have not been received yet",
-        bundles.len(), events.len(), blobs.len()
+        "Cannot vote for block proposal of chain {chain_id} because {} cross-chain message \
+         bundle(s) have not been received yet",
+        bundles.len()
     )]
-    MissingDependencies {
+    MissingCrossChainUpdates {
         chain_id: ChainId,
-        /// Missing incoming message bundles, as `(origin chain, height)` pairs that must be
-        /// received before this block can be validated (as a proposal) or applied (when
-        /// already confirmed).
+        /// The missing incoming message bundles, as `(origin chain, height)` pairs that must
+        /// all be received before this block can be validated. The validator reports every
+        /// missing bundle at once so the client can fetch them in a single round, instead of
+        /// the legacy one-rejection-per-missing-sender behavior.
         bundles: Vec<(ChainId, BlockHeight)>,
-        /// Missing events required to execute this block.
-        events: Vec<EventId>,
-        /// Missing blobs required to execute this block.
-        blobs: Vec<BlobId>,
     },
 }
 
@@ -220,7 +217,7 @@ impl ChainError {
             | ChainError::MissingOracleResponseList
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
-            | ChainError::MissingDependencies { .. } => false,
+            | ChainError::MissingCrossChainUpdates { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }
             | ChainError::InboxGapDetected { .. }

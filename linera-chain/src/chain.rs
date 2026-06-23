@@ -731,11 +731,9 @@ where
         }
         ensure!(
             missing_bundles.is_empty(),
-            ChainError::MissingDependencies {
+            ChainError::MissingCrossChainUpdates {
                 chain_id,
                 bundles: missing_bundles,
-                events: Vec::new(),
-                blobs: Vec::new(),
             }
         );
         Ok(())

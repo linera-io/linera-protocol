@@ -1088,10 +1088,11 @@ async fn test_proposal_batches_missing_dependency_catch_up<B>(
 where
     B: StorageBuilder,
 {
-    // Regression test for the hub-chain freeze fixed by the aggregated `MissingDependencies`
-    // error. A block that consumes incoming bundles from several sender chains is proposed to a
-    // validator that is behind on *all* of those senders. The validator must report every
-    // missing sender at once and the client must catch them up in a single batch, instead of
+    // Regression test for the hub-chain freeze fixed by the aggregated
+    // `MissingCrossChainUpdates` error. A block that consumes incoming bundles from several
+    // sender chains is proposed to a validator that is behind on *all* of those senders. The
+    // validator must report every missing sender at once and the client must catch them up in
+    // a single batch, instead of
     // the legacy one-rejection-and-round-trip-per-sender loop that serialized into multi-minute
     // stalls. The test exercises the client-side batching/termination logic in `updater.rs`,
     // which the worker- and gRPC-level unit tests in this PR do not cover.
@@ -1137,8 +1138,8 @@ where
     builder.set_fault_type([2], FaultType::Offline);
 
     // Consume all three bundles in a single block. Validator 3 rejects the proposal with an
-    // aggregated `MissingDependencies` listing all three senders; the client syncs them in one
-    // batch and the block is confirmed.
+    // aggregated `MissingCrossChainUpdates` listing all three senders; the client syncs them in
+    // one batch and the block is confirmed.
     recipient.process_inbox().await?;
 
     assert_eq!(

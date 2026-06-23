@@ -279,9 +279,10 @@ message BlockProposal {
   // justifies the proposal in this round.
   optional bytes original_proposal = 6;
 
-  // Whether the sender understands the aggregated `MissingDependencies` error. When
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error. When
   // false (e.g. an older client that predates it), the validator downgrades that error
-  // to the legacy per-item errors before replying, for backward compatibility.
+  // to the legacy per-sender `MissingCrossChainUpdate` before replying, for backward
+  // compatibility.
   bool supports_aggregated_missing = 7;
 }
 
@@ -339,7 +340,7 @@ message HandleConfirmedCertificateRequest {
   // been received by the target chains.
   bool wait_for_outgoing_messages = 3;
 
-  // Whether the sender understands the aggregated `MissingDependencies` error.
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error.
   bool supports_aggregated_missing = 4;
 }
 

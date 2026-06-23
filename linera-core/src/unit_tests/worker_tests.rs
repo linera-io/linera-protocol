@@ -1548,8 +1548,8 @@ where
     }
     {
         // A proposal on a chain whose inbox is empty consumes two cross-chain bundles that
-        // were never received. The validator must report *both* missing dependencies at
-        // once (rather than bailing on the first) so the client can fetch them in a single
+        // were never received. The validator must report *both* missing cross-chain updates
+        // at once (rather than bailing on the first) so the client can fetch them in a single
         // round-trip.
         let block_proposal = make_first_block(chain_3)
             .with_incoming_bundle(IncomingBundle {
@@ -1591,14 +1591,14 @@ where
             panic!("unexpected error: {error}");
         };
         match *chain_error {
-            ChainError::MissingDependencies { bundles, .. } => assert_eq!(
+            ChainError::MissingCrossChainUpdates { bundles, .. } => assert_eq!(
                 bundles,
                 vec![
                     (chain_1, BlockHeight::ZERO),
                     (chain_1, BlockHeight::from(1))
                 ],
             ),
-            other => panic!("expected MissingDependencies, got {other}"),
+            other => panic!("expected MissingCrossChainUpdates, got {other}"),
         }
     }
     Ok(())

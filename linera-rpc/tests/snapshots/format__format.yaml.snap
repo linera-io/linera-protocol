@@ -821,7 +821,7 @@ NodeError:
           - remote_node:
               TYPENAME: Secp256k1PublicKey
     31:
-      MissingDependencies:
+      MissingCrossChainUpdates:
         STRUCT:
           - chain_id:
               TYPENAME: ChainId
@@ -830,12 +830,6 @@ NodeError:
                 TUPLE:
                   - TYPENAME: ChainId
                   - TYPENAME: BlockHeight
-          - events:
-              SEQ:
-                TYPENAME: EventId
-          - blobs:
-              SEQ:
-                TYPENAME: BlobId
 OpenChainConfig:
   STRUCT:
     - ownership:

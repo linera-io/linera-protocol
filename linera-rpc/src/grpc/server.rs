@@ -49,38 +49,26 @@ use crate::{
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 
-/// Downgrades the aggregated [`NodeError::MissingDependencies`] back to a legacy per-item
-/// error for clients that did not advertise that they understand it, keeping the wire
-/// protocol backward compatible. Capable clients (and all other errors) pass through
-/// unchanged.
-///
-/// Note that only the missing cross-chain *bundles* are aggregated; missing events and blobs
-/// keep their existing `EventsNotFound` / `BlobsNotFound` errors, which all clients already
-/// understand.
+/// Downgrades the aggregated [`NodeError::MissingCrossChainUpdates`] back to the legacy
+/// per-sender [`NodeError::MissingCrossChainUpdate`] for clients that did not advertise that
+/// they understand the aggregated form, keeping the wire protocol backward compatible. Such a
+/// client only learns about the first missing sender and recovers one rejection at a time, as
+/// before. Capable clients (and all other errors) pass through unchanged.
 fn adapt_dependency_error(error: NodeError, supports_aggregated: bool) -> NodeError {
     if supports_aggregated {
         return error;
     }
     match error {
-        NodeError::MissingDependencies {
-            chain_id,
-            bundles,
-            events,
-            blobs,
-        } => {
+        NodeError::MissingCrossChainUpdates { chain_id, bundles } => {
             if let Some((origin, height)) = bundles.into_iter().next() {
                 NodeError::MissingCrossChainUpdate {
                     chain_id,
                     origin,
                     height,
                 }
-            } else if !events.is_empty() {
-                NodeError::EventsNotFound(events)
-            } else if !blobs.is_empty() {
-                NodeError::BlobsNotFound(blobs)
             } else {
                 NodeError::ChainError {
-                    error: "missing dependencies".to_string(),
+                    error: "missing cross-chain updates".to_string(),
                 }
             }
         }
@@ -1231,11 +1219,7 @@ impl GrpcProxyable for CrossChainRequest {
 
 #[cfg(test)]
 mod dependency_error_tests {
-    use linera_base::{
-        crypto::CryptoHash,
-        data_types::BlockHeight,
-        identifiers::{BlobId, BlobType, ChainId, EventId, StreamId},
-    };
+    use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
     use linera_core::node::NodeError;
 
     use super::adapt_dependency_error;
@@ -1244,72 +1228,35 @@ mod dependency_error_tests {
         ChainId(CryptoHash::test_hash(name))
     }
 
-    fn event() -> EventId {
-        EventId {
-            chain_id: chain("publisher"),
-            stream_id: StreamId::system(b"s".to_vec()),
-            index: 0,
-        }
-    }
-
-    fn blob() -> BlobId {
-        BlobId::new(CryptoHash::test_hash("blob"), BlobType::Data)
-    }
-
     #[test]
     fn capable_client_gets_errors_unchanged() {
-        // A client that understands the aggregated error receives every error as-is, both
-        // the legacy per-item ones and `MissingDependencies` itself.
-        let events = NodeError::EventsNotFound(vec![event()]);
-        assert_eq!(adapt_dependency_error(events.clone(), true), events);
-        let blobs = NodeError::BlobsNotFound(vec![blob()]);
-        assert_eq!(adapt_dependency_error(blobs.clone(), true), blobs);
-        let aggregated = NodeError::MissingDependencies {
+        // A client that understands the aggregated error receives `MissingCrossChainUpdates`
+        // as-is, with every reported sender preserved.
+        let aggregated = NodeError::MissingCrossChainUpdates {
             chain_id: chain("target"),
-            bundles: vec![(chain("origin"), BlockHeight::from(7))],
-            events: vec![],
-            blobs: vec![],
+            bundles: vec![
+                (chain("origin1"), BlockHeight::from(7)),
+                (chain("origin2"), BlockHeight::from(0)),
+            ],
         };
         assert_eq!(adapt_dependency_error(aggregated.clone(), true), aggregated);
     }
 
     #[test]
-    fn legacy_client_gets_downgraded_errors() {
+    fn legacy_client_gets_downgraded_error() {
         let cid = chain("target");
         let origin = chain("origin");
         let height = BlockHeight::from(7);
-        // Bundles take priority and downgrade to the per-origin legacy error.
-        let with_bundles = NodeError::MissingDependencies {
+        // For a client that does not understand the aggregated error, it downgrades to the
+        // legacy per-sender error reporting just the first missing sender.
+        let aggregated = NodeError::MissingCrossChainUpdates {
             chain_id: cid,
-            bundles: vec![(origin, height)],
-            events: vec![event()],
-            blobs: vec![blob()],
+            bundles: vec![(origin, height), (chain("other"), BlockHeight::from(1))],
         };
         assert!(matches!(
-            adapt_dependency_error(with_bundles, false),
-            NodeError::MissingCrossChainUpdate { origin: o, height: h, .. }
-                if o == origin && h == height
-        ));
-        // Events-only and blobs-only downgrade to their respective legacy errors.
-        let events_only = NodeError::MissingDependencies {
-            chain_id: cid,
-            bundles: vec![],
-            events: vec![event()],
-            blobs: vec![],
-        };
-        assert!(matches!(
-            adapt_dependency_error(events_only, false),
-            NodeError::EventsNotFound(events) if events == vec![event()]
-        ));
-        let blobs_only = NodeError::MissingDependencies {
-            chain_id: cid,
-            bundles: vec![],
-            events: vec![],
-            blobs: vec![blob()],
-        };
-        assert!(matches!(
-            adapt_dependency_error(blobs_only, false),
-            NodeError::BlobsNotFound(blobs) if blobs == vec![blob()]
+            adapt_dependency_error(aggregated, false),
+            NodeError::MissingCrossChainUpdate { chain_id, origin: o, height: h }
+                if chain_id == cid && o == origin && h == height
         ));
     }
 }

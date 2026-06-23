@@ -2082,9 +2082,7 @@ impl<Env: Environment> Client<Env> {
                     }
                 }
                 while let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
-                    if let ChainError::MissingDependencies {
-                        chain_id, bundles, ..
-                    } = &**chain_err
+                    if let ChainError::MissingCrossChainUpdates { chain_id, bundles } = &**chain_err
                     {
                         let chain_id = *chain_id;
                         // Clone to end the borrow of `err` before we reassign it below.
