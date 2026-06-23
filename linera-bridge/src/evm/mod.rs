@@ -22,8 +22,6 @@ pub const WRAPPED_FUNGIBLE_TYPES_V1_SOURCE: &str =
 
 /// Solidity source for the FungibleBridge contract.
 pub const FUNGIBLE_BRIDGE_SOURCE: &str = include_str!("../solidity/FungibleBridge.sol");
-<<<<<<< HEAD
-=======
 
 /// Solidity source for the Microchain abstract contract.
 pub const MICROCHAIN_SOURCE: &str = include_str!("../solidity/Microchain.sol");
@@ -40,4 +38,3 @@ pub const IBURN_EVENT_DECODER_SOURCE: &str = include_str!("../solidity/IBurnEven
 /// Solidity source for the FungibleBurnEventDecoderV1 contract.
 pub const FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE: &str =
     include_str!("../solidity/FungibleBurnEventDecoderV1.sol");
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))

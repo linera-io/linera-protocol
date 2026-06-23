@@ -119,7 +119,6 @@ pub fn create_signed_certificate(
     create_signed_certificate_for_chain(secret, public, chain_id, BlockHeight(1))
 }
 
-<<<<<<< HEAD
 pub fn deploy_microchain(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
@@ -129,11 +128,20 @@ pub fn deploy_microchain(
     let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
         .expect("MicrochainTest.sol not found");
     let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
-    let constructor_args = (light_client, *chain_id.as_bytes()).abi_encode_params();
+    let constructor_args = (
+        light_client,
+        *chain_id.as_bytes(),
+        test_pause_guardian(),
+        test_proposer(),
+        test_canceller(),
+        test_timelock_delay(),
+    )
+        .abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
-=======
+}
+
 /// Deploys the V1 burn-event decoder (no constructor args) and returns its
 /// address.
 pub fn deploy_burn_event_decoder_v1(db: &mut CacheDB<EmptyDB>, deployer: Address) -> Address {
@@ -143,7 +151,6 @@ pub fn deploy_burn_event_decoder_v1(db: &mut CacheDB<EmptyDB>, deployer: Address
         "FungibleBurnEventDecoderV1",
     );
     deploy_contract(db, deployer, bytecode)
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 }
 
 pub fn deploy_fungible_bridge(
@@ -478,7 +485,6 @@ pub fn create_test_block(
 }
 
 pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
-<<<<<<< HEAD
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
 
@@ -486,11 +492,17 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     for (name, content) in [
         ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
         (
-            "WrappedFungibleTypes.sol",
-            evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
+            "WrappedFungibleTypesV1.sol",
+            evm::WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
         ),
         ("LightClient.sol", evm::light_client::SOURCE),
+        ("ILightClient.sol", evm::ILIGHTCLIENT_SOURCE),
         ("Microchain.sol", evm::microchain::SOURCE),
+        ("IBurnEventDecoder.sol", evm::IBURN_EVENT_DECODER_SOURCE),
+        (
+            "FungibleBurnEventDecoderV1.sol",
+            evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+        ),
         ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
     ] {
         let mut f = File::create(path.join(name)).unwrap();
@@ -579,31 +591,4 @@ fn write_compilation_json(path: &Path, file_name: &str, oz_root: &Path, oz_files
     });
 
     std::fs::write(path.join("config.json"), config.to_string()).unwrap();
-=======
-    // `runs = 1` optimizes for smaller deployed bytecode at the cost of per-call
-    // gas. Bridge contracts are large; tests compile faster with this setting.
-    compile_solidity_contract_with_options(
-        source_code,
-        file_name,
-        contract_name,
-        &[
-            ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
-            (
-                "WrappedFungibleTypesV1.sol",
-                evm::WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
-            ),
-            ("LightClient.sol", evm::LIGHTCLIENT_SOURCE),
-            ("ILightClient.sol", evm::ILIGHTCLIENT_SOURCE),
-            ("Microchain.sol", evm::MICROCHAIN_SOURCE),
-            ("IBurnEventDecoder.sol", evm::IBURN_EVENT_DECODER_SOURCE),
-            (
-                "FungibleBurnEventDecoderV1.sol",
-                evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
-            ),
-            ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
-        ],
-        Some(1),
-    )
-    .expect("solc compilation failed")
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
 }

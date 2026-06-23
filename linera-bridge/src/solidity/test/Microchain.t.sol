@@ -26,7 +26,9 @@ contract MockLightClient {
 contract CountingMicrochain is Microchain {
     uint256 public onBlockCalls;
 
-    constructor(address _lc, bytes32 _cid) Microchain(_lc, _cid) {}
+    constructor(address _lc, bytes32 _cid)
+        Microchain(_lc, _cid, address(0xA11CE), address(0xB0B), address(0xCA11), 1 days)
+    {}
 
     function _onBlock(BridgeTypes.Block memory) internal override {
         onBlockCalls += 1;

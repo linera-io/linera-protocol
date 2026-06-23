@@ -4,10 +4,11 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {Microchain} from "../Microchain.sol";
 import {ILightClient} from "../ILightClient.sol";
+import {BridgeTypes} from "../BridgeTypes.sol";
 
 // Minimal ILightClient stand-in. Only adminChainId() matters for the
-// setLightClient flow; the proof methods are inert so the harness can be
-// constructed and pointed at.
+// light-client-update flow; verifyBlock is inert so the harness can be
+// constructed and pointed at (these tests exercise governance, not block relay).
 contract MockLC is ILightClient {
     bytes32 internal admin;
 
@@ -19,19 +20,10 @@ contract MockLC is ILightClient {
         return admin;
     }
 
-    function registeredBlocks(bytes32) external pure override returns (bytes32, uint64, bytes32, uint32) {
-        return (bytes32(0), 0, bytes32(0), 0);
+    function verifyBlock(bytes calldata) external pure override returns (BridgeTypes.Block memory, bytes32) {
+        BridgeTypes.Block memory b;
+        return (b, bytes32(0));
     }
-
-    function assertEventsCommitted(
-        bytes32,
-        bytes[] calldata,
-        uint32,
-        uint32,
-        uint32,
-        uint32[] calldata,
-        bytes32[] calldata
-    ) external pure override {}
 }
 
 // Concrete Microchain so the abstract base's governance can be exercised in
@@ -45,6 +37,8 @@ contract TestMicrochain is Microchain {
         address _canceller,
         uint256 _timelockDelay
     ) Microchain(_lightClient, _chainId, _pauseGuardian, _proposer, _canceller, _timelockDelay) {}
+
+    function _onBlock(BridgeTypes.Block memory) internal override {}
 
     function gated() external whenNotEmergencyPaused returns (bool) {
         return true;
@@ -106,7 +100,7 @@ contract MicrochainGovernanceTest is Test {
         new TestMicrochain(address(lc), CHAIN_ID, guardian, proposer, canceller, 90 days + 1);
     }
 
-    // --- setLightClient flow ---
+    // --- light-client update flow ---
 
     function test_propose_execute_updates_lightClient() public {
         MockLC next = new MockLC(ADMIN_CHAIN);

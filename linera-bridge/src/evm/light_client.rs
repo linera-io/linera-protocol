@@ -39,20 +39,9 @@ mod tests {
         primitives::Address,
     };
 
-<<<<<<< HEAD
     use super::{
         addCommitteeCall, committeeHeightCall, committeeTotalWeightCall, currentEpochCall,
         expireEpochsBelowCall, minAcceptedEpochCall, verifyBlockCall,
-=======
-    use crate::{
-        block_proof::ProvenEvents,
-        contracts::ILightClient::{
-            addCommitteeCall, assertEventsCommittedCall, committeeHeightCall,
-            committeeTotalWeightCall, currentEpochCall, expireEpochsBelowCall,
-            minAcceptedEpochCall, registerBlockCall, registeredBlocksCall,
-        },
-        test_helpers::*,
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
     };
     use crate::test_helpers::*;
 
@@ -356,7 +345,7 @@ mod tests {
         // Retire epoch 0.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -407,7 +396,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -425,37 +414,6 @@ mod tests {
             BlockHeight(1),
             test_admin_chain_id(),
         );
-<<<<<<< HEAD
-=======
-        // The events commitment is taken straight from the signed header — no `registerBlock`.
-        let events_hash = B256::from(*certificate.block().header.events_hash.as_bytes());
-
-        let to_b256 = |h: &CryptoHash| B256::from(*h.as_bytes());
-        let tx_index = 1usize;
-        let positions = [1u32];
-        let proof = EventInclusionProof::new(&events, tx_index, &positions);
-        let siblings: Vec<B256> = proof.siblings().iter().map(to_b256).collect();
-        let make_call = |event_bcs: Vec<Bytes>| assertEventsCommittedCall {
-            eventsHash: events_hash,
-            eventBcs: event_bcs,
-            txIndex: proof.tx_index,
-            numTxs: proof.num_txs,
-            numEventsInTx: proof.num_events_in_tx,
-            positions: positions.to_vec(),
-            siblings: siblings.clone(),
-        };
-
-        let good_bcs: Vec<Bytes> = positions
-            .iter()
-            .map(|&p| {
-                bcs::to_bytes(&events[tx_index][p as usize])
-                    .expect("BCS serialization failed")
-                    .into()
-            })
-            .collect();
-
-        // The event the header commits to folds back to its events_hash.
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
         call_contract(
             &mut light_client.db,
             light_client.deployer,
@@ -468,7 +426,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 2 },
             )
@@ -479,7 +437,7 @@ mod tests {
         // Retire epoch 0 (floor -> 1) while still at epoch 1.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -488,7 +446,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -498,7 +456,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 0 },
             )
@@ -674,181 +632,6 @@ mod tests {
         );
     }
 
-<<<<<<< HEAD
-=======
-    /// A retired committee can still sign a verifiable block proof until its
-    /// epoch is expired via `expireEpochsBelow` (weak-subjectivity floor).
-    #[test]
-    fn test_light_client_expire_epochs_below() {
-        let mut light_client = TestLightClient::new();
-
-        // Baseline: a valid epoch-0 block proof verifies, nothing expired yet.
-        let block_0 = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
-            Epoch::ZERO,
-            BlockHeight(1),
-            vec![],
-        );
-        let proof_0 = sign_and_serialize(&light_client.secret, &light_client.public, block_0);
-        light_client.verify_block(proof_0.clone());
-
-        // Rotate to epoch 1.
-        let secret_1 = ValidatorSecretKey::generate();
-        let public_1 = secret_1.public();
-        let call_1 = light_client.add_committee_call(
-            &public_1,
-            Epoch(1),
-            Epoch::ZERO,
-            BlockHeight(1),
-            test_admin_chain_id(),
-        );
-        call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &call_1,
-        );
-        assert_eq!(light_client.query_current_epoch(), Epoch(1));
-
-        // Weak subjectivity: the epoch-0 proof still verifies after rotation.
-        light_client.verify_block(proof_0.clone());
-
-        // The epoch-0 committee is present in storage before expiry.
-        let (weight_before, _, _) = call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &committeeTotalWeightCall { epoch: 0 },
-        );
-        assert!(
-            weight_before > 0,
-            "epoch 0 committee should exist before expiry"
-        );
-
-        // Retire epoch 0.
-        call_contract(
-            &mut light_client.db,
-            test_proposer(),
-            light_client.contract,
-            &expireEpochsBelowCall { newMinEpoch: 1 },
-        );
-        let (min_epoch, _, _) = call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &minAcceptedEpochCall {},
-        );
-        assert_eq!(min_epoch, 1, "minAcceptedEpoch should be raised to 1");
-
-        // The epoch-0 committee storage is cleared, not merely floored out.
-        let (weight_after, _, _) = call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &committeeTotalWeightCall { epoch: 0 },
-        );
-        assert_eq!(
-            weight_after, 0,
-            "epoch 0 committee storage should be cleared after expiry"
-        );
-
-        // The retired epoch-0 proof is now rejected as expired.
-        assert!(
-            light_client.try_verify_block(proof_0).is_err(),
-            "block proof from a retired epoch must be rejected"
-        );
-
-        // The current committee (epoch 1) still verifies.
-        let block_1 = create_test_block(
-            CryptoHash::new(&TestString::new("test_chain")),
-            Epoch(1),
-            BlockHeight(2),
-            vec![],
-        );
-        let proof_1 = sign_and_serialize(&secret_1, &public_1, block_1);
-        light_client.verify_block(proof_1);
-    }
-
-    /// `expireEpochsBelow` is monotonic and can never retire the current epoch.
-    #[test]
-    fn test_light_client_expire_epochs_below_invariants() {
-        let mut light_client = TestLightClient::new();
-
-        // At epoch 0 nothing can be expired: newMinEpoch must exceed
-        // minAcceptedEpoch (0) yet not exceed currentEpoch (0).
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                test_proposer(),
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 1 },
-            )
-            .is_err(),
-            "cannot expire at epoch 0"
-        );
-
-        // Rotate to epoch 1.
-        let secret_1 = ValidatorSecretKey::generate();
-        let public_1 = secret_1.public();
-        let call_1 = light_client.add_committee_call(
-            &public_1,
-            Epoch(1),
-            Epoch::ZERO,
-            BlockHeight(1),
-            test_admin_chain_id(),
-        );
-        call_contract(
-            &mut light_client.db,
-            light_client.deployer,
-            light_client.contract,
-            &call_1,
-        );
-
-        // The current epoch can never be retired: newMinEpoch may not exceed
-        // currentEpoch.
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                test_proposer(),
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 2 },
-            )
-            .is_err(),
-            "cannot expire the current epoch"
-        );
-
-        // Retire epoch 0 (floor -> 1) while still at epoch 1.
-        call_contract(
-            &mut light_client.db,
-            test_proposer(),
-            light_client.contract,
-            &expireEpochsBelowCall { newMinEpoch: 1 },
-        );
-
-        // Monotonic: cannot repeat or decrease the floor.
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                test_proposer(),
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 1 },
-            )
-            .is_err(),
-            "minAcceptedEpoch must strictly increase"
-        );
-        assert!(
-            try_call_contract(
-                &mut light_client.db,
-                test_proposer(),
-                light_client.contract,
-                &expireEpochsBelowCall { newMinEpoch: 0 },
-            )
-            .is_err(),
-            "minAcceptedEpoch cannot decrease"
-        );
-    }
-
->>>>>>> bb7c415997 (Support upgrades of Solidity linera-bridge contracts. (#6548))
     /// Common test state for LightClient tests with a single initial validator.
     struct TestLightClient {
         db: CacheDB<EmptyDB>,

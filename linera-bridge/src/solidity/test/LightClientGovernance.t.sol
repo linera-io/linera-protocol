@@ -18,12 +18,13 @@ contract LightClientGovernanceTest is Test {
         return new LightClient(validators, weights, ADMIN_CHAIN, 0, guardian, proposer);
     }
 
-    /// Captures the revert reason of a registerBlock call (string requires only;
-    /// non-string panics return a sentinel). Lets us assert the pause gate fires
-    /// before the (heavy) certificate verification that the block-proof tests in
-    /// the Rust suite already cover.
-    function _registerBlockReason(LightClient lc, bytes memory data) internal returns (string memory) {
-        try lc.registerBlock(data) returns (bytes32) {
+    /// Captures the revert reason of an `addCommittee` call (string requires only;
+    /// non-string panics return a sentinel). `addCommittee` is the pause-gated,
+    /// state-changing entry point on this network's LightClient (there is no
+    /// `registerBlock`); we use it to assert the pause gate fires before the
+    /// (heavy) certificate verification that the block-proof tests already cover.
+    function _addCommitteeReason(LightClient lc, bytes memory data) internal returns (string memory) {
+        try lc.addCommittee(data, hex"", new bytes[](0)) {
             return "<no-revert>";
         } catch Error(string memory reason) {
             return reason;
@@ -59,7 +60,7 @@ contract LightClientGovernanceTest is Test {
         vm.prank(guardian);
         lc.emergencyPause(1 days);
         assertEq(
-            _registerBlockReason(lc, hex""), "emergency paused", "paused registerBlock must revert with pause reason"
+            _addCommitteeReason(lc, hex""), "emergency paused", "paused registerBlock must revert with pause reason"
         );
     }
 
@@ -69,7 +70,7 @@ contract LightClientGovernanceTest is Test {
         lc.emergencyPause(1 days);
         vm.warp(block.timestamp + 1 days);
         // Gate lifted: registerBlock now fails on the garbage proof, not on the pause.
-        assertEq(_registerBlockReason(lc, hex""), "<non-string-revert>", "after expiry the pause gate must be lifted");
+        assertEq(_addCommitteeReason(lc, hex""), "<non-string-revert>", "after expiry the pause gate must be lifted");
     }
 
     function test_guardian_can_unpause_early() public {
@@ -78,7 +79,7 @@ contract LightClientGovernanceTest is Test {
         lc.emergencyPause(7 days);
         vm.prank(guardian);
         lc.emergencyUnpause();
-        assertEq(_registerBlockReason(lc, hex""), "<non-string-revert>", "after unpause the gate must be lifted");
+        assertEq(_addCommitteeReason(lc, hex""), "<non-string-revert>", "after unpause the gate must be lifted");
     }
 
     function test_unpause_when_not_paused_reverts() public {
