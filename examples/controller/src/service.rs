@@ -43,6 +43,19 @@ impl Service for ControllerService {
     }
 
     async fn handle_query(&self, query: Self::Query) -> Self::QueryResponse {
+        self.schema().execute(query).await
+    }
+}
+
+impl ControllerService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(
+        &self,
+    ) -> Schema<
+        Arc<ControllerState>,
+        <Operation as GraphQLMutationRoot<ControllerService>>::MutationRoot,
+        EmptySubscription,
+    > {
         Schema::build(
             self.state.clone(),
             Operation::mutation_root(self.runtime.clone()),
@@ -50,8 +63,6 @@ impl Service for ControllerService {
         )
         .data(self.runtime.clone())
         .finish()
-        .execute(query)
-        .await
     }
 }
 
@@ -140,6 +151,14 @@ mod tests {
             state: Arc::new(state),
             runtime: Arc::new(runtime),
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn schema_sdl() {
+        let service = create_service();
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 
     #[test]

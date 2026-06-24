@@ -119,3 +119,35 @@ mod tests {
         assert_eq!(response, expected)
     }
 }
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod schema_tests {
+    use std::sync::Arc;
+
+    use async_graphql::{EmptySubscription, Schema};
+    use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
+
+    use super::{CounterService, CounterState, MutationRoot, QueryRoot};
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = Arc::new(ServiceRuntime::<CounterService>::new());
+        let state = CounterState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = CounterService { state, runtime };
+        let schema = Schema::build(
+            QueryRoot {
+                value: *service.state.value.get(),
+            },
+            MutationRoot {
+                runtime: service.runtime.clone(),
+            },
+            EmptySubscription,
+        )
+        .finish();
+
+        insta::assert_snapshot!(schema.sdl());
+    }
+}

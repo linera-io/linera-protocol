@@ -49,15 +49,27 @@ impl Service for EthereumTrackerService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl EthereumTrackerService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(
+        &self,
+    ) -> Schema<
+        Query,
+        <Operation as GraphQLMutationRoot<EthereumTrackerService>>::MutationRoot,
+        EmptySubscription,
+    > {
+        Schema::build(
             Query {
                 service: self.clone(),
             },
             Operation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
     }
 }
 
@@ -179,3 +191,25 @@ pub struct TransferEvent {
     destination: String,
 }
 async_graphql::scalar!(TransferEvent);
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<EthereumTrackerService>::new();
+        let state = EthereumTrackerState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = EthereumTrackerService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
+    }
+}

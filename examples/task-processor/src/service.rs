@@ -43,7 +43,14 @@ impl Service for TaskProcessorService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl TaskProcessorService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(&self) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+        Schema::build(
             QueryRoot {
                 state: self.state.clone(),
                 runtime: self.runtime.clone(),
@@ -53,8 +60,7 @@ impl Service for TaskProcessorService {
             },
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
     }
 }
 
@@ -120,5 +126,27 @@ impl MutationRoot {
         let operation = TaskProcessorOperation::RequestTask { operator, input };
         self.runtime.schedule_operation(&operation);
         []
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<TaskProcessorService>::new();
+        let state = TaskProcessorState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = TaskProcessorService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }

@@ -41,13 +41,25 @@ impl Service for FungibleTokenService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl FungibleTokenService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(
+        &self,
+    ) -> Schema<
+        Self,
+        <FungibleOperation as GraphQLMutationRoot<FungibleTokenService>>::MutationRoot,
+        EmptySubscription,
+    > {
+        Schema::build(
             self.clone(),
             FungibleOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
     }
 }
 
@@ -63,5 +75,27 @@ impl FungibleTokenService {
 
     async fn ticker_symbol(&self) -> Result<String, async_graphql::Error> {
         Ok(self.runtime.application_parameters().ticker_symbol)
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<FungibleTokenService>::new();
+        let state = FungibleTokenState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = FungibleTokenService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }

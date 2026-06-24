@@ -1,0 +1,67 @@
+---
+source: ethereum-tracker/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_String_U256Cont_546704a7 {
+	key: String!
+	value: U256Cont
+}
+
+scalar InitialEvent
+
+input MapFilters_String_72fa253a {
+	keys: [String!]
+}
+
+input MapInput_String_72fa253a {
+	filters: MapFilters_String_72fa253a
+}
+
+type MapView_String_U256Cont_8634ebb6 {
+	keys(count: Int): [String!]!
+	count: Int!
+	entry(key: String!): Entry_String_U256Cont_546704a7!
+	entries(input: MapInput_String_72fa253a): [Entry_String_U256Cont_546704a7!]!
+}
+
+type OperationMutationRoot {
+	update(toBlock: Int!): [Int!]!
+}
+
+"""
+The service handler for GraphQL queries.
+"""
+type Query {
+	ethereumEndpoint: String!
+	contractAddress: String!
+	startBlock: Int!
+	accounts: MapView_String_U256Cont_8634ebb6!
+	"""
+	Reads the initial Ethereum event emitted by the monitored contract.
+	"""
+	readInitialEvent: InitialEvent!
+	"""
+	Reads the transfer events emitted by the monitored Ethereum contract.
+	"""
+	readTransferEvents(endBlock: Int!): [TransferEvent!]!
+}
+
+scalar TransferEvent
+
+scalar U256Cont
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+	mutation: OperationMutationRoot
+}

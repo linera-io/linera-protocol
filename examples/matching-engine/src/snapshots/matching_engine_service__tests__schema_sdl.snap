@@ -1,0 +1,285 @@
+---
+source: matching-engine/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+An account.
+"""
+type Account {
+	"""
+	Chain ID of the account
+	"""
+	chainId: ChainId!
+	"""
+	Owner of the account
+	"""
+	owner: AccountOwner!
+}
+
+"""
+The AccountInfo used for storing which order_id are owned by
+each owner.
+"""
+type AccountInfo {
+	"""
+	The list of orders
+	"""
+	orders: [Int!]!
+}
+
+"""
+A unique identifier for a user or an application.
+"""
+scalar AccountOwner
+
+"""
+A non-negative amount of tokens.
+"""
+scalar Amount
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+type CustomCollectionView_PriceAskInput_LevelView_d5795fd8 {
+	keys: [PriceAsk!]!
+	count: Int!
+	entry(key: PriceAskInput!): Entry_PriceAsk_LevelView_fe1e11cd!
+	entries(input: MapInput_PriceAskInput_e9b05f5a): [Entry_PriceAsk_LevelView_fe1e11cd!]!
+}
+
+type CustomCollectionView_PriceBidInput_LevelView_f08dcf6c {
+	keys: [PriceBid!]!
+	count: Int!
+	entry(key: PriceBidInput!): Entry_PriceBid_LevelView_1be08422!
+	entries(input: MapInput_PriceBidInput_3851a0e0): [Entry_PriceBid_LevelView_1be08422!]!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_AccountOwner_AccountInfo_9d668534 {
+	key: AccountOwner!
+	value: AccountInfo
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_Int_KeyBook_db35ce20 {
+	key: Int!
+	value: KeyBook
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_PriceAsk_LevelView_fe1e11cd {
+	key: PriceAsk!
+	value: LevelView!
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_PriceBid_LevelView_1be08422 {
+	key: PriceBid!
+	value: LevelView!
+}
+
+"""
+This is the entry present in the state so that we can access
+information from the order_id.
+"""
+type KeyBook {
+	"""
+	The corresponding price
+	"""
+	price: Price!
+	"""
+	The nature of the order
+	"""
+	nature: OrderNature!
+	"""
+	The owner used for checks
+	"""
+	account: Account!
+}
+
+"""
+The price level is contained in a QueueView
+The queue starts with the oldest order to the newest.
+When an order is cancelled it is zero. But if that
+cancelled order is not the oldest, then it remains
+though with a size zero.
+"""
+type LevelView {
+	queue: QueueView_OrderEntry_37aee5f5!
+}
+
+input MapFilters_AccountOwner_d6668c53 {
+	keys: [AccountOwner!]
+}
+
+input MapFilters_Int_5242398a {
+	keys: [Int!]
+}
+
+input MapFilters_PriceAskInput_e9b05f5a {
+	keys: [PriceAskInput!]
+}
+
+input MapFilters_PriceBidInput_3851a0e0 {
+	keys: [PriceBidInput!]
+}
+
+input MapInput_AccountOwner_d6668c53 {
+	filters: MapFilters_AccountOwner_d6668c53
+}
+
+input MapInput_Int_5242398a {
+	filters: MapFilters_Int_5242398a
+}
+
+input MapInput_PriceAskInput_e9b05f5a {
+	filters: MapFilters_PriceAskInput_e9b05f5a
+}
+
+input MapInput_PriceBidInput_3851a0e0 {
+	filters: MapFilters_PriceBidInput_3851a0e0
+}
+
+type MapView_AccountOwner_AccountInfo_6b1a2835 {
+	keys(count: Int): [AccountOwner!]!
+	count: Int!
+	entry(key: AccountOwner!): Entry_AccountOwner_AccountInfo_9d668534!
+	entries(input: MapInput_AccountOwner_d6668c53): [Entry_AccountOwner_AccountInfo_9d668534!]!
+}
+
+type MapView_Int_KeyBook_42dd8508 {
+	keys(count: Int): [Int!]!
+	count: Int!
+	entry(key: Int!): Entry_Int_KeyBook_db35ce20!
+	entries(input: MapInput_Int_5242398a): [Entry_Int_KeyBook_db35ce20!]!
+}
+
+"""
+The matching engine containing the information.
+"""
+type MatchingEngineState {
+	"""
+	The next_order_number contains the order_id so that
+	the order_id gets created from 0, to infinity.
+	"""
+	nextOrderNumber: Int!
+	"""
+	The map of the outstanding bids, by the bitwise complement of
+	the revert of the price. The order is from the best price
+	level (highest proposed by buyer) to the worst
+	"""
+	bids: CustomCollectionView_PriceBidInput_LevelView_f08dcf6c!
+	"""
+	The map of the outstanding asks, by the bitwise complement of
+	the price. The order is from the best one (smallest asked price
+	by seller) to the worst.
+	"""
+	asks: CustomCollectionView_PriceAskInput_LevelView_d5795fd8!
+	"""
+	The map with the list of orders giving for each order_id the
+	fundamental information on the order (nature, owner, amount)
+	"""
+	orders: MapView_Int_KeyBook_42dd8508!
+	"""
+	The map giving for each account owner the set of order_id
+	owned by that owner.
+	"""
+	accountInfo: MapView_AccountOwner_AccountInfo_6b1a2835!
+}
+
+type OperationMutationRoot {
+	executeOrder(order: Order!): [Int!]!
+	closeChain: [Int!]!
+}
+
+scalar Order
+
+"""
+The order entry in the order book
+"""
+type OrderEntry {
+	"""
+	The number of token1 being bought or sold
+	"""
+	amount: Amount!
+	"""
+	The one who has created the order
+	"""
+	account: Account!
+	"""
+	The order_id (needed for possible cancel or modification)
+	"""
+	orderId: Int!
+}
+
+scalar OrderNature
+
+"""
+The asking or bidding price of token 1 in units of token 0.
+
+Forgetting about types and units, if `account` is buying `quantity` for a `price`:
+```ignore
+account[0] -= price * quantity;
+account[1] += quantity;
+```
+Thus the quantity (also called _count_) is an `Amount`.
+
+When we have ask > bid then the winner for the residual cash is the liquidity provider.
+We choose to force the price to be an integer u64. This is because the tokens are undivisible.
+In practice, this means that the value of token1 has to be much higher than the price of token0
+just as in a normal market where the price is in multiple of cents.
+
+TODO(#841): Implementing fractional price is preferable for some exchanges. This cause some
+technical issues with the serialization because we want the serialization order to be the
+same as the original fractions. One way is to keep the serialization order we can limit
+ourselves to fractions of the form say x / 100000.
+The next problem is that if we do the fractions, then the order can only be filled partially. And
+in a mathematical way, Euclidean divisions have to be done.
+"""
+type Price {
+	price: Int!
+}
+
+type PriceAsk {
+	price: Int!
+}
+
+input PriceAskInput {
+	price: Int!
+}
+
+type PriceBid {
+	price: Int!
+}
+
+input PriceBidInput {
+	price: Int!
+}
+
+type QueueView_OrderEntry_37aee5f5 {
+	count: Int!
+	entries(count: Int): [OrderEntry!]!
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: MatchingEngineState
+	mutation: OperationMutationRoot
+}
