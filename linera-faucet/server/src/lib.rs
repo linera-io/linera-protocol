@@ -127,7 +127,7 @@ mod metrics {
     pub static FAUCET_BALANCE: LazyLock<IntGaugeVec> = LazyLock::new(|| {
         register_int_gauge_vec(
             "faucet_balance_amount",
-            "Current balance of the faucet chain",
+            "Current balance of the faucet chain, in whole tokens",
             &[],
         )
     });
@@ -812,14 +812,14 @@ where
         let remaining_duration = end_timestamp.delta_since(local_time).as_micros();
         let balance = self.client.local_balance().await?;
 
+        // `balance` is an `Amount`: a u128 scaled by 10^18. Exporting the raw
+        // scaled value overflowed i64 (e.g. 200M tokens = 2e26), producing
+        // garbage/negative gauge values. Report the balance in whole tokens,
+        // which fits i64 for any realistic balance.
         #[cfg(with_metrics)]
-        #[expect(
-            clippy::cast_possible_truncation,
-            reason = "faucet balance metric — i64 is the prometheus gauge type"
-        )]
         metrics::FAUCET_BALANCE
             .with_label_values(&[])
-            .set(u128::from(balance) as i64);
+            .set(i64::try_from(u128::from(balance) / u128::from(Amount::ONE)).unwrap_or(i64::MAX));
 
         let total_amount = requests
             .iter()
