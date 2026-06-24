@@ -33,6 +33,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
+* [`linera describe-application`↴](#linera-describe-application)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
 * [`linera keygen`↴](#linera-keygen)
@@ -112,6 +113,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
+* `describe-application` — Describe an existing application: print its `ApplicationDescription` (module ID, creator chain, parameters and required dependencies) as JSON. The description is content-addressed and fetched from the validators, so the application need not be registered on the wallet's default chain
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required module
 * `keygen` — Create an unassigned key pair
@@ -926,6 +928,18 @@ Verify that a data blob is readable
 
 * `<HASH>` — The hash of the content
 * `<READER>` — An optional chain ID to verify the blob. The default chain of the wallet is used otherwise
+
+
+
+## `linera describe-application`
+
+Describe an existing application: print its `ApplicationDescription` (module ID, creator chain, parameters and required dependencies) as JSON. The description is content-addressed and fetched from the validators, so the application need not be registered on the wallet's default chain
+
+**Usage:** `linera describe-application <APPLICATION_ID>`
+
+###### **Arguments:**
+
+* `<APPLICATION_ID>` — The ID of the application to describe
 
 
 
