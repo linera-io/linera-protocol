@@ -2,82 +2,7 @@
 pragma solidity ^0.8.0;
 import "BridgeTypes.sol";
 
-<<<<<<< HEAD:linera-bridge/src/solidity/WrappedFungibleTypesV1.sol
 library WrappedFungibleTypesV1 {
-=======
-library WrappedFungibleTypes {
-    function bcs_serialize_uleb128(uint256 x) internal pure returns (bytes memory) {
-        bytes memory result;
-        bytes1 entry;
-        while (true) {
-            if (x < 128) {
-                entry = bytes1(uint8(x));
-                return abi.encodePacked(result, entry);
-            } else {
-                uint256 xb = x >> 7;
-                uint256 remainder = x - (xb << 7);
-                require(remainder < 128);
-                entry = bytes1(uint8(remainder) + 128);
-                result = abi.encodePacked(result, entry);
-                x = xb;
-            }
-        }
-        require(false, "This line is unreachable");
-        return result;
-    }
-
-    function bcs_deserialize_offset_uleb128(uint256 pos, bytes memory input) internal pure returns (uint256, uint256) {
-        uint256 idx = 0;
-        while (true) {
-            if (uint8(input[pos + idx]) < 128) {
-                uint256 result = 0;
-                uint256 power = 1;
-                for (uint256 u = 0; u < idx; u++) {
-                    uint8 val = uint8(input[pos + u]) - 128;
-                    result += power * uint256(val);
-                    power *= 128;
-                }
-                result += power * uint8(input[pos + idx]);
-                return (pos + idx + 1, result);
-            }
-            idx += 1;
-        }
-        require(false, "This line is unreachable");
-        return (0, 0);
-    }
-
-    struct Account {
-        BridgeTypes.ChainId chain_id;
-        BridgeTypes.AccountOwner owner;
-    }
-
-    function bcs_serialize_Account(Account memory input) internal pure returns (bytes memory) {
-        bytes memory result = BridgeTypes.bcs_serialize_ChainId(input.chain_id);
-        return abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.owner));
-    }
-
-    function bcs_deserialize_offset_Account(uint256 pos, bytes memory input)
-        internal
-        pure
-        returns (uint256, Account memory)
-    {
-        uint256 new_pos;
-        BridgeTypes.ChainId memory chain_id;
-        (new_pos, chain_id) = BridgeTypes.bcs_deserialize_offset_ChainId(pos, input);
-        BridgeTypes.AccountOwner memory owner;
-        (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(new_pos, input);
-        return (new_pos, Account(chain_id, owner));
-    }
-
-    function bcs_deserialize_Account(bytes memory input) internal pure returns (Account memory) {
-        uint256 new_pos;
-        Account memory value;
-        (new_pos, value) = bcs_deserialize_offset_Account(0, input);
-        require(new_pos == input.length, "incomplete deserialization");
-        return value;
-    }
-
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482)):linera-bridge/src/solidity/WrappedFungibleTypes.sol
     struct ApplicationId {
         BridgeTypes.CryptoHash application_description_hash;
     }
@@ -230,13 +155,13 @@ library WrappedFungibleTypes {
     struct Message_Withdraw {
         BridgeTypes.AccountOwner owner;
         uint128 amount;
-        Account target_account;
+        BridgeTypes.Account target_account;
     }
 
     function bcs_serialize_Message_Withdraw(Message_Withdraw memory input) internal pure returns (bytes memory) {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
         result = abi.encodePacked(result, bcs_serialize_uint128(input.amount));
-        return abi.encodePacked(result, bcs_serialize_Account(input.target_account));
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
     }
 
     function bcs_deserialize_offset_Message_Withdraw(uint256 pos, bytes memory input)
@@ -249,8 +174,8 @@ library WrappedFungibleTypes {
         (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(pos, input);
         uint128 amount;
         (new_pos, amount) = bcs_deserialize_offset_uint128(new_pos, input);
-        Account memory target_account;
-        (new_pos, target_account) = bcs_deserialize_offset_Account(new_pos, input);
+        BridgeTypes.Account memory target_account;
+        (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(new_pos, input);
         return (new_pos, Message_Withdraw(owner, amount, target_account));
     }
 
@@ -649,9 +574,9 @@ library WrappedFungibleTypes {
     }
 
     struct WrappedFungibleOperation_Claim {
-        Account source_account;
+        BridgeTypes.Account source_account;
         uint128 amount;
-        Account target_account;
+        BridgeTypes.Account target_account;
     }
 
     function bcs_serialize_WrappedFungibleOperation_Claim(WrappedFungibleOperation_Claim memory input)
@@ -659,9 +584,9 @@ library WrappedFungibleTypes {
         pure
         returns (bytes memory)
     {
-        bytes memory result = bcs_serialize_Account(input.source_account);
+        bytes memory result = BridgeTypes.bcs_serialize_Account(input.source_account);
         result = abi.encodePacked(result, bcs_serialize_uint128(input.amount));
-        return abi.encodePacked(result, bcs_serialize_Account(input.target_account));
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
     }
 
     function bcs_deserialize_offset_WrappedFungibleOperation_Claim(uint256 pos, bytes memory input)
@@ -670,12 +595,12 @@ library WrappedFungibleTypes {
         returns (uint256, WrappedFungibleOperation_Claim memory)
     {
         uint256 new_pos;
-        Account memory source_account;
-        (new_pos, source_account) = bcs_deserialize_offset_Account(pos, input);
+        BridgeTypes.Account memory source_account;
+        (new_pos, source_account) = BridgeTypes.bcs_deserialize_offset_Account(pos, input);
         uint128 amount;
         (new_pos, amount) = bcs_deserialize_offset_uint128(new_pos, input);
-        Account memory target_account;
-        (new_pos, target_account) = bcs_deserialize_offset_Account(new_pos, input);
+        BridgeTypes.Account memory target_account;
+        (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(new_pos, input);
         return (new_pos, WrappedFungibleOperation_Claim(source_account, amount, target_account));
     }
 
@@ -691,13 +616,8 @@ library WrappedFungibleTypes {
         return value;
     }
 
-<<<<<<< HEAD:linera-bridge/src/solidity/WrappedFungibleTypesV1.sol
     struct WrappedFungibleOperation_Mint {
         BridgeTypes.Account target_account;
-=======
-    struct WrappedFungibleOperation_MintAndTransfer {
-        Account target_account;
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482)):linera-bridge/src/solidity/WrappedFungibleTypes.sol
         uint128 amount;
     }
 
@@ -706,7 +626,7 @@ library WrappedFungibleTypes {
         pure
         returns (bytes memory)
     {
-        bytes memory result = bcs_serialize_Account(input.target_account);
+        bytes memory result = BridgeTypes.bcs_serialize_Account(input.target_account);
         return abi.encodePacked(result, bcs_serialize_uint128(input.amount));
     }
 
@@ -716,8 +636,8 @@ library WrappedFungibleTypes {
         returns (uint256, WrappedFungibleOperation_Mint memory)
     {
         uint256 new_pos;
-        Account memory target_account;
-        (new_pos, target_account) = bcs_deserialize_offset_Account(pos, input);
+        BridgeTypes.Account memory target_account;
+        (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(pos, input);
         uint128 amount;
         (new_pos, amount) = bcs_deserialize_offset_uint128(new_pos, input);
         return (new_pos, WrappedFungibleOperation_Mint(target_account, amount));
@@ -773,7 +693,7 @@ library WrappedFungibleTypes {
     struct WrappedFungibleOperation_Transfer {
         BridgeTypes.AccountOwner owner;
         uint128 amount;
-        Account target_account;
+        BridgeTypes.Account target_account;
     }
 
     function bcs_serialize_WrappedFungibleOperation_Transfer(WrappedFungibleOperation_Transfer memory input)
@@ -783,7 +703,7 @@ library WrappedFungibleTypes {
     {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
         result = abi.encodePacked(result, bcs_serialize_uint128(input.amount));
-        return abi.encodePacked(result, bcs_serialize_Account(input.target_account));
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
     }
 
     function bcs_deserialize_offset_WrappedFungibleOperation_Transfer(uint256 pos, bytes memory input)
@@ -796,8 +716,8 @@ library WrappedFungibleTypes {
         (new_pos, owner) = BridgeTypes.bcs_deserialize_offset_AccountOwner(pos, input);
         uint128 amount;
         (new_pos, amount) = bcs_deserialize_offset_uint128(new_pos, input);
-        Account memory target_account;
-        (new_pos, target_account) = bcs_deserialize_offset_Account(new_pos, input);
+        BridgeTypes.Account memory target_account;
+        (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(new_pos, input);
         return (new_pos, WrappedFungibleOperation_Transfer(owner, amount, target_account));
     }
 
@@ -817,7 +737,7 @@ library WrappedFungibleTypes {
         BridgeTypes.AccountOwner owner;
         BridgeTypes.AccountOwner spender;
         uint128 amount;
-        Account target_account;
+        BridgeTypes.Account target_account;
     }
 
     function bcs_serialize_WrappedFungibleOperation_TransferFrom(WrappedFungibleOperation_TransferFrom memory input)
@@ -828,7 +748,7 @@ library WrappedFungibleTypes {
         bytes memory result = BridgeTypes.bcs_serialize_AccountOwner(input.owner);
         result = abi.encodePacked(result, BridgeTypes.bcs_serialize_AccountOwner(input.spender));
         result = abi.encodePacked(result, bcs_serialize_uint128(input.amount));
-        return abi.encodePacked(result, bcs_serialize_Account(input.target_account));
+        return abi.encodePacked(result, BridgeTypes.bcs_serialize_Account(input.target_account));
     }
 
     function bcs_deserialize_offset_WrappedFungibleOperation_TransferFrom(uint256 pos, bytes memory input)
@@ -843,8 +763,8 @@ library WrappedFungibleTypes {
         (new_pos, spender) = BridgeTypes.bcs_deserialize_offset_AccountOwner(new_pos, input);
         uint128 amount;
         (new_pos, amount) = bcs_deserialize_offset_uint128(new_pos, input);
-        Account memory target_account;
-        (new_pos, target_account) = bcs_deserialize_offset_Account(new_pos, input);
+        BridgeTypes.Account memory target_account;
+        (new_pos, target_account) = BridgeTypes.bcs_deserialize_offset_Account(new_pos, input);
         return (new_pos, WrappedFungibleOperation_TransferFrom(owner, spender, amount, target_account));
     }
 

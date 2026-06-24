@@ -9138,7 +9138,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -9202,15 +9202,9 @@ dependencies = [
 
 [[package]]
 name = "serde-generate"
-<<<<<<< HEAD
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f0cd15a5e1d4648c9ba334c936c4d3047acbe275f571c9be07cda925ed82ba6"
-=======
-version = "0.34.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d8da3b5dc712ccd84b75d863f6a984f840153d1b08a2c6b98503185bf4fdde2"
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 dependencies = [
  "anyhow",
  "heck 0.3.3",

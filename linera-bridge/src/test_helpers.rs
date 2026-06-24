@@ -14,13 +14,8 @@ use std::{
 use alloy_sol_types::{SolCall, SolValue};
 use linera_base::{
     crypto::{AccountPublicKey, CryptoHash, TestString, ValidatorPublicKey, ValidatorSecretKey},
-<<<<<<< HEAD
     data_types::{Amount, BlobContent, BlockHeight, Epoch, Round, Timestamp, U128},
     identifiers::{ApplicationId, ChainId},
-=======
-    data_types::{Amount, BlobContent, BlockHeight, Epoch, Event, Round, Timestamp, U128},
-    identifiers::{ApplicationId, ChainId, StreamId},
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 };
 use linera_chain::{
     block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
@@ -28,15 +23,7 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
-<<<<<<< HEAD
-    committee::ValidatorState, system::AdminOperation, Message, MessageKind, Operation,
-    ResourceControlPolicy, SystemOperation,
-=======
-    committee::ValidatorState,
-    system::{EpochEventData, EPOCH_STREAM_NAME},
-    test_utils::solidity::compile_solidity_contract_with_options,
-    Message, MessageKind, Operation, ResourceControlPolicy,
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
+    committee::ValidatorState, Message, MessageKind, Operation, ResourceControlPolicy,
 };
 use revm::{
     database::{CacheDB, EmptyDB},
@@ -45,17 +32,8 @@ use revm::{
 };
 use revm_context::result::{ExecutionResult, Output};
 
-<<<<<<< HEAD
 use crate::evm;
 pub use crate::evm::client::{validator_evm_address, validator_uncompressed_key};
-=======
-pub use crate::evm::client::validator_evm_address;
-use crate::{
-    block_proof::{BlockProof, ProvenEvents},
-    contracts::ILightClient::addCommitteeCall,
-    evm,
-};
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 
 pub const GAS_LIMIT: u64 = 500_000_000;
 
@@ -83,106 +61,36 @@ pub fn create_committee_blob(public: &ValidatorPublicKey) -> (Vec<u8>, CryptoHas
     (bytes, blob_hash)
 }
 
-/// Creates the system epoch event Linera emits on `CreateCommittee`: indexed by the new epoch,
-/// carrying the committee blob hash in its `EpochEventData` payload.
-pub fn epoch_event(new_epoch: Epoch, blob_hash: CryptoHash) -> Event {
-    Event {
-        stream_id: StreamId::system(EPOCH_STREAM_NAME),
-        index: new_epoch.0,
-        value: bcs::to_bytes(&EpochEventData {
-            blob_hash,
-            timestamp: Timestamp::from(0),
-        })
-        .expect("epoch event serialization failed"),
-    }
-}
-
-/// Builds an event identical to [`epoch_event`] in index, stream-name bytes, and payload, but
-/// emitted on a *user* application stream (`GenericApplicationId::User`) instead of the system
-/// stream. Used to verify the LightClient upgrades committees only from the system stream.
-pub fn forged_user_epoch_event(
-    application_id: CryptoHash,
-    new_epoch: Epoch,
+/// Creates the system epoch event Linera emits when a new committee is created:
+/// stream `system([0])`, index = the new epoch, value = BCS(committee blob hash).
+/// This is what the on-chain `addCommittee` scans for (it no longer parses the
+/// `CreateCommittee` operation).
+pub fn create_committee_event(
+    epoch: Epoch,
     blob_hash: CryptoHash,
-) -> Event {
-    use linera_base::identifiers::{GenericApplicationId, StreamName};
-    Event {
+) -> linera_base::data_types::Event {
+    use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};
+    linera_base::data_types::Event {
         stream_id: StreamId {
-            application_id: GenericApplicationId::User(ApplicationId::new(application_id)),
-            stream_name: StreamName(EPOCH_STREAM_NAME.to_vec()),
+            application_id: GenericApplicationId::System,
+            stream_name: StreamName(linera_execution::system::EPOCH_STREAM_NAME.to_vec()),
         },
-        index: new_epoch.0,
-        value: bcs::to_bytes(&EpochEventData {
-            blob_hash,
-            timestamp: Timestamp::from(0),
-        })
-        .expect("epoch event serialization failed"),
+        index: epoch.0,
+        value: bcs::to_bytes(&blob_hash).unwrap(),
     }
 }
 
-/// Signs a block with a single validator and returns the `ConfirmedBlockCertificate`.
-pub fn sign_certificate(
-    secret: &ValidatorSecretKey,
-    public: &ValidatorPublicKey,
-    block: Block,
-) -> ConfirmedBlockCertificate {
-    let confirmed = ConfirmedBlock::new(block);
-    let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
-    ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
-}
-
-/// Signs a block and returns the BCS-serialized `BlockProof`.
+/// Signs a block and returns the BCS-serialized `ConfirmedBlockCertificate`.
 pub fn sign_and_serialize(
     secret: &ValidatorSecretKey,
     public: &ValidatorPublicKey,
     block: Block,
 ) -> Vec<u8> {
-<<<<<<< HEAD
     let confirmed = ConfirmedBlock::new(block);
     let vote = Vote::new(confirmed.clone(), Round::Fast, secret);
     let certificate =
         ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)]);
     bcs::to_bytes(&certificate).expect("BCS serialization failed")
-=======
-    bcs::to_bytes(&BlockProof::from_certificate(&sign_certificate(
-        secret, public, block,
-    )))
-    .expect("BCS serialization failed")
-}
-
-/// Builds the register-then-`addCommittee` inputs for a block whose sole event (transaction 0,
-/// position 0) is `event`, signed by the given validator on `chain_id` at `block_epoch`/`height`:
-/// the [`ProvenEvents`] witness `addCommittee` consumes, and the BCS block proof to `registerBlock`
-/// first.
-pub fn committee_call_args_for_event(
-    signer_secret: &ValidatorSecretKey,
-    signer_public: &ValidatorPublicKey,
-    event: Event,
-    block_epoch: Epoch,
-    height: BlockHeight,
-    chain_id: CryptoHash,
-) -> (ProvenEvents, Bytes) {
-    let block = build_block(chain_id, block_epoch, height, vec![], vec![vec![event]]);
-    let cert = sign_certificate(signer_secret, signer_public, block);
-    let block_proof = Bytes::from(
-        bcs::to_bytes(&BlockProof::from_certificate(&cert)).expect("BCS serialization failed"),
-    );
-    (ProvenEvents::new(&cert, 0, &[0]), block_proof)
-}
-
-/// Assembles an `addCommitteeCall` from the proven-events witness and the committee blob.
-pub fn build_add_committee_call(proven: ProvenEvents, committee_blob: Vec<u8>) -> addCommitteeCall {
-    addCommitteeCall {
-        blockHash: proven.block_hash,
-        eventBcs: proven.event_bcs,
-        txIndex: proven.tx_index,
-        numTxs: proven.num_txs,
-        numEventsInTx: proven.num_events_in_tx,
-        positions: proven.positions,
-        siblings: proven.siblings,
-        committeeBlob: committee_blob.into(),
-    }
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 }
 
 /// Creates a certificate with custom transactions for a specific chain and height.
@@ -581,6 +489,46 @@ pub fn create_test_block(
             previous_event_blocks: Default::default(),
             oracle_responses: vec![],
             events: vec![],
+            blobs: vec![],
+            operation_results: vec![],
+        },
+    }
+}
+
+/// Like [`create_test_block`] but carries `events` (and no transactions) — used
+/// to drive event-reading paths such as committee rotation (the epoch event) and
+/// burns.
+pub fn create_test_block_with_events(
+    chain_id: CryptoHash,
+    epoch: Epoch,
+    height: BlockHeight,
+    events: Vec<Vec<linera_base::data_types::Event>>,
+) -> Block {
+    Block {
+        header: BlockHeader {
+            chain_id: ChainId(chain_id),
+            epoch,
+            height,
+            timestamp: Timestamp::from(0),
+            state_hash: CryptoHash::new(&TestString::new("state")),
+            previous_block_hash: None,
+            authenticated_signer: None,
+            transactions_hash: CryptoHash::new(&TestString::new("tx")),
+            messages_hash: CryptoHash::new(&TestString::new("msg")),
+            previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg")),
+            previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_evt")),
+            oracle_responses_hash: CryptoHash::new(&TestString::new("oracle")),
+            events_hash: CryptoHash::new(&TestString::new("events")),
+            blobs_hash: CryptoHash::new(&TestString::new("blobs")),
+            operation_results_hash: CryptoHash::new(&TestString::new("op_results")),
+        },
+        body: BlockBody {
+            transactions: vec![],
+            messages: vec![],
+            previous_message_blocks: Default::default(),
+            previous_event_blocks: Default::default(),
+            oracle_responses: vec![],
+            events,
             blobs: vec![],
             operation_results: vec![],
         },

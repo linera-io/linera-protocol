@@ -26,28 +26,12 @@ bytes32 constant BRIDGE_APP_ID = bytes32(uint256(0xF00D));
 // confirm that burn-matching keys on the bridge id and not on this one.
 bytes32 constant FUNGIBLE_APP_ID = bytes32(uint256(0xBEEF));
 
-<<<<<<< HEAD
 // Governance roles for test deployments (values are irrelevant to these tests,
 // which exercise burn settlement / deposit guards, not governance flows).
 address constant PAUSE_GUARDIAN = address(0xA11CE);
 address constant PROPOSER = address(0xB0B);
 address constant CANCELLER = address(0xCA11);
 uint256 constant TIMELOCK_DELAY = 1 days;
-=======
-// ------------------------------------------------------------------
-// MockLightClient
-//
-// Stands in for the real LightClient. `proveEventsCommitted` is a no-op
-// (or reverts when armed) — the fold itself is covered by LightClient's
-// own tests. `registeredBlocks` returns a nonzero events hash plus the
-// configured chain id and height, so `FungibleBridge.processBurns` can
-// read them and release the burns it is handed.
-// ------------------------------------------------------------------
-contract MockLightClient {
-    bytes32 public chainIdRet;
-    uint64 public heightRet;
-    bool public inclusionReverts;
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 
 // ------------------------------------------------------------------
 // MockLightClientForBurns
@@ -104,7 +88,6 @@ contract MockLightClientForBurns {
         sigHash = bytes32(uint256(0x1234));
     }
 
-<<<<<<< HEAD
     function _encodeBurn(address target, uint128 amount) private pure returns (bytes memory) {
         WrappedFungibleTypesV1.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(target);
@@ -154,28 +137,6 @@ contract MockLightClientForNonBurn {
         b.body.events[0][0] = evt;
 
         sigHash = bytes32(uint256(0x1234));
-=======
-    function proveEventsCommitted(
-        bytes32,
-        bytes[] calldata,
-        uint32,
-        uint32,
-        uint32,
-        uint32[] calldata,
-        bytes32[] calldata
-    ) external view {
-        require(!inclusionReverts, "event inclusion proof failed");
-    }
-
-    // Mirrors the public getter of LightClient's `registeredBlocks` mapping. A nonzero
-    // `eventsHash` marks the block as registered.
-    function registeredBlocks(bytes32)
-        external
-        view
-        returns (bytes32 eventsHash, uint64 height, bytes32 chainId, uint32 epoch)
-    {
-        return (bytes32(uint256(1)), heightRet, chainIdRet, 0);
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     }
 }
 
@@ -224,29 +185,6 @@ contract FungibleBridgeProcessBurnsTest is Test {
         tok.transfer(address(bridge), supply);
     }
 
-<<<<<<< HEAD
-=======
-    // Settles the chunk `eventBcs` at `positions`. The inclusion-proof structure (sibling counts,
-    // tx/event sizes) is irrelevant here because `MockLightClient.proveEventsCommitted` is a no-op;
-    // these tests exercise FungibleBridge's release logic, not the fold.
-    function _settle(FungibleBridge bridge, bytes[] memory eventBcs, uint32[] memory positions) internal {
-        bridge.processBurns(BLOCK_HASH, eventBcs, TX, 1, uint32(eventBcs.length), positions, noSiblings);
-    }
-
-    function _bytesArray(bytes memory a) internal pure returns (bytes[] memory) {
-        bytes[] memory arr = new bytes[](1);
-        arr[0] = a;
-        return arr;
-    }
-
-    function _bytesArray(bytes memory a, bytes memory b) internal pure returns (bytes[] memory) {
-        bytes[] memory arr = new bytes[](2);
-        arr[0] = a;
-        arr[1] = b;
-        return arr;
-    }
-
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
     // ------------------------------------------------------------------
 
     function test_processBurns_single_position_marks_processed() public {

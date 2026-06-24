@@ -121,13 +121,7 @@ name = "linera-bridge"
 required-features = ["cli"]
 
 [build-dependencies]
-<<<<<<< HEAD
 serde-generate = { version = "0.33", features = ["solidity"], optional = true }
-=======
-serde-generate = { version = "0.34.1", features = [
-    "solidity",
-], optional = true }
->>>>>>> 22c1ee41d1 (Extract new committee rotation from an event, not operation (#6482))
 serde-reflection = { workspace = true, optional = true }
 serde_yaml = { version = "0.8.26", optional = true }
 
