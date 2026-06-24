@@ -65,7 +65,10 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
 
     for (name, content) in [
         ("BridgeTypes.sol", BRIDGE_TYPES_SOURCE),
-        ("WrappedFungibleTypesV1.sol", WRAPPED_FUNGIBLE_TYPES_V1_SOURCE),
+        (
+            "WrappedFungibleTypesV1.sol",
+            WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
+        ),
         ("FungibleBridge.sol", FUNGIBLE_BRIDGE_SOURCE),
         ("LightClient.sol", linera_bridge::evm::light_client::SOURCE),
         ("ILightClient.sol", linera_bridge::evm::ILIGHTCLIENT_SOURCE),
