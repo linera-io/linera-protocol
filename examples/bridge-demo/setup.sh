@@ -140,6 +140,10 @@ CONTRACTS_DIR="${CONTRACTS_DIR:-/contracts}"
 OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
 FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
 RELAY_URL="${RELAY_URL:-http://localhost:3001}"
+# Browser-reachable EVM RPC for the frontend's read-only calls (balances, tx
+# receipts). The relay/forge use EVM_RPC_URL (the in-container `anvil` host),
+# which a browser can't resolve; the frontend reads via this localhost URL.
+BROWSER_EVM_RPC_URL="${BROWSER_EVM_RPC_URL:-http://localhost:8545}"
 # Docker container has its own solc; don't force a version download.
 FORGE_USE_SOLC=()
 
@@ -439,6 +443,7 @@ LINERA_BRIDGE_ADDRESS=$BRIDGE_ADDRESS
 LINERA_TOKEN_ADDRESS=$TOKEN_ADDRESS
 LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
 LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
+LINERA_EVM_RPC_URL=$BROWSER_EVM_RPC_URL
 EOF
 
 # Write setup-complete marker so the relay knows it's safe to start.
