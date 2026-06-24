@@ -44,13 +44,25 @@ impl Service for WrappedFungibleTokenService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl WrappedFungibleTokenService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(
+        &self,
+    ) -> Schema<
+        Self,
+        <WrappedFungibleOperation as GraphQLMutationRoot<WrappedFungibleTokenService>>::MutationRoot,
+        EmptySubscription,
+    >{
+        Schema::build(
             self.clone(),
             WrappedFungibleOperation::mutation_root(self.runtime.clone()),
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
     }
 }
 
@@ -85,5 +97,27 @@ impl WrappedFungibleTokenService {
     async fn evm_source_chain_id(&self) -> u64 {
         let params: WrappedParameters = self.runtime.application_parameters();
         params.evm_source_chain_id
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use linera_sdk::{util::BlockingWait, views::View, ServiceRuntime};
+
+    use super::*;
+
+    #[test]
+    fn schema_sdl() {
+        let runtime = ServiceRuntime::<WrappedFungibleTokenService>::new();
+        let state = WrappedFungibleTokenState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = WrappedFungibleTokenService {
+            state: Arc::new(state),
+            runtime: Arc::new(runtime),
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }

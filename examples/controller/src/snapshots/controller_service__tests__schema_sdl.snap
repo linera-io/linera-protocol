@@ -1,0 +1,308 @@
+---
+source: controller/src/service.rs
+expression: service.schema().sdl()
+---
+"""
+A unique identifier for a user or an application.
+"""
+scalar AccountOwner
+
+"""
+A blanket policy to apply to all messages by default.
+"""
+enum BlanketMessagePolicy {
+	"""
+	Automatically accept all incoming messages. Reject them only if execution fails.
+	"""
+	ACCEPT
+	"""
+	Automatically reject tracked messages, ignore or skip untracked messages, but accept
+	protected ones.
+	"""
+	REJECT
+	"""
+	Don't include any messages in blocks, and don't make any decision whether to accept or
+	reject.
+	"""
+	IGNORE
+}
+
+"""
+The unique identifier (UID) of a chain. This is currently computed as the hash value of a ChainDescription.
+"""
+scalar ChainId
+
+scalar ControllerCommand
+
+"""
+The state of the service controller application.
+"""
+type ControllerState {
+	"""
+	The description of this worker as we registered it.
+	"""
+	localWorker: Worker
+	"""
+	The services currently running locally.
+	"""
+	localServices: SetView_DataBlobHash_922740db!
+	"""
+	The services we were told to run locally, but we're still waiting to for the
+	block heights at which we're supposed to start running them.
+	"""
+	localPendingServices: MapView_DataBlobHash_PendingService_f85f22f6!
+	"""
+	The chains currently followed locally (besides ours and the active service
+	chains).
+	"""
+	localChains: SetView_ChainId_37f83aa9!
+	"""
+	The local message policy.
+	"""
+	localMessagePolicy: MapView_ChainId_MessagePolicy_b348340f!
+	"""
+	The admin account owners (user or application) allowed to update services.
+	"""
+	admins: [AccountOwner!]
+	"""
+	All the workers declared in the network.
+	"""
+	workers: MapView_ChainId_Worker_b98a7459!
+	"""
+	All the services currently defined and where they run. If services run on several
+	workers, the chain is configured so that workers can collaborate to produce blocks
+	(e.g. only one worker is actively producing blocks while the other waits as a
+	backup).
+	"""
+	services: MapView_DataBlobHash_ChainId_Array_0db9f691!
+	"""
+	Services that have been reassigned to a worker, but are awaiting confirmation that
+	the previous worker has added the new one as an owner.
+	"""
+	pendingServices: MapView_DataBlobHash_ServicePendingHandoff_fec9d6cb!
+	"""
+	All the chains currently being followed and by which workers.
+	"""
+	chains: MapView_ChainId_ChainId_Array_54eacc14!
+	"""
+	Retrieve information on a given service.
+	"""
+	readService(serviceId: DataBlobHash!): ManagedService
+	"""
+	Retrieve the local worker state.
+	"""
+	localWorkerState: LocalWorkerState!
+}
+
+"""
+Hash of a Data Blob
+"""
+scalar DataBlobHash
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_ChainId_ChainId_Array_1b667611 {
+	key: ChainId!
+	value: [ChainId!]
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_ChainId_MessagePolicy_7c54cb51 {
+	key: ChainId!
+	value: MessagePolicy
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_ChainId_Worker_e8bb0e24 {
+	key: ChainId!
+	value: Worker
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_DataBlobHash_ChainId_Array_8f84eafa {
+	key: DataBlobHash!
+	value: [ChainId!]
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_DataBlobHash_PendingService_9cb7eaf0 {
+	key: DataBlobHash!
+	value: PendingService
+}
+
+"""
+A GraphQL-visible map item, complete with key.
+"""
+type Entry_DataBlobHash_ServicePendingHandoff_97c325a6 {
+	key: DataBlobHash!
+	value: ServicePendingHandoff
+}
+
+"""
+A unique identifier for a user application or for the system application
+"""
+scalar GenericApplicationId
+
+scalar LocalWorkerState
+
+scalar ManagedService
+
+input MapFilters_ChainId_37f83aa9 {
+	keys: [ChainId!]
+}
+
+input MapFilters_DataBlobHash_922740db {
+	keys: [DataBlobHash!]
+}
+
+input MapInput_ChainId_37f83aa9 {
+	filters: MapFilters_ChainId_37f83aa9
+}
+
+input MapInput_DataBlobHash_922740db {
+	filters: MapFilters_DataBlobHash_922740db
+}
+
+type MapView_ChainId_ChainId_Array_54eacc14 {
+	keys(count: Int): [ChainId!]!
+	count: Int!
+	entry(key: ChainId!): Entry_ChainId_ChainId_Array_1b667611!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_ChainId_Array_1b667611!]!
+}
+
+type MapView_ChainId_MessagePolicy_b348340f {
+	keys(count: Int): [ChainId!]!
+	count: Int!
+	entry(key: ChainId!): Entry_ChainId_MessagePolicy_7c54cb51!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_MessagePolicy_7c54cb51!]!
+}
+
+type MapView_ChainId_Worker_b98a7459 {
+	keys(count: Int): [ChainId!]!
+	count: Int!
+	entry(key: ChainId!): Entry_ChainId_Worker_e8bb0e24!
+	entries(input: MapInput_ChainId_37f83aa9): [Entry_ChainId_Worker_e8bb0e24!]!
+}
+
+type MapView_DataBlobHash_ChainId_Array_0db9f691 {
+	keys(count: Int): [DataBlobHash!]!
+	count: Int!
+	entry(key: DataBlobHash!): Entry_DataBlobHash_ChainId_Array_8f84eafa!
+	entries(input: MapInput_DataBlobHash_922740db): [Entry_DataBlobHash_ChainId_Array_8f84eafa!]!
+}
+
+type MapView_DataBlobHash_PendingService_f85f22f6 {
+	keys(count: Int): [DataBlobHash!]!
+	count: Int!
+	entry(key: DataBlobHash!): Entry_DataBlobHash_PendingService_9cb7eaf0!
+	entries(input: MapInput_DataBlobHash_922740db): [Entry_DataBlobHash_PendingService_9cb7eaf0!]!
+}
+
+type MapView_DataBlobHash_ServicePendingHandoff_fec9d6cb {
+	keys(count: Int): [DataBlobHash!]!
+	count: Int!
+	entry(key: DataBlobHash!): Entry_DataBlobHash_ServicePendingHandoff_97c325a6!
+	entries(input: MapInput_DataBlobHash_922740db): [Entry_DataBlobHash_ServicePendingHandoff_97c325a6!]!
+}
+
+"""
+Policies for automatically handling incoming messages.
+"""
+type MessagePolicy {
+	"""
+	The blanket policy applied to all messages.
+	"""
+	blanket: BlanketMessagePolicy!
+	"""
+	A collection of chains which restrict the origin of messages to be
+	accepted. `Option::None` means that messages from all chains are accepted. An empty
+	`HashSet` denotes that messages from no chains are accepted.
+	"""
+	restrictChainIdsTo: [ChainId!]
+	"""
+	A collection of chains whose incoming messages should be ignored.
+	"""
+	ignoreChainIds: [ChainId!]!
+	"""
+	A collection of applications: If `Some`, only bundles with at least one message by any
+	of these applications will be accepted.
+	"""
+	rejectMessageBundlesWithoutApplicationIds: [GenericApplicationId!]
+	"""
+	A collection of applications: If `Some`, only bundles all of whose messages are by these
+	applications will be accepted.
+	"""
+	rejectMessageBundlesWithOtherApplicationIds: [GenericApplicationId!]
+	"""
+	A collection of applications: If `Some`, only event streams from those
+	applications will be processed.
+	"""
+	processEventsFromApplicationIds: [GenericApplicationId!]
+	"""
+	A collection of applications whose messages must never be rejected. Bundles whose
+	messages are all from one of these applications bypass the other rejection rules
+	(except `restrict_chain_ids_to`), and on execution failure they are discarded for
+	later retry instead of being rejected. A bundle that contains any message from an
+	application not on this list can be rejected. An empty set disables this feature.
+	"""
+	neverRejectApplicationIds: [GenericApplicationId!]!
+}
+
+type OperationMutationRoot {
+	executeWorkerCommand(owner: AccountOwner!, command: WorkerCommand!): [Int!]!
+	executeControllerCommand(admin: AccountOwner!, command: ControllerCommand!): [Int!]!
+	startLocalService(serviceId: DataBlobHash!): [Int!]!
+}
+
+scalar PendingService
+
+scalar ServicePendingHandoff
+
+type SetView_ChainId_37f83aa9 {
+	elements(count: Int): [ChainId!]!
+	count: Int!
+}
+
+type SetView_DataBlobHash_922740db {
+	elements(count: Int): [DataBlobHash!]!
+	count: Int!
+}
+
+"""
+The description of a service worker.
+"""
+type Worker {
+	"""
+	The address used by the worker.
+	"""
+	owner: AccountOwner!
+	"""
+	Some tags denoting the capabilities of this worker. Each capability has a value
+	that the worker will read from its local environment and pass to the applications.
+	"""
+	capabilities: [String!]!
+}
+
+scalar WorkerCommand
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: ControllerState
+	mutation: OperationMutationRoot
+}

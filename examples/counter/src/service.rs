@@ -38,15 +38,21 @@ impl Service for CounterService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
-        let schema = Schema::build(
+        self.schema().execute(request).await
+    }
+}
+
+impl CounterService {
+    /// Builds the GraphQL schema served by [`Self::handle_query`].
+    fn schema(&self) -> Schema<Arc<CounterState>, MutationRoot, EmptySubscription> {
+        Schema::build(
             self.state.clone(),
             MutationRoot {
                 runtime: self.runtime.clone(),
             },
             EmptySubscription,
         )
-        .finish();
-        schema.execute(request).await
+        .finish()
     }
 }
 
@@ -97,5 +103,21 @@ mod tests {
         let expected = Response::new(Value::from_json(json!({"value" : 61_098_721})).unwrap());
 
         assert_eq!(response, expected)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn schema_sdl() {
+        let runtime = Arc::new(ServiceRuntime::<CounterService>::new());
+        let state = CounterState::load(runtime.root_view_storage_context())
+            .blocking_wait()
+            .expect("Failed to read from mock key value store");
+
+        let service = CounterService {
+            state: Arc::new(state),
+            runtime,
+        };
+
+        insta::assert_snapshot!(service.schema().sdl());
     }
 }
