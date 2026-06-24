@@ -345,7 +345,7 @@ mod tests {
         // Retire epoch 0.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -396,7 +396,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -426,7 +426,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 2 },
             )
@@ -437,7 +437,7 @@ mod tests {
         // Retire epoch 0 (floor -> 1) while still at epoch 1.
         call_contract(
             &mut light_client.db,
-            light_client.deployer,
+            test_proposer(),
             light_client.contract,
             expireEpochsBelowCall { newMinEpoch: 1 },
         );
@@ -446,7 +446,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 1 },
             )
@@ -456,7 +456,7 @@ mod tests {
         assert!(
             try_call_contract(
                 &mut light_client.db,
-                light_client.deployer,
+                test_proposer(),
                 light_client.contract,
                 expireEpochsBelowCall { newMinEpoch: 0 },
             )
@@ -732,8 +732,8 @@ mod tests {
         chain_id: CryptoHash,
     ) -> addCommitteeCall {
         let (committee_bytes, blob_hash) = create_committee_blob(new_public);
-        let transactions = create_committee_transaction(new_epoch, blob_hash);
-        let block = create_test_block(chain_id, block_epoch, height, transactions);
+        let events = vec![vec![create_committee_event(new_epoch, blob_hash)]];
+        let block = create_test_block_with_events(chain_id, block_epoch, height, events);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
         let new_uncompressed = validator_uncompressed_key(new_public);
         addCommitteeCall {
@@ -813,12 +813,12 @@ mod tests {
         let blob_content = BlobContent::new_committee(committee_bytes.clone());
         let blob_hash = CryptoHash::new(&blob_content);
 
-        let transactions = create_committee_transaction(Epoch(1), blob_hash);
-        let block = create_test_block(
+        let events = vec![vec![create_committee_event(Epoch(1), blob_hash)]];
+        let block = create_test_block_with_events(
             test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
-            transactions,
+            events,
         );
         let bcs_bytes = sign_and_serialize(&light_client.secret, &light_client.public, block);
 
@@ -888,8 +888,8 @@ mod tests {
         chain_id: CryptoHash,
     ) -> addCommitteeCall {
         let (committee_bytes, blob_hash) = create_multi_committee_blob(new_publics);
-        let transactions = create_committee_transaction(new_epoch, blob_hash);
-        let block = create_test_block(chain_id, block_epoch, height, transactions);
+        let events = vec![vec![create_committee_event(new_epoch, blob_hash)]];
+        let block = create_test_block_with_events(chain_id, block_epoch, height, events);
         let bcs_bytes = sign_and_serialize(signer_secret, signer_public, block);
 
         // Extract uncompressed keys in BCS blob order (sorted by compressed bytes).

@@ -17,7 +17,7 @@ mod codegen {
         generate_bridge_types();
         generate_fungible_types();
         forge_fmt(&PathBuf::from("src/solidity/BridgeTypes.sol"));
-        forge_fmt(&PathBuf::from("src/solidity/WrappedFungibleTypes.sol"));
+        forge_fmt(&PathBuf::from("src/solidity/WrappedFungibleTypesV1.sol"));
     }
 
     /// Reformats a freshly generated Solidity file with `forge fmt` so the
@@ -59,9 +59,12 @@ mod codegen {
             .expect("failed to generate Solidity code");
     }
 
-    /// Generates WrappedFungibleTypes.sol from the wrapped-fungible snapshot.
-    /// Primitive types shared with BridgeTypes are declared as external so the generated
-    /// code imports them from BridgeTypes.sol instead of redefining them.
+    /// Generates WrappedFungibleTypesV1.sol from the wrapped-fungible snapshot.
+    /// The `V1` suffix is versioned in lockstep with `FungibleBurnEventDecoderV1`:
+    /// a future BurnEvent schema change generates a new `WrappedFungibleTypesV2`
+    /// consumed by a new decoder. Primitive types shared with BridgeTypes are
+    /// declared as external so the generated code imports them from
+    /// BridgeTypes.sol instead of redefining them.
     fn generate_fungible_types() {
         let bridge_snap = PathBuf::from("tests/snapshots/format__format.yaml.snap");
         let fungible_snap = PathBuf::from(
@@ -79,11 +82,11 @@ mod codegen {
 
         let out_dir = PathBuf::from("src/solidity");
         let installer = solidity::Installer::new(out_dir);
-        let config = CodeGeneratorConfig::new("WrappedFungibleTypes".to_string())
+        let config = CodeGeneratorConfig::new("WrappedFungibleTypesV1".to_string())
             .with_external_definitions(BTreeMap::from([("BridgeTypes".to_string(), shared_types)]));
         installer
             .install_module(&config, &fungible_registry)
-            .expect("failed to generate WrappedFungibleTypes Solidity code");
+            .expect("failed to generate WrappedFungibleTypesV1 Solidity code");
     }
 
     /// Returns the names from `fungible_registry` that are primitive/structural types also

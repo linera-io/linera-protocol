@@ -31,12 +31,12 @@ mod tests {
             deploy_light_client(&mut db, deployer, &[addr], &[1], test_admin_chain_id(), 0);
 
         let (committee_bytes, blob_hash) = create_committee_blob(&new_public);
-        let transactions = create_committee_transaction(Epoch(1), blob_hash);
-        let block = create_test_block(
+        let events = vec![vec![create_committee_event(Epoch(1), blob_hash)]];
+        let block = create_test_block_with_events(
             test_admin_chain_id(),
             Epoch::ZERO,
             BlockHeight(1),
-            transactions,
+            events,
         );
         let bcs_bytes = sign_and_serialize(&secret, &public, block);
         let new_uncompressed = validator_uncompressed_key(&new_public);

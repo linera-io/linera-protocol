@@ -30,6 +30,16 @@ struct InitLightClientOptions {
     /// Path to write the constructor args JSON file
     #[arg(long, default_value = "light-client-args.json")]
     output: PathBuf,
+
+    /// Pause-guardian address (0x-prefixed) that can emergency-pause
+    /// `registerBlock`. Governance role; cannot move funds.
+    #[arg(long)]
+    pause_guardian: String,
+
+    /// Proposer address (0x-prefixed) that gates `expireEpochsBelow`.
+    /// Governance multisig.
+    #[arg(long)]
+    proposer: String,
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -122,6 +132,15 @@ struct ServeOptions {
     /// Defaults to `bridge_relay.sqlite3` next to the RocksDB storage directory.
     #[arg(long)]
     sqlite_path: Option<std::path::PathBuf>,
+
+    /// Override the EVM provider's receipt poll interval, in milliseconds.
+    /// When unset, alloy picks the interval from the RPC URL: ~250ms for a
+    /// loopback host (localhost/127.0.0.1/::1), 7s otherwise. A local node
+    /// reached via a non-loopback host (e.g. a Docker service name like
+    /// `anvil`) is treated as remote and gets the slow 7s default, so set this
+    /// to match the node's block time for fast local settlement.
+    #[arg(long)]
+    evm_poll_interval_ms: Option<u64>,
 }
 
 fn main() -> Result<()> {
@@ -166,6 +185,8 @@ impl ServeOptions {
             self.monitor_start_block,
             self.max_retries,
             self.sqlite_path.as_deref(),
+            self.evm_poll_interval_ms
+                .map(std::time::Duration::from_millis),
         ))
         .await
     }
@@ -282,6 +303,8 @@ impl InitLightClientOptions {
             "weights": weights,
             "admin_chain_id": format!("0x{}", alloy_primitives::hex::encode(admin_chain_bytes)),
             "epoch": resp.data.current_epoch,
+            "pause_guardian": self.pause_guardian,
+            "proposer": self.proposer,
         });
 
         let json_str = serde_json::to_string_pretty(&result)?;

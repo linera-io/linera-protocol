@@ -28,6 +28,14 @@ set -- linera-bridge serve \
     --certificate-raw-cache-size="${CERTIFICATE_RAW_CACHE_SIZE:-1000}" \
     --event-cache-size="${EVENT_CACHE_SIZE:-1000}"
 
+# Optional: override the EVM receipt poll interval. Only pass the flag when set,
+# so an unset env keeps clap's default (alloy's host-based interval). Useful
+# against a local node reached by a non-loopback host (e.g. Docker `anvil`),
+# which alloy otherwise treats as remote and polls every 7s.
+if [ -n "${EVM_POLL_INTERVAL_MS:-}" ]; then
+    set -- "$@" --evm-poll-interval-ms="$EVM_POLL_INTERVAL_MS"
+fi
+
 # LINERA_WALLET, LINERA_KEYSTORE, LINERA_STORAGE are read directly by clap
 # via `env = "..."`, so they don't need explicit --flags here.
 

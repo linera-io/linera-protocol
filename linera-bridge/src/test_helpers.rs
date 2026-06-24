@@ -23,8 +23,7 @@ use linera_chain::{
     types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
-    committee::ValidatorState, system::AdminOperation, Message, MessageKind, Operation,
-    ResourceControlPolicy, SystemOperation,
+    committee::ValidatorState, Message, MessageKind, Operation, ResourceControlPolicy,
 };
 use revm::{
     database::{CacheDB, EmptyDB},
@@ -62,11 +61,23 @@ pub fn create_committee_blob(public: &ValidatorPublicKey) -> (Vec<u8>, CryptoHas
     (bytes, blob_hash)
 }
 
-/// Creates a `CreateCommittee` transaction list for the given epoch and blob hash.
-pub fn create_committee_transaction(epoch: Epoch, blob_hash: CryptoHash) -> Vec<Transaction> {
-    vec![Transaction::ExecuteOperation(Operation::System(Box::new(
-        SystemOperation::Admin(AdminOperation::CreateCommittee { epoch, blob_hash }),
-    )))]
+/// Creates the system epoch event Linera emits when a new committee is created:
+/// stream `system([0])`, index = the new epoch, value = BCS(committee blob hash).
+/// This is what the on-chain `addCommittee` scans for (it no longer parses the
+/// `CreateCommittee` operation).
+pub fn create_committee_event(
+    epoch: Epoch,
+    blob_hash: CryptoHash,
+) -> linera_base::data_types::Event {
+    use linera_base::identifiers::{GenericApplicationId, StreamId, StreamName};
+    linera_base::data_types::Event {
+        stream_id: StreamId {
+            application_id: GenericApplicationId::System,
+            stream_name: StreamName(linera_execution::system::EPOCH_STREAM_NAME.to_vec()),
+        },
+        index: epoch.0,
+        value: bcs::to_bytes(&blob_hash).unwrap(),
+    }
 }
 
 /// Signs a block and returns the BCS-serialized `ConfirmedBlockCertificate`.
@@ -128,10 +139,29 @@ pub fn deploy_microchain(
     let test_source = std::fs::read_to_string("tests/solidity/MicrochainTest.sol")
         .expect("MicrochainTest.sol not found");
     let bytecode = compile_contract(&test_source, "MicrochainTest.sol", "MicrochainTest");
-    let constructor_args = (light_client, *chain_id.as_bytes()).abi_encode_params();
+    let constructor_args = (
+        light_client,
+        *chain_id.as_bytes(),
+        test_pause_guardian(),
+        test_proposer(),
+        test_canceller(),
+        test_timelock_delay(),
+    )
+        .abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
+}
+
+/// Deploys the V1 burn-event decoder (no constructor args) and returns its
+/// address.
+pub fn deploy_burn_event_decoder_v1(db: &mut CacheDB<EmptyDB>, deployer: Address) -> Address {
+    let bytecode = compile_contract(
+        evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+        "FungibleBurnEventDecoderV1.sol",
+        "FungibleBurnEventDecoderV1",
+    );
+    deploy_contract(db, deployer, bytecode)
 }
 
 pub fn deploy_fungible_bridge(
@@ -143,6 +173,7 @@ pub fn deploy_fungible_bridge(
     application_id: CryptoHash,
     bridge_application_id: CryptoHash,
 ) -> Address {
+    let decoder = deploy_burn_event_decoder_v1(db, deployer);
     let bytecode = compile_contract(
         evm::FUNGIBLE_BRIDGE_SOURCE,
         "FungibleBridge.sol",
@@ -154,6 +185,11 @@ pub fn deploy_fungible_bridge(
         token,
         *application_id.as_bytes(),
         *bridge_application_id.as_bytes(),
+        decoder,
+        test_pause_guardian(),
+        test_proposer(),
+        test_canceller(),
+        test_timelock_delay(),
     )
         .abi_encode_params();
     let mut deploy_data = bytecode;
@@ -279,6 +315,28 @@ pub fn create_certificate_with_events(
     ConfirmedBlockCertificate::new(confirmed, Round::Fast, vec![(*public, vote.signature)])
 }
 
+/// Default governance addresses used when deploying a LightClient/FungibleBridge
+/// in tests that do not exercise governance. Non-zero so the constructors'
+/// zero-address guards pass; tests that exercise governance act as these
+/// addresses (e.g. `expireEpochsBelow` must be called by `test_proposer()`).
+pub fn test_pause_guardian() -> Address {
+    Address::from([0xDA; 20])
+}
+
+pub fn test_proposer() -> Address {
+    Address::from([0xBE; 20])
+}
+
+pub fn test_canceller() -> Address {
+    Address::from([0xCA; 20])
+}
+
+/// Default bridge timelock delay (1 day) — the minimum the Microchain
+/// constructor accepts.
+pub fn test_timelock_delay() -> U256 {
+    U256::from(86_400u64)
+}
+
 pub fn deploy_light_client(
     db: &mut CacheDB<EmptyDB>,
     deployer: Address,
@@ -289,8 +347,15 @@ pub fn deploy_light_client(
 ) -> Address {
     let bytecode = compile_contract(evm::light_client::SOURCE, "LightClient.sol", "LightClient");
     let chain_id_bytes = *admin_chain_id.as_bytes();
-    let constructor_args =
-        (validators.to_vec(), weights.to_vec(), chain_id_bytes, epoch).abi_encode_params();
+    let constructor_args = (
+        validators.to_vec(),
+        weights.to_vec(),
+        chain_id_bytes,
+        epoch,
+        test_pause_guardian(),
+        test_proposer(),
+    )
+        .abi_encode_params();
     let mut deploy_data = bytecode;
     deploy_data.extend_from_slice(&constructor_args);
     deploy_contract(db, deployer, deploy_data)
@@ -430,6 +495,46 @@ pub fn create_test_block(
     }
 }
 
+/// Like [`create_test_block`] but carries `events` (and no transactions) — used
+/// to drive event-reading paths such as committee rotation (the epoch event) and
+/// burns.
+pub fn create_test_block_with_events(
+    chain_id: CryptoHash,
+    epoch: Epoch,
+    height: BlockHeight,
+    events: Vec<Vec<linera_base::data_types::Event>>,
+) -> Block {
+    Block {
+        header: BlockHeader {
+            chain_id: ChainId(chain_id),
+            epoch,
+            height,
+            timestamp: Timestamp::from(0),
+            state_hash: CryptoHash::new(&TestString::new("state")),
+            previous_block_hash: None,
+            authenticated_signer: None,
+            transactions_hash: CryptoHash::new(&TestString::new("tx")),
+            messages_hash: CryptoHash::new(&TestString::new("msg")),
+            previous_message_blocks_hash: CryptoHash::new(&TestString::new("prev_msg")),
+            previous_event_blocks_hash: CryptoHash::new(&TestString::new("prev_evt")),
+            oracle_responses_hash: CryptoHash::new(&TestString::new("oracle")),
+            events_hash: CryptoHash::new(&TestString::new("events")),
+            blobs_hash: CryptoHash::new(&TestString::new("blobs")),
+            operation_results_hash: CryptoHash::new(&TestString::new("op_results")),
+        },
+        body: BlockBody {
+            transactions: vec![],
+            messages: vec![],
+            previous_message_blocks: Default::default(),
+            previous_event_blocks: Default::default(),
+            oracle_responses: vec![],
+            events,
+            blobs: vec![],
+            operation_results: vec![],
+        },
+    }
+}
+
 pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> Vec<u8> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path();
@@ -438,11 +543,17 @@ pub fn compile_contract(source_code: &str, file_name: &str, contract_name: &str)
     for (name, content) in [
         ("BridgeTypes.sol", evm::BRIDGE_TYPES_SOURCE),
         (
-            "WrappedFungibleTypes.sol",
-            evm::WRAPPED_FUNGIBLE_TYPES_SOURCE,
+            "WrappedFungibleTypesV1.sol",
+            evm::WRAPPED_FUNGIBLE_TYPES_V1_SOURCE,
         ),
         ("LightClient.sol", evm::light_client::SOURCE),
+        ("ILightClient.sol", evm::ILIGHTCLIENT_SOURCE),
         ("Microchain.sol", evm::microchain::SOURCE),
+        ("IBurnEventDecoder.sol", evm::IBURN_EVENT_DECODER_SOURCE),
+        (
+            "FungibleBurnEventDecoderV1.sol",
+            evm::FUNGIBLE_BURN_EVENT_DECODER_V1_SOURCE,
+        ),
         ("FungibleBridge.sol", evm::FUNGIBLE_BRIDGE_SOURCE),
     ] {
         let mut f = File::create(path.join(name)).unwrap();
