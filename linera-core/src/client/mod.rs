@@ -2210,37 +2210,35 @@ impl<Env: Environment> Client<Env> {
                         continue;
                     }
                 }
-                while let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
+                // The local node reports *every* missing sender in a single
+                // `MissingCrossChainUpdates`, so we download them all in one pass and retry once;
+                // there is no need to iterate the discovery one sender at a time.
+                if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
                     if let ChainError::MissingCrossChainUpdates { chain_id, bundles } = &**chain_err
                     {
                         let chain_id = *chain_id;
                         // Clone to end the borrow of `err` before we reassign it below.
                         let bundles = bundles.clone();
-                        if bundles.is_empty() {
-                            break;
+                        if !bundles.is_empty() {
+                            for (origin, height) in bundles {
+                                self.download_sender_block_with_sending_ancestors(
+                                    chain_id,
+                                    origin,
+                                    height,
+                                    remote_node,
+                                )
+                                .await?;
+                            }
+                            if let Err(new_err) = self
+                                .local_node
+                                .handle_block_proposal(proposal.clone())
+                                .await
+                            {
+                                err = new_err;
+                            } else {
+                                continue 'proposal_loop;
+                            }
                         }
-                        // Download every missing sender block the validator reported, in one
-                        // pass, then retry once.
-                        for (origin, height) in bundles {
-                            self.download_sender_block_with_sending_ancestors(
-                                chain_id,
-                                origin,
-                                height,
-                                remote_node,
-                            )
-                            .await?;
-                        }
-                        if let Err(new_err) = self
-                            .local_node
-                            .handle_block_proposal(proposal.clone())
-                            .await
-                        {
-                            err = new_err;
-                        } else {
-                            continue 'proposal_loop;
-                        }
-                    } else {
-                        break;
                     }
                 }
 
