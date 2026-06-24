@@ -526,29 +526,50 @@ where
                     )
                     .await?;
                 }
-                Err(NodeError::MissingCrossChainUpdate {
-                    chain_id,
-                    origin,
-                    height,
-                }) if chain_id == proposal.content.block.chain_id
-                    && sent_cross_chain_updates
-                        .get(&origin)
-                        .is_none_or(|h| *h < height) =>
-                {
+                // The validator reports every missing cross-chain bundle in a single
+                // `MissingCrossChainUpdates`. Sync all the origin chains in one batch instead of
+                // discovering each one through a separate rejection and round-trip. Some received
+                // certificates may be missing for this validator (e.g. to create the chain or
+                // make the balance sufficient), so we synchronize them now and retry.
+                Err(NodeError::MissingCrossChainUpdates {
+                    chain_id: dependencies_chain_id,
+                    bundles,
+                }) if dependencies_chain_id == proposal.content.block.chain_id => {
                     tracing::debug!(
                         remote_node = %self.remote_node.address(),
-                        chain_id = %origin,
-                        "Missing cross-chain update; sending chain to validator.",
+                        %chain_id,
+                        bundles = bundles.len(),
+                        "validator reported missing cross-chain updates; syncing them in one batch",
                     );
-                    sent_cross_chain_updates.insert(origin, height);
-                    // Some received certificates may be missing for this validator
-                    // (e.g. to create the chain or make the balance sufficient) so we are going to
-                    // synchronize them now and retry.
-                    self.send_chain_information(
-                        origin,
-                        height.try_add_one()?,
+                    // Sync each origin chain up to the needed height. The
+                    // `sent_cross_chain_updates` guard prevents re-sync loops.
+                    let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                    for (origin, height) in bundles {
+                        if sent_cross_chain_updates
+                            .get(&origin)
+                            .is_some_and(|sent| *sent >= height)
+                        {
+                            continue;
+                        }
+                        sent_cross_chain_updates.insert(origin, height);
+                        let target = height.try_add_one()?;
+                        let entry = origin_heights.entry(origin).or_insert(target);
+                        *entry = (*entry).max(target);
+                    }
+                    // Guard against an infinite loop if the validator keeps reporting bundles
+                    // we have already synced.
+                    ensure!(
+                        !origin_heights.is_empty(),
+                        NodeError::ResponseHandlingError {
+                            error: format!(
+                                "validator repeatedly reported already-synced cross-chain \
+                                 updates for chain {dependencies_chain_id}"
+                            ),
+                        }
+                    );
+                    self.send_chain_info_up_to_heights(
+                        origin_heights,
                         CrossChainMessageDelivery::Blocking,
-                        None,
                     )
                     .await?;
                 }

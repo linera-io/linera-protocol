@@ -664,6 +664,10 @@ where
         }
         let origins = bundles_by_origin.keys().copied().collect::<Vec<_>>();
         let inboxes = self.inboxes.try_load_entries_mut(&origins).await?;
+        // When the bundles must already be present (block proposals), collect *every* missing
+        // `(origin, height)` rather than bailing on the first, so the caller can be told the
+        // full set of cross-chain updates to fetch in a single round-trip.
+        let mut missing_bundles = Vec::new();
         for ((origin, bundles), mut inbox) in bundles_by_origin.into_iter().zip(inboxes) {
             tracing::trace!(
                 "Removing [{}] from inbox for {origin}",
@@ -679,15 +683,8 @@ where
                     .remove_bundle(bundle)
                     .await
                     .map_err(|error| (chain_id, origin, error))?;
-                if must_be_present {
-                    ensure!(
-                        was_present,
-                        ChainError::MissingCrossChainUpdate {
-                            chain_id,
-                            origin,
-                            height: bundle.height,
-                        }
-                    );
+                if must_be_present && !was_present {
+                    missing_bundles.push((origin, bundle.height));
                 }
             }
             inbox.observe_size_metric();
@@ -695,6 +692,13 @@ where
                 self.nonempty_inboxes.get_mut().remove(&origin);
             }
         }
+        ensure!(
+            missing_bundles.is_empty(),
+            ChainError::MissingCrossChainUpdates {
+                chain_id,
+                bundles: missing_bundles,
+            }
+        );
         Ok(())
     }
 

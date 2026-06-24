@@ -2211,20 +2211,25 @@ impl<Env: Environment> Client<Env> {
                     }
                 }
                 while let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
-                    if let ChainError::MissingCrossChainUpdate {
-                        chain_id,
-                        origin,
-                        height,
-                    } = &**chain_err
+                    if let ChainError::MissingCrossChainUpdates { chain_id, bundles } = &**chain_err
                     {
-                        self.download_sender_block_with_sending_ancestors(
-                            *chain_id,
-                            *origin,
-                            *height,
-                            remote_node,
-                        )
-                        .await?;
-                        // Retry
+                        let chain_id = *chain_id;
+                        // Clone to end the borrow of `err` before we reassign it below.
+                        let bundles = bundles.clone();
+                        if bundles.is_empty() {
+                            break;
+                        }
+                        // Download every missing sender block the validator reported, in one
+                        // pass, then retry once.
+                        for (origin, height) in bundles {
+                            self.download_sender_block_with_sending_ancestors(
+                                chain_id,
+                                origin,
+                                height,
+                                remote_node,
+                            )
+                            .await?;
+                        }
                         if let Err(new_err) = self
                             .local_node
                             .handle_block_proposal(proposal.clone())

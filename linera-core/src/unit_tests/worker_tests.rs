@@ -1644,6 +1644,100 @@ where
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
 #[test_log::test(tokio::test)]
+async fn test_handle_block_proposal_reports_all_missing_bundles<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    // A proposal that consumes two cross-chain bundles whose messages were never delivered to
+    // the recipient's inbox must be rejected with a single `MissingCrossChainUpdates` listing
+    // *both* missing senders, rather than bailing on the first. This lets the client fetch them
+    // all in one round-trip.
+    let mut signer = InMemorySigner::new(None);
+    let sender_public_key = signer.generate_new();
+    let sender_owner = sender_public_key.into();
+    let recipient_public_key = signer.generate_new();
+    let recipient_owner = recipient_public_key.into();
+    let mut env = TestEnvironment::new(&mut storage_builder, false, false).await?;
+    let chain_1 = env
+        .add_root_chain(1, sender_owner, Amount::from_tokens(6))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, recipient_owner, Amount::ZERO)
+        .await
+        .id();
+
+    // The sender produces two blocks that credit the recipient, but we never deliver the
+    // resulting messages to the recipient's inbox.
+    let proposal0 = make_first_block(chain_1)
+        .with_simple_transfer(chain_2, Amount::ONE)
+        .with_simple_transfer(chain_2, Amount::from_tokens(2))
+        .with_authenticated_owner(Some(sender_owner));
+    let certificate0 = env.execute_proposal(proposal0, vec![]).await?;
+    let proposal1 = make_child_block(&certificate0.clone().into_value())
+        .with_simple_transfer(chain_2, Amount::from_tokens(3))
+        .with_authenticated_owner(Some(sender_owner));
+    let certificate1 = env.execute_proposal(proposal1, vec![]).await?;
+
+    // The recipient proposes a block consuming both not-yet-received bundles.
+    let block_proposal =
+        make_first_block(chain_2)
+            .with_incoming_bundle(IncomingBundle {
+                origin: chain_1,
+                bundle: MessageBundle {
+                    certificate_hash: certificate0.hash(),
+                    height: BlockHeight::from(0),
+                    timestamp: Timestamp::from(0),
+                    transaction_index: 1,
+                    messages: vec![system_credit_message(Amount::from_tokens(2))
+                        .to_posted(MessageKind::Tracked)],
+                },
+                action: MessageAction::Accept,
+            })
+            .with_incoming_bundle(IncomingBundle {
+                origin: chain_1,
+                bundle: MessageBundle {
+                    certificate_hash: certificate1.hash(),
+                    height: BlockHeight::from(1),
+                    timestamp: Timestamp::from(0),
+                    transaction_index: 0,
+                    messages: vec![system_credit_message(Amount::from_tokens(3))
+                        .to_posted(MessageKind::Tracked)],
+                },
+                action: MessageAction::Accept,
+            })
+            .with_authenticated_owner(Some(recipient_owner))
+            .into_first_proposal(recipient_owner, &signer)
+            .await
+            .unwrap();
+    let error = env
+        .worker()
+        .handle_block_proposal(block_proposal)
+        .await
+        .0
+        .unwrap_err();
+    let WorkerError::ChainError(chain_error) = error else {
+        panic!("unexpected error: {error}");
+    };
+    match *chain_error {
+        ChainError::MissingCrossChainUpdates { bundles, .. } => assert_eq!(
+            bundles,
+            vec![
+                (chain_1, BlockHeight::from(0)),
+                (chain_1, BlockHeight::from(1))
+            ],
+        ),
+        other => panic!("expected MissingCrossChainUpdates, got {other}"),
+    }
+    Ok(())
+}
+
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
 async fn test_handle_block_proposal_exceed_balance<B>(mut storage_builder: B) -> anyhow::Result<()>
 where
     B: StorageBuilder,
