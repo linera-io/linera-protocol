@@ -1,6 +1,6 @@
 ---
 source: social/tests/format.rs
-expression: "SocialApplication::formats().unwrap()"
+expression: "SocialApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   ChainId:
@@ -11,11 +11,6 @@ REGISTRY:
       - text: STR
       - chain_id:
           TYPENAME: ChainId
-  CryptoHash:
-    NEWTYPESTRUCT:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
   Event:
     ENUM:
       0:
