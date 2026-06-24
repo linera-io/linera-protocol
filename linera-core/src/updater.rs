@@ -477,7 +477,11 @@ where
         clock_skew_sender: mpsc::UnboundedSender<ClockSkewReport>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
+        // `sent_cross_chain_updates` tracks per-origin progress for the legacy per-sender
+        // `MissingCrossChainUpdate` path (a non-upgraded validator); `synced_cross_chain_updates`
+        // is the one-shot guard for the aggregated `MissingCrossChainUpdates` path.
         let mut sent_cross_chain_updates = BTreeMap::new();
+        let mut synced_cross_chain_updates = false;
         let mut publisher_chain_ids_sent = BTreeSet::new();
         let storage = self.client.local_node.storage_client();
         loop {
@@ -552,46 +556,39 @@ where
                     )
                     .await?;
                 }
-                // A validator that understands the aggregated error reports every missing
-                // cross-chain bundle in a single `MissingCrossChainUpdates`. Sync all the origin
-                // chains in one batch instead of discovering each one through a separate
-                // rejection and round-trip.
+                // A validator that understands the aggregated error reports *every* missing
+                // cross-chain bundle in a single `MissingCrossChainUpdates`, so we sync all of
+                // them at once and retry. If it still reports missing bundles after we synced the
+                // whole set, retrying would not make progress, so we surface the error instead of
+                // looping.
                 Err(NodeError::MissingCrossChainUpdates {
                     chain_id: dependencies_chain_id,
                     bundles,
                 }) if dependencies_chain_id == proposal.content.block.chain_id => {
+                    ensure!(
+                        !synced_cross_chain_updates,
+                        NodeError::ResponseHandlingError {
+                            error: format!(
+                                "validator still reports missing cross-chain updates for chain \
+                                 {dependencies_chain_id} after they were all synced"
+                            ),
+                        }
+                    );
+                    synced_cross_chain_updates = true;
                     tracing::debug!(
                         remote_node = %self.remote_node.address(),
                         %chain_id,
                         bundles = bundles.len(),
                         "validator reported missing cross-chain updates; syncing them in one batch",
                     );
-                    // Sync each origin chain up to the needed height. The
-                    // `sent_cross_chain_updates` guard prevents re-sync loops.
+                    // Sync each reported origin chain up to the needed height, collapsing any
+                    // duplicate origins to the highest height.
                     let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
                     for (origin, height) in bundles {
-                        if sent_cross_chain_updates
-                            .get(&origin)
-                            .is_some_and(|sent| *sent >= height)
-                        {
-                            continue;
-                        }
-                        sent_cross_chain_updates.insert(origin, height);
                         let target = height.try_add_one()?;
                         let entry = origin_heights.entry(origin).or_insert(target);
                         *entry = (*entry).max(target);
                     }
-                    // Guard against an infinite loop if the validator keeps reporting bundles
-                    // we have already synced.
-                    ensure!(
-                        !origin_heights.is_empty(),
-                        NodeError::ResponseHandlingError {
-                            error: format!(
-                                "validator repeatedly reported already-synced cross-chain \
-                                 updates for chain {dependencies_chain_id}"
-                            ),
-                        }
-                    );
                     self.send_chain_info_up_to_heights(
                         origin_heights,
                         CrossChainMessageDelivery::Blocking,
