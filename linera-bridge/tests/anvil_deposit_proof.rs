@@ -117,6 +117,10 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
         "sources": sources,
         "settings": {
             "viaIR": true,
+            // Match foundry.toml / the revm test harness: without the optimizer the
+            // (post-#6548) FungibleBridge bytecode exceeds the EIP-170 24KB limit
+            // and deployment fails with CreateContractSizeLimit.
+            "optimizer": { "enabled": true, "runs": 1 },
             "remappings": ["@openzeppelin/contracts/=@openzeppelin/contracts/"],
             "outputSelection": { "*": { "*": ["evm.bytecode"] } }
         }
@@ -165,7 +169,9 @@ fn compile_contract(source_code: &str, file_name: &str, contract_name: &str) -> 
 // where the simulation runs against a stale `latest` block before the
 // previous tx's state has propagated, surfacing as `extcodesize == 0`
 // reverts (`code: 3, data: 0x`) on typed external calls.
-const DEPLOY_GAS: u64 = 5_000_000;
+// FungibleBridge's runtime is ~18 KB, so deploying it costs ~5M gas (code
+// storage + initcode execution + constructor writes); keep headroom above that.
+const DEPLOY_GAS: u64 = 15_000_000;
 const CALL_GAS: u64 = 300_000;
 
 #[tokio::test]
@@ -207,6 +213,9 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         .with_chain_id(chain_id)
         .with_gas_limit(DEPLOY_GAS);
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+    if !receipt.status() {
+        return Err("LineraToken deploy failed (reverted or out of gas)".into());
+    }
     let token_address = receipt.contract_address.ok_or("missing erc20 address")?;
 
     // 3. Compile and deploy FungibleBridge with the wrapped-fungible
@@ -242,6 +251,9 @@ async fn test_deposit_proof_generation() -> Result<(), Box<dyn std::error::Error
         .with_chain_id(chain_id)
         .with_gas_limit(DEPLOY_GAS);
     let receipt = provider.send_transaction(tx).await?.get_receipt().await?;
+    if !receipt.status() {
+        return Err("FungibleBridge deploy failed (reverted or out of gas)".into());
+    }
     let bridge_address = receipt.contract_address.ok_or("missing bridge address")?;
 
     // 4. Approve bridge to spend tokens, then deposit
