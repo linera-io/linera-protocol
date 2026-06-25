@@ -20,8 +20,8 @@ use linera_base::{
     abi::Abi,
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlobContent,
+        BlockHeight, ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
@@ -583,6 +583,18 @@ impl<Env: Environment> ChainClient<Env> {
     /// Returns the chain's description. Fetches it from the validators if necessary.
     pub async fn get_chain_description(&self) -> Result<ChainDescription, Error> {
         self.client.get_chain_description(self.chain_id).await
+    }
+
+    /// Returns the description of the given application. Fetches the description blob
+    /// from the validators if necessary; the application need not be registered on
+    /// this client's chain.
+    pub async fn get_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, Error> {
+        self.client
+            .get_application_description(application_id)
+            .await
     }
 
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the

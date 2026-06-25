@@ -1467,6 +1467,25 @@ impl Runnable for Job {
                 info!("Data blob read in {} ms", start_time.elapsed().as_millis());
             }
 
+            DescribeApplication { application_id } => {
+                let context = options
+                    .create_client_context(storage, wallet, keystore)
+                    .await?;
+
+                let start_time = Instant::now();
+                let reader = context.default_chain();
+                info!("Describing application {application_id} via chain {reader}");
+                let chain_client = context.make_chain_client(reader).await?;
+                let description = chain_client
+                    .get_application_description(application_id)
+                    .await?;
+                println!("{}", serde_json::to_string_pretty(&description)?);
+                info!(
+                    "Application described in {} ms",
+                    start_time.elapsed().as_millis()
+                );
+            }
+
             CreateApplication {
                 module_id,
                 creator,
