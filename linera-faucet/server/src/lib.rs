@@ -56,10 +56,10 @@ mod metrics {
     use std::sync::LazyLock;
 
     use linera_base::prometheus_util::{
-        exponential_bucket_interval, register_histogram_vec, register_int_counter_vec,
-        register_int_gauge_vec,
+        exponential_bucket_interval, register_gauge_vec, register_histogram_vec,
+        register_int_counter_vec,
     };
-    use prometheus::{HistogramVec, IntCounterVec, IntGaugeVec};
+    use prometheus::{GaugeVec, HistogramVec, IntCounterVec};
 
     pub static CLAIM_REQUESTS_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
         register_int_counter_vec(
@@ -124,10 +124,10 @@ mod metrics {
         )
     });
 
-    pub static FAUCET_BALANCE: LazyLock<IntGaugeVec> = LazyLock::new(|| {
-        register_int_gauge_vec(
+    pub static FAUCET_BALANCE: LazyLock<GaugeVec> = LazyLock::new(|| {
+        register_gauge_vec(
             "faucet_balance_amount",
-            "Current balance of the faucet chain, in whole tokens",
+            "Current balance of the faucet chain, in tokens",
             &[],
         )
     });
@@ -812,14 +812,15 @@ where
         let remaining_duration = end_timestamp.delta_since(local_time).as_micros();
         let balance = self.client.local_balance().await?;
 
-        // `balance` is an `Amount`: a u128 scaled by 10^18. Exporting the raw
-        // scaled value overflowed i64 (e.g. 200M tokens = 2e26), producing
-        // garbage/negative gauge values. Report the balance in whole tokens,
-        // which fits i64 for any realistic balance.
+        // `balance` is an `Amount`: a u128 scaled by 10^18. Casting the raw value
+        // to the old i64 gauge overflowed (e.g. 200M tokens = 2e26), producing
+        // garbage/negative values. Report the balance in tokens as a float, so the
+        // gauge keeps fractional precision (to watch the balance draw down) without
+        // overflowing.
         #[cfg(with_metrics)]
         metrics::FAUCET_BALANCE
             .with_label_values(&[])
-            .set(i64::try_from(u128::from(balance) / u128::from(Amount::ONE)).unwrap_or(i64::MAX));
+            .set(u128::from(balance) as f64 / u128::from(Amount::ONE) as f64);
 
         let total_amount = requests
             .iter()

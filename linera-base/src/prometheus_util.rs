@@ -4,9 +4,9 @@
 //! This module defines utility functions for interacting with Prometheus (logging metrics, etc)
 
 use prometheus::{
-    exponential_buckets, histogram_opts, linear_buckets, register_histogram,
+    exponential_buckets, histogram_opts, linear_buckets, register_gauge_vec, register_histogram,
     register_histogram_vec, register_int_counter, register_int_counter_vec, register_int_gauge,
-    register_int_gauge_vec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    register_int_gauge_vec, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
     IntGaugeVec, Opts,
 };
 
@@ -137,6 +137,13 @@ pub fn register_int_gauge_with_subsystem(
 pub fn register_int_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
     register_int_gauge_vec!(gauge_opts, label_names).expect("IntGauge can be created")
+}
+
+/// Wrapper around Prometheus `register_gauge_vec!` macro (floating-point gauge) which also sets
+/// the `linera` namespace. Use this for quantities with a fractional part (e.g. token balances).
+pub fn register_gauge_vec(name: &str, description: &str, label_names: &[&str]) -> GaugeVec {
+    let gauge_opts = Opts::new(name, description).namespace(LINERA_NAMESPACE);
+    register_gauge_vec!(gauge_opts, label_names).expect("Gauge can be created")
 }
 
 /// Wrapper around Prometheus `register_int_gauge_vec!` macro with `linera` namespace and a subsystem.
