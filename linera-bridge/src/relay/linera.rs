@@ -56,16 +56,19 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         }
     }
 
+    /// Returns the bridge application ID.
     pub fn bridge_app_id(&self) -> ApplicationId {
         self.bridge_app_id
     }
 
+    /// Returns the wrapped-fungible application ID.
     pub fn fungible_app_id(&self) -> ApplicationId {
         self.fungible_app_id
     }
 
     // ── Read operations (safe on cloned chain_client) ──
 
+    /// Synchronizes the chain client from the validators.
     pub async fn sync(&self) -> Result<()> {
         self.chain_client
             .synchronize_from_validators()
@@ -74,6 +77,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         Ok(())
     }
 
+    /// Returns the chain's current info.
     pub async fn chain_info(&self) -> Result<Box<linera_core::data_types::ChainInfo>> {
         self.chain_client
             .chain_info()
@@ -87,6 +91,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         Ok(info.chain_balance)
     }
 
+    /// Reads the confirmed block with the given hash.
     pub async fn read_confirmed_block(
         &self,
         hash: CryptoHash,
@@ -97,6 +102,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Reads the confirmed block certificate with the given hash.
     pub async fn read_certificate(
         &self,
         hash: CryptoHash,
@@ -108,6 +114,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Returns whether the deposit with the given key has already been processed.
     pub async fn query_deposit_processed(&self, deposit_key: &DepositKey) -> Result<bool> {
         crate::monitor::query_deposit_processed(&self.chain_client, self.bridge_app_id, deposit_key)
             .await
@@ -115,6 +122,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
 
     // ── Write operations (sent to main loop via channel) ──
 
+    /// Submits a deposit proof to the bridge chain via the main loop.
     pub async fn process_deposit(&self, proof: crate::proof::gen::DepositProof) -> Result<()> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.op_tx
@@ -127,6 +135,7 @@ impl<E: linera_core::environment::Environment> LineraClient<E> {
         resp_rx.await.with_context(|| "Response channel closed")?
     }
 
+    /// Processes the bridge chain's inbox via the main loop.
     pub async fn process_inbox(&self) -> Result<Vec<ConfirmedBlockCertificate>> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.op_tx

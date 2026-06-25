@@ -31,6 +31,7 @@ use crate::{
     RpcMessage,
 };
 
+/// A client communicating with validators over a simple (UDP or TCP) transport.
 #[derive(Clone)]
 pub struct SimpleClient {
     network: ValidatorPublicNetworkPreConfig<TransportProtocol>,

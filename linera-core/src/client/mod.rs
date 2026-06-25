@@ -19,11 +19,12 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round,
+        TimeDelta, Timestamp,
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -57,6 +58,7 @@ use crate::{
     ChainWorkerConfig, ProcessConfirmedBlockMode, CHAIN_INFO_MAX_RECEIVED_LOG_ENTRIES,
 };
 
+/// The client for interacting with a single chain.
 pub mod chain_client;
 pub use chain_client::ChainClient;
 
@@ -125,13 +127,20 @@ mod metrics {
     });
 }
 
+/// Default number of certificates to download in a single batch.
 pub static DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE: u64 = 500;
+/// Default number of certificates to upload in a single batch.
 pub static DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE: u64 = 500;
+/// Default number of sender-chain certificates to download in a single batch.
 pub static DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE: usize = 20_000;
+/// Default maximum number of concurrent event stream queries.
 pub static DEFAULT_MAX_EVENT_STREAM_QUERIES: usize = 1000;
+/// Default maximum number of certificate batch downloads to run concurrently.
 pub static DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS: usize = 1;
 
+/// Identifies which operation a timing measurement refers to.
 #[derive(Debug, Clone, Copy)]
+#[allow(missing_docs)]
 pub enum TimingType {
     ExecuteOperations,
     ExecuteBlock,
@@ -205,6 +214,7 @@ impl ListeningMode {
         }
     }
 
+    /// Widens this mode to also cover the given mode, keeping the more inclusive of the two.
     pub fn extend(&mut self, other: Option<ListeningMode>) {
         match (self, other) {
             (_, None) => (),
@@ -378,9 +388,13 @@ impl<Env: Environment> Client<Env> {
             config,
             Some(chain_modes.clone()),
         );
+        let clock = environment.storage().clock().clone();
         let local_node = LocalNodeClient::new(state);
-        let requests_scheduler =
-            Arc::new(RequestsScheduler::new(vec![], requests_scheduler_config));
+        let requests_scheduler = Arc::new(RequestsScheduler::new(
+            vec![],
+            requests_scheduler_config,
+            clock,
+        ));
 
         Self {
             environment,
@@ -439,6 +453,7 @@ impl<Env: Environment> Client<Env> {
         Ok(results.into_iter().next().flatten())
     }
 
+    /// Returns the provider used to connect to validator nodes.
     pub fn validator_node_provider(&self) -> &Env::Network {
         self.environment.network()
     }
@@ -593,7 +608,7 @@ impl<Env: Environment> Client<Env> {
                     chain_id,
                     next_height,
                     limit,
-                    self.options.certificate_batch_download_timeout,
+                    self.options.certificate_batch_download_hedge_delay,
                 )
                 .await?;
             let Some(new_info) = self
@@ -761,7 +776,11 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<(), chain_client::Error> {
         let blobs = &self
             .requests_scheduler
-            .download_blobs(remote_nodes, blob_ids, self.options.blob_download_timeout)
+            .download_blobs(
+                remote_nodes,
+                blob_ids,
+                self.options.blob_download_hedge_delay,
+            )
             .await?
             .ok_or_else(|| {
                 chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(blob_ids.to_vec()))
@@ -783,7 +802,7 @@ impl<Env: Environment> Client<Env> {
         event_ids: &[EventId],
     ) -> Result<(), chain_client::Error> {
         let mut validators = self.validator_nodes().await?;
-        let timeout = self.options.certificate_batch_download_timeout;
+        let timeout = self.options.certificate_batch_download_hedge_delay;
         let (max_epoch, committees) = self.admin_committees().await?;
         let committees_ref = &committees;
         let mut remaining_event_ids = event_ids.to_vec();
@@ -888,6 +907,7 @@ impl<Env: Environment> Client<Env> {
                     }
                 },
                 timeout,
+                self.storage_client().clock(),
             )
             .await;
 
@@ -940,7 +960,7 @@ impl<Env: Environment> Client<Env> {
             }
         }
         let validators = self.validator_nodes().await?;
-        let timeout = self.options.certificate_batch_download_timeout;
+        let timeout = self.options.certificate_batch_download_hedge_delay;
         // Group by chain, keeping only the max required index per stream.
         let mut required_by_chain = BTreeMap::<_, BTreeMap<StreamId, u32>>::new();
         for event_id in event_ids {
@@ -993,6 +1013,7 @@ impl<Env: Environment> Client<Env> {
                     chain_client::Error::InternalError("missing events")
                 },
                 timeout,
+                self.storage_client().clock(),
             )
             .await;
 
@@ -1286,6 +1307,43 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<ChainDescription, chain_client::Error> {
         let blob = self.get_chain_description_blob(chain_id).await?;
+        Ok(bcs::from_bytes(blob.bytes())?)
+    }
+
+    /// Ensures that the client has the `ApplicationDescription` blob for the given
+    /// application ID, fetching it from the current validators if it is not available
+    /// locally, and returns the blob. The application need not be registered on this
+    /// client's chain: the description is content-addressed and downloaded by blob ID.
+    pub async fn get_application_description_blob(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<Arc<Blob>, chain_client::Error> {
+        let blob_id = application_id.description_blob_id();
+        let blob = self.local_node.storage_client().read_blob(blob_id).await?;
+        if let Some(blob) = blob {
+            // We have the blob - return it.
+            return Ok(blob.into_std());
+        }
+        // Recover the blob from the current validators, according to the admin chain.
+        Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
+        let nodes = self.validator_nodes().await?;
+        Ok(self
+            .update_local_node_with_blobs_from(vec![blob_id], &nodes)
+            .await?
+            .pop()
+            .unwrap() // Returns exactly as many blobs as passed-in IDs.
+            .into_std())
+    }
+
+    /// Returns the `ApplicationDescription` of the given application, fetching its
+    /// description blob from the validators if it is not available locally.
+    pub async fn get_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, chain_client::Error> {
+        let blob = self
+            .get_application_description_blob(application_id)
+            .await?;
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
@@ -1662,7 +1720,8 @@ impl<Env: Environment> Client<Env> {
                         })
                         .collect::<BTreeSet<_>>()
                 },
-                self.options.certificate_batch_download_timeout,
+                self.options.certificate_batch_download_hedge_delay,
+                self.storage_client().clock(),
             )
             .await
             {
@@ -2306,7 +2365,7 @@ impl<Env: Environment> Client<Env> {
         blob_ids: Vec<BlobId>,
         remote_nodes: &[RemoteNode<Env::ValidatorNode>],
     ) -> Result<Vec<CacheArc<Blob>>, chain_client::Error> {
-        let timeout = self.options.blob_download_timeout;
+        let timeout = self.options.blob_download_hedge_delay;
         // Deduplicate IDs.
         let blob_ids = blob_ids.into_iter().collect::<BTreeSet<_>>();
         stream::iter(blob_ids.into_iter().map(|blob_id| {
@@ -2340,9 +2399,10 @@ impl<Env: Environment> Client<Env> {
                             "failed to download certificate-for-blob from validator",
                         );
                     }
-                    chain_client::Error::from(NodeError::BlobsNotFound(vec![blob_id]))
+                    chain_client::Error::CannotDownloadBlob(blob_id)
                 },
                 timeout,
+                self.storage_client().clock(),
             )
         }))
         .buffer_unordered(self.options.max_joined_tasks)
@@ -2462,42 +2522,138 @@ impl<'a, Env: Environment> EventSetDownloader<'a, Env> {
     }
 }
 
-/// Performs `f` in parallel on multiple nodes, starting with a quadratically increasing delay on
-/// each subsequent node. Returns error `err` if all of the nodes fail.
-async fn communicate_concurrently<'a, A, E1, E2, F, G, R, V>(
+pub(crate) type ClockOf<Env> = <<Env as Environment>::Storage as linera_storage::Storage>::Clock;
+
+/// Races `operation` across peers with a hedged, **failure-responsive** fan-out, returning the
+/// first `Ok` (or every error if all attempts fail).
+///
+/// `first_peer` is tried immediately. `next_peer` then supplies additional peers, each started
+/// either *immediately* when an in-flight attempt fails (no point waiting once we know an attempt
+/// failed), or after the in-flight attempt has run for `hedge_schedule(started)` without answering
+/// — hedging against a slow peer by racing an extra request; the slow attempt is **not** cancelled.
+/// `hedge_schedule` maps the number of attempts started so far to the delay before starting the
+/// next one (e.g. `|k| delay * k` for a linearly-growing stagger). All sleeping is on `clock`, so
+/// this runs in (possibly simulated) time; freezing the clock disables the slow-peer hedge while
+/// still advancing on every failure.
+pub(crate) async fn hedged_fan_out<Peer, T, Err, NextPeer, NextFut, Op, OpFut>(
+    first_peer: Peer,
+    mut next_peer: NextPeer,
+    operation: Op,
+    hedge_schedule: impl Fn(usize) -> Duration,
+    // `Sync` so `clock.sleep_for(..)` yields a `Send` future, as required when this fan-out is
+    // spawned (e.g. background certificate downloads). All storage clocks are `Sync`.
+    clock: &(impl linera_storage::Clock + Sync),
+) -> Result<T, Vec<Err>>
+where
+    NextPeer: FnMut() -> NextFut,
+    NextFut: Future<Output = Option<Peer>>,
+    Op: Fn(Peer) -> OpFut,
+    OpFut: Future<Output = Result<T, Err>>,
+{
+    use futures::future::{select, Either};
+
+    let mut in_flight = FuturesUnordered::new();
+    let mut errors = vec![];
+    let mut started = 0usize;
+    let arm = |started: usize| clock.sleep_for(hedge_schedule(started));
+
+    in_flight.push(operation(first_peer));
+    started += 1;
+    let mut hedge = arm(started);
+
+    loop {
+        if in_flight.is_empty() {
+            // Nothing running: start the next peer, or stop if there are none left.
+            match next_peer().await {
+                Some(peer) => {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+                None => return Err(errors),
+            }
+            continue;
+        }
+        match select(in_flight.next(), hedge).await {
+            // An attempt succeeded.
+            Either::Left((Some(Ok(value)), _)) => return Ok(value),
+            // An attempt failed: try the next peer right away rather than waiting out the hedge.
+            Either::Left((Some(Err(error)), pending_hedge)) => {
+                errors.push(error);
+                hedge = pending_hedge;
+                if let Some(peer) = next_peer().await {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+            }
+            // All in-flight attempts drained; the loop top decides what to do next.
+            Either::Left((None, pending_hedge)) => hedge = pending_hedge,
+            // An attempt is slow: hedge by starting another peer, if any remain.
+            Either::Right(((), _)) => match next_peer().await {
+                Some(peer) => {
+                    in_flight.push(operation(peer));
+                    started += 1;
+                    hedge = arm(started);
+                }
+                None => break,
+            },
+        }
+    }
+
+    // No more peers to start; just wait for the remaining in-flight attempts.
+    while let Some(result) = in_flight.next().await {
+        match result {
+            Ok(value) => return Ok(value),
+            Err(error) => errors.push(error),
+        }
+    }
+    Err(errors)
+}
+
+/// Performs `f` on the nodes with a hedged, staggered fan-out (see [`hedged_fan_out`]), returning
+/// the first `Ok`. If all of the nodes fail, reduces the collected `(validator, error)` pairs with
+/// `err`.
+///
+/// The hedge before starting the n-th node grows quadratically with `n`, so we stay reluctant to
+/// fan out to many validators at once when one is merely slow.
+async fn communicate_concurrently<A, E1, E2, F, G, R, V>(
     nodes: &[RemoteNode<A>],
     f: F,
     err: G,
-    timeout: Duration,
+    hedge_delay: Duration,
+    clock: &(impl linera_storage::Clock + Sync),
 ) -> Result<V, E2>
 where
     F: Clone + FnOnce(RemoteNode<A>) -> R,
     RemoteNode<A>: Clone,
     G: FnOnce(Vec<(ValidatorPublicKey, E1)>) -> E2,
-    R: Future<Output = Result<V, E1>> + 'a,
+    R: Future<Output = Result<V, E1>>,
 {
     let mut nodes = nodes.to_vec();
     nodes.shuffle(&mut rand::thread_rng());
-    let mut stream = nodes
-        .iter()
-        .zip(0..)
-        .map(|(remote_node, i)| {
+    let mut nodes = nodes.into_iter();
+    let Some(first_peer) = nodes.next() else {
+        return Err(err(vec![]));
+    };
+    hedged_fan_out(
+        first_peer,
+        move || std::future::ready(nodes.next()),
+        |node: RemoteNode<A>| {
             let fun = f.clone();
-            let node = remote_node.clone();
             async move {
-                linera_base::time::timer::sleep(timeout * i * i).await;
-                fun(node).await.map_err(|err| (remote_node.public_key, err))
+                let public_key = node.public_key;
+                fun(node).await.map_err(|e| (public_key, e))
             }
-        })
-        .collect::<FuturesUnordered<_>>();
-    let mut errors = vec![];
-    while let Some(maybe_result) = stream.next().await {
-        match maybe_result {
-            Ok(result) => return Ok(result),
-            Err(error) => errors.push(error),
-        };
-    }
-    Err(err(errors))
+        },
+        |started| {
+            let k = u32::try_from(started).unwrap_or(u32::MAX);
+            hedge_delay.saturating_mul(k).saturating_mul(k)
+        },
+        clock,
+    )
+    .await
+    .map_err(err)
 }
 
 /// Wrapper for `AbortHandle` that aborts when its dropped.
@@ -2514,7 +2670,9 @@ impl Drop for AbortOnDrop {
 /// A pending proposed block, together with its published blobs.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PendingProposal {
+    /// The proposed block.
     pub block: ProposedBlock,
+    /// The blobs published by the proposed block.
     pub blobs: Vec<Blob>,
     /// The round in which this proposal was first submitted, if any.
     #[serde(default)]
@@ -2571,5 +2729,320 @@ pub async fn create_bytecode_blobs(
             );
             (vec![evm_contract_blob], module_id)
         }
+    }
+}
+
+#[cfg(test)]
+mod communicate_concurrently_tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    use linera_base::crypto::ValidatorKeypair;
+    use linera_storage::TestClock;
+
+    use super::*;
+
+    fn test_node() -> RemoteNode<()> {
+        RemoteNode {
+            public_key: ValidatorKeypair::generate().public_key,
+            node: (),
+        }
+    }
+
+    /// When every node fails, all errors are collected and we return promptly — crucially without
+    /// ever waiting out the hedge delay, so the frozen clock never advances.
+    #[tokio::test]
+    async fn does_not_wait_after_failures() {
+        let clock = TestClock::new();
+        let nodes: Vec<_> = (0..5).map(|_| test_node()).collect();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let result: Result<(), Vec<(ValidatorPublicKey, &str)>> = communicate_concurrently(
+            &nodes,
+            {
+                let calls = calls.clone();
+                move |_node| {
+                    let calls = calls.clone();
+                    async move {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        Err("unavailable")
+                    }
+                }
+            },
+            |errors| errors,
+            Duration::from_secs(30),
+            &clock,
+        )
+        .await;
+        assert_eq!(result.unwrap_err().len(), 5);
+        assert_eq!(calls.load(Ordering::SeqCst), 5);
+        // The hedge timer was never needed (every node failed), so virtual time did not advance.
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
+
+    /// A single working node is reached by failing over the others — again without advancing the
+    /// clock, regardless of where the shuffle places it.
+    #[tokio::test]
+    async fn fails_over_to_a_working_node() {
+        let clock = TestClock::new();
+        let nodes: Vec<_> = (0..5).map(|_| test_node()).collect();
+        let working = nodes[3].public_key;
+        let result: Result<u32, Vec<(ValidatorPublicKey, &str)>> = communicate_concurrently(
+            &nodes,
+            move |node| async move {
+                if node.public_key == working {
+                    Ok(42)
+                } else {
+                    Err("unavailable")
+                }
+            },
+            |errors| errors,
+            Duration::from_secs(30),
+            &clock,
+        )
+        .await;
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
+
+    // The tests below exercise the `hedged_fan_out` engine directly — peers are modelled as
+    // `usize`, the operation outcome is chosen per peer, and "slowness" is made controllable with
+    // notify gates. Driving the (virtual) clock by hand lets us assert the hedging behaviour that
+    // was impossible to test deterministically on the wall clock.
+
+    /// Hands out peers `1..n`; `hedged_fan_out` already holds `first_peer = 0`.
+    fn peer_source(n: usize) -> impl FnMut() -> std::future::Ready<Option<usize>> {
+        let mut next = 1usize;
+        move || {
+            let peer = (next < n).then_some(next);
+            next += 1;
+            std::future::ready(peer)
+        }
+    }
+
+    /// A slow first peer is hedged by starting the next one, but is **not** cancelled: when it
+    /// finally answers `Ok`, that answer still wins the race.
+    #[tokio::test]
+    async fn slow_first_peer_is_hedged_but_not_cancelled() {
+        let clock = TestClock::new();
+        let delay = Duration::from_secs(1);
+        let order = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release0 = Arc::new(tokio::sync::Notify::new());
+        let gates = [release0.clone(), Arc::new(tokio::sync::Notify::new())];
+
+        let operation = {
+            let order = order.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let order = order.clone();
+                let gate = gates[peer].clone();
+                async move {
+                    order.lock().unwrap().push(peer);
+                    started_tx.send(peer).unwrap();
+                    gate.notified().await;
+                    if peer == 0 {
+                        Ok::<u32, &str>(42)
+                    } else {
+                        Err("slow loser")
+                    }
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(2),
+                    operation,
+                    move |k| delay * u32::try_from(k).unwrap_or(u32::MAX),
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        // Peer 0 starts immediately; the hedge for peer 1 is armed at `delay`.
+        assert_eq!(started_rx.recv().await, Some(0));
+        // Firing the hedge starts peer 1 while peer 0 is still in flight.
+        clock.add(TimeDelta::from_duration(delay));
+        assert_eq!(started_rx.recv().await, Some(1));
+        // Peer 0 was not cancelled when the hedge fired: releasing it now still wins the race.
+        release0.notify_one();
+        assert_eq!(fan.await.unwrap(), Ok(42));
+        assert_eq!(*order.lock().unwrap(), vec![0, 1]);
+    }
+
+    /// With every peer hanging, only the (virtual) clock advances the fan-out, and it starts each
+    /// peer on the cumulative hedge schedule — here the quadratic one `communicate_concurrently`
+    /// uses.
+    #[tokio::test]
+    async fn hedge_schedule_determines_start_times() {
+        let clock = TestClock::new();
+        let unit = Duration::from_secs(1);
+        let starts = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let operation = {
+            let starts = starts.clone();
+            let clock = clock.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let starts = starts.clone();
+                let clock = clock.clone();
+                async move {
+                    starts.lock().unwrap().push((peer, clock.current_time()));
+                    started_tx.send(peer).unwrap();
+                    std::future::pending::<()>().await;
+                    Ok::<u32, &str>(0)
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(4),
+                    operation,
+                    move |k| {
+                        let k = u32::try_from(k).unwrap_or(u32::MAX);
+                        unit * k * k
+                    },
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        // peer 0 at t=0; hedge(1)=1·unit, hedge(2)=4·unit, hedge(3)=9·unit, applied cumulatively.
+        assert_eq!(started_rx.recv().await, Some(0));
+        clock.add(TimeDelta::from_duration(unit));
+        assert_eq!(started_rx.recv().await, Some(1));
+        clock.add(TimeDelta::from_duration(unit * 4));
+        assert_eq!(started_rx.recv().await, Some(2));
+        clock.add(TimeDelta::from_duration(unit * 9));
+        assert_eq!(started_rx.recv().await, Some(3));
+
+        // Cumulative virtual start times: 0, 1s, 1+4=5s, 5+9=14s (Timestamp is in microseconds).
+        assert_eq!(
+            *starts.lock().unwrap(),
+            vec![
+                (0, Timestamp::from(0)),
+                (1, Timestamp::from(1_000_000)),
+                (2, Timestamp::from(5_000_000)),
+                (3, Timestamp::from(14_000_000)),
+            ]
+        );
+        fan.abort();
+    }
+
+    /// Freezing the clock disables the slow-peer hedge entirely: a slow first peer never causes a
+    /// second one to start, yet the fan-out still completes when that peer eventually answers.
+    #[tokio::test]
+    async fn frozen_clock_disables_the_hedge() {
+        let clock = TestClock::new();
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release0 = Arc::new(tokio::sync::Notify::new());
+
+        let operation = {
+            let release0 = release0.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let release0 = release0.clone();
+                async move {
+                    started_tx.send(peer).unwrap();
+                    if peer == 0 {
+                        release0.notified().await;
+                        Ok::<u32, &str>(7)
+                    } else {
+                        // If a hedge ever wrongly fired, this peer would win instead.
+                        Ok(99)
+                    }
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(2),
+                    operation,
+                    move |k| Duration::from_secs(1) * u32::try_from(k).unwrap_or(u32::MAX),
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        assert_eq!(started_rx.recv().await, Some(0));
+        // The clock is frozen, so the hedge can never fire: peer 1 must not start.
+        tokio::task::yield_now().await;
+        assert!(
+            started_rx.try_recv().is_err(),
+            "the hedge must not fire while the clock is frozen"
+        );
+        // Peer 0 still wins, without the clock ever advancing.
+        release0.notify_one();
+        assert_eq!(fan.await.unwrap(), Ok(7));
+        assert_eq!(clock.current_time(), Timestamp::from(0));
+    }
+
+    /// On failure the next peer starts immediately rather than waiting out the (here, huge) hedge
+    /// delay — failover stays responsive even with a hedge already armed.
+    #[tokio::test]
+    async fn failure_fails_over_without_waiting_out_the_hedge() {
+        let clock = TestClock::new();
+        let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
+        let release0 = Arc::new(tokio::sync::Notify::new());
+
+        let operation = {
+            let release0 = release0.clone();
+            move |peer: usize| {
+                let started_tx = started_tx.clone();
+                let release0 = release0.clone();
+                async move {
+                    started_tx.send(peer).unwrap();
+                    match peer {
+                        0 => {
+                            release0.notified().await;
+                            Err::<u32, &str>("dead")
+                        }
+                        1 => Err("dead"),
+                        _ => Ok(55),
+                    }
+                }
+            }
+        };
+
+        let fan = tokio::spawn({
+            let clock = clock.clone();
+            async move {
+                hedged_fan_out(
+                    0usize,
+                    peer_source(3),
+                    operation,
+                    // A hedge so large that any waiting would be obvious in virtual time.
+                    move |k| Duration::from_secs(100) * u32::try_from(k).unwrap_or(u32::MAX),
+                    &clock,
+                )
+                .await
+            }
+        });
+
+        assert_eq!(started_rx.recv().await, Some(0));
+        // Peer 0 fails: peer 1 starts at once, then peer 1 fails and peer 2 starts and succeeds.
+        release0.notify_one();
+        assert_eq!(started_rx.recv().await, Some(1));
+        assert_eq!(started_rx.recv().await, Some(2));
+        assert_eq!(fan.await.unwrap(), Ok(55));
+        // None of the 100s hedge delays were ever waited out.
+        assert_eq!(clock.current_time(), Timestamp::from(0));
     }
 }

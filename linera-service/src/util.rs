@@ -23,12 +23,14 @@ use linera_base::data_types::TimeDelta;
 pub use linera_client::util::*;
 use tracing::debug;
 
-// Exported for readme e2e tests.
+/// Default pause, in seconds, inserted after `linera service` commands in readme e2e tests.
 pub static DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS: &str = "3";
+/// Default pause, in seconds, inserted after GraphQL mutations in readme e2e tests.
 pub static DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS: &str = "3";
 
 /// Extension trait for [`tokio::process::Child`].
 pub trait ChildExt: std::fmt::Debug {
+    /// Ensures the child process is still running, returning an error if it has exited.
     fn ensure_is_running(&mut self) -> Result<()>;
 }
 
@@ -42,10 +44,12 @@ impl ChildExt for tokio::process::Child {
     }
 }
 
+/// Reads and deserializes a JSON value from the file at the given path.
 pub fn read_json<T: serde::de::DeserializeOwned>(path: impl Into<std::path::PathBuf>) -> Result<T> {
     Ok(serde_json::from_reader(fs_err::File::open(path)?)?)
 }
 
+/// Expands to the name of the current test function.
 #[cfg(with_testing)]
 #[macro_export]
 macro_rules! test_name {
@@ -56,11 +60,13 @@ macro_rules! test_name {
     };
 }
 
+/// A reader over a Markdown document, used to extract embedded code blocks.
 pub struct Markdown<B> {
     buffer: B,
 }
 
 impl Markdown<BufReader<fs_err::File>> {
+    /// Opens the Markdown file at the given path.
     pub fn new(path: impl AsRef<Path>) -> std::io::Result<Self> {
         let buffer = BufReader::new(fs_err::File::open(path.as_ref())?);
         Ok(Self { buffer })
@@ -71,6 +77,7 @@ impl<B> Markdown<B>
 where
     B: BufRead,
 {
+    /// Extracts the embedded bash and GraphQL code blocks as a runnable bash script.
     #[expect(clippy::while_let_on_iterator)]
     pub fn extract_bash_script_to(
         self,
@@ -159,14 +166,17 @@ pub(crate) async fn graphiql(uri: Uri) -> impl IntoResponse {
     response::Html(source)
 }
 
+/// Parses a string of milliseconds into a [`Duration`].
 pub fn parse_millis(s: &str) -> Result<Duration, ParseIntError> {
     Ok(Duration::from_millis(s.parse()?))
 }
 
+/// Parses a string of milliseconds into a [`TimeDelta`].
 pub fn parse_millis_delta(s: &str) -> Result<TimeDelta, ParseIntError> {
     Ok(TimeDelta::from_millis(s.parse()?))
 }
 
+/// Validates that a string contains only ASCII alphanumeric characters, returning it unchanged.
 pub fn parse_ascii_alphanumeric_string(s: &str) -> Result<String, &'static str> {
     if s.chars().all(|x| x.is_ascii_alphanumeric()) {
         Ok(s.to_string())

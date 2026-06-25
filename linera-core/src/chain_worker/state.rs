@@ -45,7 +45,7 @@ use linera_views::{
     views::{ReplaceContext as _, RootView as _, View as _},
 };
 use tokio::sync::oneshot;
-use tracing::{debug, instrument, trace, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 use crate::{
     chain_worker::{handle::AtomicTimestamp, ChainWorkerConfig, DeliveryNotifier},
@@ -1280,11 +1280,15 @@ where
     ///
     /// Both update and confirmation requests are handled together so that a
     /// single write-lock acquisition covers all pending work for the chain.
-    pub(crate) async fn process_batch(&mut self, requests: Vec<BatchRequest>) {
+    pub(crate) async fn process_batch(
+        &mut self,
+        requests: Vec<BatchRequest>,
+    ) -> Result<(), WorkerError> {
         let mut update_results = Vec::new();
         let mut confirm_results = Vec::new();
         let mut need_save = false;
         let mut need_rollback = false;
+        let mut recovery_error = None;
         let mut max_delivered_height: Option<BlockHeight> = None;
 
         for request in requests {
@@ -1306,7 +1310,9 @@ where
                         Ok(update_result) => update_result,
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_sender, Err(error));
+                            let (recovery, to_send) = classify_processing_error(error);
+                            recovery_error = recovery_error.or(recovery);
+                            send_result(result_sender, Err(to_send));
                             continue;
                         }
                     };
@@ -1342,16 +1348,20 @@ where
                         }
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_sender, Err(error));
+                            let (recovery, to_send) = classify_processing_error(error);
+                            recovery_error = recovery_error.or(recovery);
+                            send_result(result_sender, Err(to_send));
                         }
                     }
                 }
             }
         }
+        let mut save_error = None;
         if !need_rollback && need_save {
             if let Err(error) = self.save().await {
                 tracing::error!(%error, "failed to save batch; rolling back");
                 need_rollback = true;
+                save_error = Some(error);
             }
         }
         if need_rollback {
@@ -1361,7 +1371,19 @@ where
             for (result_sender, _) in confirm_results {
                 send_result(result_sender, Err(WorkerError::BatchRolledBack));
             }
-            return;
+            // Surface an error that left the worker poisoned or the chain state
+            // corrupted so `chain_write` can evict or reset it. A `must_reload_view`
+            // error only reaches us from a failed `save`, since resolving the journal
+            // (the operation that raises it) happens only in `write_batch`. A
+            // processing step instead can raise `CorruptedChainState` while reconciling
+            // outboxes or message counters (see `confirm_updated_recipient`), which
+            // calls for a reset rather than eviction. Ordinary processing errors (bad
+            // height, validation failures) leave the worker healthy after rollback, so
+            // they return `Ok` and were already reported to their individual senders.
+            return match save_error.or(recovery_error) {
+                Some(error) => Err(error),
+                None => Ok(()),
+            };
         }
 
         if let Some(height) = max_delivered_height {
@@ -1377,6 +1399,7 @@ where
                 .await;
             send_result(result_sender, result);
         }
+        Ok(())
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -1535,8 +1558,16 @@ where
         );
 
         // 4. Re-load certificates one at a time by hash and re-process them.
+        let num_confirmed = hashes.len();
+        let num_preprocessed = preprocessed.len();
         for (index, hash) in hashes.into_iter().enumerate() {
             let height = BlockHeight(index as u64);
+            if index % 1000 == 0 {
+                info!(
+                    %chain_id, confirmed = index, total = num_confirmed,
+                    "Re-executing confirmed blocks after reset"
+                );
+            }
             let cert = self
                 .storage
                 .read_certificate(hash)
@@ -1546,7 +1577,13 @@ where
             Box::pin(self.process_confirmed_block(cert, ProcessConfirmedBlockMode::Execute, None))
                 .await?;
         }
-        for (height, hash) in preprocessed {
+        for (index, (height, hash)) in preprocessed.into_iter().enumerate() {
+            if index % 1000 == 0 {
+                info!(
+                    %chain_id, preprocessed = index, total = num_preprocessed,
+                    "Re-preprocessing blocks after reset"
+                );
+            }
             let cert = self
                 .storage
                 .read_certificate(hash)
@@ -2458,6 +2495,21 @@ where
         // chain-local `committees` map doesn't need to sit in memory across worker calls.
         self.chain.execution_state.system.committees.evict();
         Ok(())
+    }
+}
+
+/// Classifies an error returned while processing a single cross-chain batch request.
+///
+/// If the error indicates a poisoned worker or corrupted chain state, it is returned
+/// as the first element so `process_batch` can hand it to `chain_write` for recovery
+/// (eviction or reset), and the originating caller is told `BatchRolledBack` so it
+/// retries against a freshly loaded worker. Any other error leaves the worker healthy
+/// after rollback and is reported to the caller unchanged.
+fn classify_processing_error(error: WorkerError) -> (Option<WorkerError>, WorkerError) {
+    if error.must_reload_view() || error.indicates_corrupted_chain_state() {
+        (Some(error), WorkerError::BatchRolledBack)
+    } else {
+        (None, error)
     }
 }
 

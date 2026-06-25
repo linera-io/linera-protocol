@@ -10,13 +10,18 @@ use tokio::process::Command;
 
 use crate::cli_wrappers::local_kubernetes_net::BuildMode;
 
+/// A Dockerfile used to build one of the Linera images.
 pub enum Dockerfile {
+    /// The main Linera node Dockerfile.
     Main,
+    /// The indexer Dockerfile.
     Indexer,
+    /// The explorer Dockerfile.
     Explorer,
 }
 
 impl Dockerfile {
+    /// Returns the path to this Dockerfile, relative to the repository root.
     pub fn path(&self) -> &'static str {
         match self {
             Dockerfile::Main => "docker/Dockerfile",
@@ -26,15 +31,18 @@ impl Dockerfile {
     }
 }
 
+/// A Docker image built from the Linera sources.
 pub struct DockerImage {
     name: String,
 }
 
 impl DockerImage {
+    /// Returns the name of the Docker image.
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    /// Builds the Docker image from the given Dockerfile and returns it.
     pub async fn build(
         name: String,
         binaries: BuildArg,

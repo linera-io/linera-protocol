@@ -1,0 +1,13 @@
+# Mutations are kept in a separate document from queries/subscriptions.
+#
+# graphql_client embeds the whole query document into every request, and
+# async-graphql validates every operation definition in that document against
+# the server schema. A node service started with `--read-only` builds its schema
+# with an empty mutation root, so any document that *defines* a mutation is
+# rejected ("Schema is not configured for mutations") even when the executed
+# operation is a plain query. Isolating mutations here keeps the read-only
+# queries (Chain, Blocks, Applications, ...) usable against such a service.
+
+mutation Transfer($chainId: ChainId!, $owner: AccountOwner!, $recipient_chain: ChainId!, $recipient_account: AccountOwner!, $amount: Amount!) {
+  transfer(chainId: $chainId, owner: $owner, recipient: { chain_id: $recipient_chain, owner: $recipient_account }, amount: $amount)
+}

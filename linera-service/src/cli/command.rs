@@ -33,9 +33,13 @@ const DEFAULT_BPS: usize = 10;
 /// Specification for a validator to be added to the committee.
 #[derive(Clone, Debug)]
 pub struct ValidatorToAdd {
+    /// The validator's public key.
     pub public_key: ValidatorPublicKey,
+    /// The validator's account public key.
     pub account_key: AccountPublicKey,
+    /// The network address of the validator.
     pub address: String,
+    /// The number of votes assigned to the validator.
     pub votes: u64,
 }
 
@@ -60,6 +64,7 @@ impl std::str::FromStr for ValidatorToAdd {
 
 #[derive(Clone, clap::Args, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// Options controlling the behavior of the benchmark command.
 pub struct BenchmarkOptions {
     /// How many chains to use.
     #[arg(long, default_value_t = DEFAULT_NUM_CHAINS)]
@@ -153,15 +158,18 @@ impl Default for BenchmarkOptions {
 
 #[derive(Clone, clap::Subcommand, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
+/// The benchmarking subcommands.
 pub enum BenchmarkCommand {
     /// Start a single benchmark process, maintaining a given TPS.
     Single {
+        /// The benchmark options.
         #[command(flatten)]
         options: BenchmarkOptions,
     },
 
     /// Run multiple benchmark processes in parallel.
     Multi {
+        /// The benchmark options.
         #[command(flatten)]
         options: BenchmarkOptions,
 
@@ -191,6 +199,7 @@ pub enum BenchmarkCommand {
 }
 
 impl BenchmarkCommand {
+    /// Returns the number of transactions per block configured for this benchmark.
     pub fn transactions_per_block(&self) -> usize {
         match self {
             Self::Single { options } => options.transactions_per_block,
@@ -205,6 +214,7 @@ use crate::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
 
+/// The subcommands of the Linera client binary.
 #[derive(Clone, clap::Subcommand)]
 pub enum ClientCommand {
     /// Transfer funds
@@ -247,9 +257,11 @@ pub enum ClientCommand {
         #[arg(long = "from")]
         chain_id: Option<ChainId>,
 
+        /// Options configuring the new chain's ownership.
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
 
+        /// Options configuring the new chain's application permissions.
         #[clap(flatten)]
         application_permissions_config: ApplicationPermissionsConfig,
 
@@ -275,6 +287,7 @@ pub enum ClientCommand {
         #[clap(long)]
         chain_id: Option<ChainId>,
 
+        /// Options configuring the new chain's ownership.
         #[clap(flatten)]
         ownership_config: ChainOwnershipConfig,
     },
@@ -296,6 +309,7 @@ pub enum ClientCommand {
         #[arg(long)]
         chain_id: Option<ChainId>,
 
+        /// Options configuring the new chain's application permissions.
         #[clap(flatten)]
         application_permissions_config: ApplicationPermissionsConfig,
     },
@@ -377,7 +391,10 @@ pub enum ClientCommand {
     },
 
     /// Deprecates all committees up to and including the specified one.
-    RevokeEpochs { epoch: Epoch },
+    RevokeEpochs {
+        /// The highest epoch to deprecate.
+        epoch: Epoch,
+    },
 
     /// View or update the resource control policy
     ResourceControlPolicy {
@@ -760,6 +777,7 @@ pub enum ClientCommand {
 
     /// Run a GraphQL service to explore and extend the chains of the wallet.
     Service {
+        /// Configuration for the chain listener backing the service.
         #[command(flatten)]
         config: ChainListenerConfig,
 
@@ -943,6 +961,15 @@ pub enum ClientCommand {
         /// An optional chain ID to verify the blob. The default chain of the wallet
         /// is used otherwise.
         reader: Option<ChainId>,
+    },
+
+    /// Describe an existing application: print its `ApplicationDescription` (module
+    /// ID, creator chain, parameters and required dependencies) as JSON. The
+    /// description is content-addressed and fetched from the validators, so the
+    /// application need not be registered on the wallet's default chain.
+    DescribeApplication {
+        /// The ID of the application to describe.
+        application_id: ApplicationId,
     },
 
     /// Create an application.
@@ -1132,6 +1159,7 @@ impl ClientCommand {
             | ClientCommand::ListEventsFromIndex { .. }
             | ClientCommand::PublishDataBlob { .. }
             | ClientCommand::ReadDataBlob { .. }
+            | ClientCommand::DescribeApplication { .. }
             | ClientCommand::CreateApplication { .. }
             | ClientCommand::PublishAndCreate { .. }
             | ClientCommand::Keygen
@@ -1157,6 +1185,7 @@ impl ClientCommand {
 }
 
 #[derive(Clone, clap::Parser)]
+/// The subcommands for managing the storage database.
 pub enum DatabaseToolCommand {
     /// Delete all the namespaces in the database
     DeleteAll,
@@ -1169,6 +1198,7 @@ pub enum DatabaseToolCommand {
 
     /// Initialize a namespace in the database
     Initialize {
+        /// The path to the genesis configuration file.
         #[arg(long = "genesis")]
         genesis_config_path: PathBuf,
     },
@@ -1185,6 +1215,7 @@ pub enum DatabaseToolCommand {
 
 #[expect(clippy::large_enum_variant)]
 #[derive(Clone, clap::Parser)]
+/// The subcommands for managing a local Linera network.
 pub enum NetCommand {
     /// Start a Local Linera Network
     Up {
@@ -1319,6 +1350,7 @@ pub enum NetCommand {
 }
 
 #[derive(Clone, clap::Subcommand)]
+/// The subcommands for managing the wallet.
 pub enum WalletCommand {
     /// Show the contents of the wallet.
     Show {
@@ -1333,7 +1365,10 @@ pub enum WalletCommand {
     },
 
     /// Change the wallet default chain.
-    SetDefault { chain_id: ChainId },
+    SetDefault {
+        /// The chain to set as the default.
+        chain_id: ChainId,
+    },
 
     /// Initialize a wallet from the genesis configuration.
     Init {
@@ -1388,13 +1423,20 @@ pub enum WalletCommand {
 
     /// Forgets the specified chain's keys. The chain will still be followed by the
     /// wallet.
-    ForgetKeys { chain_id: ChainId },
+    ForgetKeys {
+        /// The chain whose keys will be forgotten.
+        chain_id: ChainId,
+    },
 
     /// Forgets the specified chain, including the associated key pair.
-    ForgetChain { chain_id: ChainId },
+    ForgetChain {
+        /// The chain to forget.
+        chain_id: ChainId,
+    },
 }
 
 #[derive(Clone, clap::Subcommand)]
+/// The subcommands for inspecting chains.
 pub enum ChainCommand {
     /// Show the contents of a block.
     ShowBlock {
@@ -1414,6 +1456,7 @@ pub enum ChainCommand {
 }
 
 #[derive(Clone, clap::Parser)]
+/// The subcommands for managing Linera projects.
 pub enum ProjectCommand {
     /// Create a new Linera project.
     New {
@@ -1428,7 +1471,10 @@ pub enum ProjectCommand {
     /// Test a Linera project.
     ///
     /// Equivalent to running `cargo test` with the appropriate test runner.
-    Test { path: Option<PathBuf> },
+    Test {
+        /// The path of the root of the Linera project to test.
+        path: Option<PathBuf>,
+    },
 
     /// Build and publish a Linera project.
     PublishAndCreate {

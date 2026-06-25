@@ -20,8 +20,8 @@ use linera_base::{
     abi::Abi,
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, MessagePolicy, Round, Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlobContent,
+        BlockHeight, ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
@@ -81,6 +81,7 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 
+/// Options that configure the behavior of a [`ChainClient`].
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Maximum number of pending message bundles processed at a time in a block.
@@ -105,9 +106,9 @@ pub struct Options {
     /// as a fraction of time taken to reach quorum.
     pub quorum_grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
-    pub blob_download_timeout: Duration,
+    pub blob_download_hedge_delay: Duration,
     /// The delay when downloading a batch of certificates, after which we try a second validator.
-    pub certificate_batch_download_timeout: Duration,
+    pub certificate_batch_download_hedge_delay: Duration,
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
@@ -137,7 +138,7 @@ pub struct Options {
 }
 
 struct CircuitBreakerState {
-    next_probe_at: Instant,
+    next_probe_at: Timestamp,
     probe_interval: Duration,
 }
 
@@ -153,6 +154,7 @@ struct ConsensusStateSnapshot {
 
 #[cfg(with_testing)]
 impl Options {
+    /// Returns a default set of options for use in tests.
     pub fn test_default() -> Self {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
@@ -170,8 +172,8 @@ impl Options {
             priority_bundle_origins: HashSet::new(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
-            blob_download_timeout: Duration::from_secs(1),
-            certificate_batch_download_timeout: Duration::from_secs(1),
+            blob_download_hedge_delay: Duration::from_secs(1),
+            certificate_batch_download_hedge_delay: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
@@ -246,6 +248,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
 
 /// Error type for [`ChainClient`].
 #[derive(Debug, Error)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("Local node operation failed: {0}")]
     LocalNodeError(#[from] LocalNodeError),
@@ -316,6 +319,9 @@ pub enum Error {
         target_next_block_height: BlockHeight,
     },
 
+    #[error("No validator provided a usable certificate registering blob {0}")]
+    CannotDownloadBlob(BlobId),
+
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
@@ -359,6 +365,7 @@ impl From<Infallible> for Error {
 }
 
 impl Error {
+    /// Wraps a signer error into a [`Error::Signer`] variant.
     pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
     }
@@ -576,6 +583,18 @@ impl<Env: Environment> ChainClient<Env> {
     /// Returns the chain's description. Fetches it from the validators if necessary.
     pub async fn get_chain_description(&self) -> Result<ChainDescription, Error> {
         self.client.get_chain_description(self.chain_id).await
+    }
+
+    /// Returns the description of the given application. Fetches the description blob
+    /// from the validators if necessary; the application need not be registered on
+    /// this client's chain.
+    pub async fn get_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, Error> {
+        self.client
+            .get_application_description(application_id)
+            .await
     }
 
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
@@ -1093,7 +1112,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .await;
         }
 
-        info!("find_received_certificates finished");
+        trace!("find_received_certificates finished");
 
         Ok(())
     }
@@ -1892,6 +1911,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.transfer(owner, amount, recipient).await
     }
 
+    /// Fetches the latest chain info for this chain from the validators.
     #[instrument(level = "trace")]
     pub async fn fetch_chain_info(&self) -> Result<Box<ChainInfo>, Error> {
         let validators = self.client.validator_nodes().await?;
@@ -1948,6 +1968,7 @@ impl<Env: Environment> ChainClient<Env> {
             .map_err(Into::into)
     }
 
+    /// Synchronizes this chain's state from the validators, including received messages.
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
         if self.preferred_owner.is_none() {
             return self.client.synchronize_chain_state(self.chain_id).await;
@@ -2925,6 +2946,7 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
+    /// Reads the confirmed block with the given hash from storage.
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_confirmed_block(
         &self,
@@ -2938,6 +2960,7 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|b| b.into_std())
     }
 
+    /// Reads the confirmed block certificate with the given hash from storage.
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_certificate(
         &self,
@@ -3254,6 +3277,9 @@ impl<Env: Environment> ChainClient<Env> {
             .options
             .notification_circuit_breaker_initial_probe_interval;
         let max_probe_interval = self.options.notification_circuit_breaker_max_probe_interval;
+        // Read the (possibly simulated) node clock once, so circuit-breaker probe scheduling can
+        // be driven deterministically in tests instead of depending on the wall clock.
+        let now = self.storage_client().clock().current_time();
 
         let events_only = self
             .listening_mode()
@@ -3282,7 +3308,8 @@ impl<Env: Environment> ChainClient<Env> {
                 if let Some(state) = circuit_breakers.get_mut(validator) {
                     // Was probing -> probe failed -> escalate interval.
                     state.probe_interval = (state.probe_interval * 2).min(max_probe_interval);
-                    state.next_probe_at = Instant::now() + state.probe_interval;
+                    state.next_probe_at =
+                        now.saturating_add(TimeDelta::from_duration(state.probe_interval));
                     warn!(
                         %validator,
                         chain_id = %self.chain_id,
@@ -3294,7 +3321,8 @@ impl<Env: Environment> ChainClient<Env> {
                     circuit_breakers.insert(
                         *validator,
                         CircuitBreakerState {
-                            next_probe_at: Instant::now() + initial_probe_interval,
+                            next_probe_at: now
+                                .saturating_add(TimeDelta::from_duration(initial_probe_interval)),
                             probe_interval: initial_probe_interval,
                         },
                     );
@@ -3332,7 +3360,7 @@ impl<Env: Environment> ChainClient<Env> {
 
             // Circuit breaker: skip if not time to probe yet.
             if let Some(state) = circuit_breakers.get(&public_key) {
-                if Instant::now() < state.next_probe_at {
+                if now < state.next_probe_at {
                     continue;
                 }
                 debug!(
@@ -3492,6 +3520,7 @@ impl<Env: Environment> ChainClient<Env> {
 
 #[cfg(with_testing)]
 impl<Env: Environment> ChainClient<Env> {
+    /// Processes a notification received from the given validator.
     pub async fn process_notification_from(
         &self,
         notification: Notification,

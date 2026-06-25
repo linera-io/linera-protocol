@@ -142,6 +142,17 @@ impl BlockBuilder {
         self.with_system_operation(SystemOperation::ChangeApplicationPermissions(permissions))
     }
 
+    /// Publishes the given data `blob` in this block.
+    ///
+    /// The same [`Blob`] must also be passed to
+    /// [`ActiveChain::add_block_with_blobs`](super::ActiveChain::add_block_with_blobs) so it is
+    /// available when the block is executed.
+    pub fn with_data_blob(&mut self, blob: &Blob) -> &mut Self {
+        self.with_system_operation(SystemOperation::PublishDataBlob {
+            blob_hash: blob.id().hash,
+        })
+    }
+
     /// Adds a user `operation` to this block.
     ///
     /// The operation is serialized using [`bcs`] and added to the block, marked to be executed by

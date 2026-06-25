@@ -4,7 +4,8 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {FungibleBridge} from "../FungibleBridge.sol";
 import {BridgeTypes} from "../BridgeTypes.sol";
-import {WrappedFungibleTypes} from "../WrappedFungibleTypes.sol";
+import {WrappedFungibleTypesV1} from "../WrappedFungibleTypesV1.sol";
+import {FungibleBurnEventDecoderV1} from "../FungibleBurnEventDecoderV1.sol";
 import {LineraToken} from "../LineraToken.sol";
 
 // ------------------------------------------------------------------
@@ -24,6 +25,13 @@ bytes32 constant BRIDGE_APP_ID = bytes32(uint256(0xF00D));
 // A distinct wrapped-fungible (deposit/mint target) application ID, used to
 // confirm that burn-matching keys on the bridge id and not on this one.
 bytes32 constant FUNGIBLE_APP_ID = bytes32(uint256(0xBEEF));
+
+// Governance roles for test deployments (values are irrelevant to these tests,
+// which exercise burn settlement / deposit guards, not governance flows).
+address constant PAUSE_GUARDIAN = address(0xA11CE);
+address constant PROPOSER = address(0xB0B);
+address constant CANCELLER = address(0xCA11);
+uint256 constant TIMELOCK_DELAY = 1 days;
 
 // ------------------------------------------------------------------
 // MockLightClientForBurns
@@ -81,10 +89,10 @@ contract MockLightClientForBurns {
     }
 
     function _encodeBurn(address target, uint128 amount) private pure returns (bytes memory) {
-        WrappedFungibleTypes.BurnEvent memory burnEvt;
+        WrappedFungibleTypesV1.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(target);
         burnEvt.amount = amount;
-        return WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
+        return WrappedFungibleTypesV1.bcs_serialize_BurnEvent(burnEvt);
     }
 }
 
@@ -122,10 +130,10 @@ contract MockLightClientForNonBurn {
         // Wrong stream name — should cause "not a matching burn"
         evt.stream_id.stream_name.value = bytes("deposits");
         evt.index = 5;
-        WrappedFungibleTypes.BurnEvent memory burnEvt;
+        WrappedFungibleTypesV1.BurnEvent memory burnEvt;
         burnEvt.target = bytes20(recipBase);
         burnEvt.amount = amountPerBurn;
-        evt.value = WrappedFungibleTypes.bcs_serialize_BurnEvent(burnEvt);
+        evt.value = WrappedFungibleTypesV1.bcs_serialize_BurnEvent(burnEvt);
         b.body.events[0][0] = evt;
 
         sigHash = bytes32(uint256(0x1234));
@@ -160,7 +168,19 @@ contract FungibleBridgeProcessBurnsTest is Test {
     // `supply` tokens pre-minted to the bridge.
     function _deployBridge(address lc, uint256 supply) internal returns (FungibleBridge bridge, LineraToken tok) {
         tok = new LineraToken("Test", "TST", 18, supply);
-        bridge = new FungibleBridge(lc, CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID);
+        FungibleBurnEventDecoderV1 dec = new FungibleBurnEventDecoderV1();
+        bridge = new FungibleBridge(
+            lc,
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            address(dec),
+            PAUSE_GUARDIAN,
+            PROPOSER,
+            CANCELLER,
+            TIMELOCK_DELAY
+        );
         // Send all tokens to the bridge so transfer() calls succeed.
         tok.transfer(address(bridge), supply);
     }
@@ -304,8 +324,19 @@ contract FungibleBridgeDepositTest is Test {
     function test_deposit_reverts_amount_exceeds_u128() public {
         uint256 oversized = uint256(type(uint128).max) + 1;
         LineraToken tok = new LineraToken("Test", "TST", 18, 1);
-        FungibleBridge bridge =
-            new FungibleBridge(address(0xdead), CHAIN_ID, address(tok), FUNGIBLE_APP_ID, BRIDGE_APP_ID);
+        FungibleBurnEventDecoderV1 dec = new FungibleBurnEventDecoderV1();
+        FungibleBridge bridge = new FungibleBridge(
+            address(0xdead),
+            CHAIN_ID,
+            address(tok),
+            FUNGIBLE_APP_ID,
+            BRIDGE_APP_ID,
+            address(dec),
+            PAUSE_GUARDIAN,
+            PROPOSER,
+            CANCELLER,
+            TIMELOCK_DELAY
+        );
 
         vm.expectRevert(bytes("amount exceeds u128"));
         bridge.deposit(CHAIN_ID, FUNGIBLE_APP_ID, bytes32(uint256(0xBEEF)), oversized);

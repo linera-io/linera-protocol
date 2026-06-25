@@ -35,6 +35,7 @@ pub struct BridgeParameters {
 
 /// Operations accepted by the bridge contract.
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum BridgeOperation {
     /// Verify a deposit proof and mint wrapped tokens.
     ProcessDeposit {

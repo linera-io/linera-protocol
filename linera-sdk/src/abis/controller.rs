@@ -11,6 +11,7 @@ use crate::linera_base_types::{
     AccountOwner, ApplicationId, ChainId, ContractAbi, DataBlobHash, MessagePolicy, ServiceAbi,
 };
 
+/// The ABI of the controller application.
 pub struct ControllerAbi;
 
 impl ContractAbi for ControllerAbi {
@@ -27,6 +28,7 @@ impl ServiceAbi for ControllerAbi {
 pub type ManagedServiceId = DataBlobHash;
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+#[allow(missing_docs)]
 pub enum Operation {
     /// Worker commands
     ExecuteWorkerCommand {
@@ -42,6 +44,7 @@ pub enum Operation {
 
 /// A worker command
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum WorkerCommand {
     /// Executed by workers to register themselves.
     RegisterWorker { capabilities: Vec<String> },
@@ -53,6 +56,7 @@ scalar!(WorkerCommand);
 
 /// A controller command
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum ControllerCommand {
     /// Set the admin owners.
     SetAdmins { admins: Option<Vec<AccountOwner>> },
@@ -133,6 +137,7 @@ scalar!(LocalWorkerState);
 
 /// Messages that can be exchanged across chains from the same application instance.
 #[derive(Clone, Debug, Deserialize, Serialize, GraphQLMutationRootInCrate)]
+#[allow(missing_docs)]
 pub enum Message {
     // -- Message to the controller chain --
     ExecuteWorkerCommand {
@@ -159,6 +164,7 @@ pub enum Message {
     },
 }
 
+/// Serialization format descriptors for the controller ABI types.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod formats {
     use serde_reflection::{Samples, Tracer, TracerConfig};

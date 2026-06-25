@@ -33,6 +33,7 @@ This document contains the help content for the `linera` command-line program.
 * [`linera list-events-from-index`↴](#linera-list-events-from-index)
 * [`linera publish-data-blob`↴](#linera-publish-data-blob)
 * [`linera read-data-blob`↴](#linera-read-data-blob)
+* [`linera describe-application`↴](#linera-describe-application)
 * [`linera create-application`↴](#linera-create-application)
 * [`linera publish-and-create`↴](#linera-publish-and-create)
 * [`linera keygen`↴](#linera-keygen)
@@ -112,6 +113,7 @@ Client implementation and command-line tool for the Linera blockchain
 * `list-events-from-index` — Print events from a specific chain and stream from a specified index
 * `publish-data-blob` — Publish a data blob of binary data
 * `read-data-blob` — Verify that a data blob is readable
+* `describe-application` — Describe an existing application: print its `ApplicationDescription` (module ID, creator chain, parameters and required dependencies) as JSON. The description is content-addressed and fetched from the validators, so the application need not be registered on the wallet's default chain
 * `create-application` — Create an application
 * `publish-and-create` — Create an application, and publish the required module
 * `keygen` — Create an unassigned key pair
@@ -199,10 +201,10 @@ Client implementation and command-line tool for the Linera blockchain
 * `--quorum-grace-period <QUORUM_GRACE_PERIOD>` — An additional delay, after reaching a quorum, to wait for additional validator signatures, as a fraction of time taken to reach quorum
 
   Default value: `0.2`
-* `--blob-download-timeout-ms <BLOB_DOWNLOAD_TIMEOUT>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
+* `--blob-download-hedge-delay-ms <BLOB_DOWNLOAD_HEDGE_DELAY>` — The delay when downloading a blob, after which we try a second validator, in milliseconds
 
   Default value: `1000`
-* `--cert-batch-download-timeout-ms <CERTIFICATE_BATCH_DOWNLOAD_TIMEOUT>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
+* `--cert-batch-download-hedge-delay-ms <CERTIFICATE_BATCH_DOWNLOAD_HEDGE_DELAY>` — The delay when downloading a batch of certificates, after which we try a second validator, in milliseconds
 
   Default value: `1000`
 * `--certificate-download-batch-size <CERTIFICATE_DOWNLOAD_BATCH_SIZE>` — Maximum number of certificates that we download at a time from one validator when synchronizing one of our chains
@@ -549,7 +551,7 @@ Deprecates all committees up to and including the specified one
 
 ###### **Arguments:**
 
-* `<EPOCH>`
+* `<EPOCH>` — The highest epoch to deprecate
 
 
 
@@ -715,7 +717,11 @@ Create genesis configuration for a Linera deployment. Create initial user chains
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--wasm-fuel-unit-price <WASM_FUEL_UNIT_PRICE>` — Set the price per unit of Wasm fuel. (This will overwrite value from `--policy-config`)
 * `--evm-fuel-unit-price <EVM_FUEL_UNIT_PRICE>` — Set the price per unit of EVM fuel. (This will overwrite value from `--policy-config`)
@@ -928,6 +934,18 @@ Verify that a data blob is readable
 
 
 
+## `linera describe-application`
+
+Describe an existing application: print its `ApplicationDescription` (module ID, creator chain, parameters and required dependencies) as JSON. The description is content-addressed and fetched from the validators, so the application need not be registered on the wallet's default chain
+
+**Usage:** `linera describe-application <APPLICATION_ID>`
+
+###### **Arguments:**
+
+* `<APPLICATION_ID>` — The ID of the application to describe
+
+
+
 ## `linera create-application`
 
 Create an application
@@ -1069,7 +1087,7 @@ Change the wallet default chain
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to set as the default
 
 
 
@@ -1142,7 +1160,7 @@ Forgets the specified chain's keys. The chain will still be followed by the wall
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain whose keys will be forgotten
 
 
 
@@ -1154,7 +1172,7 @@ Forgets the specified chain, including the associated key pair
 
 ###### **Arguments:**
 
-* `<CHAIN_ID>`
+* `<CHAIN_ID>` — The chain to forget
 
 
 
@@ -1236,7 +1254,7 @@ Equivalent to running `cargo test` with the appropriate test runner.
 
 ###### **Arguments:**
 
-* `<PATH>`
+* `<PATH>` — The path of the root of the Linera project to test
 
 
 
@@ -1304,7 +1322,11 @@ Start a Local Linera Network
 
   Default value: `no-fees`
 
-  Possible values: `no-fees`, `testnet`
+  Possible values:
+  - `no-fees`:
+    Charges nothing for any resource, with no usage limits
+  - `testnet`:
+    Uses the fees and limits that match the public Testnet
 
 * `--cross-chain-queue-size <QUEUE_SIZE>` — Number of cross-chain messages allowed before dropping them
 
@@ -1642,7 +1664,7 @@ Initialize a namespace in the database
 
 ###### **Options:**
 
-* `--genesis <GENESIS_CONFIG_PATH>`
+* `--genesis <GENESIS_CONFIG_PATH>` — The path to the genesis configuration file
 
 
 

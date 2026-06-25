@@ -31,6 +31,7 @@ use crate::{
     SystemExecutionStateView,
 };
 
+/// Creates a dummy committee with a single test validator.
 pub fn dummy_committee() -> Committee {
     Committee::make_simple(vec![(
         ValidatorPublicKey::test_key(0),
@@ -38,11 +39,13 @@ pub fn dummy_committee() -> Committee {
     )])
 }
 
+/// Creates a dummy committee map containing a single committee at epoch zero.
 pub fn dummy_committees() -> BTreeMap<Epoch, Committee> {
     let committee = dummy_committee();
     BTreeMap::from([(Epoch::ZERO, committee)])
 }
 
+/// Creates a dummy root chain description with the given index, ownership, and balance.
 pub fn dummy_chain_description_with_ownership_and_balance(
     index: u32,
     ownership: ChainOwnership,
@@ -60,6 +63,7 @@ pub fn dummy_chain_description_with_ownership_and_balance(
     ChainDescription::new(origin, config, Timestamp::default())
 }
 
+/// Creates a dummy chain description owned by the given owner, with the maximum balance.
 pub fn dummy_chain_description_with_owner(index: u32, owner: AccountOwner) -> ChainDescription {
     dummy_chain_description_with_ownership_and_balance(
         index,
@@ -68,6 +72,7 @@ pub fn dummy_chain_description_with_owner(index: u32, owner: AccountOwner) -> Ch
     )
 }
 
+/// Creates a dummy chain description with a deterministic single owner and the maximum balance.
 pub fn dummy_chain_description(index: u32) -> ChainDescription {
     let chain_key = AccountPublicKey::test_key(2 * (index % 128) as u8 + 1);
     let ownership = ChainOwnership::single(chain_key.into());
@@ -243,6 +248,7 @@ where
     }
 }
 
+/// Creates the given number of dummy user application registrations for use in tests.
 pub fn create_dummy_user_application_registrations(
     count: u32,
 ) -> anyhow::Result<Vec<(ApplicationId, ApplicationDescription, Blob, Blob)>> {

@@ -30,6 +30,10 @@ contract DeployFungibleBridgeTest is Test {
         vm.setEnv("TOKEN_ADDRESS", vm.toString(address(token)));
         vm.setEnv("FUNGIBLE_APP_ID", vm.toString(appId));
         vm.setEnv("BRIDGE_APP_ID", vm.toString(bridgeAppId));
+        vm.setEnv("PAUSE_GUARDIAN", vm.toString(makeAddr("guardian")));
+        vm.setEnv("PROPOSER", vm.toString(makeAddr("proposer")));
+        vm.setEnv("CANCELLER", vm.toString(makeAddr("canceller")));
+        vm.setEnv("TIMELOCK_DELAY", vm.toString(uint256(1 days)));
 
         FungibleBridge bridge = new DeployFungibleBridge().run();
 

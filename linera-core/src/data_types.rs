@@ -96,6 +96,7 @@ pub struct ChainInfoQuery {
     /// Query for certificate hashes at block heights.
     #[debug(skip_if = Vec::is_empty, with = "debug_compressed_heights")]
     pub request_sent_certificate_hashes_by_heights: Vec<BlockHeight>,
+    /// Whether to create network actions while answering the query.
     #[serde(default = "default_true")]
     pub create_network_actions: bool,
 }
@@ -107,6 +108,7 @@ fn default_true() -> bool {
 }
 
 impl ChainInfoQuery {
+    /// Creates a query for the given chain that requests no optional information.
     pub fn new(chain_id: ChainId) -> Self {
         Self {
             chain_id,
@@ -124,48 +126,57 @@ impl ChainInfoQuery {
         }
     }
 
+    /// Also requests the current committees.
     pub fn with_committees(mut self) -> Self {
         self.request_committees = true;
         self
     }
 
+    /// Also requests the messages waiting to be picked in the next block.
     pub fn with_pending_message_bundles(mut self) -> Self {
         self.request_pending_message_bundles = true;
         self
     }
 
+    /// Also requests the certificate hashes sent at the given block heights.
     pub fn with_sent_certificate_hashes_by_heights(mut self, heights: Vec<BlockHeight>) -> Self {
         self.request_sent_certificate_hashes_by_heights = heights;
         self
     }
 
+    /// Also requests the received log entries, excluding the first `n`.
     pub fn with_received_log_excluding_first_n(mut self, n: u64) -> Self {
         self.request_received_log_excluding_first_n = Some(n);
         self
     }
 
+    /// Also requests the values from the chain manager, not just the votes.
     pub fn with_manager_values(mut self) -> Self {
         self.request_manager_values = true;
         self
     }
 
+    /// Also requests a timeout vote for the given height and round, if appropriate.
     pub fn with_timeout(mut self, height: BlockHeight, round: Round) -> Self {
         self.request_leader_timeout = Some((height, round));
         self
     }
 
+    /// Also requests a vote to switch to fallback mode, if appropriate.
     #[cfg(with_testing)]
     pub fn with_fallback(mut self) -> Self {
         self.request_fallback = true;
         self
     }
 
+    /// Also requests that network actions be created while answering the query.
     pub fn with_network_actions(mut self) -> Self {
         self.create_network_actions = true;
         self
     }
 }
 
+/// Information about a chain, returned in response to a [`ChainInfoQuery`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ChainInfo {
@@ -226,13 +237,16 @@ impl ChainInfo {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ChainInfoResponse {
+    /// The information about the chain.
     pub info: Box<ChainInfo>,
+    /// The validator's signature over the chain information, if signed.
     pub signature: Option<ValidatorSignature>,
 }
 
 /// An internal request between chains within a validator.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
+#[allow(missing_docs)]
 pub enum CrossChainRequest {
     /// Communicate a number of confirmed blocks from the sender to the recipient.
     /// Blocks must be given by increasing heights.
@@ -286,6 +300,7 @@ impl CrossChainRequest {
 }
 
 impl ChainInfo {
+    /// Builds a [`ChainInfo`] from the given chain state view.
     pub async fn from_chain_view<C, S>(view: &ChainStateView<C>) -> Result<Self, ViewError>
     where
         C: Context<Extra = ChainRuntimeContext<S>> + Clone + 'static,
@@ -314,6 +329,7 @@ impl ChainInfo {
 }
 
 impl ChainInfoResponse {
+    /// Creates a response from the given [`ChainInfo`], signing it if a key pair is provided.
     pub fn new(info: ChainInfo, key_pair: Option<&ValidatorSecretKey>) -> Self {
         let info = Box::new(info);
         let signature = key_pair.map(|kp| ValidatorSignature::new(&*info, kp));
@@ -326,6 +342,7 @@ impl ChainInfoResponse {
         self.signature = Some(ValidatorSignature::new(&*self.info, key_pair));
     }
 
+    /// Verifies that the response is correctly signed by the given validator.
     pub fn check(&self, public_key: ValidatorPublicKey) -> Result<(), CryptoError> {
         match self.signature.as_ref() {
             Some(sig) => sig.check(&*self.info, public_key),
@@ -339,7 +356,9 @@ impl BcsSignable<'_> for ChainInfo {}
 /// Request for downloading certificates by heights.
 #[derive(Clone)]
 pub struct CertificatesByHeightRequest {
+    /// The chain whose certificates are requested.
     pub chain_id: ChainId,
+    /// The block heights of the requested certificates.
     pub heights: Vec<BlockHeight>,
 }
 
@@ -407,10 +426,14 @@ pub enum ClientOutcome<T> {
     Conflict(Box<ConfirmedBlockCertificate>),
 }
 
+/// The time at which the current round times out, and the round and height it applies to.
 #[derive(Debug)]
 pub struct RoundTimeout {
+    /// The timestamp at which the current round times out.
     pub timestamp: Timestamp,
+    /// The round that this timeout applies to.
     pub current_round: Round,
+    /// The height of the next block to be added to the chain.
     pub next_block_height: BlockHeight,
 }
 
@@ -425,6 +448,7 @@ impl fmt::Display for RoundTimeout {
 }
 
 impl<T> ClientOutcome<T> {
+    /// Returns the committed value, panicking on a timeout or conflict.
     #[cfg(with_testing)]
     pub fn unwrap(self) -> T {
         match self {
@@ -436,6 +460,7 @@ impl<T> ClientOutcome<T> {
         }
     }
 
+    /// Returns the committed value, panicking with `msg` on a timeout or conflict.
     pub fn expect(self, msg: &'static str) -> T {
         match self {
             ClientOutcome::Committed(t) => t,
@@ -443,6 +468,7 @@ impl<T> ClientOutcome<T> {
         }
     }
 
+    /// Applies `f` to the committed value, leaving other outcomes unchanged.
     pub fn map<F, S>(self, f: F) -> ClientOutcome<S>
     where
         F: FnOnce(T) -> S,
@@ -454,6 +480,7 @@ impl<T> ClientOutcome<T> {
         }
     }
 
+    /// Applies the fallible `f` to the committed value, leaving other outcomes unchanged.
     pub fn try_map<F, S>(self, f: F) -> Result<ClientOutcome<S>, chain_client::Error>
     where
         F: FnOnce(T) -> Result<S, chain_client::Error>,

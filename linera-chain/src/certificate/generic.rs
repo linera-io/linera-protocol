@@ -17,6 +17,7 @@ use crate::{data_types::LiteValue, ChainError};
 #[derive(Debug)]
 pub struct GenericCertificate<T: CertificateValue> {
     value: T,
+    /// The round in which the value was certified.
     pub round: Round,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
@@ -33,6 +34,7 @@ impl<T: Allocative + CertificateValue> Allocative for GenericCertificate<T> {
 }
 
 impl<T: CertificateValue> GenericCertificate<T> {
+    /// Creates a new certificate from a value, round and list of signatures.
     pub fn new(
         value: T,
         round: Round,
@@ -72,10 +74,12 @@ impl<T: CertificateValue> GenericCertificate<T> {
         self.value.hash()
     }
 
+    /// Returns the list of signatures on the certified value.
     pub fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
         &self.signatures
     }
 
+    /// Returns a mutable reference to the list of signatures on the certified value.
     #[cfg(with_testing)]
     pub fn signatures_mut(&mut self) -> &mut Vec<(ValidatorPublicKey, ValidatorSignature)> {
         &mut self.signatures
@@ -117,6 +121,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
         Ok(())
     }
 
+    /// Returns the `LiteCertificate` corresponding to this certificate, without the value.
     pub fn lite_certificate(&self) -> crate::certificate::LiteCertificate<'_>
     where
         T: CertificateValue,

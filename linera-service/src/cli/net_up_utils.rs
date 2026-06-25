@@ -104,6 +104,7 @@ impl StorageConfigProvider {
     }
 }
 
+/// Starts a local test network and, optionally, a faucet and block exporter.
 #[expect(clippy::too_many_arguments)]
 #[cfg(feature = "kubernetes")]
 pub async fn handle_net_up_kubernetes(
@@ -185,6 +186,7 @@ pub async fn handle_net_up_kubernetes(
     wait_for_shutdown(shutdown_notifier, &mut net, faucet_service).await
 }
 
+/// Starts a local test network using native processes and, optionally, a faucet and block exporter.
 #[expect(clippy::too_many_arguments)]
 pub async fn handle_net_up_service(
     num_other_initial_chains: u32,

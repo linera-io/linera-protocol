@@ -14,6 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    time::Duration,
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
@@ -452,16 +453,38 @@ impl StorageCaches {
     pub fn new(sizes: StorageCacheConfig) -> Self {
         let interval = sizes.cache_cleanup_interval_secs;
         Self {
-            blob: Arc::new(ValueCache::new(sizes.blob_cache_size, interval)),
-            confirmed_block: Arc::new(ValueCache::new(sizes.confirmed_block_cache_size, interval)),
-            certificate: Arc::new(ValueCache::new(sizes.certificate_cache_size, interval)),
-            certificate_raw: Arc::new(ValueCache::new(sizes.certificate_raw_cache_size, interval)),
-            event: Arc::new(ValueCache::new(sizes.event_cache_size, interval)),
+            blob: Arc::new(ValueCache::new(
+                "storage_blob",
+                sizes.blob_cache_size,
+                interval,
+            )),
+            confirmed_block: Arc::new(ValueCache::new(
+                "storage_confirmed_block",
+                sizes.confirmed_block_cache_size,
+                interval,
+            )),
+            certificate: Arc::new(ValueCache::new(
+                "storage_certificate",
+                sizes.certificate_cache_size,
+                interval,
+            )),
+            certificate_raw: Arc::new(ValueCache::new(
+                "storage_certificate_raw",
+                sizes.certificate_raw_cache_size,
+                interval,
+            )),
+            event: Arc::new(ValueCache::new(
+                "storage_event",
+                sizes.event_cache_size,
+                interval,
+            )),
             block_hash_by_height: Arc::new(ValueCache::new(
+                "storage_block_hash_by_height",
                 sizes.block_hash_by_height_cache_size,
                 interval,
             )),
             event_block_height: Arc::new(ValueCache::new(
+                "storage_event_block_height",
                 sizes.event_block_height_cache_size,
                 interval,
             )),
@@ -1125,6 +1148,10 @@ impl Clock for WallClock {
         if delta > TimeDelta::ZERO {
             linera_base::time::timer::sleep(delta.as_duration()).await
         }
+    }
+
+    async fn sleep_for(&self, duration: Duration) {
+        linera_base::time::timer::sleep(duration).await
     }
 }
 

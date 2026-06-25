@@ -4,6 +4,7 @@
 //! This module provides web files to run a block explorer from Linera service node and Linera indexer.
 
 #![recursion_limit = "256"]
+#![deny(missing_docs)]
 
 mod entrypoint;
 mod formats;
@@ -168,13 +169,19 @@ pub struct GQuery<T> {
     payload: Option<T>,
 }
 
+/// The network protocol used to reach a service.
 pub enum Protocol {
+    /// Plain HTTP(S).
     Http,
+    /// A WebSocket connection.
     Websocket,
 }
 
+/// The kind of endpoint to connect to.
 pub enum AddressKind {
+    /// A Linera node service.
     Node,
+    /// A Linera indexer.
     Indexer,
 }
 
@@ -759,6 +766,7 @@ async fn route_aux(
     }
 }
 
+/// Routes a request from the JavaScript UI to the appropriate handler and updates the app state.
 #[wasm_bindgen]
 pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     let path = path.as_string();
@@ -769,12 +777,14 @@ pub async fn route(app: JsValue, path: JsValue, args: JsValue) {
     route_aux(&app, &data, &path, &args, false).await
 }
 
+/// Returns a shortened, debug-formatted representation of a crypto hash string.
 #[wasm_bindgen]
 pub fn short_crypto_hash(s: &str) -> String {
     let hash = CryptoHash::from_str(s).expect("not a crypto hash");
     format!("{hash:?}")
 }
 
+/// Returns a shortened representation of an application ID string.
 #[wasm_bindgen]
 pub fn short_app_id(s: &str) -> String {
     if s.len() <= 12 {

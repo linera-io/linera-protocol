@@ -1,25 +1,8 @@
 ---
 source: hex-game/tests/format.rs
-expression: "HexApplication::formats().unwrap()"
+expression: "HexApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
-  AccountOwner:
-    ENUM:
-      0:
-        Reserved:
-          NEWTYPE: U8
-      1:
-        Address32:
-          NEWTYPE:
-            TYPENAME: CryptoHash
-      2:
-        Address20:
-          NEWTYPE:
-            TUPLEARRAY:
-              CONTENT: U8
-              SIZE: 20
-  Amount:
-    NEWTYPESTRUCT: U128
   Board:
     STRUCT:
       - cells:
@@ -47,11 +30,6 @@ REGISTRY:
           TYPENAME: Timestamp
       - block_delay:
           TYPENAME: TimeDelta
-  CryptoHash:
-    NEWTYPESTRUCT:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
   HexOutcome:
     ENUM:
       0:

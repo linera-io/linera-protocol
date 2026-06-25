@@ -1,0 +1,88 @@
+---
+source: formats-registry/tests/format.rs
+expression: "FormatsRegistryApplication::formats().unwrap()"
+---
+REGISTRY:
+  AccountOwner:
+    ENUM:
+      0:
+        Reserved:
+          NEWTYPE: U8
+      1:
+        Address32:
+          NEWTYPE:
+            TYPENAME: CryptoHash
+      2:
+        Address20:
+          NEWTYPE:
+            TUPLEARRAY:
+              CONTENT: U8
+              SIZE: 20
+  CryptoHash:
+    NEWTYPESTRUCT:
+      TUPLEARRAY:
+        CONTENT: U8
+        SIZE: 32
+  DataBlobHash:
+    NEWTYPESTRUCT:
+      TYPENAME: CryptoHash
+  Message:
+    ENUM:
+      0:
+        Write:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - module_id:
+                TYPENAME: ModuleId
+            - blob_hash:
+                TYPENAME: DataBlobHash
+      1:
+        SetAdmins:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - admins:
+                OPTION:
+                  SEQ:
+                    TYPENAME: AccountOwner
+  ModuleId:
+    STRUCT:
+      - contract_blob_hash:
+          TYPENAME: CryptoHash
+      - service_blob_hash:
+          TYPENAME: CryptoHash
+      - vm_runtime:
+          TYPENAME: VmRuntime
+  Operation:
+    ENUM:
+      0:
+        Write:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - module_id:
+                TYPENAME: ModuleId
+            - blob_hash:
+                TYPENAME: DataBlobHash
+      1:
+        SetAdmins:
+          STRUCT:
+            - owner:
+                TYPENAME: AccountOwner
+            - admins:
+                OPTION:
+                  SEQ:
+                    TYPENAME: AccountOwner
+  VmRuntime:
+    ENUM:
+      0:
+        Wasm: UNIT
+      1:
+        Evm: UNIT
+OPERATION:
+  TYPENAME: Operation
+RESPONSE: UNIT
+MESSAGE:
+  TYPENAME: Message
+EVENT_VALUE: UNIT

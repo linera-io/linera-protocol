@@ -47,6 +47,7 @@ pub struct EvmClient<P> {
 }
 
 impl<P: Provider> EvmClient<P> {
+    /// Creates a new EVM client, optionally pinning the LightClient address.
     pub fn new(
         provider: P,
         bridge_addr: Address,
@@ -66,10 +67,12 @@ impl<P: Provider> EvmClient<P> {
         }
     }
 
+    /// Returns the FungibleBridge contract address.
     pub fn bridge_addr(&self) -> Address {
         self.bridge_addr
     }
 
+    /// Returns the EVM chain's latest block number.
     pub async fn get_block_number(&self) -> Result<u64> {
         Ok(self.provider.get_block_number().await?)
     }
@@ -207,7 +210,7 @@ impl<P: Provider> EvmClient<P> {
     ) -> Result<()> {
         let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
         let bridge = IFungibleBridge::new(self.bridge_addr, &self.provider);
-        tracing::info!(
+        tracing::debug!(
             tx_index,
             count = positions_in_tx.len(),
             size = cert_bytes.len(),
