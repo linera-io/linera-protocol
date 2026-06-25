@@ -13,7 +13,7 @@ use linera_base::{
     crypto::{BcsHashable, CryptoHash},
     data_types::{Blob, BlobContent, BlockHeight, OracleResponse, StreamUpdate},
     ensure,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, StreamId},
+    identifiers::{AccountOwner, BlobId, BlobType, ChainId, GenericApplicationId, StreamId},
     time::Instant,
 };
 use linera_views::{
@@ -102,6 +102,7 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Computes the cryptographic hash of the execution state.
     pub async fn crypto_hash_mut(&mut self) -> Result<CryptoHash, ViewError> {
         #[derive(Serialize, Deserialize)]
         struct ExecutionStateViewHash([u8; 32]);
@@ -118,7 +119,7 @@ where
     /// them during transaction execution via [`Self::apply_checkpoint`].
     ///
     /// This is a *pre-block* operation: it must run before the block-level setup mutates
-    /// the chain state (e.g. setting `system.timestamp`), because `dump_content` reads
+    /// the chain state (e.g. setting `system.progress`), because `dump_content` reads
     /// from storage and refuses to run with pending in-memory changes. Splitting the
     /// dump out of the operation handler also guarantees the captured bytes represent
     /// the chain's pre-block state, which is exactly what a bootstrapping node will
@@ -127,16 +128,24 @@ where
         &mut self,
         maximum_blob_size: u64,
     ) -> Result<Vec<Blob>, ExecutionError> {
-        let mut had_event_block = false;
+        // User event streams are summarized and pruned by the checkpoint itself (see
+        // `ExecutionStateActor`'s checkpoint handler), so they do not block checkpointing.
+        // System event streams (e.g. the epoch streams on the admin chain) are not
+        // summarized, so a chain that published any is still not allowed to checkpoint.
+        let mut had_system_event_block = false;
         self.previous_event_blocks
-            .for_each_index_while(|_| {
-                had_event_block = true;
-                Ok(false)
+            .for_each_index_while(|stream_id| {
+                if matches!(stream_id.application_id, GenericApplicationId::System) {
+                    had_system_event_block = true;
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
             })
             .await?;
         ensure!(
-            !had_event_block,
-            ExecutionError::CheckpointPreconditionFailed("chain has published events")
+            !had_system_event_block,
+            ExecutionError::CheckpointPreconditionFailed("chain has published system events")
         );
 
         let (bytes, _content_hash) = self.inner.dump_content().await?;
@@ -304,6 +313,7 @@ pub enum UserAction {
     Operation(OperationContext, Vec<u8>),
     Message(MessageContext, Vec<u8>),
     ProcessStreams(ProcessStreamsContext, Vec<StreamUpdate>),
+    SummarizeEvents(ProcessStreamsContext, Vec<StreamUpdate>),
 }
 
 impl UserAction {
@@ -312,6 +322,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.authenticated_owner,
             UserAction::Operation(context, _) => context.authenticated_owner,
             UserAction::ProcessStreams(_, _) => None,
+            UserAction::SummarizeEvents(_, _) => None,
             UserAction::Message(context, _) => context.authenticated_owner,
         }
     }
@@ -321,6 +332,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.height,
             UserAction::Operation(context, _) => context.height,
             UserAction::ProcessStreams(context, _) => context.height,
+            UserAction::SummarizeEvents(context, _) => context.height,
             UserAction::Message(context, _) => context.height,
         }
     }
@@ -330,6 +342,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.round,
             UserAction::Operation(context, _) => context.round,
             UserAction::ProcessStreams(context, _) => context.round,
+            UserAction::SummarizeEvents(context, _) => context.round,
             UserAction::Message(context, _) => context.round,
         }
     }
@@ -339,6 +352,7 @@ impl UserAction {
             UserAction::Instantiate(context, _) => context.timestamp,
             UserAction::Operation(context, _) => context.timestamp,
             UserAction::ProcessStreams(context, _) => context.timestamp,
+            UserAction::SummarizeEvents(context, _) => context.timestamp,
             UserAction::Message(context, _) => context.timestamp,
         }
     }
@@ -349,6 +363,7 @@ where
     C: Context + Clone + 'static,
     C::Extra: ExecutionRuntimeContext,
 {
+    /// Runs a query against the given application and returns its response.
     pub async fn query_application(
         &mut self,
         context: QueryContext,
@@ -482,6 +497,7 @@ where
         }
     }
 
+    /// Returns the descriptions of all applications registered on this chain.
     pub async fn list_applications(
         &self,
     ) -> Result<Vec<(ApplicationId, ApplicationDescription)>, ExecutionError> {

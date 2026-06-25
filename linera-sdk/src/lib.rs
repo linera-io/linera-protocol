@@ -24,6 +24,8 @@
 //! The [`examples`](https://github.com/linera-io/linera-protocol/tree/main/examples)
 //! directory contains some example applications.
 
+#![deny(missing_docs)]
+
 #[macro_use]
 pub mod util;
 
@@ -132,6 +134,16 @@ pub trait Contract: WithContractAbi + ContractAbi + Sized {
     /// This is called whenever there is a new event on any stream that this application
     /// subscribes to.
     async fn process_streams(&mut self, _updates: Vec<StreamUpdate>) {}
+
+    /// Summarizes the application's own event streams at a checkpoint.
+    ///
+    /// This is called when a checkpoint is created, once for each of the application's own
+    /// streams that published events since the previous checkpoint. The application may emit
+    /// a summary event to such a stream: after the checkpoint, only the latest summary is
+    /// guaranteed to remain available, while older events may eventually be dropped. An
+    /// application that emits no summary lets the stream's older events lapse; a stream that
+    /// is not summarized at a checkpoint is effectively closed.
+    async fn summarize_events(&mut self, _updates: Vec<StreamUpdate>) {}
 
     /// Finishes the execution of the current transaction.
     ///

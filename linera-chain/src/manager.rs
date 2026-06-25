@@ -102,10 +102,13 @@ use crate::{
 /// The result of verifying a (valid) query.
 #[derive(Eq, PartialEq)]
 pub enum Outcome {
+    /// The query is accepted and should be acted upon.
     Accept,
+    /// The query can be skipped without further action.
     Skip,
 }
 
+/// A reference to a vote for either a validated or a confirmed block.
 pub type ValidatedOrConfirmedVote<'a> = Either<&'a Vote<ValidatedBlock>, &'a Vote<ConfirmedBlock>>;
 
 /// The latest block that validators may have voted to confirm: this is either the block proposal
@@ -130,6 +133,7 @@ impl LockingBlock {
         }
     }
 
+    /// Returns the ID of the chain this locking block belongs to.
     pub fn chain_id(&self) -> ChainId {
         match self {
             Self::Fast(proposal) => proposal.content.block.chain_id,

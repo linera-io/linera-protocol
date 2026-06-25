@@ -10,5 +10,5 @@ use linera_sdk::formats::BcsApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", FungibleApplication::formats().unwrap());
+    insta::assert_yaml_snapshot!("format", FungibleApplication::pruned_formats().unwrap());
 }

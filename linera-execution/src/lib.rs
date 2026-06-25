@@ -4,6 +4,9 @@
 //! This module manages the execution of the system application and the user applications in a
 //! Linera chain.
 
+#![deny(missing_docs)]
+
+/// The committee of validators and their voting weights for an epoch.
 pub mod committee;
 pub mod evm;
 mod execution;
@@ -13,7 +16,9 @@ mod graphql;
 mod policy;
 mod resources;
 mod runtime;
+/// The system application implementing core chain functionality.
 pub mod system;
+/// Helpers for writing tests that exercise the execution layer.
 #[cfg(with_testing)]
 pub mod test_utils;
 mod transaction_tracker;
@@ -75,7 +80,8 @@ pub use crate::{
         ServiceSyncRuntimeHandle,
     },
     system::{
-        SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery, SystemResponse,
+        ChainProgress, SystemExecutionStateView, SystemMessage, SystemOperation, SystemQuery,
+        SystemResponse,
     },
     transaction_tracker::{PreparedCheckpoint, TransactionOutcome, TransactionTracker},
 };
@@ -83,6 +89,8 @@ pub use crate::{
 /// The `Linera.sol` library code to be included in solidity smart
 /// contracts using Linera features.
 pub const LINERA_SOL: &str = include_str!("../solidity/Linera.sol");
+/// The `LineraTypes.sol` library code defining the Solidity types used to
+/// interface with Linera features.
 pub const LINERA_TYPES_SOL: &str = include_str!("../solidity/LineraTypes.sol");
 
 /// The maximum length of a stream name.
@@ -104,6 +112,7 @@ pub type UserServiceInstance = Box<dyn UserService>;
 
 /// A factory trait to obtain a [`UserContract`] from a [`UserContractModule`]
 pub trait UserContractModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
+    /// Instantiates the contract with the given runtime handle.
     fn instantiate(
         &self,
         runtime: ContractSyncRuntimeHandle,
@@ -120,6 +129,7 @@ dyn_clone::clone_trait_object!(UserContractModule);
 
 /// A factory trait to obtain a [`UserService`] from a [`UserServiceModule`]
 pub trait UserServiceModule: dyn_clone::DynClone + Any + web_thread::Post + Send + Sync {
+    /// Instantiates the service with the given runtime handle.
     fn instantiate(
         &self,
         runtime: ServiceSyncRuntimeHandle,
@@ -152,6 +162,7 @@ impl UserContractCode {
     }
 }
 
+/// A wrapper around a `Vec` that can be converted to and from a JavaScript array.
 pub struct JsVec<T>(pub Vec<T>);
 
 #[cfg(web)]
@@ -230,6 +241,7 @@ const _: () = {
 
 /// A type for errors happening during execution.
 #[derive(Error, Debug, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum ExecutionError {
     #[error(transparent)]
     ViewError(#[from] ViewError),
@@ -486,6 +498,10 @@ pub trait UserContract {
     /// Reacts to new events on streams this application subscribes to.
     fn process_streams(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
 
+    /// Gives the application a chance to emit a summary event for each of its own streams
+    /// that published events since the previous checkpoint.
+    fn summarize_events(&mut self, updates: Vec<StreamUpdate>) -> Result<(), ExecutionError>;
+
     /// Finishes execution of the current transaction.
     fn finalize(&mut self) -> Result<(), ExecutionError>;
 }
@@ -517,32 +533,42 @@ impl Default for ExecutionRuntimeConfig {
 #[cfg_attr(not(web), async_trait)]
 #[cfg_attr(web, async_trait(?Send))]
 pub trait ExecutionRuntimeContext {
+    /// Returns the ID of the chain this context belongs to.
     fn chain_id(&self) -> ChainId;
 
+    /// Returns the thread pool used to run blocking work.
     fn thread_pool(&self) -> &Arc<ThreadPool>;
 
+    /// Returns the configuration options for the execution runtime.
     fn execution_runtime_config(&self) -> ExecutionRuntimeConfig;
 
+    /// Returns the cache of loaded user contracts.
     fn user_contracts(&self) -> &Arc<papaya::HashMap<ApplicationId, UserContractCode>>;
 
+    /// Returns the cache of loaded user services.
     fn user_services(&self) -> &Arc<papaya::HashMap<ApplicationId, UserServiceCode>>;
 
+    /// Loads the contract for the given application, instantiating it if necessary.
     async fn get_user_contract(
         &self,
         description: &ApplicationDescription,
         txn_tracker: &TransactionTracker,
     ) -> Result<UserContractCode, ExecutionError>;
 
+    /// Loads the service for the given application, instantiating it if necessary.
     async fn get_user_service(
         &self,
         description: &ApplicationDescription,
         txn_tracker: &TransactionTracker,
     ) -> Result<UserServiceCode, ExecutionError>;
 
+    /// Returns the blob with the given ID, if it is available.
     async fn get_blob(&self, blob_id: BlobId) -> Result<Option<Arc<Blob>>, ViewError>;
 
+    /// Returns the event with the given ID, if it is available.
     async fn get_event(&self, event_id: EventId) -> Result<Option<Arc<Vec<u8>>>, ViewError>;
 
+    /// Returns the network description, if it is available.
     async fn get_network_description(&self) -> Result<Option<NetworkDescription>, ViewError>;
 
     /// Returns the committee whose serialized form hashes to `hash`. Returns
@@ -605,16 +631,20 @@ pub trait ExecutionRuntimeContext {
         committee_hashes.into_iter().collect()
     }
 
+    /// Returns whether a blob with the given ID is available.
     async fn contains_blob(&self, blob_id: BlobId) -> Result<bool, ViewError>;
 
+    /// Returns whether an event with the given ID is available.
     async fn contains_event(&self, event_id: EventId) -> Result<bool, ViewError>;
 
+    /// Adds the given blobs to the context, for use in tests.
     #[cfg(with_testing)]
     async fn add_blobs(
         &self,
         blobs: impl IntoIterator<Item = Blob> + Send,
     ) -> Result<(), ViewError>;
 
+    /// Adds the given events to the context, for use in tests.
     #[cfg(with_testing)]
     async fn add_events(
         &self,
@@ -622,6 +652,7 @@ pub trait ExecutionRuntimeContext {
     ) -> Result<(), ViewError>;
 }
 
+/// The context in which an operation is executed.
 #[derive(Clone, Copy, Debug)]
 pub struct OperationContext {
     /// The current chain ID.
@@ -637,6 +668,7 @@ pub struct OperationContext {
     pub timestamp: Timestamp,
 }
 
+/// The context in which a message is executed.
 #[derive(Clone, Copy, Debug)]
 pub struct MessageContext {
     /// The current chain ID.
@@ -663,6 +695,7 @@ pub struct MessageContext {
     pub timestamp: Timestamp,
 }
 
+/// The context in which stream updates are processed.
 #[derive(Clone, Copy, Debug)]
 pub struct ProcessStreamsContext {
     /// The current chain ID.
@@ -697,6 +730,7 @@ impl From<OperationContext> for ProcessStreamsContext {
     }
 }
 
+/// The context in which a transaction is finalized.
 #[derive(Clone, Copy, Debug)]
 pub struct FinalizeContext {
     /// The current chain ID.
@@ -710,6 +744,7 @@ pub struct FinalizeContext {
     pub round: Option<u32>,
 }
 
+/// The context in which a query is executed.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct QueryContext {
     /// The current chain ID.
@@ -720,13 +755,21 @@ pub struct QueryContext {
     pub local_time: Timestamp,
 }
 
+/// The runtime API shared by the contract and service parts of an application.
 pub trait BaseRuntime {
+    /// The pending result of a generic read.
     type Read: fmt::Debug + Send + Sync;
+    /// The pending result of a key existence check.
     type ContainsKey: fmt::Debug + Send + Sync;
+    /// The pending result of a multi-key existence check.
     type ContainsKeys: fmt::Debug + Send + Sync;
+    /// The pending result of reading the values for multiple keys.
     type ReadMultiValuesBytes: fmt::Debug + Send + Sync;
+    /// The pending result of reading the value for a single key.
     type ReadValueBytes: fmt::Debug + Send + Sync;
+    /// The pending result of finding the keys with a given prefix.
     type FindKeysByPrefix: fmt::Debug + Send + Sync;
+    /// The pending result of finding the key-value pairs with a given prefix.
     type FindKeyValuesByPrefix: fmt::Debug + Send + Sync;
 
     /// The current chain ID.
@@ -927,6 +970,7 @@ pub trait BaseRuntime {
     fn send_log(&mut self, message: String, level: tracing::log::Level);
 }
 
+/// The runtime API available to the service part of an application.
 pub trait ServiceRuntime: BaseRuntime {
     /// Queries another application.
     fn try_query_application(
@@ -942,6 +986,7 @@ pub trait ServiceRuntime: BaseRuntime {
     fn check_execution_time(&mut self) -> Result<(), ExecutionError>;
 }
 
+/// The runtime API available to the contract part of an application.
 pub trait ContractRuntime: BaseRuntime {
     /// The authenticated owner for this execution, if there is one.
     fn authenticated_owner(&mut self) -> Result<Option<AccountOwner>, ExecutionError>;
@@ -1088,7 +1133,7 @@ pub trait ContractRuntime: BaseRuntime {
     fn create_data_blob(&mut self, bytes: Vec<u8>) -> Result<DataBlobHash, ExecutionError>;
 
     /// Publishes a module with contract and service bytecode and an optional
-    /// JSON-encoded `Formats` description, returning the module ID.
+    /// BCS-encoded `Formats` description, returning the module ID.
     fn publish_module(
         &mut self,
         contract: Bytecode,
@@ -1113,7 +1158,9 @@ pub enum Operation {
     System(Box<SystemOperation>),
     /// A user operation (in serialized form).
     User {
+        /// The ID of the application this operation targets.
         application_id: ApplicationId,
+        /// The serialized operation.
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1131,7 +1178,9 @@ pub enum Message {
     System(SystemMessage),
     /// A user message (in serialized form).
     User {
+        /// The ID of the application this message targets.
         application_id: ApplicationId,
+        /// The serialized message.
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1145,7 +1194,9 @@ pub enum Query {
     System(SystemQuery),
     /// A user query (in serialized form).
     User {
+        /// The ID of the application this query targets.
         application_id: ApplicationId,
+        /// The serialized query.
         #[serde(with = "serde_bytes")]
         #[debug(with = "hex_debug")]
         bytes: Vec<u8>,
@@ -1155,7 +1206,9 @@ pub enum Query {
 /// The outcome of the execution of a query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct QueryOutcome<Response = QueryResponse> {
+    /// The response returned by the query.
     pub response: Response,
+    /// The operations scheduled by the query, to be included in the next block.
     pub operations: Vec<Operation>,
 }
 
@@ -1285,6 +1338,7 @@ impl OperationContext {
     }
 }
 
+/// An in-memory [`ExecutionRuntimeContext`] implementation used in tests.
 #[cfg(with_testing)]
 #[derive(Clone)]
 pub struct TestExecutionRuntimeContext {
@@ -1299,6 +1353,7 @@ pub struct TestExecutionRuntimeContext {
 
 #[cfg(with_testing)]
 impl TestExecutionRuntimeContext {
+    /// Creates a new test execution runtime context for the given chain.
     pub fn new(chain_id: ChainId, execution_runtime_config: ExecutionRuntimeConfig) -> Self {
         Self {
             chain_id,
@@ -1449,6 +1504,7 @@ impl From<SystemOperation> for Operation {
 }
 
 impl Operation {
+    /// Creates a new system operation.
     pub fn system(operation: SystemOperation) -> Self {
         Operation::System(Box::new(operation))
     }
@@ -1484,6 +1540,7 @@ impl Operation {
         }
     }
 
+    /// Returns the ID of the application this operation targets.
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
@@ -1540,6 +1597,7 @@ impl From<SystemMessage> for Message {
 }
 
 impl Message {
+    /// Creates a new system message.
     pub fn system(message: SystemMessage) -> Self {
         Message::System(message)
     }
@@ -1563,6 +1621,7 @@ impl Message {
         })
     }
 
+    /// Returns the ID of the application this message targets.
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
@@ -1578,6 +1637,7 @@ impl From<SystemQuery> for Query {
 }
 
 impl Query {
+    /// Creates a new system query.
     pub fn system(query: SystemQuery) -> Self {
         Query::System(query)
     }
@@ -1602,6 +1662,7 @@ impl Query {
         })
     }
 
+    /// Returns the ID of the application this query targets.
     pub fn application_id(&self) -> GenericApplicationId {
         match self {
             Self::System(_) => GenericApplicationId::System,
@@ -1635,7 +1696,9 @@ pub enum BlobOrigin {
     /// The blob was published by a confirmed block on the given chain at the
     /// given height.
     Published {
+        /// The chain on which the publishing block was confirmed.
         chain_id: ChainId,
+        /// The height of the publishing block.
         block_height: BlockHeight,
     },
 }
@@ -1666,6 +1729,7 @@ impl BlobState {
 /// The runtime to use for running the application.
 #[derive(Clone, Copy, Display)]
 #[cfg_attr(with_wasm_runtime, derive(Debug, Default))]
+#[allow(missing_docs)]
 pub enum WasmRuntime {
     #[cfg(with_wasmer)]
     #[default]
@@ -1677,8 +1741,10 @@ pub enum WasmRuntime {
     Wasmtime,
 }
 
+/// The runtime to use for running EVM smart contracts.
 #[derive(Clone, Copy, Display)]
 #[cfg_attr(with_revm, derive(Debug, Default))]
+#[allow(missing_docs)]
 pub enum EvmRuntime {
     #[cfg(with_revm)]
     #[default]
@@ -1688,6 +1754,7 @@ pub enum EvmRuntime {
 
 /// Trait used to select a default `WasmRuntime`, if one is available.
 pub trait WithWasmDefault {
+    /// Returns the default `WasmRuntime` if one is available, otherwise leaves the value unchanged.
     fn with_wasm_default(self) -> Self;
 }
 

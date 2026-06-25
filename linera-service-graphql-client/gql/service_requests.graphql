@@ -448,6 +448,7 @@ query Block($hash: CryptoHash, $chainId: ChainId!) {
                 applicationId
                 chainId
                 streamId
+                firstIndex
                 nextIndex
               }
             }
@@ -626,6 +627,7 @@ query Blocks($from: CryptoHash, $chainId: ChainId!, $limit: Int) {
                 applicationId
                 chainId
                 streamId
+                firstIndex
                 nextIndex
               }
             }

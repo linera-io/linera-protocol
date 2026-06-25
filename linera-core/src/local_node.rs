@@ -16,7 +16,7 @@ use linera_base::{
 use linera_chain::{
     data_types::{BlockProposal, BundleExecutionPolicy, ProposedBlock},
     types::{Block, ConfirmedBlockCertificate, GenericCertificate},
-    ChainError, ChainExecutionContext,
+    ChainError, ChainExecutionContext, StreamCounts,
 };
 use linera_execution::{BlobState, ExecutionError, Query, QueryOutcome, ResourceTracker};
 use linera_storage::{Arc as CacheArc, Storage};
@@ -50,6 +50,7 @@ where
 
 /// Error type for the operations on a local node.
 #[derive(Debug, Error, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum LocalNodeError {
     #[error(transparent)]
     ArithmeticError(#[from] ArithmeticError),
@@ -454,16 +455,17 @@ where
         Ok(self.node.state.get_event_subscriptions(chain_id).await?)
     }
 
-    /// Gets the next expected event index for a stream.
-    pub async fn get_next_expected_event(
+    /// Gets a stream's [`StreamCounts`]: its next expected event index and its lowest readable
+    /// index, read from a single chain state view so they are mutually consistent.
+    pub async fn get_stream_indices(
         &self,
         chain_id: ChainId,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, LocalNodeError> {
+    ) -> Result<StreamCounts, LocalNodeError> {
         Ok(self
             .node
             .state
-            .get_next_expected_event(chain_id, stream_id)
+            .get_stream_indices(chain_id, stream_id)
             .await?)
     }
 
@@ -478,6 +480,15 @@ where
             .state
             .next_expected_events(chain_id, stream_ids)
             .await?)
+    }
+
+    /// Test helper: resets a chain and re-executes it from its latest checkpoint.
+    #[cfg(with_testing)]
+    pub async fn reset_and_reexecute_chain(
+        &self,
+        chain_id: ChainId,
+    ) -> Result<Vec<crate::data_types::CrossChainRequest>, LocalNodeError> {
+        Ok(self.node.state.reset_and_reexecute_chain(chain_id).await?)
     }
 
     /// Gets received certificate trackers.

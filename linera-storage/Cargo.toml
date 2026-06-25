@@ -55,6 +55,7 @@ serde.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+linera-chain = { workspace = true, features = ["test"] }
 linera-storage = { path = ".", default-features = false, features = ["test"] }
 test-case.workspace = true
 test-log = { workspace = true, features = ["trace"] }

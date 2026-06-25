@@ -98,6 +98,19 @@ macro_rules! contract {
                 )
             }
 
+            fn summarize_events(updates: Vec<
+                $crate::contract::wit::exports::linera::app::contract_entrypoints::StreamUpdate,
+            >) {
+                use $crate::util::BlockingWait as _;
+                $crate::contract::run_async_entrypoint::<$contract, _, _>(
+                    unsafe { &mut CONTRACT },
+                    move |contract| {
+                        let updates = updates.into_iter().map(Into::into).collect();
+                        contract.summarize_events(updates).blocking_wait()
+                    },
+                )
+            }
+
             fn finalize() {
                 use $crate::util::BlockingWait as _;
 

@@ -1214,7 +1214,7 @@ Secp256k1PublicKey:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
-      SIZE: 33
+      SIZE: 65
 Secp256k1Signature:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -1349,6 +1349,7 @@ SystemOperation:
               TYPENAME: ChainId
           - stream_id:
               TYPENAME: StreamId
+          - first_index: U32
           - next_index: U32
     13:
       Checkpoint: UNIT

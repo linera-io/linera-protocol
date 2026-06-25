@@ -3,6 +3,10 @@
 
 //! Wasm entrypoints for contracts and services.
 
+// The `#[wit_import]` macro generates items (a struct and associated functions) that cannot
+// carry doc comments, so we allow missing docs for this whole module of WIT bindings.
+#![allow(missing_docs)]
+
 use linera_base::data_types::StreamUpdate;
 use linera_witty::wit_import;
 
@@ -13,6 +17,7 @@ pub trait ContractEntrypoints {
     fn execute_operation(operation: Vec<u8>) -> Vec<u8>;
     fn execute_message(message: Vec<u8>);
     fn process_streams(streams: Vec<StreamUpdate>);
+    fn summarize_events(streams: Vec<StreamUpdate>);
     fn finalize();
 }
 

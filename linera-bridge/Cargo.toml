@@ -19,11 +19,11 @@ offchain = [
     "dep:alloy-sol-types",
     "dep:async-trait",
     "dep:bcs",
+    "dep:linera-chain",
     "dep:linera-execution",
     "dep:op-alloy-network",
     "dep:thiserror",
     "dep:tokio",
-    "dep:url",
 ]
 codegen = [
     "offchain",
@@ -86,7 +86,6 @@ bcs = { workspace = true, optional = true }
 linera-execution = { workspace = true, optional = true }
 op-alloy-network = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["full"] }
-url = { workspace = true, optional = true }
 
 clap = { workspace = true, optional = true }
 fs-err = { workspace = true, optional = true }
@@ -120,7 +119,7 @@ name = "linera-bridge"
 required-features = ["cli"]
 
 [build-dependencies]
-serde-generate = { version = "0.34.0", features = [
+serde-generate = { version = "0.34.1", features = [
     "solidity",
 ], optional = true }
 serde-reflection = { workspace = true, optional = true }
@@ -131,7 +130,7 @@ bcs.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["yaml"] }
 linera-base = { workspace = true, features = ["test"] }
-linera-chain.workspace = true
+linera-chain = { workspace = true, features = ["test"] }
 linera-execution = { workspace = true, features = ["revm", "test"] }
 linera-storage = { workspace = true, features = ["test"] }
 proptest.workspace = true

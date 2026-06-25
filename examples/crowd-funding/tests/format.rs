@@ -10,5 +10,5 @@ use linera_sdk::formats::BcsApplication;
 
 #[test]
 fn test_format() {
-    insta::assert_yaml_snapshot!("format", CrowdFundingApplication::formats().unwrap());
+    insta::assert_yaml_snapshot!("format", CrowdFundingApplication::pruned_formats().unwrap());
 }

@@ -1399,6 +1399,56 @@ where
     Ok(())
 }
 
+/// Tests that a client whose local view of the admin chain is stale can still use a blob
+/// whose publishing certificate was signed by a committee from an epoch the client has
+/// not heard of yet.
+///
+/// The blob-recovery path downloads the publishing certificate from a validator, but
+/// validating it locally yields `CheckCertificateResult::FutureEpoch`. The client must
+/// react by catching up on the admin chain and retrying, so the blob read succeeds.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_blob_published_in_future_epoch<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1. The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default())?;
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // The stale client needs the blob: it is missing locally, so the client downloads
+    // the publishing certificate from a validator and must accept it after catching up
+    // on the admin chain, rather than choking on the unknown epoch.
+    stale.read_data_blob(blob_id.hash).await.unwrap().unwrap();
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
@@ -1606,8 +1656,7 @@ where
         .await;
     assert_matches!(
         result,
-        Err(chain_client::Error::RemoteNodeError(NodeError::BlobsNotFound(not_found_blob_ids)))
-            if not_found_blob_ids == [blob0_id]
+        Err(chain_client::Error::CannotDownloadBlob(blob_id)) if blob_id == blob0_id
     );
 
     // Take one validator down
@@ -2623,7 +2672,16 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    // Give the chain a single multi-leader round at genesis so that its initial round
+    // (`MultiLeader(0)`) times out: without multi-leader jitter, earlier multi-leader rounds
+    // do not time out. The chain still has no blocks of its own, which is the case this
+    // regression test exercises: requesting a timeout certificate then only fetches the
+    // chain's genesis description blob.
+    let client = builder
+        .add_root_chain_with_ownership(1, Amount::from_tokens(10), |owner| {
+            ChainOwnership::multiple([(owner, 100)], 1, TimeoutConfig::default())
+        })
+        .await?;
 
     // Advance the clock past the (default 10s) round timeout.
     clock.set(Timestamp::from(20_000_000));
@@ -4096,475 +4154,6 @@ where
     Ok(())
 }
 
-/// Publishes a checkpoint from one client and verifies that a fresh follower client
-/// (whose storage knows only the genesis chain description) can bootstrap directly
-/// from the checkpoint, skipping pre-checkpoint history.
-///
-/// Setup: the producer creates two blocks — a burn at height 0, then a checkpoint
-/// at height 1. The follower should reach the producer's state hash at height 2
-/// while having downloaded *only* the checkpoint cert, not the height-0 burn.
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[test_log::test(tokio::test)]
-async fn test_checkpoint_bootstrap<B>(storage_builder: B) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
-    let chain_id = producer.chain_id();
-
-    // Height 0: a plain burn, so the chain has some history to skip.
-    let burn_cert = producer
-        .burn(AccountOwner::CHAIN, Amount::ONE)
-        .await
-        .unwrap_ok_committed();
-    assert_eq!(burn_cert.block().header.height, BlockHeight::ZERO);
-
-    // Height 1: the checkpoint itself.
-    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
-    let block = checkpoint_cert.block();
-    assert_eq!(block.header.height, BlockHeight::from(1));
-    assert_eq!(block.body.transactions.len(), 1);
-    assert_matches!(
-        &block.body.transactions[0],
-        Transaction::ExecuteOperation(Operation::System(op)) if matches!(**op, SystemOperation::Checkpoint),
-        "Unexpected first transaction",
-    );
-    let execution_state_blobs = match block.body.oracle_responses.first().and_then(|t| t.first()) {
-        Some(OracleResponse::Checkpoint {
-            execution_state_blobs,
-            ..
-        }) => execution_state_blobs.clone(),
-        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
-    };
-    assert!(
-        !execution_state_blobs.is_empty(),
-        "Checkpoint must list at least one execution-state blob",
-    );
-
-    let producer_info = producer.chain_info().await?;
-    assert_eq!(producer_info.next_block_height, BlockHeight::from(2));
-    let producer_state_hash = producer_info
-        .state_hash
-        .expect("producer should expose a state hash after the checkpoint");
-
-    // A fresh follower client starts with empty storage (other than the genesis
-    // chain description) and must bootstrap from the validator's checkpoint
-    // rather than replay history.
-    let follower = builder
-        .make_client_with_options(
-            chain_id,
-            None,
-            BlockHeight::ZERO,
-            chain_client::Options::test_default(),
-            true,
-        )
-        .await?;
-    assert_eq!(
-        follower.chain_info().await?.next_block_height,
-        BlockHeight::ZERO,
-    );
-
-    follower.synchronize_from_validators().await?;
-
-    let follower_info = follower.chain_info().await?;
-    assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
-    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
-
-    // The follower should have applied the checkpoint cert but skipped the
-    // pre-checkpoint burn at height 0.
-    let storage = follower.storage_client();
-    assert!(!storage.contains_certificate(burn_cert.hash()).await?);
-    assert!(storage.contains_certificate(checkpoint_cert.hash()).await?);
-
-    Ok(())
-}
-
-/// Verifies that a chain that has sent cross-chain messages can checkpoint, that the
-/// checkpoint's oracle response certifies the hashes of those sender blocks via
-/// `outbox_block_hashes`, and that a fresh follower can bootstrap from the checkpoint
-/// — re-populating `block_hashes` for the skipped sender blocks from the certified
-/// oracle response so the re-execution of the checkpoint verifies cleanly.
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[test_log::test(tokio::test)]
-async fn test_checkpoint_with_outgoing_messages<B>(storage_builder: B) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
-    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
-    let chain_id = producer.chain_id();
-
-    // Height 0: a cross-chain transfer, so the chain has an unfinalized
-    // outgoing-message block at the time of the checkpoint.
-    let transfer_cert = producer
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(recipient.chain_id()),
-        )
-        .await
-        .unwrap_ok_committed();
-    assert_eq!(transfer_cert.block().header.height, BlockHeight::ZERO);
-
-    // Height 1: the checkpoint. The chain has unfinalized outgoing messages, which is
-    // permitted; the checkpoint's oracle response lists the sender block hashes in
-    // `outbox_block_hashes`.
-    let checkpoint_cert = producer.checkpoint().await.unwrap().unwrap();
-    let block = checkpoint_cert.block();
-    assert_eq!(block.header.height, BlockHeight::from(1));
-    let outbox_block_hashes = match block.body.oracle_responses.first().and_then(|t| t.first()) {
-        Some(OracleResponse::Checkpoint {
-            outbox_block_hashes,
-            ..
-        }) => outbox_block_hashes.clone(),
-        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
-    };
-    assert_eq!(
-        outbox_block_hashes,
-        vec![transfer_cert.hash()],
-        "Checkpoint must certify the height-0 transfer's block hash",
-    );
-
-    let producer_state_hash = producer
-        .chain_info()
-        .await?
-        .state_hash
-        .expect("producer should expose a state hash after the checkpoint");
-
-    // Bootstrap a fresh follower from the checkpoint. The follower has no record of
-    // the height-0 transfer; the gap-bridge path must restore the execution state
-    // *and* re-populate `block_hashes` from the oracle response's
-    // `outbox_block_hashes` so the subsequent re-execution converges.
-    let follower = builder
-        .make_client_with_options(
-            chain_id,
-            None,
-            BlockHeight::ZERO,
-            chain_client::Options::test_default(),
-            true,
-        )
-        .await?;
-    follower.synchronize_from_validators().await?;
-    let follower_info = follower.chain_info().await?;
-    assert_eq!(follower_info.next_block_height, BlockHeight::from(2));
-    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
-
-    // The bootstrap path should also have reconstructed the off-chain outbox
-    // from `unfinalized_message_blocks`: the recipient is listed as nonempty,
-    // its queue holds the height-0 transfer, and the corresponding
-    // `outbox_counters` entry was bumped. Without this the bootstrapped node
-    // would silently stop delivering pre-checkpoint cross-chain messages.
-    {
-        let chain_state = follower
-            .client
-            .local_node
-            .chain_state_view(chain_id)
-            .await?;
-        let outbox_chain = chain_state
-            .outboxes
-            .try_load_entry(&recipient.chain_id())
-            .await?
-            .expect("recipient outbox should be re-populated after bootstrap");
-        let queued = outbox_chain.queue.elements().await?;
-        assert_eq!(queued, vec![BlockHeight::ZERO]);
-        assert_eq!(
-            *outbox_chain.next_height_to_schedule.get(),
-            BlockHeight::from(1)
-        );
-        // The follower only follows `chain_id`; it does not track the recipient, so the
-        // tracked-only outbox indices stay empty even though the queue above was restored.
-        assert!(!chain_state
-            .nonempty_outboxes
-            .get()
-            .contains(&recipient.chain_id()));
-        assert!(chain_state.outbox_counters.get().is_empty());
-    }
-
-    // The restored queue is what lets delivery resume once the recipient is tracked: reconciling
-    // against a tracked set that includes it rebuilds the indices from that queue.
-    {
-        let tracked = linera_base::hashed::Hashed::new(linera_chain::ChainIdSet(
-            [recipient.chain_id()].into_iter().collect(),
-        ));
-        let storage = follower.storage_client();
-        let mut chain_state = storage.load_chain(chain_id).await?;
-        chain_state.reconcile_outbox_index(Some(&tracked)).await?;
-        assert!(chain_state
-            .nonempty_outboxes
-            .get()
-            .contains(&recipient.chain_id()));
-        assert_eq!(
-            chain_state
-                .outbox_counters
-                .get()
-                .get(&BlockHeight::ZERO)
-                .copied(),
-            Some(1)
-        );
-    }
-
-    // Bootstrap fetches the pre-checkpoint sender block too: the worker's fill-in
-    // branch in `process_confirmed_block` verifies the cert against its own
-    // epoch's committee and writes it to storage, so a later `read_certificate`
-    // succeeds without an explicit upload step.
-    let follower_storage = follower.storage_client();
-    assert!(
-        follower_storage
-            .contains_certificate(transfer_cert.hash())
-            .await?,
-        "follower should have downloaded the pre-checkpoint transfer block during sync",
-    );
-    let local_node = &follower.client.local_node;
-    let reread = local_node
-        .read_certificate(chain_id, BlockHeight::ZERO)
-        .await?
-        .expect("read_certificate should return the fetched cert");
-    assert_eq!(reread.hash(), transfer_cert.hash());
-
-    // Recipient consumes the transfer. Receiving a non-`CheckpointAck` message
-    // marks the sender chain as owing us a `SystemMessage::CheckpointAck` at our
-    // next own checkpoint — the on-chain `pending_checkpoint_ack_targets` set is
-    // what drives this. (A `CheckpointAck` message wouldn't be inserted, which is
-    // how the otherwise-perpetual notification ping-pong is broken.)
-    recipient.synchronize_from_validators().await?;
-    recipient.process_inbox().await?;
-    let recipient_state = recipient
-        .client
-        .local_node
-        .chain_state_view(recipient.chain_id())
-        .await?;
-    assert!(
-        recipient_state
-            .execution_state
-            .system
-            .pending_checkpoint_ack_targets
-            .contains(&chain_id)
-            .await?,
-        "consuming the transfer should mark its sender as a pending Checkpoint target",
-    );
-
-    Ok(())
-}
-
-/// Verifies that when a chain has produced several checkpoints, a follower bootstraps
-/// from the *latest* one and only downloads sender blocks still referenced by that
-/// checkpoint's `outbox_block_hashes` — pre-first-checkpoint history, intermediate
-/// checkpoints, and message-free blocks in between are skipped entirely.
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[test_log::test(tokio::test)]
-async fn test_checkpoint_bootstrap_from_later_checkpoint<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
-    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
-    let chain_id = producer.chain_id();
-
-    // Height 0: a cross-chain transfer. The recipient never acks in this test, so
-    // both transfers stay unfinalized and are referenced by checkpoint #2's
-    // `outbox_block_hashes`.
-    let transfer_0 = producer
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(recipient.chain_id()),
-        )
-        .await
-        .unwrap_ok_committed();
-    assert_eq!(transfer_0.block().header.height, BlockHeight::ZERO);
-
-    // Height 1: checkpoint #1.
-    let checkpoint_1 = producer.checkpoint().await.unwrap().unwrap();
-    assert_eq!(checkpoint_1.block().header.height, BlockHeight::from(1));
-
-    // Height 2: a same-chain burn — no cross-chain messages, so it isn't referenced
-    // by any subsequent `outbox_block_hashes` and the follower must not download it.
-    let burn_cert = producer
-        .burn(AccountOwner::CHAIN, Amount::ONE)
-        .await
-        .unwrap_ok_committed();
-    assert_eq!(burn_cert.block().header.height, BlockHeight::from(2));
-
-    // Height 3: another cross-chain transfer.
-    let transfer_3 = producer
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(recipient.chain_id()),
-        )
-        .await
-        .unwrap_ok_committed();
-    assert_eq!(transfer_3.block().header.height, BlockHeight::from(3));
-
-    // Height 4: checkpoint #2 — the one the follower should bootstrap from.
-    let checkpoint_2 = producer.checkpoint().await.unwrap().unwrap();
-    let block = checkpoint_2.block();
-    assert_eq!(block.header.height, BlockHeight::from(4));
-    let outbox_block_hashes = match block.body.oracle_responses.first().and_then(|t| t.first()) {
-        Some(OracleResponse::Checkpoint {
-            outbox_block_hashes,
-            ..
-        }) => outbox_block_hashes.clone(),
-        other => panic!("Expected OracleResponse::Checkpoint as the first response, got {other:?}"),
-    };
-    // Neither transfer has been acked, so both are still referenced. The burn at
-    // height 2 and checkpoint #1 at height 1 are not.
-    assert_eq!(
-        outbox_block_hashes,
-        vec![transfer_0.hash(), transfer_3.hash()],
-    );
-
-    let producer_state_hash = producer
-        .chain_info()
-        .await?
-        .state_hash
-        .expect("producer should expose a state hash after checkpoint #2");
-
-    let follower = builder
-        .make_client_with_options(
-            chain_id,
-            None,
-            BlockHeight::ZERO,
-            chain_client::Options::test_default(),
-            true,
-        )
-        .await?;
-    follower.synchronize_from_validators().await?;
-    let follower_info = follower.chain_info().await?;
-    assert_eq!(follower_info.next_block_height, BlockHeight::from(5));
-    assert_eq!(follower_info.state_hash, Some(producer_state_hash));
-
-    let storage = follower.storage_client();
-    // The latest checkpoint cert is in storage; the two transfers it certifies are
-    // fetched via the pre-checkpoint sender-block path.
-    assert!(storage.contains_certificate(checkpoint_2.hash()).await?);
-    assert!(storage.contains_certificate(transfer_0.hash()).await?);
-    assert!(storage.contains_certificate(transfer_3.hash()).await?);
-    // The intermediate checkpoint and the message-free burn are not referenced by
-    // checkpoint #2's `outbox_block_hashes` and must not be downloaded.
-    assert!(!storage.contains_certificate(checkpoint_1.hash()).await?);
-    assert!(!storage.contains_certificate(burn_cert.hash()).await?);
-
-    Ok(())
-}
-
-/// Verifies that a fresh follower can bootstrap a chain that consumed incoming
-/// messages before checkpointing. The checkpoint pre-block hook records each
-/// inbox's `next_cursor_to_remove` in `OracleResponse::Checkpoint.inbox_cursors`,
-/// so re-executing the checkpoint requires the follower to seed both
-/// `restored_cursor` *and* `next_cursor_to_remove` from the oracle response —
-/// `collect_all_inbox_cursors` reads the latter, and a mismatch raises
-/// `OracleResponseMismatch`.
-#[test_case(MemoryStorageBuilder::default(); "memory")]
-#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
-#[test_log::test(tokio::test)]
-async fn test_checkpoint_bootstrap_after_consuming_messages<B>(
-    storage_builder: B,
-) -> anyhow::Result<()>
-where
-    B: StorageBuilder,
-{
-    let signer = InMemorySigner::new(None);
-    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
-    let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
-    let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
-    let recipient_id = recipient.chain_id();
-
-    // Producer sends a transfer; recipient consumes it. This advances the
-    // recipient's `inbox[producer].next_cursor_to_remove` past `Cursor::default()`,
-    // which the checkpoint's pre-block hook will snapshot into the oracle response.
-    producer
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(recipient_id),
-        )
-        .await
-        .unwrap_ok_committed();
-    recipient.synchronize_from_validators().await?;
-    recipient.process_inbox().await?;
-
-    let checkpoint_cert = recipient.checkpoint().await.unwrap().unwrap();
-    let inbox_cursors = match checkpoint_cert
-        .block()
-        .body
-        .oracle_responses
-        .first()
-        .and_then(|t| t.first())
-    {
-        Some(OracleResponse::Checkpoint { inbox_cursors, .. }) => inbox_cursors.clone(),
-        other => panic!("expected OracleResponse::Checkpoint, got {other:?}"),
-    };
-    assert!(
-        !inbox_cursors.is_empty(),
-        "recipient consumed messages, so inbox_cursors must record the producer's cursor",
-    );
-
-    let recipient_state_hash = recipient
-        .chain_info()
-        .await?
-        .state_hash
-        .expect("recipient should expose a state hash after the checkpoint");
-
-    // Producer sends a follow-up transfer to the recipient. The matching
-    // cross-chain update declares `sender_previous_height = Some(0)` (the
-    // pre-checkpoint transfer's height), which the follower's inbox-gap check
-    // must accept rather than reject.
-    producer
-        .transfer_to_account(
-            AccountOwner::CHAIN,
-            Amount::ONE,
-            Account::chain(recipient_id),
-        )
-        .await
-        .unwrap_ok_committed();
-
-    // Fresh follower for the recipient chain (non-follow-only so it goes through
-    // `find_received_certificates`, which is where local cross-chain delivery
-    // and the inbox-gap check fire). Bootstrapping replays the checkpoint block,
-    // whose Checkpoint operation handler recomputes `inbox_cursors` from the
-    // (just-seeded) inbox state — if only `restored_cursor` were seeded, the
-    // recomputed vector would be empty and `replay_oracle_response` would fail.
-    let follower = builder
-        .make_client_with_options(
-            recipient_id,
-            None,
-            BlockHeight::ZERO,
-            chain_client::Options::test_default(),
-            false,
-        )
-        .await?;
-    follower.synchronize_from_validators().await?;
-    let follower_info = follower.chain_info().await?;
-    assert_eq!(follower_info.state_hash, Some(recipient_state_hash));
-    let pre_balance = follower.local_balance().await?;
-
-    // Drive the post-bootstrap cross-chain delivery. Without seeding
-    // `next_cursor_to_add`, `process_cross_chain_update` would reject the
-    // follow-up bundle as an inbox gap (its `sender_previous_height = 0` would
-    // be `>= next_height_to_receive = 0`).
-    follower.process_inbox().await?;
-    assert_eq!(
-        follower.local_balance().await?,
-        pre_balance + Amount::ONE,
-        "follower should accept and consume the post-bootstrap follow-up transfer",
-    );
-
-    Ok(())
-}
-
 /// Verifies the end-to-end `CheckpointAck` cycle now that recipients can also checkpoint
 /// after consuming incoming messages: producer sends, recipient consumes and
 /// checkpoints (sending the ack back), producer consumes the ack and trims its
@@ -4691,6 +4280,10 @@ where
 /// chain is brought up to speed by the proposing client pushing only the latest
 /// checkpoint plus the pre-checkpoint sender blocks it certifies, not every
 /// pre-checkpoint block. The lagging validator's vote is needed for quorum.
+///
+/// The pre-checkpoint sender block is certified by a superseded epoch's committee
+/// (the chain migrates to a new epoch between the sender block and the checkpoint),
+/// exercising the trust-mark path's acceptance of cross-epoch certificates.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[test_log::test(tokio::test)]
@@ -4708,13 +4301,15 @@ where
     // sees any of the chain's certificates. We'll bring it back honest later.
     builder.set_fault_type([0], FaultType::NoChains);
 
+    let admin = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
     let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
     let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = producer.chain_id();
     let validator_0_key = builder.node(0).name();
 
-    // Height 0: cross-chain transfer — becomes a pre-checkpoint sender block that the
-    // checkpoint certifies via `outbox_block_hashes`. The recipient never consumes it.
+    // Height 0 (epoch 0): cross-chain transfer — becomes a pre-checkpoint sender block
+    // that the checkpoint certifies via `outbox_block_hashes`. The recipient never
+    // consumes it. Its certificate is signed by the epoch-0 committee.
     let transfer_0 = producer
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -4724,18 +4319,42 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(transfer_0.block().header.height, BlockHeight::ZERO);
+    assert_eq!(transfer_0.block().header.epoch, Epoch::from(0));
 
-    // Height 1: same-chain burn — no outgoing messages, so it's not referenced by any
-    // subsequent `outbox_block_hashes`. The push path must skip it.
+    // Advance the epoch on the admin chain and migrate the producer to epoch 1. The
+    // migration block (height 1) consumes the admin chain's `ProcessNewEpoch`
+    // message; after it the producer's blocks are certified by the epoch-1
+    // committee. `transfer_0`'s epoch-0 certificate is now from a superseded epoch —
+    // exactly the scenario the trust-mark path must handle when validator 0 is later
+    // brought back online and pushed the checkpoint.
+    admin
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+    producer.synchronize_from_validators().await?;
+    producer.process_inbox().await?;
+
+    // Revoke epoch 0 so the epoch-0 certificate on `transfer_0` is no longer
+    // verifiable through normal cert verification. This makes the trust-mark path
+    // the *only* way for validator 0 to accept `transfer_0` during the checkpoint
+    // push — a strictly stronger test. If revocation is ever enforced on the
+    // trust-mark path (or on certificate verification for pre-checkpoint blocks),
+    // this test will catch it.
+    admin.revoke_epochs(Epoch::ZERO).await.unwrap();
+
+    // Height 2 (epoch 1): same-chain burn — no outgoing messages, so it's not
+    // referenced by any subsequent `outbox_block_hashes`. The push path must skip it.
     let burn_1 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_1.block().header.height, BlockHeight::from(1));
+    assert_eq!(burn_1.block().header.height, BlockHeight::from(2));
+    assert_eq!(burn_1.block().header.epoch, Epoch::from(1));
 
-    // Height 2: the checkpoint that will be pushed to validator 0.
+    // Height 3 (epoch 1): the checkpoint that will be pushed to validator 0.
     let checkpoint = producer.checkpoint().await.unwrap().unwrap();
-    assert_eq!(checkpoint.block().header.height, BlockHeight::from(2));
+    assert_eq!(checkpoint.block().header.height, BlockHeight::from(3));
+    assert_eq!(checkpoint.block().header.epoch, Epoch::from(1));
     let outbox_block_hashes = match checkpoint
         .block()
         .body
@@ -4751,13 +4370,13 @@ where
     };
     assert_eq!(outbox_block_hashes, vec![transfer_0.hash()]);
 
-    // Height 3: post-checkpoint burn — must be pushed to validator 0 as part of the
-    // post-checkpoint gap fill.
+    // Height 4 (epoch 1): post-checkpoint burn — must be pushed to validator 0 as
+    // part of the post-checkpoint gap fill.
     let burn_3 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_3.block().header.height, BlockHeight::from(3));
+    assert_eq!(burn_3.block().header.height, BlockHeight::from(4));
 
     let validator_0_storage = builder
         .validator_storages
@@ -4780,12 +4399,12 @@ where
     builder.set_fault_type([0], FaultType::Honest);
     builder.set_fault_type([1], FaultType::Offline);
 
-    // Height 4: a new block whose quorum needs validator 0.
+    // Height 5 (epoch 1): a new block whose quorum needs validator 0.
     let burn_4 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_4.block().header.height, BlockHeight::from(4));
+    assert_eq!(burn_4.block().header.height, BlockHeight::from(5));
 
     // Validator 0 received the checkpoint, the pre-checkpoint sender block it
     // certifies, the post-checkpoint burn, and the newly committed proposal.
@@ -4834,7 +4453,247 @@ where
             trusted.is_empty(),
             "validator 0's trust set should be empty after the flow, was {trusted:?}",
         );
+        // The checkpoint restored the producer's epoch-1 execution state, which
+        // includes the epoch migration. Validator 0's chain is now at epoch 1 —
+        // proving the trust-mark path accepted the epoch-0 sender block
+        // (`transfer_0`) and the checkpoint restore brought the chain to the
+        // correct epoch.
+        let epoch = *chain_view.execution_state.system.epoch.get();
+        assert_eq!(
+            epoch,
+            Epoch::from(1),
+            "validator 0's chain should be at epoch 1 after the checkpoint restore",
+        );
     }
+
+    Ok(())
+}
+
+/// Verifies that corruption-recovery reset re-executes from the latest checkpoint, not from
+/// block 0. After the reset the chain reaches the same tip and state hash, but the
+/// pre-checkpoint, message-free block is no longer in `block_hashes`: it sits below the
+/// checkpoint and isn't recertified, so a from-checkpoint reset never replays it — which a
+/// from-block-0 reset would have.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_checkpoint_reset_from_latest_checkpoint<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 1, signer).await?;
+    let chain = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
+    let target = builder.add_root_chain(2, Amount::ZERO).await?;
+    let chain_id = chain.chain_id();
+
+    // Height 0: a message-free burn — below the checkpoint and not recertified, so it is the
+    // block a from-checkpoint reset must drop. Height 1: the checkpoint. Height 2: a transfer,
+    // so there is post-checkpoint state to replay.
+    let burn_cert = chain
+        .burn(AccountOwner::CHAIN, Amount::ONE)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(burn_cert.block().header.height, BlockHeight::ZERO);
+    let checkpoint_cert = chain.checkpoint().await.unwrap().unwrap();
+    assert_eq!(checkpoint_cert.block().header.height, BlockHeight::from(1));
+    chain
+        .transfer_to_account(
+            AccountOwner::CHAIN,
+            Amount::ONE,
+            Account::chain(target.chain_id()),
+        )
+        .await
+        .unwrap_ok_committed();
+
+    let info_before = chain.chain_info().await?;
+    assert_eq!(info_before.next_block_height, BlockHeight::from(3));
+    let state_hash_before = info_before.state_hash;
+
+    // Reset the chain on the producer's own worker and re-execute it.
+    chain
+        .client
+        .local_node
+        .reset_and_reexecute_chain(chain_id)
+        .await?;
+
+    // It re-executed to the same tip and state hash...
+    let info_after = chain.chain_info().await?;
+    assert_eq!(info_after.next_block_height, BlockHeight::from(3));
+    assert_eq!(info_after.state_hash, state_hash_before);
+
+    // ...but started from the checkpoint: the checkpoint (height 1) and the post-checkpoint
+    // transfer (height 2) are present in `block_hashes`, while the pre-checkpoint burn is gone.
+    let chain_state = chain.client.local_node.chain_state_view(chain_id).await?;
+    assert!(chain_state
+        .block_hashes
+        .get(&BlockHeight::from(1))
+        .await?
+        .is_some());
+    assert!(chain_state
+        .block_hashes
+        .get(&BlockHeight::from(2))
+        .await?
+        .is_some());
+    assert!(
+        chain_state
+            .block_hashes
+            .get(&BlockHeight::ZERO)
+            .await?
+            .is_none(),
+        "a from-checkpoint reset must not replay the pre-checkpoint burn",
+    );
+
+    Ok(())
+}
+
+/// Regression test for #5664: when the chain advances (e.g. a notification or background
+/// sync commits another owner's block at our height) while a client is in the middle of
+/// `execute_block`, the staged pending proposal is cleared without committing ours. This
+/// used to surface as a hard `BlockProposalError("Unexpected block proposal error")`.
+/// The client must instead re-stage at the new height and never raise that error.
+///
+/// Two owners hammer the same multi-owner chain concurrently while each client runs a
+/// notification listener that advances its local node underneath the proposer task,
+/// reproducing the race. Requires the multi-threaded runtime: on a single thread the
+/// listener cannot advance the local node between staging and re-processing.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test(flavor = "multi_thread", worker_threads = 4))]
+async fn test_execute_block_retries_when_chain_advances<B>(storage_builder: B) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    const ROUNDS: usize = 50;
+
+    let mut signer = InMemorySigner::new(None);
+    let owner1 = signer.generate_new().into();
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let client0 = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    let chain_id = client0.chain_id();
+    let owner0 = client0.identity().await?;
+
+    // Make the chain a two-owner chain so both clients can propose at the same height.
+    let ownership = ChainOwnership {
+        super_owners: BTreeSet::new(),
+        owners: BTreeMap::from_iter([(owner0, 100), (owner1, 100)]),
+        first_leader: None,
+        multi_leader_rounds: 10,
+        open_multi_leader_rounds: false,
+        timeout_config: TimeoutConfig::default(),
+    };
+    client0.change_ownership(ownership).await.unwrap();
+
+    let mut client1 = builder
+        .make_client(
+            chain_id,
+            client0.chain_info().await?.block_hash,
+            BlockHeight::from(1),
+        )
+        .await?;
+    client1.set_preferred_owner(owner1);
+    client1.synchronize_from_validators().await.unwrap();
+
+    // Run a notification listener on each client so its local node is advanced by the other
+    // owner's commits in the background — the same way the node service's background sync
+    // advances the chain while `execute_block` is running.
+    let (listener0, _abort0, _notifs0) = client0.listen().await?;
+    let (listener1, _abort1, _notifs1) = client1.listen().await?;
+    tokio::spawn(listener0);
+    tokio::spawn(listener1);
+
+    // Both owners publish a stream of data blobs to the same chain concurrently. They
+    // collide at the same height repeatedly; whichever loses a race may observe the chain
+    // advancing mid-proposal. None of these calls may fail with the "unexpected block
+    // proposal error".
+    async fn race(client: &ChainClient<impl Environment>, tag: u8) {
+        for i in 0..ROUNDS {
+            let data = vec![tag, i as u8];
+            match client.publish_data_blob(data).await {
+                // Committed / Conflict / WaitForTimeout are all acceptable outcomes of a
+                // concurrent proposal.
+                Ok(_) => {}
+                Err(err) => {
+                    let message = err.to_string();
+                    assert!(
+                        !message.contains("Unexpected block proposal error"),
+                        "execute_block raised the #5664 error instead of retrying: {message}",
+                    );
+                    // Other transient errors (communication, conflicts surfaced as errors)
+                    // are not what this test guards; resynchronize and continue.
+                    client.synchronize_from_validators().await.ok();
+                }
+            }
+        }
+    }
+
+    futures::join!(race(&client0, 0), race(&client1, 1));
+
+    Ok(())
+}
+
+/// Regression test for the no-signer-key branch in `process_pending_block_without_prepare`:
+/// when a pending proposal is authenticated by an owner whose key the signer no longer holds
+/// (e.g. an autosigner key that staged the block is later withdrawn), the client must discard
+/// the stale proposal and report `Committed(None)` rather than erroring or wedging. This is the
+/// second of the two ways `execute_block`'s retry loop can observe `Committed(None)` — the
+/// other being the chain advancing past the staged height
+/// (`test_execute_block_retries_when_chain_advances`).
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[test_log::test(tokio::test)]
+async fn test_pending_block_discarded_when_signer_key_missing<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let mut client = builder.add_root_chain(1, Amount::from_tokens(4)).await?;
+    let owner_a = client.identity().await?;
+
+    // Co-own the chain with a second owner `b` and no super-owner, so it runs in multi-leader
+    // (non-fast) rounds — the branch that discards rather than erroring.
+    let owner_b: AccountOwner = builder.signer.generate_new().into();
+    let ownership =
+        ChainOwnership::multiple([(owner_a, 50), (owner_b, 50)], 10, TimeoutConfig::default());
+    client.change_ownership(ownership).await?;
+
+    // Stage a block as owner `a` that can't reach a quorum, so it stays pending, authenticated
+    // by `a` (signing it here requires `a`'s key, which the signer still holds at this point).
+    builder.set_fault_type([0, 1], FaultType::Offline);
+    assert_matches!(
+        client.burn(AccountOwner::CHAIN, Amount::ONE).await,
+        Err(_),
+        "the burn should fail to commit with only two of four validators online"
+    );
+    assert_eq!(
+        client
+            .pending_proposal()
+            .await
+            .expect("a pending proposal authored by `a` should remain")
+            .block
+            .authenticated_owner,
+        Some(owner_a),
+    );
+
+    // Bring the validators back, then withdraw owner `a`'s key from the signer and act as `b`.
+    builder.set_fault_type([0, 1], FaultType::Honest);
+    client.synchronize_from_validators().await?;
+    assert!(
+        builder.signer.forget_key(&owner_a),
+        "owner `a`'s key should have been present before we forget it"
+    );
+    client.set_preferred_owner(owner_b);
+
+    // Processing the pending block must discard the stale proposal (we can no longer sign as `a`)
+    // and report `Committed(None)`, rather than raising an error or looping.
+    assert_matches!(
+        client.process_pending_block().await?,
+        ClientOutcome::Committed(None)
+    );
+    assert!(client.pending_proposal().await.is_none());
 
     Ok(())
 }

@@ -48,6 +48,9 @@ else
     echo "wasm-split not found, skipping (debug wasm and stripping disabled)" >&2
 fi
 
+# Start from a clean dist so stale artifacts from a previous build can never be
+# published (dist/ is gitignored and rebuilt fresh on `prepare`/publish).
+rm -rf dist
 mkdir -p dist
 cp -r src/wasm dist/
 

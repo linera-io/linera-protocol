@@ -1,6 +1,6 @@
 ---
 source: call-evm-counter/tests/format.rs
-expression: "CallEvmCounterApplication::formats().unwrap()"
+expression: "CallEvmCounterApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   CallCounterOperation:

@@ -410,6 +410,13 @@
       const TOKEN_ADDRESS    = import.meta.env.LINERA_TOKEN_ADDRESS;    // ERC-20 on EVM
       const BRIDGE_CHAIN_ID  = import.meta.env.LINERA_BRIDGE_CHAIN_ID;  // relay's chain
       const EVM_CHAIN_ID     = import.meta.env.LINERA_EVM_CHAIN_ID || '31337';
+      // Browser-reachable EVM RPC for READ-ONLY calls (balances, tx receipts).
+      // These go straight to the node via a JsonRpcProvider rather than through
+      // the wallet: a balanceOf is a public view call and must not depend on
+      // MetaMask's per-site request queue, which can stall and leave the read
+      // hanging forever. The wallet (evmSigner) is still used for signing/sending.
+      const EVM_RPC_URL      = import.meta.env.LINERA_EVM_RPC_URL || 'http://localhost:8545';
+      const readProvider     = new ethers.JsonRpcProvider(EVM_RPC_URL);
 
       // ── Minimal ABIs ──
       const ERC20_ABI = [
@@ -459,9 +466,9 @@
 
       // ── EVM balance ──
       async function updateEvmBalance() {
-        if (!evmProvider || !evmAddress) return;
+        if (!evmAddress) return;
         try {
-          const token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmProvider);
+          const token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, readProvider);
           const balance = await token.balanceOf(evmAddress);
           // ERC-20 uses 18 decimals
           $('#evm-balance').textContent = ethers.formatUnits(balance, 18);
@@ -522,7 +529,7 @@
       async function waitForTx(hash, timeoutMs = 120_000, intervalMs = 3_000) {
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
-          const receipt = await evmProvider.getTransactionReceipt(hash);
+          const receipt = await readProvider.getTransactionReceipt(hash);
           if (receipt) return receipt;
           await new Promise(r => setTimeout(r, intervalMs));
         }
@@ -586,43 +593,36 @@
       async function withdraw(amount) {
         clearErrors();
         if (!evmSigner) { addError('Connect MetaMask first'); return; }
+        if (!bridgeApp) { addError('Bridge app not initialized'); return; }
 
         try {
-          // Strip 0x and lowercase the EVM address, pad to 40 hex chars
-          const evmAddrHex = evmAddress.replace(/^0x/, '').toLowerCase();
-          // Address20 format: 0x followed by 40 hex chars
-          const targetOwner = `0x${evmAddrHex}`;
-          const targetAccount = { owner: targetOwner, chainId: BRIDGE_CHAIN_ID };
-
-          // Step 1: Transfer wrapped tokens to bridge chain with Address20 owner.
-          setStatus('Step 1/3: Burning wrapped tokens (transfer to bridge chain)...');
+          // Step 1: Submit a Burn to the evm-bridge app. The bridge moves the
+          // wrapped tokens into the signer's own escrow on the bridge chain,
+          // burns them, and emits a BurnEvent the relayer forwards to EVM —
+          // releasing the ERC-20 to the connected address.
+          setStatus('Step 1/3: Submitting burn to the bridge...');
           const amountSubUnits = ethers.parseUnits(amount, tokenDecimals).toString();
-          const mutation = gql(`mutation(
-            $donor: AccountOwner!,
-            $amount: U128!,
-            $recipient: FungibleAccount!
-          ) {
-            transfer(owner: $donor, amount: $amount, targetAccount: $recipient)
+          const mutation = gql(`mutation($amount: U128!, $target: String!) {
+            burn(amount: $amount, evmTarget: $target)
           }`, {
-            donor: lineraOwner,
             amount: amountSubUnits,
-            recipient: targetAccount,
+            target: evmAddress,
           });
-          const resp = JSON.parse(await wrappedApp.query(mutation));
+          const resp = JSON.parse(await bridgeApp.query(mutation));
           if (resp.errors?.length) throw new Error(resp.errors[0].message);
 
-          // Step 2: Wait for relay to forward block
-          setStatus('Step 2/3: Waiting for relay to forward block to EVM...');
+          // Step 2: Wait for relay to forward the burn to EVM
+          setStatus('Step 2/3: Waiting for relay to forward the burn to EVM...');
 
           // Step 3: Poll EVM balance
-          const initialBalance = await new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmProvider)
+          const initialBalance = await new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, readProvider)
             .balanceOf(evmAddress);
 
           setStatus('Step 3/3: Polling EVM balance...');
           const deadline = Date.now() + 60_000;
           while (Date.now() < deadline) {
             await new Promise(r => setTimeout(r, 1000));
-            const current = await new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, evmProvider)
+            const current = await new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, readProvider)
               .balanceOf(evmAddress);
             if (current > initialBalance) {
               setStatus('Withdrawal complete!');
@@ -671,6 +671,7 @@
         await client.start();
         const chain = await client.chain(lineraChain, { owner: lineraOwner });
         wrappedApp = await chain.application(APP_ID);
+        bridgeApp = await chain.application(BRIDGE_APP_ID);
         const decimalsResp = JSON.parse(await wrappedApp.query(gql(`query { decimals }`)));
         tokenDecimals = decimalsResp.data?.decimals;
         if (typeof tokenDecimals !== 'number') {

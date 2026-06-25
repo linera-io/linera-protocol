@@ -79,6 +79,7 @@ use crate::{
     worker::{Notification, Reason, WorkerError},
 };
 
+/// Options that configure the behavior of a [`ChainClient`].
 #[derive(Debug, Clone)]
 pub struct Options {
     /// Maximum number of pending message bundles processed at a time in a block.
@@ -101,9 +102,9 @@ pub struct Options {
     /// as a fraction of time taken to reach quorum.
     pub quorum_grace_period: f64,
     /// The delay when downloading a blob, after which we try a second validator.
-    pub blob_download_timeout: Duration,
+    pub blob_download_hedge_delay: Duration,
     /// The delay when downloading a batch of certificates, after which we try a second validator.
-    pub certificate_batch_download_timeout: Duration,
+    pub certificate_batch_download_hedge_delay: Duration,
     /// Maximum number of certificates that we download at a time from one validator when
     /// synchronizing one of our chains.
     pub certificate_download_batch_size: u64,
@@ -120,11 +121,6 @@ pub struct Options {
     /// Whether to allow creating blocks in the fast round. Fast blocks have lower latency but
     /// must be used carefully so that there are never any conflicting fast block proposals.
     pub allow_fast_blocks: bool,
-    /// Whether to apply the multi-leader jitter delay before proposing in a multi-leader
-    /// round with index `>= 1`, to spread out concurrent proposals across honest clients.
-    /// The owner with the lowest `hash(owner, round)` still proposes immediately. The
-    /// jitter only takes effect when the round has a configured timeout.
-    pub multi_leader_jitter: bool,
     /// Initial probe interval for the notification circuit breaker. When a validator's
     /// notification stream exhausts retries, the circuit breaker waits this long before
     /// probing again. Doubles on each failed probe.
@@ -138,7 +134,7 @@ pub struct Options {
 }
 
 struct CircuitBreakerState {
-    next_probe_at: Instant,
+    next_probe_at: Timestamp,
     probe_interval: Duration,
 }
 
@@ -154,6 +150,7 @@ struct ConsensusStateSnapshot {
 
 #[cfg(with_testing)]
 impl Options {
+    /// Returns a default set of options for use in tests.
     pub fn test_default() -> Self {
         use super::{
             DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE, DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
@@ -170,15 +167,14 @@ impl Options {
             priority_bundle_origins: HashSet::new(),
             cross_chain_message_delivery: CrossChainMessageDelivery::NonBlocking,
             quorum_grace_period: DEFAULT_QUORUM_GRACE_PERIOD,
-            blob_download_timeout: Duration::from_secs(1),
-            certificate_batch_download_timeout: Duration::from_secs(1),
+            blob_download_hedge_delay: Duration::from_secs(1),
+            certificate_batch_download_hedge_delay: Duration::from_secs(1),
             certificate_download_batch_size: DEFAULT_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             certificate_upload_batch_size: DEFAULT_CERTIFICATE_UPLOAD_BATCH_SIZE,
             sender_certificate_download_batch_size: DEFAULT_SENDER_CERTIFICATE_DOWNLOAD_BATCH_SIZE,
             max_concurrent_batch_downloads: DEFAULT_MAX_CONCURRENT_BATCH_DOWNLOADS,
             max_joined_tasks: 100,
             allow_fast_blocks: false,
-            multi_leader_jitter: false,
             notification_circuit_breaker_initial_probe_interval: Duration::from_secs(300),
             notification_circuit_breaker_max_probe_interval: Duration::from_secs(3600),
             max_event_stream_queries: DEFAULT_MAX_EVENT_STREAM_QUERIES,
@@ -247,6 +243,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
 
 /// Error type for [`ChainClient`].
 #[derive(Debug, Error, strum::IntoStaticStr)]
+#[allow(missing_docs)]
 pub enum Error {
     #[error("Local node operation failed: {0}")]
     LocalNodeError(#[from] LocalNodeError),
@@ -317,6 +314,9 @@ pub enum Error {
         target_next_block_height: BlockHeight,
     },
 
+    #[error("No validator provided a usable certificate registering blob {0}")]
+    CannotDownloadBlob(BlobId),
+
     #[error(transparent)]
     BcsError(#[from] bcs::Error),
 
@@ -366,6 +366,7 @@ impl From<Infallible> for Error {
 }
 
 impl Error {
+    /// Wraps a signer error into a [`Error::Signer`] variant.
     pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
     }
@@ -386,6 +387,7 @@ impl Error {
 }
 
 impl<Env: Environment> ChainClient<Env> {
+    /// Creates a new [`ChainClient`] for the given chain.
     pub fn new(
         client: Arc<Client<Env>>,
         chain_id: ChainId,
@@ -668,15 +670,14 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|((chain_id, stream_id), subscriptions)| {
                 let client = self.client.clone();
                 async move {
-                    let next_expected_index = client
+                    let counts = client
                         .local_node
-                        .get_next_expected_event(chain_id, stream_id.clone())
+                        .get_stream_indices(chain_id, stream_id.clone())
                         .await?;
-                    let Some(next_index) = next_expected_index
-                        .filter(|next_index| *next_index > subscriptions.min_next_index)
-                    else {
+                    let (first_index, next_index) = (counts.first_index, counts.next_index);
+                    if next_index <= subscriptions.min_next_index {
                         return Ok::<_, Error>(Vec::new());
-                    };
+                    }
                     Ok(subscriptions
                         .applications
                         .into_iter()
@@ -686,6 +687,7 @@ impl<Env: Environment> ChainClient<Env> {
                                 application_id,
                                 chain_id,
                                 stream_id: stream_id.clone(),
+                                first_index,
                                 next_index,
                             }
                             .into()
@@ -1072,7 +1074,7 @@ impl<Env: Environment> ChainClient<Env> {
                 .await;
         }
 
-        info!("find_received_certificates finished");
+        trace!("find_received_certificates finished");
 
         Ok(())
     }
@@ -1452,35 +1454,58 @@ impl<Env: Environment> ChainClient<Env> {
             ClientOutcome::Committed(None) => {}
         }
 
-        // Collect pending messages and epoch changes after acquiring the lock to avoid
-        // race conditions where messages valid for one block height are proposed at a
-        // different height.
-        let transactions = self
-            .prepend_epochs_messages_and_events(operations.clone())
-            .await?;
+        loop {
+            // Collect pending messages and epoch changes after acquiring the lock to avoid
+            // race conditions where messages valid for one block height are proposed at a
+            // different height. This is recomputed on every retry because the set of
+            // receivable messages and epoch changes can differ at a new height.
+            let transactions = self
+                .prepend_epochs_messages_and_events(operations.clone())
+                .await?;
 
-        if transactions.is_empty() {
-            return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
-                WorkerError::ChainError(Box::new(ChainError::EmptyBlock)),
-            )));
-        }
-
-        self.new_pending_block(transactions, blobs, &mut proposal_guard)
-            .await?;
-
-        match self
-            .process_pending_block_without_prepare(&mut proposal_guard)
-            .await?
-        {
-            ClientOutcome::Committed(Some(certificate)) => {
-                Ok(self.classify_committed(certificate, &operations))
+            if transactions.is_empty() {
+                return Err(Error::LocalNodeError(LocalNodeError::WorkerError(
+                    WorkerError::ChainError(Box::new(ChainError::EmptyBlock)),
+                )));
             }
-            // Unreachable: We just set the pending proposal in the guard.
-            ClientOutcome::Committed(None) => {
-                Err(Error::BlockProposalError("Unexpected block proposal error"))
+
+            self.new_pending_block(transactions, blobs.clone(), &mut proposal_guard)
+                .await?;
+
+            match self
+                .process_pending_block_without_prepare(&mut proposal_guard)
+                .await?
+            {
+                ClientOutcome::Committed(Some(certificate)) => {
+                    return Ok(self.classify_committed(certificate, &operations));
+                }
+                // `process_pending_block_without_prepare` cleared the pending proposal
+                // without committing ours, so our operations were not applied. This happens
+                // in two ways:
+                //   * the chain advanced past the height we staged at while we were
+                //     proposing (e.g. a notification or background sync committed another
+                //     block at our height) — the common #5664 case; or
+                //   * the staged proposal's authenticated signer's key is no longer held
+                //     (the preferred owner changed since we staged), so the stale proposal
+                //     was discarded.
+                // Either way, re-stage and retry: `new_pending_block` recomputes the block
+                // at the current height and signs as the current identity, so the first
+                // case advances to the new height (genuine external progress) and the
+                // second adopts a signer we hold, so the retry converges. See #5664.
+                ClientOutcome::Committed(None) => {
+                    tracing::debug!(
+                        chain_id = %self.chain_id,
+                        "pending proposal cleared without committing ours; re-staging and retrying"
+                    );
+                    continue;
+                }
+                ClientOutcome::WaitForTimeout(timeout) => {
+                    return Ok(ClientOutcome::WaitForTimeout(timeout));
+                }
+                ClientOutcome::Conflict(certificate) => {
+                    return Ok(ClientOutcome::Conflict(certificate));
+                }
             }
-            ClientOutcome::WaitForTimeout(timeout) => Ok(ClientOutcome::WaitForTimeout(timeout)),
-            ClientOutcome::Conflict(certificate) => Ok(ClientOutcome::Conflict(certificate)),
         }
     }
 
@@ -1894,6 +1919,7 @@ impl<Env: Environment> ChainClient<Env> {
         self.transfer(owner, amount, recipient).await
     }
 
+    /// Fetches the latest chain info for this chain from the validators.
     #[instrument(level = "trace")]
     pub async fn fetch_chain_info(&self) -> Result<Box<ChainInfo>, Error> {
         let validators = self.client.validator_nodes().await?;
@@ -1950,6 +1976,7 @@ impl<Env: Environment> ChainClient<Env> {
             .map_err(Into::into)
     }
 
+    /// Synchronizes this chain's state from the validators, including received messages.
     pub async fn synchronize_from_validators(&self) -> Result<Box<ChainInfo>, Error> {
         if self.is_follow_only() {
             return self.client.synchronize_chain_state(self.chain_id).await;
@@ -2401,13 +2428,6 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|v| (AccountOwner::from(v.account_public_key), v.votes))
             .collect();
         if manager.should_propose(identity, round, seed, &current_committee) {
-            if let Some(wait_until) = self.multi_leader_jitter_target(info, identity, round) {
-                return Ok(Either::Right(RoundTimeout {
-                    timestamp: wait_until,
-                    current_round: round,
-                    next_block_height: info.next_block_height,
-                }));
-            }
             return Ok(Either::Left(round));
         }
         if let Some(timeout) = info.round_timeout() {
@@ -2416,41 +2436,6 @@ impl<Env: Environment> ChainClient<Env> {
         Err(Error::BlockProposalError(
             "Not a leader in the current round",
         ))
-    }
-
-    /// Returns the timestamp at which `owner` should propose in `round`, to spread out
-    /// concurrent proposals from honest clients in a multi-leader round. Returns `None` if
-    /// the owner should propose immediately (either because the round is not a multi-leader
-    /// round, the owner is the preferred proposer, or the jitter target is already in the past).
-    ///
-    /// The delay is deterministic per `(owner, round)` and is anchored at the round's start
-    /// time when known, so that retrying after an interrupting notification does not extend
-    /// the wait further.
-    fn multi_leader_jitter_target(
-        &self,
-        info: &ChainInfo,
-        owner: &AccountOwner,
-        round: Round,
-    ) -> Option<Timestamp> {
-        if !self.options.multi_leader_jitter {
-            return None;
-        }
-        let ownership = &info.manager.ownership;
-        let delay = ownership.multi_leader_proposal_delay(owner, round)?;
-        if delay == TimeDelta::ZERO {
-            return None;
-        }
-        let now = self.storage_client().clock().current_time();
-        let round_start = if round == info.manager.current_round {
-            match (info.manager.round_timeout, ownership.round_timeout(round)) {
-                (Some(end), Some(duration)) => end.saturating_sub(duration),
-                _ => now,
-            }
-        } else {
-            now
-        };
-        let propose_at = round_start.saturating_add(delay);
-        (propose_at > now).then_some(propose_at)
     }
 
     /// Discards the pending block proposal, if any, so that a fresh block can be
@@ -2657,7 +2642,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Publishes some module, optionally along with a JSON-encoded `Formats`
+    /// Publishes some module, optionally along with a BCS-encoded `Formats`
     /// description that becomes a third blob alongside contract and service.
     #[cfg(not(target_arch = "wasm32"))]
     #[instrument(level = "trace", skip(contract, service, formats))]
@@ -2966,6 +2951,7 @@ impl<Env: Environment> ChainClient<Env> {
         .await
     }
 
+    /// Reads the confirmed block with the given hash from storage.
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_confirmed_block(
         &self,
@@ -2979,6 +2965,7 @@ impl<Env: Environment> ChainClient<Env> {
             .map(|b| b.into_std())
     }
 
+    /// Reads the confirmed block certificate with the given hash from storage.
     #[instrument(level = "trace", skip(hash))]
     pub async fn read_certificate(
         &self,
@@ -3281,6 +3268,9 @@ impl<Env: Environment> ChainClient<Env> {
             .options
             .notification_circuit_breaker_initial_probe_interval;
         let max_probe_interval = self.options.notification_circuit_breaker_max_probe_interval;
+        // Read the (possibly simulated) node clock once, so circuit-breaker probe scheduling can
+        // be driven deterministically in tests instead of depending on the wall clock.
+        let now = self.storage_client().clock().current_time();
         let (nodes, local_node) = {
             // For EventsOnly chains we may not have the chain's own committee locally,
             // and attempting to fetch it would trigger a full sync. Use the admin
@@ -3306,7 +3296,8 @@ impl<Env: Environment> ChainClient<Env> {
                 if let Some(state) = circuit_breakers.get_mut(validator) {
                     // Was probing -> probe failed -> escalate interval.
                     state.probe_interval = (state.probe_interval * 2).min(max_probe_interval);
-                    state.next_probe_at = Instant::now() + state.probe_interval;
+                    state.next_probe_at =
+                        now.saturating_add(TimeDelta::from_duration(state.probe_interval));
                     warn!(
                         %validator,
                         chain_id = %self.chain_id,
@@ -3318,7 +3309,8 @@ impl<Env: Environment> ChainClient<Env> {
                     circuit_breakers.insert(
                         *validator,
                         CircuitBreakerState {
-                            next_probe_at: Instant::now() + initial_probe_interval,
+                            next_probe_at: now
+                                .saturating_add(TimeDelta::from_duration(initial_probe_interval)),
                             probe_interval: initial_probe_interval,
                         },
                     );
@@ -3356,7 +3348,7 @@ impl<Env: Environment> ChainClient<Env> {
 
             // Circuit breaker: skip if not time to probe yet.
             if let Some(state) = circuit_breakers.get(&public_key) {
-                if Instant::now() < state.next_probe_at {
+                if now < state.next_probe_at {
                     continue;
                 }
                 debug!(
@@ -3521,6 +3513,7 @@ impl<Env: Environment> ChainClient<Env> {
 
 #[cfg(with_testing)]
 impl<Env: Environment> ChainClient<Env> {
+    /// Processes a notification received from the given validator.
     pub async fn process_notification_from(
         &self,
         notification: Notification,

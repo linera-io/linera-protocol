@@ -34,7 +34,7 @@ use linera_chain::{
         ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainIdSet, ChainStateView, ChainTipState,
-    ExecutionResultExt as _,
+    ExecutionResultExt as _, StreamCounts,
 };
 use linera_execution::{
     system::{EpochEventData, EventSubscriptions, EPOCH_STREAM_NAME},
@@ -1189,6 +1189,30 @@ where
             let mut inbox = self.chain.inboxes.try_load_entry_mut(&origin).await?;
             inbox.restore_from_checkpoint(cursor).await?;
         }
+        // Seed `next_expected_events` from the restored per-stream event counts. Re-executing
+        // the checkpoint re-emits each summarized stream's summary event; without this seed
+        // the summary's index would look like a gap on the freshly-restored node, so the
+        // tracker would never advance and future events on that stream would never be
+        // delivered to subscribers. The counts are contiguous, so this matches the producer's
+        // tracker as of just before the checkpoint block.
+        for (stream_id, count) in self
+            .chain
+            .execution_state
+            .system
+            .stream_event_counts
+            .index_values()
+            .await?
+        {
+            // Just after restoring, every event predates the checkpoint, so the readable floor
+            // is the count itself.
+            self.chain.next_expected_events.insert(
+                &stream_id,
+                StreamCounts {
+                    first_index: count,
+                    next_index: count,
+                },
+            )?;
+        }
         // We reset `execution_state` (via restore), `tip_state`, `block_hashes`
         // (for outbox-referenced pre-checkpoint heights), and the outbox views.
         // The other `ChainStateView` fields are either (a) already default for
@@ -1197,14 +1221,16 @@ where
         // (`manager`, `block_hashes` for height `height`), or (c) outside the
         // protocol state hash so divergence from the producer is fine
         // (inboxes; subsequent blocks reconcile by anticipation if needed).
-        // The `num_*` counters on `ChainTipState` are write-only in current
-        // code, so leaving them at zero has no functional impact.
         let new_tip = ChainTipState {
             block_hash: previous_block_hash,
             next_block_height: height,
-            ..Default::default()
         };
         self.chain.tip_state.set(new_tip.clone());
+        // Installing a snapshot establishes the chain's state from scratch (block 0 is never
+        // executed here), so record it as the initialization time for the reset cooldown.
+        self.chain
+            .chain_initialized_at
+            .set(self.storage.clock().current_time());
         self.save().await?;
         self.execute_contiguous_block(
             certificate,
@@ -1494,11 +1520,15 @@ where
     ///
     /// Both update and confirmation requests are handled together so that a
     /// single write-lock acquisition covers all pending work for the chain.
-    pub(crate) async fn process_batch(&mut self, requests: Vec<BatchRequest>) {
+    pub(crate) async fn process_batch(
+        &mut self,
+        requests: Vec<BatchRequest>,
+    ) -> Result<(), WorkerError> {
         let mut update_results = Vec::new();
         let mut confirm_results = Vec::new();
         let mut need_save = false;
         let mut need_rollback = false;
+        let mut recovery_error = None;
         let mut max_delivered_height: Option<BlockHeight> = None;
 
         for request in requests {
@@ -1520,7 +1550,9 @@ where
                         Ok(update_result) => update_result,
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_sender, Err(error));
+                            let (recovery, to_send) = classify_processing_error(error);
+                            recovery_error = recovery_error.or(recovery);
+                            send_result(result_sender, Err(to_send));
                             continue;
                         }
                     };
@@ -1556,16 +1588,20 @@ where
                         }
                         Err(error) => {
                             need_rollback = true;
-                            send_result(result_sender, Err(error));
+                            let (recovery, to_send) = classify_processing_error(error);
+                            recovery_error = recovery_error.or(recovery);
+                            send_result(result_sender, Err(to_send));
                         }
                     }
                 }
             }
         }
+        let mut save_error = None;
         if !need_rollback && need_save {
             if let Err(error) = self.save().await {
                 tracing::error!(%error, "failed to save batch; rolling back");
                 need_rollback = true;
+                save_error = Some(error);
             }
         }
         if need_rollback {
@@ -1575,7 +1611,19 @@ where
             for (result_sender, _) in confirm_results {
                 send_result(result_sender, Err(WorkerError::BatchRolledBack));
             }
-            return;
+            // Surface an error that left the worker poisoned or the chain state
+            // corrupted so `chain_write` can evict or reset it. A `must_reload_view`
+            // error only reaches us from a failed `save`, since resolving the journal
+            // (the operation that raises it) happens only in `write_batch`. A
+            // processing step instead can raise `CorruptedChainState` while reconciling
+            // outboxes or message counters (see `confirm_updated_recipient`), which
+            // calls for a reset rather than eviction. Ordinary processing errors (bad
+            // height, validation failures) leave the worker healthy after rollback, so
+            // they return `Ok` and were already reported to their individual senders.
+            return match save_error.or(recovery_error) {
+                Some(error) => Err(error),
+                None => Ok(()),
+            };
         }
 
         if let Some(height) = max_delivered_height {
@@ -1591,6 +1639,7 @@ where
                 .await;
             send_result(result_sender, result);
         }
+        Ok(())
     }
 
     /// Handles a `RevertConfirm` request: walks backward through
@@ -1713,13 +1762,13 @@ where
             return Ok(None);
         }
         let local_time = self.storage.clock().current_time();
-        let block_zero_time = *self.chain.block_zero_executed_at.get();
-        let elapsed = local_time.duration_since(block_zero_time);
+        let initialized_time = *self.chain.chain_initialized_at.get();
+        let elapsed = local_time.duration_since(initialized_time);
         if elapsed < min_duration {
             warn!(
                 %chain_id, ?elapsed, ?min_duration,
                 "Not resetting corrupted chain state; not enough time elapsed \
-                since last block 0 execution"
+                since the chain was last initialized"
             );
             return Ok(None);
         }
@@ -1742,6 +1791,12 @@ where
         // 1. Collect all sender chain IDs and block hashes before clearing.
         let sender_ids = self.chain.inboxes.indices().await?;
         let block_hashes = self.chain.block_hashes.index_values().await?;
+        // Re-execution starts from the latest checkpoint, if any: replaying the checkpoint
+        // block onto the wiped (height-0) chain installs its snapshot, so the blocks below it
+        // never need to be replayed. Without a checkpoint, this is `0` and the whole chain is
+        // replayed.
+        let restore_from =
+            (*self.chain.latest_checkpoint_height.get()).unwrap_or(BlockHeight::ZERO);
 
         // 2. Snapshot safety-critical manager state so that we cannot be tricked
         //    into double-signing if the reset wipes votes we already cast.
@@ -1760,11 +1815,29 @@ where
         warn!(
             %chain_id,
             "Cleared chain state up to height {tip_height}; \
-            re-executing all blocks"
+            re-executing blocks from height {restore_from}"
         );
 
-        // 4. Re-load certificates one at a time by hash and re-process them.
+        // 4. Re-load and re-process the certificates from the latest checkpoint onward. The
+        //    first one lands on the wiped, height-0 chain with a tip gap: if it is a checkpoint
+        //    `process_confirmed_block` installs its snapshot before executing, and otherwise
+        //    (height 0) it executes directly. The remaining blocks are contiguous.
+        let total = block_hashes
+            .iter()
+            .filter(|(height, _)| *height >= restore_from)
+            .count();
+        let mut replayed = 0;
         for (height, hash) in block_hashes {
+            if height < restore_from {
+                continue;
+            }
+            if replayed % 1000 == 0 {
+                info!(
+                    %chain_id, replayed, total,
+                    "Re-executing confirmed blocks after reset"
+                );
+            }
+            replayed += 1;
             let cert = self
                 .storage
                 .read_certificate(hash)
@@ -1930,12 +2003,21 @@ where
             .await?)
     }
 
-    /// Gets the next expected event index for a stream.
-    pub(crate) async fn get_next_expected_event(
+    /// Gets a stream's [`StreamCounts`]: the next expected event index and the lowest readable
+    /// index (the first event published since the most recent checkpoint). Both default to 0 for
+    /// a stream with no events yet. They come from the same `next_expected_events` entry, so they
+    /// are mutually consistent and both reflect every block this node has processed — including
+    /// ones it only preprocessed.
+    pub(crate) async fn get_stream_indices(
         &self,
         stream_id: StreamId,
-    ) -> Result<Option<u32>, WorkerError> {
-        Ok(self.chain.next_expected_events.get(&stream_id).await?)
+    ) -> Result<StreamCounts, WorkerError> {
+        Ok(self
+            .chain
+            .next_expected_events
+            .get(&stream_id)
+            .await?
+            .unwrap_or_default())
     }
 
     /// Gets the `next_expected_events` indices for the given streams.
@@ -1951,7 +2033,7 @@ where
         Ok(stream_ids
             .into_iter()
             .zip(values)
-            .filter_map(|(id, val)| Some((id, val?)))
+            .filter_map(|(id, val)| Some((id, val?.next_index)))
             .collect())
     }
 
@@ -2451,11 +2533,6 @@ where
             WorkerError::FastBlockUsingOracles
         );
         let chain = &mut self.chain;
-        // Check if the counters of tip_state would be valid.
-        chain
-            .tip_state
-            .get_mut()
-            .update_counters(&block.body.transactions, &block.body.messages)?;
         // Don't save the changes since the block is not confirmed yet.
         chain.rollback();
 
@@ -2617,7 +2694,7 @@ where
         )
         .await?;
         let executed_block = Block::new(proposed_block, outcome);
-        let block_hash = CryptoHash::new(&executed_block);
+        let block_hash = executed_block.hash();
         if let Some(cache) = &self.execution_state_cache {
             cache.insert(
                 &block_hash,
@@ -2707,6 +2784,21 @@ where
                 Err(WorkerError::PoisonedWorker)
             }
         }
+    }
+}
+
+/// Classifies an error returned while processing a single cross-chain batch request.
+///
+/// If the error indicates a poisoned worker or corrupted chain state, it is returned
+/// as the first element so `process_batch` can hand it to `chain_write` for recovery
+/// (eviction or reset), and the originating caller is told `BatchRolledBack` so it
+/// retries against a freshly loaded worker. Any other error leaves the worker healthy
+/// after rollback and is reported to the caller unchanged.
+fn classify_processing_error(error: WorkerError) -> (Option<WorkerError>, WorkerError) {
+    if error.must_reload_view() || error.indicates_corrupted_chain_state() {
+        (Some(error), WorkerError::BatchRolledBack)
+    } else {
+        (None, error)
     }
 }
 

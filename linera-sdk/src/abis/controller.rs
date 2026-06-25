@@ -12,6 +12,7 @@ use crate::linera_base_types::{
     ServiceAbi,
 };
 
+/// The ABI of the controller application.
 pub struct ControllerAbi;
 
 impl ContractAbi for ControllerAbi {
@@ -28,6 +29,7 @@ impl ServiceAbi for ControllerAbi {
 pub type ManagedServiceId = DataBlobHash;
 
 #[derive(Debug, StableEnumInCrate, GraphQLMutationRootInCrate)]
+#[allow(missing_docs)]
 pub enum Operation {
     /// Worker commands
     ExecuteWorkerCommand {
@@ -46,6 +48,7 @@ pub enum Operation {
 
 /// A worker command
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum WorkerCommand {
     /// Executed by workers to register themselves.
     RegisterWorker { capabilities: Vec<String> },
@@ -57,6 +60,7 @@ scalar!(WorkerCommand);
 
 /// A controller command
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[allow(missing_docs)]
 pub enum ControllerCommand {
     /// Set the admin owners.
     SetAdmins { admins: Option<Vec<AccountOwner>> },

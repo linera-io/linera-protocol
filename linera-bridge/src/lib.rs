@@ -1,7 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+//! On-chain proof verification and off-chain relaying for the EVM ↔ Linera bridge.
+
 #![recursion_limit = "256"]
+#![deny(missing_docs)]
 
 // -- On-chain (Wasm-compatible, always available) --
 
@@ -24,6 +27,15 @@ pub mod monitor;
 /// Relay server: HTTP proof endpoint + Linera chain inbox processing + EVM block forwarding.
 #[cfg(feature = "relay")]
 pub mod relay;
+
+/// Shared `sol!` bindings for the bridge's EVM contracts, used by the revm tests, the relay,
+/// and the e2e tests.
+#[cfg(feature = "offchain")]
+pub mod contracts;
+
+/// A light proof that a Linera block was confirmed: header + body fields + signatures.
+#[cfg(feature = "offchain")]
+pub mod block_proof;
 
 // -- Test-only modules --
 

@@ -7,7 +7,7 @@ use custom_debug_derive::Debug;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency;
 use linera_base::{
-    data_types::{Amount, Blob, BlockHeight, Event, OracleResponse, Timestamp},
+    data_types::{Amount, ArithmeticError, Blob, BlockHeight, Event, OracleResponse, Timestamp},
     ensure,
     identifiers::{AccountOwner, BlobId, ChainId, StreamId},
 };
@@ -145,6 +145,11 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     ))
                     .await?;
                 }
+                let progress = chain.system.progress.get_mut();
+                progress.num_incoming_bundles = progress
+                    .num_incoming_bundles
+                    .checked_add(1)
+                    .ok_or(ArithmeticError::Overflow)?;
             }
             Transaction::ExecuteOperation(operation) => {
                 self.resource_controller_mut()
@@ -171,12 +176,25 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .await?
                     .track_operation(operation)
                     .with_execution_context(chain_execution_context)?;
+                let progress = chain.system.progress.get_mut();
+                progress.num_operations = progress
+                    .num_operations
+                    .checked_add(1)
+                    .ok_or(ArithmeticError::Overflow)?;
             }
         }
 
         let txn_outcome = txn_tracker
             .into_outcome()
             .with_execution_context(chain_execution_context)?;
+        let progress = chain.system.progress.get_mut();
+        progress.num_outgoing_messages = progress
+            .num_outgoing_messages
+            .checked_add(
+                u32::try_from(txn_outcome.outgoing_messages.len())
+                    .map_err(|_| ArithmeticError::Overflow)?,
+            )
+            .ok_or(ArithmeticError::Overflow)?;
         self.process_txn_outcome(txn_outcome, &mut chain.system, chain_execution_context)
             .await?;
         Ok(())

@@ -72,7 +72,7 @@ All snapshots are checked in and tested via `insta`. This means the generated So
 
 ### Why `ecrecover` works
 
-Linera validators use secp256k1 keys (the same curve as Ethereum). The contract stores committee members as Ethereum addresses, derived off-chain as `keccak256(uncompressed_pubkey[1:])[12:]`. This lets us use Solidity's native `ecrecover` precompile rather than implementing signature verification from scratch.
+Linera validators use secp256k1 keys (the same curve as Ethereum). The contract stores committee members as Ethereum addresses, derived as `keccak256(uncompressed_pubkey[1:])[12:]`. This lets us use Solidity's native `ecrecover` precompile rather than implementing signature verification from scratch.
 
 ## Contract API
 
@@ -82,7 +82,7 @@ Linera validators use secp256k1 keys (the same curve as Ethereum). The contract 
 
 Verifies a BCS-encoded `ConfirmedBlockCertificate` against the committee for the block's declared epoch and returns the deserialized `Block` and the `signedHash` (for duplicate detection). This is a `view` function — it does not modify state. Other contracts (like `Microchain`) call this to get verified block data.
 
-#### `addCommittee(bytes calldata data, bytes calldata committeeBlob, bytes[] calldata validators)`
+#### `addCommittee(bytes calldata data, bytes calldata committeeBlob)`
 
 Advances the committee to the next epoch. This is the only state-modifying operation (besides construction).
 
@@ -90,10 +90,10 @@ Advances the committee to the next epoch. This is the only state-modifying opera
 2. Require the block is from the admin chain and the current epoch.
 3. Scan the block's transactions for an `AdminOperation::CreateCommittee { epoch, blob_hash }`.
 4. Verify that `keccak256("BlobContent::" || BCS(BlobContent { Committee, committeeBlob }))` matches `blob_hash`. This proves the caller's `committeeBlob` is the one referenced by the certified block.
-5. Parse the committee blob on-chain. For each validator, verify the caller's uncompressed public key matches the blob's compressed key at the same index (x-coordinate, y-parity, and secp256k1 curve membership), then derive the Ethereum address via `keccak256(uncompressed_key)`. The caller must supply `validators` in the same order as the blob's compressed keys (BCS canonical map order, i.e. sorted by serialized key bytes); the production helper `extract_validator_keys` does this automatically.
+5. Parse the committee blob on-chain. For each validator, derive the Ethereum address directly from the blob's 65-byte uncompressed key via `keccak256(x || y)[12:]`.
 6. Store derived addresses and blob-extracted weights as the committee for the new epoch.
 
-The `committeeBlob` is the BCS-serialized `Committee` from Linera. The `validators` parameter is an array of 64-byte uncompressed secp256k1 public keys (without the `0x04` prefix). The caller must provide these separately because the blob only contains compressed keys (33 bytes: x-coordinate + y-parity prefix), and Ethereum addresses are derived from the uncompressed form (`keccak256(x || y)[12:]`). Decompressing a key on-chain would require computing a modular square root on the secp256k1 field — expensive in the EVM. Instead, the caller provides the uncompressed keys and the contract verifies them against the blob's compressed keys: it checks that the x-coordinate matches, the y-parity matches, and the point satisfies y² ≡ x³ + 7 (mod p). This curve membership check uses Solidity's `mulmod`/`addmod` builtins and is cheap. Addresses and weights are extracted from the blob rather than caller-provided, preventing substitution attacks. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob` → parsed validators/weights.
+The `committeeBlob` is the BCS-serialized `Committee` from Linera. Validator keys are stored in the blob in the 65-byte uncompressed SEC1 encoding (`0x04 || x || y`), so the contract derives each Ethereum address directly from the blob bytes — no caller-supplied key material is needed and no on-chain decompression (modular square root) is required. Addresses and weights are extracted from the blob rather than caller-provided, preventing substitution attacks. The authenticity chain is: validator signatures → certified block → `CreateCommittee` operation → `blob_hash` → `committeeBlob` → parsed validators/weights.
 
 The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis committee's validator addresses, weights, the admin chain ID, and the initial epoch. The deployer is trusted at genesis (no blob exists).
 
@@ -109,23 +109,23 @@ Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
 - **No duplicate blocks**: rejects certificates already processed via the `verifiedBlocks` mapping.
 - **Chain ID match**: the block's `header.chain_id` must equal this contract's `chainId`.
 
-Blocks can be submitted in any order; sequential height enforcement is not required because BFT-finalized certificates guarantee canonicality. On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
+Blocks can be submitted in any order; sequential height enforcement is not required because BFT-finalized certificates guarantee canonicality. On success, calls the virtual `_onBlock(BridgeTypes.BlockProof)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
 ### FungibleBridge (concrete Microchain)
 
-A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When the wrapped-fungible application emits a `BurnEvent` (tokens auto-burned on the bridge chain), the contract releases the corresponding ERC-20 tokens to the target Ethereum address.
+A `Microchain` subcontract that bridges ERC-20 tokens from Linera to Ethereum. When the bridge application emits a `BurnEvent` on its `"burns"` stream (after burning wrapped tokens on the bridge chain), the contract releases the corresponding ERC-20 tokens to the target Ethereum address.
 
-#### `constructor(address _lightClient, bytes32 _chainId, address _token)`
+#### `constructor(address _lightClient, bytes32 _chainId, address _token, bytes32 _fungibleApplicationId, bytes32 _bridgeApplicationId)`
 
-Binds to a specific `LightClient`, chain, and ERC-20 token contract.
+Binds to a specific `LightClient`, chain, and ERC-20 token contract. `_fungibleApplicationId` is the wrapped-fungible application (the deposit/mint target); `_bridgeApplicationId` is the bridge application whose `"burns"` stream releases are matched against.
 
 #### `registerFungibleApplicationId(bytes32 _fungibleApplicationId)`
 
 Registers the wrapped-fungible application ID. Can only be called once. Only events from this application are processed; all others are silently skipped.
 
-#### `_onBlock(BridgeTypes.Block)`
+#### `_onBlock(BridgeTypes.BlockProof)`
 
-Scans the block's `events` for entries on the `"burns"` stream matching `fungibleApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
+Scans the block's `events` for entries on the `"burns"` stream matching `bridgeApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
 
 ## Rust API
 
@@ -134,11 +134,10 @@ The crate exposes typed bindings for each contract, plus the generated Solidity 
 ```rust
 use linera_bridge::evm::{light_client, microchain, BRIDGE_TYPES_SOURCE};
 
-// Encode a contract call (validators are 64-byte uncompressed public keys)
+// Encode a contract call
 let call = light_client::addCommitteeCall {
     data: bcs_bytes.into(),
     committeeBlob: committee_bytes.into(),
-    validators: vec![uncompressed_key.into()],
 };
 let calldata: Vec<u8> = call.abi_encode();
 
@@ -173,7 +172,7 @@ The constructor takes `(address[], uint64[], bytes32, uint32)` — the genesis c
 
 - **Generated BCS code via serde-generate**: Rather than hand-writing Solidity deserializers, we auto-generate them from the same Rust type definitions that produce the data. This eliminates an entire class of serialization bugs.
 
-- **Partial committee blob parsing on-chain**: The contract parses just enough of the BCS-serialized committee blob to extract compressed public keys and voting weights. It skips fields it doesn't need (network addresses, account public keys, resource control policy). The caller provides uncompressed public keys, which the contract verifies against the blob's compressed keys (x-coordinate match, y-parity match, and secp256k1 curve membership via y² ≡ x³ + 7). This eliminates the need to trust caller-provided addresses and weights, while avoiding the cost of on-chain modular square root for full decompression.
+- **Partial committee blob parsing on-chain**: The contract parses just enough of the BCS-serialized committee blob to extract the uncompressed public keys and voting weights. It skips fields it doesn't need (network addresses, account public keys, resource control policy). Since the blob carries 65-byte uncompressed keys, Ethereum addresses are derived directly from the hash-committed blob bytes — there is no caller-provided key material to validate and no on-chain decompression cost.
 
 - **Separation of concerns between LightClient and Microchain**: The `LightClient` is a singleton that only manages committees and certificate verification. It has no knowledge of individual chains or their blocks. Each `Microchain` instance tracks a single chain's block sequence and delegates verification to the `LightClient`. This means one `LightClient` deployment can serve any number of `Microchain` contracts, each following a different Linera microchain.
 
