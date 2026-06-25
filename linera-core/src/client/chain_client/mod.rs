@@ -2611,7 +2611,7 @@ impl<Env: Environment> ChainClient<Env> {
         }
     }
 
-    /// Publishes some module, optionally along with a JSON-encoded `Formats`
+    /// Publishes some module, optionally along with a BCS-encoded `Formats`
     /// description that becomes a third blob alongside contract and service.
     #[cfg(not(target_arch = "wasm32"))]
     #[instrument(level = "trace", skip(contract, service, formats))]

@@ -1710,7 +1710,7 @@ impl BlobContent {
         BlobContent::new(BlobType::ApplicationDescription, bytes)
     }
 
-    /// Creates a new application formats [`BlobContent`] from the JSON-encoded
+    /// Creates a new application formats [`BlobContent`] from the BCS-encoded
     /// `Formats` description bytes.
     pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
         BlobContent::new(BlobType::ApplicationFormats, bytes)
@@ -1832,7 +1832,7 @@ impl Blob {
         ))
     }
 
-    /// Creates a new application formats [`Blob`] from the JSON-encoded
+    /// Creates a new application formats [`Blob`] from the BCS-encoded
     /// `Formats` description bytes.
     pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
         Blob::new(BlobContent::new_application_formats(bytes))
