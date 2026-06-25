@@ -19,11 +19,12 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round,
+        TimeDelta, Timestamp,
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -1199,6 +1200,43 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<ChainDescription, chain_client::Error> {
         let blob = self.get_chain_description_blob(chain_id).await?;
+        Ok(bcs::from_bytes(blob.bytes())?)
+    }
+
+    /// Ensures that the client has the `ApplicationDescription` blob for the given
+    /// application ID, fetching it from the current validators if it is not available
+    /// locally, and returns the blob. The application need not be registered on this
+    /// client's chain: the description is content-addressed and downloaded by blob ID.
+    pub async fn get_application_description_blob(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<Arc<Blob>, chain_client::Error> {
+        let blob_id = application_id.description_blob_id();
+        let blob = self.local_node.storage_client().read_blob(blob_id).await?;
+        if let Some(blob) = blob {
+            // We have the blob - return it.
+            return Ok(blob.into_std());
+        }
+        // Recover the blob from the current validators, according to the admin chain.
+        Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
+        let nodes = self.validator_nodes().await?;
+        Ok(self
+            .update_local_node_with_blobs_from(vec![blob_id], &nodes)
+            .await?
+            .pop()
+            .unwrap() // Returns exactly as many blobs as passed-in IDs.
+            .into_std())
+    }
+
+    /// Returns the `ApplicationDescription` of the given application, fetching its
+    /// description blob from the validators if it is not available locally.
+    pub async fn get_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, chain_client::Error> {
+        let blob = self
+            .get_application_description_blob(application_id)
+            .await?;
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
