@@ -38,16 +38,26 @@ sudo chown root:root /etc/linera-bridge/.env.secret
 
 ### 3. Provision contracts, Linera apps, wallet, env file
 
-Production provisioning tooling is out of scope of this runbook —
-`examples/bridge-demo/setup.sh` is for local development only and is not
-reused here. The operator must end up with:
+Provision the contracts, Linera apps, wallet, and env file by following the
+Docker-based deployment runbook in
+[`linera-bridge/deploy/`](../linera-bridge/deploy/README.md) — a sequence of
+copy-pasteable commands run inside the project's pre-built images
+(`examples/bridge-demo/setup.sh` is for local Docker development only and is
+not reused here).
 
-- `/var/lib/linera-bridge/wallet.json`, `keystore.json`, `client.db`:
-  Linera wallet that owns the bridge chain (the relay container reads
-  these via the bind-mount at `/data`).
-- `/etc/linera-bridge/.env`: env file with the keys consumed by
-  `bridge-entrypoint.sh`. Use `/data/...` paths inside (the host bind-mount
-  exposes `/var/lib/linera-bridge` at `/data` in the container).
+Working through that runbook writes everything this runbook needs into
+`linera-bridge/deploy/out/<network>/`:
+
+- `wallet/` — the Linera wallet that owns the bridge chain. Copy its
+  `wallet.json`, `keystore.json`, `client.db` to `/var/lib/linera-bridge/`
+  (the relay container reads them via the bind-mount at `/data`).
+- `relayer.env` — the env file consumed by `bridge-entrypoint.sh`, already
+  using `/data/...` paths. Copy it to `/etc/linera-bridge/.env`.
+
+The runbook's final step emits `relayer.env` with the addresses/IDs filled in
+and `EVM_PRIVATE_KEY` deliberately omitted (kept in `.env.secret` / Secret
+Manager, see above). For the full command sequence and per-network notes, see the
+[deploy README](../linera-bridge/deploy/README.md). The fields it fills in are:
 
 ```
 # /etc/linera-bridge/.env
@@ -67,11 +77,11 @@ MAX_RETRIES=10
 PORT=3001
 ```
 
-Production EVM contracts (`LightClient`, `FungibleBridge`,
+All of these EVM contracts (`LightClient`, `FungibleBridge`,
 `LineraToken`-or-real-ERC20), the bridge chain, and the two Linera apps
-(`evm-bridge`, `wrapped-fungible`) are deployed/registered out-of-band by
-the team's deployment tooling. The output artifacts populate the env file
-above.
+(`evm-bridge`, `wrapped-fungible`) are deployed and cross-registered by the
+runbook steps; `deploy/out/<network>/relayer.env` already contains the
+filled-in values (it is the same file shown here).
 
 For the EVM contract deployment itself — the `forge script` invocations,
 their inputs, the governance (pause-guardian / proposer / canceller Safes
@@ -84,22 +94,15 @@ The `linera-bridge` container will read `/etc/linera-bridge/.env` and
 
 #### Optional: explorer verification on contract deploys
 
-When the bridge contracts are deployed via the project's `forge script`
-tooling (either via `examples/bridge-demo/setup.sh` for local-dev or
-the `bridge-init` container in `docker-compose.bridge-test.yml`),
-setting `EXPLORER_API_KEY` and `VERIFIER_URL` in the operator shell
-before invocation appends `--verify` and publishes the verified
-contract source to a block explorer atomically with the deploy.
-
-Example for Base Sepolia:
+To publish verified contract source to a block explorer, append the explorer
+flags to the `forge script` commands in the runbook, e.g. for Base Sepolia:
 
 ```bash
-export EXPLORER_API_KEY="..."
-export VERIFIER_URL="https://api-sepolia.basescan.org/api"
+--verify --etherscan-api-key <KEY> --verifier-url https://api-sepolia.basescan.org/api
 ```
 
-Both must be set for verification to be appended; either one alone is
-ignored.
+See the [deploy README](../linera-bridge/deploy/README.md#per-network-notes)
+for per-network verifier URLs.
 
 ### 4. Start the relayer
 
