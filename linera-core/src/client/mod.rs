@@ -1404,12 +1404,12 @@ impl<Env: Environment> Client<Env> {
     // (admin-chain sync -> sender-certificate processing -> here), and boxing it at this
     // boundary lets the concurrent admin-chain self-heal below satisfy its future bound
     // despite the recursion. The future is `Send` off `web` (see the type alias).
-    fn receive_sender_certificate<'a>(
-        &'a self,
+    fn receive_sender_certificate(
+        &self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
-    ) -> ReceiveSenderCertificateFuture<'a> {
+    ) -> ReceiveSenderCertificateFuture<'_> {
         Box::pin(async move {
             // Verify the certificate before doing any expensive networking.
             if let ReceiveCertificateMode::NeedsCheck = mode {
