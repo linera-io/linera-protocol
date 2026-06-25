@@ -1464,7 +1464,8 @@ impl<Env: Environment> Client<Env> {
                                     }
                                 })
                             },
-                            self.options.blob_download_timeout,
+                            self.options.blob_download_hedge_delay,
+                            self.storage_client().clock(),
                         )
                         .await
                         .is_ok()
