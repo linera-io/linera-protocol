@@ -812,15 +812,10 @@ where
         let remaining_duration = end_timestamp.delta_since(local_time).as_micros();
         let balance = self.client.local_balance().await?;
 
-        // `balance` is an `Amount`: a u128 scaled by 10^18. Casting the raw value
-        // to the old i64 gauge overflowed (e.g. 200M tokens = 2e26), producing
-        // garbage/negative values. Report the balance in tokens as a float, so the
-        // gauge keeps fractional precision (to watch the balance draw down) without
-        // overflowing.
         #[cfg(with_metrics)]
         metrics::FAUCET_BALANCE
             .with_label_values(&[])
-            .set(u128::from(balance) as f64 / u128::from(Amount::ONE) as f64);
+            .set(f64::from(balance));
 
         let total_amount = requests
             .iter()
