@@ -964,9 +964,7 @@ where
         &self,
         request: Request<api::EventBlockHeightsRequest>,
     ) -> Result<Response<api::EventBlockHeightsResponse>, Status> {
-        let event_ids: Vec<linera_base::identifiers::EventId> = request
-            .into_inner()
-            .try_into()
+        let event_ids = Vec::<linera_base::identifiers::EventId>::try_from(request.into_inner())
             .map_err(|e: linera_rpc::grpc::GrpcProtoConversionError| {
                 Status::invalid_argument(e.to_string())
             })?;

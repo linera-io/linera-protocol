@@ -1814,7 +1814,7 @@ where
 
         let mut results = vec![None; event_ids.len()];
         // Check cache first; collect misses.
-        let mut misses: Vec<usize> = Vec::new();
+        let mut misses = Vec::new();
         for (i, event_id) in event_ids.iter().enumerate() {
             if let Some(height) = self.caches.event_block_height.get(event_id) {
                 results[i] = Some(*height);

@@ -775,8 +775,8 @@ impl<Env: Environment> Client<Env> {
     /// as one atomic unit per validator attempt, with staggered fallback.
     ///
     /// The index has no backfill, so events published before the validators were
-    /// upgraded resolve to `None`; callers fall back to walking
-    /// `previous_event_blocks` whenever this fails.
+    /// upgraded resolve to `None`; this returns an error if any requested event
+    /// cannot be resolved through the index.
     #[instrument(level = "trace", skip_all)]
     async fn download_certificates_for_events_from_index(
         &self,
