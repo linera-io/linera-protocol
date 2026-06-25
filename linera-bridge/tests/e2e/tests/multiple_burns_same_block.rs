@@ -9,8 +9,8 @@
 //! `BridgeMessage::Burn` to the bridge chain (chain A). The test process
 //! drives chain A's inbox once so all N messages land in one chain-A
 //! block — a single cert with N `BurnEvent`s. After the relayer is
-//! spawned, exactly one `addBlock` call should release all N tokens (one
-//! `token.transfer` per burn in `_onBlock`) and the relayer must mark
+//! spawned, it registers the block and releases all N tokens via
+//! `processBurns` (one `token.transfer` per burn), and must mark
 //! every pending burn complete via the per-burn
 //! `isBurnProcessed(height, eventIndex)` view.
 
@@ -18,9 +18,9 @@
 
 use std::time::Duration;
 
-use alloy::{primitives::U256, providers::ProviderBuilder, sol};
+use alloy::{primitives::U256, providers::ProviderBuilder};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::abi::BridgeOperation;
+use linera_bridge::{abi::BridgeOperation, contracts::IERC20};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_evm_bridge,
@@ -33,13 +33,6 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-    }
-}
 
 const NUM_BURNS: usize = 4;
 const BURN_AMOUNT_TOKENS: u128 = 1;
@@ -146,7 +139,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
 
     // NUM_BURNS Address20 recipients in the order they appear in the
     // block. One address is intentionally repeated to exercise per-burn
-    // accounting independently of the recipient; `_onBlock` must release
+    // accounting independently of the recipient; `processBurns` must release
     // tokens for each occurrence even though the dedup key shares no
     // recipient bits.
     let recipients: [alloy::primitives::Address; NUM_BURNS] = [
@@ -231,6 +224,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
             0,
             5,
             Some(sqlite_path_for_relay.as_path()),
+            None,
         ))
         .await
     });
@@ -259,8 +253,8 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
         relay_handle.abort();
         return Err(error);
     }
-    // Wait for the relayer to finish: one `addBlock` releases all N
-    // tokens inside `_onBlock`, then `check_burn_completion`'s per-burn
+    // Wait for the relayer to finish: `registerBlock` + `processBurns` releases
+    // all N tokens, then `check_burn_completion`'s per-burn
     // `isBurnProcessed` query flips every entry to completed.
     if let Err(error) = wait_for_relay_metrics(
         &http,

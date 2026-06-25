@@ -492,6 +492,11 @@ impl TimeDelta {
         TimeDelta(secs.saturating_mul(1_000_000))
     }
 
+    /// Returns the given [`Duration`] as a [`TimeDelta`], saturating at the maximum on overflow.
+    pub fn from_duration(duration: Duration) -> Self {
+        TimeDelta(u64::try_from(duration.as_micros()).unwrap_or(u64::MAX))
+    }
+
     /// Returns this [`TimeDelta`] as a number of microseconds.
     pub const fn as_micros(&self) -> u64 {
         self.0
@@ -1705,7 +1710,7 @@ impl BlobContent {
         BlobContent::new(BlobType::ApplicationDescription, bytes)
     }
 
-    /// Creates a new application formats [`BlobContent`] from the JSON-encoded
+    /// Creates a new application formats [`BlobContent`] from the BCS-encoded
     /// `Formats` description bytes.
     pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
         BlobContent::new(BlobType::ApplicationFormats, bytes)
@@ -1827,7 +1832,7 @@ impl Blob {
         ))
     }
 
-    /// Creates a new application formats [`Blob`] from the JSON-encoded
+    /// Creates a new application formats [`Blob`] from the BCS-encoded
     /// `Formats` description bytes.
     pub fn new_application_formats(bytes: impl Into<Box<[u8]>>) -> Self {
         Blob::new(BlobContent::new_application_formats(bytes))
@@ -1945,6 +1950,10 @@ pub struct StreamUpdate {
     pub stream_id: StreamId,
     /// The lowest index of a new event. See [`StreamUpdate::new_indices`].
     pub previous_index: u32,
+    /// The lowest index whose event is still guaranteed to be readable (if it exists): the
+    /// index of the first event published since the publisher's most recent checkpoint. Reading
+    /// an event below this index may fail, since checkpoints prune earlier events.
+    pub first_index: u32,
     /// The index of the next event, i.e. the lowest for which no event is known yet.
     pub next_index: u32,
 }

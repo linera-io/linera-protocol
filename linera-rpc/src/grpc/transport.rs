@@ -3,9 +3,12 @@
 
 use crate::NodeOptions;
 
+/// Configuration for creating gRPC transport channels.
 #[derive(Clone, Debug, Default)]
 pub struct Options {
+    /// The maximum time to wait when establishing a connection.
     pub connect_timeout: Option<linera_base::time::Duration>,
+    /// The maximum time to wait for a request to complete.
     pub timeout: Option<linera_base::time::Duration>,
 }
 
@@ -22,6 +25,7 @@ cfg_if::cfg_if! {
     if #[cfg(web)] {
         pub use tonic_web_wasm_client::{Client as Channel, Error};
 
+        /// Creates a transport channel for the given address.
         pub fn create_channel(address: String, _options: &Options) -> Result<Channel, Error> {
             // TODO(#1817): this should respect `options`
             Ok(tonic_web_wasm_client::Client::new(address))
@@ -29,6 +33,7 @@ cfg_if::cfg_if! {
     } else {
         pub use tonic::transport::{Channel, Error};
 
+        /// Creates a transport channel for the given address.
         pub fn create_channel(
             address: String,
             options: &Options,

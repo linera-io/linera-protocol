@@ -35,8 +35,17 @@ scalar AccountOwner
 Admin operation metadata.
 """
 type AdminOperationMetadata {
+	"""
+	The kind of admin operation: "PublishCommitteeBlob", "CreateCommittee" or "RemoveCommittee".
+	"""
 	adminOperationType: String!
+	"""
+	The committee epoch this operation refers to, if applicable.
+	"""
 	epoch: Int
+	"""
+	The hash of the committee blob, if applicable.
+	"""
 	blobHash: CryptoHash
 }
 
@@ -55,6 +64,9 @@ A unique identifier for a user application
 """
 scalar ApplicationId
 
+"""
+A summary of an application registered on a chain.
+"""
 type ApplicationOverview {
 	id: ApplicationId!
 	description: ApplicationDescription!
@@ -253,7 +265,13 @@ scalar Bytecode
 A chain ID with a block height.
 """
 type ChainAndHeight {
+	"""
+	The chain that the block belongs to.
+	"""
 	chainId: ChainId!
+	"""
+	The height of the block within that chain.
+	"""
 	height: BlockHeight!
 }
 
@@ -367,10 +385,11 @@ type ChainStateExtendedView {
 	"""
 	outboxes: ReentrantCollectionView_ChainId_OutboxStateView_06c2376d!
 	"""
-	The indices of next events we expect to see per stream (could be ahead of the last
-	executed block in sparse chains).
+	The event indices we track per stream: the next expected index (could be ahead of the
+	last executed block in sparse chains) and the lowest readable index since the most
+	recent checkpoint.
 	"""
-	nextExpectedEvents: MapView_StreamId_Int_3d7f5335!
+	nextExpectedEvents: MapView_StreamId_StreamCounts_66ad99f6!
 	"""
 	Number of outgoing messages in flight for each block height.
 	We use a `RegisterView` to prioritize speed for small maps.
@@ -412,7 +431,7 @@ type ChainStateExtendedView {
 	Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
 	vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
 	in storage. The worker errors a checkpoint push with
-	`MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+	`BlocksNotFound` when this set is non-empty, then accepts each
 	referenced cert (regardless of its own — possibly revoked — epoch) and
 	removes the entry. Once the set is empty, the checkpoint restoration can run
 	end-to-end.
@@ -441,22 +460,19 @@ type ChainTipState {
 	Sequence number tracking blocks.
 	"""
 	nextBlockHeight: BlockHeight!
-	"""
-	Number of incoming message bundles.
-	"""
-	numIncomingBundles: Int!
-	"""
-	Number of operations.
-	"""
-	numOperations: Int!
-	"""
-	Number of outgoing messages.
-	"""
-	numOutgoingMessages: Int!
 }
 
+"""
+The set of chains tracked by the wallet.
+"""
 type Chains {
+	"""
+	The IDs of the tracked chains.
+	"""
 	list: [ChainId!]!
+	"""
+	The default chain of the wallet, if one is set.
+	"""
 	default: ChainId
 }
 
@@ -464,6 +480,9 @@ type Chains {
 Change application permissions operation metadata.
 """
 type ChangeApplicationPermissionsMetadata {
+	"""
+	The new application permissions to set on the chain.
+	"""
 	permissions: ApplicationPermissionsMetadata!
 }
 
@@ -471,11 +490,29 @@ type ChangeApplicationPermissionsMetadata {
 Change ownership operation metadata.
 """
 type ChangeOwnershipOperationMetadata {
+	"""
+	The super owners, who can propose fast blocks in the first round and regular blocks in any round.
+	"""
 	superOwners: [AccountOwner!]!
+	"""
+	The regular owners, each with the weight that determines how often they are round leader.
+	"""
 	owners: [OwnerWithWeight!]!
+	"""
+	The leader of the first single-leader round; if unset, that leader is random like other rounds.
+	"""
 	firstLeader: AccountOwner
+	"""
+	The number of rounds in which all owners are allowed to propose blocks.
+	"""
 	multiLeaderRounds: Int!
+	"""
+	Whether the multi-leader rounds are unrestricted, i.e. not limited to chain owners.
+	"""
 	openMultiLeaderRounds: Boolean!
+	"""
+	The timeout configuration governing round durations.
+	"""
 	timeoutConfig: TimeoutConfigMetadata!
 }
 
@@ -483,6 +520,9 @@ type ChangeOwnershipOperationMetadata {
 CheckpointAck message metadata.
 """
 type CheckpointAckMessageMetadata {
+	"""
+	The cursor past the last bundle from the recipient that the sender has consumed.
+	"""
 	latestReceivedCursor: Cursor!
 }
 
@@ -490,9 +530,21 @@ type CheckpointAckMessageMetadata {
 Claim operation metadata.
 """
 type ClaimOperationMetadata {
+	"""
+	The account owner whose balance is being claimed.
+	"""
 	owner: AccountOwner!
+	"""
+	The chain on which the claimed balance is held.
+	"""
 	targetId: ChainId!
+	"""
+	The account that receives the claimed tokens.
+	"""
 	recipient: AccountOutput!
+	"""
+	The amount of tokens to claim.
+	"""
 	amount: Amount!
 }
 
@@ -533,9 +585,21 @@ type ConfirmedBlock {
 Create application operation metadata.
 """
 type CreateApplicationOperationMetadata {
+	"""
+	The ID of the module the application is instantiated from.
+	"""
 	moduleId: String!
+	"""
+	The application's static parameters, encoded as a hex string.
+	"""
 	parametersHex: String!
+	"""
+	The argument passed to the application's instantiation, encoded as a hex string.
+	"""
 	instantiationArgumentHex: String!
+	"""
+	The applications this application depends on and requires to be present.
+	"""
 	requiredApplicationIds: [ApplicationId!]!
 }
 
@@ -543,8 +607,17 @@ type CreateApplicationOperationMetadata {
 Credit message metadata.
 """
 type CreditMessageMetadata {
+	"""
+	The account owner whose balance is credited on the receiving chain.
+	"""
 	target: AccountOwner!
+	"""
+	The amount of tokens being credited.
+	"""
 	amount: Amount!
+	"""
+	The account owner the transfer originated from.
+	"""
 	source: AccountOwner!
 }
 
@@ -634,9 +707,9 @@ type Entry_ChainId_OutboxStateView_855dcf53 {
 """
 A GraphQL-visible map item, complete with key.
 """
-type Entry_StreamId_Int_459c4ec3 {
+type Entry_StreamId_StreamCounts_d5e24a40 {
 	key: StreamId!
-	value: Int
+	value: StreamCounts
 }
 
 """
@@ -822,11 +895,11 @@ type MapView_BlobId_Blob_9f0b41f3 {
 	entries(input: MapInput_BlobId_4d2a0555): [Entry_BlobId_Blob_50b95aa1!]!
 }
 
-type MapView_StreamId_Int_3d7f5335 {
+type MapView_StreamId_StreamCounts_66ad99f6 {
 	keys(count: Int): [StreamId!]!
 	count: Int!
-	entry(key: StreamIdInput!): Entry_StreamId_Int_459c4ec3!
-	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_Int_459c4ec3!]!
+	entry(key: StreamIdInput!): Entry_StreamId_StreamCounts_d5e24a40!
+	entries(input: MapInput_StreamIdInput_b7c3909d): [Entry_StreamId_StreamCounts_d5e24a40!]!
 }
 
 """
@@ -1175,7 +1248,7 @@ type MutationRoot {
 		"""
 		vmRuntime: VmRuntime!,
 		"""
-		Optional JSON-encoded `Formats` description bytes
+		Optional BCS-encoded `Formats` description bytes
 		"""
 		formats: [Int!]
 	): ModuleId!
@@ -1228,11 +1301,23 @@ scalar Notification
 Open chain operation metadata.
 """
 type OpenChainOperationMetadata {
+	"""
+	The initial balance credited to the new chain.
+	"""
 	balance: Amount!
+	"""
+	The ownership configuration of the new chain.
+	"""
 	ownership: ChainOwnershipMetadata!
+	"""
+	The application permissions of the new chain.
+	"""
 	applicationPermissions: ApplicationPermissionsMetadata!
 }
 
+"""
+GraphQL-compatible structured representation of an operation.
+"""
 type Operation {
 	"""
 	The type of operation: "System" or "User"
@@ -1317,7 +1402,13 @@ type OutgoingMessage {
 Owner with weight metadata.
 """
 type OwnerWithWeight {
+	"""
+	The account owner.
+	"""
 	owner: AccountOwner!
+	"""
+	The owner's weight, determining how often they are round leader (a `u64` as a string).
+	"""
 	weight: String!
 }
 
@@ -1377,6 +1468,9 @@ type PostedMessage {
 Publish data blob operation metadata.
 """
 type PublishDataBlobMetadata {
+	"""
+	The hash of the data blob being published.
+	"""
 	blobHash: CryptoHash!
 }
 
@@ -1384,6 +1478,9 @@ type PublishDataBlobMetadata {
 Publish module operation metadata.
 """
 type PublishModuleMetadata {
+	"""
+	The ID of the module being published.
+	"""
 	moduleId: String!
 }
 
@@ -1399,7 +1496,7 @@ type QueryRoot {
 	"""
 	version: VersionInfo!
 	"""
-	Returns the bytes of an application formats blob (JSON-encoded `Formats`)
+	Returns the bytes of an application formats blob (BCS-encoded `Formats`)
 	stored in the local node, given the formats blob hash carried by a
 	`ModuleId`. Returns `None` if the blob is not present locally.
 	"""
@@ -1450,6 +1547,25 @@ scalar Round
 type SetView_CryptoHash_87fbb60c {
 	elements(count: Int): [CryptoHash!]!
 	count: Int!
+}
+
+"""
+The event indices we track for a stream, maintained whenever a block is processed
+(executed or merely preprocessed).
+"""
+type StreamCounts {
+	"""
+	The lowest event index still guaranteed to be readable (if it exists): the index of the
+	first event published to this stream since the most recent checkpoint. Earlier events may
+	have been pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+	When there are no events yet, this equals [`next_index`](Self::next_index).
+	"""
+	firstIndex: Int!
+	"""
+	The next event index we expect to see, i.e. the lowest for which no event is known yet.
+	May be ahead of the last executed block on sparse chains.
+	"""
+	nextIndex: Int!
 }
 
 """
@@ -1651,8 +1767,17 @@ type TransactionMetadata {
 Transfer operation metadata.
 """
 type TransferOperationMetadata {
+	"""
+	The account owner whose balance is debited.
+	"""
 	owner: AccountOwner!
+	"""
+	The account that receives the transferred tokens.
+	"""
 	recipient: AccountOutput!
+	"""
+	The amount of tokens to transfer.
+	"""
 	amount: Amount!
 }
 
@@ -1660,9 +1785,25 @@ type TransferOperationMetadata {
 Update stream metadata.
 """
 type UpdateStreamMetadata {
+	"""
+	The application that owns the event stream.
+	"""
 	applicationId: String!
+	"""
+	The chain on which the events are published.
+	"""
 	chainId: ChainId!
+	"""
+	The identifier of the event stream being updated.
+	"""
 	streamId: String!
+	"""
+	The lowest event index still guaranteed to be readable (if it exists).
+	"""
+	firstIndex: Int!
+	"""
+	The index of the next event to read from the stream.
+	"""
 	nextIndex: Int!
 }
 
@@ -1670,6 +1811,9 @@ type UpdateStreamMetadata {
 Verify blob operation metadata.
 """
 type VerifyBlobMetadata {
+	"""
+	The ID of the blob whose existence is being verified.
+	"""
 	blobId: String!
 }
 
@@ -1681,8 +1825,17 @@ scalar VmRuntime
 Withdraw message metadata.
 """
 type WithdrawMessageMetadata {
+	"""
+	The account owner whose balance is debited on the source chain.
+	"""
 	owner: AccountOwner!
+	"""
+	The amount of tokens being withdrawn.
+	"""
 	amount: Amount!
+	"""
+	The account that receives the withdrawn tokens.
+	"""
 	recipient: AccountOutput!
 }
 

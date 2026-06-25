@@ -162,13 +162,18 @@ pub async fn parse_broadcast_address(
     project_name: &str,
     compose_file: &std::path::Path,
     script_name: &str,
+    contract_name: &str,
 ) -> anyhow::Result<Address> {
+    // Select by contract name rather than `.transactions[0]`: a script may
+    // deploy more than one contract (e.g. DeployFungibleBridge also deploys the
+    // initial decoder), and the target is not necessarily the first CREATE.
     let output = exec_output(
         compose,
         "foundry-tools",
         &format!(
             "CHAIN_ID=$(cast chain-id --rpc-url http://anvil:8545); \
-             jq -r '.transactions[0].contractAddress' \
+             jq -r --arg name '{contract_name}' \
+             '[.transactions[] | select(.contractName==$name)] | last | .contractAddress' \
              /contracts/broadcast/{script_name}/$CHAIN_ID/run-latest.json"
         ),
         project_name,
@@ -204,6 +209,7 @@ pub async fn deploy_linera_token(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -238,6 +244,7 @@ pub async fn deploy_linera_token_with_supply(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -271,6 +278,7 @@ pub async fn deploy_linera_token_with_decimals(
         project_name,
         compose_file,
         "DeployLineraToken.s.sol",
+        "LineraToken",
     )
     .await
 }
@@ -296,6 +304,10 @@ pub async fn deploy_fungible_bridge(
                  TOKEN_ADDRESS={token} \
                  FUNGIBLE_APP_ID={fungible_app_id_bytes32} \
                  BRIDGE_APP_ID={bridge_app_id_bytes32} \
+                 PAUSE_GUARDIAN=0x000000000000000000000000000000000000dead \
+                 PROPOSER=0x000000000000000000000000000000000000beef \
+                 CANCELLER=0x000000000000000000000000000000000000ca11 \
+                 TIMELOCK_DELAY=86400 \
              forge script /contracts/script/DeployFungibleBridge.s.sol \
              --root /contracts \
              --rpc-url http://anvil:8545 \
@@ -311,6 +323,7 @@ pub async fn deploy_fungible_bridge(
         project_name,
         compose_file,
         "DeployFungibleBridge.s.sol",
+        "FungibleBridge",
     )
     .await
 }
@@ -713,4 +726,26 @@ pub fn test_storage_cache_config() -> linera_storage::StorageCacheConfig {
         event_block_height_cache_size: 1000,
         cache_cleanup_interval_secs: linera_storage::DEFAULT_CLEANUP_INTERVAL_SECS,
     }
+}
+
+/// Returns the positions of `bridge_app_id`'s "burns"-stream events in `certificate`, grouped by
+/// transaction index. Mirrors `FungibleBridge`'s burn matching (the bridge application id plus the
+/// "burns" stream) so a test can settle exactly those events via `registerBlock` + `processBurns`,
+/// the same path the relayer uses in production.
+pub fn burn_positions_by_tx(
+    certificate: &linera_chain::types::ConfirmedBlockCertificate,
+    bridge_app_id: linera_base::identifiers::ApplicationId,
+) -> Vec<(u32, Vec<u32>)> {
+    use linera_base::identifiers::GenericApplicationId;
+    let mut by_tx: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
+    for (tx_index, tx_events) in (0u32..).zip(&certificate.block().body.events) {
+        for (pos, event) in (0u32..).zip(tx_events) {
+            if event.stream_id.application_id == GenericApplicationId::User(bridge_app_id)
+                && event.stream_id.stream_name.0 == b"burns"
+            {
+                by_tx.entry(tx_index).or_default().push(pos);
+            }
+        }
+    }
+    by_tx.into_iter().collect()
 }

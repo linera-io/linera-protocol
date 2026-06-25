@@ -32,6 +32,7 @@ mod validator_exporter;
 #[cfg(test)]
 pub use indexer::indexer_api;
 
+/// Spawns the block processor on a dedicated thread and returns a sender for new block IDs.
 pub fn start_block_processor_task<S, F>(
     storage: S,
     shutdown_signal: F,

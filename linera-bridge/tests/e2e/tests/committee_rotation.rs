@@ -8,11 +8,12 @@
 
 use std::time::{Duration, Instant};
 
-use alloy::{providers::ProviderBuilder, sol};
+use alloy::providers::ProviderBuilder;
 use linera_base::{
     crypto::{AccountPublicKey, InMemorySigner, ValidatorKeypair},
     identifiers::AccountOwner,
 };
+use linera_bridge::contracts::ILightClient;
 use linera_bridge_e2e::{
     compose_file_path, create_extra_wallet, deploy_fungible_bridge, deploy_linera_token,
     dump_compose_logs, exec_ok, extra_wallet_env, light_client_address,
@@ -25,13 +26,6 @@ use linera_execution::WasmRuntime;
 use linera_faucet_client::Faucet;
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-
-sol! {
-    #[sol(rpc)]
-    interface ILightClient {
-        function currentEpoch() external view returns (uint32);
-    }
-}
 
 /// Queries the current epoch from the LightClient contract on Anvil.
 async fn query_current_epoch() -> anyhow::Result<u32> {
@@ -182,6 +176,7 @@ async fn test_committee_rotation_updates_evm_light_client() -> anyhow::Result<()
             std::time::Duration::from_secs(5), // monitor_scan_interval
             0,                                 // monitor_start_block
             5,                                 // max_retries
+            None,
             None,
         ))
         .await

@@ -76,6 +76,21 @@ mod metrics {
     });
 }
 
+/// Per-block state of a chain: the timestamp of its most recent block together with
+/// cumulative counts of the transactions and messages processed so far. Stored as a
+/// single value so that each block updates only one key.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Allocative)]
+pub struct ChainProgress {
+    /// The timestamp of the most recent block.
+    pub timestamp: Timestamp,
+    /// Number of incoming message bundles executed so far.
+    pub num_incoming_bundles: u32,
+    /// Number of operations executed so far.
+    pub num_operations: u32,
+    /// Number of outgoing messages sent so far.
+    pub num_outgoing_messages: u32,
+}
+
 /// A view accessing the execution state of the system of a chain.
 #[derive(Debug, ClonableView, View, Allocative)]
 #[allocative(bound = "C")]
@@ -97,8 +112,6 @@ pub struct SystemExecutionStateView<C> {
     pub balances: MapView<C, AccountOwner, Amount>,
     /// Allowances for spending from one account by another.
     pub allowances: MapView<C, OwnerSpender, Amount>,
-    /// The timestamp of the most recent block.
-    pub timestamp: RegisterView<C, Timestamp>,
     /// Whether this chain has been closed.
     pub closed: RegisterView<C, bool>,
     /// Permissions for applications on this chain.
@@ -133,6 +146,8 @@ pub struct SystemExecutionStateView<C> {
     /// `CheckpointAck` messages here is what breaks the otherwise-perpetual
     /// notification ping-pong between two chains that ever exchanged a real message.
     pub pending_checkpoint_ack_targets: SetView<C, ChainId>,
+    /// The most recent block's timestamp and cumulative transaction/message counts.
+    pub progress: RegisterView<C, ChainProgress>,
 }
 
 impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C> {
@@ -151,7 +166,6 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
             balance: self.balance.with_context(ctx.clone()).await,
             balances: self.balances.with_context(ctx.clone()).await,
             allowances: self.allowances.with_context(ctx.clone()).await,
-            timestamp: self.timestamp.with_context(ctx.clone()).await,
             closed: self.closed.with_context(ctx.clone()).await,
             application_permissions: self.application_permissions.with_context(ctx.clone()).await,
             used_blobs: self.used_blobs.with_context(ctx.clone()).await,
@@ -166,6 +180,7 @@ impl<C: Context, C2: Context> ReplaceContext<C2> for SystemExecutionStateView<C>
                 .pending_checkpoint_ack_targets
                 .with_context(ctx.clone())
                 .await,
+            progress: self.progress.with_context(ctx.clone()).await,
         }
     }
 }
@@ -228,6 +243,7 @@ impl OpenChainConfig {
 
 /// A system operation.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum SystemOperation {
     /// Transfers `amount` units of value from the given owner's account to the recipient.
     /// If no owner is given, try to take the units out of the unattributed account.
@@ -299,6 +315,9 @@ pub enum SystemOperation {
         application_id: ApplicationId,
         chain_id: ChainId,
         stream_id: StreamId,
+        /// The lowest readable index in the publishing stream, i.e. the index of the first
+        /// event published since the publisher's most recent checkpoint.
+        first_index: u32,
         next_index: u32,
     },
     /// Publishes a canonical snapshot of the chain's execution state as a blob,
@@ -310,6 +329,7 @@ pub enum SystemOperation {
 
 /// Operations that are only allowed on the admin chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum AdminOperation {
     /// Publishes a new committee as a blob. This can be assigned to an epoch using
     /// [`AdminOperation::CreateCommittee`] in a later block.
@@ -324,6 +344,7 @@ pub enum AdminOperation {
 
 /// A system message meant to be executed on a remote chain.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, Allocative)]
+#[allow(missing_docs)]
 pub enum SystemMessage {
     /// Credits `amount` units of value to the account `target` -- unless the message is
     /// bouncing, in which case `source` is credited instead.
@@ -355,6 +376,7 @@ pub struct SystemQuery;
 
 /// The response to a system query.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct SystemResponse {
     pub chain_id: ChainId,
     pub balance: Amount,
@@ -364,7 +386,9 @@ pub struct SystemResponse {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
+/// The result of creating a new application.
 #[derive(Debug)]
+#[allow(missing_docs)]
 pub struct CreateApplicationResult {
     pub app_id: ApplicationId,
 }
@@ -596,6 +620,7 @@ where
                 application_id,
                 chain_id,
                 stream_id,
+                first_index,
                 next_index,
             } => {
                 let subscriptions = self
@@ -615,6 +640,7 @@ where
                     chain_id,
                     stream_id.clone(),
                     app_next_index,
+                    first_index,
                     next_index,
                 );
                 subscriptions
@@ -702,6 +728,7 @@ where
         }
     }
 
+    /// Transfers `amount` from `source` to `recipient`, debiting the source account.
     pub async fn transfer(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -732,6 +759,7 @@ where
         self.credit_or_send_message(source, recipient, amount).await
     }
 
+    /// Claims `amount` from `source`'s account on `target_id` and transfers it to `recipient`.
     pub async fn claim(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -767,6 +795,7 @@ where
         }
     }
 
+    /// Sets the allowance that `spender` may transfer on behalf of `owner` to `amount`.
     pub async fn approve(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -792,6 +821,7 @@ where
         Ok(())
     }
 
+    /// Transfers `amount` from `owner` to `recipient`, debiting the spender's allowance.
     pub async fn transfer_from(
         &mut self,
         authenticated_owner: Option<AccountOwner>,
@@ -940,7 +970,7 @@ where
             balance,
             application_permissions,
         } = description.config().clone();
-        self.timestamp.set(description.timestamp());
+        self.progress.get_mut().timestamp = description.timestamp();
         self.description.set(Some(description));
         self.epoch.set(epoch);
 
@@ -967,6 +997,7 @@ where
         Ok(false)
     }
 
+    /// Handles a query to the system state, returning the system response.
     pub fn handle_query(
         &mut self,
         context: QueryContext,
@@ -1007,10 +1038,12 @@ where
         Ok(child_id)
     }
 
+    /// Marks the chain as closed.
     pub fn close_chain(&mut self) {
         self.closed.set(true);
     }
 
+    /// Creates a new application from the given module and arguments, returning its ID.
     pub async fn create_application(
         &mut self,
         chain_id: ChainId,
@@ -1117,6 +1150,7 @@ where
         Ok(())
     }
 
+    /// Reads the content of the blob with the given ID.
     pub async fn read_blob_content(&self, blob_id: BlobId) -> Result<BlobContent, ExecutionError> {
         match self.context().extra().get_blob(blob_id).await {
             Ok(Some(blob)) => Ok(Arc::unwrap_or_clone(blob).into()),
@@ -1125,6 +1159,7 @@ where
         }
     }
 
+    /// Returns an error unless a blob with the given ID exists.
     pub async fn assert_blob_exists(&mut self, blob_id: BlobId) -> Result<(), ExecutionError> {
         if self.context().extra().contains_blob(blob_id).await? {
             Ok(())

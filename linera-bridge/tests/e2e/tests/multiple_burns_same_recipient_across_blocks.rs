@@ -17,7 +17,7 @@
 //! batching multiple events into one block). When the relayer
 //! starts, its first scan iteration finds all 5 pending burns at once.
 //!
-//! The relayer must forward every burn via `addBlock` and the
+//! The relayer must settle every burn via `registerBlock` + `processBurns` and the
 //! per-burn `isBurnProcessed(height, eventIndex)` query must return
 //! true for every entry; the recipient's ERC-20 balance must equal
 //! `5 * amount`.
@@ -26,9 +26,9 @@
 
 use std::time::Duration;
 
-use alloy::{primitives::U256, providers::ProviderBuilder, sol};
+use alloy::{primitives::U256, providers::ProviderBuilder};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
-use linera_bridge::abi::BridgeOperation;
+use linera_bridge::{abi::BridgeOperation, contracts::IERC20};
 use linera_bridge_e2e::{
     compose_file_path, deploy_fungible_bridge, deploy_linera_token, fund_bridge_erc20,
     light_client_address, parse_metric_value, publish_and_create_evm_bridge,
@@ -41,13 +41,6 @@ use linera_execution::{Operation, WasmRuntime};
 use linera_faucet_client::Faucet;
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
-
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-    }
-}
 
 const NUM_BURNS: u32 = 5;
 const BURN_AMOUNT_TOKENS: u128 = 1;
@@ -219,6 +212,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
             0,
             5,
             Some(sqlite_path_for_relay.as_path()),
+            None,
         ))
         .await
     });
@@ -235,7 +229,7 @@ async fn relayer_processes_every_burn_to_same_recipient() -> anyhow::Result<()> 
     // all NUM_BURNS appear in burns_completed. Pre-fix gets there via
     // mark-by-existence flipping every pending burn complete after the
     // first transfer lands; post-fix gets there via per-burn
-    // `isBurnProcessed` flipping each entry only as its own `addBlock`
+    // `isBurnProcessed` flipping each entry only as its own `processBurns`
     // confirms.
     let settle_result = wait_for_relay_metrics(
         &http,

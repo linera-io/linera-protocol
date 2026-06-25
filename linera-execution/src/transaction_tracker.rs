@@ -17,7 +17,8 @@ use linera_base::{
 
 use crate::{ExecutionError, OutgoingMessage};
 
-type AppStreamUpdates = BTreeMap<(ChainId, StreamId), (u32, u32)>;
+/// Maps a (publishing chain, stream) to its `(previous_index, first_index, next_index)`.
+type AppStreamUpdates = BTreeMap<(ChainId, StreamId), (u32, u32, u32)>;
 
 /// Tracks oracle responses and execution outcomes of an ongoing transaction execution, as well
 /// as replayed oracle responses.
@@ -92,11 +93,15 @@ pub struct PreparedCheckpoint {
 /// The [`TransactionTracker`] contents after a transaction has finished.
 #[derive(Debug, Default)]
 pub struct TransactionOutcome {
+    /// The recorded oracle responses.
     #[debug(skip_if = Vec::is_empty)]
     pub oracle_responses: Vec<OracleResponse>,
+    /// The messages to be sent to other chains.
     #[debug(skip_if = Vec::is_empty)]
     pub outgoing_messages: Vec<OutgoingMessage>,
+    /// The index to be assigned to the next created application.
     pub next_application_index: u32,
+    /// The index to be assigned to the next created chain.
     pub next_chain_index: u32,
     /// Events recorded by contracts' `emit` calls.
     pub events: Vec<Event>,
@@ -111,6 +116,7 @@ pub struct TransactionOutcome {
 }
 
 impl TransactionTracker {
+    /// Creates a new [`TransactionTracker`].
     pub fn new(
         local_time: Timestamp,
         transaction_index: u32,
@@ -136,6 +142,7 @@ impl TransactionTracker {
         }
     }
 
+    /// Sets the blobs known to the tracker and returns the updated tracker.
     pub fn with_blobs(mut self, blobs: BTreeMap<BlobId, BlobContent>) -> Self {
         self.blobs = blobs;
         self
@@ -153,44 +160,53 @@ impl TransactionTracker {
         self.prepared_checkpoint.take()
     }
 
+    /// Returns the local time recorded by the tracker.
     pub fn local_time(&self) -> Timestamp {
         self.local_time
     }
 
+    /// Sets the local time recorded by the tracker.
     pub fn set_local_time(&mut self, local_time: Timestamp) {
         self.local_time = local_time;
     }
 
+    /// Returns the index of the current transaction in the block.
     pub fn transaction_index(&self) -> u32 {
         self.transaction_index
     }
 
+    /// Returns the index that would be assigned to the next created application, without consuming it.
     pub fn peek_application_index(&self) -> u32 {
         self.next_application_index
     }
 
+    /// Returns the index to be assigned to the next created application and increments the counter.
     pub fn next_application_index(&mut self) -> u32 {
         let index = self.next_application_index;
         self.next_application_index += 1;
         index
     }
 
+    /// Returns the index to be assigned to the next created chain and increments the counter.
     pub fn next_chain_index(&mut self) -> u32 {
         let index = self.next_chain_index;
         self.next_chain_index += 1;
         index
     }
 
+    /// Records an outgoing message.
     pub fn add_outgoing_message(&mut self, message: OutgoingMessage) {
         self.outgoing_messages.push(message);
     }
 
+    /// Records multiple outgoing messages.
     pub fn add_outgoing_messages(&mut self, messages: impl IntoIterator<Item = OutgoingMessage>) {
         for message in messages {
             self.add_outgoing_message(message);
         }
     }
 
+    /// Records an event emitted on the given stream.
     pub fn add_event(&mut self, stream_id: StreamId, index: u32, value: Vec<u8>) {
         self.events.push(Event {
             stream_id,
@@ -199,6 +215,7 @@ impl TransactionTracker {
         });
     }
 
+    /// Returns the content of the blob with the given ID, if known to the tracker.
     pub fn get_blob_content(&self, blob_id: &BlobId) -> Option<&BlobContent> {
         if let Some(content) = self.blobs.get(blob_id) {
             return Some(content);
@@ -206,10 +223,12 @@ impl TransactionTracker {
         self.previously_created_blobs.get(blob_id)
     }
 
+    /// Records a blob created by this transaction.
     pub fn add_created_blob(&mut self, blob: Blob) {
         self.blobs.insert(blob.id(), blob.into_content());
     }
 
+    /// Records a blob published by this transaction.
     pub fn add_published_blob(&mut self, blob_id: BlobId) {
         self.blobs_published.insert(blob_id);
     }
@@ -219,10 +238,12 @@ impl TransactionTracker {
         self.free_blob_ids.insert(blob_id);
     }
 
+    /// Returns the blobs created by this transaction.
     pub fn created_blobs(&self) -> &BTreeMap<BlobId, BlobContent> {
         &self.blobs
     }
 
+    /// Records the result of the operation.
     pub fn add_operation_result(&mut self, result: Option<Vec<u8>>) {
         self.operation_result = result
     }
@@ -243,12 +264,14 @@ impl TransactionTracker {
         Ok(self.oracle_responses.last().unwrap())
     }
 
+    /// Records that the given range of events on a stream must be processed by the application.
     pub fn add_stream_to_process(
         &mut self,
         application_id: ApplicationId,
         chain_id: ChainId,
         stream_id: StreamId,
         previous_index: u32,
+        first_index: u32,
         next_index: u32,
     ) {
         if next_index == previous_index {
@@ -258,13 +281,16 @@ impl TransactionTracker {
             .entry(application_id)
             .or_default()
             .entry((chain_id, stream_id))
-            .and_modify(|(pi, ni)| {
+            .and_modify(|(pi, fi, ni)| {
                 *pi = (*pi).min(previous_index);
+                // The strongest floor wins: a later checkpoint prunes more.
+                *fi = (*fi).max(first_index);
                 *ni = (*ni).max(next_index);
             })
-            .or_insert_with(|| (previous_index, next_index));
+            .or_insert_with(|| (previous_index, first_index, next_index));
     }
 
+    /// Removes a stream from the set of streams to be processed by the application.
     pub fn remove_stream_to_process(
         &mut self,
         application_id: ApplicationId,
@@ -279,6 +305,7 @@ impl TransactionTracker {
         }
     }
 
+    /// Takes the streams to be processed, grouped by application.
     pub fn take_streams_to_process(&mut self) -> BTreeMap<ApplicationId, Vec<StreamUpdate>> {
         mem::take(&mut self.streams_to_process)
             .into_iter()
@@ -286,11 +313,14 @@ impl TransactionTracker {
                 let updates = streams
                     .into_iter()
                     .map(
-                        |((chain_id, stream_id), (previous_index, next_index))| StreamUpdate {
-                            chain_id,
-                            stream_id,
-                            previous_index,
-                            next_index,
+                        |((chain_id, stream_id), (previous_index, first_index, next_index))| {
+                            StreamUpdate {
+                                chain_id,
+                                stream_id,
+                                previous_index,
+                                first_index,
+                                next_index,
+                            }
                         },
                     )
                     .collect();
@@ -335,6 +365,7 @@ impl TransactionTracker {
         Ok(Some(response))
     }
 
+    /// Consumes the tracker and returns the resulting [`TransactionOutcome`].
     pub fn into_outcome(self) -> Result<TransactionOutcome, ExecutionError> {
         let TransactionTracker {
             replaying_oracle_responses,

@@ -742,6 +742,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 1,
         }
     );
@@ -822,6 +823,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 2,
         }
     );
@@ -847,6 +849,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender2.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 1,
         }
     );
@@ -902,6 +905,7 @@ where
             application_id: application_id.forget_abi(),
             chain_id: sender.chain_id(),
             stream_id,
+            first_index: 0,
             next_index: 3,
         }
     );
@@ -1055,6 +1059,50 @@ where
     assert_eq!(
         count_update_streams, 1,
         "should have UpdateStreams operations"
+    );
+
+    // Regression guard for the readable floor on a preprocess-only subscriber. The sender
+    // checkpoints (summarizing its posts), then a fresh subscriber synchronizes the sender's
+    // event blocks without ever executing the sender's chain. Its `first_index` must reflect
+    // the checkpoint floor, which it can only get from `next_expected_events` (maintained while
+    // preprocessing); the sender's execution state, where the floor used to be read from, is
+    // never populated on a pure subscriber and would yield 0.
+    let posts_stream = StreamId {
+        application_id: application_id.forget_abi().into(),
+        stream_name: b"posts".into(),
+    };
+    let checkpoint_cert = sender.checkpoint().await.unwrap().unwrap();
+    let summary_index = checkpoint_cert
+        .block()
+        .body
+        .events
+        .iter()
+        .flatten()
+        .find(|event| event.stream_id == posts_stream)
+        .expect("the checkpoint should summarize the posts stream")
+        .index;
+    assert!(summary_index > 0, "there were posts before the checkpoint");
+
+    let receiver3 = builder.add_root_chain(5, Amount::ONE).await?;
+    receiver3
+        .execute_operation(Operation::user(
+            application_id,
+            &social::Operation::Subscribe {
+                chain_id: sender.chain_id(),
+            },
+        )?)
+        .await
+        .unwrap_ok_committed();
+    receiver3.synchronize_from_validators().await.unwrap();
+
+    let counts = receiver3
+        .client
+        .local_node
+        .get_stream_indices(sender.chain_id(), posts_stream)
+        .await?;
+    assert_eq!(
+        counts.first_index, summary_index,
+        "a preprocess-only subscriber must see the post-checkpoint floor, not 0",
     );
 
     Ok(())
@@ -1245,16 +1293,18 @@ where
     assert_eq!(recent_posts.len(), 2);
 
     // The per-stream event tracker was seeded from the restored counts and advanced past the
-    // re-emitted summary, so it sits one past the summary's index.
-    let expected = follower
+    // re-emitted summary, so `next_index` sits one past the summary's index and the readable
+    // floor points exactly at the summary. A subscriber reading this stream is thus told that
+    // the pruned pre-checkpoint post events below the summary are not available, and to start
+    // at the summary. Both indices live in `next_expected_events`, so they stay correct even on
+    // a node that only preprocesses (never executes) this chain's later blocks.
+    let counts = follower
         .client
         .local_node
-        .next_expected_events(main_id, vec![posts_stream.clone()])
+        .get_stream_indices(main_id, posts_stream.clone())
         .await?;
-    assert_eq!(
-        expected.get(&posts_stream),
-        Some(&(summary_event.index + 1))
-    );
+    assert_eq!(counts.next_index, summary_event.index + 1);
+    assert_eq!(counts.first_index, summary_event.index);
 
     // --- Phase 3: a post-bootstrap cross-chain delivery is accepted via the seeded inbox. ---
     // The follow-up's `sender_previous_height` points at the pre-checkpoint transfer's height,
@@ -2132,6 +2182,7 @@ where
                 application_id: application_id.forget_abi(),
                 chain_id: sender.chain_id(),
                 stream_id,
+                first_index: 0,
                 next_index: 1,
             }
             .into()],

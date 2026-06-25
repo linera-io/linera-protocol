@@ -44,6 +44,7 @@ impl Allocative for LiteCertificate<'_> {
 }
 
 impl LiteCertificate<'_> {
+    /// Creates a new lite certificate from a value, round and list of signatures.
     pub fn new(
         value: LiteValue,
         round: Round,

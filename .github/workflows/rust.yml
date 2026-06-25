@@ -134,6 +134,10 @@ jobs:
       if: steps.check-solc.outputs.solc-available == 'true'
       run: |
         cargo test --locked -p linera-bridge
+    - name: Run Solidity (forge) tests
+      if: steps.check-solc.outputs.solc-available == 'true'
+      working-directory: linera-bridge/src/solidity
+      run: forge test -vvv
 
   metrics-test:
     needs: changed-files

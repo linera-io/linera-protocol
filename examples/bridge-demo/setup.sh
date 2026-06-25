@@ -35,7 +35,10 @@ TOKEN_DECIMALS=18
 FUND_AMOUNT="500000000000000000000"
 SHARED_DIR=""
 WALLET_DIR="/tmp/wallet"
-EXTRA_WALLET_ID=1
+# `linera net up --with-faucet` already owns wallet_0 (admin) and wallet_1 (faucet, holds an open
+# rocksdb lock on client_1.db). Use a higher slot so the copied extra wallet doesn't clobber the
+# faucet's wallet or block on its lock.
+EXTRA_WALLET_ID=2
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -137,6 +140,10 @@ CONTRACTS_DIR="${CONTRACTS_DIR:-/contracts}"
 OUTPUT_FILE="${OUTPUT_FILE:-$SCRIPT_DIR/.env.local}"
 FAUCET_URL="${FAUCET_URL:-http://localhost:8080}"
 RELAY_URL="${RELAY_URL:-http://localhost:3001}"
+# Browser-reachable EVM RPC for the frontend's read-only calls (balances, tx
+# receipts). The relay/forge use EVM_RPC_URL (the in-container `anvil` host),
+# which a browser can't resolve; the frontend reads via this localhost URL.
+BROWSER_EVM_RPC_URL="${BROWSER_EVM_RPC_URL:-http://localhost:8545}"
 # Docker container has its own solc; don't force a version download.
 FORGE_USE_SOLC=()
 
@@ -146,6 +153,19 @@ if [[ -z "$SHARED_DIR" ]]; then
 fi
 mkdir -p "$SHARED_DIR"
 echo "  Shared dir: $SHARED_DIR"
+
+# ── Invalidate this run's prior outputs ──
+# Clearing setup-complete here means a fresh setup
+# run re-gates the relay until this run finishes, while a standalone relay
+# restart keeps the existing marker and starts immediately. Also drop the stale
+# IDs/addresses this script produces so nothing reads last run's values mid-run.
+# Files written by the init containers (light-client-address, bridge-chain-id,
+# relay-owner, relay-wallet) are intentionally left untouched.
+echo "Clearing stale setup outputs..."
+dc_exec --user root foundry-tools sh -c \
+    "rm -f /shared/setup-complete /shared/wrapped-app-id /shared/bridge-app-id /shared/bridge-address"
+rm -f "$SHARED_DIR"/wrapped-app-id "$SHARED_DIR"/bridge-app-id "$SHARED_DIR"/bridge-address
+rm -f "$OUTPUT_FILE"
 
 echo "=== Bridge Demo Setup ==="
 echo ""
@@ -338,6 +358,10 @@ dc_exec foundry-tools env \
     TOKEN_ADDRESS="$TOKEN_ADDRESS" \
     FUNGIBLE_APP_ID="$APP_ID_BYTES32" \
     BRIDGE_APP_ID="$BRIDGE_APP_ID_BYTES32" \
+    PAUSE_GUARDIAN="${BRIDGE_PAUSE_GUARDIAN:-0x000000000000000000000000000000000000dEaD}" \
+    PROPOSER="${BRIDGE_PROPOSER:-0x000000000000000000000000000000000000bEEF}" \
+    CANCELLER="${BRIDGE_CANCELLER:-0x000000000000000000000000000000000000Ca11}" \
+    TIMELOCK_DELAY="${BRIDGE_TIMELOCK_DELAY:-86400}" \
     forge script /contracts/script/DeployFungibleBridge.s.sol \
     --root /contracts \
     --rpc-url "$EVM_RPC_URL" \
@@ -346,8 +370,10 @@ dc_exec foundry-tools env \
     cat /tmp/bridge-deploy.log >&2
     die "FungibleBridge deploy failed"
 }
+# DeployFungibleBridge also deploys the initial decoder, so transactions[0] is
+# the decoder; select the bridge by contract name.
 BRIDGE_ADDRESS=$(dc_exec foundry-tools \
-    jq -r '.transactions[0].contractAddress' \
+    jq -r '[.transactions[] | select(.contractName=="FungibleBridge")] | last | .contractAddress' \
     "/contracts/broadcast/DeployFungibleBridge.s.sol/${EVM_CHAIN_ID_DECIMAL}/run-latest.json" \
     | tr -d '[:space:]')
 validate_eth_address "FungibleBridge address" "$BRIDGE_ADDRESS"
@@ -360,10 +386,14 @@ echo "$BRIDGE_ADDRESS" > "$SHARED_DIR/bridge-address"
 
 # ── 8. Register the bridge ↔ wrapped relationship on both sides ──
 echo "Registering the bridge as the wrapped-fungible authorized caller..."
-# BCS: WrappedFungibleOperation::RegisterAuthorizedCaller (variant 8) + 32-byte
-# bridge app ID. Submitted on the WRAPPED app, on the mint (bridge) chain — the
-# relay wallet owns that chain.
-REGISTER_CALLER_HEX="08${BRIDGE_APP_ID}"
+# WrappedFungibleOperation::RegisterAuthorizedCaller + 32-byte bridge app ID,
+# submitted on the WRAPPED app, on the mint (bridge) chain — the relay wallet
+# owns that chain. The operation enum derives `StableEnum`, so the wire tag is
+# not the BCS variant index but a 4-byte ULEB128 of the variant's stable tag:
+# keccak256(name)[0..4] as big-endian u32, masked (v & 0x07FFFFFF) | 0x08000000.
+# RegisterAuthorizedCaller → tag 170732950 → ULEB128 0x96dbb451. Regenerate with
+# `cast keccak RegisterAuthorizedCaller` if the variant is ever renamed.
+REGISTER_CALLER_HEX="96dbb451${BRIDGE_APP_ID}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
@@ -374,8 +404,10 @@ dc_exec linera-network env \
     --chain-id "$BRIDGE_CHAIN_ID" 2>&1
 
 echo "Registering FungibleBridge address in evm-bridge..."
-# BCS: BridgeOperation::RegisterFungibleBridge (variant 2) + 20-byte EVM address.
-REGISTER_BRIDGE_HEX="02${BRIDGE_ADDR_HEX}"
+# BridgeOperation::RegisterFungibleBridge + 20-byte EVM address. Same StableEnum
+# encoding as above: RegisterFungibleBridge → tag 230758129 → ULEB128 0xf1ad846e.
+# Regenerate with `cast keccak RegisterFungibleBridge` if the variant is renamed.
+REGISTER_BRIDGE_HEX="f1ad846e${BRIDGE_ADDR_HEX}"
 dc_exec linera-network env \
     LINERA_WALLET=/shared/relay-wallet/wallet.json \
     LINERA_KEYSTORE=/shared/relay-wallet/keystore.json \
@@ -411,6 +443,7 @@ LINERA_BRIDGE_ADDRESS=$BRIDGE_ADDRESS
 LINERA_TOKEN_ADDRESS=$TOKEN_ADDRESS
 LINERA_BRIDGE_CHAIN_ID=$BRIDGE_CHAIN_ID
 LINERA_EVM_CHAIN_ID=$EVM_CHAIN_ID
+LINERA_EVM_RPC_URL=$BROWSER_EVM_RPC_URL
 EOF
 
 # Write setup-complete marker so the relay knows it's safe to start.

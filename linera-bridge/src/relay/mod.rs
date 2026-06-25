@@ -8,8 +8,8 @@
 //!   operations on the bridge chain.
 //! - **Linera client**: manages a "bridge chain", listens for `NewIncomingBundle` notifications,
 //!   processes the inbox, and burns any Address20 credits so the EVM contract can release tokens.
-//! - **EVM forwarder**: after processing inbox and burns, BCS-serializes the resulting certificates
-//!   and calls `FungibleBridge.addBlock(bytes)` on the EVM chain.
+//! - **EVM forwarder**: after processing inbox and burns, registers the resulting block on the
+//!   `LightClient` and calls `FungibleBridge.processBurns(...)` to release tokens on the EVM chain.
 
 use linera_base::crypto::Signer as _;
 
@@ -23,16 +23,21 @@ pub(crate) mod settlement;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use alloy::{
-    network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
+    network::EthereumWallet,
+    primitives::Address,
+    providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
 };
 use anyhow::{Context as _, Result};
 use futures::StreamExt as _;
-use linera_base::identifiers::{AccountOwner, ApplicationId, ChainId};
+use linera_base::{
+    data_types::BlockHeight,
+    identifiers::{AccountOwner, ApplicationId, ChainId},
+};
 use linera_client::{chain_listener::ClientContext as _, client_context::ClientContext};
-use linera_core::{client::ChainClient, worker::Reason};
+use linera_core::{client::ChainClient, environment::Environment, worker::Reason};
 use linera_execution::{Operation, WasmRuntime};
-use linera_storage::DbStorage;
+use linera_storage::{DbStorage, WallClock};
 use linera_views::{
     backends::{
         lru_caching::LruCachingConfig,
@@ -49,10 +54,7 @@ use crate::{
 };
 
 /// Queries both chain balances and updates the prometheus metrics.
-pub(crate) async fn update_balance_metrics<
-    P: alloy::providers::Provider,
-    E: linera_core::environment::Environment,
->(
+pub(crate) async fn update_balance_metrics<P: Provider, E: Environment>(
     evm_client: &evm::EvmClient<P>,
     linera_client: &linera::LineraClient<E>,
 ) {
@@ -60,9 +62,7 @@ pub(crate) async fn update_balance_metrics<
     update_linera_balance_metric(linera_client).await;
 }
 
-pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
-    evm_client: &evm::EvmClient<P>,
-) {
+pub(crate) async fn update_evm_balance_metric<P: Provider>(evm_client: &evm::EvmClient<P>) {
     match evm_client.get_relayer_balance().await {
         Ok(balance) => {
             // U256::to::<u128> panics if >u128::MAX, but ETH supply fits in u128.
@@ -73,7 +73,7 @@ pub(crate) async fn update_evm_balance_metric<P: alloy::providers::Provider>(
     }
 }
 
-pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::Environment>(
+pub(crate) async fn update_linera_balance_metric<E: Environment>(
     linera_client: &linera::LineraClient<E>,
 ) {
     match linera_client.chain_balance().await {
@@ -82,6 +82,7 @@ pub(crate) async fn update_linera_balance_metric<E: linera_core::environment::En
     }
 }
 
+/// Runs the bridge relay server until it errors or is shut down.
 #[expect(clippy::too_many_arguments)]
 pub async fn run(
     rpc_url: &str,
@@ -102,6 +103,7 @@ pub async fn run(
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path: Option<&Path>,
+    evm_poll_interval: Option<Duration>,
 ) -> Result<()> {
     tracing::info!("Starting bridge relay server...");
 
@@ -194,6 +196,24 @@ pub async fn run(
     chain_client.synchronize_from_validators().await?;
     tracing::info!(%chain_id, %chain_owner, "Bridge chain registered and synced");
 
+    // Drain any inbox messages that arrived while the relay was down. The serve
+    // loop only processes the inbox on live `NewIncomingBundle` notifications,
+    // so messages delivered during downtime (notably user burns, which arrive
+    // as `BridgeMessage::Burn` and only emit their `BurnEvent` once the bridge
+    // chain processes them) would otherwise sit unprocessed until the next
+    // incoming bundle. The periodic drain in `serve_loop` is the steady-state
+    // safety net; this handles the gap at startup.
+    match Box::pin(chain_client.process_inbox()).await {
+        Ok((certs, _)) if !certs.is_empty() => {
+            tracing::info!(
+                count = certs.len(),
+                "Drained inbox messages accumulated before startup"
+            );
+        }
+        Ok(_) => {}
+        Err(e) => tracing::warn!("Startup inbox drain failed: {e}"),
+    }
+
     Box::pin(serve_loop(
         chain_client,
         rpc_url,
@@ -208,6 +228,7 @@ pub async fn run(
         monitor_start_block,
         max_retries,
         sqlite_path,
+        evm_poll_interval,
         Path::new(db_path),
         admin_chain_id,
         admin_chain_height,
@@ -215,7 +236,7 @@ pub async fn run(
     .await
 }
 
-type RocksDbStorage = DbStorage<RocksDbDatabase, linera_storage::WallClock>;
+type RocksDbStorage = DbStorage<RocksDbDatabase, WallClock>;
 
 async fn create_rocksdb_storage(
     path: &Path,
@@ -249,7 +270,7 @@ async fn create_rocksdb_storage(
 }
 
 #[expect(clippy::too_many_arguments)]
-async fn serve_loop<E: linera_core::environment::Environment + 'static>(
+async fn serve_loop<E: Environment + 'static>(
     chain_client: ChainClient<E>,
     rpc_url: &str,
     evm_bridge_address: &str,
@@ -263,9 +284,10 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     monitor_start_block: u64,
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
+    evm_poll_interval: Option<Duration>,
     storage_dir: &Path,
     admin_chain_id: ChainId,
-    admin_chain_height: linera_base::data_types::BlockHeight,
+    admin_chain_height: BlockHeight,
 ) -> Result<()> {
     // ── Set up centralized clients ──
     let bridge_addr: Address = evm_bridge_address
@@ -279,6 +301,16 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .wallet(evm_wallet)
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
+
+    // Alloy derives the receipt poll interval from the RPC host: ~250ms for a
+    // loopback address, 7s otherwise. A local node reached via a non-loopback
+    // host (e.g. the Docker service name `anvil`) is treated as remote, so each
+    // settlement tx would wait ~7s despite sub-second block times. Override when
+    // configured so local settlement keeps pace with the node.
+    if let Some(interval) = evm_poll_interval {
+        provider.client().set_poll_interval(interval);
+        tracing::info!(?interval, "Overrode EVM provider poll interval");
+    }
 
     let light_client_addr: Option<Address> = evm_light_client_address
         .map(|s| s.parse())
@@ -449,6 +481,14 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         "Relay is ready"
     );
 
+    // Safety-net inbox drain. Notification delivery can be missed (relay down,
+    // stream hiccup), and a missed `NewIncomingBundle` would otherwise strand
+    // its messages until the next one. Reuse the monitor's scan interval as the
+    // drain cadence; an empty inbox makes `process_inbox` a cheap no-op.
+    let mut inbox_drain_interval = tokio::time::interval(monitor_scan_interval);
+    // Consume the immediate first tick — the startup drain above already ran.
+    inbox_drain_interval.tick().await;
+
     // ── Main loop: process chain operations + notifications ──
     tracing::info!("Listening for chain operations and notifications...");
     loop {
@@ -471,6 +511,22 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
             result = &mut admin_server_handle => {
                 anyhow::bail!("Admin HTTP server exited unexpectedly: {result:?}");
             }
+            _ = inbox_drain_interval.tick() => {
+                // Periodic safety net for a missed `NewIncomingBundle`: sync and
+                // drain the inbox so stranded messages (e.g. user burns) are
+                // eventually processed even without a fresh notification.
+                if let Err(e) = chain_client.synchronize_from_validators().await {
+                    tracing::warn!("Periodic sync before inbox drain failed: {e}");
+                } else {
+                    match chain_client.process_inbox().await {
+                        Ok((certs, _)) if !certs.is_empty() => {
+                            tracing::info!(count = certs.len(), "Periodic inbox drain processed messages");
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!("Periodic inbox drain failed: {e}"),
+                    }
+                }
+            }
             notification = notifications.next() => {
                 let notification = match notification {
                     Some(n) => n,
@@ -487,7 +543,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                 if notification.chain_id == admin_chain_id {
                     if let Reason::NewBlock { height, .. } = &notification.reason {
                         tracing::debug!(%height, "New admin chain block, reconciling committees");
-                        let scan_upto = linera_base::data_types::BlockHeight(height.0 + 1);
+                        let scan_upto = BlockHeight(height.0 + 1);
                         if let Err(e) = committee::catch_up(
                             chain_client.storage_client(),
                             &evm_client,
@@ -507,7 +563,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     continue;
                 }
 
-                tracing::info!("Received NewIncomingBundle, processing inbox...");
+                tracing::debug!("Received NewIncomingBundle, processing inbox...");
 
                 if let Err(e) = chain_client.synchronize_from_validators().await {
                     tracing::error!("Failed to synchronize: {e}");
@@ -527,7 +583,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                     continue;
                 }
 
-                tracing::info!(count = certs.len(), "Processed inbox certificates");
+                tracing::debug!(count = certs.len(), "Processed inbox certificates");
             }
 
             Some(op) = op_rx.recv() => {

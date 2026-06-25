@@ -48,6 +48,7 @@ use crate::{
 };
 
 impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
+    /// Creates an in-memory chain state view for the given chain, for use in tests.
     pub async fn new(chain_id: ChainId) -> Self {
         let exec_runtime_context =
             TestExecutionRuntimeContext::new(chain_id, ExecutionRuntimeConfig::default());

@@ -109,7 +109,7 @@ Verifies a certificate via `lightClient.verifyBlock(data)`, then enforces:
 - **No duplicate blocks**: rejects certificates already processed via the `verifiedBlocks` mapping.
 - **Chain ID match**: the block's `header.chain_id` must equal this contract's `chainId`.
 
-Blocks can be submitted in any order; sequential height enforcement is not required because BFT-finalized certificates guarantee canonicality. On success, calls the virtual `_onBlock(BridgeTypes.Block)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
+Blocks can be submitted in any order; sequential height enforcement is not required because BFT-finalized certificates guarantee canonicality. On success, calls the virtual `_onBlock(BridgeTypes.BlockProof)` hook. Subcontracts override this to extract and store application-specific data from the verified block.
 
 ### FungibleBridge (concrete Microchain)
 
@@ -123,7 +123,7 @@ Binds to a specific `LightClient`, chain, and ERC-20 token contract. `_fungibleA
 
 Registers the wrapped-fungible application ID. Can only be called once. Only events from this application are processed; all others are silently skipped.
 
-#### `_onBlock(BridgeTypes.Block)`
+#### `_onBlock(BridgeTypes.BlockProof)`
 
 Scans the block's `events` for entries on the `"burns"` stream matching `bridgeApplicationId`. For each match, the event value is deserialized as a `WrappedFungibleTypes.BurnEvent`. The `target` (Ethereum address) receives an ERC-20 `transfer` from the bridge's balance.
 

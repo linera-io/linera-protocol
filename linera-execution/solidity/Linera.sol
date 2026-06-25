@@ -284,6 +284,7 @@ library Linera {
         ChainId chain_id;
         StreamId stream_id;
         uint32 previous_index;
+        uint32 first_index;
         uint32 next_index;
     }
 

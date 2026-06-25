@@ -1,16 +1,11 @@
 ---
 source: task-processor/tests/format.rs
-expression: "TaskProcessorApplication::formats().unwrap()"
+expression: "TaskProcessorApplication::pruned_formats().unwrap()"
 ---
 REGISTRY:
   ChainId:
     NEWTYPESTRUCT:
       TYPENAME: CryptoHash
-  CryptoHash:
-    NEWTYPESTRUCT:
-      TUPLEARRAY:
-        CONTENT: U8
-        SIZE: 32
   Message:
     ENUM:
       0:

@@ -20,9 +20,9 @@ use linera_base::{
     time::{Duration, Instant},
 };
 use linera_execution::{
-    committee::Committee, system::EPOCH_STREAM_NAME, ExecutionRuntimeContext, ExecutionStateView,
-    Message, Operation, OutgoingMessage, PreparedCheckpoint, Query, QueryContext, QueryOutcome,
-    ResourceController, ResourceTracker, ServiceRuntimeEndpoint, TransactionTracker,
+    committee::Committee, ExecutionRuntimeContext, ExecutionStateView, Message, Operation,
+    PreparedCheckpoint, Query, QueryContext, QueryOutcome, ResourceController, ResourceTracker,
+    ServiceRuntimeEndpoint, TransactionTracker,
 };
 use linera_views::{
     context::Context,
@@ -213,6 +213,21 @@ impl std::ops::Deref for ChainIdSet {
     }
 }
 
+/// The event indices we track for a stream, maintained whenever a block is processed
+/// (executed or merely preprocessed).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Allocative)]
+#[cfg_attr(with_graphql, derive(async_graphql::SimpleObject))]
+pub struct StreamCounts {
+    /// The lowest event index still guaranteed to be readable (if it exists): the index of the
+    /// first event published to this stream since the most recent checkpoint. Earlier events may
+    /// have been pruned by a checkpoint and are not available to nodes that bootstrapped from it.
+    /// When there are no events yet, this equals [`next_index`](Self::next_index).
+    pub first_index: u32,
+    /// The next event index we expect to see, i.e. the lowest for which no event is known yet.
+    /// May be ahead of the last executed block on sparse chains.
+    pub next_index: u32,
+}
+
 /// A view accessing the state of a chain.
 #[cfg_attr(
     with_graphql,
@@ -252,9 +267,10 @@ where
     pub inboxes: ReentrantCollectionView<C, ChainId, InboxStateView<C>>,
     /// Mailboxes used to send messages, indexed by their target.
     pub outboxes: ReentrantCollectionView<C, ChainId, OutboxStateView<C>>,
-    /// The indices of next events we expect to see per stream (could be ahead of the last
-    /// executed block in sparse chains).
-    pub next_expected_events: MapView<C, StreamId, u32>,
+    /// The event indices we track per stream: the next expected index (could be ahead of the
+    /// last executed block in sparse chains) and the lowest readable index since the most
+    /// recent checkpoint.
+    pub next_expected_events: MapView<C, StreamId, StreamCounts>,
     /// Number of outgoing messages in flight for each block height.
     /// We use a `RegisterView` to prioritize speed for small maps.
     pub outbox_counters: RegisterView<C, NonCanonicalBTreeMap<BlockHeight, u32>>,
@@ -288,7 +304,7 @@ where
     /// Hashes of pre-checkpoint sender blocks the chain has seen a checkpoint cert
     /// vouch for via `outbox_block_hashes`, but whose actual cert bytes are not yet
     /// in storage. The worker errors a checkpoint push with
-    /// `MissingPreCheckpointBlocks` when this set is non-empty, then accepts each
+    /// `BlocksNotFound` when this set is non-empty, then accepts each
     /// referenced cert (regardless of its own — possibly revoked — epoch) and
     /// removes the entry. Once the set is empty, the checkpoint restoration can run
     /// end-to-end.
@@ -311,12 +327,6 @@ pub struct ChainTipState {
     pub block_hash: Option<CryptoHash>,
     /// Sequence number tracking blocks.
     pub next_block_height: BlockHeight,
-    /// Number of incoming message bundles.
-    pub num_incoming_bundles: u32,
-    /// Number of operations.
-    pub num_operations: u32,
-    /// Number of outgoing messages.
-    pub num_outgoing_messages: u32,
 }
 
 impl ChainTipState {
@@ -348,50 +358,6 @@ impl ChainTipState {
         );
         Ok(self.next_block_height > height)
     }
-
-    /// Checks if the measurement counters would be valid.
-    pub fn update_counters(
-        &mut self,
-        transactions: &[Transaction],
-        messages: &[Vec<OutgoingMessage>],
-    ) -> Result<(), ChainError> {
-        let mut num_incoming_bundles = 0u32;
-        let mut num_operations = 0u32;
-
-        for transaction in transactions {
-            match transaction {
-                Transaction::ReceiveMessages(_) => {
-                    num_incoming_bundles = num_incoming_bundles
-                        .checked_add(1)
-                        .ok_or(ArithmeticError::Overflow)?;
-                }
-                Transaction::ExecuteOperation(_) => {
-                    num_operations = num_operations
-                        .checked_add(1)
-                        .ok_or(ArithmeticError::Overflow)?;
-                }
-            }
-        }
-
-        self.num_incoming_bundles = self
-            .num_incoming_bundles
-            .checked_add(num_incoming_bundles)
-            .ok_or(ArithmeticError::Overflow)?;
-
-        self.num_operations = self
-            .num_operations
-            .checked_add(num_operations)
-            .ok_or(ArithmeticError::Overflow)?;
-
-        let num_outgoing_messages = u32::try_from(messages.iter().map(Vec::len).sum::<usize>())
-            .map_err(|_| ArithmeticError::Overflow)?;
-        self.num_outgoing_messages = self
-            .num_outgoing_messages
-            .checked_add(num_outgoing_messages)
-            .ok_or(ArithmeticError::Overflow)?;
-
-        Ok(())
-    }
 }
 
 impl<C> ChainStateView<C>
@@ -407,6 +373,7 @@ where
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
     ))]
+    /// Executes the given query against an application on this chain.
     pub async fn query_application(
         &mut self,
         local_time: Timestamp,
@@ -428,6 +395,7 @@ where
         chain_id = %self.chain_id(),
         application_id = %application_id
     ))]
+    /// Returns the description of the application with the given ID.
     pub async fn describe_application(
         &mut self,
         application_id: ApplicationId,
@@ -444,6 +412,8 @@ where
         target = %target,
         height = %height
     ))]
+    /// Marks all messages sent to `target` up to the given height as received, returning whether
+    /// the outbox changed.
     pub async fn mark_messages_as_received(
         &mut self,
         target: &ChainId,
@@ -648,6 +618,7 @@ where
         }
     }
 
+    /// Returns the current epoch and committee of this chain.
     pub async fn current_committee(&self) -> Result<(Epoch, Arc<Committee>), ChainError> {
         let chain_id = self.chain_id();
         self.execution_state
@@ -658,6 +629,7 @@ where
             .ok_or(ChainError::InactiveChain(chain_id))
     }
 
+    /// Returns the ownership configuration of this chain.
     pub async fn ownership(&self) -> Result<&ChainOwnership, ChainError> {
         Ok(self.execution_state.system.ownership.get().await?)
     }
@@ -868,7 +840,7 @@ where
             None
         };
 
-        chain.system.timestamp.set(block.timestamp);
+        chain.system.progress.get_mut().timestamp = block.timestamp;
 
         let mut resource_controller = ResourceController::new(
             Arc::new(committee_policy),
@@ -1245,7 +1217,7 @@ where
 
         self.initialize_if_needed(local_time).await?;
 
-        let chain_timestamp = *self.execution_state.system.timestamp.get();
+        let chain_timestamp = self.execution_state.system.progress.get().timestamp;
         ensure!(
             chain_timestamp <= block.timestamp,
             ChainError::InvalidBlockTimestamp {
@@ -1298,7 +1270,7 @@ where
             (Vec::new(), Vec::new(), Vec::new())
         };
 
-        Self::execute_block_inner(
+        let (outcome, tracker, never_reject_origins) = Self::execute_block_inner(
             &mut self.execution_state,
             &self.block_hashes,
             &mut block,
@@ -1311,10 +1283,9 @@ where
             inbox_cursors,
             outbox_block_hashes,
         )
-        .await
-        .map(|(outcome, tracker, never_reject_origins)| {
-            (block, outcome, tracker, never_reject_origins)
-        })
+        .await?;
+
+        Ok((block, outcome, tracker, never_reject_origins))
     }
 
     /// Snapshots `(origin, next_cursor_to_remove)` for each chain we've received a
@@ -1482,7 +1453,6 @@ where
         let tip = self.tip_state.get_mut();
         tip.block_hash = Some(hash);
         tip.next_block_height.try_add_assign_one()?;
-        tip.update_counters(&block.body.transactions, &block.body.messages)?;
         self.insert_block_hash(block.header.height, hash)?;
         if block.body.starts_with_checkpoint() {
             self.latest_checkpoint_height.set(Some(block.header.height));
@@ -1748,9 +1718,10 @@ where
         Ok(targets)
     }
 
-    /// Updates the event streams with events emitted by the block if they form a contiguous
-    /// sequence (might not be the case when preprocessing a block).
-    /// Returns the set of updated event streams.
+    /// Updates the per-stream event trackers from the events emitted by the block: advances
+    /// `next_index` over contiguous new events (which might not be contiguous when preprocessing
+    /// a block), and advances each stream's readable floor (`first_index`) when the block is the
+    /// first to emit to it since a checkpoint. Returns the set of updated event streams.
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.header.height
@@ -1759,45 +1730,56 @@ where
         &mut self,
         block: &Block,
     ) -> Result<BTreeSet<StreamId>, ChainError> {
-        let mut emitted_streams = BTreeMap::<StreamId, BTreeSet<u32>>::new();
+        // A stream's events within a single block are a contiguous run (each event takes the
+        // next sequential index), so the lowest and highest index it emits here are all we need.
+        let mut emitted_ranges = BTreeMap::<StreamId, (u32, u32)>::new();
         for event in block.body.events.iter().flatten() {
-            emitted_streams
+            emitted_ranges
                 .entry(event.stream_id.clone())
-                .or_default()
-                .insert(event.index);
+                .and_modify(|(lo, hi)| {
+                    *lo = (*lo).min(event.index);
+                    *hi = (*hi).max(event.index);
+                })
+                .or_insert((event.index, event.index));
         }
         let mut stream_ids = Vec::new();
-        let mut list_indices = Vec::new();
-        for (stream_id, indices) in emitted_streams {
+        let mut ranges = Vec::new();
+        for (stream_id, range) in emitted_ranges {
             stream_ids.push(stream_id);
-            list_indices.push(indices);
+            ranges.push(range);
         }
 
         let mut updated_streams = BTreeSet::new();
-        for ((stream_id, next_index), indices) in self
+        for ((stream_id, counts), (lo, hi)) in self
             .next_expected_events
             .multi_get_pairs(stream_ids)
             .await?
             .into_iter()
-            .zip(list_indices)
+            .zip(ranges)
         {
-            let initial_index = if stream_id == StreamId::system(EPOCH_STREAM_NAME) {
-                // we don't expect the epoch stream to contain event 0
-                1
-            } else {
-                0
-            };
-            let mut current_expected_index = next_index.unwrap_or(initial_index);
-            for index in indices {
-                if index == current_expected_index {
-                    updated_streams.insert(stream_id.clone());
-                    current_expected_index = index.saturating_add(1);
+            let mut counts = counts.unwrap_or_default();
+            let next = hi.saturating_add(1);
+            if block.body.previous_event_blocks.contains_key(&stream_id) {
+                // The stream already published since the most recent checkpoint, so we expect its
+                // events to continue contiguously. If they don't, we have a gap (missing events
+                // since the checkpoint) and leave the tracker untouched; the floor is preserved.
+                if lo != counts.next_index {
+                    continue;
                 }
+                counts.next_index = next;
+            } else if lo >= counts.first_index {
+                // First block to emit to this stream since the most recent checkpoint (which
+                // clears `previous_event_blocks`): `lo` is the new readable floor, everything
+                // earlier was pruned. The `>=` guard keeps a checkpoint seen out of order — an
+                // earlier one preprocessed after a later one — from lowering the floor.
+                counts.first_index = lo;
+                counts.next_index = counts.next_index.max(next);
+            } else {
+                // An earlier checkpoint era, already superseded by a later one we recorded.
+                continue;
             }
-            if current_expected_index != 0 {
-                self.next_expected_events
-                    .insert(&stream_id, current_expected_index)?;
-            }
+            updated_streams.insert(stream_id.clone());
+            self.next_expected_events.insert(&stream_id, counts)?;
         }
         Ok(updated_streams)
     }

@@ -14,6 +14,7 @@ use linera_base::{
     crypto::CryptoHash,
     data_types::{Blob, BlockHeight, NetworkDescription, TimeDelta, Timestamp},
     identifiers::{ApplicationId, BlobId, ChainId, EventId, IndexAndEvent, StreamId},
+    time::Duration,
 };
 use linera_cache::{Arc as CacheArc, ValueCache};
 use linera_chain::{
@@ -636,6 +637,10 @@ impl Clock for WallClock {
         if delta > TimeDelta::ZERO {
             linera_base::time::timer::sleep(delta.as_duration()).await
         }
+    }
+
+    async fn sleep_for(&self, duration: Duration) {
+        linera_base::time::timer::sleep(duration).await
     }
 }
 
@@ -1841,15 +1846,21 @@ where
 mod tests {
     use linera_base::{
         crypto::{CryptoHash, TestString},
-        data_types::{BlockHeight, Epoch, Round, Timestamp},
+        data_types::{Amount, Blob, BlobContent, BlockHeight, Event, OracleResponse, Round},
         identifiers::{
-            ApplicationId, BlobId, BlobType, ChainId, EventId, GenericApplicationId, StreamId,
-            StreamName,
+            Account, AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId,
+            GenericApplicationId, StreamId, StreamName,
         },
     };
     use linera_chain::{
-        block::{Block, BlockBody, BlockHeader, ConfirmedBlock},
+        block::{Block, ConfirmedBlock},
+        data_types::{OperationResult, Transaction},
+        test::BlockBuilder,
         types::ConfirmedBlockCertificate,
+    };
+    use linera_execution::{
+        system::{SystemMessage, SystemOperation},
+        Message, MessageKind, Operation, OutgoingMessage,
     };
     use linera_views::{
         memory::MemoryDatabase,
@@ -1863,6 +1874,49 @@ mod tests {
         },
         DbStorage, Storage, TestClock,
     };
+
+    /// Builds a block populated with one item of each body kind, with values derived from the
+    /// height so blocks are distinct. The header is computed from the body via `Block::new`, so
+    /// the block round-trips through storage (the block hash commits to that header).
+    fn populated_block(chain_id: ChainId, height: u64) -> Block {
+        let owner = AccountOwner::CHAIN;
+        let stream_id = StreamId {
+            application_id: GenericApplicationId::System,
+            stream_name: StreamName(b"test_stream".to_vec()),
+        };
+        BlockBuilder::new(chain_id, BlockHeight(height))
+            .with_state_hash(CryptoHash::new(&TestString::new(format!(
+                "state_hash_{height}"
+            ))))
+            .with_transaction(Transaction::ExecuteOperation(Operation::System(Box::new(
+                SystemOperation::Transfer {
+                    owner,
+                    recipient: Account::chain(chain_id),
+                    amount: Amount::ONE,
+                },
+            ))))
+            .with_messages(vec![OutgoingMessage {
+                destination: chain_id,
+                authenticated_owner: None,
+                grant: Amount::ZERO,
+                refund_grant_to: None,
+                kind: MessageKind::Simple,
+                message: Message::System(SystemMessage::Credit {
+                    target: owner,
+                    amount: Amount::ONE,
+                    source: owner,
+                }),
+            }])
+            .with_events(vec![Event {
+                stream_id,
+                index: 0,
+                value: b"event".to_vec(),
+            }])
+            .with_oracle_responses(vec![OracleResponse::Round(Some(0))])
+            .with_blobs(vec![Blob::new(BlobContent::new_data(b"blob".to_vec()))])
+            .with_operation_result(OperationResult(b"result".to_vec()))
+            .build()
+    }
 
     // Several functionalities of the storage rely on the way that the serialization
     // is done. Thus we need to check that the serialization works in the way that
@@ -1952,39 +2006,7 @@ mod tests {
         // Create a test certificate at a specific height
         let chain_id = ChainId(CryptoHash::test_hash("test_chain"));
         let height = BlockHeight(5);
-        let block = Block {
-            header: BlockHeader {
-                chain_id,
-                epoch: Epoch::ZERO,
-                height,
-                timestamp: Timestamp::from(0),
-                state_hash: CryptoHash::new(&TestString::new("state_hash")),
-                previous_block_hash: None,
-                authenticated_owner: None,
-                transactions_hash: CryptoHash::new(&TestString::new("transactions_hash")),
-                messages_hash: CryptoHash::new(&TestString::new("messages_hash")),
-                previous_message_blocks_hash: CryptoHash::new(&TestString::new(
-                    "prev_msg_blocks_hash",
-                )),
-                previous_event_blocks_hash: CryptoHash::new(&TestString::new(
-                    "prev_event_blocks_hash",
-                )),
-                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_responses_hash")),
-                events_hash: CryptoHash::new(&TestString::new("events_hash")),
-                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
-                operation_results_hash: CryptoHash::new(&TestString::new("operation_results_hash")),
-            },
-            body: BlockBody {
-                transactions: vec![],
-                messages: vec![],
-                previous_message_blocks: Default::default(),
-                previous_event_blocks: Default::default(),
-                oracle_responses: vec![],
-                events: vec![],
-                blobs: vec![],
-                operation_results: vec![],
-            },
-        };
+        let block = populated_block(chain_id, height.0);
         let confirmed_block = ConfirmedBlock::new(block);
         let certificate = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
 
@@ -2016,43 +2038,7 @@ mod tests {
         let mut expected_certs = vec![];
 
         for height in [1, 3, 5] {
-            let block = Block {
-                header: BlockHeader {
-                    chain_id,
-                    epoch: Epoch::ZERO,
-                    height: BlockHeight(height),
-                    timestamp: Timestamp::from(0),
-                    state_hash: CryptoHash::new(&TestString::new("state_hash_{height}")),
-                    previous_block_hash: None,
-                    authenticated_owner: None,
-                    transactions_hash: CryptoHash::new(&TestString::new("tx_hash_{height}")),
-                    messages_hash: CryptoHash::new(&TestString::new("msg_hash_{height}")),
-                    previous_message_blocks_hash: CryptoHash::new(&TestString::new(
-                        "pmb_hash_{height}",
-                    )),
-                    previous_event_blocks_hash: CryptoHash::new(&TestString::new(
-                        "peb_hash_{height}",
-                    )),
-                    oracle_responses_hash: CryptoHash::new(&TestString::new(
-                        "oracle_hash_{height}",
-                    )),
-                    events_hash: CryptoHash::new(&TestString::new("events_hash_{height}")),
-                    blobs_hash: CryptoHash::new(&TestString::new("blobs_hash_{height}")),
-                    operation_results_hash: CryptoHash::new(&TestString::new(
-                        "op_results_hash_{height}",
-                    )),
-                },
-                body: BlockBody {
-                    transactions: vec![],
-                    messages: vec![],
-                    previous_message_blocks: Default::default(),
-                    previous_event_blocks: Default::default(),
-                    oracle_responses: vec![],
-                    events: vec![],
-                    blobs: vec![],
-                    operation_results: vec![],
-                },
-            };
+            let block = populated_block(chain_id, height);
             let confirmed_block = ConfirmedBlock::new(block);
             let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
             expected_certs.push((height, cert.clone()));
@@ -2141,68 +2127,12 @@ mod tests {
 
         let mut batch = MultiPartitionBatch::new();
 
-        let block_a = Block {
-            header: BlockHeader {
-                chain_id: chain_a,
-                epoch: Epoch::ZERO,
-                height: BlockHeight(10),
-                timestamp: Timestamp::from(0),
-                state_hash: CryptoHash::new(&TestString::new("state_hash_a")),
-                previous_block_hash: None,
-                authenticated_owner: None,
-                transactions_hash: CryptoHash::new(&TestString::new("tx_hash_a")),
-                messages_hash: CryptoHash::new(&TestString::new("msg_hash_a")),
-                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash_a")),
-                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash_a")),
-                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash_a")),
-                events_hash: CryptoHash::new(&TestString::new("events_hash_a")),
-                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash_a")),
-                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash_a")),
-            },
-            body: BlockBody {
-                transactions: vec![],
-                messages: vec![],
-                previous_message_blocks: Default::default(),
-                previous_event_blocks: Default::default(),
-                oracle_responses: vec![],
-                events: vec![],
-                blobs: vec![],
-                operation_results: vec![],
-            },
-        };
+        let block_a = populated_block(chain_a, 10);
         let confirmed_block_a = ConfirmedBlock::new(block_a);
         let cert_a = ConfirmedBlockCertificate::new(confirmed_block_a, Round::Fast, vec![]);
         batch.add_certificate(&cert_a).unwrap();
 
-        let block_b = Block {
-            header: BlockHeader {
-                chain_id: chain_b,
-                epoch: Epoch::ZERO,
-                height: BlockHeight(10),
-                timestamp: Timestamp::from(0),
-                state_hash: CryptoHash::new(&TestString::new("state_hash_b")),
-                previous_block_hash: None,
-                authenticated_owner: None,
-                transactions_hash: CryptoHash::new(&TestString::new("tx_hash_b")),
-                messages_hash: CryptoHash::new(&TestString::new("msg_hash_b")),
-                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash_b")),
-                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash_b")),
-                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash_b")),
-                events_hash: CryptoHash::new(&TestString::new("events_hash_b")),
-                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash_b")),
-                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash_b")),
-            },
-            body: BlockBody {
-                transactions: vec![],
-                messages: vec![],
-                previous_message_blocks: Default::default(),
-                previous_event_blocks: Default::default(),
-                oracle_responses: vec![],
-                events: vec![],
-                blobs: vec![],
-                operation_results: vec![],
-            },
-        };
+        let block_b = populated_block(chain_b, 10);
         let confirmed_block_b = ConfirmedBlock::new(block_b);
         let cert_b = ConfirmedBlockCertificate::new(confirmed_block_b, Round::Fast, vec![]);
         batch.add_certificate(&cert_b).unwrap();
@@ -2239,35 +2169,7 @@ mod tests {
 
         // Write certificate
         let mut batch = MultiPartitionBatch::new();
-        let block = Block {
-            header: BlockHeader {
-                chain_id,
-                epoch: Epoch::ZERO,
-                height: BlockHeight(7),
-                timestamp: Timestamp::from(0),
-                state_hash: CryptoHash::new(&TestString::new("state_hash")),
-                previous_block_hash: None,
-                authenticated_owner: None,
-                transactions_hash: CryptoHash::new(&TestString::new("tx_hash")),
-                messages_hash: CryptoHash::new(&TestString::new("msg_hash")),
-                previous_message_blocks_hash: CryptoHash::new(&TestString::new("pmb_hash")),
-                previous_event_blocks_hash: CryptoHash::new(&TestString::new("peb_hash")),
-                oracle_responses_hash: CryptoHash::new(&TestString::new("oracle_hash")),
-                events_hash: CryptoHash::new(&TestString::new("events_hash")),
-                blobs_hash: CryptoHash::new(&TestString::new("blobs_hash")),
-                operation_results_hash: CryptoHash::new(&TestString::new("op_results_hash")),
-            },
-            body: BlockBody {
-                transactions: vec![],
-                messages: vec![],
-                previous_message_blocks: Default::default(),
-                previous_event_blocks: Default::default(),
-                oracle_responses: vec![],
-                events: vec![],
-                blobs: vec![],
-                operation_results: vec![],
-            },
-        };
+        let block = populated_block(chain_id, 7);
         let confirmed_block = ConfirmedBlock::new(block);
         let cert = ConfirmedBlockCertificate::new(confirmed_block, Round::Fast, vec![]);
         let hash = cert.hash();

@@ -338,20 +338,20 @@ impl ActiveChain {
             .map(|((chain_id, stream_id), subscriptions)| {
                 let worker = worker.clone();
                 async move {
-                    let next_index = Box::pin(worker.chain_state_view(chain_id))
+                    let counts = Box::pin(worker.chain_state_view(chain_id))
                         .await
                         .expect("Failed to query chain state view")
-                        .execution_state
-                        .system
-                        .stream_event_counts
+                        .next_expected_events
                         .get(&stream_id)
                         .await
-                        .expect("Failed to query chain's event counts");
-                    let Some(next_index) =
-                        next_index.filter(|next_index| *next_index > subscriptions.min_next_index)
+                        .expect("Failed to query chain's event indices");
+                    let Some(counts) =
+                        counts.filter(|counts| counts.next_index > subscriptions.min_next_index)
                     else {
                         return Vec::new();
                     };
+                    let first_index = counts.first_index;
+                    let next_index = counts.next_index;
                     subscriptions
                         .applications
                         .into_iter()
@@ -360,6 +360,7 @@ impl ActiveChain {
                             application_id,
                             chain_id,
                             stream_id: stream_id.clone(),
+                            first_index,
                             next_index,
                         })
                         .collect::<Vec<_>>()

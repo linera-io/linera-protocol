@@ -111,9 +111,12 @@ impl OutputType for RawJson {
     }
 }
 
+/// The set of chains tracked by the wallet.
 #[derive(SimpleObject, Serialize, Deserialize, Clone)]
 pub struct Chains {
+    /// The IDs of the tracked chains.
     pub list: Vec<ChainId>,
+    /// The default chain of the wallet, if one is set.
     pub default: Option<ChainId>,
 }
 
@@ -713,7 +716,7 @@ and no system operations."
         service: Bytecode,
         #[graphql(desc = "The virtual machine being used (either Wasm or Evm)")]
         vm_runtime: VmRuntime,
-        #[graphql(desc = "Optional JSON-encoded `Formats` description bytes")] formats: Option<
+        #[graphql(desc = "Optional BCS-encoded `Formats` description bytes")] formats: Option<
             Vec<u8>,
         >,
     ) -> Result<ModuleId, Error> {
@@ -918,7 +921,7 @@ where
         linera_version::VersionInfo::default()
     }
 
-    /// Returns the bytes of an application formats blob (JSON-encoded `Formats`)
+    /// Returns the bytes of an application formats blob (BCS-encoded `Formats`)
     /// stored in the local node, given the formats blob hash carried by a
     /// `ModuleId`. Returns `None` if the blob is not present locally.
     async fn application_formats(
@@ -1002,6 +1005,7 @@ impl<S: Storage> ChainStateExtendedView<S> {
     }
 }
 
+/// A summary of an application registered on a chain.
 #[derive(SimpleObject)]
 pub struct ApplicationOverview {
     id: ApplicationId,
@@ -1379,11 +1383,13 @@ where
         }
     }
 
+    /// Returns the socket address on which the metrics endpoint is served.
     #[cfg(with_metrics)]
     pub fn metrics_address(&self) -> SocketAddr {
         SocketAddr::from(([0, 0, 0, 0], self.metrics_port.get()))
     }
 
+    /// Builds the GraphQL schema served by the node service.
     pub fn schema(&self) -> NodeServiceSchema<C> {
         let query = QueryRoot {
             context: Arc::clone(&self.context),

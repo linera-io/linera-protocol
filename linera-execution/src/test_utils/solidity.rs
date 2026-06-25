@@ -105,6 +105,7 @@ fn get_bytecode_path(
     Ok(hex::decode(&object)?)
 }
 
+/// Compiles a Solidity contract and returns the bytecode of the named contract.
 pub fn compile_solidity_contract(
     source_code: &str,
     file_name: &str,
@@ -120,6 +121,8 @@ pub fn compile_solidity_contract(
     )
 }
 
+/// Compiles a Solidity contract with the given optimizer settings, returning the contract's
+/// bytecode.
 pub fn compile_solidity_contract_with_options(
     source_code: &str,
     file_name: &str,
@@ -161,10 +164,12 @@ pub fn compile_solidity_contract_with_options(
     get_bytecode_path(path, file_name, contract_name, optimizer_runs)
 }
 
+/// Compiles the given Solidity source code and returns the bytecode of the named contract.
 pub fn get_bytecode(source_code: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
     compile_solidity_contract(source_code, "test_code.sol", contract_name, &[])
 }
 
+/// Reads a Solidity file, detects its contract name, and returns the compiled bytecode.
 pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     let source_code = std::fs::read_to_string(path)?;
     let contract_name: &str = source_code
@@ -179,11 +184,13 @@ pub fn load_solidity_example(path: &str) -> anyhow::Result<Vec<u8>> {
     get_bytecode(&source_code, contract_name)
 }
 
+/// Reads a Solidity file and returns the compiled bytecode of the contract with the given name.
 pub fn load_solidity_example_by_name(path: &str, contract_name: &str) -> anyhow::Result<Vec<u8>> {
     let source_code = std::fs::read_to_string(path)?;
     get_bytecode(&source_code, contract_name)
 }
 
+/// Writes an EVM module to a temporary file, returning its path and the owning temporary directory.
 pub fn temporary_write_evm_module(module: &[u8]) -> anyhow::Result<(PathBuf, TempDir)> {
     let dir = tempfile::tempdir()?;
     let path = dir.path();
@@ -196,11 +203,13 @@ pub fn temporary_write_evm_module(module: &[u8]) -> anyhow::Result<(PathBuf, Tem
     Ok((evm_contract, dir))
 }
 
+/// Compiles a Solidity example and writes it to a temporary EVM module file, returning its path.
 pub fn get_evm_contract_path(path: &str) -> anyhow::Result<(PathBuf, TempDir)> {
     let module = load_solidity_example(path)?;
     temporary_write_evm_module(&module)
 }
 
+/// Converts a JSON array of byte values into a vector of bytes.
 pub fn value_to_vec_u8(value: &Value) -> Vec<u8> {
     let mut vec: Vec<u8> = Vec::new();
     for val in value.as_array().unwrap() {
@@ -211,6 +220,7 @@ pub fn value_to_vec_u8(value: &Value) -> Vec<u8> {
     vec
 }
 
+/// Reads a `u64` from the last 8 bytes of a 32-byte EVM word encoded as a JSON byte array.
 pub fn read_evm_u64_entry(value: &Value) -> u64 {
     let vec = value_to_vec_u8(value);
     let mut arr = [0_u8; 8];
@@ -218,11 +228,13 @@ pub fn read_evm_u64_entry(value: &Value) -> u64 {
     u64::from_be_bytes(arr)
 }
 
+/// Reads a `U256` from a 32-byte EVM word encoded as a JSON byte array.
 pub fn read_evm_u256_entry(value: &Value) -> U256 {
     let result = value_to_vec_u8(value);
     U256::from_be_slice(&result)
 }
 
+/// Reads an `Address` from the last 20 bytes of a 32-byte EVM word encoded as a JSON byte array.
 pub fn read_evm_address_entry(value: &Value) -> Address {
     let vec = value_to_vec_u8(value);
     let mut arr = [0_u8; 20];

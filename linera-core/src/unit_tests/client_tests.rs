@@ -2720,7 +2720,16 @@ where
     let signer = InMemorySigner::new(None);
     let clock = storage_builder.clock().clone();
     let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
-    let client = builder.add_root_chain(1, Amount::from_tokens(10)).await?;
+    // Give the chain a single multi-leader round at genesis so that its initial round
+    // (`MultiLeader(0)`) times out: without multi-leader jitter, earlier multi-leader rounds
+    // do not time out. The chain still has no blocks of its own, which is the case this
+    // regression test exercises: requesting a timeout certificate then only fetches the
+    // chain's genesis description blob.
+    let client = builder
+        .add_root_chain_with_ownership(1, Amount::from_tokens(10), |owner| {
+            ChainOwnership::multiple([(owner, 100)], 1, TimeoutConfig::default())
+        })
+        .await?;
 
     // Advance the clock past the (default 10s) round timeout.
     clock.set(Timestamp::from(20_000_000));
@@ -4319,6 +4328,10 @@ where
 /// chain is brought up to speed by the proposing client pushing only the latest
 /// checkpoint plus the pre-checkpoint sender blocks it certifies, not every
 /// pre-checkpoint block. The lagging validator's vote is needed for quorum.
+///
+/// The pre-checkpoint sender block is certified by a superseded epoch's committee
+/// (the chain migrates to a new epoch between the sender block and the checkpoint),
+/// exercising the trust-mark path's acceptance of cross-epoch certificates.
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
 #[test_log::test(tokio::test)]
@@ -4336,13 +4349,15 @@ where
     // sees any of the chain's certificates. We'll bring it back honest later.
     builder.set_fault_type([0], FaultType::NoChains);
 
+    let admin = builder.add_root_chain(0, Amount::from_tokens(1000)).await?;
     let producer = builder.add_root_chain(1, Amount::from_tokens(7)).await?;
     let recipient = builder.add_root_chain(2, Amount::ZERO).await?;
     let chain_id = producer.chain_id();
     let validator_0_key = builder.node(0).name();
 
-    // Height 0: cross-chain transfer — becomes a pre-checkpoint sender block that the
-    // checkpoint certifies via `outbox_block_hashes`. The recipient never consumes it.
+    // Height 0 (epoch 0): cross-chain transfer — becomes a pre-checkpoint sender block
+    // that the checkpoint certifies via `outbox_block_hashes`. The recipient never
+    // consumes it. Its certificate is signed by the epoch-0 committee.
     let transfer_0 = producer
         .transfer_to_account(
             AccountOwner::CHAIN,
@@ -4352,18 +4367,42 @@ where
         .await
         .unwrap_ok_committed();
     assert_eq!(transfer_0.block().header.height, BlockHeight::ZERO);
+    assert_eq!(transfer_0.block().header.epoch, Epoch::from(0));
 
-    // Height 1: same-chain burn — no outgoing messages, so it's not referenced by any
-    // subsequent `outbox_block_hashes`. The push path must skip it.
+    // Advance the epoch on the admin chain and migrate the producer to epoch 1. The
+    // migration block (height 1) consumes the admin chain's `ProcessNewEpoch`
+    // message; after it the producer's blocks are certified by the epoch-1
+    // committee. `transfer_0`'s epoch-0 certificate is now from a superseded epoch —
+    // exactly the scenario the trust-mark path must handle when validator 0 is later
+    // brought back online and pushed the checkpoint.
+    admin
+        .stage_new_committee(builder.initial_committee.clone())
+        .await
+        .unwrap();
+    producer.synchronize_from_validators().await?;
+    producer.process_inbox().await?;
+
+    // Revoke epoch 0 so the epoch-0 certificate on `transfer_0` is no longer
+    // verifiable through normal cert verification. This makes the trust-mark path
+    // the *only* way for validator 0 to accept `transfer_0` during the checkpoint
+    // push — a strictly stronger test. If revocation is ever enforced on the
+    // trust-mark path (or on certificate verification for pre-checkpoint blocks),
+    // this test will catch it.
+    admin.revoke_epochs(Epoch::ZERO).await.unwrap();
+
+    // Height 2 (epoch 1): same-chain burn — no outgoing messages, so it's not
+    // referenced by any subsequent `outbox_block_hashes`. The push path must skip it.
     let burn_1 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_1.block().header.height, BlockHeight::from(1));
+    assert_eq!(burn_1.block().header.height, BlockHeight::from(2));
+    assert_eq!(burn_1.block().header.epoch, Epoch::from(1));
 
-    // Height 2: the checkpoint that will be pushed to validator 0.
+    // Height 3 (epoch 1): the checkpoint that will be pushed to validator 0.
     let checkpoint = producer.checkpoint().await.unwrap().unwrap();
-    assert_eq!(checkpoint.block().header.height, BlockHeight::from(2));
+    assert_eq!(checkpoint.block().header.height, BlockHeight::from(3));
+    assert_eq!(checkpoint.block().header.epoch, Epoch::from(1));
     let outbox_block_hashes = match checkpoint
         .block()
         .body
@@ -4379,13 +4418,13 @@ where
     };
     assert_eq!(outbox_block_hashes, vec![transfer_0.hash()]);
 
-    // Height 3: post-checkpoint burn — must be pushed to validator 0 as part of the
-    // post-checkpoint gap fill.
+    // Height 4 (epoch 1): post-checkpoint burn — must be pushed to validator 0 as
+    // part of the post-checkpoint gap fill.
     let burn_3 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_3.block().header.height, BlockHeight::from(3));
+    assert_eq!(burn_3.block().header.height, BlockHeight::from(4));
 
     let validator_0_storage = builder
         .validator_storages
@@ -4408,12 +4447,12 @@ where
     builder.set_fault_type([0], FaultType::Honest);
     builder.set_fault_type([1], FaultType::Offline);
 
-    // Height 4: a new block whose quorum needs validator 0.
+    // Height 5 (epoch 1): a new block whose quorum needs validator 0.
     let burn_4 = producer
         .burn(AccountOwner::CHAIN, Amount::ONE)
         .await
         .unwrap_ok_committed();
-    assert_eq!(burn_4.block().header.height, BlockHeight::from(4));
+    assert_eq!(burn_4.block().header.height, BlockHeight::from(5));
 
     // Validator 0 received the checkpoint, the pre-checkpoint sender block it
     // certifies, the post-checkpoint burn, and the newly committed proposal.
@@ -4461,6 +4500,17 @@ where
         assert!(
             trusted.is_empty(),
             "validator 0's trust set should be empty after the flow, was {trusted:?}",
+        );
+        // The checkpoint restored the producer's epoch-1 execution state, which
+        // includes the epoch migration. Validator 0's chain is now at epoch 1 —
+        // proving the trust-mark path accepted the epoch-0 sender block
+        // (`transfer_0`) and the checkpoint restore brought the chain to the
+        // correct epoch.
+        let epoch = *chain_view.execution_state.system.epoch.get();
+        assert_eq!(
+            epoch,
+            Epoch::from(1),
+            "validator 0's chain should be at epoch 1 after the checkpoint restore",
         );
     }
 

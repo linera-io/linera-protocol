@@ -208,18 +208,30 @@ impl ValidatorQueryResults {
     }
 }
 
+/// The state shared by the client commands: the core client, wallet configuration, and
+/// network timeouts.
 pub struct ClientContext<Env: Environment> {
+    /// The core client used to interact with chains and validators.
     pub client: Arc<Client<Env>>,
+    /// The genesis configuration of the network.
     // TODO(#5083): this doesn't really need to be stored
     pub genesis_config: crate::config::GenesisConfig,
+    /// The timeout for sending requests to validators.
     pub send_timeout: Duration,
+    /// The timeout for receiving responses from validators.
     pub recv_timeout: Duration,
+    /// The delay before retrying a failed request to a validator.
     pub retry_delay: Duration,
+    /// The maximum number of times to retry a failed request to a validator.
     pub max_retries: u32,
+    /// The maximum backoff between retries of a failed request to a validator.
     pub max_backoff: Duration,
+    /// The set of background tasks listening for chain notifications.
     pub chain_listeners: JoinSet,
+    /// The default chain used when no chain is explicitly specified.
     // TODO(#5082): move this into the upstream UI layers (maybe just the CLI)
     pub default_chain: Option<ChainId>,
+    /// The metrics collector, if metrics collection is enabled.
     #[cfg(not(web))]
     pub client_metrics: Option<ClientMetrics>,
 }
@@ -274,6 +286,7 @@ where
     // not worth refactoring this because
     // https://github.com/linera-io/linera-protocol/issues/5082
     // https://github.com/linera-io/linera-protocol/issues/5083
+    /// Creates a new client context from the given storage, wallet, signer, and options.
     #[expect(clippy::too_many_arguments)]
     pub async fn new(
         storage: S,
@@ -385,6 +398,7 @@ impl<Env: Environment> ClientContext<Env> {
             .expect("default chain requested but none set")
     }
 
+    /// Returns the lowest non-admin chain ID in the wallet.
     pub async fn first_non_admin_chain(&self) -> Result<ChainId, Error> {
         let admin_chain_id = self.admin_chain_id();
         let chain_ids = self
@@ -400,6 +414,7 @@ impl<Env: Environment> ClientContext<Env> {
             .expect("No non-admin chain specified in wallet with no non-admin chain"))
     }
 
+    /// Creates a node provider configured with this context's network options.
     // TODO(#5084) this should match the `NodeProvider` from the `Environment`
     pub fn make_node_provider(&self) -> NodeProvider {
         NodeProvider::new(self.make_node_options())
@@ -415,11 +430,13 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Returns the client metrics, if metrics collection is enabled.
     #[cfg(not(web))]
     pub fn client_metrics(&self) -> Option<&ClientMetrics> {
         self.client_metrics.as_ref()
     }
 
+    /// Updates the wallet entry for the client's chain from its current chain info.
     pub async fn update_wallet_from_client<Env_: Environment>(
         &self,
         client: &ChainClient<Env_>,
@@ -499,6 +516,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(())
     }
 
+    /// Processes the chain's inbox, waiting for round timeouts, and updates the wallet.
     pub async fn process_inbox(
         &mut self,
         chain_client: &ChainClient<Env>,
@@ -535,6 +553,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Assigns the given chain to the owner, tracking it and recording it in the wallet.
     pub async fn assign_new_chain_to_key(
         &mut self,
         chain_id: ChainId,
@@ -619,6 +638,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Returns the ownership configuration of the given chain.
     pub async fn ownership(&mut self, chain_id: Option<ChainId>) -> Result<ChainOwnership, Error> {
         let chain_id = chain_id.unwrap_or_else(|| self.default_chain());
         let client = self.make_chain_client(chain_id).await?;
@@ -626,6 +646,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(info.manager.ownership)
     }
 
+    /// Changes the ownership configuration of the given chain.
     pub async fn change_ownership(
         &mut self,
         chain_id: Option<ChainId>,
@@ -667,6 +688,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(())
     }
 
+    /// Sets the preferred owner used to propose blocks on the given chain.
     pub async fn set_preferred_owner(
         &mut self,
         chain_id: Option<ChainId>,
@@ -682,6 +704,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(())
     }
 
+    /// Checks that the validator's version info is compatible with the local version.
     pub async fn check_compatible_version_info(
         &self,
         address: &str,
@@ -708,6 +731,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Checks that the validator's network description matches the local genesis config.
     pub async fn check_matching_network_description(
         &self,
         address: &str,
@@ -734,6 +758,7 @@ impl<Env: Environment> ClientContext<Env> {
         }
     }
 
+    /// Queries a validator for the given chain's info and verifies its signature.
     pub async fn check_validator_chain_info_response(
         &self,
         public_key: Option<&ValidatorPublicKey>,
@@ -824,6 +849,7 @@ impl<Env: Environment> ClientContext<Env> {
 
 #[cfg(feature = "fs")]
 impl<Env: Environment> ClientContext<Env> {
+    /// Publishes a module from its contract and service bytecode files.
     pub async fn publish_module(
         &mut self,
         chain_client: &ChainClient<Env>,
@@ -847,7 +873,7 @@ impl<Env: Environment> ClientContext<Env> {
         })?;
 
         let formats_bytes = match formats {
-            Some(path) => Some(load_formats_from_snap(&path)?),
+            Some(path) => Some(bcs::to_bytes(&load_formats_from_snap(&path)?)?),
             None => None,
         };
 
@@ -879,6 +905,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(module_id)
     }
 
+    /// Publishes a data blob loaded from the given file.
     pub async fn publish_data_blob(
         &mut self,
         chain_client: &ChainClient<Env>,
@@ -910,6 +937,7 @@ impl<Env: Environment> ClientContext<Env> {
     }
 
     // TODO(#2490): Consider removing or renaming this.
+    /// Verifies that a data blob with the given hash is available.
     pub async fn read_data_blob(
         &mut self,
         chain_client: &ChainClient<Env>,
@@ -932,11 +960,13 @@ impl<Env: Environment> ClientContext<Env> {
     }
 }
 
-/// Reads an insta SNAP file containing a YAML-encoded `Formats` value, parses
-/// it, and returns the canonical JSON encoding to publish as the application
-/// formats blob.
+/// Reads an insta SNAP file containing a YAML-encoded `Formats` value and parses
+/// it. The caller BCS-serializes the result to obtain the application formats
+/// blob payload: BCS matches the documented intent (the blob is "the BCS
+/// serialization of an application's `Formats`") and the encoding the explorer
+/// decodes with.
 #[cfg(feature = "fs")]
-fn load_formats_from_snap(path: &std::path::Path) -> Result<Vec<u8>, Error> {
+fn load_formats_from_snap(path: &std::path::Path) -> Result<linera_sdk::formats::Formats, Error> {
     let content = fs::read_to_string(path).map_err(|e| {
         std::io::Error::new(e.kind(), format!("failed to read SNAP file {path:?}: {e}"))
     })?;
@@ -946,19 +976,13 @@ fn load_formats_from_snap(path: &std::path::Path) -> Result<Vec<u8>, Error> {
             format!("SNAP file {path:?} is missing the `---` frontmatter delimiters"),
         )
     })?;
-    let formats: linera_sdk::formats::Formats = serde_yaml_08::from_str(body).map_err(|e| {
+    let formats = serde_yaml_08::from_str(body).map_err(|e| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("failed to parse SNAP body in {path:?} as Formats: {e}"),
         )
     })?;
-    serde_json::to_vec(&formats).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("failed to serialize Formats as JSON: {e}"),
-        )
-        .into()
-    })
+    Ok(formats)
 }
 
 #[cfg(feature = "fs")]
@@ -970,6 +994,7 @@ fn strip_snap_frontmatter(content: &str) -> Option<&str> {
 
 #[cfg(not(web))]
 impl<Env: Environment> ClientContext<Env> {
+    /// Prepares the chains and fungible tokens needed to run a benchmark.
     pub async fn prepare_for_benchmark(
         &mut self,
         num_chains: usize,
@@ -1042,6 +1067,7 @@ impl<Env: Environment> ClientContext<Env> {
         Ok(chain_clients)
     }
 
+    /// Closes the benchmark chains, or processes their inboxes and updates the wallet.
     pub async fn wrap_up_benchmark(
         &mut self,
         chain_clients: Vec<ChainClient<Env>>,
