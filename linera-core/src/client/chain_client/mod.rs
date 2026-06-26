@@ -20,8 +20,8 @@ use linera_base::{
     abi::Abi,
     crypto::{signer, CryptoHash, Signer, ValidatorPublicKey},
     data_types::{
-        Amount, ApplicationPermissions, ArithmeticError, Blob, BlobContent, BlockHeight,
-        ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
+        Amount, ApplicationDescription, ApplicationPermissions, ArithmeticError, Blob, BlobContent,
+        BlockHeight, ChainDescription, Epoch, MessagePolicy, Round, TimeDelta, Timestamp,
     },
     ensure,
     identifiers::{
@@ -242,7 +242,7 @@ impl<Env: Environment> Clone for ChainClient<Env> {
 }
 
 /// Error type for [`ChainClient`].
-#[derive(Debug, Error)]
+#[derive(Debug, Error, strum::IntoStaticStr)]
 #[allow(missing_docs)]
 pub enum Error {
     #[error("Local node operation failed: {0}")]
@@ -369,6 +369,20 @@ impl Error {
     /// Wraps a signer error into a [`Error::Signer`] variant.
     pub fn signer_failure(err: impl signer::Error + 'static) -> Self {
         Self::Signer(Box::new(err))
+    }
+
+    /// Returns the qualified error variant name for the `error_type` metric label,
+    /// delegating to the wrapped error's `error_type()` so the underlying worker or
+    /// chain error name is surfaced rather than just the outer variant.
+    pub fn error_type(&self) -> String {
+        match self {
+            Error::LocalNodeError(local_node_error) => local_node_error.error_type(),
+            Error::ChainError(chain_error) => chain_error.error_type(),
+            other => {
+                let variant: &'static str = other.into();
+                format!("ChainClientError::{variant}")
+            }
+        }
     }
 }
 
@@ -581,6 +595,18 @@ impl<Env: Environment> ChainClient<Env> {
     /// Returns the chain's description. Fetches it from the validators if necessary.
     pub async fn get_chain_description(&self) -> Result<ChainDescription, Error> {
         self.client.get_chain_description(self.chain_id).await
+    }
+
+    /// Returns the description of the given application. Fetches the description blob
+    /// from the validators if necessary; the application need not be registered on
+    /// this client's chain.
+    pub async fn get_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, Error> {
+        self.client
+            .get_application_description(application_id)
+            .await
     }
 
     /// Obtains up to `self.options.max_pending_message_bundles` pending message bundles for the
@@ -1394,6 +1420,23 @@ impl<Env: Environment> ChainClient<Env> {
         #[cfg(with_metrics)]
         let _latency = super::metrics::EXECUTE_BLOCK_LATENCY.measure_latency();
 
+        let result = self.try_execute_block(operations, blobs).await;
+        if let Err(error) = &result {
+            let error_type = error.error_type();
+            #[cfg(with_metrics)]
+            super::metrics::BLOCK_STAGING_FAILURES_TOTAL
+                .with_label_values(&[error_type.as_str()])
+                .inc();
+            info!(chain_id = %self.chain_id, %error_type, "Block staging failed");
+        }
+        result
+    }
+
+    async fn try_execute_block(
+        &self,
+        operations: Vec<Operation>,
+        blobs: Vec<Blob>,
+    ) -> Result<ClientOutcome<ConfirmedBlockCertificate>, Error> {
         let mutex = self.proposal_mutex();
         let lock_start = linera_base::time::Instant::now();
         let mut proposal_guard = mutex.lock_owned().await;
@@ -3499,5 +3542,26 @@ impl<Env: Environment> ChainClient<Env> {
         self.process_notification(remote_node, local_node, notification)
             .await
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Error, LocalNodeError};
+
+    #[test]
+    fn error_type_delegates_to_local_node_error() {
+        assert_eq!(
+            Error::LocalNodeError(LocalNodeError::InvalidChainInfoResponse).error_type(),
+            "LocalNodeError::InvalidChainInfoResponse"
+        );
+    }
+
+    #[test]
+    fn error_type_falls_back_to_chain_client_variant() {
+        assert_eq!(
+            Error::WalletSynchronizationError.error_type(),
+            "ChainClientError::WalletSynchronizationError"
+        );
     }
 }

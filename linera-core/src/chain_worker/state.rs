@@ -67,9 +67,9 @@ mod metrics {
 
     use linera_base::prometheus_util::{
         exponential_bucket_interval, exponential_bucket_latencies, register_histogram,
-        register_histogram_vec,
+        register_histogram_vec, register_int_counter, register_int_counter_vec,
     };
-    use prometheus::{Histogram, HistogramVec};
+    use prometheus::{Histogram, HistogramVec, IntCounter, IntCounterVec};
 
     pub static CREATE_NETWORK_ACTIONS_LATENCY: LazyLock<Histogram> = LazyLock::new(|| {
         register_histogram(
@@ -85,6 +85,21 @@ mod metrics {
             "Number of inboxes",
             &[],
             exponential_bucket_interval(1.0, 10_000.0),
+        )
+    });
+
+    pub static BLOCK_PROPOSALS_RECEIVED_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
+        register_int_counter(
+            "block_proposals_received_total",
+            "Total number of block proposals received by the worker",
+        )
+    });
+
+    pub static BLOCK_PROPOSALS_REJECTED_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "block_proposals_rejected_total",
+            "Total number of block proposals rejected by the worker, labelled by error type",
+            &["error_type"],
         )
     });
 }
@@ -2341,10 +2356,20 @@ where
         &mut self,
         proposal: BlockProposal,
     ) -> (Result<ChainInfoResponse, WorkerError>, NetworkActions) {
+        #[cfg(with_metrics)]
+        metrics::BLOCK_PROPOSALS_RECEIVED_TOTAL.inc();
+        let chain_id = proposal.content.block.chain_id;
+        let height = proposal.content.block.height;
         let old_round = self.chain.manager.current_round();
         match self.try_handle_block_proposal(proposal).await {
             Ok((response, actions)) => (Ok(response), actions),
             Err(err) => {
+                let error_type = err.error_type();
+                #[cfg(with_metrics)]
+                metrics::BLOCK_PROPOSALS_REJECTED_TOTAL
+                    .with_label_values(&[error_type.as_str()])
+                    .inc();
+                debug!(%chain_id, %height, %error_type, "Block proposal rejected");
                 // Even on error, the manager's `current_round` may have advanced
                 // (the `HasIncompatibleConfirmedVote` recovery path calls
                 // `update_signed_proposal`). Surface the resulting `NewRound`
@@ -2573,7 +2598,8 @@ where
             metrics::NUM_INBOXES
                 .with_label_values(&[])
                 .observe(nonempty_origins.len() as f64);
-            let action = if *chain.execution_state.system.closed.get() {
+            let is_closed = *chain.execution_state.system.closed.get();
+            let action = if is_closed {
                 MessageAction::Reject
             } else {
                 MessageAction::Accept
@@ -2590,6 +2616,13 @@ where
                         action,
                     });
                 }
+            }
+            if is_closed && !bundles.is_empty() {
+                info!(
+                    chain_id = %chain.chain_id(),
+                    count = bundles.len(),
+                    "Auto-rejecting all incoming message bundles because the chain is closed"
+                );
             }
             info.requested_pending_message_bundles = bundles;
         }

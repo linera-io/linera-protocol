@@ -19,11 +19,12 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round,
+        TimeDelta, Timestamp,
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -79,8 +80,10 @@ mod validator_trackers;
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
-    use prometheus::HistogramVec;
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
     pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
         LazyLock::new(|| {
@@ -125,6 +128,14 @@ mod metrics {
             "find_received_certificates latency",
             &[],
             exponential_bucket_latencies(10_000.0),
+        )
+    });
+
+    pub static BLOCK_STAGING_FAILURES_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "block_staging_failures_total",
+            "Total number of client block staging (execute_block) failures, labelled by error type",
+            &["error_type"],
         )
     });
 }
@@ -1209,6 +1220,43 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
     ) -> Result<ChainDescription, chain_client::Error> {
         let blob = self.get_chain_description_blob(chain_id).await?;
+        Ok(bcs::from_bytes(blob.bytes())?)
+    }
+
+    /// Ensures that the client has the `ApplicationDescription` blob for the given
+    /// application ID, fetching it from the current validators if it is not available
+    /// locally, and returns the blob. The application need not be registered on this
+    /// client's chain: the description is content-addressed and downloaded by blob ID.
+    pub async fn get_application_description_blob(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<Arc<Blob>, chain_client::Error> {
+        let blob_id = application_id.description_blob_id();
+        let blob = self.local_node.storage_client().read_blob(blob_id).await?;
+        if let Some(blob) = blob {
+            // We have the blob - return it.
+            return Ok(blob.into_std());
+        }
+        // Recover the blob from the current validators, according to the admin chain.
+        Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
+        let nodes = self.validator_nodes().await?;
+        Ok(self
+            .update_local_node_with_blobs_from(vec![blob_id], &nodes)
+            .await?
+            .pop()
+            .unwrap() // Returns exactly as many blobs as passed-in IDs.
+            .into_std())
+    }
+
+    /// Returns the `ApplicationDescription` of the given application, fetching its
+    /// description blob from the validators if it is not available locally.
+    pub async fn get_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, chain_client::Error> {
+        let blob = self
+            .get_application_description_blob(application_id)
+            .await?;
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
