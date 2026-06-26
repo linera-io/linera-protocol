@@ -208,8 +208,6 @@ impl BenchmarkCommand {
     }
 }
 
-#[cfg(feature = "kubernetes")]
-use crate::cli_wrappers::local_kubernetes_net::BuildMode;
 use crate::util::{
     DEFAULT_PAUSE_AFTER_GQL_MUTATIONS_SECS, DEFAULT_PAUSE_AFTER_LINERA_SERVICE_SECS,
 };
@@ -1253,33 +1251,6 @@ pub enum NetCommand {
         #[arg(long)]
         testing_prng_seed: Option<u64>,
 
-        /// Start the local network on a local Kubernetes deployment.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long)]
-        kubernetes: bool,
-
-        /// If this is not set, we'll build the binaries from within the Docker container
-        /// If it's set, but with no directory path arg, we'll look for the binaries based on `current_binary_parent`
-        /// If it's set, but with a directory path arg, we'll get the binaries from that path directory
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, num_args=0..=1)]
-        binaries: Option<Option<PathBuf>>,
-
-        /// Don't build docker image. This assumes that the image is already built.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, default_value = "false")]
-        no_build: bool,
-
-        /// The name of the docker image to use.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, default_value = "linera:latest")]
-        docker_image_name: String,
-
-        /// The build mode to use.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, default_value = "release")]
-        build_mode: BuildMode,
-
         /// Run with a specific path where the wallet and validator input files are.
         /// If none, then a temporary directory is created.
         #[arg(long)]
@@ -1322,22 +1293,6 @@ pub enum NetCommand {
         /// The port on which to run the block exporter.
         #[arg(long, default_value = "8081")]
         exporter_port: NonZeroU16,
-
-        /// The name of the indexer docker image to use.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, default_value = "linera-indexer:latest")]
-        indexer_image_name: String,
-
-        /// The name of the explorer docker image to use.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, default_value = "linera-explorer:latest")]
-        explorer_image_name: String,
-
-        /// Use dual store (rocksdb and scylladb) instead of just scylladb. This is exclusive for
-        /// kubernetes deployments.
-        #[cfg(feature = "kubernetes")]
-        #[arg(long, default_value = "false")]
-        dual_store: bool,
 
         /// Set the list of hosts that contracts and services can send HTTP requests to.
         #[arg(long, value_delimiter = ',')]
