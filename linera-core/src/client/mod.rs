@@ -2155,33 +2155,41 @@ impl<Env: Environment> Client<Env> {
                         continue;
                     }
                 }
-                // The local node reports *every* missing sender in a single
-                // `MissingCrossChainUpdates`, so we download them all in one pass and retry once;
-                // there is no need to iterate the discovery one sender at a time.
+                // The local node reports every missing sender bundle in a single
+                // `MissingCrossChainUpdates`, so we download them all in one pass and retry once.
                 if let LocalNodeError::WorkerError(WorkerError::ChainError(chain_err)) = &err {
                     if let ChainError::MissingCrossChainUpdates { chain_id, bundles } = &**chain_err
                     {
                         let chain_id = *chain_id;
-                        // Clone to end the borrow of `err` before we reassign it below.
-                        let bundles = bundles.clone();
-                        if !bundles.is_empty() {
-                            for (origin, height) in bundles {
-                                self.download_sender_block_with_sending_ancestors(
-                                    chain_id,
-                                    origin,
-                                    height,
-                                    remote_node,
-                                )
-                                .await?;
-                            }
-                            if let Err(new_err) =
-                                Box::pin(self.local_node.handle_block_proposal(proposal.clone()))
-                                    .await
-                            {
-                                err = new_err;
-                            } else {
-                                continue 'proposal_loop;
-                            }
+                        // `download_sender_block_with_sending_ancestors` walks each origin's
+                        // message-bearing blocks back from the given height, so the highest missing
+                        // height per origin subsumes the lower ones. Deduplicate to that (also
+                        // ending the borrow of `err` so we can reassign it below), then download the
+                        // independent origins concurrently, bounded by `max_joined_tasks`.
+                        let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                        for (origin, height) in bundles {
+                            let entry = origin_heights.entry(*origin).or_insert(*height);
+                            *entry = (*entry).max(*height);
+                        }
+                        stream::iter(origin_heights.into_iter().map(|(origin, height)| {
+                            self.download_sender_block_with_sending_ancestors(
+                                chain_id,
+                                origin,
+                                height,
+                                remote_node,
+                            )
+                        }))
+                        .buffer_unordered(self.options.max_joined_tasks)
+                        .collect::<Vec<_>>()
+                        .await
+                        .into_iter()
+                        .collect::<Result<(), _>>()?;
+                        if let Err(new_err) =
+                            Box::pin(self.local_node.handle_block_proposal(proposal.clone())).await
+                        {
+                            err = new_err;
+                        } else {
+                            continue 'proposal_loop;
                         }
                     }
                 }
