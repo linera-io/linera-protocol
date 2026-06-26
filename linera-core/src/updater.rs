@@ -527,9 +527,11 @@ where
                     .await?;
                 }
                 // The validator reports *every* missing cross-chain bundle in a single
-                // `MissingCrossChainUpdates`, so we send all of them at once and retry. If it
-                // still reports missing bundles after we synced the whole set, retrying would not
-                // make progress, so we surface the error instead of looping.
+                // `MissingCrossChainUpdates`, so we sync all of them at once and retry. Some
+                // received certificates may be missing for this validator (e.g. to create the
+                // chain or make the balance sufficient). If it still reports missing bundles
+                // after we synced the whole set, retrying would not make progress, so we surface
+                // the error instead of looping.
                 Err(NodeError::MissingCrossChainUpdates {
                     chain_id: dependencies_chain_id,
                     bundles,
@@ -550,17 +552,15 @@ where
                         bundles = bundles.len(),
                         "validator reported missing cross-chain updates; syncing them in one batch",
                     );
-                    // The reported bundles are exactly the sender blocks this proposal consumes
-                    // that the validator is missing (the recipient's inbox reports each absent
-                    // bundle). Send precisely those blocks, sparsely, rather than back-filling each
-                    // origin's whole prefix. Grouping into a `BTreeSet` per origin delivers them in
-                    // ascending height order, which the inbox requires.
-                    let mut origin_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> =
-                        BTreeMap::new();
+                    // Sync each reported origin chain up to the needed height, collapsing any
+                    // duplicate origins to the highest height.
+                    let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
                     for (origin, height) in bundles {
-                        origin_heights.entry(origin).or_default().insert(height);
+                        let target = height.try_add_one()?;
+                        let entry = origin_heights.entry(origin).or_insert(target);
+                        *entry = (*entry).max(target);
                     }
-                    self.send_chain_info_at_heights(
+                    self.send_chain_info_up_to_heights(
                         origin_heights,
                         CrossChainMessageDelivery::Blocking,
                     )
