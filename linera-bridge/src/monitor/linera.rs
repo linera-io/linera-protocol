@@ -375,7 +375,16 @@ async fn persist_cert_bytes(
     event_indices: &[u32],
     cert: &ConfirmedBlockCertificate,
 ) {
-    let cert_bytes = bcs::to_bytes(cert).expect("BCS-serialize cert");
+    // BCS serialization can fail (e.g. for overly nested or oversized values), so skip the height
+    // rather than panicking and aborting the whole monitor loop — matching how the caller handles a
+    // failed certificate read.
+    let cert_bytes = match bcs::to_bytes(cert) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            tracing::warn!(?height, ?error, "Failed to BCS-serialize certificate");
+            return;
+        }
+    };
     let state = monitor.read().await;
     let Some(db) = state.db() else { return };
     for event_index in event_indices {
