@@ -3,6 +3,11 @@
 
 //! CLI tool for Linera EVM bridge operations.
 
+// The binary's crate root needs its own limit (the library's does not apply here);
+// monomorphizing the deeply recursive client futures with the bridge's storage stack
+// otherwise overflows the default of 128.
+#![recursion_limit = "512"]
+
 use std::path::PathBuf;
 
 use anyhow::Result;
