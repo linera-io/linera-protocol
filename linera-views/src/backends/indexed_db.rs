@@ -24,7 +24,7 @@ use crate::{
 
 /// The initial configuration of the system
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IndexedDbStoreConfig {}
+pub struct IndexedDbStoreConfig;
 
 /// The prefixes being used in the system
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
@@ -320,7 +320,7 @@ mod testing {
     /// Creates a test IndexedDB store for working.
     #[cfg(with_testing)]
     pub async fn create_indexed_db_test_store() -> IndexedDbStore {
-        let config = IndexedDbStoreConfig {};
+        let config = IndexedDbStoreConfig;
         let namespace = generate_test_namespace();
         let database = IndexedDbDatabase::connect(&config, &namespace)
             .await
