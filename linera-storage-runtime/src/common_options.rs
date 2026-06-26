@@ -83,6 +83,38 @@ pub struct CommonStorageOptions {
     /// The replication factor for the keyspace
     #[arg(long, default_value = "1", global = true)]
     pub storage_replication_factor: u32,
+
+    /// Extra RocksDB tuning options, passed as repeated `KEY=VALUE` pairs, e.g.
+    /// `--rocksdb-opt write_buffer_size=268435456 --rocksdb-opt max_open_files=512`.
+    /// Can also be set via the `LINERA_ROCKSDB_OPTS` environment variable as a
+    /// comma-separated list. These only affect runtime behavior, never the
+    /// on-disk storage format; format-defining keys are rejected. Run with an
+    /// unknown key to see the list of supported options.
+    #[cfg(feature = "rocksdb")]
+    #[arg(
+        long = "rocksdb-opt",
+        value_name = "KEY=VALUE",
+        env = "LINERA_ROCKSDB_OPTS",
+        value_delimiter = ',',
+        global = true
+    )]
+    pub rocksdb_opts: Vec<String>,
+
+    /// Extra ScyllaDB driver options, passed as repeated `KEY=VALUE` pairs, e.g.
+    /// `--scylladb-opt consistency=local_quorum --scylladb-opt request_timeout_ms=5000`.
+    /// Can also be set via the `LINERA_SCYLLADB_OPTS` environment variable as a
+    /// comma-separated list. These only affect the driver/session behavior, never
+    /// the on-disk storage format or table schema. Run with an unknown key to see
+    /// the list of supported options.
+    #[cfg(feature = "scylladb")]
+    #[arg(
+        long = "scylladb-opt",
+        value_name = "KEY=VALUE",
+        env = "LINERA_SCYLLADB_OPTS",
+        value_delimiter = ',',
+        global = true
+    )]
+    pub scylladb_opts: Vec<String>,
 }
 
 impl CommonStorageOptions {

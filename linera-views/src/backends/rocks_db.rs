@@ -319,6 +319,239 @@ pub struct RocksDbStoreInternalConfig {
     pub spawn_mode: RocksDbSpawnMode,
     /// Preferred buffer size for async streams.
     pub max_stream_queries: usize,
+    /// Runtime-tunable RocksDB options that override the built-in defaults.
+    #[serde(default)]
+    pub tuning_options: RocksDbTuningOptions,
+}
+
+/// Runtime-tunable RocksDB options.
+///
+/// These options change only the runtime behavior of RocksDB — memory budgets,
+/// parallelism, compaction triggers, and how *new* data is written. They never
+/// change the on-disk storage format in a way that would make existing data
+/// unreadable, so they are safe to change between restarts of an existing
+/// database (options that affect newly written SSTables, such as compression or
+/// block size, simply take full effect as old files are rewritten by
+/// compaction). Every field defaults to `None`, meaning the built-in default is
+/// used.
+///
+/// Format-defining options (the prefix extractor, block format version,
+/// compaction style, whole-key filtering, …) are deliberately *not* exposed
+/// here, and are rejected by [`RocksDbTuningOptions::from_kv_pairs`].
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct RocksDbTuningOptions {
+    /// Size of a single memtable, in bytes (`write_buffer_size`).
+    pub write_buffer_size: Option<usize>,
+    /// Maximum number of memtables held in memory (`max_write_buffer_number`).
+    pub max_write_buffer_number: Option<i32>,
+    /// Number of L0 files that triggers a write slowdown.
+    pub level_zero_slowdown_writes_trigger: Option<i32>,
+    /// Number of L0 files that triggers a write stop.
+    pub level_zero_stop_writes_trigger: Option<i32>,
+    /// Number of L0 files that triggers compaction.
+    pub level_zero_file_num_compaction_trigger: Option<i32>,
+    /// Background thread parallelism (`increase_parallelism`).
+    pub parallelism: Option<i32>,
+    /// Maximum number of concurrent background jobs (flush + compaction).
+    pub max_background_jobs: Option<i32>,
+    /// Maximum number of threads used by a single compaction job.
+    pub max_subcompactions: Option<u32>,
+    /// Target SST file size at the base level, in bytes.
+    pub target_file_size_base: Option<u64>,
+    /// Block cache size, in bytes.
+    pub block_cache_size: Option<usize>,
+    /// Total memtable memory budget across column families, in bytes.
+    pub write_buffer_manager_size: Option<usize>,
+    /// Maximum number of open files (`-1` for unlimited).
+    pub max_open_files: Option<i32>,
+    /// Table block size, in bytes (affects newly written SSTables).
+    pub block_size: Option<usize>,
+    /// Bloom filter bits per key (affects newly written SSTables).
+    pub bloom_filter_bits_per_key: Option<f64>,
+    /// Compression algorithm for newly written blocks.
+    pub compression_type: Option<RocksDbCompressionType>,
+}
+
+/// The block compression algorithm used by RocksDB for newly written blocks.
+///
+/// Changing this is safe: RocksDB records the algorithm per block, so existing
+/// blocks remain readable regardless of the current setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum RocksDbCompressionType {
+    /// No compression.
+    None,
+    /// Snappy.
+    Snappy,
+    /// LZ4 (the default).
+    Lz4,
+    /// LZ4 high-compression.
+    Lz4hc,
+    /// Zstandard.
+    Zstd,
+    /// Zlib.
+    Zlib,
+    /// Bzip2.
+    Bz2,
+}
+
+impl RocksDbCompressionType {
+    fn to_rocksdb(self) -> rocksdb::DBCompressionType {
+        match self {
+            RocksDbCompressionType::None => rocksdb::DBCompressionType::None,
+            RocksDbCompressionType::Snappy => rocksdb::DBCompressionType::Snappy,
+            RocksDbCompressionType::Lz4 => rocksdb::DBCompressionType::Lz4,
+            RocksDbCompressionType::Lz4hc => rocksdb::DBCompressionType::Lz4hc,
+            RocksDbCompressionType::Zstd => rocksdb::DBCompressionType::Zstd,
+            RocksDbCompressionType::Zlib => rocksdb::DBCompressionType::Zlib,
+            RocksDbCompressionType::Bz2 => rocksdb::DBCompressionType::Bz2,
+        }
+    }
+
+    fn from_token(token: &str) -> Option<Self> {
+        Some(match token.to_ascii_lowercase().as_str() {
+            "none" => RocksDbCompressionType::None,
+            "snappy" => RocksDbCompressionType::Snappy,
+            "lz4" => RocksDbCompressionType::Lz4,
+            "lz4hc" => RocksDbCompressionType::Lz4hc,
+            "zstd" => RocksDbCompressionType::Zstd,
+            "zlib" => RocksDbCompressionType::Zlib,
+            "bz2" => RocksDbCompressionType::Bz2,
+            _ => return None,
+        })
+    }
+}
+
+impl RocksDbTuningOptions {
+    /// Option keys that affect the on-disk storage format. Passing any of these
+    /// to [`Self::from_kv_pairs`] is an error: they cannot be changed safely on
+    /// an existing database.
+    const FORMAT_SENSITIVE_KEYS: &'static [&'static str] = &[
+        "prefix_extractor",
+        "format_version",
+        "compaction_style",
+        "whole_key_filtering",
+        "memtable_prefix_bloom_ratio",
+        "comparator",
+        "merge_operator",
+        "max_key_size",
+        "max_value_size",
+    ];
+
+    /// The list of supported option keys, for use in error messages and docs.
+    pub fn supported_keys() -> &'static [&'static str] {
+        &[
+            "write_buffer_size",
+            "max_write_buffer_number",
+            "level_zero_slowdown_writes_trigger",
+            "level_zero_stop_writes_trigger",
+            "level_zero_file_num_compaction_trigger",
+            "parallelism",
+            "max_background_jobs",
+            "max_subcompactions",
+            "target_file_size_base",
+            "block_cache_size",
+            "write_buffer_manager_size",
+            "max_open_files",
+            "block_size",
+            "bloom_filter_bits_per_key",
+            "compression_type",
+        ]
+    }
+
+    /// Parses a list of `KEY=VALUE` strings into typed tuning options.
+    ///
+    /// Unknown keys, malformed entries, values that fail to parse, and
+    /// format-sensitive keys all produce a descriptive error.
+    pub fn from_kv_pairs<I, S>(pairs: I) -> Result<Self, RocksDbStoreInternalError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut options = Self::default();
+        for pair in pairs {
+            let pair = pair.as_ref();
+            let (key, value) = pair.split_once('=').ok_or_else(|| {
+                RocksDbStoreInternalError::InvalidTuningOption(format!(
+                    "expected `KEY=VALUE`, got `{pair}`"
+                ))
+            })?;
+            let key = key.trim();
+            let value = value.trim();
+            if Self::FORMAT_SENSITIVE_KEYS.contains(&key) {
+                return Err(RocksDbStoreInternalError::InvalidTuningOption(format!(
+                    "`{key}` affects the on-disk storage format and cannot be changed at runtime"
+                )));
+            }
+            match key {
+                "write_buffer_size" => {
+                    options.write_buffer_size = Some(parse_tuning_value(key, value)?)
+                }
+                "max_write_buffer_number" => {
+                    options.max_write_buffer_number = Some(parse_tuning_value(key, value)?)
+                }
+                "level_zero_slowdown_writes_trigger" => {
+                    options.level_zero_slowdown_writes_trigger =
+                        Some(parse_tuning_value(key, value)?)
+                }
+                "level_zero_stop_writes_trigger" => {
+                    options.level_zero_stop_writes_trigger = Some(parse_tuning_value(key, value)?)
+                }
+                "level_zero_file_num_compaction_trigger" => {
+                    options.level_zero_file_num_compaction_trigger =
+                        Some(parse_tuning_value(key, value)?)
+                }
+                "parallelism" => options.parallelism = Some(parse_tuning_value(key, value)?),
+                "max_background_jobs" => {
+                    options.max_background_jobs = Some(parse_tuning_value(key, value)?)
+                }
+                "max_subcompactions" => {
+                    options.max_subcompactions = Some(parse_tuning_value(key, value)?)
+                }
+                "target_file_size_base" => {
+                    options.target_file_size_base = Some(parse_tuning_value(key, value)?)
+                }
+                "block_cache_size" => {
+                    options.block_cache_size = Some(parse_tuning_value(key, value)?)
+                }
+                "write_buffer_manager_size" => {
+                    options.write_buffer_manager_size = Some(parse_tuning_value(key, value)?)
+                }
+                "max_open_files" => options.max_open_files = Some(parse_tuning_value(key, value)?),
+                "block_size" => options.block_size = Some(parse_tuning_value(key, value)?),
+                "bloom_filter_bits_per_key" => {
+                    options.bloom_filter_bits_per_key = Some(parse_tuning_value(key, value)?)
+                }
+                "compression_type" => {
+                    options.compression_type =
+                        Some(RocksDbCompressionType::from_token(value).ok_or_else(|| {
+                            RocksDbStoreInternalError::InvalidTuningOption(format!(
+                                "unknown compression type `{value}`; \
+                                 expected one of none, snappy, lz4, lz4hc, zstd, zlib, bz2"
+                            ))
+                        })?)
+                }
+                _ => {
+                    return Err(RocksDbStoreInternalError::InvalidTuningOption(format!(
+                        "unknown option `{key}`; supported options are: {}",
+                        Self::supported_keys().join(", ")
+                    )))
+                }
+            }
+        }
+        Ok(options)
+    }
+}
+
+fn parse_tuning_value<T>(key: &str, value: &str) -> Result<T, RocksDbStoreInternalError>
+where
+    T: std::str::FromStr,
+    T::Err: Display,
+{
+    value.parse::<T>().map_err(|err| {
+        RocksDbStoreInternalError::InvalidTuningOption(format!(
+            "invalid value `{value}` for option `{key}`: {err}"
+        ))
+    })
 }
 
 impl RocksDbDatabaseInternal {
@@ -369,28 +602,53 @@ impl RocksDbStoreInternal {
         );
         let num_cpus = get_available_cpus();
         let total_ram = get_available_memory(&sys);
+        // Runtime overrides for the defaults below. `None` keeps the default.
+        let tuning = &config.tuning_options;
 
         let mut options = rocksdb::Options::default();
         options.create_if_missing(true);
         options.create_missing_column_families(true);
 
         // Flush in-memory buffer to disk more often
-        options.set_write_buffer_size(WRITE_BUFFER_SIZE);
-        options.set_max_write_buffer_number(MAX_WRITE_BUFFER_NUMBER);
-        options.set_compression_type(rocksdb::DBCompressionType::Lz4);
-        options.set_level_zero_slowdown_writes_trigger(8);
-        options.set_level_zero_stop_writes_trigger(12);
-        options.set_level_zero_file_num_compaction_trigger(2);
+        let write_buffer_size = tuning.write_buffer_size.unwrap_or(WRITE_BUFFER_SIZE);
+        options.set_write_buffer_size(write_buffer_size);
+        options.set_max_write_buffer_number(
+            tuning
+                .max_write_buffer_number
+                .unwrap_or(MAX_WRITE_BUFFER_NUMBER),
+        );
+        options.set_compression_type(
+            tuning
+                .compression_type
+                .map_or(rocksdb::DBCompressionType::Lz4, |c| c.to_rocksdb()),
+        );
+        options.set_level_zero_slowdown_writes_trigger(
+            tuning.level_zero_slowdown_writes_trigger.unwrap_or(8),
+        );
+        options.set_level_zero_stop_writes_trigger(
+            tuning.level_zero_stop_writes_trigger.unwrap_or(12),
+        );
+        options.set_level_zero_file_num_compaction_trigger(
+            tuning.level_zero_file_num_compaction_trigger.unwrap_or(2),
+        );
         // We deliberately give RocksDB one background thread *per* CPU so that
         // flush + (N-1) compactions can hammer the NVMe at full bandwidth while
         // still leaving enough CPU time for the foreground application threads.
-        options.increase_parallelism(num_cpus);
-        options.set_max_background_jobs(num_cpus);
-        options.set_max_subcompactions(num_cpus as u32);
+        options.increase_parallelism(tuning.parallelism.unwrap_or(num_cpus));
+        options.set_max_background_jobs(tuning.max_background_jobs.unwrap_or(num_cpus));
+        options.set_max_subcompactions(tuning.max_subcompactions.unwrap_or(num_cpus as u32));
         options.set_level_compaction_dynamic_level_bytes(true);
 
         options.set_compaction_style(DBCompactionStyle::Level);
-        options.set_target_file_size_base(2 * WRITE_BUFFER_SIZE as u64);
+        options.set_target_file_size_base(
+            tuning
+                .target_file_size_base
+                .unwrap_or(2 * write_buffer_size as u64),
+        );
+        // By default RocksDB keeps every file open (`-1`); only override if asked.
+        if let Some(max_open_files) = tuning.max_open_files {
+            options.set_max_open_files(max_open_files);
+        }
 
         let mut block_options = BlockBasedOptions::default();
         block_options.set_pin_l0_filter_and_index_blocks_in_cache(true);
@@ -400,23 +658,25 @@ impl RocksDbStoreInternal {
         // - Small enough to leave memory for other system components
         // - Follows common practice for database caching in server environments
         // - Prevents excessive memory pressure that could lead to swapping or OOM conditions
+        let block_cache_size = tuning.block_cache_size.unwrap_or(total_ram / 4);
         block_options.set_block_cache(&Cache::new_hyper_clock_cache(
-            total_ram / 4,
+            block_cache_size,
             HYPER_CLOCK_CACHE_BLOCK_SIZE,
         ));
 
         // Cap total memtable memory to prevent unbounded growth when multiple column
         // families are used or many memtables accumulate before flushing.
+        let write_buffer_manager_size = tuning.write_buffer_manager_size.unwrap_or(total_ram / 4);
         let write_buffer_manager =
-            WriteBufferManager::new_write_buffer_manager(total_ram / 4, true);
+            WriteBufferManager::new_write_buffer_manager(write_buffer_manager_size, true);
         options.set_write_buffer_manager(&write_buffer_manager);
 
         // Configure bloom filters for prefix iteration optimization
-        block_options.set_bloom_filter(10.0, false);
+        block_options.set_bloom_filter(tuning.bloom_filter_bits_per_key.unwrap_or(10.0), false);
         block_options.set_whole_key_filtering(false);
 
         // 32KB blocks instead of default 4KB - reduces iterator seeks
-        block_options.set_block_size(32 * 1024);
+        block_options.set_block_size(tuning.block_size.unwrap_or(32 * 1024));
         // Use latest format for better compression and performance
         block_options.set_format_version(5);
 
@@ -692,6 +952,7 @@ impl TestKeyValueDatabase for RocksDbDatabaseInternal {
             path_with_guard,
             spawn_mode,
             max_stream_queries,
+            tuning_options: RocksDbTuningOptions::default(),
         })
     }
 }
@@ -726,6 +987,10 @@ pub enum RocksDbStoreInternalError {
     /// Namespace contains forbidden characters
     #[error("Namespace contains forbidden characters")]
     InvalidNamespace,
+
+    /// A RocksDB tuning option could not be parsed.
+    #[error("invalid RocksDB tuning option: {0}")]
+    InvalidTuningOption(String),
 
     /// Filesystem error
     #[error("Filesystem error: {0}")]
@@ -808,5 +1073,109 @@ impl crate::backends::DatabaseBackup for RocksDbDatabaseInternal {
         let mut engine = BackupEngine::open(&opts, &env)?;
         engine.create_new_backup_flush(&*self.executor.db, true)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+
+    use super::{
+        PathWithGuard, RocksDbCompressionType, RocksDbSpawnMode, RocksDbStoreInternal,
+        RocksDbStoreInternalConfig, RocksDbTuningOptions, ROOT_KEY_DOMAIN,
+    };
+
+    #[test]
+    fn parses_typed_values() {
+        let options = RocksDbTuningOptions::from_kv_pairs([
+            "write_buffer_size=268435456",
+            "max_open_files=512",
+            "bloom_filter_bits_per_key=12.5",
+            "compression_type=zstd",
+        ])
+        .unwrap();
+        assert_eq!(options.write_buffer_size, Some(268435456));
+        assert_eq!(options.max_open_files, Some(512));
+        assert_eq!(options.bloom_filter_bits_per_key, Some(12.5));
+        assert_eq!(options.compression_type, Some(RocksDbCompressionType::Zstd));
+        // Untouched options stay at their defaults.
+        assert_eq!(options.max_background_jobs, None);
+    }
+
+    #[test]
+    fn empty_input_is_all_defaults() {
+        let options = RocksDbTuningOptions::from_kv_pairs(Vec::<String>::new()).unwrap();
+        assert!(options.write_buffer_size.is_none());
+        assert!(options.compression_type.is_none());
+    }
+
+    #[test]
+    fn trims_whitespace_around_key_and_value() {
+        let options = RocksDbTuningOptions::from_kv_pairs([" write_buffer_size = 1024 "]).unwrap();
+        assert_eq!(options.write_buffer_size, Some(1024));
+    }
+
+    #[test]
+    fn rejects_unknown_key() {
+        let error = RocksDbTuningOptions::from_kv_pairs(["not_a_real_option=1"]).unwrap_err();
+        assert!(error.to_string().contains("unknown option"));
+    }
+
+    #[test]
+    fn rejects_format_sensitive_key() {
+        for key in [
+            "prefix_extractor=8",
+            "format_version=6",
+            "compaction_style=universal",
+        ] {
+            let error = RocksDbTuningOptions::from_kv_pairs([key]).unwrap_err();
+            assert!(
+                error.to_string().contains("storage format"),
+                "unexpected error for {key}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_pair() {
+        let error = RocksDbTuningOptions::from_kv_pairs(["write_buffer_size"]).unwrap_err();
+        assert!(error.to_string().contains("KEY=VALUE"));
+    }
+
+    #[test]
+    fn rejects_unparseable_value() {
+        let error =
+            RocksDbTuningOptions::from_kv_pairs(["write_buffer_size=not_a_number"]).unwrap_err();
+        assert!(error.to_string().contains("invalid value"));
+    }
+
+    #[test]
+    fn rejects_unknown_compression() {
+        let error = RocksDbTuningOptions::from_kv_pairs(["compression_type=gzip"]).unwrap_err();
+        assert!(error.to_string().contains("unknown compression type"));
+    }
+
+    /// Opens a real RocksDB store with overridden options to confirm they are
+    /// accepted by RocksDB (in particular the conditionally-set `max_open_files`
+    /// and the cache-size paths).
+    #[test]
+    fn build_applies_overrides() {
+        let dir = TempDir::new().unwrap();
+        let config = RocksDbStoreInternalConfig {
+            path_with_guard: PathWithGuard::new(dir.path().to_path_buf()),
+            spawn_mode: RocksDbSpawnMode::SpawnBlocking,
+            max_stream_queries: 10,
+            tuning_options: RocksDbTuningOptions::from_kv_pairs([
+                "write_buffer_size=1048576",
+                "max_open_files=128",
+                "compression_type=none",
+                "block_cache_size=8388608",
+                "write_buffer_manager_size=8388608",
+                "max_background_jobs=2",
+            ])
+            .unwrap(),
+        };
+        let store = RocksDbStoreInternal::build(&config, "test_ns", ROOT_KEY_DOMAIN.to_vec());
+        assert!(store.is_ok(), "build failed: {:?}", store.err());
     }
 }
