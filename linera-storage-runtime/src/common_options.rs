@@ -1,13 +1,10 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr as _;
-
 use linera_storage::{StorageCacheConfig, DEFAULT_CLEANUP_INTERVAL_SECS};
-use linera_views::{
-    lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig,
-    rocks_db::RocksDbStatisticsLevel,
-};
+use linera_views::lru_prefix_cache::StorageCacheConfig as ViewsStorageCacheConfig;
+#[cfg(feature = "rocksdb")]
+use {linera_views::rocks_db::RocksDbStatisticsLevel, std::str::FromStr as _};
 
 /// Command-line options shared by all storage backends, controlling concurrency
 /// limits and cache sizes.
@@ -91,6 +88,7 @@ pub struct CommonStorageOptions {
 
     /// Enable RocksDB's internal statistics collection and export them as Prometheus
     /// metrics. Off by default; enable it on nodes whose metrics are scraped.
+    #[cfg(feature = "rocksdb")]
     #[arg(long, global = true)]
     pub rocksdb_enable_statistics: bool,
 
@@ -98,6 +96,7 @@ pub struct CommonStorageOptions {
     /// levels collect more, and more expensive, data. One of: `disable-all`,
     /// `except-histogram-or-timers`, `except-timers`, `except-detailed-timers`,
     /// `except-time-for-mutex`, `all`.
+    #[cfg(feature = "rocksdb")]
     #[arg(
         long,
         default_value = "except-histogram-or-timers",
