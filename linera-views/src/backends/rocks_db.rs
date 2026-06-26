@@ -47,10 +47,6 @@ use crate::{
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
 static STORED_ROOT_KEYS_PREFIX: u8 = 1;
 
-/// The number of streams for the test
-#[cfg(with_testing)]
-const TEST_ROCKS_DB_MAX_STREAM_QUERIES: usize = 10;
-
 // The maximum size of values in RocksDB is 3 GiB
 // For offset reasons we decrease by 400
 const MAX_VALUE_SIZE: usize = 3 * 1024 * 1024 * 1024 - 400;
@@ -292,7 +288,6 @@ impl RocksDbStoreExecutor {
 pub struct RocksDbStoreInternal {
     executor: RocksDbStoreExecutor,
     path_with_guard: PathWithGuard,
-    max_stream_queries: usize,
     spawn_mode: RocksDbSpawnMode,
     root_key_written: Arc<AtomicBool>,
 }
@@ -302,7 +297,6 @@ pub struct RocksDbStoreInternal {
 pub struct RocksDbDatabaseInternal {
     executor: RocksDbStoreExecutor,
     path_with_guard: PathWithGuard,
-    max_stream_queries: usize,
     spawn_mode: RocksDbSpawnMode,
 }
 
@@ -386,8 +380,6 @@ pub struct RocksDbStoreInternalConfig {
     pub path_with_guard: PathWithGuard,
     /// The chosen spawn mode
     pub spawn_mode: RocksDbSpawnMode,
-    /// Preferred buffer size for async streams.
-    pub max_stream_queries: usize,
     /// Whether to enable RocksDB's internal statistics collection and export it as
     /// Prometheus metrics. Disabled by default to avoid overhead in clients that do not
     /// scrape metrics; enabled explicitly for the workers.
@@ -419,7 +411,6 @@ impl RocksDbDatabaseInternal {
         Ok(RocksDbDatabaseInternal {
             executor: temp_store.executor,
             path_with_guard: temp_store.path_with_guard,
-            max_stream_queries: temp_store.max_stream_queries,
             spawn_mode: temp_store.spawn_mode,
         })
     }
@@ -436,7 +427,6 @@ impl RocksDbStoreInternal {
         let mut path_with_guard = config.path_with_guard.clone();
         path_buf.push(namespace);
         path_with_guard.path_buf = path_buf.clone();
-        let max_stream_queries = config.max_stream_queries;
         let spawn_mode = config.spawn_mode;
         if !std::path::Path::exists(&path_buf) {
             std::fs::create_dir_all(path_buf.clone())?;
@@ -527,7 +517,6 @@ impl RocksDbStoreInternal {
         Ok(RocksDbStoreInternal {
             executor,
             path_with_guard,
-            max_stream_queries,
             spawn_mode,
             root_key_written: Arc::new(AtomicBool::new(false)),
         })
@@ -791,10 +780,6 @@ impl WithError for RocksDbStoreInternal {
 impl ReadableKeyValueStore for RocksDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
 
-    fn max_stream_queries(&self) -> usize {
-        self.max_stream_queries
-    }
-
     fn root_key(&self) -> Result<Vec<u8>, RocksDbStoreInternalError> {
         assert!(self.executor.start_key.starts_with(&ROOT_KEY_DOMAIN));
         let root_key = bcs::from_bytes(&self.executor.start_key[ROOT_KEY_DOMAIN.len()..])?;
@@ -926,7 +911,6 @@ impl KeyValueDatabase for RocksDbDatabaseInternal {
         Ok(RocksDbStoreInternal {
             executor,
             path_with_guard: self.path_with_guard.clone(),
-            max_stream_queries: self.max_stream_queries,
             spawn_mode: self.spawn_mode,
             root_key_written: Arc::new(AtomicBool::new(false)),
         })
@@ -1020,11 +1004,9 @@ impl TestKeyValueDatabase for RocksDbDatabaseInternal {
     async fn new_test_config() -> Result<RocksDbStoreInternalConfig, RocksDbStoreInternalError> {
         let path_with_guard = PathWithGuard::new_testing();
         let spawn_mode = RocksDbSpawnMode::get_spawn_mode_from_runtime();
-        let max_stream_queries = TEST_ROCKS_DB_MAX_STREAM_QUERIES;
         Ok(RocksDbStoreInternalConfig {
             path_with_guard,
             spawn_mode,
-            max_stream_queries,
             enable_statistics: false,
             statistics_level: RocksDbStatisticsLevel::default(),
         })

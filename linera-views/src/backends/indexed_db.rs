@@ -24,17 +24,11 @@ use crate::{
 
 /// The initial configuration of the system
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IndexedDbStoreConfig {
-    /// Preferred buffer size for async streams.
-    pub max_stream_queries: usize,
-}
+pub struct IndexedDbStoreConfig {}
 
 /// The prefixes being used in the system
 static ROOT_KEY_DOMAIN: [u8; 1] = [0];
 static STORED_ROOT_KEYS_PREFIX: [u8; 1] = [1];
-
-/// The number of streams for the test
-pub const TEST_INDEX_DB_MAX_STREAM_QUERIES: usize = 10;
 
 const OBJECT_STORE_NAME: &str = "linera";
 
@@ -44,8 +38,6 @@ const OBJECT_STORE_NAME: &str = "linera";
 pub struct IndexedDbDatabase {
     /// The database used for storing the data.
     pub database: Rc<indexed_db::Database<Infallible>>,
-    /// The maximum number of queries used for the stream.
-    pub max_stream_queries: usize,
     /// The database name used for storing the data.
     pub namespace: String,
 }
@@ -110,10 +102,6 @@ impl WithError for IndexedDbDatabase {
 
 impl ReadableKeyValueStore for IndexedDbStore {
     const MAX_KEY_SIZE: usize = usize::MAX;
-
-    fn max_stream_queries(&self) -> usize {
-        self.database.max_stream_queries
-    }
 
     fn root_key(&self) -> Result<Vec<u8>> {
         assert!(self.start_key.starts_with(&ROOT_KEY_DOMAIN));
@@ -262,7 +250,7 @@ impl KeyValueDatabase for IndexedDbDatabase {
         "indexed db".to_string()
     }
 
-    async fn connect(config: &Self::Config, namespace: &str) -> Result<Self> {
+    async fn connect(_config: &Self::Config, namespace: &str) -> Result<Self> {
         Ok(Self {
             database: indexed_db::Factory::<Infallible>::get()?
                 .open(
@@ -279,7 +267,6 @@ impl KeyValueDatabase for IndexedDbDatabase {
                 .await?
                 .into(),
             namespace: namespace.to_string(),
-            max_stream_queries: config.max_stream_queries,
         })
     }
 
@@ -330,22 +317,15 @@ mod testing {
     use super::*;
     use crate::random::generate_test_namespace;
 
-    /// Creates a test IndexedDB client for working.
-    pub async fn create_indexed_db_store_stream_queries(
-        max_stream_queries: usize,
-    ) -> IndexedDbStore {
-        let config = IndexedDbStoreConfig { max_stream_queries };
+    /// Creates a test IndexedDB store for working.
+    #[cfg(with_testing)]
+    pub async fn create_indexed_db_test_store() -> IndexedDbStore {
+        let config = IndexedDbStoreConfig {};
         let namespace = generate_test_namespace();
         let database = IndexedDbDatabase::connect(&config, &namespace)
             .await
             .unwrap();
         database.open_shared(&[]).unwrap()
-    }
-
-    /// Creates a test IndexedDB store for working.
-    #[cfg(with_testing)]
-    pub async fn create_indexed_db_test_store() -> IndexedDbStore {
-        create_indexed_db_store_stream_queries(TEST_INDEX_DB_MAX_STREAM_QUERIES).await
     }
 }
 

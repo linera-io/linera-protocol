@@ -722,7 +722,6 @@ impl ScyllaDbClient {
 pub struct ScyllaDbStoreInternal {
     store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
-    max_stream_queries: usize,
     root_key: Vec<u8>,
     /// Whether this store was opened with `open_exclusive`. When true, `write_batch`
     /// resolves in-batch prefix/insert collisions via per-statement `USING TIMESTAMP`;
@@ -740,7 +739,6 @@ pub struct ScyllaDbStoreInternal {
 pub struct ScyllaDbDatabaseInternal {
     store: Arc<ScyllaDbClient>,
     semaphore: Option<Arc<Semaphore>>,
-    max_stream_queries: usize,
 }
 
 impl WithError for ScyllaDbDatabaseInternal {
@@ -832,10 +830,6 @@ impl WithError for ScyllaDbStoreInternal {
 
 impl ReadableKeyValueStore for ScyllaDbStoreInternal {
     const MAX_KEY_SIZE: usize = MAX_KEY_SIZE;
-
-    fn max_stream_queries(&self) -> usize {
-        self.max_stream_queries
-    }
 
     fn root_key(&self) -> Result<Vec<u8>, ScyllaDbStoreInternalError> {
         Ok(self.root_key[1..].to_vec())
@@ -1033,8 +1027,6 @@ pub struct ScyllaDbStoreInternalConfig {
     pub uri: String,
     /// Maximum number of concurrent database queries allowed for this client.
     pub max_concurrent_queries: Option<usize>,
-    /// Preferred buffer size for async streams.
-    pub max_stream_queries: usize,
     /// The replication factor.
     pub replication_factor: u32,
 }
@@ -1058,23 +1050,16 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
         let semaphore = config
             .max_concurrent_queries
             .map(|n| Arc::new(Semaphore::new(n)));
-        let max_stream_queries = config.max_stream_queries;
-        Ok(Self {
-            store,
-            semaphore,
-            max_stream_queries,
-        })
+        Ok(Self { store, semaphore })
     }
 
     fn open_shared(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
         let root_key = get_big_root_key(root_key);
         Ok(ScyllaDbStoreInternal {
             store,
             semaphore,
-            max_stream_queries,
             root_key,
             is_exclusive: false,
             ts_floor: Arc::new(AtomicI64::new(0)),
@@ -1084,12 +1069,10 @@ impl KeyValueDatabase for ScyllaDbDatabaseInternal {
     fn open_exclusive(&self, root_key: &[u8]) -> Result<Self::Store, ScyllaDbStoreInternalError> {
         let store = self.store.clone();
         let semaphore = self.semaphore.clone();
-        let max_stream_queries = self.max_stream_queries;
         let root_key = get_big_root_key(root_key);
         Ok(ScyllaDbStoreInternal {
             store,
             semaphore,
-            max_stream_queries,
             root_key,
             is_exclusive: true,
             ts_floor: Arc::new(AtomicI64::new(0)),
@@ -1313,7 +1296,6 @@ impl TestKeyValueDatabase for JournalingKeyValueDatabase<ScyllaDbDatabaseInterna
         Ok(ScyllaDbStoreInternalConfig {
             uri,
             max_concurrent_queries: Some(10),
-            max_stream_queries: 10,
             replication_factor: 1,
         })
     }

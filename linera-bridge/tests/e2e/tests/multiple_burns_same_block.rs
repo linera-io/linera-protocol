@@ -53,7 +53,6 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
     let relay_genesis_config = genesis_config.clone();
 
     let store_config = MemoryStoreConfig {
-        max_stream_queries: 10,
         kill_on_drop: true,
     };
     let mut storage = DbStorage::<MemoryDatabase, _>::maybe_create_and_connect(

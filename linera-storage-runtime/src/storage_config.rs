@@ -307,7 +307,6 @@ impl StorageConfig {
         match &self.inner_storage_config {
             InnerStorageConfig::Memory { genesis_path } => {
                 let config = linera_views::memory::MemoryStoreConfig {
-                    max_stream_queries: options.storage_max_stream_queries,
                     kill_on_drop: false,
                 };
                 let genesis_path = genesis_path.clone();
@@ -323,7 +322,6 @@ impl StorageConfig {
                     linera_storage_service::common::StorageServiceStoreInternalConfig {
                         endpoint: endpoint.clone(),
                         max_concurrent_queries: options.storage_max_concurrent_queries,
-                        max_stream_queries: options.storage_max_stream_queries,
                     };
                 let config = linera_storage_service::common::StorageServiceStoreConfig {
                     inner_config,
@@ -337,7 +335,6 @@ impl StorageConfig {
                 let inner_config = linera_views::rocks_db::RocksDbStoreInternalConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard,
-                    max_stream_queries: options.storage_max_stream_queries,
                     enable_statistics: options.rocksdb_enable_statistics,
                     statistics_level: options.rocksdb_statistics_level,
                 };
@@ -351,7 +348,6 @@ impl StorageConfig {
             InnerStorageConfig::ScyllaDb { uri } => {
                 let inner_config = linera_views::scylla_db::ScyllaDbStoreInternalConfig {
                     uri: uri.clone(),
-                    max_stream_queries: options.storage_max_stream_queries,
                     max_concurrent_queries: options.storage_max_concurrent_queries,
                     replication_factor: options.storage_replication_factor,
                 };
@@ -370,7 +366,6 @@ impl StorageConfig {
                 let inner_config = linera_views::rocks_db::RocksDbStoreInternalConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard: path_with_guard.clone(),
-                    max_stream_queries: options.storage_max_stream_queries,
                     enable_statistics: options.rocksdb_enable_statistics,
                     statistics_level: options.rocksdb_statistics_level,
                 };
@@ -381,7 +376,6 @@ impl StorageConfig {
 
                 let inner_config = linera_views::scylla_db::ScyllaDbStoreInternalConfig {
                     uri: uri.clone(),
-                    max_stream_queries: options.storage_max_stream_queries,
                     max_concurrent_queries: options.storage_max_concurrent_queries,
                     replication_factor: options.storage_replication_factor,
                 };
