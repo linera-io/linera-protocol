@@ -1086,13 +1086,6 @@ where
     /// heights, not the locally-held prefix leading up to them. Use it only when the required
     /// blocks are fully self-describing to the validator — e.g. bringing over the specific blocks
     /// that carry a set of blobs.
-    ///
-    /// Do **not** use it to catch a validator up on missing cross-chain message bundles. A block
-    /// that sits above a gap is only preprocessed, and its bundle is scheduled only once its
-    /// `previous_message_block` has been executed on the validator; sending just the reported
-    /// height omits that ancestor and the bundle never gets delivered. Use
-    /// [`Self::send_chain_info_up_to_heights`] there, which pushes the whole locally-held
-    /// message-bearing prefix.
     async fn send_chain_info_at_heights(
         &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
@@ -1129,11 +1122,6 @@ where
 
     /// Brings a validator up to each given `(chain, height)` by pushing the locally-held prefix
     /// of that chain (via [`Self::send_chain_information`]), for all chains concurrently.
-    ///
-    /// This is the correct primitive for catching a validator up on missing cross-chain bundles:
-    /// it pushes every message-bearing block we hold up to the target, so the validator executes
-    /// the ancestors it needs and preprocesses gap blocks. See [`Self::send_chain_info_at_heights`]
-    /// for why sending only the exact reported heights is not enough.
     async fn send_chain_info_up_to_heights(
         &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
