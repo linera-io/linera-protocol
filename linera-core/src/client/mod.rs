@@ -355,6 +355,16 @@ pub struct Client<Env: Environment> {
     options: chain_client::Options,
 }
 
+/// Boxed future returned by `receive_sender_certificate`. It is `Send` off the `web`
+/// target (where futures must be `Send`) and `?Send` on `web` (single-threaded, where
+/// the validator node is not `Sync`).
+#[cfg(not(web))]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + Send + 'a>>;
+#[cfg(web)]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + 'a>>;
+
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
@@ -1458,68 +1468,87 @@ impl<Env: Environment> Client<Env> {
     /// chains we follow get executed, untracked or events-only chains are only
     /// preprocessed.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_sender_certificate(
+    // Returns a boxed future rather than being an `async fn`: this function recurses
+    // (admin-chain sync -> sender-certificate processing -> here), and boxing it at this
+    // boundary lets the concurrent admin-chain self-heal below satisfy its future bound
+    // despite the recursion. The future is `Send` off `web` (see the type alias).
+    fn receive_sender_certificate(
         &self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
-    ) -> Result<(), chain_client::Error> {
-        // Verify the certificate before doing any expensive networking.
-        if let ReceiveCertificateMode::NeedsCheck = mode {
-            let mut check_result = self.check_certificate(&certificate).await?;
-            if matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                // The certificate is from an epoch our local view of the admin chain
-                // hasn't caught up to yet. Catch up and check again instead of failing.
-                // Prefer the nodes that gave us the certificate: they evidently know
-                // the newer epoch even if our own committee view is stale or its
-                // members are unreachable. A sync only counts if it actually made the
-                // epoch known; otherwise fall back to the known committee.
-                let admin_chain_id = self.admin_chain_id;
-                let epoch = certificate.block().header.epoch;
-                info!(
-                    %epoch,
-                    "certificate is from an unknown epoch; synchronizing the admin chain"
-                );
-                for node in nodes.iter().flatten() {
-                    match Box::pin(self.synchronize_chain_state_from(node, admin_chain_id)).await {
-                        Ok(()) => {
-                            check_result = self.check_certificate(&certificate).await?;
-                            if !matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                                break;
-                            }
-                        }
-                        Err(error) => debug!(
-                            %error,
-                            validator = %node.public_key,
-                            "failed to synchronize the admin chain from validator",
-                        ),
+    ) -> ReceiveSenderCertificateFuture<'_> {
+        Box::pin(async move {
+            // Verify the certificate before doing any expensive networking.
+            if let ReceiveCertificateMode::NeedsCheck = mode {
+                let mut check_result = self.check_certificate(&certificate).await?;
+                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                    // The certificate is from an epoch our local view of the admin chain
+                    // hasn't caught up to yet. Catch up and check again instead of failing.
+                    // Prefer the nodes that gave us the certificate: they evidently know
+                    // the newer epoch even if our own committee view is stale or its
+                    // members are unreachable. Race them concurrently rather than blocking
+                    // on a slow one, then fall back to the known committee. A sync only
+                    // counts if it actually made the epoch known.
+                    let admin_chain_id = self.admin_chain_id;
+                    let epoch = certificate.block().header.epoch;
+                    info!(
+                        %epoch,
+                        "certificate is from an unknown epoch; synchronizing the admin chain"
+                    );
+                    let synced_from_serving_node = if let Some(nodes) = &nodes {
+                        let certificate = &certificate;
+                        communicate_concurrently(
+                            nodes,
+                            |node| {
+                                Box::pin(async move {
+                                    self.synchronize_chain_state_from(&node, admin_chain_id)
+                                        .await?;
+                                    match self.check_certificate(certificate).await? {
+                                        CheckCertificateResult::FutureEpoch => {
+                                            Err(chain_client::Error::CommitteeSynchronizationError)
+                                        }
+                                        _ => Ok(()),
+                                    }
+                                })
+                            },
+                            self.options.blob_download_hedge_delay,
+                            self.storage_client().clock(),
+                        )
+                        .await
+                        .is_ok()
+                    } else {
+                        false
+                    };
+                    if synced_from_serving_node {
+                        check_result = self.check_certificate(&certificate).await?;
+                    }
+                    if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                        Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
+                        check_result = self.check_certificate(&certificate).await?;
                     }
                 }
-                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                    Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
-                    check_result = self.check_certificate(&certificate).await?;
-                }
+                check_result.into_result()?;
             }
-            check_result.into_result()?;
-        }
-        // Recover history from the network.
-        let nodes = if let Some(nodes) = nodes {
-            nodes
-        } else {
-            self.validator_nodes().await?
-        };
-        let processing_mode = if self
-            .chain_mode(certificate.value().chain_id())
-            .is_some_and(|m| m.should_sync_chain_state())
-        {
-            ProcessConfirmedBlockMode::Auto
-        } else {
-            ProcessConfirmedBlockMode::Preprocess
-        };
-        self.handle_certificate_with_retry(&certificate, &nodes, processing_mode)
-            .await?;
+            // Recover history from the network.
+            let nodes = if let Some(nodes) = nodes {
+                nodes
+            } else {
+                self.validator_nodes().await?
+            };
+            let processing_mode = if self
+                .chain_mode(certificate.value().chain_id())
+                .is_some_and(|m| m.should_sync_chain_state())
+            {
+                ProcessConfirmedBlockMode::Auto
+            } else {
+                ProcessConfirmedBlockMode::Preprocess
+            };
+            self.handle_certificate_with_retry(&certificate, &nodes, processing_mode)
+                .await?;
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Downloads and processes certificates for sender chain blocks.
