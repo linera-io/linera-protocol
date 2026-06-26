@@ -301,6 +301,10 @@ impl StorageConfig {
     /// The addition of the common config to get a full configuration
     pub fn add_common_storage_options(
         &self,
+        #[cfg_attr(
+            not(any(feature = "storage-service", feature = "rocksdb", feature = "scylladb")),
+            allow(unused_variables)
+        )]
         options: &CommonStorageOptions,
     ) -> Result<StoreConfig, anyhow::Error> {
         let namespace = self.namespace.clone();
