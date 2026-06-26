@@ -581,17 +581,15 @@ where
                         bundles = bundles.len(),
                         "validator reported missing cross-chain updates; syncing them in one batch",
                     );
-                    // The reported bundles are exactly the sender blocks this proposal consumes
-                    // that the validator is missing (the recipient's inbox reports each absent
-                    // bundle). Send precisely those blocks, sparsely, rather than back-filling each
-                    // origin's whole prefix. Grouping into a `BTreeSet` per origin delivers them in
-                    // ascending height order, which the inbox requires.
-                    let mut origin_heights: BTreeMap<ChainId, BTreeSet<BlockHeight>> =
-                        BTreeMap::new();
+                    // Sync each reported origin chain up to the needed height, collapsing any
+                    // duplicate origins to the highest height.
+                    let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
                     for (origin, height) in bundles {
-                        origin_heights.entry(origin).or_default().insert(height);
+                        let target = height.try_add_one()?;
+                        let entry = origin_heights.entry(origin).or_insert(target);
+                        *entry = (*entry).max(target);
                     }
-                    self.send_chain_info_at_heights(
+                    self.send_chain_info_up_to_heights(
                         origin_heights,
                         CrossChainMessageDelivery::Blocking,
                     )
@@ -609,15 +607,17 @@ where
                     tracing::debug!(
                         remote_node = %self.remote_node.address(),
                         chain_id = %origin,
-                        "Missing cross-chain update; sending sender block to validator.",
+                        "Missing cross-chain update; sending chain to validator.",
                     );
                     sent_cross_chain_updates.insert(origin, height);
-                    // A validator on the legacy error reports one missing sender bundle at a time.
-                    // Send exactly that sender block, sparsely, and retry; the validator will
-                    // report the next missing one if any.
-                    self.send_chain_info_at_heights(
-                        [(origin, BTreeSet::from([height]))],
+                    // Some received certificates may be missing for this validator
+                    // (e.g. to create the chain or make the balance sufficient) so we are going to
+                    // synchronize them now and retry.
+                    self.send_chain_information(
+                        origin,
+                        height.try_add_one()?,
                         CrossChainMessageDelivery::Blocking,
+                        None,
                     )
                     .await?;
                 }
