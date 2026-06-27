@@ -97,17 +97,6 @@ pub struct Config {
     indexer: String,
     node: String,
     tls: bool,
-    /// Hex-encoded chain id where the formats registry application is deployed.
-    /// Must be set together with [`Self::formats_registry_app_id`]. Stored as a
-    /// raw string so the JS-side `v-model` round-trips cleanly through
-    /// `serde_wasm_bindgen`; we validate the format only when actually using
-    /// the value.
-    #[serde(default)]
-    formats_registry_chain: Option<String>,
-    /// Hex-encoded application id of the formats registry. Same string-storage
-    /// rationale as [`Self::formats_registry_chain`].
-    #[serde(default)]
-    formats_registry_app_id: Option<String>,
 }
 
 impl Config {
@@ -117,8 +106,6 @@ impl Config {
             indexer: "localhost:8081".to_string(),
             node: "localhost:8080".to_string(),
             tls: false,
-            formats_registry_chain: None,
-            formats_registry_app_id: None,
         };
         // Return default if window doesn't exist (e.g., in test environment).
         let Some(window) = web_sys::window() else {
@@ -142,6 +129,18 @@ pub struct Data {
     chains: Vec<ChainId>,
     chain: ChainId,
     plugins: Vec<String>,
+    /// Hex-encoded chain id where the formats registry application is deployed.
+    /// Sourced exclusively from the `VITE_FORMATS_REGISTRY_CHAIN` env var (see
+    /// `App.vue`), so it is a runtime-only field on `Data` rather than part of
+    /// the localStorage-persisted [`Config`]. Must be set together with
+    /// [`Self::formats_registry_app_id`]; we validate the format only when
+    /// actually using the value.
+    #[serde(default)]
+    formats_registry_chain: Option<String>,
+    /// Hex-encoded application id of the formats registry. Same env-only
+    /// rationale as [`Self::formats_registry_chain`].
+    #[serde(default)]
+    formats_registry_app_id: Option<String>,
 }
 
 /// Initializes Vue data.
@@ -156,6 +155,8 @@ pub fn data() -> JsValue {
         )
         .unwrap(),
         plugins: Vec::new(),
+        formats_registry_chain: None,
+        formats_registry_app_id: None,
     };
     data.serialize(&SER).unwrap()
 }
@@ -946,21 +947,19 @@ async fn fetch_user_app_formats(
         }
     };
     let Some(registry_chain) = data
-        .config
         .formats_registry_chain
         .as_deref()
         .filter(|s| !s.is_empty())
     else {
-        log_str(&format!("{op}: no formats_registry_chain set in config"));
+        log_str(&format!("{op}: no formats_registry_chain set (VITE_FORMATS_REGISTRY_CHAIN)"));
         return None;
     };
     let Some(registry_app_id) = data
-        .config
         .formats_registry_app_id
         .as_deref()
         .filter(|s| !s.is_empty())
     else {
-        log_str(&format!("{op}: no formats_registry_app_id set in config"));
+        log_str(&format!("{op}: no formats_registry_app_id set (VITE_FORMATS_REGISTRY_APP_ID)"));
         return None;
     };
     let node = url(&data.config, &Protocol::Http, &AddressKind::Node);

@@ -18,7 +18,7 @@ const formatsState = ref<Record<string, any | false | null>>({})
 async function refreshFormats() {
   const root: any = getCurrentInstance()?.proxy?.$root
   if (!root || typeof root.fetch_user_app_formats !== 'function') return
-  if (!root.config?.formats_registry_chain || !root.config?.formats_registry_app_id) {
+  if (!root.formats_registry_chain || !root.formats_registry_app_id) {
     // Mark all entries as "not available" (formats registry not configured).
     const next: Record<string, any | false | null> = {}
     for (const a of props.apps) next[a.id] = false
@@ -103,7 +103,7 @@ watch(() => props.apps.map(a => a.id).join('|'), refreshFormats, { immediate: tr
               <span class="spinner-border spinner-border-sm text-muted"></span>
             </template>
             <template v-else-if="formatsState[a.id] === false">
-              <button class="btn btn-link btn-sm text-muted" disabled :title="(($root as any).config?.formats_registry_chain && ($root as any).config?.formats_registry_app_id) ? 'No formats registered for this module' : 'Set the formats registry chain and app id in the navbar'">
+              <button class="btn btn-link btn-sm text-muted" disabled :title="(($root as any).formats_registry_chain && ($root as any).formats_registry_app_id) ? 'No formats registered for this module' : 'Set VITE_FORMATS_REGISTRY_CHAIN and VITE_FORMATS_REGISTRY_APP_ID in .env.local'">
                 <i class="bi bi-x-circle"></i>
               </button>
             </template>

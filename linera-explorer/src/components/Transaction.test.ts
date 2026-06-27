@@ -48,10 +48,8 @@ function mountReceiveUserMessage(opts: {
     global: {
       config: {
         globalProperties: {
-          config: {
-            formats_registry_chain: opts.formats_registry ? 'fake-chain-id' : null,
-            formats_registry_app_id: opts.formats_registry ?? null,
-          },
+          formats_registry_chain: opts.formats_registry ? 'fake-chain-id' : null,
+          formats_registry_app_id: opts.formats_registry ?? null,
           decode_user_message: (application_id: string, bytes_hex: string) =>
             opts.decode ? opts.decode(application_id, bytes_hex) : null
         } as any
