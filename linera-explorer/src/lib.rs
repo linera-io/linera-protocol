@@ -12,6 +12,8 @@ mod graphql;
 mod input_type;
 mod js_utils;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Context as _, Result};
@@ -49,6 +51,22 @@ use wasm_bindgen_futures::spawn_local;
 use ws_stream_wasm::*;
 
 static WEBSOCKET: OnceCell<WsMeta> = OnceCell::new();
+
+thread_local! {
+    /// Caches the formats resolved for an application so repeated decodes within
+    /// (and across) blocks don't re-issue the module-id lookup and registry query
+    /// for the same app. Keyed by `(registry_chain, registry_app_id,
+    /// application_id)` — the registry pair keeps entries valid if the configured
+    /// registry ever changes.
+    ///
+    /// Both outcomes are cached: `Some(formats)` (positive) and `None` (negative —
+    /// the app has no registered formats), since module formats are immutable.
+    /// Only definitive results are stored; transient lookup/query errors are not
+    /// cached so they get retried. Wasm runs single-threaded, so a `thread_local`
+    /// `RefCell` is the whole story and reloading the page clears the cache.
+    static FORMATS_CACHE: RefCell<HashMap<(String, String, String), Option<formats::Formats>>> =
+        RefCell::new(HashMap::new());
+}
 
 pub(crate) fn reqwest_client() -> reqwest::Client {
     // timeouts cannot be enforced when compiling to wasm-js.
@@ -962,6 +980,19 @@ async fn fetch_user_app_formats(
         log_str(&format!("{op}: no formats_registry_app_id set (VITE_FORMATS_REGISTRY_APP_ID)"));
         return None;
     };
+    let cache_key = (
+        registry_chain.to_string(),
+        registry_app_id.to_string(),
+        application_id.to_string(),
+    );
+    if let Some(cached) = FORMATS_CACHE.with(|c| c.borrow().get(&cache_key).cloned()) {
+        log_str(&format!(
+            "{op}: formats cache hit for app {application_id} ({})",
+            if cached.is_some() { "formats" } else { "no formats" }
+        ));
+        return cached;
+    }
+
     let node = url(&data.config, &Protocol::Http, &AddressKind::Node);
     log_str(&format!(
         "{op}: looking up module for app {application_id} on active chain {} (node={node})",
@@ -973,13 +1004,16 @@ async fn fetch_user_app_formats(
             m
         }
         Ok(None) => {
+            // App genuinely absent on this chain: a definitive negative, cache it.
             log_str(&format!(
                 "{op}: application {application_id} not found on chain {}",
                 data.chain
             ));
+            FORMATS_CACHE.with(|c| c.borrow_mut().insert(cache_key, None));
             return None;
         }
         Err(e) => {
+            // Transient lookup failure: do not cache, let the next call retry.
             log_str(&format!("{op}: failed to look up module id: {e}"));
             return None;
         }
@@ -987,7 +1021,9 @@ async fn fetch_user_app_formats(
     log_str(&format!(
         "{op}: querying registry chain={registry_chain} app={registry_app_id} module={module_id_hex}"
     ));
-    match formats::fetch_formats(&node, registry_chain, registry_app_id, &module_id_hex).await {
+    let result = match formats::fetch_formats(&node, registry_chain, registry_app_id, &module_id_hex)
+        .await
+    {
         Ok(Some(f)) => {
             log_str(&format!("{op}: registry returned formats"));
             Some(f)
@@ -999,10 +1035,13 @@ async fn fetch_user_app_formats(
             None
         }
         Err(e) => {
+            // Transient registry query failure: do not cache, let the next call retry.
             log_str(&format!("{op}: registry query failed: {e}"));
-            None
+            return None;
         }
-    }
+    };
+    FORMATS_CACHE.with(|c| c.borrow_mut().insert(cache_key, result.clone()));
+    result
 }
 
 /// Run a `Formats::decode_*` method against `bytes_hex`, returning a JS value or
