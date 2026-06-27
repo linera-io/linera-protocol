@@ -732,15 +732,31 @@ where
     /// Sends chain information to bring a validator up to date with a specific chain.
     ///
     /// This method performs a two-phase synchronization:
-    /// 1. **Height synchronization**: Ensures the validator has all blocks up to `target_block_height`.
+    /// 1. **Height synchronization**: sends the certificates we hold locally for the range
+    ///    `[validator_next_height, target_block_height)`, in order.
     /// 2. **Round synchronization**: If heights match, ensures the validator has proposals/certificates
     ///    for the current consensus round.
+    ///
+    /// Only certificates that are actually in our local storage are sent; heights we don't have are
+    /// silently skipped (see [`Self::read_certificates_for_heights`]). This is deliberate and is what
+    /// makes the "leave gaps on the validator side" behavior (#4181) work: a chain we merely *receive*
+    /// from is stored only at its message-bearing heights, so we push exactly those. The validator
+    /// executes the contiguous prefix and preprocesses any block that sits above a gap — enough to
+    /// deliver that block's cross-chain bundles without our ever having to send the intervening
+    /// non-message blocks (which we don't have anyway).
+    ///
+    /// Because our local storage is guaranteed to hold every block we needed to build a proposal (a
+    /// bundle can only be consumed after its ordered message-bearing predecessors were downloaded),
+    /// this is the reliable way to catch a validator up. Deriving the set to send from a
+    /// `MissingCrossChainUpdates` error instead is *not* reliable: that error lists only the bundles
+    /// the current proposal is missing and omits already-consumed ancestors, which the validator
+    /// still needs executed before it can schedule a later gap block's bundle.
     ///
     /// # Height Sync Strategy
     /// - For existing chains (target_block_height > 0):
     ///   * Optimistically sends the last certificate first (often that's all that's missing).
-    ///   * Falls back to full chain query if the validator needs more context.
-    ///   * Sends any additional missing certificates in order.
+    ///   * Falls back to a full chain query if the validator needs more context.
+    ///   * Sends any additional locally-held certificates in order.
     /// - For new chains (target_block_height == 0):
     ///   * Sends the chain description and dependencies first.
     ///   * Then queries the validator's state.
@@ -800,9 +816,13 @@ where
         self.sync_consensus_round(remote_round, &manager).await
     }
 
-    /// Synchronizes a validator to a specific block height by sending missing certificates.
+    /// Synchronizes a validator to a specific block height by sending the certificates we hold.
     ///
-    /// Uses an optimistic approach: sends the last certificate first, then fills in any gaps.
+    /// Uses an optimistic approach: sends the last certificate first, then, based on the
+    /// validator's reported height, sends the earlier certificates in the range. Only the heights
+    /// we actually have in local storage are sent — any we're missing are silently skipped rather
+    /// than treated as an error, which is what leaves genuine gaps on the validator (see
+    /// [`Self::send_chain_information`] for why that is both safe and intended).
     ///
     /// Returns the [`ChainInfo`] from the validator after synchronization.
     async fn sync_chain_height(
@@ -869,7 +889,7 @@ where
         Ok(info)
     }
 
-    /// Reads certificates for the given heights from storage.
+    /// Reads certificates for the given heights from local storage.
     ///
     /// First attempts to use the optimized `read_certificates_by_heights` method.
     /// Falls back to the traditional `get_block_hashes` + `read_certificates` approach
@@ -877,6 +897,11 @@ where
     ///
     /// When using the fallback, writes the discovered height->hash indices back to storage
     /// so subsequent lookups can use the optimized path.
+    ///
+    /// Heights we don't have are silently dropped: the returned vector contains only the
+    /// certificates actually present, so callers naturally skip any block we never downloaded
+    /// (e.g. a sender's non-message-bearing blocks). Callers must not assume the result covers
+    /// every requested height.
     async fn read_certificates_for_heights(
         &self,
         chain_id: ChainId,
@@ -1069,11 +1094,12 @@ where
             .await
     }
 
-    /// Sends chain information for specific heights on multiple chains.
+    /// Sends the blocks at exactly the specified heights on multiple chains.
     ///
-    /// Unlike `send_chain_info_up_to_heights`, this method only sends the blocks at the
-    /// specified heights, not all blocks up to those heights. This is more efficient for
-    /// sparse chains where only specific blocks are needed.
+    /// Unlike [`Self::send_chain_info_up_to_heights`], this sends *only* the blocks at the given
+    /// heights, not the locally-held prefix leading up to them. Use it only when the required
+    /// blocks are fully self-describing to the validator — e.g. bringing over the specific blocks
+    /// that carry a set of blobs.
     async fn send_chain_info_at_heights(
         &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BTreeSet<BlockHeight>)>,
@@ -1108,6 +1134,8 @@ where
         Ok(())
     }
 
+    /// Brings a validator up to each given `(chain, height)` by pushing the locally-held prefix
+    /// of that chain (via [`Self::send_chain_information`]), for all chains concurrently.
     async fn send_chain_info_up_to_heights(
         &self,
         chain_heights: impl IntoIterator<Item = (ChainId, BlockHeight)>,
