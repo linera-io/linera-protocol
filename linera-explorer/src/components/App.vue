@@ -14,10 +14,10 @@ export default {
   data() { return data() },
   created() {
     // The formats-registry chain/app id come exclusively from Vite env vars
-    // (a `.env.local` written by scripts/explore-chain.sh). They are runtime-only
-    // values on the Vue root — never persisted to localStorage and not editable
-    // in the navbar — so the explorer always decodes against the registry for the
-    // wallet it was launched with, with no stale stored value to shadow it.
+    // (e.g. a `.env.local`). They are runtime-only values on the Vue root — never
+    // persisted to localStorage and not editable in the navbar — so the explorer
+    // always decodes against the registry for the wallet it was launched with,
+    // with no stale stored value to shadow it.
     const envChain = import.meta.env.VITE_FORMATS_REGISTRY_CHAIN as string | undefined
     const envApp = import.meta.env.VITE_FORMATS_REGISTRY_APP_ID as string | undefined
     this.formats_registry_chain = envChain || null
