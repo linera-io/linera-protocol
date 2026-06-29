@@ -39,7 +39,7 @@ later steps consume earlier outputs:
 |------|----------|-------|
 | EVM | `LightClient` | Verifies Linera certificates; genesis committee from the faucet |
 | EVM | ERC-20 token | An existing token, or a freshly-deployed `LineraToken` |
-| EVM | `FungibleBridge` | Holds ERC-20 liquidity; releases on verified `BurnEvent`s |
+| EVM | `FungibleBridge` | Locks deposited ERC-20; releases it on verified `BurnEvent`s |
 | Linera | bridge chain | A chain the relayer owns and drives |
 | Linera | `wrapped-fungible` app | Mints/burns wrapped tokens |
 | Linera | `evm-bridge` app | Verifies EVM deposit proofs; coordinates mint/burn |
@@ -104,10 +104,6 @@ export PROPOSER=0x...
 export CANCELLER=0x...
 export TIMELOCK_DELAY=172800                          # FungibleBridge timelock, seconds (e.g. 48h)
 
-# Wrapped-token metadata on Linera
-export TICKER_SYMBOL=wTT
-export TOKEN_DECIMALS=18                               # MUST match the ERC-20's decimals
-
 # RPC the Linera validators use for EVM finality (must be allow-listed; defaults to RPC_URL)
 export EVM_RPC_ENDPOINT_FOR_LINERA="${EVM_RPC_ENDPOINT_FOR_LINERA:-$RPC_URL}"
 
@@ -125,7 +121,7 @@ docker-foundry() {
   docker run --rm \
     -e RPC_URL -e EVM_PRIVATE_KEY \
     -e LIGHT_CLIENT_ARGS_JSON_FILE \
-    -e TOKEN_NAME -e TOKEN_SYMBOL -e TOKEN_DECIMALS -e TOKEN_SUPPLY \
+    -e TOKEN_ADDRESS \
     -v "$PWD/linera-bridge/src/solidity:/contracts" \
     -v "$OUT:/shared" \
     -w /contracts \
@@ -206,22 +202,40 @@ To verify the contract on a block explorer, append
 
 ## 3. Resolve the ERC-20 token (EVM)
 
-**Reuse an existing ERC-20** (the common case for mainnet) — just set it:
+**Reuse an existing ERC-20** (the common case) — set its address, then read
+`decimals()` straight from the contract so the wrapped app can't drift from it:
 
 ```bash
-export TOKEN_ADDRESS=0x...   # existing ERC-20; TOKEN_DECIMALS above must match it
+export TOKEN_ADDRESS=0x...                 # existing ERC-20 on THIS network
+export TOKEN_DECIMALS=$(docker-foundry 'cast call $TOKEN_ADDRESS "decimals()(uint8)" --rpc-url $RPC_URL')
+echo "Token $TOKEN_ADDRESS has $TOKEN_DECIMALS decimals"
 ```
 
-**…or deploy a fresh `LineraToken`:**
+Sanity-check the address actually has code **on this network** — a mainnet-only
+address (or an EOA) returns `0x` here, and the relayer would later abort on its
+`decimals()` query:
+
+```bash
+docker-foundry 'cast code $TOKEN_ADDRESS --rpc-url $RPC_URL' | head -c 12; echo   # 0x → not a contract here, stop
+```
+
+**…or deploy a fresh `LineraToken`** — here you *choose* the new token's
+decimals; the same value feeds the token and the wrapped app, so they match.
+These `TOKEN_*` vars are read only by `DeployLineraToken`, so they're passed on
+this one step instead of cluttering the shared wrapper:
 
 ```bash
 export TOKEN_NAME=LineraToken TOKEN_SYMBOL=LIN TOKEN_DECIMALS=18 \
        TOKEN_SUPPLY=1000000000000000000000
-docker-foundry 'forge script script/DeployLineraToken.s.sol \
-  --rpc-url $RPC_URL --private-key $EVM_PRIVATE_KEY --broadcast'
+docker run --rm \
+  -v "$PWD/linera-bridge/src/solidity:/contracts" -w /contracts \
+  -e RPC_URL -e EVM_PRIVATE_KEY \
+  -e TOKEN_NAME -e TOKEN_SYMBOL -e TOKEN_DECIMALS -e TOKEN_SUPPLY \
+  foundry-jq 'forge script script/DeployLineraToken.s.sol \
+    --rpc-url $RPC_URL --private-key $EVM_PRIVATE_KEY --broadcast'
 
 export TOKEN_ADDRESS=$(deployed_addr DeployLineraToken.s.sol LineraToken)
-echo "Token: $TOKEN_ADDRESS"
+echo "Token: $TOKEN_ADDRESS ($TOKEN_DECIMALS decimals)"
 ```
 
 ## 4. Claim the bridge chain (Linera)
@@ -270,7 +284,7 @@ docker-linera sync || true
 docker-linera process-inbox || true
 
 export BRIDGE_PARAMS="{\"source_chain_id\":$EVM_CHAIN_ID,\"token_address\":$(addr_to_bytes $TOKEN_ADDRESS),\"bridge_chain_id\":\"$BRIDGE_CHAIN_ID\",\"fungible_app_id\":\"$WRAPPED_APP_ID\"}"
-export BRIDGE_ARG="{\"rpc_endpoint\":\"$EVM_RPC_ENDPOINT_FOR_LINERA\"}"
+export BRIDGE_ARG="{\"rpc_endpoint\":\"\"}" # Fill in with EVM endpoint when Linera network is allowed to query it
 
 docker-linera publish-and-create \
   /repo/linera-bridge/contracts/evm-bridge/target/wasm32-unknown-unknown/release/evm_bridge_contract.wasm \
@@ -335,19 +349,31 @@ docker-linera execute-operation \
 These registrations are **set-once**; re-running them against an already-registered
 bridge fails at the app level — expected.
 
-## 9. (Optional) Fund the bridge with ERC-20 liquidity
+## 9. (Optional) Seed a test account to try the bridge
 
-The bridge releases ERC-20 from its own balance, so it must hold tokens. For a
-fresh `LineraToken` you can seed it from the deployer; on mainnet you typically
-fund out-of-band with real liquidity instead.
+You do **not** pre-fund the FungibleBridge. It holds no float of its own — it is
+collateralized 1:1 by deposits: `deposit()` locks the sender's ERC-20 into the
+bridge (`_safeTransferFrom(msg.sender, address(this), …)`) while the evm-bridge
+app mints the wrapped token on Linera; a Linera-side burn then releases exactly
+that locked amount back out (`_safeTransfer(target, …)`). Every withdrawal is
+therefore backed by a prior deposit — there is nothing to seed on the bridge
+itself.
 
-```bash
-export FUND_AMOUNT=0   # ERC-20 base units to send; 0 = skip
-docker run --rm \
-  -e RPC_URL -e EVM_PRIVATE_KEY foundry-jq \
-  "cast send $TOKEN_ADDRESS 'transfer(address,uint256)' $BRIDGE_ADDRESS $FUND_AMOUNT \
-     --rpc-url \$RPC_URL --private-key \$EVM_PRIVATE_KEY"
-```
+What you *do* need is an EVM account holding the ERC-20 to make that first
+deposit:
+
+- **Reused token (e.g. Base Sepolia USDC):** get test tokens from the token's own
+  faucet (Circle's Base Sepolia USDC faucet) into the account you'll bridge from.
+- **Fresh `LineraToken`:** the deployer holds the entire supply — send some to the
+  test account:
+
+  ```bash
+  export RECIPIENT=0x...                      # the account you'll deposit from
+  export SEED_AMOUNT=100000000000000000000    # 100 LIN at 18 decimals
+  docker run --rm -e RPC_URL -e EVM_PRIVATE_KEY foundry-jq \
+    "cast send $TOKEN_ADDRESS 'transfer(address,uint256)' $RECIPIENT $SEED_AMOUNT \
+       --rpc-url \$RPC_URL --private-key \$EVM_PRIVATE_KEY"
+  ```
 
 ## 10. Emit the relayer env file
 
@@ -373,6 +399,10 @@ LINERA_STORAGE=rocksdb:/data/client.db
 MONITOR_SCAN_INTERVAL=30
 MONITOR_START_BLOCK=$MONITOR_START_BLOCK
 MAX_RETRIES=10
+# eth_getLogs chunk size — match your RPC's max getLogs range. 2000 works with the
+# public Base Sepolia RPC; raise it for providers that allow larger ranges. Alchemy's
+# free tier caps at 10 (impractical) — use the public RPC or a paid plan.
+MAX_LOG_BLOCK_RANGE=10
 PORT=3001
 EOF
 
@@ -393,13 +423,43 @@ cat "$OUT/relayer.env"
 | Bridge-chain wallet | `$OUT/wallet/` — **back this up** |
 | Relayer env | `$OUT/relayer.env` |
 
-## Handing off to the relayer
+## Run the relayer
 
-`relayer.env` matches the format the relayer runbook consumes. The wallet paths
-inside it are **container** paths (`/data/...`); bind-mount the host
-`$OUT/wallet/` dir at `/data`. `EVM_PRIVATE_KEY` is deliberately omitted — supply
-it via a separate secret file. See
-[`docker/README.testnet.md`](../../docker/README.testnet.md) for running the relayer.
+The same `linera-bridge` image runs the relayer. It consumes `relayer.env`
+directly, reads the bridge-chain wallet from a bind-mount at `/data`, and takes
+`EVM_PRIVATE_KEY` from the environment (it is deliberately **not** written to
+`relayer.env`). No GCP or compose stack is needed — just `docker run`:
+
+```bash
+docker run -d --name linera-relay \
+  --env-file "$OUT/relayer.env" \
+  -e EVM_PRIVATE_KEY \
+  -v "$OUT/wallet:/data" \
+  -p 3001:3001 \
+  linera-bridge
+```
+
+The image's entrypoint builds `linera-bridge serve` from those env vars
+(`relayer.env` already points `LINERA_WALLET` / `LINERA_KEYSTORE` /
+`LINERA_STORAGE` at `/data/...`, and `-p` matches its `PORT=3001`). Check it
+came up and is scanning both chains:
+
+```bash
+docker logs -f linera-relay                          # follow startup
+curl -sI http://127.0.0.1:3001/health | head -1      # HTTP/1.1 200 OK
+curl -s http://127.0.0.1:3001/metrics | grep '^linera_bridge_' | head
+```
+
+Stop and remove it with `docker rm -f linera-relay`; re-run the `docker run`
+above to restart — the wallet and relay state persist in `$OUT/wallet/`.
+
+> The relayer signs `addBlock` transactions on the EVM side, so the
+> `EVM_PRIVATE_KEY` account must hold gas on the target network. If
+> `linera_bridge_evm_balance_wei` reads low, top it up (no restart needed).
+
+For operating the relayer as a long-running service on a VM — GCP Secret Manager
+for the key, Prometheus alerts, backups — see
+[`docker/README.testnet.md`](../../docker/README.testnet.md).
 
 ## Governance roles
 
@@ -423,10 +483,10 @@ at deploy time.
 | Ethereum Sepolia | a Sepolia RPC | `https://api-sepolia.etherscan.io/api` |
 | Base / Ethereum mainnet | a mainnet RPC | basescan/etherscan `…/api` |
 
-For mainnet you almost always reuse an existing ERC-20 (step 3, first option)
-and fund the bridge with real liquidity out-of-band (skip step 9). To verify
-contracts, append `--verify --etherscan-api-key <KEY> --verifier-url <URL>` to
-the `forge` commands.
+For mainnet you almost always reuse an existing ERC-20 (step 3, first option).
+The bridge needs no liquidity seeding — it is collateralized by deposits (see
+step 9). To verify contracts, append
+`--verify --etherscan-api-key <KEY> --verifier-url <URL>` to the `forge` commands.
 
 ### HTTP allow-list
 
@@ -461,3 +521,4 @@ going live.
 | `publish-and-create` fails / no Wasm | modules not built | `make -C linera-bridge build-wasm`; check the `ls` in Prerequisites |
 | `deployed_addr` prints empty | wrong `$EVM_CHAIN_ID` or contract name | confirm `$EVM_CHAIN_ID`; the broadcast dir is `broadcast/<script>/<chainid>/` |
 | Deposits fail `UnauthorizedHttpRequest` | RPC host not allow-listed | see [HTTP allow-list](#http-allow-list) |
+| Relayer: `eth_getLogs ... exceeds max block range` / 10-block limit | RPC caps the `getLogs` range | lower `MAX_LOG_BLOCK_RANGE` in `relayer.env` to ≤ the RPC's cap (2000 for public Base Sepolia) and restart; Alchemy's free tier (10) is impractical — use the public RPC or a paid plan |
