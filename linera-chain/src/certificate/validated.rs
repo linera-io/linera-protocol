@@ -2,7 +2,7 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Deref;
+use std::{borrow::Cow, ops::Deref};
 
 use allocative::Allocative;
 use linera_base::{
@@ -12,7 +12,7 @@ use linera_base::{
 };
 use linera_execution::committee::Committee;
 use serde::{
-    ser::{Serialize, SerializeStruct, Serializer},
+    ser::{Serialize, Serializer},
     Deserialize, Deserializer,
 };
 
@@ -22,6 +22,19 @@ use crate::{
     justification::JustificationChain,
     ChainError,
 };
+
+/// The serialized representation of a [`ValidatedBlockCertificate`]. Deriving the
+/// (de)serialization on this single type keeps both directions in sync and free of manual field
+/// bookkeeping; the manual impls only add the strictly-ordered-signatures invariant.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "ValidatedBlockCertificate")]
+struct Repr<'a> {
+    value: Cow<'a, ValidatedBlock>,
+    round: Round,
+    lock: Option<Round>,
+    signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
+    below: Cow<'a, JustificationChain>,
+}
 
 /// Certificate for a [`ValidatedBlock`] instance, certified in some round whose `ValidatedBlock`
 /// voters signed a lock `ℓ`.
@@ -188,13 +201,14 @@ impl From<ValidatedBlockCertificate> for Certificate {
 
 impl Serialize for ValidatedBlockCertificate {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 5)?;
-        state.serialize_field("value", self.quorum.inner())?;
-        state.serialize_field("round", &self.quorum.round())?;
-        state.serialize_field("lock", &self.quorum.lock())?;
-        state.serialize_field("signatures", self.quorum.signatures())?;
-        state.serialize_field("below", &self.below)?;
-        state.end()
+        Repr {
+            value: Cow::Borrowed(self.quorum.inner()),
+            round: self.quorum.round(),
+            lock: self.quorum.lock(),
+            signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
+            below: Cow::Borrowed(&self.below),
+        }
+        .serialize(serializer)
     }
 }
 
@@ -203,29 +217,21 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
     where
         D: Deserializer<'de>,
     {
-        #[derive(Deserialize)]
-        #[serde(rename = "ValidatedBlockCertificate")]
-        struct Inner {
-            value: ValidatedBlock,
-            round: Round,
-            lock: Option<Round>,
-            signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-            below: JustificationChain,
-        }
-        let inner = Inner::deserialize(deserializer)?;
-        if !crate::data_types::is_strictly_ordered(&inner.signatures) {
+        let inner = Repr::deserialize(deserializer)?;
+        let signatures = inner.signatures.into_owned();
+        if !crate::data_types::is_strictly_ordered(&signatures) {
             Err(serde::de::Error::custom(
                 "Signatures are not strictly ordered",
             ))
         } else {
             Ok(Self::from_parts(
                 GenericCertificate::new_with_lock(
-                    inner.value,
+                    inner.value.into_owned(),
                     inner.round,
                     inner.lock,
-                    inner.signatures,
+                    signatures,
                 ),
-                inner.below,
+                inner.below.into_owned(),
             ))
         }
     }
