@@ -12,9 +12,7 @@ mod graphql;
 mod input_type;
 mod js_utils;
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::str::FromStr;
+use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
 use anyhow::{anyhow, Context as _, Result};
 use futures::prelude::*;
@@ -969,7 +967,9 @@ async fn fetch_user_app_formats(
         .as_deref()
         .filter(|s| !s.is_empty())
     else {
-        log_str(&format!("{op}: no formats_registry_chain set (VITE_FORMATS_REGISTRY_CHAIN)"));
+        log_str(&format!(
+            "{op}: no formats_registry_chain set (VITE_FORMATS_REGISTRY_CHAIN)"
+        ));
         return None;
     };
     let Some(registry_app_id) = data
@@ -977,7 +977,9 @@ async fn fetch_user_app_formats(
         .as_deref()
         .filter(|s| !s.is_empty())
     else {
-        log_str(&format!("{op}: no formats_registry_app_id set (VITE_FORMATS_REGISTRY_APP_ID)"));
+        log_str(&format!(
+            "{op}: no formats_registry_app_id set (VITE_FORMATS_REGISTRY_APP_ID)"
+        ));
         return None;
     };
     let cache_key = (
@@ -988,7 +990,11 @@ async fn fetch_user_app_formats(
     if let Some(cached) = FORMATS_CACHE.with(|c| c.borrow().get(&cache_key).cloned()) {
         log_str(&format!(
             "{op}: formats cache hit for app {application_id} ({})",
-            if cached.is_some() { "formats" } else { "no formats" }
+            if cached.is_some() {
+                "formats"
+            } else {
+                "no formats"
+            }
         ));
         return cached;
     }
@@ -1021,8 +1027,13 @@ async fn fetch_user_app_formats(
     log_str(&format!(
         "{op}: querying registry chain={registry_chain} app={registry_app_id} module={module_id_hex}"
     ));
-    let result = match formats::fetch_formats(&node, registry_chain, registry_app_id, &module_id_hex)
-        .await
+    let result = match formats::fetch_formats(
+        &node,
+        registry_chain,
+        registry_app_id,
+        &module_id_hex,
+    )
+    .await
     {
         Ok(Some(f)) => {
             log_str(&format!("{op}: registry returned formats"));
