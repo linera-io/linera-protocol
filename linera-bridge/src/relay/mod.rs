@@ -101,6 +101,7 @@ pub async fn run(
     max_retries: u32,
     sqlite_path: Option<&Path>,
     evm_poll_interval: Option<Duration>,
+    max_log_block_range: u64,
 ) -> Result<()> {
     tracing::info!("Starting bridge relay server...");
 
@@ -240,6 +241,7 @@ pub async fn run(
         max_retries,
         sqlite_path,
         evm_poll_interval,
+        max_log_block_range,
         &db_path,
         admin_chain_id,
         admin_chain_height,
@@ -263,6 +265,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
     evm_poll_interval: Option<Duration>,
+    max_log_block_range: u64,
     storage_dir: &Path,
     admin_chain_id: ChainId,
     admin_chain_height: linera_base::data_types::BlockHeight,
@@ -299,6 +302,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         bridge_addr,
         relayer_addr,
         light_client_addr,
+        max_log_block_range,
     ));
 
     // ── Catch up LightClient with any missed committee rotations ──

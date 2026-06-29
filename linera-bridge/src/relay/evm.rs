@@ -34,9 +34,6 @@ sol! {
     }
 }
 
-/// Maximum block range per `eth_getLogs` query.
-const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
-
 /// Centralized client for all EVM interactions. Safe to share via `Arc`.
 pub struct EvmClient<P> {
     provider: P,
@@ -44,6 +41,9 @@ pub struct EvmClient<P> {
     relayer_addr: Address,
     deposit_event_sig: B256,
     light_client_addr: tokio::sync::OnceCell<Address>,
+    /// Maximum block range per `eth_getLogs` query. RPC providers cap this
+    /// (e.g. 2000 for the public Base Sepolia RPC), so it is configurable.
+    max_log_block_range: u64,
 }
 
 impl<P: Provider> EvmClient<P> {
@@ -53,6 +53,7 @@ impl<P: Provider> EvmClient<P> {
         bridge_addr: Address,
         relayer_addr: Address,
         light_client_override: Option<Address>,
+        max_log_block_range: u64,
     ) -> Self {
         let light_client_addr = tokio::sync::OnceCell::new();
         if let Some(addr) = light_client_override {
@@ -64,6 +65,7 @@ impl<P: Provider> EvmClient<P> {
             relayer_addr,
             deposit_event_sig: deposit_event_signature(),
             light_client_addr,
+            max_log_block_range,
         }
     }
 
@@ -108,7 +110,7 @@ impl<P: Provider> EvmClient<P> {
         let mut all_logs = Vec::new();
         let mut cursor = from;
         while cursor <= to {
-            let chunk_end = (cursor + MAX_LOG_BLOCK_RANGE - 1).min(to);
+            let chunk_end = (cursor + self.max_log_block_range - 1).min(to);
             let filter = filter_base.clone().from_block(cursor).to_block(chunk_end);
             let logs = self.provider.get_logs(&filter).await?;
             all_logs.extend(logs);

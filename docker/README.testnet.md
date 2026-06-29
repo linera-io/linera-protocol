@@ -74,6 +74,7 @@ LINERA_STORAGE=rocksdb:/data/client.db
 MONITOR_SCAN_INTERVAL=30
 MONITOR_START_BLOCK=...               # FungibleBridge deploy block
 MAX_RETRIES=10
+MAX_LOG_BLOCK_RANGE=2000              # eth_getLogs chunk; match your RPC's cap
 PORT=3001
 ```
 
