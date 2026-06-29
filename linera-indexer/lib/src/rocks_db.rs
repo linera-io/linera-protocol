@@ -118,6 +118,8 @@ impl RocksDbRunner {
             spawn_mode,
             path_with_guard,
             max_stream_queries: config.client.max_stream_queries,
+            enable_statistics: false,
+            statistics_level: Default::default(),
         };
         let rocksdb_store_config = RocksDbStoreConfig {
             inner_config,
