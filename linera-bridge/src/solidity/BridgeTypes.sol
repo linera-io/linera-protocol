@@ -1339,12 +1339,14 @@ library BridgeTypes {
         CryptoHash entry0;
         Round entry1;
         CertificateKind entry2;
+        opt_Round entry3;
     }
 
     function bcs_serialize_VoteValue(VoteValue memory input) internal pure returns (bytes memory) {
         bytes memory result = bcs_serialize_CryptoHash(input.entry0);
         result = abi.encodePacked(result, bcs_serialize_Round(input.entry1));
-        return abi.encodePacked(result, bcs_serialize_CertificateKind(input.entry2));
+        result = abi.encodePacked(result, bcs_serialize_CertificateKind(input.entry2));
+        return abi.encodePacked(result, bcs_serialize_opt_Round(input.entry3));
     }
 
     function bcs_deserialize_offset_VoteValue(uint256 pos, bytes memory input)
@@ -1359,7 +1361,9 @@ library BridgeTypes {
         (new_pos, entry1) = bcs_deserialize_offset_Round(new_pos, input);
         CertificateKind entry2;
         (new_pos, entry2) = bcs_deserialize_offset_CertificateKind(new_pos, input);
-        return (new_pos, VoteValue(entry0, entry1, entry2));
+        opt_Round memory entry3;
+        (new_pos, entry3) = bcs_deserialize_offset_opt_Round(new_pos, input);
+        return (new_pos, VoteValue(entry0, entry1, entry2, entry3));
     }
 
     function bcs_deserialize_VoteValue(bytes memory input) internal pure returns (VoteValue memory) {
@@ -1514,6 +1518,42 @@ library BridgeTypes {
         uint256 new_pos;
         opt_CryptoHash memory value;
         (new_pos, value) = bcs_deserialize_offset_opt_CryptoHash(0, input);
+        require(new_pos == input.length, "incomplete deserialization");
+        return value;
+    }
+
+    struct opt_Round {
+        bool has_value;
+        Round value;
+    }
+
+    function bcs_serialize_opt_Round(opt_Round memory input) internal pure returns (bytes memory) {
+        if (input.has_value) {
+            return abi.encodePacked(uint8(1), bcs_serialize_Round(input.value));
+        } else {
+            return abi.encodePacked(uint8(0));
+        }
+    }
+
+    function bcs_deserialize_offset_opt_Round(uint256 pos, bytes memory input)
+        internal
+        pure
+        returns (uint256, opt_Round memory)
+    {
+        uint256 new_pos;
+        bool has_value;
+        (new_pos, has_value) = bcs_deserialize_offset_bool(pos, input);
+        Round memory value;
+        if (has_value) {
+            (new_pos, value) = bcs_deserialize_offset_Round(new_pos, input);
+        }
+        return (new_pos, opt_Round(has_value, value));
+    }
+
+    function bcs_deserialize_opt_Round(bytes memory input) internal pure returns (opt_Round memory) {
+        uint256 new_pos;
+        opt_Round memory value;
+        (new_pos, value) = bcs_deserialize_offset_opt_Round(0, input);
         require(new_pos == input.length, "incomplete deserialization");
         return value;
     }

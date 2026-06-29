@@ -371,8 +371,14 @@ contract LightClient is ILightClient {
     ) internal view {
         // Construct VoteValue BCS and hash with type name prefix
         // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
-        BridgeTypes.VoteValue memory voteValue =
-            BridgeTypes.VoteValue(BridgeTypes.CryptoHash(blockHash), round, BridgeTypes.CertificateKind.Confirmed);
+        // ConfirmedBlock votes carry no lock, so the lock `ℓ` (Option<Round>) is `None`; the
+        // `round` placeholder is ignored because `has_value` is false.
+        BridgeTypes.VoteValue memory voteValue = BridgeTypes.VoteValue(
+            BridgeTypes.CryptoHash(blockHash),
+            round,
+            BridgeTypes.CertificateKind.Confirmed,
+            BridgeTypes.opt_Round(false, round)
+        );
         bytes32 signedHash = keccak256(abi.encodePacked("VoteValue::", BridgeTypes.bcs_serialize_VoteValue(voteValue)));
 
         // Verify signatures against the block's epoch committee
