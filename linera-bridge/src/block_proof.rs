@@ -252,7 +252,8 @@ mod tests {
             .unwrap()
             .unwrap();
         // Confirmed in the fast round, so the certificate carries no justification chain.
-        let certificate = ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
+        let certificate =
+            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 
         let proof = BlockProof::from_certificate(&certificate);
 
