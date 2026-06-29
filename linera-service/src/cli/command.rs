@@ -901,7 +901,7 @@ pub enum ClientCommand {
 
         /// Optional path to an insta SNAP file containing the YAML serialization
         /// of the application's `Formats`. When provided, the formats are
-        /// JSON-encoded and published as a third blob alongside the contract
+        /// BCS-encoded and published as a third blob alongside the contract
         /// and service blobs; the resulting `ModuleId` carries the formats blob
         /// hash.
         #[arg(long)]
@@ -943,6 +943,15 @@ pub enum ClientCommand {
         /// An optional chain ID to verify the blob. The default chain of the wallet
         /// is used otherwise.
         reader: Option<ChainId>,
+    },
+
+    /// Describe an existing application: print its `ApplicationDescription` (module
+    /// ID, creator chain, parameters and required dependencies) as JSON. The
+    /// description is content-addressed and fetched from the validators, so the
+    /// application need not be registered on the wallet's default chain.
+    DescribeApplication {
+        /// The ID of the application to describe.
+        application_id: ApplicationId,
     },
 
     /// Create an application.
@@ -1132,6 +1141,7 @@ impl ClientCommand {
             | ClientCommand::ListEventsFromIndex { .. }
             | ClientCommand::PublishDataBlob { .. }
             | ClientCommand::ReadDataBlob { .. }
+            | ClientCommand::DescribeApplication { .. }
             | ClientCommand::CreateApplication { .. }
             | ClientCommand::PublishAndCreate { .. }
             | ClientCommand::Keygen

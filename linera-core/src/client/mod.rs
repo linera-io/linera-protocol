@@ -19,11 +19,12 @@ use linera_base::prometheus_util::MeasureLatency as _;
 use linera_base::{
     crypto::{CryptoHash, Signer as _, ValidatorPublicKey},
     data_types::{
-        ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round, TimeDelta, Timestamp,
+        ApplicationDescription, ArithmeticError, Blob, BlockHeight, ChainDescription, Epoch, Round,
+        TimeDelta, Timestamp,
     },
     ensure,
     hashed::Hashed,
-    identifiers::{AccountOwner, BlobId, BlobType, ChainId, EventId, StreamId},
+    identifiers::{AccountOwner, ApplicationId, BlobId, BlobType, ChainId, EventId, StreamId},
     time::Duration,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -79,8 +80,10 @@ mod validator_trackers;
 mod metrics {
     use std::sync::LazyLock;
 
-    use linera_base::prometheus_util::{exponential_bucket_latencies, register_histogram_vec};
-    use prometheus::HistogramVec;
+    use linera_base::prometheus_util::{
+        exponential_bucket_latencies, register_histogram_vec, register_int_counter_vec,
+    };
+    use prometheus::{HistogramVec, IntCounterVec};
 
     pub static PROCESS_INBOX_WITHOUT_PREPARE_LATENCY: LazyLock<HistogramVec> =
         LazyLock::new(|| {
@@ -125,6 +128,14 @@ mod metrics {
             "find_received_certificates latency",
             &[],
             exponential_bucket_latencies(10_000.0),
+        )
+    });
+
+    pub static BLOCK_STAGING_FAILURES_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {
+        register_int_counter_vec(
+            "block_staging_failures_total",
+            "Total number of client block staging (execute_block) failures, labelled by error type",
+            &["error_type"],
         )
     });
 }
@@ -343,6 +354,16 @@ pub struct Client<Env: Environment> {
     /// Configuration options.
     options: chain_client::Options,
 }
+
+/// Boxed future returned by `receive_sender_certificate`. It is `Send` off the `web`
+/// target (where futures must be `Send`) and `?Send` on `web` (single-threaded, where
+/// the validator node is not `Sync`).
+#[cfg(not(web))]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + Send + 'a>>;
+#[cfg(web)]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + 'a>>;
 
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
@@ -1202,6 +1223,43 @@ impl<Env: Environment> Client<Env> {
         Ok(bcs::from_bytes(blob.bytes())?)
     }
 
+    /// Ensures that the client has the `ApplicationDescription` blob for the given
+    /// application ID, fetching it from the current validators if it is not available
+    /// locally, and returns the blob. The application need not be registered on this
+    /// client's chain: the description is content-addressed and downloaded by blob ID.
+    pub async fn get_application_description_blob(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<Arc<Blob>, chain_client::Error> {
+        let blob_id = application_id.description_blob_id();
+        let blob = self.local_node.storage_client().read_blob(blob_id).await?;
+        if let Some(blob) = blob {
+            // We have the blob - return it.
+            return Ok(blob.into_std());
+        }
+        // Recover the blob from the current validators, according to the admin chain.
+        Box::pin(self.synchronize_chain_state(self.admin_chain_id)).await?;
+        let nodes = self.validator_nodes().await?;
+        Ok(self
+            .update_local_node_with_blobs_from(vec![blob_id], &nodes)
+            .await?
+            .pop()
+            .unwrap() // Returns exactly as many blobs as passed-in IDs.
+            .into_std())
+    }
+
+    /// Returns the `ApplicationDescription` of the given application, fetching its
+    /// description blob from the validators if it is not available locally.
+    pub async fn get_application_description(
+        &self,
+        application_id: ApplicationId,
+    ) -> Result<ApplicationDescription, chain_client::Error> {
+        let blob = self
+            .get_application_description_blob(application_id)
+            .await?;
+        Ok(bcs::from_bytes(blob.bytes())?)
+    }
+
     /// Submits a validated block for finalization and returns the confirmed block certificate.
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn finalize_block(
@@ -1410,68 +1468,87 @@ impl<Env: Environment> Client<Env> {
     /// chains we follow get executed, untracked or events-only chains are only
     /// preprocessed.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_sender_certificate(
+    // Returns a boxed future rather than being an `async fn`: this function recurses
+    // (admin-chain sync -> sender-certificate processing -> here), and boxing it at this
+    // boundary lets the concurrent admin-chain self-heal below satisfy its future bound
+    // despite the recursion. The future is `Send` off `web` (see the type alias).
+    fn receive_sender_certificate(
         &self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
-    ) -> Result<(), chain_client::Error> {
-        // Verify the certificate before doing any expensive networking.
-        if let ReceiveCertificateMode::NeedsCheck = mode {
-            let mut check_result = self.check_certificate(&certificate).await?;
-            if matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                // The certificate is from an epoch our local view of the admin chain
-                // hasn't caught up to yet. Catch up and check again instead of failing.
-                // Prefer the nodes that gave us the certificate: they evidently know
-                // the newer epoch even if our own committee view is stale or its
-                // members are unreachable. A sync only counts if it actually made the
-                // epoch known; otherwise fall back to the known committee.
-                let admin_chain_id = self.admin_chain_id;
-                let epoch = certificate.block().header.epoch;
-                info!(
-                    %epoch,
-                    "certificate is from an unknown epoch; synchronizing the admin chain"
-                );
-                for node in nodes.iter().flatten() {
-                    match Box::pin(self.synchronize_chain_state_from(node, admin_chain_id)).await {
-                        Ok(()) => {
-                            check_result = self.check_certificate(&certificate).await?;
-                            if !matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                                break;
-                            }
-                        }
-                        Err(error) => debug!(
-                            %error,
-                            validator = %node.public_key,
-                            "failed to synchronize the admin chain from validator",
-                        ),
+    ) -> ReceiveSenderCertificateFuture<'_> {
+        Box::pin(async move {
+            // Verify the certificate before doing any expensive networking.
+            if let ReceiveCertificateMode::NeedsCheck = mode {
+                let mut check_result = self.check_certificate(&certificate).await?;
+                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                    // The certificate is from an epoch our local view of the admin chain
+                    // hasn't caught up to yet. Catch up and check again instead of failing.
+                    // Prefer the nodes that gave us the certificate: they evidently know
+                    // the newer epoch even if our own committee view is stale or its
+                    // members are unreachable. Race them concurrently rather than blocking
+                    // on a slow one, then fall back to the known committee. A sync only
+                    // counts if it actually made the epoch known.
+                    let admin_chain_id = self.admin_chain_id;
+                    let epoch = certificate.block().header.epoch;
+                    info!(
+                        %epoch,
+                        "certificate is from an unknown epoch; synchronizing the admin chain"
+                    );
+                    let synced_from_serving_node = if let Some(nodes) = &nodes {
+                        let certificate = &certificate;
+                        communicate_concurrently(
+                            nodes,
+                            |node| {
+                                Box::pin(async move {
+                                    self.synchronize_chain_state_from(&node, admin_chain_id)
+                                        .await?;
+                                    match self.check_certificate(certificate).await? {
+                                        CheckCertificateResult::FutureEpoch => {
+                                            Err(chain_client::Error::CommitteeSynchronizationError)
+                                        }
+                                        _ => Ok(()),
+                                    }
+                                })
+                            },
+                            self.options.blob_download_hedge_delay,
+                            self.storage_client().clock(),
+                        )
+                        .await
+                        .is_ok()
+                    } else {
+                        false
+                    };
+                    if synced_from_serving_node {
+                        check_result = self.check_certificate(&certificate).await?;
+                    }
+                    if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                        Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
+                        check_result = self.check_certificate(&certificate).await?;
                     }
                 }
-                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                    Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
-                    check_result = self.check_certificate(&certificate).await?;
-                }
+                check_result.into_result()?;
             }
-            check_result.into_result()?;
-        }
-        // Recover history from the network.
-        let nodes = if let Some(nodes) = nodes {
-            nodes
-        } else {
-            self.validator_nodes().await?
-        };
-        let processing_mode = if self
-            .chain_mode(certificate.value().chain_id())
-            .is_some_and(|m| m.should_sync_chain_state())
-        {
-            ProcessConfirmedBlockMode::Auto
-        } else {
-            ProcessConfirmedBlockMode::Preprocess
-        };
-        self.handle_certificate_with_retry(&certificate, &nodes, processing_mode)
-            .await?;
+            // Recover history from the network.
+            let nodes = if let Some(nodes) = nodes {
+                nodes
+            } else {
+                self.validator_nodes().await?
+            };
+            let processing_mode = if self
+                .chain_mode(certificate.value().chain_id())
+                .is_some_and(|m| m.should_sync_chain_state())
+            {
+                ProcessConfirmedBlockMode::Auto
+            } else {
+                ProcessConfirmedBlockMode::Preprocess
+            };
+            self.handle_certificate_with_retry(&certificate, &nodes, processing_mode)
+                .await?;
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Downloads and processes certificates for sender chain blocks.
@@ -2563,7 +2640,7 @@ impl CheckCertificateResult {
 }
 
 /// Creates a compressed Contract, Service and bytecode, plus an optional
-/// `ApplicationFormats` blob built from the JSON-encoded `Formats` description
+/// `ApplicationFormats` blob built from the BCS-encoded `Formats` description
 /// bytes.
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn create_bytecode_blobs(

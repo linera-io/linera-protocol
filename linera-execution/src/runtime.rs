@@ -1951,7 +1951,7 @@ impl From<&MessageContext> for ExecutingMessage {
 }
 
 /// Creates a compressed contract and service bytecode synchronously, plus an
-/// optional `ApplicationFormats` blob built from the JSON-encoded `Formats`
+/// optional `ApplicationFormats` blob built from the BCS-encoded `Formats`
 /// description bytes.
 pub fn create_bytecode_blobs_sync(
     contract: &Bytecode,

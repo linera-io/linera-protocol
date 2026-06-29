@@ -271,7 +271,7 @@ pub enum BlobType {
     Committee,
     /// A blob containing a chain description.
     ChainDescription,
-    /// A blob containing the JSON-encoded `Formats` description published
+    /// A blob containing the BCS-encoded `Formats` description published
     /// alongside an application's contract and service blobs.
     ApplicationFormats,
     /// A blob containing one ordered chunk of a chain's execution-state dump at a
@@ -527,7 +527,7 @@ pub struct ModuleId<Abi = (), Parameters = (), InstantiationArgument = ()> {
     pub service_blob_hash: CryptoHash,
     /// The virtual machine being used.
     pub vm_runtime: VmRuntime,
-    /// The hash of an optional blob containing the JSON-encoded `Formats`
+    /// The hash of an optional blob containing the BCS-encoded `Formats`
     /// description for this module's application. Published alongside the
     /// contract and service blobs when available.
     pub formats_blob_hash: Option<CryptoHash>,
