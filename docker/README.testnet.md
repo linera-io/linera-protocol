@@ -3,6 +3,12 @@
 This describes how to provision and operate a `linera-bridge` relayer
 on a single VM, bridging Base Sepolia (EVM) and Testnet Conway (Linera).
 
+> **Scope.** This runbook targets a production VM with **GCP Secret Manager**
+> and systemd. To run the relayer **locally without GCP**, you only need
+> section 3 (provision via the deploy runbook) and the
+> [Local / without GCP](#local--without-gcp) command in section 4 — skip the
+> VM/Secret-Manager steps (1, 2, and the Production compose).
+
 ## Prerequisites
 
 - A Linux VM with Docker + docker-compose
@@ -106,6 +112,35 @@ See the [deploy README](../linera-bridge/deploy/README.md#per-network-notes)
 for per-network verifier URLs.
 
 ### 4. Start the relayer
+
+The relayer runs from the `linera-bridge` image. Pick the path that matches your
+environment.
+
+#### Local / without GCP
+
+Run the locally-built image directly against the deploy outputs — no Secret
+Manager, no compose. With `$OUT` and `EVM_PRIVATE_KEY` set as in the deploy
+runbook (or substitute the paths/key directly):
+
+```bash
+docker run -d --name linera-relay \
+  --env-file "$OUT/relayer.env" \
+  -e EVM_PRIVATE_KEY \
+  -v "$OUT/wallet:/data" \
+  -p 3001:3001 \
+  linera-bridge
+```
+
+This is the recommended path for local and single-operator setups. See the
+deploy runbook's [Run the relayer](../linera-bridge/deploy/README.md#run-the-relayer)
+section for logs / health / stop.
+
+#### Production (GCP VM)
+
+`docker-compose.bridge-testnet.yml` adds a `fetch-evm-key` sidecar that pulls
+`EVM_PRIVATE_KEY` from **GCP Secret Manager** and runs the published registry
+image; it requires `GCP_PROJECT_ID` and the VM layout from steps 1–2. On the
+provisioned VM:
 
 ```bash
 docker compose -f docker/docker-compose.bridge-testnet.yml up -d
@@ -265,3 +300,4 @@ Suggested alert rules (apply on the external Prometheus):
 | `linera_bridge_evm_balance_wei` reads 0          | RPC unreachable, or wrong key                  | Check `RPC_URL`, verify key with `cast wallet address`                           |
 | Pending deposits/burns stuck                     | EVM gas too low, or RPC errors                 | Top up gas; check logs for retry messages                                        |
 | Slow startup, no metrics for minutes             | RocksDB cache rebuilding from chain history    | Wait; check `linera_bridge_last_scanned_linera_height` is climbing               |
+| `eth_getLogs ... exceeds max block range`        | RPC caps the `getLogs` block range             | Lower `MAX_LOG_BLOCK_RANGE` (≤ the RPC's cap; 2000 for public Base Sepolia) and restart |
