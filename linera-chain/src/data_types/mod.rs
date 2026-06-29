@@ -590,7 +590,10 @@ pub struct Vote<T> {
     pub value: T,
     /// The consensus round in which the vote was cast.
     pub round: Round,
-    /// The validator's signature over the value hash, round and certificate kind.
+    /// The lock round `ℓ` this vote signed (see [`VoteValue`]). Only `ValidatedBlock` votes
+    /// carry a lock; it is `None` for fresh proposals and for `ConfirmedBlock`/`Timeout` votes.
+    pub lock: Option<Round>,
+    /// The validator's signature over the value hash, round, certificate kind and lock.
     pub signature: ValidatorSignature,
 }
 
@@ -600,11 +603,25 @@ impl<T> Vote<T> {
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(value.hash(), round, T::KIND, None);
+        Self::new_with_lock(value, round, None, key_pair)
+    }
+
+    /// Use signing key to create a signed object with the lock round `ℓ` (see [`VoteValue`]).
+    pub fn new_with_lock(
+        value: T,
+        round: Round,
+        lock: Option<Round>,
+        key_pair: &ValidatorSecretKey,
+    ) -> Self
+    where
+        T: CertificateValue,
+    {
+        let hash_and_round = VoteValue(value.hash(), round, T::KIND, lock);
         let signature = ValidatorSignature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
+            lock,
             signature,
         }
     }
@@ -617,6 +634,7 @@ impl<T> Vote<T> {
         LiteVote {
             value: LiteValue::new(&self.value),
             round: self.round,
+            lock: self.lock,
             signature: self.signature,
         }
     }
@@ -635,7 +653,10 @@ pub struct LiteVote {
     pub value: LiteValue,
     /// The consensus round in which the vote was cast.
     pub round: Round,
-    /// The validator's signature over the value hash, round and certificate kind.
+    /// The lock round `ℓ` this vote signed (see [`VoteValue`]). Only `ValidatedBlock` votes
+    /// carry a lock; it is `None` for fresh proposals and for `ConfirmedBlock`/`Timeout` votes.
+    pub lock: Option<Round>,
+    /// The validator's signature over the value hash, round, certificate kind and lock.
     pub signature: ValidatorSignature,
 }
 
@@ -649,6 +670,7 @@ impl LiteVote {
         Some(Vote {
             value,
             round: self.round,
+            lock: self.lock,
             signature: self.signature,
         })
     }
@@ -921,13 +943,19 @@ impl LiteVote {
         Self {
             value,
             round,
+            lock: None,
             signature,
         }
     }
 
     /// Verifies the signature in the vote.
     pub fn check(&self, public_key: ValidatorPublicKey) -> Result<(), ChainError> {
-        let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind, None);
+        let hash_and_round = VoteValue(
+            self.value.value_hash,
+            self.round,
+            self.value.kind,
+            self.lock,
+        );
         Ok(self.signature.check(&hash_and_round, public_key)?)
     }
 }

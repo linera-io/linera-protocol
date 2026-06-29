@@ -26,6 +26,11 @@ pub struct LiteCertificate<'a> {
     pub value: LiteValue,
     /// The round in which the value was certified.
     pub round: Round,
+    /// The lock round `ℓ` the `ValidatedBlock` voters signed (see [`VoteValue`]). Always `None`
+    /// for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no justification.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub lock: Option<Round>,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
 }
@@ -48,6 +53,19 @@ impl LiteCertificate<'_> {
     pub fn new(
         value: LiteValue,
         round: Round,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self::new_with_lock(value, round, None, signatures)
+    }
+
+    /// Creates a new lite certificate that also records the lock round `ℓ` its `ValidatedBlock`
+    /// voters signed (see [`VoteValue`]).
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub fn new_with_lock(
+        value: LiteValue,
+        round: Round,
+        lock: Option<Round>,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
@@ -56,6 +74,7 @@ impl LiteCertificate<'_> {
         Self {
             value,
             round,
+            lock,
             signatures,
         }
     }
@@ -71,17 +90,21 @@ impl LiteCertificate<'_> {
             LiteVote {
                 value,
                 round,
+                lock,
                 signature,
             },
         ) = votes.next()?;
         let mut signatures = vec![(public_key, signature)];
         for (validator_key, vote) in votes {
-            if vote.value.value_hash != value.value_hash || vote.round != round {
+            if vote.value.value_hash != value.value_hash || vote.round != round || vote.lock != lock
+            {
                 return None;
             }
             signatures.push((validator_key, vote.signature));
         }
-        Some(LiteCertificate::new(value, round, signatures))
+        Some(LiteCertificate::new_with_lock(
+            value, round, lock, signatures,
+        ))
     }
 
     /// Verifies the certificate.
@@ -90,7 +113,7 @@ impl LiteCertificate<'_> {
             self.value.value_hash,
             self.value.kind,
             self.round,
-            None,
+            self.lock,
             &self.signatures,
             committee,
         )?;
@@ -112,9 +135,10 @@ impl LiteCertificate<'_> {
         {
             return None;
         }
-        Some(GenericCertificate::new(
+        Some(GenericCertificate::new_with_lock(
             value,
             self.round,
+            self.lock,
             self.signatures.into_owned(),
         ))
     }
@@ -124,6 +148,7 @@ impl LiteCertificate<'_> {
         LiteCertificate {
             value: self.value.clone(),
             round: self.round,
+            lock: self.lock,
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
         }
     }

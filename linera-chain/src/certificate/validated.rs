@@ -46,9 +46,10 @@ impl From<GenericCertificate<ValidatedBlock>> for Certificate {
 
 impl Serialize for GenericCertificate<ValidatedBlock> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 3)?;
+        let mut state = serializer.serialize_struct("ValidatedBlockCertificate", 4)?;
         state.serialize_field("value", self.inner())?;
         state.serialize_field("round", &self.round)?;
+        state.serialize_field("lock", &self.lock())?;
         state.serialize_field("signatures", self.signatures())?;
         state.end()
     }
@@ -64,6 +65,7 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
         struct Inner {
             value: ValidatedBlock,
             round: Round,
+            lock: Option<Round>,
             signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
         }
         let inner = Inner::deserialize(deserializer)?;
@@ -72,7 +74,12 @@ impl<'de> Deserialize<'de> for GenericCertificate<ValidatedBlock> {
                 "Signatures are not strictly ordered",
             ))
         } else {
-            Ok(Self::new(inner.value, inner.round, inner.signatures))
+            Ok(Self::new_with_lock(
+                inner.value,
+                inner.round,
+                inner.lock,
+                inner.signatures,
+            ))
         }
     }
 }

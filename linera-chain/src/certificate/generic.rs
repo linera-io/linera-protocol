@@ -19,6 +19,11 @@ pub struct GenericCertificate<T: CertificateValue> {
     value: T,
     /// The round in which the value was certified.
     pub round: Round,
+    /// The lock round `ℓ` the `ValidatedBlock` voters signed (see [`VoteValue`]). Always `None`
+    /// for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no justification.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    lock: Option<Round>,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
 
@@ -38,6 +43,19 @@ impl<T: CertificateValue> GenericCertificate<T> {
     pub fn new(
         value: T,
         round: Round,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self::new_with_lock(value, round, None, signatures)
+    }
+
+    /// Creates a new certificate that also records the lock round `ℓ` its `ValidatedBlock`
+    /// voters signed (see [`VoteValue`]).
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub fn new_with_lock(
+        value: T,
+        round: Round,
+        lock: Option<Round>,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
@@ -45,8 +63,14 @@ impl<T: CertificateValue> GenericCertificate<T> {
         Self {
             value,
             round,
+            lock,
             signatures,
         }
+    }
+
+    /// Returns the lock round `ℓ` the `ValidatedBlock` voters signed, if any.
+    pub fn lock(&self) -> Option<Round> {
+        self.lock
     }
 
     /// Returns a reference to the `Hashed` value contained in this certificate.
@@ -115,7 +139,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             self.hash(),
             T::KIND,
             self.round,
-            None,
+            self.lock,
             &self.signatures,
             committee,
         )?;
@@ -130,6 +154,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
         crate::certificate::LiteCertificate {
             value: LiteValue::new(&self.value),
             round: self.round,
+            lock: self.lock,
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
         }
     }
@@ -140,6 +165,7 @@ impl<T: CertificateValue> Clone for GenericCertificate<T> {
         Self {
             value: self.value.clone(),
             round: self.round,
+            lock: self.lock,
             signatures: self.signatures.clone(),
         }
     }
@@ -152,6 +178,7 @@ impl<T: CertificateValue + Eq + PartialEq> PartialEq for GenericCertificate<T> {
     fn eq(&self, other: &Self) -> bool {
         self.hash() == other.hash()
             && self.round == other.round
+            && self.lock == other.lock
             && self.signatures == other.signatures
     }
 }

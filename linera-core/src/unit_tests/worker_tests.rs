@@ -3689,6 +3689,8 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::SingleLeader(5));
+    // The validation vote locks at the round of the justifying certificate it relied on.
+    assert_eq!(vote.lock, Some(Round::SingleLeader(4)));
 
     // Let round 5 time out, too.
     let certificate_timeout =

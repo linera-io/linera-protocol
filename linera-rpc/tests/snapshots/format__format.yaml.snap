@@ -594,6 +594,9 @@ LiteCertificate:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
+    - lock:
+        OPTION:
+          TYPENAME: Round
     - signatures:
         SEQ:
           TUPLE:
@@ -613,6 +616,9 @@ LiteVote:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
+    - lock:
+        OPTION:
+          TYPENAME: Round
     - signature:
         TYPENAME: Secp256k1Signature
 LockingBlock:
@@ -1403,6 +1409,9 @@ ValidatedBlockCertificate:
         TYPENAME: Block
     - round:
         TYPENAME: Round
+    - lock:
+        OPTION:
+          TYPENAME: Round
     - signatures:
         SEQ:
           TUPLE:
