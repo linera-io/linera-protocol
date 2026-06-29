@@ -13,18 +13,41 @@ import Transfer from './Transfer.vue'
 export default {
   data() { return data() },
   created() {
-    // The formats-registry chain/app id come exclusively from Vite env vars
-    // (e.g. a `.env.local`). They are runtime-only values on the Vue root — never
-    // persisted to localStorage and not editable in the navbar — so the explorer
-    // always decodes against the registry for the wallet it was launched with,
-    // with no stale stored value to shadow it.
-    const envChain = import.meta.env.VITE_FORMATS_REGISTRY_CHAIN as string | undefined
-    const envApp = import.meta.env.VITE_FORMATS_REGISTRY_APP_ID as string | undefined
-    this.formats_registry_chain = envChain || null
-    this.formats_registry_app_id = envApp || null
+    this.resolve_formats_registry()
+  },
+  computed: {
+    // True when both formats-registry values are pinned via Vite env vars (e.g.
+    // a `.env.local`). In that case the env values are authoritative and the
+    // navbar inputs are hidden; otherwise the inputs are shown and the values are
+    // entered manually and persisted to localStorage.
+    formats_registry_from_env(): boolean {
+      return Boolean(import.meta.env.VITE_FORMATS_REGISTRY_CHAIN && import.meta.env.VITE_FORMATS_REGISTRY_APP_ID)
+    }
   },
   methods: {
     save_config() { save_config(this) },
+    // Compute the effective formats-registry values used for decoding: the Vite
+    // env vars when set, otherwise the manual values persisted in `config`. The
+    // env vars win, so a stale stored value can never shadow the registry for the
+    // wallet the explorer was launched with. The result lives in runtime-only
+    // root fields (never persisted), which is what the wasm decoders read.
+    resolve_formats_registry() {
+      const envChain = import.meta.env.VITE_FORMATS_REGISTRY_CHAIN as string | undefined
+      const envApp = import.meta.env.VITE_FORMATS_REGISTRY_APP_ID as string | undefined
+      this.formats_registry_chain = (envChain || this.config.formats_registry_chain) || null
+      this.formats_registry_app_id = (envApp || this.config.formats_registry_app_id) || null
+    },
+    on_formats_registry_change() {
+      // Treat empty/whitespace as "unset" so the optional fields round-trip to
+      // None instead of failing to parse, then persist and re-resolve.
+      for (const k of ['formats_registry_chain', 'formats_registry_app_id']) {
+        if (typeof this.config[k] === 'string' && this.config[k].trim() === '') {
+          this.config[k] = null
+        }
+      }
+      save_config(this)
+      this.resolve_formats_registry()
+    },
     route(name?: string, args?: [string, string][]) { route(this, name, args) },
     decode_user_operation(application_id: string, bytes_hex: string) {
       return decode_user_operation(this, application_id, bytes_hex)
@@ -99,6 +122,13 @@ export default {
                 <input v-model="config.node" class="form-control" @change="save_config" style="width:190px">
                 <span class="input-group-text">indexer</span>
                 <input v-model="config.indexer" class="form-control" @change="save_config" style="width:190px">
+              </div>
+            </li>
+            <li class="nav-item mx-2" v-if="!formats_registry_from_env">
+              <div class="input-group">
+                <span class="input-group-text">formats registry</span>
+                <input v-model="config.formats_registry_chain" class="form-control font-monospace" placeholder="chain id" @change="on_formats_registry_change" style="width:200px">
+                <input v-model="config.formats_registry_app_id" class="form-control font-monospace" placeholder="application id" @change="on_formats_registry_change" style="width:200px">
               </div>
             </li>
             <li class="nav-item mx-2">

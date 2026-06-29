@@ -113,6 +113,19 @@ pub struct Config {
     indexer: String,
     node: String,
     tls: bool,
+    /// Hex-encoded chain id of the formats-registry application, used as the
+    /// manual fallback when the `VITE_FORMATS_REGISTRY_CHAIN` env var is unset.
+    /// Editable in the navbar and persisted to localStorage; the env var, when
+    /// set, takes precedence (resolution happens in `App.vue`). Stored as a raw
+    /// string so the JS-side `v-model` round-trips cleanly through
+    /// `serde_wasm_bindgen`; we validate the format only when using the value.
+    #[serde(default)]
+    formats_registry_chain: Option<String>,
+    /// Hex-encoded formats-registry app id; manual fallback for the
+    /// `VITE_FORMATS_REGISTRY_APP_ID` env var. Same rationale as
+    /// [`Self::formats_registry_chain`].
+    #[serde(default)]
+    formats_registry_app_id: Option<String>,
 }
 
 impl Config {
@@ -122,6 +135,8 @@ impl Config {
             indexer: "localhost:8081".to_string(),
             node: "localhost:8080".to_string(),
             tls: false,
+            formats_registry_chain: None,
+            formats_registry_app_id: None,
         };
         // Return default if window doesn't exist (e.g., in test environment).
         let Some(window) = web_sys::window() else {
@@ -145,16 +160,16 @@ pub struct Data {
     chains: Vec<ChainId>,
     chain: ChainId,
     plugins: Vec<String>,
-    /// Hex-encoded chain id where the formats registry application is deployed.
-    /// Sourced exclusively from the `VITE_FORMATS_REGISTRY_CHAIN` env var (see
-    /// `App.vue`), so it is a runtime-only field on `Data` rather than part of
-    /// the localStorage-persisted [`Config`]. Must be set together with
-    /// [`Self::formats_registry_app_id`]; we validate the format only when
-    /// actually using the value.
+    /// Effective hex-encoded chain id of the formats-registry application used
+    /// for decoding: the `VITE_FORMATS_REGISTRY_CHAIN` env var when set, else the
+    /// persisted [`Config::formats_registry_chain`]. Resolved in `App.vue` and
+    /// kept here as a runtime-only field (never persisted), which is what the
+    /// wasm decoders read. Must be set together with
+    /// [`Self::formats_registry_app_id`]; we validate the format only when using it.
     #[serde(default)]
     formats_registry_chain: Option<String>,
-    /// Hex-encoded application id of the formats registry. Same env-only
-    /// rationale as [`Self::formats_registry_chain`].
+    /// Effective hex-encoded formats-registry app id. Same env-or-config
+    /// resolution as [`Self::formats_registry_chain`].
     #[serde(default)]
     formats_registry_app_id: Option<String>,
 }
