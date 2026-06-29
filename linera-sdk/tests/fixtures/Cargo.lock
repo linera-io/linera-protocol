@@ -2573,6 +2573,7 @@ dependencies = [
  "serde",
  "sha3",
  "static_assertions",
+ "strum",
  "sysinfo",
  "tempfile",
  "thiserror 1.0.69",
