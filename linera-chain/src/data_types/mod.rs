@@ -563,9 +563,20 @@ impl LiteValue {
 }
 
 //(deuszx): pub is temp.
-/// The value a validator signs when voting: the value hash, round and certificate kind.
+/// The value a validator signs when voting: the value hash, round, certificate kind and,
+/// for `ValidatedBlock` votes, the lock round `ℓ`.
+///
+/// The lock `ℓ` is the consensus device behind fault attributability: by signing it, a
+/// validator asserts "I have not voted to confirm a block other than this one in any round
+/// `≥ ℓ`". `None` means `ℓ = 0`, i.e. the strongest claim ("...in any round"), and is used
+/// for freshly proposed blocks and for `ConfirmedBlock`/`Timeout` votes, which carry no lock.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
-pub struct VoteValue(CryptoHash, Round, CertificateKind);
+pub struct VoteValue(
+    pub(crate) CryptoHash,
+    pub(crate) Round,
+    pub(crate) CertificateKind,
+    pub(crate) Option<Round>,
+);
 
 /// A vote on a statement from a validator.
 #[derive(Allocative, Clone, Debug, Serialize, Deserialize)]
@@ -585,7 +596,7 @@ impl<T> Vote<T> {
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(value.hash(), round, T::KIND);
+        let hash_and_round = VoteValue(value.hash(), round, T::KIND, None);
         let signature = ValidatorSignature::new(&hash_and_round, key_pair);
         Self {
             value,
@@ -901,7 +912,7 @@ impl BlockProposal {
 impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, secret_key: &ValidatorSecretKey) -> Self {
-        let hash_and_round = VoteValue(value.value_hash, round, value.kind);
+        let hash_and_round = VoteValue(value.value_hash, round, value.kind, None);
         let signature = ValidatorSignature::new(&hash_and_round, secret_key);
         Self {
             value,
@@ -912,7 +923,7 @@ impl LiteVote {
 
     /// Verifies the signature in the vote.
     pub fn check(&self, public_key: ValidatorPublicKey) -> Result<(), ChainError> {
-        let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind);
+        let hash_and_round = VoteValue(self.value.value_hash, self.round, self.value.kind, None);
         Ok(self.signature.check(&hash_and_round, public_key)?)
     }
 }
@@ -947,7 +958,7 @@ impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND);
+        let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND, None);
         signature.check(&hash_and_round, public_key)?;
         // Check that each validator only appears once.
         ensure!(
@@ -978,10 +989,15 @@ pub(crate) fn is_strictly_ordered(values: &[(ValidatorPublicKey, ValidatorSignat
 }
 
 /// Verifies certificate signatures.
+///
+/// `lock` is the lock round `ℓ` that `ValidatedBlock` voters signed (see [`VoteValue`]); it
+/// is `None` for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no
+/// justification.
 pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     certificate_kind: CertificateKind,
     round: Round,
+    lock: Option<Round>,
     signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
@@ -1005,7 +1021,7 @@ pub(crate) fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = VoteValue(value_hash, round, certificate_kind);
+    let hash_and_round = VoteValue(value_hash, round, certificate_kind, lock);
     ValidatorSignature::verify_batch(&hash_and_round, signatures.iter())?;
     Ok(())
 }

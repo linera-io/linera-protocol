@@ -115,6 +115,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             self.hash(),
             T::KIND,
             self.round,
+            None,
             &self.signatures,
             committee,
         )?;

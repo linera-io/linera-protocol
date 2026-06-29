@@ -90,6 +90,7 @@ impl LiteCertificate<'_> {
             self.value.value_hash,
             self.value.kind,
             self.round,
+            None,
             &self.signatures,
             committee,
         )?;

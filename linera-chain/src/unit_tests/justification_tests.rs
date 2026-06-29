@@ -1,0 +1,422 @@
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use linera_base::{
+    crypto::{
+        AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey, ValidatorSignature,
+    },
+    data_types::Round,
+};
+use linera_execution::committee::Committee;
+
+use super::{
+    extract_double_validation, extract_equivocation, EquivocationProof, JustificationChain,
+    JustificationLink, JustifiedConfirmation, ValidatedQuorum,
+};
+use crate::{data_types::VoteValue, types::CertificateKind, ChainError};
+
+/// Generates `n` validator keypairs and an equally-weighted committee over them.
+/// With 100 votes each, the quorum threshold is `ceil(2n/3 * 100) + ...`; for `n = 4` that
+/// means any 3 of the 4 validators form a quorum.
+fn setup(n: usize) -> (Committee, Vec<ValidatorKeypair>) {
+    let keys: Vec<ValidatorKeypair> = (0..n).map(|_| ValidatorKeypair::generate()).collect();
+    let committee = Committee::make_simple(
+        keys.iter()
+            .map(|kp| (kp.public_key, AccountSecretKey::generate().public()))
+            .collect(),
+    );
+    (committee, keys)
+}
+
+fn block(name: &str) -> CryptoHash {
+    CryptoHash::test_hash(name)
+}
+
+fn sign(
+    block: CryptoHash,
+    round: Round,
+    kind: CertificateKind,
+    lock: Option<Round>,
+    key: &ValidatorKeypair,
+) -> (ValidatorPublicKey, ValidatorSignature) {
+    let value = VoteValue(block, round, kind, lock);
+    (
+        key.public_key,
+        ValidatorSignature::new(&value, &key.secret_key),
+    )
+}
+
+/// A `ValidatedBlock` quorum for `block` in `round`, cast with the given `lock`.
+fn validated_link(
+    block: CryptoHash,
+    round: Round,
+    lock: Option<Round>,
+    signers: &[&ValidatorKeypair],
+) -> JustificationLink {
+    JustificationLink {
+        round,
+        signatures: signers
+            .iter()
+            .map(|kp| sign(block, round, CertificateKind::Validated, lock, kp))
+            .collect(),
+    }
+}
+
+fn confirmed_signatures(
+    block: CryptoHash,
+    round: Round,
+    signers: &[&ValidatorKeypair],
+) -> Vec<(ValidatorPublicKey, ValidatorSignature)> {
+    signers
+        .iter()
+        .map(|kp| sign(block, round, CertificateKind::Confirmed, None, kp))
+        .collect()
+}
+
+// --- Chain verification -----------------------------------------------------------------
+
+#[test]
+fn verify_accepts_valid_chain() {
+    let (committee, k) = setup(4);
+    let b = block("B");
+    // Link 0 at round 3 is justified by link 1 at round 1, which is the grounding link.
+    let chain = JustificationChain::new(vec![
+        validated_link(
+            b,
+            Round::SingleLeader(3),
+            Some(Round::SingleLeader(1)),
+            &[&k[0], &k[1], &k[2]],
+        ),
+        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
+    ]);
+    assert!(chain.verify(b, &committee).is_ok());
+    assert_eq!(chain.top_lock(), Some(Round::SingleLeader(3)));
+}
+
+#[test]
+fn verify_rejects_non_decreasing_rounds() {
+    let (committee, k) = setup(4);
+    let b = block("B");
+    let chain = JustificationChain::new(vec![
+        validated_link(
+            b,
+            Round::SingleLeader(1),
+            Some(Round::SingleLeader(1)),
+            &[&k[0], &k[1], &k[2]],
+        ),
+        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
+    ]);
+    assert!(matches!(
+        chain.verify(b, &committee),
+        Err(ChainError::JustificationRoundsNotDecreasing)
+    ));
+}
+
+#[test]
+fn verify_rejects_broken_linkage() {
+    let (committee, k) = setup(4);
+    let b = block("B");
+    // Link 0's votes signed lock `SingleLeader(2)`, but the next link is at `SingleLeader(1)`,
+    // so the lock the verifier derives doesn't match what was signed.
+    let chain = JustificationChain::new(vec![
+        validated_link(
+            b,
+            Round::SingleLeader(3),
+            Some(Round::SingleLeader(2)),
+            &[&k[0], &k[1], &k[2]],
+        ),
+        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
+    ]);
+    assert!(chain.verify(b, &committee).is_err());
+}
+
+#[test]
+fn verify_rejects_sub_quorum() {
+    let (committee, k) = setup(4);
+    let b = block("B");
+    let chain = JustificationChain::new(vec![validated_link(
+        b,
+        Round::SingleLeader(0),
+        None,
+        &[&k[0]],
+    )]);
+    assert!(matches!(
+        chain.verify(b, &committee),
+        Err(ChainError::CertificateRequiresQuorum)
+    ));
+}
+
+// --- Equivocation extraction ------------------------------------------------------------
+
+#[test]
+fn extract_returns_none_for_same_block() {
+    let (_committee, k) = setup(4);
+    let a = JustifiedConfirmation {
+        block_hash: block("A"),
+        round: Round::SingleLeader(0),
+        confirmed_signatures: confirmed_signatures(block("A"), Round::SingleLeader(0), &[&k[0]]),
+        justification: JustificationChain::default(),
+    };
+    let b = a.clone();
+    assert!(extract_equivocation(&a, &b).is_none());
+}
+
+#[test]
+fn extract_finds_lock_violation() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    let r = Round::SingleLeader(0);
+    // `k[0]` and `k[2]` both confirmed A and freshly validated B in the same round.
+    let a = JustifiedConfirmation {
+        block_hash: a_hash,
+        round: r,
+        confirmed_signatures: confirmed_signatures(a_hash, r, &[&k[0], &k[1], &k[2]]),
+        justification: JustificationChain::new(vec![validated_link(
+            a_hash,
+            r,
+            None,
+            &[&k[0], &k[1], &k[2]],
+        )]),
+    };
+    let b = JustifiedConfirmation {
+        block_hash: b_hash,
+        round: r,
+        confirmed_signatures: confirmed_signatures(b_hash, r, &[&k[0], &k[2], &k[3]]),
+        justification: JustificationChain::new(vec![validated_link(
+            b_hash,
+            r,
+            None,
+            &[&k[0], &k[2], &k[3]],
+        )]),
+    };
+    let proof = extract_equivocation(&a, &b).expect("a proof must exist");
+    assert!(matches!(proof, EquivocationProof::LockViolation { .. }));
+    assert!(proof.check().is_ok());
+    assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+}
+
+#[test]
+fn extract_descends_to_grounding_link() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    // A was confirmed in round 0; B's chain has its top link in round 3, justified by the
+    // grounding link in round 1. Because A's confirmation round (0) is below the top link's
+    // lock (1), the walk must skip the top link and catch the violation in the grounding link.
+    let a = JustifiedConfirmation {
+        block_hash: a_hash,
+        round: Round::SingleLeader(0),
+        confirmed_signatures: confirmed_signatures(
+            a_hash,
+            Round::SingleLeader(0),
+            &[&k[0], &k[1], &k[2]],
+        ),
+        justification: JustificationChain::default(),
+    };
+    let b = JustifiedConfirmation {
+        block_hash: b_hash,
+        round: Round::SingleLeader(3),
+        confirmed_signatures: confirmed_signatures(
+            b_hash,
+            Round::SingleLeader(3),
+            &[&k[1], &k[2], &k[3]],
+        ),
+        justification: JustificationChain::new(vec![
+            validated_link(
+                b_hash,
+                Round::SingleLeader(3),
+                Some(Round::SingleLeader(1)),
+                &[&k[1], &k[2], &k[3]],
+            ),
+            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[0], &k[2], &k[3]]),
+        ]),
+    };
+    let proof = extract_equivocation(&a, &b).expect("a proof must exist");
+    match &proof {
+        EquivocationProof::LockViolation {
+            validator,
+            validated_round,
+            validated_lock,
+            ..
+        } => {
+            assert_eq!(*validator, k[0].public_key);
+            assert_eq!(*validated_round, Round::SingleLeader(1));
+            assert_eq!(*validated_lock, None);
+        }
+        other => panic!("expected a lock violation, got {other:?}"),
+    }
+    assert!(proof.check().is_ok());
+}
+
+#[test]
+fn extract_finds_double_confirm_in_fast_round() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    // Both blocks confirmed in the fast round, so neither carries a justification chain.
+    let a = JustifiedConfirmation {
+        block_hash: a_hash,
+        round: Round::Fast,
+        confirmed_signatures: confirmed_signatures(a_hash, Round::Fast, &[&k[0], &k[1], &k[2]]),
+        justification: JustificationChain::default(),
+    };
+    let b = JustifiedConfirmation {
+        block_hash: b_hash,
+        round: Round::Fast,
+        confirmed_signatures: confirmed_signatures(b_hash, Round::Fast, &[&k[0], &k[2], &k[3]]),
+        justification: JustificationChain::default(),
+    };
+    let proof = extract_equivocation(&a, &b).expect("a proof must exist");
+    assert!(matches!(proof, EquivocationProof::DoubleVote { .. }));
+    assert!(proof.check().is_ok());
+    assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+}
+
+#[test]
+fn extract_finds_double_validation() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    let r = Round::SingleLeader(3);
+    // `k[0]` and `k[2]` validated two different blocks in the same round, each under its own
+    // (different) lock. That overlap is the double-validation fault.
+    let a = ValidatedQuorum {
+        block_hash: a_hash,
+        round: r,
+        lock: Some(Round::SingleLeader(1)),
+        signatures: validated_link(
+            a_hash,
+            r,
+            Some(Round::SingleLeader(1)),
+            &[&k[0], &k[1], &k[2]],
+        )
+        .signatures,
+    };
+    let b = ValidatedQuorum {
+        block_hash: b_hash,
+        round: r,
+        lock: Some(Round::SingleLeader(2)),
+        signatures: validated_link(
+            b_hash,
+            r,
+            Some(Round::SingleLeader(2)),
+            &[&k[0], &k[2], &k[3]],
+        )
+        .signatures,
+    };
+    let proof = extract_double_validation(&a, &b).expect("a proof must exist");
+    match &proof {
+        EquivocationProof::DoubleVote { kind, .. } => {
+            assert_eq!(*kind, CertificateKind::Validated);
+        }
+        other => panic!("expected a double vote, got {other:?}"),
+    }
+    assert!(proof.check().is_ok());
+    assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+}
+
+#[test]
+fn extract_double_validation_ignores_different_rounds() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    // Validating conflicting blocks in different rounds is not a fault on its own.
+    let a = ValidatedQuorum {
+        block_hash: a_hash,
+        round: Round::SingleLeader(1),
+        lock: None,
+        signatures: validated_link(a_hash, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]])
+            .signatures,
+    };
+    let b = ValidatedQuorum {
+        block_hash: b_hash,
+        round: Round::SingleLeader(3),
+        lock: Some(Round::SingleLeader(1)),
+        signatures: validated_link(
+            b_hash,
+            Round::SingleLeader(3),
+            Some(Round::SingleLeader(1)),
+            &[&k[0], &k[2], &k[3]],
+        )
+        .signatures,
+    };
+    assert!(extract_double_validation(&a, &b).is_none());
+}
+
+// --- Proof self-verification ------------------------------------------------------------
+
+#[test]
+fn proof_check_rejects_same_block() {
+    let (_committee, k) = setup(4);
+    let a = block("A");
+    let r = Round::SingleLeader(0);
+    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, &k[0]);
+    let (_, validated_signature) = sign(a, r, CertificateKind::Validated, None, &k[0]);
+    let proof = EquivocationProof::LockViolation {
+        validator: k[0].public_key,
+        confirmed_block_hash: a,
+        confirmed_round: r,
+        confirmed_signature,
+        validated_block_hash: a,
+        validated_round: r,
+        validated_lock: None,
+        validated_signature,
+    };
+    assert!(matches!(
+        proof.check(),
+        Err(ChainError::EquivocationProofSameBlock)
+    ));
+}
+
+#[test]
+fn proof_check_rejects_non_violating_lock() {
+    let (_committee, k) = setup(4);
+    let (a, b) = (block("A"), block("B"));
+    // The confirmation is in round 0, but the lock claim only covers rounds `≥ 2`, so
+    // confirming a different block in round 0 is not actually a violation.
+    let (_, confirmed_signature) = sign(
+        a,
+        Round::SingleLeader(0),
+        CertificateKind::Confirmed,
+        None,
+        &k[0],
+    );
+    let (_, validated_signature) = sign(
+        b,
+        Round::SingleLeader(3),
+        CertificateKind::Validated,
+        Some(Round::SingleLeader(2)),
+        &k[0],
+    );
+    let proof = EquivocationProof::LockViolation {
+        validator: k[0].public_key,
+        confirmed_block_hash: a,
+        confirmed_round: Round::SingleLeader(0),
+        confirmed_signature,
+        validated_block_hash: b,
+        validated_round: Round::SingleLeader(3),
+        validated_lock: Some(Round::SingleLeader(2)),
+        validated_signature,
+    };
+    assert!(matches!(
+        proof.check(),
+        Err(ChainError::EquivocationProofNoLockViolation)
+    ));
+}
+
+#[test]
+fn proof_check_rejects_forged_signature() {
+    let (_committee, k) = setup(4);
+    let (a, b) = (block("A"), block("B"));
+    let r = Round::SingleLeader(0);
+    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, &k[0]);
+    // Signed by k[1], but the proof names k[0].
+    let (_, validated_signature) = sign(b, r, CertificateKind::Validated, None, &k[1]);
+    let proof = EquivocationProof::LockViolation {
+        validator: k[0].public_key,
+        confirmed_block_hash: a,
+        confirmed_round: r,
+        confirmed_signature,
+        validated_block_hash: b,
+        validated_round: r,
+        validated_lock: None,
+        validated_signature,
+    };
+    assert!(proof.check().is_err());
+}

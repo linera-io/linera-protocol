@@ -19,6 +19,7 @@ mod chain;
 /// Data types exchanged while proposing, voting on, and confirming blocks.
 pub mod data_types;
 mod inbox;
+pub mod justification;
 pub mod manager;
 mod outbox;
 mod pending_blobs;
@@ -144,6 +145,12 @@ pub enum ChainError {
     CertificateValidatorReuse,
     #[error("Signatures in a certificate must form a quorum")]
     CertificateRequiresQuorum,
+    #[error("Justification chain rounds must be strictly decreasing")]
+    JustificationRoundsNotDecreasing,
+    #[error("Equivocation proof must reference two different blocks")]
+    EquivocationProofSameBlock,
+    #[error("Equivocation proof does not violate the lock claim")]
+    EquivocationProofNoLockViolation,
     #[error(
         "Inbox gap on chain {chain_id} from origin {origin}: \
         expected height {expected_height}, got {actual_height}"
@@ -207,6 +214,9 @@ impl ChainError {
             | ChainError::MissingEarlierBlocks { .. }
             | ChainError::CertificateValidatorReuse
             | ChainError::CertificateRequiresQuorum
+            | ChainError::JustificationRoundsNotDecreasing
+            | ChainError::EquivocationProofSameBlock
+            | ChainError::EquivocationProofNoLockViolation
             | ChainError::BlockProposalTooLarge(_)
             | ChainError::ClosedChain
             | ChainError::EmptyBlock
