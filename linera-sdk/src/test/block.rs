@@ -16,6 +16,7 @@ use linera_chain::{
         BundleExecutionPolicy, IncomingBundle, LiteValue, LiteVote, MessageAction, ProposedBlock,
         SignatureAggregator, Transaction,
     },
+    justification::JustificationChain,
     types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::worker::WorkerError;
@@ -267,10 +268,13 @@ impl BlockBuilder {
         let committee = self.validator.committee().await;
         let public_key = self.validator.key_pair().public();
         let mut builder = SignatureAggregator::new(value, Round::Fast, &committee);
-        let certificate = builder
+        let quorum = builder
             .append(public_key, vote.signature)
             .expect("Failed to sign block")
             .expect("Committee has more than one test validator");
+        // Confirmed in the fast round, so the certificate carries no justification chain.
+        let certificate =
+            ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 
         Ok((certificate, resource_tracker))
     }

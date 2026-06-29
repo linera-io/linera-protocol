@@ -52,11 +52,12 @@ use linera_chain::{
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
         PostedMessage, ProposedBlock, SignatureAggregator, Transaction, Vote,
     },
+    justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
-        CertificateKind, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate,
-        GenericCertificate, Timeout, ValidatedBlock,
+        CertificateKind, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
+        Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -87,7 +88,7 @@ use crate::{
     data_types::*,
     test_utils::{MemoryStorageBuilder, StorageBuilder},
     worker::{
-        Notification,
+        Notification, ProcessableCertificate,
         Reason::{self, NewBlock, NewIncomingBundle},
         WorkerError, WorkerState,
     },
@@ -324,30 +325,47 @@ where
         description
     }
 
-    fn make_certificate<T>(&self, value: T) -> GenericCertificate<T>
+    fn make_certificate<T>(&self, value: T) -> T::Certificate
     where
-        T: CertificateValue,
+        T: ProcessableCertificate,
     {
         self.make_certificate_with_round(value, Round::MultiLeader(0))
     }
 
-    fn make_certificate_with_round<T>(&self, value: T, round: Round) -> GenericCertificate<T>
+    fn make_certificate_with_round<T>(&self, value: T, round: Round) -> T::Certificate
     where
-        T: CertificateValue,
+        T: ProcessableCertificate,
     {
-        let vote = LiteVote::new(
-            LiteValue::new(&value),
-            round,
-            self.executing_worker
-                .chain_worker_config
-                .key_pair()
-                .unwrap(),
-        );
+        let key_pair = self
+            .executing_worker
+            .chain_worker_config
+            .key_pair()
+            .unwrap();
+        let public_key = self.executing_worker.public_key();
+        let value_hash = value.hash();
+        let chain_id = value.chain_id();
+        let vote = LiteVote::new(LiteValue::new(&value), round, key_pair);
         let mut builder = SignatureAggregator::new(value, round, &self.committee);
-        builder
-            .append(self.executing_worker.public_key(), vote.signature)
-            .unwrap()
-            .unwrap()
+        let quorum = builder.append(public_key, vote.signature).unwrap().unwrap();
+        // A block confirmed outside the fast round must be justified by a validated quorum at the
+        // confirm round. Build that single-link chain (the lone test validator signs a
+        // `ValidatedBlock` vote with lock `None`). Validated and timeout certificates, and blocks
+        // confirmed in the fast round, carry no justification.
+        let justification = if T::KIND == CertificateKind::Confirmed && !round.is_fast() {
+            let validated_value = LiteValue {
+                value_hash,
+                chain_id,
+                kind: CertificateKind::Validated,
+            };
+            let validated_vote = LiteVote::new(validated_value, round, key_pair);
+            JustificationChain::new(vec![JustificationLink {
+                round,
+                signatures: vec![(public_key, validated_vote.signature)],
+            }])
+        } else {
+            JustificationChain::default()
+        };
+        T::make_certificate(quorum, justification)
     }
 
     async fn make_simple_transfer_certificate(
@@ -3595,10 +3613,12 @@ where
 
     // If we send the validated block certificate to the worker, it votes to confirm.
     let vote = response.info.manager.pending.clone().unwrap();
-    let certificate1 = vote
+    let quorum1 = vote
         .with_value(value1.clone())
         .unwrap()
         .into_certificate(env.executing_worker().public_key());
+    let certificate1 =
+        ValidatedBlockCertificate::from_parts(quorum1, JustificationChain::default());
     let (response, _) = env
         .executing_worker()
         .handle_validated_certificate(certificate1.clone())

@@ -22,12 +22,14 @@
 //!
 //! [`VoteValue`]: crate::data_types::VoteValue
 
+use allocative::Allocative;
 use linera_base::{
     crypto::{CryptoHash, ValidatorPublicKey, ValidatorSignature},
     data_types::Round,
     ensure,
 };
 use linera_execution::committee::Committee;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     data_types::{check_signatures, VoteValue},
@@ -37,7 +39,7 @@ use crate::{
 
 /// One link in a justification chain: a quorum of validators that all voted to validate the
 /// same block in `round`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct JustificationLink {
     /// The round in which these `ValidatedBlock` votes were cast.
@@ -53,7 +55,7 @@ pub struct JustificationLink {
 /// lock `ℓᵢ = links[i + 1].round` — i.e. it is justified by the next, lower link — and the
 /// last link was cast with `ℓ = 0` (`None`), the fresh proposal that grounds the chain. An
 /// empty chain means the block was confirmed in the fast round, which needs no validation.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct JustificationChain {
     links: Vec<JustificationLink>,
@@ -68,6 +70,19 @@ impl JustificationChain {
     /// Returns the links, ordered by decreasing round.
     pub fn links(&self) -> &[JustificationLink] {
         &self.links
+    }
+
+    /// Returns a new chain with the given quorum prepended as a new top link in `round`,
+    /// i.e. the highest, certifying round. The existing links must all be in lower rounds.
+    pub fn prepend(
+        &self,
+        round: Round,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        let mut links = Vec::with_capacity(self.links.len() + 1);
+        links.push(JustificationLink { round, signatures });
+        links.extend(self.links.iter().cloned());
+        Self { links }
     }
 
     /// Returns the lock `ℓ` that the quorum in link `index` signed: the round of the next,

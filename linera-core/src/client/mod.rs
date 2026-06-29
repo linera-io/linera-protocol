@@ -32,12 +32,13 @@ use linera_base::{data_types::Bytecode, identifiers::ModuleId, vm::VmRuntime};
 use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight, LiteVote,
-        ProposedBlock,
+        OriginalProposal, ProposedBlock,
     },
+    justification::JustificationChain,
     manager::LockingBlock,
     types::{
-        Block, CertificateValue, ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate,
-        LiteCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Block, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, LiteCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainIdSet,
 };
@@ -690,7 +691,10 @@ impl<Env: Environment> Client<Env> {
                     break;
                 }
             }
-            last_info = self.handle_certificate(certificate).await?.info;
+            last_info = self
+                .handle_certificate::<ConfirmedBlock>(certificate)
+                .await?
+                .info;
         }
         Ok(last_info)
     }
@@ -1136,10 +1140,10 @@ impl<Env: Environment> Client<Env> {
 
     async fn handle_certificate<T: ProcessableCertificate>(
         &self,
-        certificate: GenericCertificate<T>,
+        certificate: T::Certificate,
     ) -> Result<ChainInfoResponse, LocalNodeError> {
         self.local_node
-            .handle_certificate(certificate, &self.notifier)
+            .handle_certificate::<T>(certificate, &self.notifier)
             .await
     }
 
@@ -1267,15 +1271,19 @@ impl<Env: Environment> Client<Env> {
         committee: &Committee,
         certificate: ValidatedBlockCertificate,
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
-        debug!(round = %certificate.round, "Submitting block for confirmation");
-        let hashed_value = ConfirmedBlock::new(certificate.inner().block().clone());
+        debug!(round = %certificate.round(), "Submitting block for confirmation");
+        let hashed_value = ConfirmedBlock::new(certificate.block().clone());
+        // The confirmed certificate carries the full chain of validated quorums for the block:
+        // this validated certificate's own quorum as the top link, followed by the chain below it.
+        let validated = certificate.full_justification();
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
         };
-        let certificate = self
+        let quorum = self
             .communicate_chain_action(committee, finalize_action, hashed_value)
             .await?;
+        let certificate = ConfirmedBlockCertificate::from_parts(quorum, validated);
         self.receive_certificate_with_checked_signatures(
             certificate.clone(),
             ProcessConfirmedBlockMode::Execute,
@@ -1291,11 +1299,19 @@ impl<Env: Environment> Client<Env> {
         committee: Arc<Committee>,
         proposal: Box<BlockProposal>,
         value: T,
-    ) -> Result<GenericCertificate<T>, chain_client::Error> {
+    ) -> Result<T::Certificate, chain_client::Error> {
         debug!(
             round = %proposal.content.round,
             "Submitting block proposal to validators"
         );
+
+        // The certificate's justification chain comes from the proposal: a regular retry is
+        // justified by the validated certificate it carries (the new top link plus that
+        // certificate's own chain); a fresh proposal or fast-round proposal has none.
+        let justification = match proposal.original_proposal.as_ref() {
+            Some(OriginalProposal::Regular { certificate }) => certificate.full_justification(),
+            Some(OriginalProposal::Fast(_)) | None => JustificationChain::default(),
+        };
 
         // Check if the block timestamp is in the future and log INFO.
         let block_timestamp = proposal.content.block.timestamp;
@@ -1344,13 +1360,14 @@ impl<Env: Environment> Client<Env> {
             }
         });
 
-        let certificate = self
+        let quorum = self
             .communicate_chain_action(&committee, submit_action, value)
             .await?;
 
         clock_skew_check_handle.await;
 
-        self.handle_certificate(certificate.clone()).await?;
+        let certificate = T::make_certificate(quorum, justification);
+        self.handle_certificate::<T>(certificate.clone()).await?;
         Ok(certificate)
     }
 
@@ -1362,7 +1379,7 @@ impl<Env: Environment> Client<Env> {
         chain_id: ChainId,
         height: BlockHeight,
         delivery: CrossChainMessageDelivery,
-        latest_certificate: Option<CacheArc<GenericCertificate<ConfirmedBlock>>>,
+        latest_certificate: Option<CacheArc<ConfirmedBlockCertificate>>,
     ) -> Result<(), chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
         communicate_with_quorum(
@@ -2093,7 +2110,7 @@ impl<Env: Environment> Client<Env> {
         };
 
         if let Some(timeout) = remote_info.manager.timeout {
-            self.handle_certificate(*timeout).await?;
+            self.handle_certificate::<Timeout>(*timeout).await?;
         }
         let mut proposals = Vec::new();
         if let Some(proposal) = remote_info.manager.requested_signed_proposal {
@@ -2254,13 +2271,15 @@ impl<Env: Environment> Client<Env> {
     async fn try_process_locking_block_from(
         &self,
         remote_node: &RemoteNode<Env::ValidatorNode>,
-        certificate: GenericCertificate<ValidatedBlock>,
+        certificate: ValidatedBlockCertificate,
     ) -> Result<(), chain_client::Error> {
         let chain_id = certificate.inner().chain_id();
         let mut downloaded_blobs = HashSet::<BlobId>::new();
         let mut events = EventSetDownloader::new(self);
         loop {
-            let result = self.handle_certificate(certificate.clone()).await;
+            let result = self
+                .handle_certificate::<ValidatedBlock>(certificate.clone())
+                .await;
             if let Err(LocalNodeError::BlobsNotFound(blob_ids)) = &result {
                 let new_blobs = filter_new(blob_ids, &downloaded_blobs);
                 if !new_blobs.is_empty() {

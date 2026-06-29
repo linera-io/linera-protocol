@@ -147,6 +147,8 @@ pub enum ChainError {
     CertificateRequiresQuorum,
     #[error("Justification chain rounds must be strictly decreasing")]
     JustificationRoundsNotDecreasing,
+    #[error("Certificate lock round does not match the top of its justification chain")]
+    JustificationLockMismatch,
     #[error("Equivocation proof must reference two different blocks")]
     EquivocationProofSameBlock,
     #[error("Equivocation proof does not violate the lock claim")]
@@ -215,6 +217,7 @@ impl ChainError {
             | ChainError::CertificateValidatorReuse
             | ChainError::CertificateRequiresQuorum
             | ChainError::JustificationRoundsNotDecreasing
+            | ChainError::JustificationLockMismatch
             | ChainError::EquivocationProofSameBlock
             | ChainError::EquivocationProofNoLockViolation
             | ChainError::BlockProposalTooLarge(_)

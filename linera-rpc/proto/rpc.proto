@@ -305,6 +305,12 @@ message LiteCertificate {
   bool wait_for_outgoing_messages = 5;
 
   CertificateKind kind = 6;
+
+  // The lock round (a bincode-encoded `Option<Round>`) the `ValidatedBlock` voters signed.
+  bytes lock = 7;
+
+  // The justification chain (a bincode-encoded `JustificationChain`) carried by the certificate.
+  bytes justification = 8;
 }
 
 // A certified statement from the committee, together with other certificates
@@ -375,6 +381,10 @@ message Certificate {
 
   // The kind of certificate serialized in `value` field.
   CertificateKind kind = 4;
+
+  // The justification chain (a `JustificationChain`) carried by validated and confirmed block
+  // certificates. Empty for timeout certificates and for blocks needing no justification.
+  bytes justification = 5;
 }
 
 enum CertificateKind {

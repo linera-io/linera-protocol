@@ -455,6 +455,8 @@ ConfirmedBlockCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - validated:
+        TYPENAME: JustificationChain
 CrateVersion:
   STRUCT:
     - major: U32
@@ -588,6 +590,20 @@ InitialChainConfig:
         TYPENAME: Amount
     - application_permissions:
         TYPENAME: ApplicationPermissions
+JustificationChain:
+  STRUCT:
+    - links:
+        SEQ:
+          TYPENAME: JustificationLink
+JustificationLink:
+  STRUCT:
+    - round:
+        TYPENAME: Round
+    - signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: Secp256k1PublicKey
+            - TYPENAME: Secp256k1Signature
 LiteCertificate:
   STRUCT:
     - value:
@@ -597,6 +613,8 @@ LiteCertificate:
     - lock:
         OPTION:
           TYPENAME: Round
+    - justification:
+        TYPENAME: JustificationChain
     - signatures:
         SEQ:
           TUPLE:
@@ -1417,6 +1435,8 @@ ValidatedBlockCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
+    - below:
+        TYPENAME: JustificationChain
 VersionInfo:
   STRUCT:
     - crate_version:

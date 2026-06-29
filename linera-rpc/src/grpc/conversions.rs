@@ -12,9 +12,11 @@ use linera_base::{
 };
 use linera_chain::{
     data_types::{BlockProposal, LiteValue, ProposalContent},
+    justification::JustificationChain,
     types::{
-        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate, LiteCertificate,
-        Timeout, TimeoutCertificate, ValidatedBlock, ValidatedBlockCertificate,
+        Certificate, CertificateKind, ConfirmedBlock, ConfirmedBlockCertificate,
+        GenericCertificate, LiteCertificate, Timeout, TimeoutCertificate, ValidatedBlock,
+        ValidatedBlockCertificate,
     },
 };
 use linera_core::{
@@ -62,6 +64,16 @@ where
     T: TryInto<S, Error = GrpcProtoConversionError>,
 {
     t.ok_or(GrpcProtoConversionError::MissingField)?.try_into()
+}
+
+/// Deserializes a certificate's justification chain from the proto field. An empty field (used
+/// for timeout certificates) yields an empty chain.
+fn deserialize_justification(bytes: &[u8]) -> Result<JustificationChain, GrpcProtoConversionError> {
+    if bytes.is_empty() {
+        Ok(JustificationChain::default())
+    } else {
+        Ok(bincode::deserialize(bytes)?)
+    }
 }
 
 impl From<GrpcProtoConversionError> for Status {
@@ -382,8 +394,11 @@ impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
         };
         let signatures = bincode::deserialize(&certificate.signatures)?;
         let round = bincode::deserialize(&certificate.round)?;
+        let lock = bincode::deserialize(&certificate.lock)?;
+        let mut lite = LiteCertificate::new_with_lock(value, round, lock, signatures);
+        lite.justification = deserialize_justification(&certificate.justification)?;
         Ok(Self {
-            certificate: LiteCertificate::new(value, round, signatures),
+            certificate: lite,
             wait_for_outgoing_messages: certificate.wait_for_outgoing_messages,
         })
     }
@@ -400,6 +415,8 @@ impl TryFrom<HandleLiteCertRequest<'_>> for api::LiteCertificate {
             signatures: bincode::serialize(&request.certificate.signatures)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
             kind: request.certificate.value.kind as i32,
+            lock: bincode::serialize(&request.certificate.lock)?,
+            justification: bincode::serialize(&request.certificate.justification)?,
         })
     }
 }
@@ -534,7 +551,10 @@ impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
 
         if cert_type == api::CertificateKind::Validated as i32 {
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
-            Ok(ValidatedBlockCertificate::new(value, round, signatures))
+            let below = deserialize_justification(&certificate.justification)?;
+            let quorum =
+                GenericCertificate::new_with_lock(value, round, below.top_lock(), signatures);
+            Ok(ValidatedBlockCertificate::from_parts(quorum, below))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
         }
@@ -551,7 +571,9 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
 
         if cert_type == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
-            Ok(ConfirmedBlockCertificate::new(value, round, signatures))
+            let validated = deserialize_justification(&certificate.justification)?;
+            let quorum = GenericCertificate::new(value, round, signatures);
+            Ok(ConfirmedBlockCertificate::from_parts(quorum, validated))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
         }
@@ -572,6 +594,7 @@ impl TryFrom<TimeoutCertificate> for api::Certificate {
             round,
             signatures,
             kind: api::CertificateKind::Timeout as i32,
+            justification: Vec::new(),
         })
     }
 }
@@ -580,8 +603,9 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: ConfirmedBlockCertificate) -> Result<Self, Self::Error> {
-        let round = bincode::serialize(&certificate.round)?;
+        let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
+        let justification = bincode::serialize(certificate.validated())?;
 
         let value = bincode::serialize(certificate.value())?;
 
@@ -590,6 +614,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
             round,
             signatures,
             kind: api::CertificateKind::Confirmed as i32,
+            justification,
         })
     }
 }
@@ -598,8 +623,9 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
     type Error = GrpcProtoConversionError;
 
     fn try_from(certificate: ValidatedBlockCertificate) -> Result<Self, Self::Error> {
-        let round = bincode::serialize(&certificate.round)?;
+        let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
+        let justification = bincode::serialize(certificate.below())?;
 
         let value = bincode::serialize(certificate.value())?;
 
@@ -608,6 +634,7 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
             round,
             signatures,
             kind: api::CertificateKind::Validated as i32,
+            justification,
         })
     }
 }
@@ -973,18 +1000,21 @@ impl TryFrom<Certificate> for api::Certificate {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
 
-        let (kind, value) = match certificate {
+        let (kind, value, justification) = match certificate {
             Certificate::Confirmed(confirmed) => (
                 api::CertificateKind::Confirmed,
                 bincode::serialize(confirmed.value())?,
+                bincode::serialize(confirmed.validated())?,
             ),
             Certificate::Validated(validated) => (
                 api::CertificateKind::Validated,
                 bincode::serialize(validated.value())?,
+                bincode::serialize(validated.below())?,
             ),
             Certificate::Timeout(timeout) => (
                 api::CertificateKind::Timeout,
                 bincode::serialize(timeout.value())?,
+                Vec::new(),
             ),
         };
 
@@ -993,6 +1023,7 @@ impl TryFrom<Certificate> for api::Certificate {
             round,
             signatures,
             kind: kind as i32,
+            justification,
         })
     }
 }
@@ -1006,10 +1037,15 @@ impl TryFrom<api::Certificate> for Certificate {
 
         let value = if certificate.kind == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
-            Certificate::Confirmed(ConfirmedBlockCertificate::new(value, round, signatures))
+            let validated = deserialize_justification(&certificate.justification)?;
+            let quorum = GenericCertificate::new(value, round, signatures);
+            Certificate::Confirmed(ConfirmedBlockCertificate::from_parts(quorum, validated))
         } else if certificate.kind == api::CertificateKind::Validated as i32 {
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
-            Certificate::Validated(ValidatedBlockCertificate::new(value, round, signatures))
+            let below = deserialize_justification(&certificate.justification)?;
+            let quorum =
+                GenericCertificate::new_with_lock(value, round, below.top_lock(), signatures);
+            Certificate::Validated(ValidatedBlockCertificate::from_parts(quorum, below))
         } else if certificate.kind == api::CertificateKind::Timeout as i32 {
             let value: Timeout = bincode::deserialize(&certificate.value)?;
             Certificate::Timeout(TimeoutCertificate::new(value, round, signatures))
@@ -1280,6 +1316,8 @@ pub mod tests {
                 kind: CertificateKind::Validated,
             },
             round: Round::MultiLeader(2),
+            lock: None,
+            justification: Default::default(),
             signatures: Cow::Owned(vec![(
                 key_pair.public_key,
                 ValidatorSignature::new(&Foo("test".into()), &key_pair.secret_key),

@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::{CertificateValue, GenericCertificate};
 use crate::{
     data_types::{check_signatures, LiteValue, LiteVote},
+    justification::JustificationChain,
     ChainError,
 };
 
@@ -31,6 +32,11 @@ pub struct LiteCertificate<'a> {
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
     pub lock: Option<Round>,
+    /// The justification chain attached to this certificate: for a `ValidatedBlock` certificate
+    /// it is the chain of validated quorums in rounds below `round`; for a `ConfirmedBlock`
+    /// certificate it is the full chain of validated quorums up to and including the confirm
+    /// round. Empty for `Timeout` certificates and for blocks needing no justification.
+    pub justification: JustificationChain,
     /// Signatures on the value.
     pub signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
 }
@@ -39,6 +45,10 @@ impl Allocative for LiteCertificate<'_> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.visit_field(Key::new("LiteCertificate_value"), &self.value);
         visitor.visit_field(Key::new("LiteCertificate_round"), &self.round);
+        visitor.visit_field(
+            Key::new("LiteCertificate_justification"),
+            &self.justification,
+        );
         if matches!(self.signatures, Cow::Owned(_)) {
             for (public_key, signature) in self.signatures.deref() {
                 visitor.visit_field(Key::new("ValidatorPublicKey"), public_key);
@@ -75,6 +85,7 @@ impl LiteCertificate<'_> {
             value,
             round,
             lock,
+            justification: JustificationChain::default(),
             signatures,
         }
     }
@@ -107,7 +118,7 @@ impl LiteCertificate<'_> {
         ))
     }
 
-    /// Verifies the certificate.
+    /// Verifies the certificate, including its justification chain.
     pub fn check(&self, committee: &Committee) -> Result<&LiteValue, ChainError> {
         check_signatures(
             self.value.value_hash,
@@ -117,7 +128,17 @@ impl LiteCertificate<'_> {
             &self.signatures,
             committee,
         )?;
+        self.justification
+            .verify(self.value.value_hash, committee)?;
         Ok(&self.value)
+    }
+
+    /// Returns the full justification chain that a certificate validating in a higher round
+    /// would carry below itself: this certificate's own quorum as the new top link, followed
+    /// by the chain it already carries.
+    pub fn full_justification(&self) -> JustificationChain {
+        self.justification
+            .prepend(self.round, self.signatures.to_vec())
     }
 
     /// Checks whether the value matches this certificate.
@@ -149,6 +170,7 @@ impl LiteCertificate<'_> {
             value: self.value.clone(),
             round: self.round,
             lock: self.lock,
+            justification: self.justification.clone(),
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
         }
     }

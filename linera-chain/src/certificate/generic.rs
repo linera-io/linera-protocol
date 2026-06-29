@@ -68,6 +68,11 @@ impl<T: CertificateValue> GenericCertificate<T> {
         }
     }
 
+    /// Returns the round in which the value was certified.
+    pub fn round(&self) -> Round {
+        self.round
+    }
+
     /// Returns the lock round `ℓ` the `ValidatedBlock` voters signed, if any.
     pub fn lock(&self) -> Option<Round> {
         self.lock
@@ -155,6 +160,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             value: LiteValue::new(&self.value),
             round: self.round,
             lock: self.lock,
+            justification: crate::justification::JustificationChain::default(),
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
         }
     }
