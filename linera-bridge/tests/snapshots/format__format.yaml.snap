@@ -253,3 +253,5 @@ VoteValue:
     - TYPENAME: CryptoHash
     - TYPENAME: Round
     - TYPENAME: CertificateKind
+    - OPTION:
+        TYPENAME: Round

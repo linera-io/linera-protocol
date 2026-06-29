@@ -221,7 +221,9 @@ mod tests {
     use linera_chain::{
         block::ConfirmedBlock,
         data_types::{LiteValue, LiteVote, SignatureAggregator},
+        justification::JustificationChain,
         test::BlockBuilder,
+        types::ConfirmedBlockCertificate,
     };
     use linera_execution::committee::Committee;
 
@@ -245,10 +247,12 @@ mod tests {
             &validator.secret_key,
         );
         let mut aggregator = SignatureAggregator::new(confirmed, Round::Fast, &committee);
-        let certificate = aggregator
+        let quorum = aggregator
             .append(validator.public_key, vote.signature)
             .unwrap()
             .unwrap();
+        // Confirmed in the fast round, so the certificate carries no justification chain.
+        let certificate = ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 
         let proof = BlockProof::from_certificate(&certificate);
 
