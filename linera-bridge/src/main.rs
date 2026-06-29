@@ -133,12 +133,11 @@ struct ServeOptions {
     #[arg(long)]
     sqlite_path: Option<std::path::PathBuf>,
 
-    /// Override the EVM provider's receipt poll interval, in milliseconds.
-    /// When unset, alloy picks the interval from the RPC URL: ~250ms for a
-    /// loopback host (localhost/127.0.0.1/::1), 7s otherwise. A local node
-    /// reached via a non-loopback host (e.g. a Docker service name like
-    /// `anvil`) is treated as remote and gets the slow 7s default, so set this
-    /// to match the node's block time for fast local settlement.
+    /// How often to poll `eth_getTransactionReceipt` while waiting for a
+    /// settlement tx, in milliseconds (default 4000). The relay polls the
+    /// receipt directly rather than using alloy's block heartbeat, so this is
+    /// the confirmation-detection cadence; lower it (e.g. to a node's block
+    /// time) for faster local settlement.
     #[arg(long)]
     evm_poll_interval_ms: Option<u64>,
 

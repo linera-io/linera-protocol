@@ -25,7 +25,7 @@ use std::{path::Path, sync::Arc, time::Duration};
 use alloy::{
     network::EthereumWallet,
     primitives::Address,
-    providers::{Provider as _, ProviderBuilder},
+    providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
 };
 use anyhow::{Context as _, Result};
@@ -283,15 +283,12 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    // Alloy derives the receipt poll interval from the RPC host: ~250ms for a
-    // loopback address, 7s otherwise. A local node reached via a non-loopback
-    // host (e.g. the Docker service name `anvil`) is treated as remote, so each
-    // settlement tx would wait ~7s despite sub-second block times. Override when
-    // configured so local settlement keeps pace with the node.
-    if let Some(interval) = evm_poll_interval {
-        provider.client().set_poll_interval(interval);
-        tracing::info!(?interval, "Overrode EVM provider poll interval");
-    }
+    // We wait for settlement receipts by polling `eth_getTransactionReceipt`
+    // ourselves (see `EvmClient::await_receipt`) rather than via alloy's
+    // pending-tx heartbeat, which backfills one `eth_getBlockByNumber` per block
+    // while any tx is in flight. `evm_poll_interval` is that receipt poll
+    // cadence; default to a few seconds when unset.
+    let receipt_poll_interval = evm_poll_interval.unwrap_or(Duration::from_secs(4));
 
     let light_client_addr: Option<Address> = evm_light_client_address
         .map(|s| s.parse())
@@ -303,6 +300,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         relayer_addr,
         light_client_addr,
         max_log_block_range,
+        receipt_poll_interval,
     ));
 
     // ── Catch up LightClient with any missed committee rotations ──
