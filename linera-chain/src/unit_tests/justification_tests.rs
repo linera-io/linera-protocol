@@ -39,7 +39,7 @@ fn sign(
     lock: Option<Round>,
     key: &ValidatorKeypair,
 ) -> (ValidatorPublicKey, ValidatorSignature) {
-    let value = VoteValue(block, round, kind, lock);
+    let value = VoteValue(block, round, kind, lock, false);
     (
         key.public_key,
         ValidatorSignature::new(&value, &key.secret_key),

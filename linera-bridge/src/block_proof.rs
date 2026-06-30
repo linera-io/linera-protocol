@@ -27,17 +27,23 @@ pub struct BlockProof {
     pub header: BlockHeader,
     /// The round in which the block was confirmed.
     pub round: Round,
+    /// Whether the block was confirmed in the chain's first round — the first-round attestation
+    /// the `ConfirmedBlock` voters signed. It is part of the signed `VoteValue`, so the light
+    /// client must reconstruct that value with this flag for the signatures to verify.
+    pub first_round: bool,
     /// The validator signatures over the block hash.
     pub signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
 
 impl BlockProof {
-    /// Builds a proof from a confirmed-block certificate: just the header, round, and signatures.
+    /// Builds a proof from a confirmed-block certificate: just the header, round, first-round
+    /// attestation, and signatures.
     pub fn from_certificate(certificate: &ConfirmedBlockCertificate) -> Self {
         let block = certificate.block();
         BlockProof {
             header: block.header.clone(),
             round: certificate.round,
+            first_round: certificate.first_round(),
             signatures: certificate.signatures().clone(),
         }
     }

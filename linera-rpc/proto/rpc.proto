@@ -311,6 +311,10 @@ message LiteCertificate {
 
   // The justification chain (a bincode-encoded `JustificationChain`) carried by the certificate.
   bytes justification = 8;
+
+  // The first-round attestation the `ConfirmedBlock` voters signed. Only `true` for a confirmed
+  // block certificate confirming a block in the chain's first round; always `false` otherwise.
+  bool first_round = 9;
 }
 
 // A certified statement from the committee, together with other certificates
@@ -385,6 +389,10 @@ message Certificate {
   // The justification chain (a `JustificationChain`) carried by validated and confirmed block
   // certificates. Empty for timeout certificates and for blocks needing no justification.
   bytes justification = 5;
+
+  // The first-round attestation the `ConfirmedBlock` voters signed. Only `true` for a confirmed
+  // block certificate confirming a block in the chain's first round; always `false` otherwise.
+  bool first_round = 6;
 }
 
 enum CertificateKind {

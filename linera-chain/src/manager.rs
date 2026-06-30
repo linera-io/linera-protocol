@@ -507,7 +507,10 @@ where
         if round.is_fast() {
             self.validated_vote.set(None);
             let value = ConfirmedBlock::new(block);
-            let vote = Vote::new(value, round, key_pair);
+            // Attest that this confirmation is in the chain's first round, so the justification
+            // chain may be omitted: such a block is always the lower one in any fork.
+            let first_round = round == self.ownership.get().first_round();
+            let vote = Vote::new_with_first_round(value, round, first_round, key_pair);
             Ok(Some(Either::Right(
                 self.confirmed_vote.get_mut().insert(vote),
             )))
@@ -543,8 +546,11 @@ where
             if self.current_round() != round {
                 return Ok(()); // We never vote in a past round.
             }
-            // Vote to confirm.
-            let vote = Vote::new(confirmed_block, round, key_pair);
+            // Vote to confirm. Attest whether this confirmation is in the chain's first round, so
+            // the justification chain may be omitted: such a block is always the lower one in any
+            // fork.
+            let first_round = round == self.ownership.get().first_round();
+            let vote = Vote::new_with_first_round(confirmed_block, round, first_round, key_pair);
             // Ok to overwrite validation votes with confirmation votes at equal or higher round.
             self.confirmed_vote.set(Some(vote));
             self.validated_vote.set(None);

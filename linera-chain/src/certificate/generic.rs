@@ -24,6 +24,12 @@ pub struct GenericCertificate<T: CertificateValue> {
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
     lock: Option<Round>,
+    /// The first-round attestation the `ConfirmedBlock` voters signed (see [`VoteValue`]). Only
+    /// `true` for a `ConfirmedBlock` certificate confirming a block in the chain's first round;
+    /// always `false` for `ValidatedBlock`/`Timeout` certificates.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    first_round: bool,
     signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
 
@@ -56,6 +62,21 @@ impl<T: CertificateValue> GenericCertificate<T> {
         value: T,
         round: Round,
         lock: Option<Round>,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self::new_with_lock_and_first_round(value, round, lock, false, signatures)
+    }
+
+    /// Creates a new certificate that also records the lock round `ℓ` its `ValidatedBlock`
+    /// voters signed and the first-round attestation its `ConfirmedBlock` voters signed (see
+    /// [`VoteValue`]).
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub fn new_with_lock_and_first_round(
+        value: T,
+        round: Round,
+        lock: Option<Round>,
+        first_round: bool,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
@@ -64,6 +85,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             value,
             round,
             lock,
+            first_round,
             signatures,
         }
     }
@@ -76,6 +98,11 @@ impl<T: CertificateValue> GenericCertificate<T> {
     /// Returns the lock round `ℓ` the `ValidatedBlock` voters signed, if any.
     pub fn lock(&self) -> Option<Round> {
         self.lock
+    }
+
+    /// Returns the first-round attestation the `ConfirmedBlock` voters signed.
+    pub fn first_round(&self) -> bool {
+        self.first_round
     }
 
     /// Returns a reference to the `Hashed` value contained in this certificate.
@@ -145,6 +172,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             T::KIND,
             self.round,
             self.lock,
+            self.first_round,
             &self.signatures,
             committee,
         )?;
@@ -160,6 +188,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             value: LiteValue::new(&self.value),
             round: self.round,
             lock: self.lock,
+            first_round: self.first_round,
             justification: crate::justification::JustificationChain::default(),
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
         }
@@ -172,6 +201,7 @@ impl<T: CertificateValue> Clone for GenericCertificate<T> {
             value: self.value.clone(),
             round: self.round,
             lock: self.lock,
+            first_round: self.first_round,
             signatures: self.signatures.clone(),
         }
     }
@@ -185,6 +215,7 @@ impl<T: CertificateValue + Eq + PartialEq> PartialEq for GenericCertificate<T> {
         self.hash() == other.hash()
             && self.round == other.round
             && self.lock == other.lock
+            && self.first_round == other.first_round
             && self.signatures == other.signatures
     }
 }

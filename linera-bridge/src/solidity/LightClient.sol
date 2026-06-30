@@ -232,7 +232,7 @@ contract LightClient is ILightClient {
     {
         BridgeTypes.BlockProof memory proof;
         (proof, blockHash) = _deserializeAndHash(blockProof);
-        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.signatures);
+        _verifyQuorum(blockHash, proof.header.epoch.value, proof.round, proof.first_round, proof.signatures);
         header = proof.header;
     }
 
@@ -353,12 +353,14 @@ contract LightClient is ILightClient {
 
         BridgeTypes.Round memory round;
         (pos, round) = BridgeTypes.bcs_deserialize_offset_Round(pos, mdata);
+        bool firstRound;
+        (pos, firstRound) = BridgeTypes.bcs_deserialize_offset_bool(pos, mdata);
         BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures;
         (pos, signatures) =
             BridgeTypes.bcs_deserialize_offset_seq_tuple_Secp256k1PublicKey_Secp256k1Signature(pos, mdata);
         require(pos == mdata.length, "incomplete deserialization");
 
-        proof = BridgeTypes.BlockProof(header, round, signatures);
+        proof = BridgeTypes.BlockProof(header, round, firstRound, signatures);
     }
 
     /// Verifies that `signatures` form a quorum of the `epoch` committee over the block whose hash
@@ -367,17 +369,22 @@ contract LightClient is ILightClient {
         bytes32 blockHash,
         uint32 epoch,
         BridgeTypes.Round memory round,
+        bool firstRound,
         BridgeTypes.tuple_Secp256k1PublicKey_Secp256k1Signature[] memory signatures
     ) internal view {
         // Construct VoteValue BCS and hash with type name prefix
         // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
         // ConfirmedBlock votes carry no lock, so the lock `ℓ` (Option<Round>) is `None`; the
-        // `round` placeholder is ignored because `has_value` is false.
+        // `round` placeholder is ignored because `has_value` is false. `firstRound` is the
+        // first-round attestation the voters signed, carried in the proof so it reproduces the
+        // signed value (it is `true` for confirmations in the chain's first round, e.g. the fast
+        // round on a super-owner chain).
         BridgeTypes.VoteValue memory voteValue = BridgeTypes.VoteValue(
             BridgeTypes.CryptoHash(blockHash),
             round,
             BridgeTypes.CertificateKind.Confirmed,
-            BridgeTypes.opt_Round(false, round)
+            BridgeTypes.opt_Round(false, round),
+            firstRound
         );
         bytes32 signedHash = keccak256(abi.encodePacked("VoteValue::", BridgeTypes.bcs_serialize_VoteValue(voteValue)));
 

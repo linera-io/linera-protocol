@@ -30,6 +30,7 @@ use crate::{
 struct Repr<'a> {
     value: Cow<'a, ConfirmedBlock>,
     round: Round,
+    first_round: bool,
     signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
     validated: Cow<'a, JustificationChain>,
 }
@@ -106,18 +107,23 @@ impl ConfirmedBlockCertificate {
     /// `ConfirmedBlock` votes, that the validated chain is itself a valid chain of quorums, and
     /// that — if present — it heads at the confirmation round.
     ///
-    /// An *absent* chain is accepted: a block confirmed in the fast round needs none, and one
-    /// confirmed in the chain's first round may omit it (it is always the lower block in any
-    /// fork, so its own chain is never needed to attribute one). Whether a *later*-round block
-    /// was obliged to carry its chain depends on the chain's first round at that height, which a
+    /// An *absent* chain is accepted only when the block was confirmed in the fast round or the
+    /// quorum carries the first-round attestation: such a block is always the lower block in any
+    /// fork, so its own chain is never needed to attribute one. Whether a *later*-round block was
+    /// obliged to carry its chain depends on the chain's first round at that height, which a
     /// committee-only check cannot know; that obligation rests on honest block construction (see
     /// `finalize_block`) and the per-signature justifications retained by the commitment scheme.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         self.quorum.check(committee)?;
         self.validated.verify(self.hash(), committee)?;
-        if let Some(link) = self.validated.links().first() {
+        if self.validated().links().is_empty() {
             ensure!(
-                link.round == self.round(),
+                self.round().is_fast() || self.quorum().first_round(),
+                ChainError::JustificationLockMismatch
+            );
+        } else {
+            ensure!(
+                self.validated().links()[0].round == self.round(),
                 ChainError::JustificationLockMismatch
             );
         }
@@ -224,6 +230,7 @@ impl Serialize for ConfirmedBlockCertificate {
         Repr {
             value: Cow::Borrowed(self.quorum.inner()),
             round: self.quorum.round(),
+            first_round: self.quorum.first_round(),
             signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
             validated: Cow::Borrowed(&self.validated),
         }
@@ -242,7 +249,13 @@ impl<'de> Deserialize<'de> for ConfirmedBlockCertificate {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
             Ok(Self::from_parts(
-                GenericCertificate::new(helper.value.into_owned(), helper.round, signatures),
+                GenericCertificate::new_with_lock_and_first_round(
+                    helper.value.into_owned(),
+                    helper.round,
+                    None,
+                    helper.first_round,
+                    signatures,
+                ),
                 helper.validated.into_owned(),
             ))
         }

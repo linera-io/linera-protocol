@@ -395,7 +395,13 @@ impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
         let signatures = bincode::deserialize(&certificate.signatures)?;
         let round = bincode::deserialize(&certificate.round)?;
         let lock = bincode::deserialize(&certificate.lock)?;
-        let mut lite = LiteCertificate::new_with_lock(value, round, lock, signatures);
+        let mut lite = LiteCertificate::new_with_lock_and_first_round(
+            value,
+            round,
+            lock,
+            certificate.first_round,
+            signatures,
+        );
         lite.justification = deserialize_justification(&certificate.justification)?;
         Ok(Self {
             certificate: lite,
@@ -417,6 +423,7 @@ impl TryFrom<HandleLiteCertRequest<'_>> for api::LiteCertificate {
             kind: request.certificate.value.kind as i32,
             lock: bincode::serialize(&request.certificate.lock)?,
             justification: bincode::serialize(&request.certificate.justification)?,
+            first_round: request.certificate.first_round,
         })
     }
 }
@@ -572,7 +579,13 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
         if cert_type == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             let validated = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new(value, round, signatures);
+            let quorum = GenericCertificate::new_with_lock_and_first_round(
+                value,
+                round,
+                None,
+                certificate.first_round,
+                signatures,
+            );
             Ok(ConfirmedBlockCertificate::from_parts(quorum, validated))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
@@ -595,6 +608,7 @@ impl TryFrom<TimeoutCertificate> for api::Certificate {
             signatures,
             kind: api::CertificateKind::Timeout as i32,
             justification: Vec::new(),
+            first_round: false,
         })
     }
 }
@@ -606,6 +620,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
         let justification = bincode::serialize(certificate.validated())?;
+        let first_round = certificate.quorum().first_round();
 
         let value = bincode::serialize(certificate.value())?;
 
@@ -615,6 +630,7 @@ impl TryFrom<ConfirmedBlockCertificate> for api::Certificate {
             signatures,
             kind: api::CertificateKind::Confirmed as i32,
             justification,
+            first_round,
         })
     }
 }
@@ -635,6 +651,7 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
             signatures,
             kind: api::CertificateKind::Validated as i32,
             justification,
+            first_round: false,
         })
     }
 }
@@ -1000,21 +1017,24 @@ impl TryFrom<Certificate> for api::Certificate {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
 
-        let (kind, value, justification) = match certificate {
+        let (kind, value, justification, first_round) = match certificate {
             Certificate::Confirmed(confirmed) => (
                 api::CertificateKind::Confirmed,
                 bincode::serialize(confirmed.value())?,
                 bincode::serialize(confirmed.validated())?,
+                confirmed.quorum().first_round(),
             ),
             Certificate::Validated(validated) => (
                 api::CertificateKind::Validated,
                 bincode::serialize(validated.value())?,
                 bincode::serialize(validated.below())?,
+                false,
             ),
             Certificate::Timeout(timeout) => (
                 api::CertificateKind::Timeout,
                 bincode::serialize(timeout.value())?,
                 Vec::new(),
+                false,
             ),
         };
 
@@ -1024,6 +1044,7 @@ impl TryFrom<Certificate> for api::Certificate {
             signatures,
             kind: kind as i32,
             justification,
+            first_round,
         })
     }
 }
@@ -1038,7 +1059,13 @@ impl TryFrom<api::Certificate> for Certificate {
         let value = if certificate.kind == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             let validated = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new(value, round, signatures);
+            let quorum = GenericCertificate::new_with_lock_and_first_round(
+                value,
+                round,
+                None,
+                certificate.first_round,
+                signatures,
+            );
             Certificate::Confirmed(ConfirmedBlockCertificate::from_parts(quorum, validated))
         } else if certificate.kind == api::CertificateKind::Validated as i32 {
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;

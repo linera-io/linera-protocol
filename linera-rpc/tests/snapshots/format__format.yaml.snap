@@ -450,6 +450,7 @@ ConfirmedBlockCertificate:
         TYPENAME: Block
     - round:
         TYPENAME: Round
+    - first_round: BOOL
     - signatures:
         SEQ:
           TUPLE:
@@ -613,6 +614,7 @@ LiteCertificate:
     - lock:
         OPTION:
           TYPENAME: Round
+    - first_round: BOOL
     - justification:
         TYPENAME: JustificationChain
     - signatures:
@@ -637,6 +639,7 @@ LiteVote:
     - lock:
         OPTION:
           TYPENAME: Round
+    - first_round: BOOL
     - signature:
         TYPENAME: Secp256k1Signature
 LockingBlock:

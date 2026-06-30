@@ -32,6 +32,12 @@ pub struct LiteCertificate<'a> {
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
     pub lock: Option<Round>,
+    /// The first-round attestation the `ConfirmedBlock` voters signed (see [`VoteValue`]). Only
+    /// `true` for a `ConfirmedBlock` certificate confirming a block in the chain's first round;
+    /// always `false` for `ValidatedBlock`/`Timeout` certificates.
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub first_round: bool,
     /// The justification chain attached to this certificate: for a `ValidatedBlock` certificate
     /// it is the chain of validated quorums in rounds below `round`; for a `ConfirmedBlock`
     /// certificate it is the full chain of validated quorums up to and including the confirm
@@ -76,6 +82,21 @@ impl LiteCertificate<'_> {
         value: LiteValue,
         round: Round,
         lock: Option<Round>,
+        signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
+    ) -> Self {
+        Self::new_with_lock_and_first_round(value, round, lock, false, signatures)
+    }
+
+    /// Creates a new lite certificate that also records the lock round `ℓ` its `ValidatedBlock`
+    /// voters signed and the first-round attestation its `ConfirmedBlock` voters signed (see
+    /// [`VoteValue`]).
+    ///
+    /// [`VoteValue`]: crate::data_types::VoteValue
+    pub fn new_with_lock_and_first_round(
+        value: LiteValue,
+        round: Round,
+        lock: Option<Round>,
+        first_round: bool,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
         signatures.sort_by_key(|&(validator_name, _)| validator_name);
@@ -85,6 +106,7 @@ impl LiteCertificate<'_> {
             value,
             round,
             lock,
+            first_round,
             justification: JustificationChain::default(),
             signatures,
         }
@@ -102,19 +124,27 @@ impl LiteCertificate<'_> {
                 value,
                 round,
                 lock,
+                first_round,
                 signature,
             },
         ) = votes.next()?;
         let mut signatures = vec![(public_key, signature)];
         for (validator_key, vote) in votes {
-            if vote.value.value_hash != value.value_hash || vote.round != round || vote.lock != lock
+            if vote.value.value_hash != value.value_hash
+                || vote.round != round
+                || vote.lock != lock
+                || vote.first_round != first_round
             {
                 return None;
             }
             signatures.push((validator_key, vote.signature));
         }
-        Some(LiteCertificate::new_with_lock(
-            value, round, lock, signatures,
+        Some(LiteCertificate::new_with_lock_and_first_round(
+            value,
+            round,
+            lock,
+            first_round,
+            signatures,
         ))
     }
 
@@ -125,6 +155,7 @@ impl LiteCertificate<'_> {
             self.value.kind,
             self.round,
             self.lock,
+            self.first_round,
             &self.signatures,
             committee,
         )?;
@@ -156,10 +187,11 @@ impl LiteCertificate<'_> {
         {
             return None;
         }
-        Some(GenericCertificate::new_with_lock(
+        Some(GenericCertificate::new_with_lock_and_first_round(
             value,
             self.round,
             self.lock,
+            self.first_round,
             self.signatures.into_owned(),
         ))
     }
@@ -170,6 +202,7 @@ impl LiteCertificate<'_> {
             value: self.value.clone(),
             round: self.round,
             lock: self.lock,
+            first_round: self.first_round,
             justification: self.justification.clone(),
             signatures: Cow::Owned(self.signatures.clone().into_owned()),
         }

@@ -94,6 +94,7 @@ BlockProof:
         TYPENAME: BlockHeader
     - round:
         TYPENAME: Round
+    - first_round: BOOL
     - signatures:
         SEQ:
           TUPLE:
@@ -255,3 +256,4 @@ VoteValue:
     - TYPENAME: CertificateKind
     - OPTION:
         TYPENAME: Round
+    - BOOL

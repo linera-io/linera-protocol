@@ -567,19 +567,25 @@ impl LiteValue {
 }
 
 //(deuszx): pub is temp.
-/// The value a validator signs when voting: the value hash, round, certificate kind and,
-/// for `ValidatedBlock` votes, the lock round `ℓ`.
+/// The value a validator signs when voting: the value hash, round, certificate kind, the lock
+/// round `ℓ` (for `ValidatedBlock` votes), and the first-round attestation (for `ConfirmedBlock`
+/// votes).
 ///
 /// The lock `ℓ` is the consensus device behind fault attributability: by signing it, a
 /// validator asserts "I have not voted to confirm a block other than this one in any round
 /// `≥ ℓ`". `None` means `ℓ = 0`, i.e. the strongest claim ("...in any round"), and is used
 /// for freshly proposed blocks and for `ConfirmedBlock`/`Timeout` votes, which carry no lock.
+///
+/// The final `bool` is the first-round attestation: it is `true` only when a `ConfirmedBlock`
+/// vote confirms a block in the chain's first round, and is always `false` for `ValidatedBlock`
+/// and `Timeout` votes.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct VoteValue(
     pub(crate) CryptoHash,
     pub(crate) Round,
     pub(crate) CertificateKind,
     pub(crate) Option<Round>,
+    pub(crate) bool,
 );
 
 /// A vote on a statement from a validator.
@@ -593,7 +599,12 @@ pub struct Vote<T> {
     /// The lock round `ℓ` this vote signed (see [`VoteValue`]). Only `ValidatedBlock` votes
     /// carry a lock; it is `None` for fresh proposals and for `ConfirmedBlock`/`Timeout` votes.
     pub lock: Option<Round>,
-    /// The validator's signature over the value hash, round, certificate kind and lock.
+    /// The first-round attestation this vote signed (see [`VoteValue`]). It is `true` only for a
+    /// `ConfirmedBlock` vote that confirms a block in the chain's first round; it is always
+    /// `false` for `ValidatedBlock` and `Timeout` votes.
+    pub first_round: bool,
+    /// The validator's signature over the value hash, round, certificate kind, lock and
+    /// first-round attestation.
     pub signature: ValidatorSignature,
 }
 
@@ -616,12 +627,35 @@ impl<T> Vote<T> {
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(value.hash(), round, T::KIND, lock);
+        let hash_and_round = VoteValue(value.hash(), round, T::KIND, lock, false);
         let signature = ValidatorSignature::new(&hash_and_round, key_pair);
         Self {
             value,
             round,
             lock,
+            first_round: false,
+            signature,
+        }
+    }
+
+    /// Use signing key to create a signed `ConfirmedBlock` object that carries the first-round
+    /// attestation `first_round` (see [`VoteValue`]). The lock is always `None`.
+    pub fn new_with_first_round(
+        value: T,
+        round: Round,
+        first_round: bool,
+        key_pair: &ValidatorSecretKey,
+    ) -> Self
+    where
+        T: CertificateValue,
+    {
+        let hash_and_round = VoteValue(value.hash(), round, T::KIND, None, first_round);
+        let signature = ValidatorSignature::new(&hash_and_round, key_pair);
+        Self {
+            value,
+            round,
+            lock: None,
+            first_round,
             signature,
         }
     }
@@ -635,6 +669,7 @@ impl<T> Vote<T> {
             value: LiteValue::new(&self.value),
             round: self.round,
             lock: self.lock,
+            first_round: self.first_round,
             signature: self.signature,
         }
     }
@@ -656,7 +691,12 @@ pub struct LiteVote {
     /// The lock round `ℓ` this vote signed (see [`VoteValue`]). Only `ValidatedBlock` votes
     /// carry a lock; it is `None` for fresh proposals and for `ConfirmedBlock`/`Timeout` votes.
     pub lock: Option<Round>,
-    /// The validator's signature over the value hash, round, certificate kind and lock.
+    /// The first-round attestation this vote signed (see [`VoteValue`]). It is `true` only for a
+    /// `ConfirmedBlock` vote that confirms a block in the chain's first round; it is always
+    /// `false` for `ValidatedBlock` and `Timeout` votes.
+    pub first_round: bool,
+    /// The validator's signature over the value hash, round, certificate kind, lock and
+    /// first-round attestation.
     pub signature: ValidatorSignature,
 }
 
@@ -671,6 +711,7 @@ impl LiteVote {
             value,
             round: self.round,
             lock: self.lock,
+            first_round: self.first_round,
             signature: self.signature,
         })
     }
@@ -938,12 +979,13 @@ impl BlockProposal {
 impl LiteVote {
     /// Uses the signing key to create a signed object.
     pub fn new(value: LiteValue, round: Round, secret_key: &ValidatorSecretKey) -> Self {
-        let hash_and_round = VoteValue(value.value_hash, round, value.kind, None);
+        let hash_and_round = VoteValue(value.value_hash, round, value.kind, None, false);
         let signature = ValidatorSignature::new(&hash_and_round, secret_key);
         Self {
             value,
             round,
             lock: None,
+            first_round: false,
             signature,
         }
     }
@@ -955,6 +997,7 @@ impl LiteVote {
             self.round,
             self.value.kind,
             self.lock,
+            self.first_round,
         );
         Ok(self.signature.check(&hash_and_round, public_key)?)
     }
@@ -990,7 +1033,13 @@ impl<'a, T: CertificateValue> SignatureAggregator<'a, T> {
     where
         T: CertificateValue,
     {
-        let hash_and_round = VoteValue(self.partial.hash(), self.partial.round, T::KIND, None);
+        let hash_and_round = VoteValue(
+            self.partial.hash(),
+            self.partial.round,
+            T::KIND,
+            None,
+            false,
+        );
         signature.check(&hash_and_round, public_key)?;
         // Check that each validator only appears once.
         ensure!(
@@ -1024,12 +1073,14 @@ pub(crate) fn is_strictly_ordered(values: &[(ValidatorPublicKey, ValidatorSignat
 ///
 /// `lock` is the lock round `ℓ` that `ValidatedBlock` voters signed (see [`VoteValue`]); it
 /// is `None` for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no
-/// justification.
+/// justification. `first_round` is the first-round attestation that `ConfirmedBlock` voters
+/// signed; it is always `false` for `ValidatedBlock`/`Timeout` certificates.
 pub(crate) fn check_signatures(
     value_hash: CryptoHash,
     certificate_kind: CertificateKind,
     round: Round,
     lock: Option<Round>,
+    first_round: bool,
     signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     committee: &Committee,
 ) -> Result<(), ChainError> {
@@ -1053,7 +1104,7 @@ pub(crate) fn check_signatures(
         ChainError::CertificateRequiresQuorum
     );
     // All that is left is checking signatures!
-    let hash_and_round = VoteValue(value_hash, round, certificate_kind, lock);
+    let hash_and_round = VoteValue(value_hash, round, certificate_kind, lock, first_round);
     ValidatorSignature::verify_batch(&hash_and_round, signatures.iter())?;
     Ok(())
 }

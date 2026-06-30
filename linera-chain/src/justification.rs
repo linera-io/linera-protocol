@@ -112,6 +112,7 @@ impl JustificationChain {
                 CertificateKind::Validated,
                 link.round,
                 self.lock_at(index),
+                false,
                 &link.signatures,
                 committee,
             )?;
@@ -242,6 +243,7 @@ impl EquivocationProof {
                     *confirmed_round,
                     CertificateKind::Confirmed,
                     None,
+                    false,
                 );
                 confirmed_signature.check(&confirmed, *validator)?;
                 let validated = VoteValue(
@@ -249,6 +251,7 @@ impl EquivocationProof {
                     *validated_round,
                     CertificateKind::Validated,
                     *validated_lock,
+                    false,
                 );
                 validated_signature.check(&validated, *validator)?;
                 Ok(())
@@ -268,9 +271,9 @@ impl EquivocationProof {
                     first_block_hash != second_block_hash,
                     ChainError::EquivocationProofSameBlock
                 );
-                let first = VoteValue(*first_block_hash, *round, *kind, *first_lock);
+                let first = VoteValue(*first_block_hash, *round, *kind, *first_lock, false);
                 first_signature.check(&first, *validator)?;
-                let second = VoteValue(*second_block_hash, *round, *kind, *second_lock);
+                let second = VoteValue(*second_block_hash, *round, *kind, *second_lock, false);
                 second_signature.check(&second, *validator)?;
                 Ok(())
             }

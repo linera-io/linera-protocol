@@ -110,28 +110,38 @@ fn light_client_verifies_header_and_one_field() {
 }
 
 #[test]
-fn confirmed_certificate_check_accepts_absent_chain() {
-    use crate::{justification::JustificationChain, types::ConfirmedBlockCertificate};
+fn confirmed_certificate_check_and_absent_chain() {
+    use crate::{
+        justification::JustificationChain,
+        types::{ConfirmedBlockCertificate, GenericCertificate},
+    };
 
     let validator = ValidatorKeypair::generate();
     let account = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
     let committee = Committee::make_simple(vec![(validator.public_key, account.public())]);
 
-    // A confirmed certificate in a non-fast round carrying no justification chain — as produced
-    // for a first-round confirmation, which omits its chain.
+    // A confirmed certificate in a non-fast round carrying no justification chain is accepted
+    // only when its quorum carries the first-round attestation: such a block is always the lower
+    // one in any fork, so it never needs a chain of its own.
     let round = Round::SingleLeader(0);
     let value = ConfirmedBlock::new(sample_block());
-    let vote = LiteVote::new(LiteValue::new(&value), round, &validator.secret_key);
-    let mut builder = SignatureAggregator::new(value, round, &committee);
-    let quorum = builder
-        .append(validator.public_key, vote.signature)
-        .unwrap()
-        .unwrap();
+    let vote = Vote::new_with_first_round(value.clone(), round, true, &validator.secret_key);
+    let quorum = GenericCertificate::new_with_lock_and_first_round(
+        value.clone(),
+        round,
+        None,
+        true,
+        vec![(validator.public_key, vote.signature)],
+    );
     let certificate = ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
-
-    // The check accepts an absent chain (the obligation to carry one for later rounds rests on
-    // honest construction, not on this committee-only check).
     assert!(certificate.check(&committee).is_ok());
+
+    // Without the attestation, a non-fast-round confirmation with no chain is rejected.
+    let vote = Vote::new(value.clone(), round, &validator.secret_key);
+    let quorum =
+        GenericCertificate::new(value, round, vec![(validator.public_key, vote.signature)]);
+    let certificate = ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
+    assert!(certificate.check(&committee).is_err());
 }
 
 #[test]
