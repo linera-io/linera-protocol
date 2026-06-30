@@ -22,6 +22,7 @@ set -- linera-bridge serve \
     --monitor-scan-interval="${MONITOR_SCAN_INTERVAL:-30}" \
     --monitor-start-block="${MONITOR_START_BLOCK:-0}" \
     --max-retries="${MAX_RETRIES:-10}" \
+    --max-log-block-range="${MAX_LOG_BLOCK_RANGE:-2000}" \
     --blob-cache-size="${BLOB_CACHE_SIZE:-1000}" \
     --confirmed-block-cache-size="${CONFIRMED_BLOCK_CACHE_SIZE:-1000}" \
     --certificate-cache-size="${CERTIFICATE_CACHE_SIZE:-1000}" \

@@ -13,7 +13,9 @@
 
 #![recursion_limit = "512"]
 
-use alloy::{network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner};
+use alloy::{
+    network::EthereumWallet, providers::ProviderBuilder, signers::local::PrivateKeySigner,
+};
 use linera_base::{crypto::InMemorySigner, data_types::U128, identifiers::AccountOwner};
 use linera_bridge::{abi::BridgeOperation, relay::evm::EvmClient};
 use linera_bridge_e2e::{
@@ -29,6 +31,8 @@ use linera_faucet_client::Faucet;
 use linera_storage::DbStorage;
 use linera_views::backends::memory::{MemoryDatabase, MemoryStoreConfig};
 use test_case::test_case;
+
+use std::time::Duration;
 
 /// Hard cap on the search range. Bounds chain-A block construction cost
 /// and keeps the test runtime predictable. The ERC-20 supply minted to
@@ -183,28 +187,14 @@ async fn burns_per_evm_tx(
     let over_limit = |gas: Option<u64>| !matches!(gas, Some(g) if g <= block_gas_limit);
 
     let mut hi: u32 = 8;
-    let mut hi_gas = build_and_estimate(
-        hi,
-        &cc_a,
-        &cc_b,
-        bridge_app_id,
-        bridge_addr,
-        &provider,
-    )
-    .await?;
+    let mut hi_gas =
+        build_and_estimate(hi, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider).await?;
     tracing::info!(n = hi, gas = ?hi_gas, "search: initial `Burn` ops count");
 
     while !over_limit(hi_gas) && hi < MAX_SEARCH_N {
         let next_hi = hi.saturating_mul(2).min(MAX_SEARCH_N);
-        let gas = build_and_estimate(
-            next_hi,
-            &cc_a,
-            &cc_b,
-            bridge_app_id,
-            bridge_addr,
-            &provider,
-        )
-        .await?;
+        let gas = build_and_estimate(next_hi, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider)
+            .await?;
         hi = next_hi;
         hi_gas = gas;
         if over_limit(hi_gas) {
@@ -225,15 +215,7 @@ async fn burns_per_evm_tx(
     let mut lo_gas = if hi == 1 {
         hi_gas
     } else {
-        build_and_estimate(
-            lo,
-            &cc_a,
-            &cc_b,
-            bridge_app_id,
-            bridge_addr,
-            &provider,
-        )
-        .await?
+        build_and_estimate(lo, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider).await?
     }
     .expect("n=1 must fit in a single Linera block");
     anyhow::ensure!(
@@ -268,15 +250,8 @@ async fn burns_per_evm_tx(
 
     while lo + 1 < hi {
         let mid = lo + (hi - lo) / 2;
-        let gas = build_and_estimate(
-            mid,
-            &cc_a,
-            &cc_b,
-            bridge_app_id,
-            bridge_addr,
-            &provider,
-        )
-        .await?;
+        let gas =
+            build_and_estimate(mid, &cc_a, &cc_b, bridge_app_id, bridge_addr, &provider).await?;
         tracing::info!(n = mid, ?gas, "search: bisect");
         if over_limit(gas) {
             hi = mid;
@@ -372,7 +347,10 @@ where
 
     let cert = fetch_latest_cert(cc_a).await?;
     let by_tx = burn_positions_by_tx(&cert, bridge_app_id);
-    anyhow::ensure!(!by_tx.is_empty(), "chain-A block carried no BurnEvents for n={n}");
+    anyhow::ensure!(
+        !by_tx.is_empty(),
+        "chain-A block carried no BurnEvents for n={n}"
+    );
 
     // Settle the block the way the relayer does: register it once, then estimate the
     // `processBurns` gas of each of its transactions. The reported figure is the sum
@@ -382,6 +360,8 @@ where
         bridge_addr,
         alloy::primitives::Address::ZERO,
         Some(light_client_address()),
+        2000,
+        Duration::from_secs(4),
     );
     evm_client.register_block(&cert).await?;
 
