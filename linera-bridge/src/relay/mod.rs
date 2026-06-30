@@ -23,9 +23,7 @@ pub(crate) mod settlement;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use alloy::{
-    network::EthereumWallet,
-    primitives::Address,
-    providers::{Provider as _, ProviderBuilder},
+    network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
 };
 use anyhow::{Context as _, Result};
@@ -101,6 +99,7 @@ pub async fn run(
     max_retries: u32,
     sqlite_path: Option<&Path>,
     evm_poll_interval: Option<Duration>,
+    max_log_block_range: u64,
 ) -> Result<()> {
     tracing::info!("Starting bridge relay server...");
 
@@ -240,6 +239,7 @@ pub async fn run(
         max_retries,
         sqlite_path,
         evm_poll_interval,
+        max_log_block_range,
         &db_path,
         admin_chain_id,
         admin_chain_height,
@@ -263,6 +263,7 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     max_retries: u32,
     sqlite_path_override: Option<&Path>,
     evm_poll_interval: Option<Duration>,
+    max_log_block_range: u64,
     storage_dir: &Path,
     admin_chain_id: ChainId,
     admin_chain_height: linera_base::data_types::BlockHeight,
@@ -280,15 +281,12 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         .with_simple_nonce_management()
         .connect_http(rpc_url.parse().context("invalid RPC URL")?);
 
-    // Alloy derives the receipt poll interval from the RPC host: ~250ms for a
-    // loopback address, 7s otherwise. A local node reached via a non-loopback
-    // host (e.g. the Docker service name `anvil`) is treated as remote, so each
-    // settlement tx would wait ~7s despite sub-second block times. Override when
-    // configured so local settlement keeps pace with the node.
-    if let Some(interval) = evm_poll_interval {
-        provider.client().set_poll_interval(interval);
-        tracing::info!(?interval, "Overrode EVM provider poll interval");
-    }
+    // We wait for settlement receipts by polling `eth_getTransactionReceipt`
+    // ourselves (see `EvmClient::await_receipt`) rather than via alloy's
+    // pending-tx heartbeat, which backfills one `eth_getBlockByNumber` per block
+    // while any tx is in flight. `evm_poll_interval` is that receipt poll
+    // cadence; default to a few seconds when unset.
+    let receipt_poll_interval = evm_poll_interval.unwrap_or(Duration::from_secs(4));
 
     let light_client_addr: Option<Address> = evm_light_client_address
         .map(|s| s.parse())
@@ -299,6 +297,8 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         bridge_addr,
         relayer_addr,
         light_client_addr,
+        max_log_block_range,
+        receipt_poll_interval,
     ));
 
     // ── Catch up LightClient with any missed committee rotations ──
@@ -379,6 +379,9 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
     let monitor = Arc::new(RwLock::new(monitor_state));
     let deposit_notify = Arc::new(Notify::new());
     let burn_notify = Arc::new(Notify::new());
+    // Wakes the Linera scan loop the instant our chain advances, so withdrawals
+    // are detected promptly instead of waiting for the next poll tick.
+    let scan_notify = Arc::new(Notify::new());
 
     let mut evm_scan_handle = {
         let monitor = Arc::clone(&monitor);
@@ -398,11 +401,13 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
         let evm_client = Arc::clone(&evm_client);
         let linera_client = Arc::clone(&linera_client);
         let burn_notify = Arc::clone(&burn_notify);
+        let scan_notify = Arc::clone(&scan_notify);
         tokio::spawn(monitor::linera::linera_scan_loop(
             monitor,
             evm_client,
             linera_client,
             burn_notify,
+            scan_notify,
             monitor_scan_interval,
         ))
     };
@@ -535,6 +540,13 @@ async fn serve_loop<E: linera_core::environment::Environment + 'static>(
                         }
                     }
                     continue;
+                }
+
+                // A new block on our own (bridge) chain may carry a freshly
+                // executed BurnEvent — wake the Linera scanner so the withdrawal
+                // is picked up immediately rather than on the next poll tick.
+                if matches!(notification.reason, Reason::NewBlock { .. }) {
+                    scan_notify.notify_one();
                 }
 
                 if !matches!(notification.reason, Reason::NewIncomingBundle { .. }) {

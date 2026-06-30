@@ -3,10 +3,12 @@
 
 //! Centralized EVM client for all bridge EVM interactions.
 
+use std::time::{Duration, Instant};
+
 use alloy::{
     primitives::{Address, Bytes, B256, U256},
     providers::Provider,
-    rpc::types::{Filter, Log},
+    rpc::types::{Filter, Log, TransactionReceipt},
     sol,
 };
 use alloy_sol_types::SolCall;
@@ -34,8 +36,9 @@ sol! {
     }
 }
 
-/// Maximum block range per `eth_getLogs` query.
-const MAX_LOG_BLOCK_RANGE: u64 = 10_000;
+/// Give up waiting for a settlement tx receipt after this long; the monitor's
+/// retry path then re-sends. Generous so a slow-but-valid tx isn't re-sent.
+const RECEIPT_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Centralized client for all EVM interactions. Safe to share via `Arc`.
 pub struct EvmClient<P> {
@@ -44,6 +47,11 @@ pub struct EvmClient<P> {
     relayer_addr: Address,
     deposit_event_sig: B256,
     light_client_addr: tokio::sync::OnceCell<Address>,
+    /// Maximum block range per `eth_getLogs` query. RPC providers cap this
+    /// (e.g. 2000 for the public Base Sepolia RPC), so it is configurable.
+    max_log_block_range: u64,
+    /// How often to poll `eth_getTransactionReceipt` while a tx is pending.
+    receipt_poll_interval: Duration,
 }
 
 impl<P: Provider> EvmClient<P> {
@@ -53,6 +61,8 @@ impl<P: Provider> EvmClient<P> {
         bridge_addr: Address,
         relayer_addr: Address,
         light_client_override: Option<Address>,
+        max_log_block_range: u64,
+        receipt_poll_interval: Duration,
     ) -> Self {
         let light_client_addr = tokio::sync::OnceCell::new();
         if let Some(addr) = light_client_override {
@@ -64,6 +74,40 @@ impl<P: Provider> EvmClient<P> {
             relayer_addr,
             deposit_event_sig: deposit_event_signature(),
             light_client_addr,
+            max_log_block_range,
+            receipt_poll_interval,
+        }
+    }
+
+    /// Waits for a transaction receipt by polling `eth_getTransactionReceipt`
+    /// directly, instead of `PendingTransactionBuilder::get_receipt()`.
+    /// `get_receipt()` starts alloy's block heartbeat, which — while any tx is
+    /// pending — backfills one `eth_getBlockByNumber` per block (see
+    /// alloy-provider `blocks.rs`). Polling the receipt hash makes zero
+    /// `getBlockByNumber` and one cheap call per interval, only while a tx is in
+    /// flight (nothing when idle). Returns an error if the tx reverted (status
+    /// 0), so a failed settlement is retried rather than treated as confirmed.
+    async fn await_receipt(&self, tx_hash: B256) -> Result<TransactionReceipt> {
+        let deadline = Instant::now() + RECEIPT_TIMEOUT;
+        loop {
+            if let Some(receipt) = self
+                .provider
+                .get_transaction_receipt(tx_hash)
+                .await
+                .context("eth_getTransactionReceipt failed")?
+            {
+                if !receipt.status() {
+                    anyhow::bail!("transaction {tx_hash} reverted (receipt status 0)");
+                }
+                return Ok(receipt);
+            }
+            if Instant::now() >= deadline {
+                anyhow::bail!(
+                    "transaction {tx_hash} not confirmed within {:?}",
+                    RECEIPT_TIMEOUT
+                );
+            }
+            tokio::time::sleep(self.receipt_poll_interval).await;
         }
     }
 
@@ -108,7 +152,7 @@ impl<P: Provider> EvmClient<P> {
         let mut all_logs = Vec::new();
         let mut cursor = from;
         while cursor <= to {
-            let chunk_end = (cursor + MAX_LOG_BLOCK_RANGE - 1).min(to);
+            let chunk_end = (cursor + self.max_log_block_range - 1).min(to);
             let filter = filter_base.clone().from_block(cursor).to_block(chunk_end);
             let logs = self.provider.get_logs(&filter).await?;
             all_logs.extend(logs);
@@ -145,8 +189,8 @@ impl<P: Provider> EvmClient<P> {
             .send()
             .await
             .context("addBlock send failed")?;
-        let receipt = pending_tx
-            .get_receipt()
+        let receipt = self
+            .await_receipt(*pending_tx.tx_hash())
             .await
             .context("addBlock receipt failed")?;
 
@@ -221,8 +265,8 @@ impl<P: Provider> EvmClient<P> {
             .send()
             .await
             .context("processBurns send failed")?;
-        let receipt = pending_tx
-            .get_receipt()
+        let receipt = self
+            .await_receipt(*pending_tx.tx_hash())
             .await
             .context("processBurns receipt failed")?;
         tracing::info!(tx = ?receipt.transaction_hash, "processBurns transaction confirmed");
@@ -297,12 +341,13 @@ impl<P: Provider> EvmClient<P> {
         let tx = alloy::rpc::types::TransactionRequest::default()
             .to(lc_addr)
             .input(call.abi_encode().into());
-        let receipt = self
+        let pending_tx = self
             .provider
             .send_transaction(tx)
             .await
-            .context("addCommittee send failed")?
-            .get_receipt()
+            .context("addCommittee send failed")?;
+        let receipt = self
+            .await_receipt(*pending_tx.tx_hash())
             .await
             .context("addCommittee receipt failed")?;
         Ok(receipt.transaction_hash)
