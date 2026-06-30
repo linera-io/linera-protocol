@@ -29,6 +29,7 @@ pub async fn linera_scan_loop<E: Environment + 'static>(
     evm_client: Arc<EvmClient<impl Provider + 'static>>,
     linera_client: Arc<LineraClient<E>>,
     burn_notify: Arc<Notify>,
+    scan_notify: Arc<Notify>,
     scan_interval: Duration,
 ) {
     loop {
@@ -52,7 +53,13 @@ pub async fn linera_scan_loop<E: Environment + 'static>(
             "Linera burn scan complete"
         );
 
-        tokio::time::sleep(scan_interval).await;
+        // Wake immediately when the main loop signals that our chain advanced
+        // (e.g. a freshly executed withdrawal), falling back to the poll
+        // interval as a backstop for any missed notification.
+        tokio::select! {
+            _ = scan_notify.notified() => {}
+            _ = tokio::time::sleep(scan_interval) => {}
+        }
     }
 }
 

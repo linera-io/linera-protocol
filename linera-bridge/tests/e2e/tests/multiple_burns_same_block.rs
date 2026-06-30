@@ -225,6 +225,7 @@ async fn relayer_processes_every_burn_in_one_block() -> anyhow::Result<()> {
             5,
             Some(sqlite_path_for_relay.as_path()),
             None,
+            2000, // max_log_block_range
         ))
         .await
     });

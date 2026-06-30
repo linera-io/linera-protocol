@@ -1,7 +1,13 @@
 # Linera Bridge — Mainnet Deployment Runbook
 
 This describes how to provision and operate a `linera-bridge` relayer
-on a single VM, bridging Base (EVM) and Mainnet (Linera).
+on a single VM, bridging Base Sepolia (EVM) and Testnet Conway (Linera).
+
+> **Scope.** This runbook targets a production VM with **GCP Secret Manager**
+> and systemd. To run the relayer **locally without GCP**, you only need
+> section 3 (provision via the deploy runbook) and the
+> [Local / without GCP](#local--without-gcp) command in section 4 — skip the
+> VM/Secret-Manager steps (1, 2, and the Production compose).
 
 ## Prerequisites
 
@@ -38,16 +44,26 @@ sudo chown root:root /etc/linera-bridge/.env.secret
 
 ### 3. Provision contracts, Linera apps, wallet, env file
 
-Production provisioning tooling is out of scope of this runbook —
-`examples/bridge-demo/setup.sh` is for local development only and is not
-reused here. The operator must end up with:
+Provision the contracts, Linera apps, wallet, and env file by following the
+Docker-based deployment runbook in
+[`linera-bridge/deploy/`](../linera-bridge/deploy/README.md) — a sequence of
+copy-pasteable commands run inside the project's pre-built images
+(`examples/bridge-demo/setup.sh` is for local Docker development only and is
+not reused here).
 
-- `/var/lib/linera-bridge/wallet.json`, `keystore.json`, `client.db`:
-  Linera wallet that owns the bridge chain (the relay container reads
-  these via the bind-mount at `/data`).
-- `/etc/linera-bridge/.env`: env file with the keys consumed by
-  `bridge-entrypoint.sh`. Use `/data/...` paths inside (the host bind-mount
-  exposes `/var/lib/linera-bridge` at `/data` in the container).
+Working through that runbook writes everything this runbook needs into
+`linera-bridge/deploy/out/<network>/`:
+
+- `wallet/` — the Linera wallet that owns the bridge chain. Copy its
+  `wallet.json`, `keystore.json`, `client.db` to `/var/lib/linera-bridge/`
+  (the relay container reads them via the bind-mount at `/data`).
+- `relayer.env` — the env file consumed by `bridge-entrypoint.sh`, already
+  using `/data/...` paths. Copy it to `/etc/linera-bridge/.env`.
+
+The runbook's final step emits `relayer.env` with the addresses/IDs filled in
+and `EVM_PRIVATE_KEY` deliberately omitted (kept in `.env.secret` / Secret
+Manager, see above). For the full command sequence and per-network notes, see the
+[deploy README](../linera-bridge/deploy/README.md). The fields it fills in are:
 
 ```
 # /etc/linera-bridge/.env
@@ -64,14 +80,15 @@ LINERA_STORAGE=rocksdb:/data/client.db
 MONITOR_SCAN_INTERVAL=30
 MONITOR_START_BLOCK=...               # FungibleBridge deploy block
 MAX_RETRIES=10
+MAX_LOG_BLOCK_RANGE=2000              # eth_getLogs chunk; match your RPC's cap
 PORT=3001
 ```
 
-Production EVM contracts (`LightClient`, `FungibleBridge`,
+All of these EVM contracts (`LightClient`, `FungibleBridge`,
 `LineraToken`-or-real-ERC20), the bridge chain, and the two Linera apps
-(`evm-bridge`, `wrapped-fungible`) are deployed/registered out-of-band by
-the team's deployment tooling. The output artifacts populate the env file
-above.
+(`evm-bridge`, `wrapped-fungible`) are deployed and cross-registered by the
+runbook steps; `deploy/out/<network>/relayer.env` already contains the
+filled-in values (it is the same file shown here).
 
 For the EVM contract deployment itself — the `forge script` invocations,
 their inputs, the governance (pause-guardian / proposer / canceller Safes
@@ -84,24 +101,46 @@ The `linera-bridge` container will read `/etc/linera-bridge/.env` and
 
 #### Optional: explorer verification on contract deploys
 
-When the bridge contracts are deployed via the project's `forge script`
-tooling (either via `examples/bridge-demo/setup.sh` for local-dev or
-the `bridge-init` container in `docker-compose.bridge-test.yml`),
-setting `EXPLORER_API_KEY` and `VERIFIER_URL` in the operator shell
-before invocation appends `--verify` and publishes the verified
-contract source to a block explorer atomically with the deploy.
-
-Example for Base:
+To publish verified contract source to a block explorer, append the explorer
+flags to the `forge script` commands in the runbook, e.g. for Base Sepolia:
 
 ```bash
-export EXPLORER_API_KEY="..."
-export VERIFIER_URL="..."
+--verify --etherscan-api-key <KEY> --verifier-url https://api-sepolia.basescan.org/api
 ```
 
-Both must be set for verification to be appended; either one alone is
-ignored.
+See the [deploy README](../linera-bridge/deploy/README.md#per-network-notes)
+for per-network verifier URLs.
 
 ### 4. Start the relayer
+
+The relayer runs from the `linera-bridge` image. Pick the path that matches your
+environment.
+
+#### Local / without GCP
+
+Run the locally-built image directly against the deploy outputs — no Secret
+Manager, no compose. With `$OUT` and `EVM_PRIVATE_KEY` set as in the deploy
+runbook (or substitute the paths/key directly):
+
+```bash
+docker run -d --name linera-relay \
+  --env-file "$OUT/relayer.env" \
+  -e EVM_PRIVATE_KEY \
+  -v "$OUT/wallet:/data" \
+  -p 3001:3001 \
+  linera-bridge
+```
+
+This is the recommended path for local and single-operator setups. See the
+deploy runbook's [Run the relayer](../linera-bridge/deploy/README.md#run-the-relayer)
+section for logs / health / stop.
+
+#### Production (GCP VM)
+
+`docker-compose.bridge-testnet.yml` adds a `fetch-evm-key` sidecar that pulls
+`EVM_PRIVATE_KEY` from **GCP Secret Manager** and runs the published registry
+image; it requires `GCP_PROJECT_ID` and the VM layout from steps 1–2. On the
+provisioned VM:
 
 ```bash
 docker compose -f docker/docker-compose.bridge-mainnet.yml up -d
@@ -261,3 +300,4 @@ Suggested alert rules (apply on the external Prometheus):
 | `linera_bridge_evm_balance_wei` reads 0          | RPC unreachable, or wrong key                  | Check `RPC_URL`, verify key with `cast wallet address`                           |
 | Pending deposits/burns stuck                     | EVM gas too low, or RPC errors                 | Top up gas; check logs for retry messages                                        |
 | Slow startup, no metrics for minutes             | RocksDB cache rebuilding from chain history    | Wait; check `linera_bridge_last_scanned_linera_height` is climbing               |
+| `eth_getLogs ... exceeds max block range`        | RPC caps the `getLogs` block range             | Lower `MAX_LOG_BLOCK_RANGE` (≤ the RPC's cap; 2000 for public Base Sepolia) and restart |

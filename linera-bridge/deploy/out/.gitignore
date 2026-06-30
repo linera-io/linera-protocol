@@ -1,0 +1,3 @@
+# Per-network deployment artifacts (addresses, wallets, secrets) — never committed.
+*
+!.gitignore
