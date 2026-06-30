@@ -226,9 +226,15 @@ impl EquivocationProof {
                     confirmed_block_hash != validated_block_hash,
                     ChainError::EquivocationProofSameBlock
                 );
-                // The confirmation lies in a round `≥ ℓ`, so the lock claim is false.
+                // The lock claim — "no confirmation of a different block in any round `≥ ℓ`" —
+                // is made while validating in `validated_round`, so it covers only the rounds the
+                // voter had already acted in: the window `[ℓ, validated_round)` (`ℓ = None` means
+                // `0`). The confirmation contradicts it only if it falls in that window, i.e.
+                // `ℓ ≤ confirmed_round < validated_round`. A confirmation at or after
+                // `validated_round` is a legitimate later switch, not a violation.
                 ensure!(
-                    validated_lock.is_none_or(|lock| *confirmed_round >= lock),
+                    *confirmed_round < *validated_round
+                        && validated_lock.is_none_or(|lock| *confirmed_round >= lock),
                     ChainError::EquivocationProofNoLockViolation
                 );
                 let confirmed = VoteValue(
@@ -303,9 +309,13 @@ fn walk_chain(
     let chain = &chained.justification;
     for (index, link) in chain.links().iter().enumerate() {
         let lock = chain.lock_at(index);
-        // A validator that confirmed at `confirmer.round` contradicts a lock `ℓ` iff
-        // `ℓ = None` (claims it never confirmed a conflict) or `confirmer.round ≥ ℓ`.
-        if lock.is_some_and(|lock| confirmer.round < lock) {
+        // This link's votes (cast in `link.round`) claim no conflicting confirmation in any
+        // round `≥ ℓ`, covering the window `[ℓ, link.round)`. A confirmation in
+        // `confirmer.round` contradicts it only if it falls in that window: the link must have
+        // been cast strictly after the confirmation (`link.round > confirmer.round`) with a lock
+        // reaching back over it (`ℓ ≤ confirmer.round`). Otherwise it's a legitimate later
+        // switch; another link may still straddle the confirmation, so keep scanning.
+        if link.round <= confirmer.round || lock.is_some_and(|lock| confirmer.round < lock) {
             continue;
         }
         for (validator, validated_signature) in &link.signatures {

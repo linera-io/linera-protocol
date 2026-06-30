@@ -165,26 +165,35 @@ fn extract_returns_none_for_same_block() {
 fn extract_finds_lock_violation() {
     let (_committee, k) = setup(4);
     let (a_hash, b_hash) = (block("A"), block("B"));
-    let r = Round::SingleLeader(0);
-    // `k[0]` and `k[2]` both confirmed A and freshly validated B in the same round.
+    // A is confirmed in round 0; B is freshly validated and confirmed in round 1. `k[0]` and
+    // `k[2]` confirmed A in round 0 and then validated B in round 1 with ℓ = None — whose claim
+    // covers round 0 — so confirming A in round 0 is a lock violation (round 0 ∈ [0, 1)).
     let a = JustifiedConfirmation {
         block_hash: a_hash,
-        round: r,
-        confirmed_signatures: confirmed_signatures(a_hash, r, &[&k[0], &k[1], &k[2]]),
+        round: Round::SingleLeader(0),
+        confirmed_signatures: confirmed_signatures(
+            a_hash,
+            Round::SingleLeader(0),
+            &[&k[0], &k[1], &k[2]],
+        ),
         justification: JustificationChain::new(vec![validated_link(
             a_hash,
-            r,
+            Round::SingleLeader(0),
             None,
             &[&k[0], &k[1], &k[2]],
         )]),
     };
     let b = JustifiedConfirmation {
         block_hash: b_hash,
-        round: r,
-        confirmed_signatures: confirmed_signatures(b_hash, r, &[&k[0], &k[2], &k[3]]),
+        round: Round::SingleLeader(1),
+        confirmed_signatures: confirmed_signatures(
+            b_hash,
+            Round::SingleLeader(1),
+            &[&k[0], &k[2], &k[3]],
+        ),
         justification: JustificationChain::new(vec![validated_link(
             b_hash,
-            r,
+            Round::SingleLeader(1),
             None,
             &[&k[0], &k[2], &k[3]],
         )]),
@@ -193,6 +202,102 @@ fn extract_finds_lock_violation() {
     assert!(matches!(proof, EquivocationProof::LockViolation { .. }));
     assert!(proof.check().is_ok());
     assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+}
+
+#[test]
+fn proof_check_rejects_confirmation_after_validation() {
+    let (_committee, k) = setup(4);
+    let (a, b) = (block("A"), block("B"));
+    // `k[0]` validated B in round 2 (fresh, ℓ = None) and confirmed a *different* block A in a
+    // *later* round 5. The round-2 validation's claim covers only rounds before round 2, so
+    // confirming A in round 5 is a legitimate later switch, not a lock violation.
+    let (_, validated_signature) = sign(
+        b,
+        Round::SingleLeader(2),
+        CertificateKind::Validated,
+        None,
+        &k[0],
+    );
+    let (_, confirmed_signature) = sign(
+        a,
+        Round::SingleLeader(5),
+        CertificateKind::Confirmed,
+        None,
+        &k[0],
+    );
+    let proof = EquivocationProof::LockViolation {
+        validator: k[0].public_key,
+        confirmed_block_hash: a,
+        confirmed_round: Round::SingleLeader(5),
+        confirmed_signature,
+        validated_block_hash: b,
+        validated_round: Round::SingleLeader(2),
+        validated_lock: None,
+        validated_signature,
+    };
+    assert!(matches!(
+        proof.check(),
+        Err(ChainError::EquivocationProofNoLockViolation)
+    ));
+}
+
+#[test]
+fn extract_is_independent_of_argument_order() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    // A is freshly validated and confirmed in round 2. B is grounded in round 1 and
+    // re-validated in round 5 (ℓ = 1), then confirmed there. `k[1]`/`k[2]` confirmed A in round
+    // 2 and validated B in round 5 under ℓ = 1, whose window [1, 5) contains 2 — a genuine lock
+    // violation. Extraction must find that real fault for either argument order, never a
+    // spurious one read off A's own chain at a round below the B-confirmation.
+    let a = JustifiedConfirmation {
+        block_hash: a_hash,
+        round: Round::SingleLeader(2),
+        confirmed_signatures: confirmed_signatures(
+            a_hash,
+            Round::SingleLeader(2),
+            &[&k[0], &k[1], &k[2]],
+        ),
+        justification: JustificationChain::new(vec![validated_link(
+            a_hash,
+            Round::SingleLeader(2),
+            None,
+            &[&k[0], &k[1], &k[2]],
+        )]),
+    };
+    let b = JustifiedConfirmation {
+        block_hash: b_hash,
+        round: Round::SingleLeader(5),
+        confirmed_signatures: confirmed_signatures(
+            b_hash,
+            Round::SingleLeader(5),
+            &[&k[1], &k[2], &k[3]],
+        ),
+        justification: JustificationChain::new(vec![
+            validated_link(
+                b_hash,
+                Round::SingleLeader(5),
+                Some(Round::SingleLeader(1)),
+                &[&k[1], &k[2], &k[3]],
+            ),
+            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[1], &k[2], &k[3]]),
+        ]),
+    };
+    for (x, y) in [(&a, &b), (&b, &a)] {
+        let proof = extract_equivocation(x, y).expect("a proof must exist");
+        assert!(proof.check().is_ok());
+        match &proof {
+            EquivocationProof::LockViolation {
+                confirmed_round,
+                validated_round,
+                ..
+            } => assert!(
+                confirmed_round < validated_round,
+                "the confirmation must fall inside the lock window"
+            ),
+            other => panic!("expected a lock violation, got {other:?}"),
+        }
+    }
 }
 
 #[test]
