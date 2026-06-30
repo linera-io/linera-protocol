@@ -338,6 +338,8 @@ impl StorageConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard,
                     max_stream_queries: options.storage_max_stream_queries,
+                    enable_statistics: options.rocksdb_enable_statistics,
+                    statistics_level: options.rocksdb_statistics_level,
                 };
                 let config = linera_views::rocks_db::RocksDbStoreConfig {
                     inner_config,
@@ -369,6 +371,8 @@ impl StorageConfig {
                     spawn_mode: *spawn_mode,
                     path_with_guard: path_with_guard.clone(),
                     max_stream_queries: options.storage_max_stream_queries,
+                    enable_statistics: options.rocksdb_enable_statistics,
+                    statistics_level: options.rocksdb_statistics_level,
                 };
                 let first_config = linera_views::rocks_db::RocksDbStoreConfig {
                     inner_config,

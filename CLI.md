@@ -309,6 +309,10 @@ Client implementation and command-line tool for the Linera blockchain
 * `--storage-replication-factor <STORAGE_REPLICATION_FACTOR>` — The replication factor for the keyspace
 
   Default value: `1`
+* `--rocksdb-enable-statistics` — Enable RocksDB's internal statistics collection and export them as Prometheus metrics. Off by default; enable it on nodes whose metrics are scraped
+* `--rocksdb-statistics-level <ROCKSDB_STATISTICS_LEVEL>` — The level of detail collected when `--rocksdb-enable-statistics` is set. Higher levels collect more, and more expensive, data. One of: `disable-all`, `except-histogram-or-timers`, `except-timers`, `except-detailed-timers`, `except-time-for-mutex`, `all`
+
+  Default value: `except-histogram-or-timers`
 * `--wasm-runtime <WASM_RUNTIME>` — The WebAssembly runtime to use
 * `--with-application-logs` — Output log messages from contract execution
 * `--tokio-threads <TOKIO_THREADS>` — The number of Tokio worker threads to use

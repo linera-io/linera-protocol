@@ -681,6 +681,8 @@ async fn main() {
                 spawn_mode,
                 path_with_guard,
                 max_stream_queries,
+                enable_statistics: false,
+                statistics_level: Default::default(),
             };
             let storage_cache_config = StorageCacheConfig {
                 max_cache_size,
