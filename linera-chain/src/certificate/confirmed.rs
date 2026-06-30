@@ -102,20 +102,24 @@ impl ConfirmedBlockCertificate {
         self.quorum.into_inner()
     }
 
-    /// Verifies the certificate: the quorum's `ConfirmedBlock` signatures, the validated chain,
-    /// and that the chain heads at the confirm round (or is empty in the fast round).
+    /// Verifies the certificate's signatures and justification chain: the quorum of
+    /// `ConfirmedBlock` votes, that the validated chain is itself a valid chain of quorums, and
+    /// that — if present — it heads at the confirmation round.
+    ///
+    /// An *absent* chain is accepted: a block confirmed in the fast round needs none, and one
+    /// confirmed in the chain's first round may omit it (it is always the lower block in any
+    /// fork, so its own chain is never needed to attribute one). Whether a *later*-round block
+    /// was obliged to carry its chain depends on the chain's first round at that height, which a
+    /// committee-only check cannot know; that obligation rests on honest block construction (see
+    /// `finalize_block`) and the per-signature justifications retained by the commitment scheme.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         self.quorum.check(committee)?;
         self.validated.verify(self.hash(), committee)?;
-        match self.validated.links().first() {
-            None => ensure!(
-                self.round().is_fast(),
-                ChainError::JustificationLockMismatch
-            ),
-            Some(link) => ensure!(
+        if let Some(link) = self.validated.links().first() {
+            ensure!(
                 link.round == self.round(),
                 ChainError::JustificationLockMismatch
-            ),
+            );
         }
         Ok(())
     }

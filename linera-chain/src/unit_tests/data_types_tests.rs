@@ -110,6 +110,31 @@ fn light_client_verifies_header_and_one_field() {
 }
 
 #[test]
+fn confirmed_certificate_check_accepts_absent_chain() {
+    use crate::{justification::JustificationChain, types::ConfirmedBlockCertificate};
+
+    let validator = ValidatorKeypair::generate();
+    let account = AccountSecretKey::Ed25519(Ed25519SecretKey::generate());
+    let committee = Committee::make_simple(vec![(validator.public_key, account.public())]);
+
+    // A confirmed certificate in a non-fast round carrying no justification chain — as produced
+    // for a first-round confirmation, which omits its chain.
+    let round = Round::SingleLeader(0);
+    let value = ConfirmedBlock::new(sample_block());
+    let vote = LiteVote::new(LiteValue::new(&value), round, &validator.secret_key);
+    let mut builder = SignatureAggregator::new(value, round, &committee);
+    let quorum = builder
+        .append(validator.public_key, vote.signature)
+        .unwrap()
+        .unwrap();
+    let certificate = ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
+
+    // The check accepts an absent chain (the obligation to carry one for later rounds rests on
+    // honest construction, not on this committee-only check).
+    assert!(certificate.check(&committee).is_ok());
+}
+
+#[test]
 fn test_signed_values() {
     let validator1_key_pair = ValidatorKeypair::generate();
     let validator2_key_pair = ValidatorKeypair::generate();

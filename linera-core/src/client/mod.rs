@@ -1273,9 +1273,23 @@ impl<Env: Environment> Client<Env> {
     ) -> Result<ConfirmedBlockCertificate, chain_client::Error> {
         debug!(round = %certificate.round(), "Submitting block for confirmation");
         let hashed_value = ConfirmedBlock::new(certificate.block().clone());
-        // The confirmed certificate carries the full chain of validated quorums for the block:
-        // this validated certificate's own quorum as the top link, followed by the chain below it.
-        let validated = certificate.full_justification();
+        // The confirmed certificate carries the full chain of validated quorums for the block —
+        // this validated certificate's own quorum as the top link, then the chain below it —
+        // except in the chain's first round: a first-round block is always the lower block in any
+        // fork, so it never needs a chain of its own and we omit it.
+        let chain_id = certificate.block().header.chain_id;
+        let first_round = self
+            .local_node
+            .chain_info(chain_id)
+            .await?
+            .manager
+            .ownership
+            .first_round();
+        let validated = if certificate.round() == first_round {
+            JustificationChain::default()
+        } else {
+            certificate.full_justification()
+        };
         let finalize_action = CommunicateAction::FinalizeBlock {
             certificate: Box::new(certificate),
             delivery: self.options.cross_chain_message_delivery,
