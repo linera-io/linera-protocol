@@ -5425,3 +5425,55 @@ where
     assert!(chain.outbox_counters.get().is_empty());
     Ok(())
 }
+
+/// A confirmation whose first-round attestation is untruthful is rejected when the block is
+/// executed in order, where the chain's ownership — and thus its real first round — is known.
+/// This single-owner chain's first round is `MultiLeader(0)`, but the certificate claims the
+/// fast round, so the attested bit is a lie.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[test_log::test(tokio::test)]
+async fn test_false_first_round_attestation_rejected<B>(
+    mut storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let key_pair = AccountSecretKey::generate();
+    let mut env = TestEnvironment::new(&mut storage_builder, true, false).await?;
+    let chain_1 = env
+        .add_root_chain(1, key_pair.public().into(), Amount::from_tokens(10))
+        .await
+        .id();
+    let chain_2 = env
+        .add_root_chain(2, AccountPublicKey::test_key(2).into(), Amount::ONE)
+        .await
+        .id();
+
+    // An honest first block, re-certified in the fast round with the first-round attestation set.
+    // The fast round passes the committee-only structural check (it is a possible first round),
+    // but it is not *this* chain's first round, so executing it in order must reject the bit.
+    let honest = env
+        .make_simple_transfer_certificate(
+            chain_1,
+            key_pair.public(),
+            chain_2,
+            Amount::ONE,
+            Vec::new(),
+            None,
+        )
+        .await;
+    let lying = env.make_certificate_with_round(honest.value().clone(), Round::Fast);
+
+    let result = env
+        .worker()
+        .process_confirmed_block(lying, ProcessConfirmedBlockMode::Execute, None)
+        .await;
+    match result {
+        Err(WorkerError::ChainError(error)) => {
+            assert_matches!(*error, ChainError::FalseFirstRoundAttestation);
+        }
+        _ => panic!("expected the false first-round attestation to be rejected"),
+    }
+    Ok(())
+}
