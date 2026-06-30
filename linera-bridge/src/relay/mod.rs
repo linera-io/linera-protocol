@@ -23,9 +23,7 @@ pub(crate) mod settlement;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use alloy::{
-    network::EthereumWallet,
-    primitives::Address,
-    providers::ProviderBuilder,
+    network::EthereumWallet, primitives::Address, providers::ProviderBuilder,
     signers::local::PrivateKeySigner,
 };
 use anyhow::{Context as _, Result};
