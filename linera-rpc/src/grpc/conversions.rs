@@ -1344,6 +1344,7 @@ pub mod tests {
             },
             round: Round::MultiLeader(2),
             lock: None,
+            first_round: false,
             justification: Default::default(),
             signatures: Cow::Owned(vec![(
                 key_pair.public_key,
