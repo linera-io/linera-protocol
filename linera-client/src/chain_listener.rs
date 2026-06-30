@@ -661,11 +661,40 @@ impl<C: ClientContext + 'static> ChainListener<C> {
         })
     }
 
-    fn remove_event_subscriber(&mut self, chain_id: ChainId) {
-        self.event_subscribers.retain(|_, subscribers| {
+    /// Removes `chain_id` as a subscriber from every publisher, and returns the publishers that
+    /// no longer have any subscribers as a result.
+    fn remove_event_subscriber(&mut self, chain_id: ChainId) -> Vec<ChainId> {
+        let mut orphaned = Vec::new();
+        self.event_subscribers.retain(|publisher_id, subscribers| {
             subscribers.remove(&chain_id);
-            !subscribers.is_empty()
+            if subscribers.is_empty() {
+                orphaned.push(*publisher_id);
+                false
+            } else {
+                true
+            }
         });
+        orphaned
+    }
+
+    /// Stops listening to a publisher chain whose last subscriber went away, provided the chain is
+    /// only tracked because of event subscriptions (i.e. its mode is `EventsOnly`). Wallet chains
+    /// (`FullChain`/`FollowChain`) are left untouched, as is any chain we're not listening to.
+    async fn stop_tracking_publisher(&mut self, publisher_id: ChainId) {
+        let mode = self.context.lock().await.client().chain_mode(publisher_id);
+        if !matches!(mode, Some(ListeningMode::EventsOnly(_))) {
+            return;
+        }
+        let Some(listening_client) = self.listening.remove(&publisher_id) else {
+            return;
+        };
+        self.context
+            .lock()
+            .await
+            .client()
+            .remove_chain_mode(publisher_id);
+        listening_client.stop().await;
+        debug!(%publisher_id, "stopped tracking publisher chain after its last subscriber went away");
     }
 
     /// Updates the event subscribers map, and returns all publishing chains we need to listen to.
@@ -710,6 +739,29 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                 .or_default()
                 .insert(chain_id);
         }
+        // Detect publishers this chain no longer subscribes to (e.g. an application called
+        // `unsubscribe_from_events`), and stop tracking any that were only tracked on its behalf.
+        let removed_publishers = self
+            .event_subscribers
+            .iter()
+            .filter(|(publisher_id, subscribers)| {
+                subscribers.contains(&chain_id) && !publishing_chains.contains_key(publisher_id)
+            })
+            .map(|(publisher_id, _)| *publisher_id)
+            .collect::<Vec<_>>();
+        for publisher_id in removed_publishers {
+            let orphaned = {
+                let Some(subscribers) = self.event_subscribers.get_mut(&publisher_id) else {
+                    continue;
+                };
+                subscribers.remove(&chain_id);
+                subscribers.is_empty()
+            };
+            if orphaned {
+                self.event_subscribers.remove(&publisher_id);
+                self.stop_tracking_publisher(publisher_id).await;
+            }
+        }
         Ok(publishing_chains)
     }
 
@@ -749,8 +801,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                                     error!(%chain_id, "attempted to drop a non-existent listener");
                                     continue;
                                 };
-                                self.remove_event_subscriber(chain_id);
+                                let orphaned = self.remove_event_subscriber(chain_id);
                                 listening_client.stop().await;
+                                for publisher_id in orphaned {
+                                    self.stop_tracking_publisher(publisher_id).await;
+                                }
                                 if let Err(error) = self.context.lock().await.wallet().remove(chain_id).await {
                                     error!(%error, %chain_id, "error removing a chain from the wallet");
                                 }
@@ -785,8 +840,11 @@ impl<C: ClientContext + 'static> ChainListener<C> {
                             error!(%chain_id, "attempted to drop a non-existent listener");
                             continue;
                         };
-                        self.remove_event_subscriber(chain_id);
+                        let orphaned = self.remove_event_subscriber(chain_id);
                         listening_client.stop().await;
+                        for publisher_id in orphaned {
+                            self.stop_tracking_publisher(publisher_id).await;
+                        }
                         continue;
                     };
                     return Ok(Action::Notification(notification));
