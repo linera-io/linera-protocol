@@ -107,18 +107,37 @@ impl ConfirmedBlockCertificate {
     /// `ConfirmedBlock` votes, that the validated chain is itself a valid chain of quorums, and
     /// that — if present — it heads at the confirmation round.
     ///
-    /// An *absent* chain is accepted only when the block was confirmed in the fast round or the
-    /// quorum carries the first-round attestation: such a block is always the lower block in any
-    /// fork, so its own chain is never needed to attribute one. Whether a *later*-round block was
-    /// obliged to carry its chain depends on the chain's first round at that height, which a
-    /// committee-only check cannot know; that obligation rests on honest block construction (see
-    /// `finalize_block`) and the per-signature justifications retained by the commitment scheme.
+    /// An *absent* chain is accepted only when the quorum carries the first-round attestation
+    /// (a fast-round confirmation always does, since the fast round is a chain's first round):
+    /// such a block is always the lower block in any fork, so its own chain is never needed to
+    /// attribute one. The attestation is also sanity-checked here against the round — it can only
+    /// be set in a round that could be a chain's first one. Whether it is the *actual* first
+    /// round depends on the chain's ownership at that height, which a committee-only check cannot
+    /// know; that, and the obligation of a later-round block to carry its chain, rest on honest
+    /// block construction (see `finalize_block`), full-execution verification, and the
+    /// per-signature justifications retained by the commitment scheme.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         self.quorum.check(committee)?;
         self.validated.verify(self.hash(), committee)?;
+        // The first-round attestation can only be set in a round that could be a chain's first:
+        // the fast round, or the index-0 round of whichever round type the chain starts with —
+        // a single- or multi-leader chain begins at `SingleLeader(0)`/`MultiLeader(0)`, and a
+        // validators-only chain at `Validator(0)`.
+        if self.quorum().first_round() {
+            ensure!(
+                matches!(
+                    self.round(),
+                    Round::Fast
+                        | Round::MultiLeader(0)
+                        | Round::SingleLeader(0)
+                        | Round::Validator(0)
+                ),
+                ChainError::JustificationLockMismatch
+            );
+        }
         if self.validated().links().is_empty() {
             ensure!(
-                self.round().is_fast() || self.quorum().first_round(),
+                self.quorum().first_round(),
                 ChainError::JustificationLockMismatch
             );
         } else {

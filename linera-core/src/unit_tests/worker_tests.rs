@@ -50,14 +50,14 @@ use linera_chain::{
     data_types::{
         BlockExecutionOutcome, BlockProposal, BundleExecutionPolicy, ChainAndHeight,
         IncomingBundle, LiteValue, LiteVote, MessageAction, MessageBundle, OperationResult,
-        PostedMessage, ProposedBlock, SignatureAggregator, Transaction, Vote,
+        PostedMessage, ProposedBlock, Transaction, Vote,
     },
     justification::{JustificationChain, JustificationLink},
     manager::LockingBlock,
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateKind, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
-        Timeout, ValidatedBlock, ValidatedBlockCertificate,
+        GenericCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -344,9 +344,16 @@ where
         let public_key = self.executing_worker.public_key();
         let value_hash = value.hash();
         let chain_id = value.chain_id();
-        let vote = LiteVote::new(LiteValue::new(&value), round, key_pair);
-        let mut builder = SignatureAggregator::new(value, round, &self.committee);
-        let quorum = builder.append(public_key, vote.signature).unwrap().unwrap();
+        // A confirmation in the fast round is in the chain's first round, so its votes attest it.
+        let first_round = T::KIND == CertificateKind::Confirmed && round.is_fast();
+        let vote = Vote::new_with_first_round(value.clone(), round, first_round, key_pair);
+        let quorum = GenericCertificate::new_with_lock_and_first_round(
+            value,
+            round,
+            None,
+            first_round,
+            vec![(public_key, vote.signature)],
+        );
         // A block confirmed outside the fast round must be justified by a validated quorum at the
         // confirm round. Build that single-link chain (the lone test validator signs a
         // `ValidatedBlock` vote with lock `None`). Validated and timeout certificates, and blocks
