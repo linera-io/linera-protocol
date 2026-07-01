@@ -33,6 +33,7 @@ use linera_execution::committee::Committee;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    block::BlockHeader,
     data_types::{check_signatures, VoteValue},
     types::CertificateKind,
     ChainError,
@@ -122,16 +123,17 @@ impl JustificationChain {
     }
 }
 
-/// A confirmed block's *hash* together with the justification that makes it self-contained
+/// A confirmed block's *header* together with the justification that makes it self-contained
 /// evidence: the round and quorum of `ConfirmedBlock` votes that finalized it, and the chain of
 /// `ValidatedBlock` quorums for the same block, with its top link in the round the block was
-/// confirmed. Only the hash travels, never the block itself. This is the shape a
-/// `ConfirmedBlockCertificate` reduces to for fault attribution.
+/// confirmed. Only the header travels, never the block body. The header hashes to the value the
+/// votes sign (`CryptoHash::new(&header)`) and carries the chain ID and height that scope the
+/// fault. This is the shape a `ConfirmedBlockCertificate` reduces to for fault attribution.
 #[derive(Clone, Debug)]
 pub struct JustifiedConfirmation {
-    /// The hash of the confirmed block. Since `ValidatedBlock` and `ConfirmedBlock` wrap the
-    /// same `Block`, this is also the hash the chain's `ValidatedBlock` votes sign.
-    pub block_hash: CryptoHash,
+    /// The header of the confirmed block. Its hash is what the chain's `ValidatedBlock` and
+    /// `ConfirmedBlock` votes sign (`ValidatedBlock` and `ConfirmedBlock` wrap the same block).
+    pub header: BlockHeader,
     /// The round in which the block was confirmed.
     pub round: Round,
     /// The quorum of `ConfirmedBlock` votes finalizing the block.
@@ -140,13 +142,21 @@ pub struct JustifiedConfirmation {
     pub justification: JustificationChain,
 }
 
+impl JustifiedConfirmation {
+    /// The hash of the confirmed block, which is what its votes sign.
+    pub fn block_hash(&self) -> CryptoHash {
+        CryptoHash::new(&self.header)
+    }
+}
+
 /// A quorum of `ValidatedBlock` votes for one block, cast in one round under one unlocking round.
 /// This is the top of a `ValidatedBlockCertificate`; comparing two of them in the same round
 /// attributes a double-validation fault.
 #[derive(Clone, Debug)]
 pub struct ValidatedQuorum {
-    /// The hash of the validated block, which is also what the votes sign.
-    pub block_hash: CryptoHash,
+    /// The header of the validated block. Its hash is what the votes sign, and it carries the
+    /// chain ID and height that scope the fault.
+    pub header: BlockHeader,
     /// The round in which the block was validated.
     pub round: Round,
     /// The unlocking round these `ValidatedBlock` votes signed.
@@ -164,14 +174,15 @@ pub enum EquivocationProof {
     LockViolation {
         /// The misbehaving validator.
         validator: ValidatorPublicKey,
-        /// The block the validator voted to confirm.
-        confirmed_block_hash: CryptoHash,
+        /// The header of the block the validator voted to confirm. Its hash, chain ID and height
+        /// are read from here; it must share the chain and height of `validated_header`.
+        confirmed_header: BlockHeader,
         /// The round in which it voted to confirm.
         confirmed_round: Round,
         /// Its `ConfirmedBlock` signature.
         confirmed_signature: ValidatorSignature,
-        /// The different block the validator voted to validate.
-        validated_block_hash: CryptoHash,
+        /// The header of the different block the validator voted to validate.
+        validated_header: BlockHeader,
         /// The round in which it voted to validate.
         validated_round: Round,
         /// The unlocking round the validation vote signed, contradicted by the confirmation.
@@ -189,14 +200,14 @@ pub enum EquivocationProof {
         round: Round,
         /// The certificate kind both votes share.
         kind: CertificateKind,
-        /// The first block voted for.
-        first_block_hash: CryptoHash,
+        /// The header of the first block voted for. The two headers must share a chain and height.
+        first_header: BlockHeader,
         /// The unlocking round the first vote signed (`None` for `ConfirmedBlock` votes).
         first_unlocking_round: Option<Round>,
         /// The signature on the first vote.
         first_signature: ValidatorSignature,
-        /// The second, different block voted for.
-        second_block_hash: CryptoHash,
+        /// The header of the second, different block voted for.
+        second_header: BlockHeader,
         /// The unlocking round the second vote signed (`None` for `ConfirmedBlock` votes).
         second_unlocking_round: Option<Round>,
         /// The signature on the second vote.
@@ -219,17 +230,27 @@ impl EquivocationProof {
         match self {
             EquivocationProof::LockViolation {
                 validator,
-                confirmed_block_hash,
+                confirmed_header,
                 confirmed_round,
                 confirmed_signature,
-                validated_block_hash,
+                validated_header,
                 validated_round,
                 validated_unlocking_round,
                 validated_signature,
             } => {
+                let confirmed_block_hash = CryptoHash::new(confirmed_header);
+                let validated_block_hash = CryptoHash::new(validated_header);
                 ensure!(
                     confirmed_block_hash != validated_block_hash,
                     ChainError::EquivocationProofSameBlock
+                );
+                // The two votes must concern the same height on the same chain; otherwise there
+                // is no lock relationship between them — a validator may freely confirm a block at
+                // one height and validate a different one at another height or on another chain.
+                ensure!(
+                    confirmed_header.chain_id == validated_header.chain_id
+                        && confirmed_header.height == validated_header.height,
+                    ChainError::EquivocationProofDifferentChainOrHeight
                 );
                 // The unlocking-round claim — "no confirmation of a different block in any round
                 // at or above the unlocking round" — is made while validating in
@@ -245,7 +266,7 @@ impl EquivocationProof {
                     ChainError::EquivocationProofNoLockViolation
                 );
                 let confirmed = VoteValue(
-                    *confirmed_block_hash,
+                    confirmed_block_hash,
                     *confirmed_round,
                     CertificateKind::Confirmed,
                     None,
@@ -253,7 +274,7 @@ impl EquivocationProof {
                 );
                 confirmed_signature.check(&confirmed, *validator)?;
                 let validated = VoteValue(
-                    *validated_block_hash,
+                    validated_block_hash,
                     *validated_round,
                     CertificateKind::Validated,
                     *validated_unlocking_round,
@@ -266,19 +287,29 @@ impl EquivocationProof {
                 validator,
                 round,
                 kind,
-                first_block_hash,
+                first_header,
                 first_unlocking_round,
                 first_signature,
-                second_block_hash,
+                second_header,
                 second_unlocking_round,
                 second_signature,
             } => {
+                let first_block_hash = CryptoHash::new(first_header);
+                let second_block_hash = CryptoHash::new(second_header);
                 ensure!(
                     first_block_hash != second_block_hash,
                     ChainError::EquivocationProofSameBlock
                 );
+                // Both votes must concern the same height on the same chain: a validator voting
+                // for different blocks at different heights or on different chains in the same
+                // round number is not double-voting.
+                ensure!(
+                    first_header.chain_id == second_header.chain_id
+                        && first_header.height == second_header.height,
+                    ChainError::EquivocationProofDifferentChainOrHeight
+                );
                 let first = VoteValue(
-                    *first_block_hash,
+                    first_block_hash,
                     *round,
                     *kind,
                     *first_unlocking_round,
@@ -286,7 +317,7 @@ impl EquivocationProof {
                 );
                 first_signature.check(&first, *validator)?;
                 let second = VoteValue(
-                    *second_block_hash,
+                    second_block_hash,
                     *round,
                     *kind,
                     *second_unlocking_round,
@@ -308,7 +339,11 @@ pub fn extract_equivocation(
     a: &JustifiedConfirmation,
     b: &JustifiedConfirmation,
 ) -> Option<EquivocationProof> {
-    if a.block_hash == b.block_hash {
+    // A conflict is two *different* blocks at the *same* height on the *same* chain.
+    if a.header.chain_id != b.header.chain_id || a.header.height != b.header.height {
+        return None;
+    }
+    if a.block_hash() == b.block_hash() {
         return None; // Not a conflict.
     }
     // Walk each block's justification chain against the other's confirmation quorum. The base
@@ -348,10 +383,10 @@ fn walk_chain(
             {
                 return Some(EquivocationProof::LockViolation {
                     validator: *validator,
-                    confirmed_block_hash: confirmer.block_hash,
+                    confirmed_header: confirmer.header.clone(),
                     confirmed_round: confirmer.round,
                     confirmed_signature,
-                    validated_block_hash: chained.block_hash,
+                    validated_header: chained.header.clone(),
                     validated_round: link.round,
                     validated_unlocking_round: unlocking_round,
                     validated_signature: *validated_signature,
@@ -376,10 +411,10 @@ pub fn extract_double_validation(
     double_vote(
         a.round,
         CertificateKind::Validated,
-        a.block_hash,
+        &a.header,
         a.unlocking_round,
         &a.signatures,
-        b.block_hash,
+        &b.header,
         b.unlocking_round,
         &b.signatures,
     )
@@ -396,10 +431,10 @@ fn double_confirm(
     double_vote(
         a.round,
         CertificateKind::Confirmed,
-        a.block_hash,
+        &a.header,
         None,
         &a.confirmed_signatures,
-        b.block_hash,
+        &b.header,
         None,
         &b.confirmed_signatures,
     )
@@ -410,14 +445,19 @@ fn double_confirm(
 fn double_vote(
     round: Round,
     kind: CertificateKind,
-    first_block_hash: CryptoHash,
+    first_header: &BlockHeader,
     first_unlocking_round: Option<Round>,
     first_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
-    second_block_hash: CryptoHash,
+    second_header: &BlockHeader,
     second_unlocking_round: Option<Round>,
     second_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
 ) -> Option<EquivocationProof> {
-    if first_block_hash == second_block_hash {
+    // Only a conflict if the two votes are for different blocks at the same height on the same
+    // chain.
+    if first_header.chain_id != second_header.chain_id
+        || first_header.height != second_header.height
+        || CryptoHash::new(first_header) == CryptoHash::new(second_header)
+    {
         return None;
     }
     for (validator, first_signature) in first_signatures {
@@ -426,10 +466,10 @@ fn double_vote(
                 validator: *validator,
                 round,
                 kind,
-                first_block_hash,
+                first_header: first_header.clone(),
                 first_unlocking_round,
                 first_signature: *first_signature,
-                second_block_hash,
+                second_header: second_header.clone(),
                 second_unlocking_round,
                 second_signature,
             });

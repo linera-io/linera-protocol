@@ -5,7 +5,8 @@ use linera_base::{
     crypto::{
         AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey, ValidatorSignature,
     },
-    data_types::Round,
+    data_types::{BlockHeight, Epoch, Round, Timestamp},
+    identifiers::ChainId,
 };
 use linera_execution::committee::Committee;
 
@@ -13,7 +14,7 @@ use super::{
     extract_double_validation, extract_equivocation, EquivocationProof, JustificationChain,
     JustificationLink, JustifiedConfirmation, ValidatedQuorum,
 };
-use crate::{data_types::VoteValue, types::CertificateKind, ChainError};
+use crate::{block::BlockHeader, data_types::VoteValue, types::CertificateKind, ChainError};
 
 /// Generates `n` validator keypairs and an equally-weighted committee over them.
 /// With 100 votes each, the quorum threshold is `ceil(2n/3 * 100) + ...`; for `n = 4` that
@@ -28,8 +29,42 @@ fn setup(n: usize) -> (Committee, Vec<ValidatorKeypair>) {
     (committee, keys)
 }
 
+/// Builds a distinct block header on the given chain, at the given height, distinguished by
+/// `name` (which varies its content hashes). The header hashes to the value the votes sign.
+fn header_at(chain: u32, height: u64, name: &str) -> BlockHeader {
+    let h = CryptoHash::test_hash(name);
+    BlockHeader {
+        chain_id: ChainId(CryptoHash::test_hash(format!("chain{chain}"))),
+        epoch: Epoch::ZERO,
+        height: BlockHeight(height),
+        timestamp: Timestamp::from(0),
+        state_hash: h,
+        previous_block_hash: None,
+        authenticated_owner: None,
+        transactions_hash: h,
+        messages_hash: h,
+        previous_message_blocks_hash: h,
+        previous_event_blocks_hash: h,
+        oracle_responses_hash: h,
+        events_hash: h,
+        blobs_hash: h,
+        operation_results_hash: h,
+    }
+}
+
+/// A block header on the default chain (1) at height 0, distinguished by `name`.
+fn header(name: &str) -> BlockHeader {
+    header_at(1, 0, name)
+}
+
+/// The hash of [`header(name)`] — the value that block's votes sign.
 fn block(name: &str) -> CryptoHash {
-    CryptoHash::test_hash(name)
+    CryptoHash::new(&header(name))
+}
+
+/// The hash of [`header_at(chain, height, name)`].
+fn block_at(chain: u32, height: u64, name: &str) -> CryptoHash {
+    CryptoHash::new(&header_at(chain, height, name))
 }
 
 fn sign(
@@ -160,7 +195,7 @@ fn verify_rejects_sub_quorum() {
 fn extract_returns_none_for_same_block() {
     let (_committee, k) = setup(4);
     let a = JustifiedConfirmation {
-        block_hash: block("A"),
+        header: header("A"),
         round: Round::SingleLeader(0),
         confirmed_signatures: confirmed_signatures(block("A"), Round::SingleLeader(0), &[&k[0]]),
         justification: JustificationChain::default(),
@@ -177,7 +212,7 @@ fn extract_finds_lock_violation() {
     // `k[2]` confirmed A in round 0 and then validated B in round 1 with unlocking round `None` —
     // whose claim covers round 0 — so confirming A in round 0 is a lock violation (round 0 ∈ [0, 1)).
     let a = JustifiedConfirmation {
-        block_hash: a_hash,
+        header: header("A"),
         round: Round::SingleLeader(0),
         confirmed_signatures: confirmed_signatures(
             a_hash,
@@ -192,7 +227,7 @@ fn extract_finds_lock_violation() {
         )]),
     };
     let b = JustifiedConfirmation {
-        block_hash: b_hash,
+        header: header("B"),
         round: Round::SingleLeader(1),
         confirmed_signatures: confirmed_signatures(
             b_hash,
@@ -235,10 +270,10 @@ fn proof_check_rejects_confirmation_after_validation() {
     );
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
-        confirmed_block_hash: a,
+        confirmed_header: header("A"),
         confirmed_round: Round::SingleLeader(5),
         confirmed_signature,
-        validated_block_hash: b,
+        validated_header: header("B"),
         validated_round: Round::SingleLeader(2),
         validated_unlocking_round: None,
         validated_signature,
@@ -260,7 +295,7 @@ fn extract_is_independent_of_argument_order() {
     // violation. Extraction must find that real fault for either argument order, never a
     // spurious one read off A's own chain at a round below the B-confirmation.
     let a = JustifiedConfirmation {
-        block_hash: a_hash,
+        header: header("A"),
         round: Round::SingleLeader(2),
         confirmed_signatures: confirmed_signatures(
             a_hash,
@@ -275,7 +310,7 @@ fn extract_is_independent_of_argument_order() {
         )]),
     };
     let b = JustifiedConfirmation {
-        block_hash: b_hash,
+        header: header("B"),
         round: Round::SingleLeader(5),
         confirmed_signatures: confirmed_signatures(
             b_hash,
@@ -318,7 +353,7 @@ fn extract_descends_to_grounding_link() {
     // unlocking round (1), the walk must skip the top link and catch the violation in the
     // grounding link.
     let a = JustifiedConfirmation {
-        block_hash: a_hash,
+        header: header("A"),
         round: Round::SingleLeader(0),
         confirmed_signatures: confirmed_signatures(
             a_hash,
@@ -328,7 +363,7 @@ fn extract_descends_to_grounding_link() {
         justification: JustificationChain::default(),
     };
     let b = JustifiedConfirmation {
-        block_hash: b_hash,
+        header: header("B"),
         round: Round::SingleLeader(3),
         confirmed_signatures: confirmed_signatures(
             b_hash,
@@ -368,13 +403,13 @@ fn extract_finds_double_confirm_in_fast_round() {
     let (a_hash, b_hash) = (block("A"), block("B"));
     // Both blocks confirmed in the fast round, so neither carries a justification chain.
     let a = JustifiedConfirmation {
-        block_hash: a_hash,
+        header: header("A"),
         round: Round::Fast,
         confirmed_signatures: confirmed_signatures(a_hash, Round::Fast, &[&k[0], &k[1], &k[2]]),
         justification: JustificationChain::default(),
     };
     let b = JustifiedConfirmation {
-        block_hash: b_hash,
+        header: header("B"),
         round: Round::Fast,
         confirmed_signatures: confirmed_signatures(b_hash, Round::Fast, &[&k[0], &k[2], &k[3]]),
         justification: JustificationChain::default(),
@@ -393,7 +428,7 @@ fn extract_finds_double_validation() {
     // `k[0]` and `k[2]` validated two different blocks in the same round, each under its own
     // (different) unlocking round. That overlap is the double-validation fault.
     let a = ValidatedQuorum {
-        block_hash: a_hash,
+        header: header("A"),
         round: r,
         unlocking_round: Some(Round::SingleLeader(1)),
         signatures: validated_link(
@@ -405,7 +440,7 @@ fn extract_finds_double_validation() {
         .signatures,
     };
     let b = ValidatedQuorum {
-        block_hash: b_hash,
+        header: header("B"),
         round: r,
         unlocking_round: Some(Round::SingleLeader(2)),
         signatures: validated_link(
@@ -433,14 +468,14 @@ fn extract_double_validation_ignores_different_rounds() {
     let (a_hash, b_hash) = (block("A"), block("B"));
     // Validating conflicting blocks in different rounds is not a fault on its own.
     let a = ValidatedQuorum {
-        block_hash: a_hash,
+        header: header("A"),
         round: Round::SingleLeader(1),
         unlocking_round: None,
         signatures: validated_link(a_hash, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]])
             .signatures,
     };
     let b = ValidatedQuorum {
-        block_hash: b_hash,
+        header: header("B"),
         round: Round::SingleLeader(3),
         unlocking_round: Some(Round::SingleLeader(1)),
         signatures: validated_link(
@@ -465,10 +500,10 @@ fn proof_check_rejects_same_block() {
     let (_, validated_signature) = sign(a, r, CertificateKind::Validated, None, &k[0]);
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
-        confirmed_block_hash: a,
+        confirmed_header: header("A"),
         confirmed_round: r,
         confirmed_signature,
-        validated_block_hash: a,
+        validated_header: header("A"),
         validated_round: r,
         validated_unlocking_round: None,
         validated_signature,
@@ -502,10 +537,10 @@ fn proof_check_rejects_non_violating_lock() {
     );
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
-        confirmed_block_hash: a,
+        confirmed_header: header("A"),
         confirmed_round: Round::SingleLeader(0),
         confirmed_signature,
-        validated_block_hash: b,
+        validated_header: header("B"),
         validated_round: Round::SingleLeader(3),
         validated_unlocking_round: Some(Round::SingleLeader(2)),
         validated_signature,
@@ -526,13 +561,93 @@ fn proof_check_rejects_forged_signature() {
     let (_, validated_signature) = sign(b, r, CertificateKind::Validated, None, &k[1]);
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
-        confirmed_block_hash: a,
+        confirmed_header: header("A"),
         confirmed_round: r,
         confirmed_signature,
-        validated_block_hash: b,
+        validated_header: header("B"),
         validated_round: r,
         validated_unlocking_round: None,
         validated_signature,
     };
     assert!(proof.check().is_err());
+}
+
+#[test]
+fn extract_returns_none_across_heights() {
+    let (_committee, k) = setup(4);
+    // Same shape as `extract_finds_lock_violation`, but the two blocks are at *different heights*.
+    // The locking rule is per height, so a validator confirming A at height 0 and validating B at
+    // height 1 is not equivocating — no proof must be produced, in either argument order.
+    let a_hash = block_at(1, 0, "A");
+    let b_hash = block_at(1, 1, "B");
+    let a = JustifiedConfirmation {
+        header: header_at(1, 0, "A"),
+        round: Round::SingleLeader(0),
+        confirmed_signatures: confirmed_signatures(
+            a_hash,
+            Round::SingleLeader(0),
+            &[&k[0], &k[1], &k[2]],
+        ),
+        justification: JustificationChain::new(vec![validated_link(
+            a_hash,
+            Round::SingleLeader(0),
+            None,
+            &[&k[0], &k[1], &k[2]],
+        )]),
+    };
+    let b = JustifiedConfirmation {
+        header: header_at(1, 1, "B"),
+        round: Round::SingleLeader(1),
+        confirmed_signatures: confirmed_signatures(
+            b_hash,
+            Round::SingleLeader(1),
+            &[&k[0], &k[2], &k[3]],
+        ),
+        justification: JustificationChain::new(vec![validated_link(
+            b_hash,
+            Round::SingleLeader(1),
+            None,
+            &[&k[0], &k[2], &k[3]],
+        )]),
+    };
+    assert!(extract_equivocation(&a, &b).is_none());
+    assert!(extract_equivocation(&b, &a).is_none());
+}
+
+#[test]
+fn proof_check_rejects_different_chain() {
+    let (_committee, k) = setup(4);
+    // `k[0]` legitimately confirmed a block on chain 1 and validated a different block on chain 2,
+    // with round numbers that would otherwise satisfy the lock-violation window. Both signatures
+    // are genuine, but the votes concern different chains, so this is not a violation.
+    let confirmed_header = header_at(1, 0, "A");
+    let validated_header = header_at(2, 0, "B");
+    let (_, confirmed_signature) = sign(
+        CryptoHash::new(&confirmed_header),
+        Round::SingleLeader(0),
+        CertificateKind::Confirmed,
+        None,
+        &k[0],
+    );
+    let (_, validated_signature) = sign(
+        CryptoHash::new(&validated_header),
+        Round::SingleLeader(1),
+        CertificateKind::Validated,
+        None,
+        &k[0],
+    );
+    let proof = EquivocationProof::LockViolation {
+        validator: k[0].public_key,
+        confirmed_header,
+        confirmed_round: Round::SingleLeader(0),
+        confirmed_signature,
+        validated_header,
+        validated_round: Round::SingleLeader(1),
+        validated_unlocking_round: None,
+        validated_signature,
+    };
+    assert!(matches!(
+        proof.check(),
+        Err(ChainError::EquivocationProofDifferentChainOrHeight)
+    ));
 }

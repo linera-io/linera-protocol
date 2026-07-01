@@ -153,6 +153,8 @@ pub enum ChainError {
     FalseFirstRoundAttestation,
     #[error("Equivocation proof must reference two different blocks")]
     EquivocationProofSameBlock,
+    #[error("Equivocation proof references blocks on different chains or at different heights")]
+    EquivocationProofDifferentChainOrHeight,
     #[error("Equivocation proof does not violate the lock claim")]
     EquivocationProofNoLockViolation,
     #[error(
@@ -222,6 +224,7 @@ impl ChainError {
             | ChainError::JustificationUnlockingRoundMismatch
             | ChainError::FalseFirstRoundAttestation
             | ChainError::EquivocationProofSameBlock
+            | ChainError::EquivocationProofDifferentChainOrHeight
             | ChainError::EquivocationProofNoLockViolation
             | ChainError::BlockProposalTooLarge(_)
             | ChainError::ClosedChain
