@@ -597,7 +597,6 @@ impl<Env: Environment> RequestsScheduler<Env> {
         if let Some(in_flight_match) = self
             .in_flight_tracker
             .try_subscribe(&key, self.clock.current_time())
-            .await
         {
             match in_flight_match {
                 InFlightMatch::Exact(Subscribed(mut receiver)) => {
@@ -698,10 +697,13 @@ impl<Env: Environment> RequestsScheduler<Env> {
             }
         };
 
-        // Create new in-flight entry for this request
-        self.in_flight_tracker
-            .insert_new(key.clone(), self.clock.current_time())
-            .await;
+        // Create a new in-flight entry for this request. The returned guard owns the
+        // entry: if this task is cancelled before completing (e.g. a losing branch of
+        // `communicate_with_quorum`), dropping it removes the entry so subscribers wake
+        // up and execute the request themselves instead of waiting forever.
+        let in_flight_guard = self
+            .in_flight_tracker
+            .insert_new(key.clone(), self.clock.current_time());
 
         // Remove the peer we're about to use from alternatives (it shouldn't retry with itself)
         self.in_flight_tracker
@@ -718,10 +720,8 @@ impl<Env: Environment> RequestsScheduler<Env> {
         let result_for_broadcast: Result<RequestResult, NodeError> = result.clone().map(Into::into);
         let shared_result = Arc::new(result_for_broadcast);
 
-        // Broadcast result and clean up
-        self.in_flight_tracker
-            .complete_and_broadcast(&key, shared_result.clone())
-            .await;
+        // Broadcast result and clean up.
+        in_flight_guard.complete_and_broadcast(shared_result.clone());
 
         if let Ok(success) = shared_result.as_ref() {
             self.cache
@@ -1226,7 +1226,7 @@ mod tests {
         let now = manager.clock.current_time();
 
         // A request is in flight, and two other peers register as alternative sources for it.
-        manager.in_flight_tracker.insert_new(key.clone(), now).await;
+        let guard = manager.in_flight_tracker.insert_new(key.clone(), now);
         manager
             .in_flight_tracker
             .add_alternative_peer(&key, nodes[1].clone())
@@ -1244,14 +1244,46 @@ mod tests {
         );
 
         // Completing the request removes the in-flight entry along with its alternatives.
-        manager
-            .in_flight_tracker
-            .complete_and_broadcast(&key, Arc::new(Ok(RequestResult::Blob(None))))
-            .await;
+        guard.complete_and_broadcast(Arc::new(Ok(RequestResult::Blob(None))));
         assert!(
             manager.get_alternative_peers(&key).await.is_none(),
             "Expected the in-flight entry to be removed after completion",
         );
+    }
+
+    /// Dropping the owner guard without completing must wake subscribers — they fall back to
+    /// executing the request themselves — rather than leaving them blocked forever. Regression
+    /// test for the cold-sync hang where a cancelled `communicate_with_quorum` branch leaked the
+    /// in-flight entry, so its subscribers' `recv().await` never returned.
+    #[tokio::test]
+    async fn test_owner_drop_wakes_subscribers() {
+        use linera_base::identifiers::BlobType;
+
+        let manager = create_test_manager(Duration::from_secs(60), Duration::from_secs(60));
+        let key = RequestKey::Blob(BlobId::new(
+            CryptoHash::test_hash("test_blob"),
+            BlobType::Data,
+        ));
+        let now = manager.clock.current_time();
+
+        // An owner registers an in-flight request; a second caller subscribes to it.
+        let guard = manager.in_flight_tracker.insert_new(key.clone(), now);
+        let Some(InFlightMatch::Exact(Subscribed(mut receiver))) =
+            manager.in_flight_tracker.try_subscribe(&key, now)
+        else {
+            panic!("expected to subscribe to the in-flight request");
+        };
+
+        // The owner is cancelled before completing the request.
+        drop(guard);
+
+        // The subscriber observes the channel closing instead of hanging, and the entry is gone
+        // so a later caller starts its own request.
+        assert!(matches!(
+            receiver.recv().await,
+            Err(tokio::sync::broadcast::error::RecvError::Closed),
+        ));
+        assert!(manager.in_flight_tracker.try_subscribe(&key, now).is_none());
     }
 
     #[tokio::test]
@@ -1323,11 +1355,11 @@ mod tests {
             }
         };
 
-        // Setup: Insert in-flight entry and register alternative peers
-        manager
+        // Setup: Insert in-flight entry and register alternative peers. The guard is
+        // held for the rest of the test so the entry is not dropped before the request runs.
+        let _guard = manager
             .in_flight_tracker
-            .insert_new(key.clone(), manager.clock.current_time())
-            .await;
+            .insert_new(key.clone(), manager.clock.current_time());
         // Register nodes 3, 2, 1 as alternatives (will be popped in reverse: 1, 2, 3)
         for node in nodes.iter().skip(1).rev() {
             manager
