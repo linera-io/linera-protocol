@@ -45,7 +45,7 @@ use crate::{
         PostedMessage, ProposedBlock,
     },
     test::{make_child_block, make_first_block, BlockTestExt, HttpServer},
-    ChainError, ChainExecutionContext, ChainStateView,
+    BlockExecutionPhase, ChainError, ChainExecutionContext, ChainStateView,
 };
 
 impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
@@ -76,6 +76,7 @@ impl ChainStateView<MemoryContext<TestExecutionRuntimeContext>> {
                 published_blobs,
                 None,
                 BundleExecutionPolicy::committed(),
+                BlockExecutionPhase::StageProposal,
             )
             .await?;
         Ok((block, outcome, tracker))
