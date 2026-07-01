@@ -982,12 +982,13 @@ where
         certificate.check(&committee)?;
 
         // The first-round attestation is checkable only where we hold the chain's ownership at
-        // this height: when we are about to execute the block in order (no gap), the chain's
-        // current ownership is the configuration the block was proposed under, giving the correct
-        // first round. For a block above our tip or on a sparsely-tracked chain we lack that
-        // ownership, so we trust the bit and defer the check to wherever the chain is executed in
-        // order.
-        if !gap && certificate.first_round() {
+        // this height: when we are about to execute the block in order (no gap) on an already
+        // active chain, the current ownership is the configuration the block was proposed under,
+        // giving the correct first round. A block above our tip, on a sparsely-tracked chain, or
+        // on a chain we have not yet initialized (its genesis, before we have applied its
+        // description) leaves us without that ownership, so we trust the bit and defer the check
+        // to wherever the chain is executed in order.
+        if !gap && certificate.first_round() && self.chain.is_active().await? {
             ensure!(
                 certificate.round() == self.chain.ownership().await?.first_round(),
                 ChainError::FalseFirstRoundAttestation
