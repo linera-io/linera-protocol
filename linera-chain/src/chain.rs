@@ -57,6 +57,36 @@ mod chain_tests;
 #[cfg(with_metrics)]
 use linera_base::prometheus_util::MeasureLatency;
 
+/// The protocol phase a block is executed in. Recorded as the `phase` label on the
+/// block-execution metrics so the three distinct paths — staging a proposal, validating a
+/// received proposal, and committing a confirmed certificate — are separate time series in
+/// Prometheus.
+///
+/// Every path that executes a block must name its phase explicitly: there is no `Default`,
+/// so a new caller cannot compile without choosing one, and no execution can land in an
+/// unlabeled or silently-mislabeled bucket.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockExecutionPhase {
+    /// A block proposer staging (building) its own block (`stage_block_execution`).
+    StageProposal,
+    /// A validator validating a received block proposal (`handle_block_proposal`).
+    HandleProposal,
+    /// A validator executing a confirmed certificate before committing it
+    /// (`process_confirmed_block`).
+    HandleConfirmed,
+}
+
+impl BlockExecutionPhase {
+    /// The Prometheus `phase` label value for this execution phase.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            BlockExecutionPhase::StageProposal => "stage_proposal",
+            BlockExecutionPhase::HandleProposal => "handle_proposal",
+            BlockExecutionPhase::HandleConfirmed => "handle_confirmed",
+        }
+    }
+}
+
 #[cfg(with_metrics)]
 pub(crate) mod metrics {
     use std::sync::LazyLock;
@@ -68,14 +98,18 @@ pub(crate) mod metrics {
     use prometheus::{HistogramVec, IntCounterVec};
 
     pub static NUM_BLOCKS_EXECUTED: LazyLock<IntCounterVec> = LazyLock::new(|| {
-        register_int_counter_vec("num_blocks_executed", "Number of blocks executed", &[])
+        register_int_counter_vec(
+            "num_blocks_executed",
+            "Number of blocks executed",
+            &["phase"],
+        )
     });
 
     pub static BLOCK_EXECUTION_LATENCY: LazyLock<HistogramVec> = LazyLock::new(|| {
         register_histogram_vec(
             "block_execution_latency",
             "Block execution latency",
-            &[],
+            &["phase"],
             exponential_bucket_interval(50.0_f64, 10_000_000.0),
         )
     });
@@ -85,7 +119,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "message_execution_latency",
             "Message execution latency",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
@@ -94,7 +128,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "operation_execution_latency",
             "Operation execution latency",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1_f64, 50_000.0),
         )
     });
@@ -103,7 +137,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "wasm_fuel_used_per_block",
             "Wasm fuel used per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
@@ -112,7 +146,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "evm_fuel_used_per_block",
             "EVM fuel used per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(10.0, 100_000_000.0),
         )
     });
@@ -121,7 +155,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "vm_num_reads_per_block",
             "VM number of reads per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1, 100.0),
         )
     });
@@ -130,7 +164,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "vm_bytes_read_per_block",
             "VM number of bytes read per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1, 10_000_000.0),
         )
     });
@@ -139,7 +173,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "vm_bytes_written_per_block",
             "VM number of bytes written per block",
-            &[],
+            &["phase"],
             exponential_bucket_interval(0.1, 10_000_000.0),
         )
     });
@@ -148,7 +182,7 @@ pub(crate) mod metrics {
         register_histogram_vec(
             "state_hash_computation_latency",
             "Time to recompute the state hash, in microseconds",
-            &[],
+            &["phase"],
             exponential_bucket_interval(1.0, 2_000_000.0),
         )
     });
@@ -171,23 +205,27 @@ pub(crate) mod metrics {
         )
     });
 
-    /// Tracks block execution metrics in Prometheus.
-    pub(crate) fn track_block_metrics(tracker: &ResourceTracker) {
-        NUM_BLOCKS_EXECUTED.with_label_values(&[]).inc();
+    /// Tracks block execution metrics in Prometheus, labeled by the execution `phase`.
+    pub(crate) fn track_block_metrics(
+        tracker: &ResourceTracker,
+        phase: super::BlockExecutionPhase,
+    ) {
+        let phase = &[phase.as_str()];
+        NUM_BLOCKS_EXECUTED.with_label_values(phase).inc();
         WASM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.wasm_fuel as f64);
         EVM_FUEL_USED_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.evm_fuel as f64);
         VM_NUM_READS_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.read_operations as f64);
         VM_BYTES_READ_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.bytes_read as f64);
         VM_BYTES_WRITTEN_PER_BLOCK
-            .with_label_values(&[])
+            .with_label_values(phase)
             .observe(tracker.bytes_written as f64);
     }
 }
@@ -787,6 +825,7 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         exec_policy: BundleExecutionPolicy,
+        phase: BlockExecutionPhase,
         checkpoint_origin_cursors: Vec<(ChainId, Cursor)>,
         checkpoint_inbox_cursors: Vec<(ChainId, Cursor)>,
         checkpoint_outbox_block_hashes: Vec<CryptoHash>,
@@ -801,7 +840,10 @@ where
         }
 
         #[cfg(with_metrics)]
-        let _execution_latency = metrics::BLOCK_EXECUTION_LATENCY.measure_latency_us();
+        let block_execution_latency =
+            metrics::BLOCK_EXECUTION_LATENCY.with_label_values(&[phase.as_str()]);
+        #[cfg(with_metrics)]
+        let _execution_latency = block_execution_latency.measure_latency_us();
 
         // Resolve the current epoch's resource policy first: `prepare_checkpoint` needs
         // `maximum_blob_size` to chunk the dump, and `current_committee` is a pure read
@@ -866,6 +908,7 @@ where
             local_time,
             replaying_oracle_responses,
             block,
+            phase,
         )?;
         if let Some(prepared) = prepared_checkpoint {
             block_execution_tracker.set_prepared_checkpoint(prepared);
@@ -1128,7 +1171,10 @@ where
 
         let state_hash = {
             #[cfg(with_metrics)]
-            let _hash_latency = metrics::STATE_HASH_COMPUTATION_LATENCY.measure_latency_us();
+            let state_hash_latency =
+                metrics::STATE_HASH_COMPUTATION_LATENCY.with_label_values(&[phase.as_str()]);
+            #[cfg(with_metrics)]
+            let _hash_latency = state_hash_latency.measure_latency_us();
             chain.crypto_hash_mut().await?
         };
 
@@ -1189,6 +1235,7 @@ where
     /// - After `max_failures` failed bundles, all remaining message bundles are discarded.
     ///
     /// The block may be modified to reflect the actual executed transactions.
+    #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id(),
         block_height = %block.height
@@ -1201,6 +1248,7 @@ where
         published_blobs: &[Blob],
         replaying_oracle_responses: Option<Vec<Vec<OracleResponse>>>,
         policy: BundleExecutionPolicy,
+        phase: BlockExecutionPhase,
     ) -> Result<
         (
             ProposedBlock,
@@ -1279,6 +1327,7 @@ where
             published_blobs,
             replaying_oracle_responses,
             policy,
+            phase,
             origin_cursors,
             inbox_cursors,
             outbox_block_hashes,
