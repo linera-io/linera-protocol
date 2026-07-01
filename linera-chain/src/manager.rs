@@ -337,10 +337,11 @@ where
         }
         // If we have voted to confirm a block, we may only vote to validate a *different* block
         // if a validated block certificate justifies it from a round strictly after our
-        // confirmation. The validation vote will then sign the lock `ℓ = certificate.round`, and
-        // since our confirmation is in an earlier round, the claim "I have not voted to confirm a
-        // different block in any round `≥ ℓ`" stays truthful. Re-validating the very block we
-        // confirmed is always allowed: the lock only constrains switching blocks.
+        // confirmation. The validation vote will then sign the unlocking round `certificate.round`,
+        // and since our confirmation is in an earlier round, the claim "I have not voted to confirm
+        // a different block in any round at or above the unlocking round" stays truthful.
+        // Re-validating the very block we confirmed is always allowed: the unlocking round only
+        // constrains switching blocks.
         if let Some(vote) = self.confirmed_vote() {
             ensure!(
                 match proposal.original_proposal.as_ref() {
@@ -515,15 +516,16 @@ where
                 self.confirmed_vote.get_mut().insert(vote),
             )))
         } else {
-            // The lock `ℓ` we sign is the round of the justification this proposal relies on:
-            // a fresh proposal or one retrying a fast block has no justifying validated
-            // certificate, so `ℓ = 0` (`None`); a regular retry is justified by its certificate.
-            let lock = match &proposal.original_proposal {
+            // The unlocking round we sign is the round of the justification this proposal relies
+            // on: a fresh proposal or one retrying a fast block has no justifying validated
+            // certificate, so the unlocking round is `0` (`None`); a regular retry is justified by
+            // its certificate.
+            let unlocking_round = match &proposal.original_proposal {
                 Some(OriginalProposal::Regular { certificate }) => Some(certificate.round),
                 Some(OriginalProposal::Fast(_)) | None => None,
             };
             let value = ValidatedBlock::new(block);
-            let vote = Vote::new_with_lock(value, round, lock, key_pair);
+            let vote = Vote::new_with_unlocking_round(value, round, unlocking_round, key_pair);
             Ok(Some(Either::Left(
                 self.validated_vote.get_mut().insert(vote),
             )))

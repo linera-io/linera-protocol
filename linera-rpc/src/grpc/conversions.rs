@@ -394,11 +394,11 @@ impl TryFrom<api::LiteCertificate> for HandleLiteCertRequest<'_> {
         };
         let signatures = bincode::deserialize(&certificate.signatures)?;
         let round = bincode::deserialize(&certificate.round)?;
-        let lock = bincode::deserialize(&certificate.lock)?;
-        let mut lite = LiteCertificate::new_with_lock_and_first_round(
+        let unlocking_round = bincode::deserialize(&certificate.unlocking_round)?;
+        let mut lite = LiteCertificate::new_with_unlocking_round_and_first_round(
             value,
             round,
-            lock,
+            unlocking_round,
             certificate.first_round,
             signatures,
         );
@@ -421,7 +421,7 @@ impl TryFrom<HandleLiteCertRequest<'_>> for api::LiteCertificate {
             signatures: bincode::serialize(&request.certificate.signatures)?,
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
             kind: request.certificate.value.kind as i32,
-            lock: bincode::serialize(&request.certificate.lock)?,
+            unlocking_round: bincode::serialize(&request.certificate.unlocking_round)?,
             justification: bincode::serialize(&request.certificate.justification)?,
             first_round: request.certificate.first_round,
         })
@@ -559,8 +559,12 @@ impl TryFrom<api::Certificate> for ValidatedBlockCertificate {
         if cert_type == api::CertificateKind::Validated as i32 {
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
             let below = deserialize_justification(&certificate.justification)?;
-            let quorum =
-                GenericCertificate::new_with_lock(value, round, below.top_lock(), signatures);
+            let quorum = GenericCertificate::new_with_unlocking_round(
+                value,
+                round,
+                below.top_unlocking_round(),
+                signatures,
+            );
             Ok(ValidatedBlockCertificate::from_parts(quorum, below))
         } else {
             Err(GrpcProtoConversionError::InvalidCertificateType)
@@ -579,7 +583,7 @@ impl TryFrom<api::Certificate> for ConfirmedBlockCertificate {
         if cert_type == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             let validated = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new_with_lock_and_first_round(
+            let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
                 value,
                 round,
                 None,
@@ -1059,7 +1063,7 @@ impl TryFrom<api::Certificate> for Certificate {
         let value = if certificate.kind == api::CertificateKind::Confirmed as i32 {
             let value: ConfirmedBlock = bincode::deserialize(&certificate.value)?;
             let validated = deserialize_justification(&certificate.justification)?;
-            let quorum = GenericCertificate::new_with_lock_and_first_round(
+            let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
                 value,
                 round,
                 None,
@@ -1070,8 +1074,12 @@ impl TryFrom<api::Certificate> for Certificate {
         } else if certificate.kind == api::CertificateKind::Validated as i32 {
             let value: ValidatedBlock = bincode::deserialize(&certificate.value)?;
             let below = deserialize_justification(&certificate.justification)?;
-            let quorum =
-                GenericCertificate::new_with_lock(value, round, below.top_lock(), signatures);
+            let quorum = GenericCertificate::new_with_unlocking_round(
+                value,
+                round,
+                below.top_unlocking_round(),
+                signatures,
+            );
             Certificate::Validated(ValidatedBlockCertificate::from_parts(quorum, below))
         } else if certificate.kind == api::CertificateKind::Timeout as i32 {
             let value: Timeout = bincode::deserialize(&certificate.value)?;
@@ -1343,7 +1351,7 @@ pub mod tests {
                 kind: CertificateKind::Validated,
             },
             round: Round::MultiLeader(2),
-            lock: None,
+            unlocking_round: None,
             first_round: false,
             justification: Default::default(),
             signatures: Cow::Owned(vec![(

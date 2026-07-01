@@ -31,31 +31,32 @@ use crate::{
 struct Repr<'a> {
     value: Cow<'a, ValidatedBlock>,
     round: Round,
-    lock: Option<Round>,
+    unlocking_round: Option<Round>,
     signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
     below: Cow<'a, JustificationChain>,
 }
 
 /// Certificate for a [`ValidatedBlock`] instance, certified in some round whose `ValidatedBlock`
-/// voters signed a lock `ℓ`.
+/// voters signed an unlocking round.
 ///
 /// A validated block certificate means the block is valid (but not necessarily finalized yet).
 /// Since only one block per round is validated, there can be at most one such certificate in
 /// every round. It wraps the signed quorum and carries the justification chain that grounds the
-/// lock the voters signed.
+/// unlocking round the voters signed.
 #[derive(Clone, Debug, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ValidatedBlockCertificate {
-    /// The signed quorum of `ValidatedBlock` votes. Its lock equals `below.top_lock()`.
+    /// The signed quorum of `ValidatedBlock` votes. Its unlocking round equals
+    /// `below.top_unlocking_round()`.
     quorum: GenericCertificate<ValidatedBlock>,
     /// The chain of validated quorums for the same block in rounds below this certificate's,
-    /// with its top link in the lock round `ℓ`, descending to the grounding round. Empty iff
-    /// the lock is `None`.
+    /// with its top link in the unlocking round, descending to the grounding round. Empty iff
+    /// the unlocking round is `None`.
     below: JustificationChain,
 }
 
 impl ValidatedBlockCertificate {
-    /// Creates a validated block certificate with an empty justification chain (lock `None`).
+    /// Creates a validated block certificate with an empty justification chain (unlocking round `None`).
     pub fn new(
         value: ValidatedBlock,
         round: Round,
@@ -113,14 +114,14 @@ impl ValidatedBlockCertificate {
             .prepend(self.quorum.round(), self.quorum.signatures().clone())
     }
 
-    /// Verifies the certificate: the quorum's signatures against its lock, the justification
-    /// chain, and that the lock matches the top of the chain.
+    /// Verifies the certificate: the quorum's signatures against its unlocking round, the
+    /// justification chain, and that the unlocking round matches the top of the chain.
     pub fn check(&self, committee: &Committee) -> Result<(), ChainError> {
         self.quorum.check(committee)?;
         self.below.verify(self.hash(), committee)?;
         ensure!(
-            self.quorum.lock() == self.below.top_lock(),
-            ChainError::JustificationLockMismatch
+            self.quorum.unlocking_round() == self.below.top_unlocking_round(),
+            ChainError::JustificationUnlockingRoundMismatch
         );
         Ok(())
     }
@@ -152,8 +153,8 @@ impl Certified for ValidatedBlockCertificate {
         ValidatedBlockCertificate::round(self)
     }
 
-    fn lock(&self) -> Option<Round> {
-        self.quorum.lock()
+    fn unlocking_round(&self) -> Option<Round> {
+        self.quorum.unlocking_round()
     }
 
     fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
@@ -204,7 +205,7 @@ impl Serialize for ValidatedBlockCertificate {
         Repr {
             value: Cow::Borrowed(self.quorum.inner()),
             round: self.quorum.round(),
-            lock: self.quorum.lock(),
+            unlocking_round: self.quorum.unlocking_round(),
             signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
             below: Cow::Borrowed(&self.below),
         }
@@ -225,10 +226,10 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
             ))
         } else {
             Ok(Self::from_parts(
-                GenericCertificate::new_with_lock(
+                GenericCertificate::new_with_unlocking_round(
                     inner.value.into_owned(),
                     inner.round,
-                    inner.lock,
+                    inner.unlocking_round,
                     signatures,
                 ),
                 inner.below.into_owned(),

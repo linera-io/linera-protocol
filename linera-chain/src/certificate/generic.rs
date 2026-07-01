@@ -19,11 +19,11 @@ pub struct GenericCertificate<T: CertificateValue> {
     value: T,
     /// The round in which the value was certified.
     pub round: Round,
-    /// The lock round `ℓ` the `ValidatedBlock` voters signed (see [`VoteValue`]). Always `None`
+    /// The unlocking round the `ValidatedBlock` voters signed (see [`VoteValue`]). Always `None`
     /// for `ConfirmedBlock`/`Timeout` certificates and for validated blocks with no justification.
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
-    lock: Option<Round>,
+    unlocking_round: Option<Round>,
     /// The first-round attestation the `ConfirmedBlock` voters signed (see [`VoteValue`]). Only
     /// `true` for a `ConfirmedBlock` certificate confirming a block in the chain's first round;
     /// always `false` for `ValidatedBlock`/`Timeout` certificates.
@@ -51,31 +51,37 @@ impl<T: CertificateValue> GenericCertificate<T> {
         round: Round,
         signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
-        Self::new_with_lock(value, round, None, signatures)
+        Self::new_with_unlocking_round(value, round, None, signatures)
     }
 
-    /// Creates a new certificate that also records the lock round `ℓ` its `ValidatedBlock`
+    /// Creates a new certificate that also records the unlocking round its `ValidatedBlock`
     /// voters signed (see [`VoteValue`]).
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
-    pub fn new_with_lock(
+    pub fn new_with_unlocking_round(
         value: T,
         round: Round,
-        lock: Option<Round>,
+        unlocking_round: Option<Round>,
         signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
-        Self::new_with_lock_and_first_round(value, round, lock, false, signatures)
+        Self::new_with_unlocking_round_and_first_round(
+            value,
+            round,
+            unlocking_round,
+            false,
+            signatures,
+        )
     }
 
-    /// Creates a new certificate that also records the lock round `ℓ` its `ValidatedBlock`
+    /// Creates a new certificate that also records the unlocking round its `ValidatedBlock`
     /// voters signed and the first-round attestation its `ConfirmedBlock` voters signed (see
     /// [`VoteValue`]).
     ///
     /// [`VoteValue`]: crate::data_types::VoteValue
-    pub fn new_with_lock_and_first_round(
+    pub fn new_with_unlocking_round_and_first_round(
         value: T,
         round: Round,
-        lock: Option<Round>,
+        unlocking_round: Option<Round>,
         first_round: bool,
         mut signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
@@ -84,7 +90,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
         Self {
             value,
             round,
-            lock,
+            unlocking_round,
             first_round,
             signatures,
         }
@@ -95,9 +101,9 @@ impl<T: CertificateValue> GenericCertificate<T> {
         self.round
     }
 
-    /// Returns the lock round `ℓ` the `ValidatedBlock` voters signed, if any.
-    pub fn lock(&self) -> Option<Round> {
-        self.lock
+    /// Returns the unlocking round the `ValidatedBlock` voters signed, if any.
+    pub fn unlocking_round(&self) -> Option<Round> {
+        self.unlocking_round
     }
 
     /// Returns the first-round attestation the `ConfirmedBlock` voters signed.
@@ -171,7 +177,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
             self.hash(),
             T::KIND,
             self.round,
-            self.lock,
+            self.unlocking_round,
             self.first_round,
             &self.signatures,
             committee,
@@ -187,7 +193,7 @@ impl<T: CertificateValue> GenericCertificate<T> {
         crate::certificate::LiteCertificate {
             value: LiteValue::new(&self.value),
             round: self.round,
-            lock: self.lock,
+            unlocking_round: self.unlocking_round,
             first_round: self.first_round,
             justification: crate::justification::JustificationChain::default(),
             signatures: std::borrow::Cow::Borrowed(&self.signatures),
@@ -200,7 +206,7 @@ impl<T: CertificateValue> Clone for GenericCertificate<T> {
         Self {
             value: self.value.clone(),
             round: self.round,
-            lock: self.lock,
+            unlocking_round: self.unlocking_round,
             first_round: self.first_round,
             signatures: self.signatures.clone(),
         }
@@ -214,7 +220,7 @@ impl<T: CertificateValue + Eq + PartialEq> PartialEq for GenericCertificate<T> {
     fn eq(&self, other: &Self) -> bool {
         self.hash() == other.hash()
             && self.round == other.round
-            && self.lock == other.lock
+            && self.unlocking_round == other.unlocking_round
             && self.first_round == other.first_round
             && self.signatures == other.signatures
     }

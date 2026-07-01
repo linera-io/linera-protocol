@@ -611,7 +611,7 @@ LiteCertificate:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
-    - lock:
+    - unlocking_round:
         OPTION:
           TYPENAME: Round
     - first_round: BOOL
@@ -636,7 +636,7 @@ LiteVote:
         TYPENAME: LiteValue
     - round:
         TYPENAME: Round
-    - lock:
+    - unlocking_round:
         OPTION:
           TYPENAME: Round
     - first_round: BOOL
@@ -1430,7 +1430,7 @@ ValidatedBlockCertificate:
         TYPENAME: Block
     - round:
         TYPENAME: Round
-    - lock:
+    - unlocking_round:
         OPTION:
           TYPENAME: Round
     - signatures:

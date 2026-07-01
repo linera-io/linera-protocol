@@ -126,7 +126,7 @@ fn confirmed_certificate_check_and_absent_chain() {
     let round = Round::SingleLeader(0);
     let value = ConfirmedBlock::new(sample_block());
     let vote = Vote::new_with_first_round(value.clone(), round, true, &validator.secret_key);
-    let quorum = GenericCertificate::new_with_lock_and_first_round(
+    let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
         value.clone(),
         round,
         None,

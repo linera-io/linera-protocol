@@ -36,28 +36,36 @@ fn sign(
     block: CryptoHash,
     round: Round,
     kind: CertificateKind,
-    lock: Option<Round>,
+    unlocking_round: Option<Round>,
     key: &ValidatorKeypair,
 ) -> (ValidatorPublicKey, ValidatorSignature) {
-    let value = VoteValue(block, round, kind, lock, false);
+    let value = VoteValue(block, round, kind, unlocking_round, false);
     (
         key.public_key,
         ValidatorSignature::new(&value, &key.secret_key),
     )
 }
 
-/// A `ValidatedBlock` quorum for `block` in `round`, cast with the given `lock`.
+/// A `ValidatedBlock` quorum for `block` in `round`, cast with the given `unlocking_round`.
 fn validated_link(
     block: CryptoHash,
     round: Round,
-    lock: Option<Round>,
+    unlocking_round: Option<Round>,
     signers: &[&ValidatorKeypair],
 ) -> JustificationLink {
     JustificationLink {
         round,
         signatures: signers
             .iter()
-            .map(|kp| sign(block, round, CertificateKind::Validated, lock, kp))
+            .map(|kp| {
+                sign(
+                    block,
+                    round,
+                    CertificateKind::Validated,
+                    unlocking_round,
+                    kp,
+                )
+            })
             .collect(),
     }
 }
@@ -90,7 +98,7 @@ fn verify_accepts_valid_chain() {
         validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
     ]);
     assert!(chain.verify(b, &committee).is_ok());
-    assert_eq!(chain.top_lock(), Some(Round::SingleLeader(3)));
+    assert_eq!(chain.top_unlocking_round(), Some(Round::SingleLeader(3)));
 }
 
 #[test]
@@ -116,8 +124,8 @@ fn verify_rejects_non_decreasing_rounds() {
 fn verify_rejects_broken_linkage() {
     let (committee, k) = setup(4);
     let b = block("B");
-    // Link 0's votes signed lock `SingleLeader(2)`, but the next link is at `SingleLeader(1)`,
-    // so the lock the verifier derives doesn't match what was signed.
+    // Link 0's votes signed unlocking round `SingleLeader(2)`, but the next link is at
+    // `SingleLeader(1)`, so the unlocking round the verifier derives doesn't match what was signed.
     let chain = JustificationChain::new(vec![
         validated_link(
             b,
@@ -166,8 +174,8 @@ fn extract_finds_lock_violation() {
     let (_committee, k) = setup(4);
     let (a_hash, b_hash) = (block("A"), block("B"));
     // A is confirmed in round 0; B is freshly validated and confirmed in round 1. `k[0]` and
-    // `k[2]` confirmed A in round 0 and then validated B in round 1 with ℓ = None — whose claim
-    // covers round 0 — so confirming A in round 0 is a lock violation (round 0 ∈ [0, 1)).
+    // `k[2]` confirmed A in round 0 and then validated B in round 1 with unlocking round `None` —
+    // whose claim covers round 0 — so confirming A in round 0 is a lock violation (round 0 ∈ [0, 1)).
     let a = JustifiedConfirmation {
         block_hash: a_hash,
         round: Round::SingleLeader(0),
@@ -208,7 +216,7 @@ fn extract_finds_lock_violation() {
 fn proof_check_rejects_confirmation_after_validation() {
     let (_committee, k) = setup(4);
     let (a, b) = (block("A"), block("B"));
-    // `k[0]` validated B in round 2 (fresh, ℓ = None) and confirmed a *different* block A in a
+    // `k[0]` validated B in round 2 (fresh, unlocking round `None`) and confirmed a *different* block A in a
     // *later* round 5. The round-2 validation's claim covers only rounds before round 2, so
     // confirming A in round 5 is a legitimate later switch, not a lock violation.
     let (_, validated_signature) = sign(
@@ -232,7 +240,7 @@ fn proof_check_rejects_confirmation_after_validation() {
         confirmed_signature,
         validated_block_hash: b,
         validated_round: Round::SingleLeader(2),
-        validated_lock: None,
+        validated_unlocking_round: None,
         validated_signature,
     };
     assert!(matches!(
@@ -246,8 +254,9 @@ fn extract_is_independent_of_argument_order() {
     let (_committee, k) = setup(4);
     let (a_hash, b_hash) = (block("A"), block("B"));
     // A is freshly validated and confirmed in round 2. B is grounded in round 1 and
-    // re-validated in round 5 (ℓ = 1), then confirmed there. `k[1]`/`k[2]` confirmed A in round
-    // 2 and validated B in round 5 under ℓ = 1, whose window [1, 5) contains 2 — a genuine lock
+    // re-validated in round 5 (unlocking round 1), then confirmed there. `k[1]`/`k[2]` confirmed A
+    // in round 2 and validated B in round 5 under unlocking round 1, whose window [1, 5) contains 2
+    // — a genuine lock
     // violation. Extraction must find that real fault for either argument order, never a
     // spurious one read off A's own chain at a round below the B-confirmation.
     let a = JustifiedConfirmation {
@@ -293,7 +302,7 @@ fn extract_is_independent_of_argument_order() {
                 ..
             } => assert!(
                 confirmed_round < validated_round,
-                "the confirmation must fall inside the lock window"
+                "the confirmation must fall inside the unlocking-round window"
             ),
             other => panic!("expected a lock violation, got {other:?}"),
         }
@@ -306,7 +315,8 @@ fn extract_descends_to_grounding_link() {
     let (a_hash, b_hash) = (block("A"), block("B"));
     // A was confirmed in round 0; B's chain has its top link in round 3, justified by the
     // grounding link in round 1. Because A's confirmation round (0) is below the top link's
-    // lock (1), the walk must skip the top link and catch the violation in the grounding link.
+    // unlocking round (1), the walk must skip the top link and catch the violation in the
+    // grounding link.
     let a = JustifiedConfirmation {
         block_hash: a_hash,
         round: Round::SingleLeader(0),
@@ -340,12 +350,12 @@ fn extract_descends_to_grounding_link() {
         EquivocationProof::LockViolation {
             validator,
             validated_round,
-            validated_lock,
+            validated_unlocking_round,
             ..
         } => {
             assert_eq!(*validator, k[0].public_key);
             assert_eq!(*validated_round, Round::SingleLeader(1));
-            assert_eq!(*validated_lock, None);
+            assert_eq!(*validated_unlocking_round, None);
         }
         other => panic!("expected a lock violation, got {other:?}"),
     }
@@ -381,11 +391,11 @@ fn extract_finds_double_validation() {
     let (a_hash, b_hash) = (block("A"), block("B"));
     let r = Round::SingleLeader(3);
     // `k[0]` and `k[2]` validated two different blocks in the same round, each under its own
-    // (different) lock. That overlap is the double-validation fault.
+    // (different) unlocking round. That overlap is the double-validation fault.
     let a = ValidatedQuorum {
         block_hash: a_hash,
         round: r,
-        lock: Some(Round::SingleLeader(1)),
+        unlocking_round: Some(Round::SingleLeader(1)),
         signatures: validated_link(
             a_hash,
             r,
@@ -397,7 +407,7 @@ fn extract_finds_double_validation() {
     let b = ValidatedQuorum {
         block_hash: b_hash,
         round: r,
-        lock: Some(Round::SingleLeader(2)),
+        unlocking_round: Some(Round::SingleLeader(2)),
         signatures: validated_link(
             b_hash,
             r,
@@ -425,14 +435,14 @@ fn extract_double_validation_ignores_different_rounds() {
     let a = ValidatedQuorum {
         block_hash: a_hash,
         round: Round::SingleLeader(1),
-        lock: None,
+        unlocking_round: None,
         signatures: validated_link(a_hash, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]])
             .signatures,
     };
     let b = ValidatedQuorum {
         block_hash: b_hash,
         round: Round::SingleLeader(3),
-        lock: Some(Round::SingleLeader(1)),
+        unlocking_round: Some(Round::SingleLeader(1)),
         signatures: validated_link(
             b_hash,
             Round::SingleLeader(3),
@@ -460,7 +470,7 @@ fn proof_check_rejects_same_block() {
         confirmed_signature,
         validated_block_hash: a,
         validated_round: r,
-        validated_lock: None,
+        validated_unlocking_round: None,
         validated_signature,
     };
     assert!(matches!(
@@ -473,7 +483,8 @@ fn proof_check_rejects_same_block() {
 fn proof_check_rejects_non_violating_lock() {
     let (_committee, k) = setup(4);
     let (a, b) = (block("A"), block("B"));
-    // The confirmation is in round 0, but the lock claim only covers rounds `≥ 2`, so
+    // The confirmation is in round 0, but the unlocking-round claim only covers rounds at or
+    // above 2, so
     // confirming a different block in round 0 is not actually a violation.
     let (_, confirmed_signature) = sign(
         a,
@@ -496,7 +507,7 @@ fn proof_check_rejects_non_violating_lock() {
         confirmed_signature,
         validated_block_hash: b,
         validated_round: Round::SingleLeader(3),
-        validated_lock: Some(Round::SingleLeader(2)),
+        validated_unlocking_round: Some(Round::SingleLeader(2)),
         validated_signature,
     };
     assert!(matches!(
@@ -520,7 +531,7 @@ fn proof_check_rejects_forged_signature() {
         confirmed_signature,
         validated_block_hash: b,
         validated_round: r,
-        validated_lock: None,
+        validated_unlocking_round: None,
         validated_signature,
     };
     assert!(proof.check().is_err());

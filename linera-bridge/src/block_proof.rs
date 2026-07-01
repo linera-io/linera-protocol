@@ -251,7 +251,7 @@ mod tests {
         // and the certificate carries no justification chain.
         let vote =
             Vote::new_with_first_round(confirmed.clone(), Round::Fast, true, &validator.secret_key);
-        let quorum = GenericCertificate::new_with_lock_and_first_round(
+        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
             confirmed,
             Round::Fast,
             None,

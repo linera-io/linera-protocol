@@ -36,7 +36,7 @@ struct Repr<'a> {
 }
 
 /// Certificate for a [`ConfirmedBlock`] instance, certified in some round by a quorum of
-/// `ConfirmedBlock` votes (which carry no lock).
+/// `ConfirmedBlock` votes (which carry no unlocking round).
 ///
 /// A confirmed block certificate means that the block is finalized: it is the agreed block at
 /// that height on that chain. It wraps the signed quorum and carries the full chain of validated
@@ -44,7 +44,7 @@ struct Repr<'a> {
 #[derive(Clone, Debug, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ConfirmedBlockCertificate {
-    /// The signed quorum of `ConfirmedBlock` votes. Its lock is always `None`.
+    /// The signed quorum of `ConfirmedBlock` votes. Its unlocking round is always `None`.
     quorum: GenericCertificate<ConfirmedBlock>,
     /// The full chain of validated quorums for the block, with its top link in the round the
     /// block was confirmed, descending to the grounding round. Empty iff the block was confirmed
@@ -132,18 +132,18 @@ impl ConfirmedBlockCertificate {
                         | Round::SingleLeader(0)
                         | Round::Validator(0)
                 ),
-                ChainError::JustificationLockMismatch
+                ChainError::JustificationUnlockingRoundMismatch
             );
         }
         if self.validated().links().is_empty() {
             ensure!(
                 self.quorum().first_round(),
-                ChainError::JustificationLockMismatch
+                ChainError::JustificationUnlockingRoundMismatch
             );
         } else {
             ensure!(
                 self.validated().links()[0].round == self.round(),
-                ChainError::JustificationLockMismatch
+                ChainError::JustificationUnlockingRoundMismatch
             );
         }
         Ok(())
@@ -176,8 +176,8 @@ impl Certified for ConfirmedBlockCertificate {
         ConfirmedBlockCertificate::round(self)
     }
 
-    fn lock(&self) -> Option<Round> {
-        self.quorum.lock()
+    fn unlocking_round(&self) -> Option<Round> {
+        self.quorum.unlocking_round()
     }
 
     fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {
@@ -268,7 +268,7 @@ impl<'de> Deserialize<'de> for ConfirmedBlockCertificate {
             Err(serde::de::Error::custom("Vector is not strictly sorted"))
         } else {
             Ok(Self::from_parts(
-                GenericCertificate::new_with_lock_and_first_round(
+                GenericCertificate::new_with_unlocking_round_and_first_round(
                     helper.value.into_owned(),
                     helper.round,
                     None,

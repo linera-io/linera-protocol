@@ -306,8 +306,8 @@ message LiteCertificate {
 
   CertificateKind kind = 6;
 
-  // The lock round (a bincode-encoded `Option<Round>`) the `ValidatedBlock` voters signed.
-  bytes lock = 7;
+  // The unlocking round (a bincode-encoded `Option<Round>`) the `ValidatedBlock` voters signed.
+  bytes unlocking_round = 7;
 
   // The justification chain (a bincode-encoded `JustificationChain`) carried by the certificate.
   bytes justification = 8;

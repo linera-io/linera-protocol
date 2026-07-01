@@ -33,7 +33,7 @@ use crate::{
 pub type TimeoutCertificate = GenericCertificate<Timeout>;
 
 /// The common read interface shared by all certificate types: the signed value, the round and
-/// lock it was certified under, its signatures, and verification.
+/// unlocking round it was certified under, its signatures, and verification.
 pub trait Certified {
     /// The kind of value this certificate certifies.
     type Value: CertificateValue;
@@ -44,8 +44,8 @@ pub trait Certified {
     /// Returns the round in which the value was certified.
     fn round(&self) -> Round;
 
-    /// Returns the lock round `ℓ` the `ValidatedBlock` voters signed, if any.
-    fn lock(&self) -> Option<Round>;
+    /// Returns the unlocking round the `ValidatedBlock` voters signed, if any.
+    fn unlocking_round(&self) -> Option<Round>;
 
     /// Returns the validator signatures certifying this value.
     fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)>;
@@ -81,8 +81,8 @@ impl<T: CertificateValue> Certified for GenericCertificate<T> {
         GenericCertificate::round(self)
     }
 
-    fn lock(&self) -> Option<Round> {
-        GenericCertificate::lock(self)
+    fn unlocking_round(&self) -> Option<Round> {
+        GenericCertificate::unlocking_round(self)
     }
 
     fn signatures(&self) -> &Vec<(ValidatorPublicKey, ValidatorSignature)> {

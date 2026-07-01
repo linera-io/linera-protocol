@@ -8,17 +8,18 @@
 //! using only data the certificates carry. This module provides that data — the
 //! [`JustificationChain`] — and the algorithm that extracts a proof from it.
 //!
-//! Each `ValidatedBlock` vote signs a lock round `ℓ` (see [`VoteValue`]), asserting that the
-//! voter has not voted to confirm a *different* block in any round `≥ ℓ`. A vote only counts
-//! if `ℓ = 0` (no justification needed) or it is justified by a quorum of `ValidatedBlock`
-//! votes for the same block in a round in `[ℓ, r)`. That quorum is itself justified, so the
-//! justifications form a chain of quorums with strictly decreasing rounds, descending to the
-//! round where the block was first validated (where `ℓ = 0`, represented as `None`).
+//! Each `ValidatedBlock` vote signs an unlocking round (see [`VoteValue`]), asserting that the
+//! voter has not voted to confirm a *different* block in any round at or above it. A vote only
+//! counts if its unlocking round is `0` (no justification needed) or it is justified by a quorum
+//! of `ValidatedBlock` votes for the same block in a round at or above the unlocking round and
+//! below `r`. That quorum is itself justified, so the justifications form a chain of quorums with
+//! strictly decreasing rounds, descending to the round where the block was first validated (where
+//! the unlocking round is `0`, represented as `None`).
 //!
 //! Because every certificate carries this chain, two conflicting certificates are
 //! self-contained evidence: walking one block's chain against the other block's confirmation
-//! quorum reaches a validator whose lock claim is contradicted by its own confirmation vote.
-//! See [`extract_equivocation`].
+//! quorum reaches a validator whose unlocking-round claim is contradicted by its own confirmation
+//! vote. See [`extract_equivocation`].
 //!
 //! [`VoteValue`]: crate::data_types::VoteValue
 
@@ -52,9 +53,10 @@ pub struct JustificationLink {
 /// the certifying round down to the round where the block was first validated.
 ///
 /// Links are ordered by **strictly decreasing** round. The quorum in link `i` was cast with
-/// lock `ℓᵢ = links[i + 1].round` — i.e. it is justified by the next, lower link — and the
-/// last link was cast with `ℓ = 0` (`None`), the fresh proposal that grounds the chain. An
-/// empty chain means the block was confirmed in the fast round, which needs no validation.
+/// unlocking round `links[i + 1].round` — i.e. it is justified by the next, lower link — and the
+/// last link was cast with unlocking round `0` (`None`), the fresh proposal that grounds the
+/// chain. An empty chain means the block was confirmed in the fast round, which needs no
+/// validation.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct JustificationChain {
@@ -85,15 +87,15 @@ impl JustificationChain {
         Self { links }
     }
 
-    /// Returns the lock `ℓ` that the quorum in link `index` signed: the round of the next,
+    /// Returns the unlocking round that the quorum in link `index` signed: the round of the next,
     /// lower link, or `None` if `index` is the last (grounding) link.
-    fn lock_at(&self, index: usize) -> Option<Round> {
+    fn unlocking_round_at(&self, index: usize) -> Option<Round> {
         self.links.get(index + 1).map(|link| link.round)
     }
 
-    /// Returns the lock `ℓ` that a certificate sitting on top of this chain signed: the round
-    /// of the highest link, or `None` if the chain is empty.
-    pub fn top_lock(&self) -> Option<Round> {
+    /// Returns the unlocking round that a certificate sitting on top of this chain signed: the
+    /// round of the highest link, or `None` if the chain is empty.
+    pub fn top_unlocking_round(&self) -> Option<Round> {
         self.links.first().map(|link| link.round)
     }
 
@@ -111,7 +113,7 @@ impl JustificationChain {
                 value_hash,
                 CertificateKind::Validated,
                 link.round,
-                self.lock_at(index),
+                self.unlocking_round_at(index),
                 false,
                 &link.signatures,
                 committee,
@@ -137,17 +139,17 @@ pub struct JustifiedConfirmation {
     pub justification: JustificationChain,
 }
 
-/// A quorum of `ValidatedBlock` votes for one block, cast in one round under one lock. This is
-/// the top of a `ValidatedBlockCertificate`; comparing two of them in the same round attributes
-/// a double-validation fault.
+/// A quorum of `ValidatedBlock` votes for one block, cast in one round under one unlocking round.
+/// This is the top of a `ValidatedBlockCertificate`; comparing two of them in the same round
+/// attributes a double-validation fault.
 #[derive(Clone, Debug)]
 pub struct ValidatedQuorum {
     /// The hash of the validated block, which is also what the votes sign.
     pub block_hash: CryptoHash,
     /// The round in which the block was validated.
     pub round: Round,
-    /// The lock `ℓ` these `ValidatedBlock` votes signed.
-    pub lock: Option<Round>,
+    /// The unlocking round these `ValidatedBlock` votes signed.
+    pub unlocking_round: Option<Round>,
     /// The quorum of `ValidatedBlock` votes.
     pub signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
 }
@@ -155,8 +157,9 @@ pub struct ValidatedQuorum {
 /// A self-contained proof that a single validator misbehaved.
 #[derive(Clone, Debug)]
 pub enum EquivocationProof {
-    /// The validator voted to validate one block under a lock `ℓ` while having voted to
-    /// confirm a *different* block in a round `≥ ℓ` — contradicting its own lock claim.
+    /// The validator voted to validate one block under an unlocking round while having voted to
+    /// confirm a *different* block in a round at or above it — contradicting its own
+    /// unlocking-round claim.
     LockViolation {
         /// The misbehaving validator.
         validator: ValidatorPublicKey,
@@ -170,14 +173,14 @@ pub enum EquivocationProof {
         validated_block_hash: CryptoHash,
         /// The round in which it voted to validate.
         validated_round: Round,
-        /// The lock `ℓ` the validation vote signed, contradicted by the confirmation.
-        validated_lock: Option<Round>,
+        /// The unlocking round the validation vote signed, contradicted by the confirmation.
+        validated_unlocking_round: Option<Round>,
         /// Its `ValidatedBlock` signature.
         validated_signature: ValidatorSignature,
     },
     /// The validator cast two votes of the same kind for different blocks in the same round:
     /// either two `ConfirmedBlock` votes, or two `ValidatedBlock` votes (illegal regardless of
-    /// the locks, since a validator may vote for at most one block per round and kind).
+    /// the unlocking rounds, since a validator may vote for at most one block per round and kind).
     DoubleVote {
         /// The misbehaving validator.
         validator: ValidatorPublicKey,
@@ -187,14 +190,14 @@ pub enum EquivocationProof {
         kind: CertificateKind,
         /// The first block voted for.
         first_block_hash: CryptoHash,
-        /// The lock the first vote signed (`None` for `ConfirmedBlock` votes).
-        first_lock: Option<Round>,
+        /// The unlocking round the first vote signed (`None` for `ConfirmedBlock` votes).
+        first_unlocking_round: Option<Round>,
         /// The signature on the first vote.
         first_signature: ValidatorSignature,
         /// The second, different block voted for.
         second_block_hash: CryptoHash,
-        /// The lock the second vote signed (`None` for `ConfirmedBlock` votes).
-        second_lock: Option<Round>,
+        /// The unlocking round the second vote signed (`None` for `ConfirmedBlock` votes).
+        second_unlocking_round: Option<Round>,
         /// The signature on the second vote.
         second_signature: ValidatorSignature,
     },
@@ -220,22 +223,24 @@ impl EquivocationProof {
                 confirmed_signature,
                 validated_block_hash,
                 validated_round,
-                validated_lock,
+                validated_unlocking_round,
                 validated_signature,
             } => {
                 ensure!(
                     confirmed_block_hash != validated_block_hash,
                     ChainError::EquivocationProofSameBlock
                 );
-                // The lock claim — "no confirmation of a different block in any round `≥ ℓ`" —
-                // is made while validating in `validated_round`, so it covers only the rounds the
-                // voter had already acted in: the window `[ℓ, validated_round)` (`ℓ = None` means
-                // `0`). The confirmation contradicts it only if it falls in that window, i.e.
-                // `ℓ ≤ confirmed_round < validated_round`. A confirmation at or after
-                // `validated_round` is a legitimate later switch, not a violation.
+                // The unlocking-round claim — "no confirmation of a different block in any round
+                // at or above the unlocking round" — is made while validating in
+                // `validated_round`, so it covers only the rounds the voter had already acted in:
+                // the window `[unlocking_round, validated_round)` (an unlocking round of `None`
+                // means `0`). The confirmation contradicts it only if it falls in that window,
+                // i.e. `unlocking_round ≤ confirmed_round < validated_round`. A confirmation at or
+                // after `validated_round` is a legitimate later switch, not a violation.
                 ensure!(
                     *confirmed_round < *validated_round
-                        && validated_lock.is_none_or(|lock| *confirmed_round >= lock),
+                        && validated_unlocking_round
+                            .is_none_or(|unlocking_round| *confirmed_round >= unlocking_round),
                     ChainError::EquivocationProofNoLockViolation
                 );
                 let confirmed = VoteValue(
@@ -250,7 +255,7 @@ impl EquivocationProof {
                     *validated_block_hash,
                     *validated_round,
                     CertificateKind::Validated,
-                    *validated_lock,
+                    *validated_unlocking_round,
                     false,
                 );
                 validated_signature.check(&validated, *validator)?;
@@ -261,19 +266,31 @@ impl EquivocationProof {
                 round,
                 kind,
                 first_block_hash,
-                first_lock,
+                first_unlocking_round,
                 first_signature,
                 second_block_hash,
-                second_lock,
+                second_unlocking_round,
                 second_signature,
             } => {
                 ensure!(
                     first_block_hash != second_block_hash,
                     ChainError::EquivocationProofSameBlock
                 );
-                let first = VoteValue(*first_block_hash, *round, *kind, *first_lock, false);
+                let first = VoteValue(
+                    *first_block_hash,
+                    *round,
+                    *kind,
+                    *first_unlocking_round,
+                    false,
+                );
                 first_signature.check(&first, *validator)?;
-                let second = VoteValue(*second_block_hash, *round, *kind, *second_lock, false);
+                let second = VoteValue(
+                    *second_block_hash,
+                    *round,
+                    *kind,
+                    *second_unlocking_round,
+                    false,
+                );
                 second_signature.check(&second, *validator)?;
                 Ok(())
             }
@@ -294,8 +311,8 @@ pub fn extract_equivocation(
         return None; // Not a conflict.
     }
     // Walk each block's justification chain against the other's confirmation quorum. The base
-    // of a non-empty chain (lock `None`) always catches a validator in the intersection, so a
-    // single non-empty chain suffices.
+    // of a non-empty chain (unlocking round `None`) always catches a validator in the
+    // intersection, so a single non-empty chain suffices.
     walk_chain(a, b)
         .or_else(|| walk_chain(b, a))
         // Both blocks were confirmed in the fast round (no chain): the fault is then two
@@ -304,21 +321,24 @@ pub fn extract_equivocation(
 }
 
 /// Looks for a validator that confirmed `confirmer`'s block and also appears in some link of
-/// `chained`'s justification chain with a lock the confirmation contradicts.
+/// `chained`'s justification chain with an unlocking round the confirmation contradicts.
 fn walk_chain(
     confirmer: &JustifiedConfirmation,
     chained: &JustifiedConfirmation,
 ) -> Option<EquivocationProof> {
     let chain = &chained.justification;
     for (index, link) in chain.links().iter().enumerate() {
-        let lock = chain.lock_at(index);
+        let unlocking_round = chain.unlocking_round_at(index);
         // This link's votes (cast in `link.round`) claim no conflicting confirmation in any
-        // round `≥ ℓ`, covering the window `[ℓ, link.round)`. A confirmation in
-        // `confirmer.round` contradicts it only if it falls in that window: the link must have
-        // been cast strictly after the confirmation (`link.round > confirmer.round`) with a lock
-        // reaching back over it (`ℓ ≤ confirmer.round`). Otherwise it's a legitimate later
-        // switch; another link may still straddle the confirmation, so keep scanning.
-        if link.round <= confirmer.round || lock.is_some_and(|lock| confirmer.round < lock) {
+        // round at or above the unlocking round, covering the window `[unlocking_round,
+        // link.round)`. A confirmation in `confirmer.round` contradicts it only if it falls in
+        // that window: the link must have been cast strictly after the confirmation
+        // (`link.round > confirmer.round`) with an unlocking round reaching back over it
+        // (`unlocking_round ≤ confirmer.round`). Otherwise it's a legitimate later switch; another
+        // link may still straddle the confirmation, so keep scanning.
+        if link.round <= confirmer.round
+            || unlocking_round.is_some_and(|unlocking_round| confirmer.round < unlocking_round)
+        {
             continue;
         }
         for (validator, validated_signature) in &link.signatures {
@@ -332,7 +352,7 @@ fn walk_chain(
                     confirmed_signature,
                     validated_block_hash: chained.block_hash,
                     validated_round: link.round,
-                    validated_lock: lock,
+                    validated_unlocking_round: unlocking_round,
                     validated_signature: *validated_signature,
                 });
             }
@@ -356,10 +376,10 @@ pub fn extract_double_validation(
         a.round,
         CertificateKind::Validated,
         a.block_hash,
-        a.lock,
+        a.unlocking_round,
         &a.signatures,
         b.block_hash,
-        b.lock,
+        b.unlocking_round,
         &b.signatures,
     )
 }
@@ -390,10 +410,10 @@ fn double_vote(
     round: Round,
     kind: CertificateKind,
     first_block_hash: CryptoHash,
-    first_lock: Option<Round>,
+    first_unlocking_round: Option<Round>,
     first_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     second_block_hash: CryptoHash,
-    second_lock: Option<Round>,
+    second_unlocking_round: Option<Round>,
     second_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
 ) -> Option<EquivocationProof> {
     if first_block_hash == second_block_hash {
@@ -406,10 +426,10 @@ fn double_vote(
                 round,
                 kind,
                 first_block_hash,
-                first_lock,
+                first_unlocking_round,
                 first_signature: *first_signature,
                 second_block_hash,
-                second_lock,
+                second_unlocking_round,
                 second_signature,
             });
         }

@@ -374,8 +374,9 @@ contract LightClient is ILightClient {
     ) internal view {
         // Construct VoteValue BCS and hash with type name prefix
         // CryptoHash::new(&VoteValue(...)) = keccak256("VoteValue::" ++ BCS(VoteValue))
-        // ConfirmedBlock votes carry no lock, so the lock `ℓ` (Option<Round>) is `None`; the
-        // `round` placeholder is ignored because `has_value` is false. `firstRound` is the
+        // ConfirmedBlock votes carry no unlocking round, so the unlocking round (Option<Round>)
+        // is `None`; the `round` placeholder is ignored because `has_value` is false. `firstRound`
+        // is the
         // first-round attestation the voters signed, carried in the proof so it reproduces the
         // signed value (it is `true` for confirmations in the chain's first round, e.g. the fast
         // round on a super-owner chain).

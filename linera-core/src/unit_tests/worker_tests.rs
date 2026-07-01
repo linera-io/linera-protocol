@@ -347,7 +347,7 @@ where
         // A confirmation in the fast round is in the chain's first round, so its votes attest it.
         let first_round = T::KIND == CertificateKind::Confirmed && round.is_fast();
         let vote = Vote::new_with_first_round(value.clone(), round, first_round, key_pair);
-        let quorum = GenericCertificate::new_with_lock_and_first_round(
+        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
             value,
             round,
             None,
@@ -3716,8 +3716,8 @@ where
     let vote = response.info.manager.pending.as_ref().unwrap();
     assert_eq!(vote.value, lite_value2);
     assert_eq!(vote.round, Round::SingleLeader(5));
-    // The validation vote locks at the round of the justifying certificate it relied on.
-    assert_eq!(vote.lock, Some(Round::SingleLeader(4)));
+    // The validation vote's unlocking round is the round of the justifying certificate it relied on.
+    assert_eq!(vote.unlocking_round, Some(Round::SingleLeader(4)));
 
     // Let round 5 time out, too.
     let certificate_timeout =

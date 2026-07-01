@@ -274,7 +274,7 @@ impl BlockBuilder {
         let public_key = self.validator.key_pair().public();
         let vote =
             Vote::new_with_first_round(value.clone(), round, true, self.validator.key_pair());
-        let quorum = GenericCertificate::new_with_lock_and_first_round(
+        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
             value,
             round,
             None,

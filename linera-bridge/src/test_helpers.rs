@@ -228,7 +228,7 @@ pub fn create_signed_certificate_first_round(
     let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), transactions);
     let confirmed = ConfirmedBlock::new(block);
     let vote = Vote::new_with_first_round(confirmed.clone(), Round::Fast, true, secret);
-    let quorum = GenericCertificate::new_with_lock_and_first_round(
+    let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
         confirmed,
         Round::Fast,
         None,
