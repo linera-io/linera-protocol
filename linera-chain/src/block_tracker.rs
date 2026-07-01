@@ -120,7 +120,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     #[instrument(skip_all, fields(
         chain_id = %self.chain_id,
         block_height = %self.block_height,
-        phase = self.phase.as_str(),
+        phase = <&str>::from(self.phase),
         transaction_index = %self.transaction_index,
         transaction_type = %transaction.as_ref(),
     ))]
@@ -166,7 +166,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
                     .with_execution_context(chain_execution_context)?;
                 #[cfg(with_metrics)]
                 let operation_latency =
-                    metrics::OPERATION_EXECUTION_LATENCY.with_label_values(&[self.phase.as_str()]);
+                    metrics::OPERATION_EXECUTION_LATENCY.with_label_values(&[self.phase.into()]);
                 #[cfg(with_metrics)]
                 let _operation_latency = operation_latency.measure_latency_us();
                 let context = OperationContext {
@@ -249,7 +249,7 @@ impl<'resources, 'blobs> BlockExecutionTracker<'resources, 'blobs> {
     {
         #[cfg(with_metrics)]
         let message_latency =
-            metrics::MESSAGE_EXECUTION_LATENCY.with_label_values(&[self.phase.as_str()]);
+            metrics::MESSAGE_EXECUTION_LATENCY.with_label_values(&[self.phase.into()]);
         #[cfg(with_metrics)]
         let _message_latency = message_latency.measure_latency_us();
         let context = MessageContext {
