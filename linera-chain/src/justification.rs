@@ -13,8 +13,8 @@
 //! counts if its unlocking round is `0` (no justification needed) or it is justified by a quorum
 //! of `ValidatedBlock` votes for the same block in a round at or above the unlocking round and
 //! below `r`. That quorum is itself justified, so the justifications form a chain of quorums with
-//! strictly decreasing rounds, descending to the round where the block was first validated (where
-//! the unlocking round is `0`, represented as `None`).
+//! strictly increasing rounds, rising from the round where the block was first validated (where
+//! the unlocking round is `0`, represented as `None`) up to the certifying round.
 //!
 //! Because every certificate carries this chain, two conflicting certificates are
 //! self-contained evidence: walking one block's chain against the other block's confirmation
@@ -50,13 +50,13 @@ pub struct JustificationLink {
 }
 
 /// The chain of `ValidatedBlock` quorums that justifies a validated or confirmed block, from
-/// the certifying round down to the round where the block was first validated.
+/// the round where the block was first validated up to the certifying round.
 ///
-/// Links are ordered by **strictly decreasing** round. The quorum in link `i` was cast with
-/// unlocking round `links[i + 1].round` — i.e. it is justified by the next, lower link — and the
-/// last link was cast with unlocking round `0` (`None`), the fresh proposal that grounds the
-/// chain. An empty chain means the block was confirmed in the fast round, which needs no
-/// validation.
+/// Links are ordered by **strictly increasing** round. The quorum in link `i` was cast with
+/// unlocking round `links[i - 1].round` — i.e. it is justified by the previous, lower link — and
+/// the first link (index `0`) was cast with unlocking round `0` (`None`), the fresh proposal that
+/// grounds the chain. An empty chain means the block was confirmed in the fast round, which needs
+/// no validation.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Allocative)]
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct JustificationChain {
@@ -64,49 +64,48 @@ pub struct JustificationChain {
 }
 
 impl JustificationChain {
-    /// Creates a justification chain from its links, ordered by decreasing round.
+    /// Creates a justification chain from its links, ordered by increasing round.
     pub fn new(links: Vec<JustificationLink>) -> Self {
         Self { links }
     }
 
-    /// Returns the links, ordered by decreasing round.
+    /// Returns the links, ordered by increasing round.
     pub fn links(&self) -> &[JustificationLink] {
         &self.links
     }
 
-    /// Returns a new chain with the given quorum prepended as a new top link in `round`,
+    /// Returns a new chain with the given quorum appended as a new top link in `round`,
     /// i.e. the highest, certifying round. The existing links must all be in lower rounds.
-    pub fn prepend(
+    pub fn append(
         &self,
         round: Round,
         signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
     ) -> Self {
-        let mut links = Vec::with_capacity(self.links.len() + 1);
+        let mut links = self.links.clone();
         links.push(JustificationLink { round, signatures });
-        links.extend(self.links.iter().cloned());
         Self { links }
     }
 
-    /// Returns the unlocking round that the quorum in link `index` signed: the round of the next,
-    /// lower link, or `None` if `index` is the last (grounding) link.
+    /// Returns the unlocking round that the quorum in link `index` signed: the round of the
+    /// previous, lower link, or `None` if `index` is the first (grounding) link.
     fn unlocking_round_at(&self, index: usize) -> Option<Round> {
-        self.links.get(index + 1).map(|link| link.round)
+        index.checked_sub(1).map(|prev| self.links[prev].round)
     }
 
     /// Returns the unlocking round that a certificate sitting on top of this chain signed: the
     /// round of the highest link, or `None` if the chain is empty.
     pub fn top_unlocking_round(&self) -> Option<Round> {
-        self.links.first().map(|link| link.round)
+        self.links.last().map(|link| link.round)
     }
 
     /// Verifies that every link is a quorum of `ValidatedBlock` votes for `value_hash` and
-    /// that the rounds strictly decrease, so each link is properly justified by the next.
+    /// that the rounds strictly increase, so each link is properly justified by the previous one.
     pub fn verify(&self, value_hash: CryptoHash, committee: &Committee) -> Result<(), ChainError> {
         for (index, link) in self.links.iter().enumerate() {
             if let Some(next) = self.links.get(index + 1) {
                 ensure!(
-                    next.round < link.round,
-                    ChainError::JustificationRoundsNotDecreasing
+                    link.round < next.round,
+                    ChainError::JustificationRoundsNotIncreasing
                 );
             }
             check_signatures(
@@ -123,9 +122,11 @@ impl JustificationChain {
     }
 }
 
-/// A confirmed block together with the justification that makes it self-contained evidence:
-/// the chain of `ValidatedBlock` quorums for the same block, with its top link in the round
-/// the block was confirmed. This is the shape a `ConfirmedBlockCertificate` will carry.
+/// A confirmed block's *hash* together with the justification that makes it self-contained
+/// evidence: the round and quorum of `ConfirmedBlock` votes that finalized it, and the chain of
+/// `ValidatedBlock` quorums for the same block, with its top link in the round the block was
+/// confirmed. Only the hash travels, never the block itself. This is the shape a
+/// `ConfirmedBlockCertificate` reduces to for fault attribution.
 #[derive(Clone, Debug)]
 pub struct JustifiedConfirmation {
     /// The hash of the confirmed block. Since `ValidatedBlock` and `ConfirmedBlock` wrap the

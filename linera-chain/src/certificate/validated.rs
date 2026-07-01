@@ -50,7 +50,7 @@ pub struct ValidatedBlockCertificate {
     /// `below.top_unlocking_round()`.
     quorum: GenericCertificate<ValidatedBlock>,
     /// The chain of validated quorums for the same block in rounds below this certificate's,
-    /// with its top link in the unlocking round, descending to the grounding round. Empty iff
+    /// rising from the grounding round to its top link in the unlocking round. Empty iff
     /// the unlocking round is `None`.
     below: JustificationChain,
 }
@@ -107,11 +107,11 @@ impl ValidatedBlockCertificate {
     }
 
     /// Returns the full justification chain that a certificate certified in a higher round on
-    /// top of this one would carry: this certificate's own quorum as the new top link, followed
-    /// by the chain below it.
+    /// top of this one would carry: the chain below it, with this certificate's own quorum
+    /// appended as the new top link.
     pub fn full_justification(&self) -> JustificationChain {
         self.below
-            .prepend(self.quorum.round(), self.quorum.signatures().clone())
+            .append(self.quorum.round(), self.quorum.signatures().clone())
     }
 
     /// Verifies the certificate: the quorum's signatures against its unlocking round, the

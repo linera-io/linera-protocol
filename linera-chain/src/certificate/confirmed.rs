@@ -46,9 +46,9 @@ struct Repr<'a> {
 pub struct ConfirmedBlockCertificate {
     /// The signed quorum of `ConfirmedBlock` votes. Its unlocking round is always `None`.
     quorum: GenericCertificate<ConfirmedBlock>,
-    /// The full chain of validated quorums for the block, with its top link in the round the
-    /// block was confirmed, descending to the grounding round. Empty iff the block was confirmed
-    /// in the fast round.
+    /// The full chain of validated quorums for the block, rising from the grounding round to its
+    /// top link in the round the block was confirmed. Empty iff the block was confirmed in the
+    /// fast round.
     validated: JustificationChain,
 }
 
@@ -135,16 +135,17 @@ impl ConfirmedBlockCertificate {
                 ChainError::JustificationUnlockingRoundMismatch
             );
         }
-        if self.validated().links().is_empty() {
-            ensure!(
+        match self.validated().top_unlocking_round() {
+            // An absent chain is allowed only for a first-round confirmation.
+            None => ensure!(
                 self.quorum().first_round(),
                 ChainError::JustificationUnlockingRoundMismatch
-            );
-        } else {
-            ensure!(
-                self.validated().links()[0].round == self.round(),
+            ),
+            // Otherwise the chain's top link is the validation in the confirmation round.
+            Some(top_round) => ensure!(
+                top_round == self.round(),
                 ChainError::JustificationUnlockingRoundMismatch
-            );
+            ),
         }
         Ok(())
     }

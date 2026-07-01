@@ -87,36 +87,36 @@ fn confirmed_signatures(
 fn verify_accepts_valid_chain() {
     let (committee, k) = setup(4);
     let b = block("B");
-    // Link 0 at round 3 is justified by link 1 at round 1, which is the grounding link.
+    // Link 0 at round 1 is the grounding link; link 1 at round 3 is justified by it.
     let chain = JustificationChain::new(vec![
+        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
         validated_link(
             b,
             Round::SingleLeader(3),
             Some(Round::SingleLeader(1)),
             &[&k[0], &k[1], &k[2]],
         ),
-        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
     ]);
     assert!(chain.verify(b, &committee).is_ok());
     assert_eq!(chain.top_unlocking_round(), Some(Round::SingleLeader(3)));
 }
 
 #[test]
-fn verify_rejects_non_decreasing_rounds() {
+fn verify_rejects_non_increasing_rounds() {
     let (committee, k) = setup(4);
     let b = block("B");
     let chain = JustificationChain::new(vec![
+        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
         validated_link(
             b,
             Round::SingleLeader(1),
             Some(Round::SingleLeader(1)),
             &[&k[0], &k[1], &k[2]],
         ),
-        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
     ]);
     assert!(matches!(
         chain.verify(b, &committee),
-        Err(ChainError::JustificationRoundsNotDecreasing)
+        Err(ChainError::JustificationRoundsNotIncreasing)
     ));
 }
 
@@ -124,16 +124,16 @@ fn verify_rejects_non_decreasing_rounds() {
 fn verify_rejects_broken_linkage() {
     let (committee, k) = setup(4);
     let b = block("B");
-    // Link 0's votes signed unlocking round `SingleLeader(2)`, but the next link is at
+    // Link 1's votes signed unlocking round `SingleLeader(2)`, but the previous link is at
     // `SingleLeader(1)`, so the unlocking round the verifier derives doesn't match what was signed.
     let chain = JustificationChain::new(vec![
+        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
         validated_link(
             b,
             Round::SingleLeader(3),
             Some(Round::SingleLeader(2)),
             &[&k[0], &k[1], &k[2]],
         ),
-        validated_link(b, Round::SingleLeader(1), None, &[&k[0], &k[1], &k[2]]),
     ]);
     assert!(chain.verify(b, &committee).is_err());
 }
@@ -283,13 +283,13 @@ fn extract_is_independent_of_argument_order() {
             &[&k[1], &k[2], &k[3]],
         ),
         justification: JustificationChain::new(vec![
+            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[1], &k[2], &k[3]]),
             validated_link(
                 b_hash,
                 Round::SingleLeader(5),
                 Some(Round::SingleLeader(1)),
                 &[&k[1], &k[2], &k[3]],
             ),
-            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[1], &k[2], &k[3]]),
         ]),
     };
     for (x, y) in [(&a, &b), (&b, &a)] {
@@ -336,13 +336,13 @@ fn extract_descends_to_grounding_link() {
             &[&k[1], &k[2], &k[3]],
         ),
         justification: JustificationChain::new(vec![
+            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[0], &k[2], &k[3]]),
             validated_link(
                 b_hash,
                 Round::SingleLeader(3),
                 Some(Round::SingleLeader(1)),
                 &[&k[1], &k[2], &k[3]],
             ),
-            validated_link(b_hash, Round::SingleLeader(1), None, &[&k[0], &k[2], &k[3]]),
         ]),
     };
     let proof = extract_equivocation(&a, &b).expect("a proof must exist");

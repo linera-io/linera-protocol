@@ -171,11 +171,11 @@ impl LiteCertificate<'_> {
     }
 
     /// Returns the full justification chain that a certificate validating in a higher round
-    /// would carry below itself: this certificate's own quorum as the new top link, followed
-    /// by the chain it already carries.
+    /// would carry below itself: the chain it already carries, with this certificate's own
+    /// quorum appended as the new top link.
     pub fn full_justification(&self) -> JustificationChain {
         self.justification
-            .prepend(self.round, self.signatures.to_vec())
+            .append(self.round, self.signatures.to_vec())
     }
 
     /// Checks whether the value matches this certificate.
