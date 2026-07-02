@@ -157,6 +157,8 @@ pub enum ChainError {
     EquivocationProofDifferentChainOrHeight,
     #[error("Equivocation proof does not violate the lock claim")]
     EquivocationProofNoLockViolation,
+    #[error("Equivocation proof's earlier vote is not below the attested first round")]
+    EquivocationProofNoFirstRoundViolation,
     #[error(
         "Inbox gap on chain {chain_id} from origin {origin}: \
         expected height {expected_height}, got {actual_height}"
@@ -226,6 +228,7 @@ impl ChainError {
             | ChainError::EquivocationProofSameBlock
             | ChainError::EquivocationProofDifferentChainOrHeight
             | ChainError::EquivocationProofNoLockViolation
+            | ChainError::EquivocationProofNoFirstRoundViolation
             | ChainError::BlockProposalTooLarge(_)
             | ChainError::ClosedChain
             | ChainError::EmptyBlock

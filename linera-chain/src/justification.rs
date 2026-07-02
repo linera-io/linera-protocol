@@ -16,10 +16,16 @@
 //! strictly increasing rounds, rising from the round where the block was first validated (where
 //! the unlocking round is `0`, represented as `None`) up to the certifying round.
 //!
-//! Because every certificate carries this chain, two conflicting certificates are
-//! self-contained evidence: walking one block's chain against the other block's confirmation
+//! A confirmation in a chain's *first* round needs no chain: its `ConfirmedBlock` votes instead
+//! carry a first-round attestation (see [`VoteValue`]), asserting that no lower round exists at
+//! this height. A vote in a lower round together with an attestation in a higher one is therefore
+//! itself an attributable fault.
+//!
+//! Because every certificate carries this chain (or attestation), two conflicting certificates
+//! are self-contained evidence: walking one block's chain against the other block's confirmation
 //! quorum reaches a validator whose unlocking-round claim is contradicted by its own confirmation
-//! vote. See [`extract_equivocation`].
+//! vote, or the two confirmation quorums intersect in a validator that contradicted itself. See
+//! [`extract_equivocation`].
 //!
 //! [`VoteValue`]: crate::data_types::VoteValue
 
@@ -136,9 +142,11 @@ pub struct JustifiedConfirmation {
     pub header: BlockHeader,
     /// The round in which the block was confirmed.
     pub round: Round,
+    /// The first-round attestation the `ConfirmedBlock` votes signed (see [`VoteValue`]).
+    pub first_round: bool,
     /// The quorum of `ConfirmedBlock` votes finalizing the block.
     pub confirmed_signatures: Vec<(ValidatorPublicKey, ValidatorSignature)>,
-    /// The `ValidatedBlock` justification chain (empty iff confirmed in the fast round).
+    /// The `ValidatedBlock` justification chain (empty iff confirmed in the chain's first round).
     pub justification: JustificationChain,
 }
 
@@ -179,6 +187,10 @@ pub enum EquivocationProof {
         confirmed_header: BlockHeader,
         /// The round in which it voted to confirm.
         confirmed_round: Round,
+        /// The first-round attestation the confirmation vote signed (see [`VoteValue`]).
+        ///
+        /// [`VoteValue`]: crate::data_types::VoteValue
+        confirmed_attested: bool,
         /// Its `ConfirmedBlock` signature.
         confirmed_signature: ValidatorSignature,
         /// The header of the different block the validator voted to validate.
@@ -204,14 +216,40 @@ pub enum EquivocationProof {
         first_header: BlockHeader,
         /// The unlocking round the first vote signed (`None` for `ConfirmedBlock` votes).
         first_unlocking_round: Option<Round>,
+        /// The first-round attestation the first vote signed (`false` for `ValidatedBlock` votes).
+        first_attested: bool,
         /// The signature on the first vote.
         first_signature: ValidatorSignature,
         /// The header of the second, different block voted for.
         second_header: BlockHeader,
         /// The unlocking round the second vote signed (`None` for `ConfirmedBlock` votes).
         second_unlocking_round: Option<Round>,
+        /// The first-round attestation the second vote signed (`false` for `ValidatedBlock` votes).
+        second_attested: bool,
         /// The signature on the second vote.
         second_signature: ValidatorSignature,
+    },
+    /// The validator voted to confirm a block with the first-round attestation — asserting that
+    /// no lower round exists at this height — while having also voted to confirm a block in a
+    /// lower round. The two votes cannot both be honest, regardless of the blocks they are for.
+    FirstRoundViolation {
+        /// The misbehaving validator.
+        validator: ValidatorPublicKey,
+        /// The header of the block confirmed with the attestation. It must share the chain and
+        /// height of `earlier_header`.
+        attested_header: BlockHeader,
+        /// The round the attestation asserts to be the chain's first.
+        attested_round: Round,
+        /// The `ConfirmedBlock` signature carrying the attestation.
+        attested_signature: ValidatorSignature,
+        /// The header of the block the earlier vote confirmed.
+        earlier_header: BlockHeader,
+        /// The round of the earlier vote — strictly below `attested_round`.
+        earlier_round: Round,
+        /// The first-round attestation the earlier vote signed.
+        earlier_attested: bool,
+        /// Its `ConfirmedBlock` signature.
+        earlier_signature: ValidatorSignature,
     },
 }
 
@@ -220,7 +258,8 @@ impl EquivocationProof {
     pub fn validator(&self) -> ValidatorPublicKey {
         match self {
             EquivocationProof::LockViolation { validator, .. }
-            | EquivocationProof::DoubleVote { validator, .. } => *validator,
+            | EquivocationProof::DoubleVote { validator, .. }
+            | EquivocationProof::FirstRoundViolation { validator, .. } => *validator,
         }
     }
 
@@ -232,6 +271,7 @@ impl EquivocationProof {
                 validator,
                 confirmed_header,
                 confirmed_round,
+                confirmed_attested,
                 confirmed_signature,
                 validated_header,
                 validated_round,
@@ -270,7 +310,7 @@ impl EquivocationProof {
                     *confirmed_round,
                     CertificateKind::Confirmed,
                     None,
-                    false,
+                    *confirmed_attested,
                 );
                 confirmed_signature.check(&confirmed, *validator)?;
                 let validated = VoteValue(
@@ -289,9 +329,11 @@ impl EquivocationProof {
                 kind,
                 first_header,
                 first_unlocking_round,
+                first_attested,
                 first_signature,
                 second_header,
                 second_unlocking_round,
+                second_attested,
                 second_signature,
             } => {
                 let first_block_hash = CryptoHash::new(first_header);
@@ -313,7 +355,7 @@ impl EquivocationProof {
                     *round,
                     *kind,
                     *first_unlocking_round,
-                    false,
+                    *first_attested,
                 );
                 first_signature.check(&first, *validator)?;
                 let second = VoteValue(
@@ -321,9 +363,50 @@ impl EquivocationProof {
                     *round,
                     *kind,
                     *second_unlocking_round,
-                    false,
+                    *second_attested,
                 );
                 second_signature.check(&second, *validator)?;
+                Ok(())
+            }
+            EquivocationProof::FirstRoundViolation {
+                validator,
+                attested_header,
+                attested_round,
+                attested_signature,
+                earlier_header,
+                earlier_round,
+                earlier_attested,
+                earlier_signature,
+            } => {
+                // Both votes must concern the same height on the same chain: the attestation only
+                // asserts that no lower round exists at *this* height, so a vote at a lower round
+                // number elsewhere does not contradict it. The blocks themselves may be equal —
+                // the contradiction is between the rounds, not the blocks.
+                ensure!(
+                    attested_header.chain_id == earlier_header.chain_id
+                        && attested_header.height == earlier_header.height,
+                    ChainError::EquivocationProofDifferentChainOrHeight
+                );
+                ensure!(
+                    *earlier_round < *attested_round,
+                    ChainError::EquivocationProofNoFirstRoundViolation
+                );
+                let attested = VoteValue(
+                    CryptoHash::new(attested_header),
+                    *attested_round,
+                    CertificateKind::Confirmed,
+                    None,
+                    true,
+                );
+                attested_signature.check(&attested, *validator)?;
+                let earlier = VoteValue(
+                    CryptoHash::new(earlier_header),
+                    *earlier_round,
+                    CertificateKind::Confirmed,
+                    None,
+                    *earlier_attested,
+                );
+                earlier_signature.check(&earlier, *validator)?;
                 Ok(())
             }
         }
@@ -333,8 +416,18 @@ impl EquivocationProof {
 /// Extracts a proof of equivocation from two `ConfirmedBlock` certificates that finalize
 /// *different* blocks at the same height.
 ///
-/// Returns `None` only if the inputs do not actually conflict (same block) or are malformed;
-/// for two genuinely conflicting, well-formed certificates a proof always exists.
+/// Returns `None` only if the inputs do not actually conflict (same block, or different chains
+/// or heights) or are malformed; for two genuinely conflicting, well-formed certificates a proof
+/// always exists. With the lower confirmation in round `r` and the higher in round `s`:
+///
+/// - `r == s`: the two confirmation quorums intersect — a double vote.
+/// - `r < s` and the higher certificate carries a justification chain: the chain's links tile
+///   all rounds from its grounding round up to `s` with unlocking-round windows, and the
+///   grounding link's window is unbounded below, so some link's window contains `r`. That link's
+///   quorum intersects the lower confirmation quorum — a lock violation.
+/// - `r < s` and the higher certificate instead carries the first-round attestation: the two
+///   confirmation quorums intersect in a validator that confirmed in `r` and attested that `s`
+///   is the chain's first round — a first-round violation.
 pub fn extract_equivocation(
     a: &JustifiedConfirmation,
     b: &JustifiedConfirmation,
@@ -351,9 +444,14 @@ pub fn extract_equivocation(
     // intersection, so a single non-empty chain suffices.
     walk_chain(a, b)
         .or_else(|| walk_chain(b, a))
-        // Both blocks were confirmed in the fast round (no chain): the fault is then two
-        // confirmation votes for different blocks in the same round.
+        // Both blocks were confirmed in the same round (no chain straddles the other
+        // confirmation): the fault is then two confirmation votes for different blocks in that
+        // round.
         .or_else(|| double_confirm(a, b))
+        // The higher block was confirmed with a first-round attestation and no chain: the fault
+        // is then a confirmation below the attested first round.
+        .or_else(|| first_round_violation(a, b))
+        .or_else(|| first_round_violation(b, a))
 }
 
 /// Looks for a validator that confirmed `confirmer`'s block and also appears in some link of
@@ -385,6 +483,7 @@ fn walk_chain(
                     validator: *validator,
                     confirmed_header: confirmer.header.clone(),
                     confirmed_round: confirmer.round,
+                    confirmed_attested: confirmer.first_round,
                     confirmed_signature,
                     validated_header: chained.header.clone(),
                     validated_round: link.round,
@@ -413,9 +512,11 @@ pub fn extract_double_validation(
         CertificateKind::Validated,
         &a.header,
         a.unlocking_round,
+        false,
         &a.signatures,
         &b.header,
         b.unlocking_round,
+        false,
         &b.signatures,
     )
 }
@@ -433,11 +534,41 @@ fn double_confirm(
         CertificateKind::Confirmed,
         &a.header,
         None,
+        a.first_round,
         &a.confirmed_signatures,
         &b.header,
         None,
+        b.first_round,
         &b.confirmed_signatures,
     )
+}
+
+/// Looks for a validator that confirmed `attested`'s block with the first-round attestation and
+/// also confirmed `earlier`'s block in a lower round — contradicting the attestation's claim
+/// that no lower round exists at this height. The two confirmation quorums always intersect, so
+/// for a genuinely attested higher confirmation this always finds a proof.
+fn first_round_violation(
+    attested: &JustifiedConfirmation,
+    earlier: &JustifiedConfirmation,
+) -> Option<EquivocationProof> {
+    if !attested.first_round || earlier.round >= attested.round {
+        return None;
+    }
+    for (validator, attested_signature) in &attested.confirmed_signatures {
+        if let Some(earlier_signature) = signature_of(&earlier.confirmed_signatures, validator) {
+            return Some(EquivocationProof::FirstRoundViolation {
+                validator: *validator,
+                attested_header: attested.header.clone(),
+                attested_round: attested.round,
+                attested_signature: *attested_signature,
+                earlier_header: earlier.header.clone(),
+                earlier_round: earlier.round,
+                earlier_attested: earlier.first_round,
+                earlier_signature,
+            });
+        }
+    }
+    None
 }
 
 /// Finds a validator that signed both quorums and builds the corresponding [`EquivocationProof::DoubleVote`].
@@ -447,9 +578,11 @@ fn double_vote(
     kind: CertificateKind,
     first_header: &BlockHeader,
     first_unlocking_round: Option<Round>,
+    first_attested: bool,
     first_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
     second_header: &BlockHeader,
     second_unlocking_round: Option<Round>,
+    second_attested: bool,
     second_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
 ) -> Option<EquivocationProof> {
     // Only a conflict if the two votes are for different blocks at the same height on the same
@@ -468,9 +601,11 @@ fn double_vote(
                 kind,
                 first_header: first_header.clone(),
                 first_unlocking_round,
+                first_attested,
                 first_signature: *first_signature,
                 second_header: second_header.clone(),
                 second_unlocking_round,
+                second_attested,
                 second_signature,
             });
         }

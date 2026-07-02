@@ -72,9 +72,10 @@ fn sign(
     round: Round,
     kind: CertificateKind,
     unlocking_round: Option<Round>,
+    first_round: bool,
     key: &ValidatorKeypair,
 ) -> (ValidatorPublicKey, ValidatorSignature) {
-    let value = VoteValue(block, round, kind, unlocking_round, false);
+    let value = VoteValue(block, round, kind, unlocking_round, first_round);
     (
         key.public_key,
         ValidatorSignature::new(&value, &key.secret_key),
@@ -98,6 +99,7 @@ fn validated_link(
                     round,
                     CertificateKind::Validated,
                     unlocking_round,
+                    false,
                     kp,
                 )
             })
@@ -105,14 +107,26 @@ fn validated_link(
     }
 }
 
+/// A quorum of `ConfirmedBlock` signatures for `block` in `round`, carrying the first-round
+/// attestation iff `first_round` is set.
 fn confirmed_signatures(
     block: CryptoHash,
     round: Round,
+    first_round: bool,
     signers: &[&ValidatorKeypair],
 ) -> Vec<(ValidatorPublicKey, ValidatorSignature)> {
     signers
         .iter()
-        .map(|kp| sign(block, round, CertificateKind::Confirmed, None, kp))
+        .map(|kp| {
+            sign(
+                block,
+                round,
+                CertificateKind::Confirmed,
+                None,
+                first_round,
+                kp,
+            )
+        })
         .collect()
 }
 
@@ -197,7 +211,13 @@ fn extract_returns_none_for_same_block() {
     let a = JustifiedConfirmation {
         header: header("A"),
         round: Round::SingleLeader(0),
-        confirmed_signatures: confirmed_signatures(block("A"), Round::SingleLeader(0), &[&k[0]]),
+        first_round: false,
+        confirmed_signatures: confirmed_signatures(
+            block("A"),
+            Round::SingleLeader(0),
+            false,
+            &[&k[0]],
+        ),
         justification: JustificationChain::default(),
     };
     let b = a.clone();
@@ -214,9 +234,11 @@ fn extract_finds_lock_violation() {
     let a = JustifiedConfirmation {
         header: header("A"),
         round: Round::SingleLeader(0),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             a_hash,
             Round::SingleLeader(0),
+            false,
             &[&k[0], &k[1], &k[2]],
         ),
         justification: JustificationChain::new(vec![validated_link(
@@ -229,9 +251,11 @@ fn extract_finds_lock_violation() {
     let b = JustifiedConfirmation {
         header: header("B"),
         round: Round::SingleLeader(1),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             b_hash,
             Round::SingleLeader(1),
+            false,
             &[&k[0], &k[2], &k[3]],
         ),
         justification: JustificationChain::new(vec![validated_link(
@@ -259,6 +283,7 @@ fn proof_check_rejects_confirmation_after_validation() {
         Round::SingleLeader(2),
         CertificateKind::Validated,
         None,
+        false,
         &k[0],
     );
     let (_, confirmed_signature) = sign(
@@ -266,12 +291,14 @@ fn proof_check_rejects_confirmation_after_validation() {
         Round::SingleLeader(5),
         CertificateKind::Confirmed,
         None,
+        false,
         &k[0],
     );
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
         confirmed_header: header("A"),
         confirmed_round: Round::SingleLeader(5),
+        confirmed_attested: false,
         confirmed_signature,
         validated_header: header("B"),
         validated_round: Round::SingleLeader(2),
@@ -297,9 +324,11 @@ fn extract_is_independent_of_argument_order() {
     let a = JustifiedConfirmation {
         header: header("A"),
         round: Round::SingleLeader(2),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             a_hash,
             Round::SingleLeader(2),
+            false,
             &[&k[0], &k[1], &k[2]],
         ),
         justification: JustificationChain::new(vec![validated_link(
@@ -312,9 +341,11 @@ fn extract_is_independent_of_argument_order() {
     let b = JustifiedConfirmation {
         header: header("B"),
         round: Round::SingleLeader(5),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             b_hash,
             Round::SingleLeader(5),
+            false,
             &[&k[1], &k[2], &k[3]],
         ),
         justification: JustificationChain::new(vec![
@@ -355,9 +386,11 @@ fn extract_descends_to_grounding_link() {
     let a = JustifiedConfirmation {
         header: header("A"),
         round: Round::SingleLeader(0),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             a_hash,
             Round::SingleLeader(0),
+            false,
             &[&k[0], &k[1], &k[2]],
         ),
         justification: JustificationChain::default(),
@@ -365,9 +398,11 @@ fn extract_descends_to_grounding_link() {
     let b = JustifiedConfirmation {
         header: header("B"),
         round: Round::SingleLeader(3),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             b_hash,
             Round::SingleLeader(3),
+            false,
             &[&k[1], &k[2], &k[3]],
         ),
         justification: JustificationChain::new(vec![
@@ -401,17 +436,31 @@ fn extract_descends_to_grounding_link() {
 fn extract_finds_double_confirm_in_fast_round() {
     let (_committee, k) = setup(4);
     let (a_hash, b_hash) = (block("A"), block("B"));
-    // Both blocks confirmed in the fast round, so neither carries a justification chain.
+    // Both blocks confirmed in the fast round — the chain's first round — so both carry the
+    // first-round attestation instead of a justification chain. The proof must rebuild the
+    // attested vote values, or the genuine signatures would not verify.
     let a = JustifiedConfirmation {
         header: header("A"),
         round: Round::Fast,
-        confirmed_signatures: confirmed_signatures(a_hash, Round::Fast, &[&k[0], &k[1], &k[2]]),
+        first_round: true,
+        confirmed_signatures: confirmed_signatures(
+            a_hash,
+            Round::Fast,
+            true,
+            &[&k[0], &k[1], &k[2]],
+        ),
         justification: JustificationChain::default(),
     };
     let b = JustifiedConfirmation {
         header: header("B"),
         round: Round::Fast,
-        confirmed_signatures: confirmed_signatures(b_hash, Round::Fast, &[&k[0], &k[2], &k[3]]),
+        first_round: true,
+        confirmed_signatures: confirmed_signatures(
+            b_hash,
+            Round::Fast,
+            true,
+            &[&k[0], &k[2], &k[3]],
+        ),
         justification: JustificationChain::default(),
     };
     let proof = extract_equivocation(&a, &b).expect("a proof must exist");
@@ -496,12 +545,13 @@ fn proof_check_rejects_same_block() {
     let (_committee, k) = setup(4);
     let a = block("A");
     let r = Round::SingleLeader(0);
-    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, &k[0]);
-    let (_, validated_signature) = sign(a, r, CertificateKind::Validated, None, &k[0]);
+    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, false, &k[0]);
+    let (_, validated_signature) = sign(a, r, CertificateKind::Validated, None, false, &k[0]);
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
         confirmed_header: header("A"),
         confirmed_round: r,
+        confirmed_attested: false,
         confirmed_signature,
         validated_header: header("A"),
         validated_round: r,
@@ -526,6 +576,7 @@ fn proof_check_rejects_non_violating_lock() {
         Round::SingleLeader(0),
         CertificateKind::Confirmed,
         None,
+        false,
         &k[0],
     );
     let (_, validated_signature) = sign(
@@ -533,12 +584,14 @@ fn proof_check_rejects_non_violating_lock() {
         Round::SingleLeader(3),
         CertificateKind::Validated,
         Some(Round::SingleLeader(2)),
+        false,
         &k[0],
     );
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
         confirmed_header: header("A"),
         confirmed_round: Round::SingleLeader(0),
+        confirmed_attested: false,
         confirmed_signature,
         validated_header: header("B"),
         validated_round: Round::SingleLeader(3),
@@ -556,13 +609,14 @@ fn proof_check_rejects_forged_signature() {
     let (_committee, k) = setup(4);
     let (a, b) = (block("A"), block("B"));
     let r = Round::SingleLeader(0);
-    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, &k[0]);
+    let (_, confirmed_signature) = sign(a, r, CertificateKind::Confirmed, None, false, &k[0]);
     // Signed by k[1], but the proof names k[0].
-    let (_, validated_signature) = sign(b, r, CertificateKind::Validated, None, &k[1]);
+    let (_, validated_signature) = sign(b, r, CertificateKind::Validated, None, false, &k[1]);
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
         confirmed_header: header("A"),
         confirmed_round: r,
+        confirmed_attested: false,
         confirmed_signature,
         validated_header: header("B"),
         validated_round: r,
@@ -583,9 +637,11 @@ fn extract_returns_none_across_heights() {
     let a = JustifiedConfirmation {
         header: header_at(1, 0, "A"),
         round: Round::SingleLeader(0),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             a_hash,
             Round::SingleLeader(0),
+            false,
             &[&k[0], &k[1], &k[2]],
         ),
         justification: JustificationChain::new(vec![validated_link(
@@ -598,9 +654,11 @@ fn extract_returns_none_across_heights() {
     let b = JustifiedConfirmation {
         header: header_at(1, 1, "B"),
         round: Round::SingleLeader(1),
+        first_round: false,
         confirmed_signatures: confirmed_signatures(
             b_hash,
             Round::SingleLeader(1),
+            false,
             &[&k[0], &k[2], &k[3]],
         ),
         justification: JustificationChain::new(vec![validated_link(
@@ -612,6 +670,139 @@ fn extract_returns_none_across_heights() {
     };
     assert!(extract_equivocation(&a, &b).is_none());
     assert!(extract_equivocation(&b, &a).is_none());
+}
+
+#[test]
+fn extract_finds_lock_violation_against_attested_confirmation() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    // A was confirmed in the chain's first round, `MultiLeader(0)`, so its votes carry the
+    // attestation and it has no justification chain. `k[0]` and `k[2]` then validated a fork B
+    // in round 1 with unlocking round `None`, contradicting their own confirmation of A. The
+    // extracted proof's confirmation vote is the attested one, and must verify as such.
+    let a = JustifiedConfirmation {
+        header: header("A"),
+        round: Round::MultiLeader(0),
+        first_round: true,
+        confirmed_signatures: confirmed_signatures(
+            a_hash,
+            Round::MultiLeader(0),
+            true,
+            &[&k[0], &k[1], &k[2]],
+        ),
+        justification: JustificationChain::default(),
+    };
+    let b = JustifiedConfirmation {
+        header: header("B"),
+        round: Round::SingleLeader(1),
+        first_round: false,
+        confirmed_signatures: confirmed_signatures(
+            b_hash,
+            Round::SingleLeader(1),
+            false,
+            &[&k[0], &k[2], &k[3]],
+        ),
+        justification: JustificationChain::new(vec![validated_link(
+            b_hash,
+            Round::SingleLeader(1),
+            None,
+            &[&k[0], &k[2], &k[3]],
+        )]),
+    };
+    for (x, y) in [(&a, &b), (&b, &a)] {
+        let proof = extract_equivocation(x, y).expect("a proof must exist");
+        assert!(matches!(proof, EquivocationProof::LockViolation { .. }));
+        assert!(proof.check().is_ok());
+        assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+    }
+}
+
+#[test]
+fn extract_finds_first_round_violation() {
+    let (_committee, k) = setup(4);
+    let (a_hash, b_hash) = (block("A"), block("B"));
+    // A was confirmed in the fast round. A fork B was then confirmed in `MultiLeader(0)` with
+    // the first-round attestation and no justification chain — so neither block's chain can
+    // straddle the other's confirmation, and the rounds differ. The only attributable fault is
+    // the false attestation itself: `k[0]` and `k[2]` confirmed A below the round they attested
+    // to be the chain's first.
+    let a = JustifiedConfirmation {
+        header: header("A"),
+        round: Round::Fast,
+        first_round: true,
+        confirmed_signatures: confirmed_signatures(
+            a_hash,
+            Round::Fast,
+            true,
+            &[&k[0], &k[1], &k[2]],
+        ),
+        justification: JustificationChain::default(),
+    };
+    let b = JustifiedConfirmation {
+        header: header("B"),
+        round: Round::MultiLeader(0),
+        first_round: true,
+        confirmed_signatures: confirmed_signatures(
+            b_hash,
+            Round::MultiLeader(0),
+            true,
+            &[&k[0], &k[2], &k[3]],
+        ),
+        justification: JustificationChain::default(),
+    };
+    for (x, y) in [(&a, &b), (&b, &a)] {
+        let proof = extract_equivocation(x, y).expect("a proof must exist");
+        match &proof {
+            EquivocationProof::FirstRoundViolation {
+                attested_round,
+                earlier_round,
+                ..
+            } => {
+                assert_eq!(*attested_round, Round::MultiLeader(0));
+                assert_eq!(*earlier_round, Round::Fast);
+            }
+            other => panic!("expected a first-round violation, got {other:?}"),
+        }
+        assert!(proof.check().is_ok());
+        assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+    }
+}
+
+#[test]
+fn proof_check_rejects_non_violating_first_round() {
+    let (_committee, k) = setup(4);
+    // The "earlier" confirmation is *above* the attested first round, so the two votes are
+    // compatible: confirming in a later round never contradicts the attestation.
+    let (_, attested_signature) = sign(
+        block("A"),
+        Round::Fast,
+        CertificateKind::Confirmed,
+        None,
+        true,
+        &k[0],
+    );
+    let (_, earlier_signature) = sign(
+        block("B"),
+        Round::MultiLeader(0),
+        CertificateKind::Confirmed,
+        None,
+        false,
+        &k[0],
+    );
+    let proof = EquivocationProof::FirstRoundViolation {
+        validator: k[0].public_key,
+        attested_header: header("A"),
+        attested_round: Round::Fast,
+        attested_signature,
+        earlier_header: header("B"),
+        earlier_round: Round::MultiLeader(0),
+        earlier_attested: false,
+        earlier_signature,
+    };
+    assert!(matches!(
+        proof.check(),
+        Err(ChainError::EquivocationProofNoFirstRoundViolation)
+    ));
 }
 
 #[test]
@@ -627,6 +818,7 @@ fn proof_check_rejects_different_chain() {
         Round::SingleLeader(0),
         CertificateKind::Confirmed,
         None,
+        false,
         &k[0],
     );
     let (_, validated_signature) = sign(
@@ -634,12 +826,14 @@ fn proof_check_rejects_different_chain() {
         Round::SingleLeader(1),
         CertificateKind::Validated,
         None,
+        false,
         &k[0],
     );
     let proof = EquivocationProof::LockViolation {
         validator: k[0].public_key,
         confirmed_header,
         confirmed_round: Round::SingleLeader(0),
+        confirmed_attested: false,
         confirmed_signature,
         validated_header,
         validated_round: Round::SingleLeader(1),
