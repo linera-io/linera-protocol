@@ -32,7 +32,7 @@ struct Repr<'a> {
     round: Round,
     unlocking_round: Option<Round>,
     signatures: Cow<'a, [(ValidatorPublicKey, ValidatorSignature)]>,
-    below: Cow<'a, JustificationChain>,
+    justification: Cow<'a, JustificationChain>,
 }
 
 /// Certificate for a [`ValidatedBlock`] instance, certified in some round whose `ValidatedBlock`
@@ -46,12 +46,12 @@ struct Repr<'a> {
 #[cfg_attr(with_testing, derive(Eq, PartialEq))]
 pub struct ValidatedBlockCertificate {
     /// The signed quorum of `ValidatedBlock` votes. Its unlocking round equals
-    /// `below.top_unlocking_round()`.
+    /// `justification.top_unlocking_round()`.
     quorum: GenericCertificate<ValidatedBlock>,
     /// The chain of validated quorums for the same block in rounds below this certificate's,
     /// rising from the grounding round to its top link in the unlocking round. Empty iff
     /// the unlocking round is `None`.
-    below: JustificationChain,
+    justification: JustificationChain,
 }
 
 impl ValidatedBlockCertificate {
@@ -63,16 +63,19 @@ impl ValidatedBlockCertificate {
     ) -> Self {
         Self {
             quorum: GenericCertificate::new(value, round, signatures),
-            below: JustificationChain::default(),
+            justification: JustificationChain::default(),
         }
     }
 
     /// Creates a validated block certificate from a signed quorum and its justification chain.
     pub fn from_parts(
         quorum: GenericCertificate<ValidatedBlock>,
-        below: JustificationChain,
+        justification: JustificationChain,
     ) -> Self {
-        Self { quorum, below }
+        Self {
+            quorum,
+            justification,
+        }
     }
 
     /// Returns the signed quorum of `ValidatedBlock` votes.
@@ -81,13 +84,13 @@ impl ValidatedBlockCertificate {
     }
 
     /// Returns the chain of validated quorums in rounds below this certificate's.
-    pub fn below(&self) -> &JustificationChain {
-        &self.below
+    pub fn justification(&self) -> &JustificationChain {
+        &self.justification
     }
 
     /// Consumes this certificate, returning the signed quorum and the justification chain.
     pub fn into_parts(self) -> (GenericCertificate<ValidatedBlock>, JustificationChain) {
-        (self.quorum, self.below)
+        (self.quorum, self.justification)
     }
 
     /// Returns the round in which the value was certified.
@@ -109,7 +112,7 @@ impl ValidatedBlockCertificate {
     /// top of this one would carry: the chain below it, with this certificate's own quorum
     /// appended as the new top link.
     pub fn full_justification(&self) -> JustificationChain {
-        self.below
+        self.justification
             .append(self.quorum.round(), self.quorum.signatures().clone())
     }
 
@@ -125,7 +128,7 @@ impl ValidatedBlockCertificate {
     /// Returns the [`LiteCertificate`] corresponding to this certificate, borrowing the chain.
     pub fn lite_certificate(&self) -> LiteCertificate<'_> {
         let mut lite = self.quorum.lite_certificate_without_justification();
-        lite.justification = Cow::Borrowed(&self.below);
+        lite.justification = Cow::Borrowed(&self.justification);
         lite
     }
 }
@@ -203,7 +206,7 @@ impl Serialize for ValidatedBlockCertificate {
             round: self.quorum.round(),
             unlocking_round: self.quorum.unlocking_round(),
             signatures: Cow::Borrowed(self.quorum.signatures().as_slice()),
-            below: Cow::Borrowed(&self.below),
+            justification: Cow::Borrowed(&self.justification),
         }
         .serialize(serializer)
     }
@@ -228,7 +231,7 @@ impl<'de> Deserialize<'de> for ValidatedBlockCertificate {
                     inner.unlocking_round,
                     signatures,
                 ),
-                inner.below.into_owned(),
+                inner.justification.into_owned(),
             ))
         }
     }

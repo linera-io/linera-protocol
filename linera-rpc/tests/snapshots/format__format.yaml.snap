@@ -1438,7 +1438,7 @@ ValidatedBlockCertificate:
           TUPLE:
             - TYPENAME: Secp256k1PublicKey
             - TYPENAME: Secp256k1Signature
-    - below:
+    - justification:
         TYPENAME: JustificationChain
 VersionInfo:
   STRUCT:

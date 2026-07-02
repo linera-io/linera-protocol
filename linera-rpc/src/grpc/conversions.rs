@@ -646,7 +646,7 @@ impl TryFrom<ValidatedBlockCertificate> for api::Certificate {
     fn try_from(certificate: ValidatedBlockCertificate) -> Result<Self, Self::Error> {
         let round = bincode::serialize(&certificate.round())?;
         let signatures = bincode::serialize(certificate.signatures())?;
-        let justification = bincode::serialize(certificate.below())?;
+        let justification = bincode::serialize(certificate.justification())?;
 
         let value = bincode::serialize(certificate.value())?;
 
