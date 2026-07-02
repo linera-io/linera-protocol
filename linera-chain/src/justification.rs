@@ -47,6 +47,26 @@ use crate::{
     ChainError,
 };
 
+#[cfg(with_metrics)]
+mod metrics {
+    use std::sync::LazyLock;
+
+    use linera_base::prometheus_util::{exponential_bucket_interval, register_histogram_vec};
+    use prometheus::HistogramVec;
+
+    /// The number of links in a justification chain a node verified. A chain grows by one link
+    /// per round a block had to fight through, so a rising tail here signals contention on some
+    /// height before it becomes a certificate-size or finalization problem.
+    pub static JUSTIFICATION_CHAIN_LENGTH: LazyLock<HistogramVec> = LazyLock::new(|| {
+        register_histogram_vec(
+            "justification_chain_length",
+            "Number of links in a verified justification chain",
+            &[],
+            exponential_bucket_interval(1.0, 1024.0),
+        )
+    });
+}
+
 /// One link in a justification chain: a quorum of validators that all voted to validate the
 /// same block in `round`.
 #[derive(Clone, Debug, Serialize, Deserialize, Allocative)]
@@ -109,7 +129,16 @@ impl JustificationChain {
 
     /// Verifies that every link is a quorum of `ValidatedBlock` votes for `value_hash` and
     /// that the rounds strictly increase, so each link is properly justified by the previous one.
+    ///
+    /// The chain length needs no explicit cap: strictly increasing rounds mean a chain of `n`
+    /// links spans `n` distinct rounds, and each link must carry a genuine quorum, so a longer
+    /// chain necessarily reaches a higher round and cannot be inflated cheaply. The observed
+    /// length is recorded as a metric so real contention shows up in monitoring.
     pub fn verify(&self, value_hash: CryptoHash, committee: &Committee) -> Result<(), ChainError> {
+        #[cfg(with_metrics)]
+        metrics::JUSTIFICATION_CHAIN_LENGTH
+            .with_label_values(&[])
+            .observe(self.links.len() as f64);
         for (index, link) in self.links.iter().enumerate() {
             if let Some(next) = self.links.get(index + 1) {
                 ensure!(
