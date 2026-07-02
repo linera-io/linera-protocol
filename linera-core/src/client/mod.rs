@@ -344,6 +344,16 @@ pub struct Client<Env: Environment> {
     options: chain_client::Options,
 }
 
+/// Boxed future returned by `receive_sender_certificate`. It is `Send` off the `web`
+/// target (where futures must be `Send`) and `?Send` on `web` (single-threaded, where
+/// the validator node is not `Sync`).
+#[cfg(not(web))]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + Send + 'a>>;
+#[cfg(web)]
+type ReceiveSenderCertificateFuture<'a> =
+    std::pin::Pin<Box<dyn Future<Output = Result<(), chain_client::Error>> + 'a>>;
+
 impl<Env: Environment> Client<Env> {
     /// Creates a new `Client` with a new cache and notifiers.
     #[instrument(level = "trace", skip_all)]
@@ -1393,72 +1403,98 @@ impl<Env: Environment> Client<Env> {
     /// chains we follow get executed, untracked or events-only chains are only
     /// preprocessed.
     #[instrument(level = "trace", skip_all)]
-    async fn receive_sender_certificate(
+    fn receive_sender_certificate(
         &self,
         certificate: CacheArc<ConfirmedBlockCertificate>,
         mode: ReceiveCertificateMode,
         nodes: Option<Vec<RemoteNode<Env::ValidatorNode>>>,
-    ) -> Result<(), chain_client::Error> {
-        // Verify the certificate before doing any expensive networking.
-        let (mut max_epoch, mut committees) = self.admin_committees().await?;
-        if let ReceiveCertificateMode::NeedsCheck = mode {
-            let mut check_result = Self::check_certificate(max_epoch, &committees, &certificate)?;
-            if matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                // The certificate is from an epoch our local view of the admin chain
-                // hasn't caught up to yet. Catch up and check again instead of failing.
-                // Prefer the nodes that gave us the certificate: they evidently know
-                // the newer epoch even if our own committee view is stale or its
-                // members are unreachable. A sync only counts if it actually made the
-                // epoch known; otherwise fall back to the known committee.
-                let admin_chain_id = self.admin_chain_id;
-                let epoch = certificate.block().header.epoch;
-                info!(
-                    %epoch,
-                    "certificate is from an unknown epoch; synchronizing the admin chain"
-                );
-                for node in nodes.iter().flatten() {
-                    match Box::pin(self.synchronize_chain_state_from(node, admin_chain_id)).await {
-                        Ok(()) => {
-                            (max_epoch, committees) = self.admin_committees().await?;
-                            check_result =
-                                Self::check_certificate(max_epoch, &committees, &certificate)?;
-                            if !matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                                break;
-                            }
-                        }
-                        Err(error) => warn!(
-                            %error,
-                            validator = %node.public_key,
-                            "failed to synchronize the admin chain from validator",
-                        ),
+    ) -> ReceiveSenderCertificateFuture<'_> {
+        Box::pin(async move {
+            // Verify the certificate before doing any expensive networking.
+            let (mut max_epoch, mut committees) = self.admin_committees().await?;
+            if let ReceiveCertificateMode::NeedsCheck = mode {
+                let mut check_result =
+                    Self::check_certificate(max_epoch, &committees, &certificate)?;
+                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                    // The certificate is from an epoch our local view of the admin chain
+                    // hasn't caught up to yet. Catch up and check again instead of failing.
+                    // Prefer the nodes that gave us the certificate: they evidently know
+                    // the newer epoch even if our own committee view is stale or its
+                    // members are unreachable. A sync only counts if it actually made the
+                    // epoch known; otherwise fall back to the known committee.
+                    let admin_chain_id = self.admin_chain_id;
+                    let epoch = certificate.block().header.epoch;
+                    info!(
+                        %epoch,
+                        "certificate is from an unknown epoch; synchronizing the admin chain"
+                    );
+                    let synced_from_serving_node = if let Some(nodes) = &nodes {
+                        let certificate = &certificate;
+                        communicate_concurrently(
+                            nodes,
+                            async move |node| {
+                                self.synchronize_chain_state_from(&node, admin_chain_id)
+                                    .await?;
+                                let (max_epoch, committees) = self.admin_committees().await?;
+                                match Self::check_certificate(max_epoch, &committees, certificate)?
+                                {
+                                    CheckCertificateResult::FutureEpoch => {
+                                        Err(chain_client::Error::CommitteeSynchronizationError)
+                                    }
+                                    _ => Ok(()),
+                                }
+                            },
+                            |errors| {
+                                for (validator, error) in &errors {
+                                    warn!(
+                                        %validator,
+                                        %error,
+                                        "failed to synchronize the admin chain from validator",
+                                    );
+                                }
+                                chain_client::Error::CommitteeSynchronizationError
+                            },
+                            self.options.blob_download_hedge_delay,
+                            self.storage_client().clock(),
+                        )
+                        .await
+                        .is_ok()
+                    } else {
+                        false
+                    };
+                    if synced_from_serving_node {
+                        (max_epoch, committees) = self.admin_committees().await?;
+                        check_result =
+                            Self::check_certificate(max_epoch, &committees, &certificate)?;
+                    }
+                    if matches!(check_result, CheckCertificateResult::FutureEpoch) {
+                        Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
+                        (max_epoch, committees) = self.admin_committees().await?;
+                        check_result =
+                            Self::check_certificate(max_epoch, &committees, &certificate)?;
                     }
                 }
-                if matches!(check_result, CheckCertificateResult::FutureEpoch) {
-                    Box::pin(self.synchronize_chain_state(admin_chain_id)).await?;
-                    (max_epoch, committees) = self.admin_committees().await?;
-                    check_result = Self::check_certificate(max_epoch, &committees, &certificate)?;
-                }
+                check_result.into_result()?;
             }
-            check_result.into_result()?;
-        }
-        // Recover history from the network.
-        let nodes = if let Some(nodes) = nodes {
-            nodes
-        } else {
-            self.validator_nodes().await?
-        };
-        let processing_mode = if self
-            .chain_mode(certificate.value().chain_id())
-            .is_some_and(|m| m.should_sync_chain_state())
-        {
-            ProcessConfirmedBlockMode::Auto
-        } else {
-            ProcessConfirmedBlockMode::Preprocess
-        };
-        self.handle_certificate_with_retry(&certificate, &nodes, processing_mode)
-            .await?;
+            // Recover history from the network.
+            let nodes = if let Some(nodes) = nodes {
+                nodes
+            } else {
+                self.validator_nodes().await?
+            };
+            let processing_mode = if self
+                .chain_mode(certificate.value().chain_id())
+                .is_some_and(|m| m.should_sync_chain_state())
+            {
+                ProcessConfirmedBlockMode::Auto
+            } else {
+                ProcessConfirmedBlockMode::Preprocess
+            };
+            self.handle_certificate_with_retry(&certificate, &nodes, processing_mode)
+                .await?;
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Downloads and processes certificates for sender chain blocks.

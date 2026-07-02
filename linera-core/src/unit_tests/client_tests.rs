@@ -1354,6 +1354,57 @@ where
     Ok(())
 }
 
+/// Like `test_stale_client_reads_blob_published_in_future_epoch`, but one validator is
+/// offline while the stale client catches up. The admin-chain self-heal races the
+/// reachable validators, so a single unresponsive one must not prevent recovery.
+#[test_case(MemoryStorageBuilder::default(); "memory")]
+#[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
+#[cfg_attr(feature = "rocksdb", test_case(RocksDbStorageBuilder::new().await; "rocks_db"))]
+#[cfg_attr(feature = "scylladb", test_case(ScyllaDbStorageBuilder::default(); "scylla_db"))]
+#[test_log::test(tokio::test)]
+async fn test_stale_client_reads_future_epoch_blob_with_offline_validator<B>(
+    storage_builder: B,
+) -> anyhow::Result<()>
+where
+    B: StorageBuilder,
+{
+    let signer = InMemorySigner::new(None);
+    let mut builder = TestBuilder::new(storage_builder, 4, 0, signer).await?;
+    let admin = builder.add_root_chain(0, Amount::from_tokens(3)).await?;
+    let publisher = builder.add_root_chain(1, Amount::from_tokens(3)).await?;
+    let stale = builder.add_root_chain(2, Amount::from_tokens(3)).await?;
+    let validators = builder.initial_committee.validators().clone();
+
+    // Move the network to epoch 1 (the three remaining validators still form a quorum).
+    // The publisher catches up; `stale` does not.
+    let committee = Committee::new(validators, ResourceControlPolicy::default());
+    admin.stage_new_committee(committee).await?;
+    publisher.synchronize_from_validators().await?;
+    publisher.process_inbox().await?;
+    assert_eq!(publisher.chain_info().await?.epoch, Epoch::from(1));
+    assert_eq!(stale.chain_info().await?.epoch, Epoch::ZERO);
+
+    // Publish a data blob under the epoch-1 committee.
+    let blob_bytes = b"future-epoch blob".to_vec();
+    let blob_id = Blob::new(BlobContent::new_data(blob_bytes.clone())).id();
+    let certificate = publisher
+        .publish_data_blob(blob_bytes)
+        .await
+        .unwrap_ok_committed();
+    assert_eq!(certificate.block().header.epoch, Epoch::from(1));
+
+    // Take one validator offline. The stale client's admin-chain catch-up still succeeds
+    // against the reachable ones.
+    builder.set_fault_type([3], FaultType::Offline);
+
+    stale
+        .read_data_blob(blob_id.hash)
+        .await
+        .unwrap_ok_committed();
+
+    Ok(())
+}
+
 #[test_case(MemoryStorageBuilder::default(); "memory")]
 #[cfg_attr(feature = "storage-service", test_case(ServiceStorageBuilder::new(); "storage_service"))]
 #[test_log::test(tokio::test)]
