@@ -1432,10 +1432,21 @@ impl<Env: Environment> Client<Env> {
         value: T,
     ) -> Result<GenericCertificate<T>, chain_client::Error> {
         let nodes = self.make_nodes(committee)?;
-        let ((votes_hash, votes_round), votes) = communicate_with_quorum(
+        // Group votes by their full signed payload: signatures only aggregate into a
+        // certificate if they are unanimous on all signed fields, so a vote that diverges in
+        // the unlocking round or first-round attestation belongs to a separate candidate
+        // quorum.
+        let ((votes_hash, votes_round, _, _), votes) = communicate_with_quorum(
             &nodes,
             committee,
-            |vote: &LiteVote| (vote.value.value_hash, vote.round),
+            |vote: &LiteVote| {
+                (
+                    vote.value.value_hash,
+                    vote.round,
+                    vote.unlocking_round,
+                    vote.first_round,
+                )
+            },
             |remote_node| {
                 let mut updater = ValidatorUpdater {
                     remote_node,
