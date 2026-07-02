@@ -340,15 +340,24 @@ where
         // confirmation. The validation vote will then sign the unlocking round `certificate.round`,
         // and since our confirmation is in an earlier round, the claim "I have not voted to confirm
         // a different block in any round at or above the unlocking round" stays truthful.
-        // Re-validating the very block we confirmed is always allowed: the unlocking round only
-        // constrains switching blocks.
+        //
+        // Re-validating the very block we confirmed is also allowed, but the certificate must
+        // still be at least as recent as our confirmation. The unlocking round only constrains
+        // switching blocks, yet the round we sign is a claim about *ourselves*: an earlier
+        // confirmation of a different block could fall at or above an older certificate's round
+        // and turn the claim into a lie we could be slashed for. Our confirmed vote sits in the
+        // highest round we ever confirmed in, so `vote.round <= certificate.round` guarantees no
+        // different-block confirmation lies in the unlocking window `[certificate.round, round)`.
         if let Some(vote) = self.confirmed_vote() {
             ensure!(
                 match proposal.original_proposal.as_ref() {
                     None => false,
                     Some(OriginalProposal::Regular { certificate }) =>
-                        vote.value().matches_proposed_block(new_block)
-                            || vote.round < certificate.round,
+                        if vote.value().matches_proposed_block(new_block) {
+                            vote.round <= certificate.round
+                        } else {
+                            vote.round < certificate.round
+                        },
                     Some(OriginalProposal::Fast(_)) => {
                         vote.round.is_fast() && vote.value().matches_proposed_block(new_block)
                     }
