@@ -495,9 +495,13 @@ impl SyncRuntimeInternal<UserContractInstance> {
         let timeout = self
             .resource_controller
             .remaining_service_oracle_execution_time()?;
-        let execution_start = Instant::now();
-        let deadline = Some(execution_start + timeout);
-        let response = self
+        let deadline = Some(Instant::now() + timeout);
+        // `execution_time` is measured by the actor around the service execution itself and is
+        // zero when the response is replayed from the certificate. Tracking that value — instead
+        // of timing the whole request round-trip here — means a replaying validator accumulates
+        // no wall-clock execution time, so it cannot diverge from the proposer by crossing
+        // `maximum_service_oracle_execution_ms` only on some hosts.
+        let (response, execution_time) = self
             .execution_state_sender
             .send_request(|callback| ExecutionRequest::QueryServiceOracle {
                 deadline,
@@ -509,7 +513,7 @@ impl SyncRuntimeInternal<UserContractInstance> {
             .recv_response()?;
 
         self.resource_controller
-            .track_service_oracle_execution(execution_start.elapsed())?;
+            .track_service_oracle_execution(execution_time)?;
         self.resource_controller
             .track_service_oracle_response(response.len())?;
 
