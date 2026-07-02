@@ -479,7 +479,7 @@ where
         clock_skew_sender: mpsc::UnboundedSender<ClockSkewReport>,
     ) -> Result<Box<ChainInfo>, chain_client::Error> {
         let chain_id = proposal.content.block.chain_id;
-        let mut sent_cross_chain_updates = BTreeMap::new();
+        let mut synced_cross_chain_updates = false;
         let mut publisher_chain_ids_sent = BTreeSet::new();
         let storage = self.client.local_node.storage_client();
         loop {
@@ -526,29 +526,43 @@ where
                     )
                     .await?;
                 }
-                Err(NodeError::MissingCrossChainUpdate {
-                    chain_id,
-                    origin,
-                    height,
-                }) if chain_id == proposal.content.block.chain_id
-                    && sent_cross_chain_updates
-                        .get(&origin)
-                        .is_none_or(|h| *h < height) =>
-                {
+                // The validator reports *every* missing cross-chain bundle in a single
+                // `MissingCrossChainUpdates`, so we sync all of them at once and retry. Some
+                // received certificates may be missing for this validator (e.g. to create the
+                // chain or make the balance sufficient). If it still reports missing bundles
+                // after we synced the whole set, retrying would not make progress, so we surface
+                // the error instead of looping.
+                Err(NodeError::MissingCrossChainUpdates {
+                    chain_id: dependencies_chain_id,
+                    bundles,
+                }) if dependencies_chain_id == proposal.content.block.chain_id => {
+                    ensure!(
+                        !synced_cross_chain_updates,
+                        NodeError::ResponseHandlingError {
+                            error: format!(
+                                "validator still reports missing cross-chain updates for chain \
+                                 {dependencies_chain_id} after they were all synced"
+                            ),
+                        }
+                    );
+                    synced_cross_chain_updates = true;
                     tracing::debug!(
                         remote_node = %self.remote_node.address(),
-                        chain_id = %origin,
-                        "Missing cross-chain update; sending chain to validator.",
+                        %chain_id,
+                        bundles = bundles.len(),
+                        "validator reported missing cross-chain updates; syncing them in one batch",
                     );
-                    sent_cross_chain_updates.insert(origin, height);
-                    // Some received certificates may be missing for this validator
-                    // (e.g. to create the chain or make the balance sufficient) so we are going to
-                    // synchronize them now and retry.
-                    self.send_chain_information(
-                        origin,
-                        height.try_add_one()?,
+                    // Sync each reported origin chain up to the needed height, collapsing any
+                    // duplicate origins to the highest height.
+                    let mut origin_heights: BTreeMap<ChainId, BlockHeight> = BTreeMap::new();
+                    for (origin, height) in bundles {
+                        let target = height.try_add_one()?;
+                        let entry = origin_heights.entry(origin).or_insert(target);
+                        *entry = (*entry).max(target);
+                    }
+                    self.send_chain_info_up_to_heights(
+                        origin_heights,
                         CrossChainMessageDelivery::Blocking,
-                        None,
                     )
                     .await?;
                 }

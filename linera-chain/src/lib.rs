@@ -53,13 +53,16 @@ pub enum ChainError {
     #[error("The chain being queried is not active {0}")]
     InactiveChain(ChainId),
     #[error(
-        "Cannot vote for block proposal of chain {chain_id} because a message \
-         from chain {origin} at height {height} has not been received yet"
+        "Cannot vote for block proposal of chain {chain_id} because {} cross-chain message \
+         bundle(s) have not been received yet",
+        bundles.len()
     )]
-    MissingCrossChainUpdate {
+    MissingCrossChainUpdates {
         chain_id: ChainId,
-        origin: ChainId,
-        height: BlockHeight,
+        /// The missing incoming message bundles, as `(origin chain, height)` pairs that must
+        /// all be received before this block can be validated. The validator reports every
+        /// missing bundle at once so the client can fetch them in a single round.
+        bundles: Vec<(ChainId, BlockHeight)>,
     },
     #[error(
         "Message in block proposed to {chain_id} does not match the previously received messages from \
@@ -216,7 +219,7 @@ impl ChainError {
             | ChainError::RoundDoesNotTimeOut
             | ChainError::NotTimedOutYet(_)
             | ChainError::CheckpointPreconditionFailed(_)
-            | ChainError::MissingCrossChainUpdate { .. } => false,
+            | ChainError::MissingCrossChainUpdates { .. } => false,
             ChainError::ViewError(_)
             | ChainError::UnexpectedMessage { .. }
             | ChainError::InboxGapDetected { .. }
