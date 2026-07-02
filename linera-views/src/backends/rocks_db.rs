@@ -282,7 +282,9 @@ impl RocksDbStoreExecutor {
             full_key[0] = STORED_ROOT_KEYS_PREFIX;
             inner_batch.put(&full_key, vec![]);
         }
-        self.db.write(inner_batch)?;
+        self.db
+            .write(inner_batch)
+            .map_err(RocksDbStoreInternalError::WriteBatchError)?;
         Ok(())
     }
 }
@@ -1046,6 +1048,12 @@ pub enum RocksDbStoreInternalError {
     #[error("RocksDB error: {0}")]
     RocksDb(#[from] rocksdb::Error),
 
+    /// RocksDB error while writing a batch. Unlike [`RocksDbStoreInternalError::RocksDb`]
+    /// (which also covers read failures), this error means a batch write may or may not
+    /// have been applied, so the in-memory view must be reloaded from storage.
+    #[error("RocksDB write-batch error: {0}")]
+    WriteBatchError(rocksdb::Error),
+
     /// The database contains a file which is not a directory
     #[error("Namespaces should be directories")]
     NonDirectoryNamespace,
@@ -1112,6 +1120,10 @@ impl Eq for PathWithGuard {}
 
 impl KeyValueStoreError for RocksDbStoreInternalError {
     const BACKEND: &'static str = "rocks_db";
+
+    fn must_reload_view(&self) -> bool {
+        matches!(self, Self::WriteBatchError(_))
+    }
 }
 
 /// The composed error type for the `RocksDbStore`
