@@ -23,11 +23,13 @@
 //!
 //! Because every certificate carries this chain (or attestation), two conflicting certificates
 //! are self-contained evidence: walking one block's chain against the other block's confirmation
-//! quorum reaches a validator whose unlocking-round claim is contradicted by its own confirmation
-//! vote, or the two confirmation quorums intersect in a validator that contradicted itself. See
-//! [`extract_equivocation`].
+//! quorum reaches validators whose unlocking-round claims are contradicted by their own
+//! confirmation votes, or the two confirmation quorums intersect in validators that contradicted
+//! themselves. See [`extract_equivocations`].
 //!
 //! [`VoteValue`]: crate::data_types::VoteValue
+
+use std::collections::BTreeMap;
 
 use allocative::Allocative;
 use linera_base::{
@@ -413,53 +415,57 @@ impl EquivocationProof {
     }
 }
 
-/// Extracts a proof of equivocation from two `ConfirmedBlock` certificates that finalize
-/// *different* blocks at the same height.
+/// Extracts proofs of equivocation from two `ConfirmedBlock` certificates that finalize
+/// *different* blocks at the same height: one proof for every validator whose own signatures on
+/// the two certificates (including their justification chains) contradict each other.
 ///
-/// Returns `None` only if the inputs do not actually conflict (same block, or different chains
-/// or heights) or are malformed; for two genuinely conflicting, well-formed certificates a proof
-/// always exists. With the lower confirmation in round `r` and the higher in round `s`:
+/// Returns an empty list only if the inputs do not actually conflict (same block, or different
+/// chains or heights) or are malformed. For two genuinely conflicting, well-formed certificates
+/// the proven validators always hold at least a third of the total weight, because each of the
+/// following cases blames a full intersection of two quorums. With the lower confirmation in
+/// round `r` and the higher in round `s`:
 ///
-/// - `r == s`: the two confirmation quorums intersect — a double vote.
+/// - `r == s`: every validator in the intersection of the two confirmation quorums double-voted.
 /// - `r < s` and the higher certificate carries a justification chain: the chain's links tile
 ///   all rounds from its grounding round up to `s` with unlocking-round windows, and the
-///   grounding link's window is unbounded below, so some link's window contains `r`. That link's
-///   quorum intersects the lower confirmation quorum — a lock violation.
-/// - `r < s` and the higher certificate instead carries the first-round attestation: the two
-///   confirmation quorums intersect in a validator that confirmed in `r` and attested that `s`
-///   is the chain's first round — a first-round violation.
-pub fn extract_equivocation(
+///   grounding link's window is unbounded below, so some link's window contains `r`. Every
+///   validator in that link's intersection with the lower confirmation quorum violated its lock.
+/// - `r < s` and the higher certificate instead carries the first-round attestation: every
+///   validator in the intersection of the two confirmation quorums confirmed in `r` while
+///   attesting that `s` is the chain's first round — a first-round violation.
+pub fn extract_equivocations(
     a: &JustifiedConfirmation,
     b: &JustifiedConfirmation,
-) -> Option<EquivocationProof> {
+) -> Vec<EquivocationProof> {
     // A conflict is two *different* blocks at the *same* height on the *same* chain.
     if a.header.chain_id != b.header.chain_id || a.header.height != b.header.height {
-        return None;
+        return Vec::new();
     }
     if a.block_hash() == b.block_hash() {
-        return None; // Not a conflict.
+        return Vec::new(); // Not a conflict.
     }
-    // Walk each block's justification chain against the other's confirmation quorum. The base
-    // of a non-empty chain (unlocking round `None`) always catches a validator in the
-    // intersection, so a single non-empty chain suffices.
-    walk_chain(a, b)
-        .or_else(|| walk_chain(b, a))
-        // Both blocks were confirmed in the same round (no chain straddles the other
-        // confirmation): the fault is then two confirmation votes for different blocks in that
-        // round.
-        .or_else(|| double_confirm(a, b))
-        // The higher block was confirmed with a first-round attestation and no chain: the fault
-        // is then a confirmation below the attested first round.
-        .or_else(|| first_round_violation(a, b))
-        .or_else(|| first_round_violation(b, a))
+    let mut proofs = BTreeMap::new();
+    // Walk each block's justification chain against the other's confirmation quorum.
+    walk_chain(a, b, &mut proofs);
+    walk_chain(b, a, &mut proofs);
+    // Both blocks were confirmed in the same round: two confirmation votes for different blocks
+    // in that round.
+    double_confirm(a, b, &mut proofs);
+    // One block was confirmed with a first-round attestation and the other in a lower round: a
+    // confirmation below the attested first round.
+    first_round_violation(a, b, &mut proofs);
+    first_round_violation(b, a, &mut proofs);
+    proofs.into_values().collect()
 }
 
-/// Looks for a validator that confirmed `confirmer`'s block and also appears in some link of
-/// `chained`'s justification chain with an unlocking round the confirmation contradicts.
+/// Records a proof for every validator that confirmed `confirmer`'s block and also appears in
+/// some link of `chained`'s justification chain with an unlocking round the confirmation
+/// contradicts.
 fn walk_chain(
     confirmer: &JustifiedConfirmation,
     chained: &JustifiedConfirmation,
-) -> Option<EquivocationProof> {
+    proofs: &mut BTreeMap<ValidatorPublicKey, EquivocationProof>,
+) {
     let chain = &chained.justification;
     for (index, link) in chain.links().iter().enumerate() {
         let unlocking_round = chain.unlocking_round_at(index);
@@ -479,55 +485,60 @@ fn walk_chain(
             if let Some(confirmed_signature) =
                 signature_of(&confirmer.confirmed_signatures, validator)
             {
-                return Some(EquivocationProof::LockViolation {
-                    validator: *validator,
-                    confirmed_header: confirmer.header.clone(),
-                    confirmed_round: confirmer.round,
-                    confirmed_attested: confirmer.first_round,
-                    confirmed_signature,
-                    validated_header: chained.header.clone(),
-                    validated_round: link.round,
-                    validated_unlocking_round: unlocking_round,
-                    validated_signature: *validated_signature,
-                });
+                proofs
+                    .entry(*validator)
+                    .or_insert_with(|| EquivocationProof::LockViolation {
+                        validator: *validator,
+                        confirmed_header: confirmer.header.clone(),
+                        confirmed_round: confirmer.round,
+                        confirmed_attested: confirmer.first_round,
+                        confirmed_signature,
+                        validated_header: chained.header.clone(),
+                        validated_round: link.round,
+                        validated_unlocking_round: unlocking_round,
+                        validated_signature: *validated_signature,
+                    });
             }
         }
     }
-    None
 }
 
-/// Extracts a proof that a validator validated two *different* blocks in the same round, which
+/// Extracts proofs that validators validated two *different* blocks in the same round, which
 /// is illegal regardless of the locks: a validator may vote to validate at most one block per
-/// round. Returns `None` if the quorums are for the same block or different rounds (validating
-/// conflicting blocks in different rounds is not itself a fault — only confirming is locked).
-pub fn extract_double_validation(
+/// round. One proof per validator that signed both quorums; empty if the quorums are for the
+/// same block or different rounds (validating conflicting blocks in different rounds is not
+/// itself a fault — only confirming is locked).
+pub fn extract_double_validations(
     a: &ValidatedQuorum,
     b: &ValidatedQuorum,
-) -> Option<EquivocationProof> {
-    if a.round != b.round {
-        return None;
+) -> Vec<EquivocationProof> {
+    let mut proofs = BTreeMap::new();
+    if a.round == b.round {
+        double_vote(
+            a.round,
+            CertificateKind::Validated,
+            &a.header,
+            a.unlocking_round,
+            false,
+            &a.signatures,
+            &b.header,
+            b.unlocking_round,
+            false,
+            &b.signatures,
+            &mut proofs,
+        );
     }
-    double_vote(
-        a.round,
-        CertificateKind::Validated,
-        &a.header,
-        a.unlocking_round,
-        false,
-        &a.signatures,
-        &b.header,
-        b.unlocking_round,
-        false,
-        &b.signatures,
-    )
+    proofs.into_values().collect()
 }
 
-/// Looks for a validator that confirmed both blocks in the same round.
+/// Records a proof for every validator that confirmed both blocks in the same round.
 fn double_confirm(
     a: &JustifiedConfirmation,
     b: &JustifiedConfirmation,
-) -> Option<EquivocationProof> {
+    proofs: &mut BTreeMap<ValidatorPublicKey, EquivocationProof>,
+) {
     if a.round != b.round {
-        return None;
+        return;
     }
     double_vote(
         a.round,
@@ -540,38 +551,40 @@ fn double_confirm(
         None,
         b.first_round,
         &b.confirmed_signatures,
-    )
+        proofs,
+    );
 }
 
-/// Looks for a validator that confirmed `attested`'s block with the first-round attestation and
-/// also confirmed `earlier`'s block in a lower round — contradicting the attestation's claim
-/// that no lower round exists at this height. The two confirmation quorums always intersect, so
-/// for a genuinely attested higher confirmation this always finds a proof.
+/// Records a proof for every validator that confirmed `attested`'s block with the first-round
+/// attestation and also confirmed `earlier`'s block in a lower round — contradicting the
+/// attestation's claim that no lower round exists at this height.
 fn first_round_violation(
     attested: &JustifiedConfirmation,
     earlier: &JustifiedConfirmation,
-) -> Option<EquivocationProof> {
+    proofs: &mut BTreeMap<ValidatorPublicKey, EquivocationProof>,
+) {
     if !attested.first_round || earlier.round >= attested.round {
-        return None;
+        return;
     }
     for (validator, attested_signature) in &attested.confirmed_signatures {
         if let Some(earlier_signature) = signature_of(&earlier.confirmed_signatures, validator) {
-            return Some(EquivocationProof::FirstRoundViolation {
-                validator: *validator,
-                attested_header: attested.header.clone(),
-                attested_round: attested.round,
-                attested_signature: *attested_signature,
-                earlier_header: earlier.header.clone(),
-                earlier_round: earlier.round,
-                earlier_attested: earlier.first_round,
-                earlier_signature,
-            });
+            proofs
+                .entry(*validator)
+                .or_insert_with(|| EquivocationProof::FirstRoundViolation {
+                    validator: *validator,
+                    attested_header: attested.header.clone(),
+                    attested_round: attested.round,
+                    attested_signature: *attested_signature,
+                    earlier_header: earlier.header.clone(),
+                    earlier_round: earlier.round,
+                    earlier_attested: earlier.first_round,
+                    earlier_signature,
+                });
         }
     }
-    None
 }
 
-/// Finds a validator that signed both quorums and builds the corresponding [`EquivocationProof::DoubleVote`].
+/// Records an [`EquivocationProof::DoubleVote`] for every validator that signed both quorums.
 #[allow(clippy::too_many_arguments)]
 fn double_vote(
     round: Round,
@@ -584,33 +597,35 @@ fn double_vote(
     second_unlocking_round: Option<Round>,
     second_attested: bool,
     second_signatures: &[(ValidatorPublicKey, ValidatorSignature)],
-) -> Option<EquivocationProof> {
+    proofs: &mut BTreeMap<ValidatorPublicKey, EquivocationProof>,
+) {
     // Only a conflict if the two votes are for different blocks at the same height on the same
     // chain.
     if first_header.chain_id != second_header.chain_id
         || first_header.height != second_header.height
         || CryptoHash::new(first_header) == CryptoHash::new(second_header)
     {
-        return None;
+        return;
     }
     for (validator, first_signature) in first_signatures {
         if let Some(second_signature) = signature_of(second_signatures, validator) {
-            return Some(EquivocationProof::DoubleVote {
-                validator: *validator,
-                round,
-                kind,
-                first_header: first_header.clone(),
-                first_unlocking_round,
-                first_attested,
-                first_signature: *first_signature,
-                second_header: second_header.clone(),
-                second_unlocking_round,
-                second_attested,
-                second_signature,
-            });
+            proofs
+                .entry(*validator)
+                .or_insert_with(|| EquivocationProof::DoubleVote {
+                    validator: *validator,
+                    round,
+                    kind,
+                    first_header: first_header.clone(),
+                    first_unlocking_round,
+                    first_attested,
+                    first_signature: *first_signature,
+                    second_header: second_header.clone(),
+                    second_unlocking_round,
+                    second_attested,
+                    second_signature,
+                });
         }
     }
-    None
 }
 
 /// Returns the validator's signature in `signatures`, if present.

@@ -1,6 +1,8 @@
 // Copyright (c) Zefchain Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use linera_base::{
     crypto::{
         AccountSecretKey, CryptoHash, ValidatorKeypair, ValidatorPublicKey, ValidatorSignature,
@@ -11,7 +13,7 @@ use linera_base::{
 use linera_execution::committee::Committee;
 
 use super::{
-    extract_double_validation, extract_equivocation, EquivocationProof, JustificationChain,
+    extract_double_validations, extract_equivocations, EquivocationProof, JustificationChain,
     JustificationLink, JustifiedConfirmation, ValidatedQuorum,
 };
 use crate::{block::BlockHeader, data_types::VoteValue, types::CertificateKind, ChainError};
@@ -130,6 +132,24 @@ fn confirmed_signatures(
         .collect()
 }
 
+/// Asserts that the proofs all verify and name exactly the expected validators, one proof each.
+#[track_caller]
+fn assert_proves(proofs: &[EquivocationProof], expected: &[&ValidatorKeypair]) {
+    for proof in proofs {
+        proof.check().expect("proof must verify");
+    }
+    let validators = proofs
+        .iter()
+        .map(EquivocationProof::validator)
+        .collect::<BTreeSet<_>>();
+    let expected = expected
+        .iter()
+        .map(|kp| kp.public_key)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(validators, expected);
+    assert_eq!(proofs.len(), expected.len());
+}
+
 // --- Chain verification -----------------------------------------------------------------
 
 #[test]
@@ -221,7 +241,7 @@ fn extract_returns_none_for_same_block() {
         justification: JustificationChain::default(),
     };
     let b = a.clone();
-    assert!(extract_equivocation(&a, &b).is_none());
+    assert!(extract_equivocations(&a, &b).is_empty());
 }
 
 #[test]
@@ -265,10 +285,11 @@ fn extract_finds_lock_violation() {
             &[&k[0], &k[2], &k[3]],
         )]),
     };
-    let proof = extract_equivocation(&a, &b).expect("a proof must exist");
-    assert!(matches!(proof, EquivocationProof::LockViolation { .. }));
-    assert!(proof.check().is_ok());
-    assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+    let proofs = extract_equivocations(&a, &b);
+    assert!(proofs
+        .iter()
+        .all(|proof| matches!(proof, EquivocationProof::LockViolation { .. })));
+    assert_proves(&proofs, &[&k[0], &k[2]]);
 }
 
 #[test]
@@ -359,19 +380,21 @@ fn extract_is_independent_of_argument_order() {
         ]),
     };
     for (x, y) in [(&a, &b), (&b, &a)] {
-        let proof = extract_equivocation(x, y).expect("a proof must exist");
-        assert!(proof.check().is_ok());
-        match &proof {
-            EquivocationProof::LockViolation {
-                confirmed_round,
-                validated_round,
-                ..
-            } => assert!(
-                confirmed_round < validated_round,
-                "the confirmation must fall inside the unlocking-round window"
-            ),
-            other => panic!("expected a lock violation, got {other:?}"),
+        let proofs = extract_equivocations(x, y);
+        for proof in &proofs {
+            match proof {
+                EquivocationProof::LockViolation {
+                    confirmed_round,
+                    validated_round,
+                    ..
+                } => assert!(
+                    confirmed_round < validated_round,
+                    "the confirmation must fall inside the unlocking-round window"
+                ),
+                other => panic!("expected a lock violation, got {other:?}"),
+            }
         }
+        assert_proves(&proofs, &[&k[1], &k[2]]);
     }
 }
 
@@ -415,21 +438,21 @@ fn extract_descends_to_grounding_link() {
             ),
         ]),
     };
-    let proof = extract_equivocation(&a, &b).expect("a proof must exist");
-    match &proof {
-        EquivocationProof::LockViolation {
-            validator,
-            validated_round,
-            validated_unlocking_round,
-            ..
-        } => {
-            assert_eq!(*validator, k[0].public_key);
-            assert_eq!(*validated_round, Round::SingleLeader(1));
-            assert_eq!(*validated_unlocking_round, None);
+    let proofs = extract_equivocations(&a, &b);
+    for proof in &proofs {
+        match proof {
+            EquivocationProof::LockViolation {
+                validated_round,
+                validated_unlocking_round,
+                ..
+            } => {
+                assert_eq!(*validated_round, Round::SingleLeader(1));
+                assert_eq!(*validated_unlocking_round, None);
+            }
+            other => panic!("expected a lock violation, got {other:?}"),
         }
-        other => panic!("expected a lock violation, got {other:?}"),
     }
-    assert!(proof.check().is_ok());
+    assert_proves(&proofs, &[&k[0], &k[2]]);
 }
 
 #[test]
@@ -463,10 +486,11 @@ fn extract_finds_double_confirm_in_fast_round() {
         ),
         justification: JustificationChain::default(),
     };
-    let proof = extract_equivocation(&a, &b).expect("a proof must exist");
-    assert!(matches!(proof, EquivocationProof::DoubleVote { .. }));
-    assert!(proof.check().is_ok());
-    assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+    let proofs = extract_equivocations(&a, &b);
+    assert!(proofs
+        .iter()
+        .all(|proof| matches!(proof, EquivocationProof::DoubleVote { .. })));
+    assert_proves(&proofs, &[&k[0], &k[2]]);
 }
 
 #[test]
@@ -500,15 +524,16 @@ fn extract_finds_double_validation() {
         )
         .signatures,
     };
-    let proof = extract_double_validation(&a, &b).expect("a proof must exist");
-    match &proof {
-        EquivocationProof::DoubleVote { kind, .. } => {
-            assert_eq!(*kind, CertificateKind::Validated);
+    let proofs = extract_double_validations(&a, &b);
+    for proof in &proofs {
+        match proof {
+            EquivocationProof::DoubleVote { kind, .. } => {
+                assert_eq!(*kind, CertificateKind::Validated);
+            }
+            other => panic!("expected a double vote, got {other:?}"),
         }
-        other => panic!("expected a double vote, got {other:?}"),
     }
-    assert!(proof.check().is_ok());
-    assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+    assert_proves(&proofs, &[&k[0], &k[2]]);
 }
 
 #[test]
@@ -535,7 +560,7 @@ fn extract_double_validation_ignores_different_rounds() {
         )
         .signatures,
     };
-    assert!(extract_double_validation(&a, &b).is_none());
+    assert!(extract_double_validations(&a, &b).is_empty());
 }
 
 // --- Proof self-verification ------------------------------------------------------------
@@ -668,8 +693,8 @@ fn extract_returns_none_across_heights() {
             &[&k[0], &k[2], &k[3]],
         )]),
     };
-    assert!(extract_equivocation(&a, &b).is_none());
-    assert!(extract_equivocation(&b, &a).is_none());
+    assert!(extract_equivocations(&a, &b).is_empty());
+    assert!(extract_equivocations(&b, &a).is_empty());
 }
 
 #[test]
@@ -710,10 +735,11 @@ fn extract_finds_lock_violation_against_attested_confirmation() {
         )]),
     };
     for (x, y) in [(&a, &b), (&b, &a)] {
-        let proof = extract_equivocation(x, y).expect("a proof must exist");
-        assert!(matches!(proof, EquivocationProof::LockViolation { .. }));
-        assert!(proof.check().is_ok());
-        assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+        let proofs = extract_equivocations(x, y);
+        assert!(proofs
+            .iter()
+            .all(|proof| matches!(proof, EquivocationProof::LockViolation { .. })));
+        assert_proves(&proofs, &[&k[0], &k[2]]);
     }
 }
 
@@ -751,20 +777,21 @@ fn extract_finds_first_round_violation() {
         justification: JustificationChain::default(),
     };
     for (x, y) in [(&a, &b), (&b, &a)] {
-        let proof = extract_equivocation(x, y).expect("a proof must exist");
-        match &proof {
-            EquivocationProof::FirstRoundViolation {
-                attested_round,
-                earlier_round,
-                ..
-            } => {
-                assert_eq!(*attested_round, Round::MultiLeader(0));
-                assert_eq!(*earlier_round, Round::Fast);
+        let proofs = extract_equivocations(x, y);
+        for proof in &proofs {
+            match proof {
+                EquivocationProof::FirstRoundViolation {
+                    attested_round,
+                    earlier_round,
+                    ..
+                } => {
+                    assert_eq!(*attested_round, Round::MultiLeader(0));
+                    assert_eq!(*earlier_round, Round::Fast);
+                }
+                other => panic!("expected a first-round violation, got {other:?}"),
             }
-            other => panic!("expected a first-round violation, got {other:?}"),
         }
-        assert!(proof.check().is_ok());
-        assert!([k[0].public_key, k[2].public_key].contains(&proof.validator()));
+        assert_proves(&proofs, &[&k[0], &k[2]]);
     }
 }
 
