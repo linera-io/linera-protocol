@@ -228,8 +228,8 @@ mod tests {
         block::ConfirmedBlock,
         data_types::Vote,
         justification::JustificationChain,
-        test::BlockBuilder,
-        types::{ConfirmedBlockCertificate, GenericCertificate},
+        test::{BlockBuilder, VoteTestExt},
+        types::ConfirmedBlockCertificate,
     };
     use linera_execution::committee::Committee;
 
@@ -249,15 +249,9 @@ mod tests {
 
         // Confirmed in the fast round, which is the chain's first round, so the votes attest it
         // and the certificate carries no justification chain.
-        let vote =
-            Vote::new_with_first_round(confirmed.clone(), Round::Fast, true, &validator.secret_key);
-        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
-            confirmed,
-            Round::Fast,
-            None,
-            true,
-            vec![(validator.public_key, vote.signature)],
-        );
+        let quorum =
+            Vote::new_with_first_round(confirmed, Round::Fast, true, &validator.secret_key)
+                .into_certificate(validator.public_key);
         let certificate =
             ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 

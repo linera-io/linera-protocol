@@ -16,7 +16,8 @@ use linera_chain::{
         BundleExecutionPolicy, IncomingBundle, MessageAction, ProposedBlock, Transaction, Vote,
     },
     justification::JustificationChain,
-    types::{ConfirmedBlock, ConfirmedBlockCertificate, GenericCertificate},
+    test::VoteTestExt,
+    types::{ConfirmedBlock, ConfirmedBlockCertificate},
 };
 use linera_core::{data_types::ChainInfoQuery, worker::WorkerError};
 use linera_execution::{system::SystemOperation, Operation, ResourceTracker};
@@ -272,15 +273,8 @@ impl BlockBuilder {
             .info;
         let round = info.manager.ownership.first_round();
         let public_key = self.validator.key_pair().public();
-        let vote =
-            Vote::new_with_first_round(value.clone(), round, true, self.validator.key_pair());
-        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
-            value,
-            round,
-            None,
-            true,
-            vec![(public_key, vote.signature)],
-        );
+        let quorum = Vote::new_with_first_round(value, round, true, self.validator.key_pair())
+            .into_certificate(public_key);
         let certificate =
             ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
 

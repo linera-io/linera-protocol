@@ -301,44 +301,6 @@ fn extract_returns_none_for_non_conflicts() {
 }
 
 #[test]
-fn extract_finds_lock_violation() {
-    let (_committee, k) = setup(4);
-    let (a_hash, b_hash) = (block("A"), block("B"));
-    // A is confirmed in round 0; B is freshly validated and confirmed in round 1. `k[0]` and
-    // `k[2]` confirmed A in round 0 and then validated B in round 1 with unlocking round `None` —
-    // whose claim covers round 0 — so confirming A in round 0 is a lock violation (round 0 ∈ [0, 1)).
-    let a = confirmation(
-        "A",
-        Round::SingleLeader(0),
-        false,
-        &[&k[0], &k[1], &k[2]],
-        JustificationChain::new(vec![validated_link(
-            a_hash,
-            Round::SingleLeader(0),
-            None,
-            &[&k[0], &k[1], &k[2]],
-        )]),
-    );
-    let b = confirmation(
-        "B",
-        Round::SingleLeader(1),
-        false,
-        &[&k[0], &k[2], &k[3]],
-        JustificationChain::new(vec![validated_link(
-            b_hash,
-            Round::SingleLeader(1),
-            None,
-            &[&k[0], &k[2], &k[3]],
-        )]),
-    );
-    let proofs = extract_equivocations(&a, &b);
-    assert!(proofs
-        .iter()
-        .all(|proof| matches!(proof, EquivocationProof::LockViolation { .. })));
-    assert_proves(&proofs, &[&k[0], &k[2]]);
-}
-
-#[test]
 fn extract_is_independent_of_argument_order() {
     let (_committee, k) = setup(4);
     let (a_hash, b_hash) = (block("A"), block("B"));

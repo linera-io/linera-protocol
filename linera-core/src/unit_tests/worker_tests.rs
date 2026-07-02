@@ -57,7 +57,7 @@ use linera_chain::{
     test::{make_child_block, make_first_block, BlockTestExt, MessageTestExt, VoteTestExt},
     types::{
         CertificateKind, CertificateValue, Certified, ConfirmedBlock, ConfirmedBlockCertificate,
-        GenericCertificate, Timeout, ValidatedBlock, ValidatedBlockCertificate,
+        Timeout, ValidatedBlock, ValidatedBlockCertificate,
     },
     ChainError, ChainExecutionContext, ChainStateView,
 };
@@ -346,14 +346,8 @@ where
         let chain_id = value.chain_id();
         // A confirmation in the fast round is in the chain's first round, so its votes attest it.
         let first_round = T::KIND == CertificateKind::Confirmed && round.is_fast();
-        let vote = Vote::new_with_first_round(value.clone(), round, first_round, key_pair);
-        let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
-            value,
-            round,
-            None,
-            first_round,
-            vec![(public_key, vote.signature)],
-        );
+        let quorum = Vote::new_with_first_round(value, round, first_round, key_pair)
+            .into_certificate(public_key);
         // A block confirmed outside the fast round must be justified by a validated quorum at the
         // confirm round. Build that single-link chain (the lone test validator signs a
         // `ValidatedBlock` vote with lock `None`). Validated and timeout certificates, and blocks

@@ -112,8 +112,7 @@ fn light_client_verifies_header_and_one_field() {
 #[test]
 fn confirmed_certificate_check_and_absent_chain() {
     use crate::{
-        justification::JustificationChain,
-        types::{ConfirmedBlockCertificate, GenericCertificate},
+        justification::JustificationChain, test::VoteTestExt, types::ConfirmedBlockCertificate,
     };
 
     let validator = ValidatorKeypair::generate();
@@ -125,21 +124,14 @@ fn confirmed_certificate_check_and_absent_chain() {
     // one in any fork, so it never needs a chain of its own.
     let round = Round::SingleLeader(0);
     let value = ConfirmedBlock::new(sample_block());
-    let vote = Vote::new_with_first_round(value.clone(), round, true, &validator.secret_key);
-    let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
-        value.clone(),
-        round,
-        None,
-        true,
-        vec![(validator.public_key, vote.signature)],
-    );
+    let quorum = Vote::new_with_first_round(value.clone(), round, true, &validator.secret_key)
+        .into_certificate(validator.public_key);
     let certificate = ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
     assert!(certificate.check(&committee).is_ok());
 
     // Without the attestation, a non-fast-round confirmation with no chain is rejected.
-    let vote = Vote::new(value.clone(), round, &validator.secret_key);
     let quorum =
-        GenericCertificate::new(value, round, vec![(validator.public_key, vote.signature)]);
+        Vote::new(value, round, &validator.secret_key).into_certificate(validator.public_key);
     let certificate = ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default());
     assert!(certificate.check(&committee).is_err());
 }
@@ -148,7 +140,8 @@ fn confirmed_certificate_check_and_absent_chain() {
 fn lite_certificate_check_binds_justification_chain() {
     use crate::{
         justification::{JustificationChain, JustificationLink},
-        types::{CertificateKind, GenericCertificate, ValidatedBlockCertificate},
+        test::VoteTestExt,
+        types::{CertificateKind, ValidatedBlockCertificate},
     };
 
     let validator = ValidatorKeypair::generate();
@@ -168,20 +161,9 @@ fn lite_certificate_check_binds_justification_chain() {
         signatures: vec![(validator.public_key, ground_signature)],
     }]);
     // ... justifies a validated quorum in `round` that signs the unlocking round `ground_round`.
-    let top_value = VoteValue(
-        hash,
-        round,
-        CertificateKind::Validated,
-        Some(ground_round),
-        false,
-    );
-    let top_signature = ValidatorSignature::new(&top_value, &validator.secret_key);
-    let quorum = GenericCertificate::new_with_unlocking_round(
-        value,
-        round,
-        Some(ground_round),
-        vec![(validator.public_key, top_signature)],
-    );
+    let quorum =
+        Vote::new_with_unlocking_round(value, round, Some(ground_round), &validator.secret_key)
+            .into_certificate(validator.public_key);
     let certificate = ValidatedBlockCertificate::from_parts(quorum, below);
 
     // The lite certificate carries the chain, so its check — the only gate the worker applies to

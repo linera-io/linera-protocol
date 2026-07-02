@@ -18,7 +18,8 @@ use linera_chain::{
         ProposedBlock, Transaction, Vote,
     },
     justification::JustificationChain,
-    types::{ConfirmedBlockCertificate, GenericCertificate},
+    test::VoteTestExt,
+    types::ConfirmedBlockCertificate,
 };
 use linera_execution::{
     committee::ValidatorState,
@@ -227,14 +228,8 @@ pub fn create_signed_certificate_first_round(
     })];
     let block = create_test_block(chain_id, Epoch::ZERO, BlockHeight(1), transactions);
     let confirmed = ConfirmedBlock::new(block);
-    let vote = Vote::new_with_first_round(confirmed.clone(), Round::Fast, true, secret);
-    let quorum = GenericCertificate::new_with_unlocking_round_and_first_round(
-        confirmed,
-        Round::Fast,
-        None,
-        true,
-        vec![(*public, vote.signature)],
-    );
+    let quorum =
+        Vote::new_with_first_round(confirmed, Round::Fast, true, secret).into_certificate(*public);
     ConfirmedBlockCertificate::from_parts(quorum, JustificationChain::default())
 }
 
