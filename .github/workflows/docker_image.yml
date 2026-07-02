@@ -2,7 +2,7 @@ name: Docker Image
 
 on:
   push:
-    branches: [ 'devnet_*', 'testnet_*', 'bridge-main' ]
+    branches: [ main, 'devnet_*', 'testnet_*', 'bridge-main' ]
   workflow_dispatch:
 
 permissions:

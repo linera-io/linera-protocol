@@ -333,6 +333,16 @@ impl ChainModes {
         }
         result
     }
+
+    /// Stops tracking `chain_id`, removing its entry entirely. Returns the removed mode, if any.
+    /// The tracked-set hash is recomputed only if the removed chain was `FullChain`.
+    pub fn remove_mode(&mut self, chain_id: &ChainId) -> Option<ListeningMode> {
+        let removed = self.modes.remove(chain_id)?;
+        if removed.is_full() {
+            self.full = Self::compute_full(&self.modes);
+        }
+        Some(removed)
+    }
 }
 
 /// A builder that creates [`ChainClient`]s which share the cache and notifiers.
@@ -520,6 +530,15 @@ impl<Env: Environment> Client<Env> {
             .write()
             .expect("Panics should not happen while holding a lock to `chain_modes`")
             .extend_mode(chain_id, mode)
+    }
+
+    /// Stops tracking a chain, removing its listening mode. Returns the removed mode, if any.
+    #[instrument(level = "trace", skip(self))]
+    pub fn remove_chain_mode(&self, chain_id: ChainId) -> Option<ListeningMode> {
+        self.chain_modes
+            .write()
+            .expect("Panics should not happen while holding a lock to `chain_modes`")
+            .remove_mode(&chain_id)
     }
 
     /// Returns the listening mode for a chain, if it is tracked.
@@ -2727,6 +2746,44 @@ pub async fn create_bytecode_blobs(
         blobs.push(blob);
     }
     (blobs, module_id)
+}
+
+#[cfg(test)]
+mod chain_modes_tests {
+    use std::collections::BTreeSet;
+
+    use linera_base::{crypto::CryptoHash, identifiers::ChainId};
+
+    use super::{ChainModes, ListeningMode};
+
+    /// `remove_mode` reports the previous mode (and `None` for an absent chain), and only rehashes
+    /// the memoized fully-tracked set when the removed chain was `FullChain` — removing an
+    /// `EventsOnly` chain leaves that set untouched.
+    #[test]
+    fn remove_mode_updates_full_set_only_for_full_chains() {
+        let mut modes = ChainModes::default();
+        let full = ChainId(CryptoHash::test_hash("full"));
+        let events_only = ChainId(CryptoHash::test_hash("events-only"));
+        modes.extend_mode(full, ListeningMode::FullChain);
+        modes.extend_mode(events_only, ListeningMode::EventsOnly(BTreeSet::new()));
+
+        let full_hash_before = modes.full().hash();
+        // Removing the events-only chain returns its mode but doesn't touch the fully-tracked set.
+        assert!(matches!(
+            modes.remove_mode(&events_only),
+            Some(ListeningMode::EventsOnly(_))
+        ));
+        assert!(modes.get(&events_only).is_none());
+        // Removing it again is a no-op.
+        assert!(modes.remove_mode(&events_only).is_none());
+        assert_eq!(modes.full().hash(), full_hash_before);
+        assert_eq!(modes.full().inner().0, BTreeSet::from([full]));
+
+        // Removing the full chain empties and rehashes the fully-tracked set.
+        assert_eq!(modes.remove_mode(&full), Some(ListeningMode::FullChain));
+        assert_ne!(modes.full().hash(), full_hash_before);
+        assert!(modes.full().inner().0.is_empty());
+    }
 }
 
 #[cfg(test)]
