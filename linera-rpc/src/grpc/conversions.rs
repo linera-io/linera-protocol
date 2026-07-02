@@ -255,6 +255,8 @@ impl TryFrom<BlockProposal> for api::BlockProposal {
                 .original_proposal
                 .map(|cert| bincode::serialize(&cert))
                 .transpose()?,
+            // This binary understands the aggregated `MissingCrossChainUpdates` error.
+            supports_aggregated_missing: true,
         })
     }
 }
@@ -488,6 +490,8 @@ impl TryFrom<HandleConfirmedCertificateRequest> for api::HandleConfirmedCertific
             chain_id: Some(request.certificate.inner().chain_id().into()),
             certificate: Some(request.certificate.try_into()?),
             wait_for_outgoing_messages: request.wait_for_outgoing_messages,
+            // This binary understands the aggregated `MissingCrossChainUpdates` error.
+            supports_aggregated_missing: true,
         })
     }
 }
@@ -1254,6 +1258,43 @@ pub mod tests {
     pub fn test_chain_id() {
         let chain_id = dummy_chain_id(0);
         round_trip_check::<_, api::ChainId>(&chain_id);
+    }
+
+    /// `NodeError` is bincode-encoded into the gRPC error field (see `TryFrom<NodeError> for
+    /// api::ChainInfoResult`), so an upgraded peer must be able to decode the aggregated
+    /// `MissingCrossChainUpdates` variant. This also guards against accidentally reordering the
+    /// enum (the variant must stay appended for wire compatibility with older peers).
+    #[test]
+    fn test_node_error_missing_cross_chain_updates_round_trip() {
+        let error = NodeError::MissingCrossChainUpdates {
+            chain_id: dummy_chain_id(0),
+            bundles: vec![
+                (dummy_chain_id(1), BlockHeight::from(7)),
+                (dummy_chain_id(2), BlockHeight::from(0)),
+            ],
+        };
+        let encoded = bincode::serialize(&error).unwrap();
+        let decoded: NodeError = bincode::deserialize(&encoded).unwrap();
+        assert_eq!(error, decoded);
+    }
+
+    /// The chain-level error must map to the node-level error preserving every reported sender,
+    /// so the client receives the full missing set.
+    #[test]
+    fn test_chain_error_missing_cross_chain_updates_maps_to_node_error() {
+        let chain_id = dummy_chain_id(0);
+        let bundles = vec![
+            (dummy_chain_id(1), BlockHeight::from(3)),
+            (dummy_chain_id(2), BlockHeight::from(8)),
+        ];
+        let node_error = NodeError::from(linera_chain::ChainError::MissingCrossChainUpdates {
+            chain_id,
+            bundles: bundles.clone(),
+        });
+        assert_eq!(
+            node_error,
+            NodeError::MissingCrossChainUpdates { chain_id, bundles }
+        );
     }
 
     #[test]

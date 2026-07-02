@@ -49,6 +49,33 @@ use crate::{
 type CrossChainSender = mpsc::Sender<(linera_core::data_types::CrossChainRequest, ShardId)>;
 type NotificationSender = tokio::sync::broadcast::Sender<Notification>;
 
+/// Downgrades the aggregated [`NodeError::MissingCrossChainUpdates`] back to the legacy
+/// per-sender [`NodeError::MissingCrossChainUpdate`] for clients that did not advertise that
+/// they understand the aggregated form, keeping the wire protocol backward compatible. Such a
+/// client only learns about the first missing sender and recovers one rejection at a time, as
+/// before. Capable clients (and all other errors) pass through unchanged.
+fn adapt_dependency_error(error: NodeError, supports_aggregated: bool) -> NodeError {
+    if supports_aggregated {
+        return error;
+    }
+    match error {
+        NodeError::MissingCrossChainUpdates { chain_id, bundles } => {
+            if let Some((origin, height)) = bundles.into_iter().next() {
+                NodeError::MissingCrossChainUpdate {
+                    chain_id,
+                    origin,
+                    height,
+                }
+            } else {
+                NodeError::ChainError {
+                    error: "missing cross-chain updates".to_string(),
+                }
+            }
+        }
+        other => other,
+    }
+}
+
 #[cfg(with_metrics)]
 mod metrics {
     use std::sync::LazyLock;
@@ -742,7 +769,9 @@ where
         request: Request<BlockProposal>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let traffic_type = Self::get_traffic_type(&request);
-        let proposal = request.into_inner().try_into()?;
+        let proto = request.into_inner();
+        let supports_aggregated = proto.supports_aggregated_missing;
+        let proposal = proto.try_into()?;
         trace!(?proposal, "Handling block proposal");
         let (result, actions) = self.state.clone().handle_block_proposal(proposal).await;
         // Dispatch actions whether or not the proposal was accepted: a rejected
@@ -758,7 +787,7 @@ where
             Err(error) => {
                 Self::log_request_error("handle_block_proposal", traffic_type, &error.error_type());
                 self.log_error(&error, "Failed to handle block proposal");
-                NodeError::from(error).try_into()?
+                adapt_dependency_error(NodeError::from(error), supports_aggregated).try_into()?
             }
         }))
     }
@@ -826,10 +855,12 @@ where
         request: Request<api::HandleConfirmedCertificateRequest>,
     ) -> Result<Response<ChainInfoResult>, Status> {
         let traffic_type = Self::get_traffic_type(&request);
+        let proto = request.into_inner();
+        let supports_aggregated = proto.supports_aggregated_missing;
         let HandleConfirmedCertificateRequest {
             certificate,
             wait_for_outgoing_messages,
-        } = request.into_inner().try_into()?;
+        } = proto.try_into()?;
         trace!(?certificate, "Handling certificate");
         let (sender, receiver) = wait_for_outgoing_messages.then(oneshot::channel).unzip();
         match self
@@ -855,7 +886,10 @@ where
                     &error.error_type(),
                 );
                 self.log_error(&error, "Failed to handle confirmed certificate");
-                Ok(Response::new(NodeError::from(error).try_into()?))
+                Ok(Response::new(
+                    adapt_dependency_error(NodeError::from(error), supports_aggregated)
+                        .try_into()?,
+                ))
             }
         }
     }
@@ -1180,5 +1214,49 @@ impl GrpcProxyable for CrossChainRequest {
                 recipient.clone()?.try_into().ok()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod dependency_error_tests {
+    use linera_base::{crypto::CryptoHash, data_types::BlockHeight, identifiers::ChainId};
+    use linera_core::node::NodeError;
+
+    use super::adapt_dependency_error;
+
+    fn chain(name: &str) -> ChainId {
+        ChainId(CryptoHash::test_hash(name))
+    }
+
+    #[test]
+    fn capable_client_gets_errors_unchanged() {
+        // A client that understands the aggregated error receives `MissingCrossChainUpdates`
+        // as-is, with every reported sender preserved.
+        let aggregated = NodeError::MissingCrossChainUpdates {
+            chain_id: chain("target"),
+            bundles: vec![
+                (chain("origin1"), BlockHeight::from(7)),
+                (chain("origin2"), BlockHeight::from(0)),
+            ],
+        };
+        assert_eq!(adapt_dependency_error(aggregated.clone(), true), aggregated);
+    }
+
+    #[test]
+    fn legacy_client_gets_downgraded_error() {
+        let cid = chain("target");
+        let origin = chain("origin");
+        let height = BlockHeight::from(7);
+        // For a client that does not understand the aggregated error, it downgrades to the
+        // legacy per-sender error reporting just the first missing sender.
+        let aggregated = NodeError::MissingCrossChainUpdates {
+            chain_id: cid,
+            bundles: vec![(origin, height), (chain("other"), BlockHeight::from(1))],
+        };
+        assert!(matches!(
+            adapt_dependency_error(aggregated, false),
+            NodeError::MissingCrossChainUpdate { chain_id, origin: o, height: h }
+                if chain_id == cid && o == origin && h == height
+        ));
     }
 }

@@ -344,6 +344,16 @@ pub enum NodeError {
         chain_id: ChainId,
         remote_node: Box<ValidatorPublicKey>,
     },
+
+    #[error(
+        "Validator is missing {} cross-chain message bundle(s) to validate the block for \
+         chain {chain_id}",
+        bundles.len()
+    )]
+    MissingCrossChainUpdates {
+        chain_id: ChainId,
+        bundles: Vec<(ChainId, BlockHeight)>,
+    },
 }
 
 /// Parsed data from an `InvalidTimestamp` error.
@@ -394,6 +404,7 @@ impl NodeError {
             NodeError::BlobsNotFound(_)
             | NodeError::EventsNotFound(_)
             | NodeError::MissingCrossChainUpdate { .. }
+            | NodeError::MissingCrossChainUpdates { .. }
             | NodeError::WrongRound(_)
             | NodeError::UnexpectedBlockHeight { .. }
             | NodeError::InactiveChain(_)
@@ -482,15 +493,9 @@ impl From<CryptoError> for NodeError {
 impl From<ChainError> for NodeError {
     fn from(error: ChainError) -> Self {
         match error {
-            ChainError::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            } => Self::MissingCrossChainUpdate {
-                chain_id,
-                origin,
-                height,
-            },
+            ChainError::MissingCrossChainUpdates { chain_id, bundles } => {
+                Self::MissingCrossChainUpdates { chain_id, bundles }
+            }
             ChainError::InactiveChain(chain_id) => Self::InactiveChain(chain_id),
             ChainError::ExecutionError(execution_error, context) => match *execution_error {
                 ExecutionError::BlobsNotFound(blob_ids) => Self::BlobsNotFound(blob_ids),

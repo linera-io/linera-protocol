@@ -278,6 +278,12 @@ message BlockProposal {
   // A lite certificate for a validated block, or a fast block proposal, that
   // justifies the proposal in this round.
   optional bytes original_proposal = 6;
+
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error. When
+  // false (e.g. an older client that predates it), the validator downgrades that error
+  // to the legacy per-sender `MissingCrossChainUpdate` before replying, for backward
+  // compatibility.
+  bool supports_aggregated_missing = 7;
 }
 
 // A certified statement from the committee, without the value.
@@ -333,6 +339,9 @@ message HandleConfirmedCertificateRequest {
   // Wait until all outgoing cross-chain messages from this certificate have
   // been received by the target chains.
   bool wait_for_outgoing_messages = 3;
+
+  // Whether the sender understands the aggregated `MissingCrossChainUpdates` error.
+  bool supports_aggregated_missing = 4;
 }
 
 // A request for a pending blob.

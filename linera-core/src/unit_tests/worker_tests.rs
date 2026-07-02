@@ -1546,6 +1546,61 @@ where
             .await
             .0?;
     }
+    {
+        // A proposal on a chain whose inbox is empty consumes two cross-chain bundles that
+        // were never received. The validator must report *both* missing cross-chain updates
+        // at once (rather than bailing on the first) so the client can fetch them in a single
+        // round-trip.
+        let block_proposal = make_first_block(chain_3)
+            .with_incoming_bundle(IncomingBundle {
+                origin: chain_1,
+                bundle: MessageBundle {
+                    certificate_hash: certificate0.hash(),
+                    height: BlockHeight::ZERO,
+                    timestamp: Timestamp::from(0),
+                    transaction_index: 0,
+                    messages: vec![
+                        system_credit_message(Amount::ONE).to_posted(0, MessageKind::Tracked)
+                    ],
+                },
+                action: MessageAction::Accept,
+            })
+            .with_incoming_bundle(IncomingBundle {
+                origin: chain_1,
+                bundle: MessageBundle {
+                    certificate_hash: certificate1.hash(),
+                    height: BlockHeight::from(1),
+                    timestamp: Timestamp::from(0),
+                    transaction_index: 0,
+                    messages: vec![system_credit_message(Amount::from_tokens(3))
+                        .to_posted(0, MessageKind::Tracked)],
+                },
+                action: MessageAction::Accept,
+            })
+            .with_authenticated_signer(Some(recipient_owner))
+            .into_first_proposal(recipient_owner, &signer)
+            .await
+            .unwrap();
+        let error = env
+            .worker()
+            .handle_block_proposal(block_proposal)
+            .await
+            .0
+            .unwrap_err();
+        let WorkerError::ChainError(chain_error) = error else {
+            panic!("unexpected error: {error}");
+        };
+        match *chain_error {
+            ChainError::MissingCrossChainUpdates { bundles, .. } => assert_eq!(
+                bundles,
+                vec![
+                    (chain_1, BlockHeight::ZERO),
+                    (chain_1, BlockHeight::from(1))
+                ],
+            ),
+            other => panic!("expected MissingCrossChainUpdates, got {other}"),
+        }
+    }
     Ok(())
 }
 
